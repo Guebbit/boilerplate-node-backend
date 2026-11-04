@@ -19,35 +19,17 @@ flowchart LR
     tasks["tasks<br/><i>this module</i>"]
     access["access"]
     account["account"]
-    delivery["delivery"]
-    inventory["inventory"]
     notifications["notifications"]
-    orders["orders"]
-    payments["payments"]
+    shop_tasks["shop-tasks"]
     users["users"]
 
     notifications --> tasks
+    shop_tasks --> tasks
     tasks --> access
     tasks --> account
-    tasks --> delivery
-    tasks --> inventory
-    tasks --> orders
-    tasks --> payments
     tasks --> users
     account -. "account.export_failed" .-> tasks
     account -. "account.export_ready" .-> tasks
-    delivery -. "fulfillment_order.cancelled" .-> tasks
-    delivery -. "fulfillment_order.delayed" .-> tasks
-    delivery -. "shipment.shipped" .-> tasks
-    inventory -. "inventory.hold_orphaned" .-> tasks
-    orders -. "order.cancelled" .-> tasks
-    payments -. "payment.amount_mismatch" .-> tasks
-    payments -. "payment.dispute_opened" .-> tasks
-    payments -. "payment.dispute_updated" .-> tasks
-    payments -. "payment.refund_canceled" .-> tasks
-    payments -. "payment.refund_failed" .-> tasks
-    payments -. "payment.refund_owed_by_hand" .-> tasks
-    payments -. "payment.refunded" .-> tasks
     users -. "user.review_cleared" .-> tasks
     users -. "user.review_flagged" .-> tasks
     tasks -. "task.assigned" .-> notifications
@@ -58,8 +40,7 @@ flowchart LR
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
-    class orders core;
-    class delivery,inventory,notifications,payments supporting;
+    class notifications,shop_tasks supporting;
     class access,account,users generic;
     class tasks centre;
 ```

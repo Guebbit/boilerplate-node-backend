@@ -1,13 +1,13 @@
 /**
  * @module
- * The scheduled jobs `notifications` owns: the daily and the weekly staff digest.
+ * The scheduled jobs `shop-tasks` owns: the daily and the weekly staff digest.
  *
  * See: docs/reference/ops.md#scheduled-jobs
  */
 
 import type { JobDeclaration } from '@kernel/registry';
 import type { JobData } from '@infrastructure/config/shared-rules/jobs';
-import { notificationsJobData } from './jobs.generated';
+import { shopTasksJobData } from './jobs.generated';
 import { logger } from '@infrastructure/adapters/logger';
 import { runStaffDigest, type DigestRun } from './services/digest';
 
@@ -23,8 +23,8 @@ const digestJob = (run: DigestRun, data: JobData): JobDeclaration => ({
     lease: { ttlMs: 30 * 60 * 1000 }
 });
 
-/** The jobs `notifications` owns. */
-export const notificationsJobs: readonly JobDeclaration[] = [
-    digestJob('daily', notificationsJobData.sweepStaffDigest),
-    digestJob('weekly', notificationsJobData.sweepStaffWeekly)
+/** The jobs `shop-tasks` owns. */
+export const shopTasksJobs: readonly JobDeclaration[] = [
+    digestJob('daily', shopTasksJobData.sweepStaffDigest),
+    digestJob('weekly', shopTasksJobData.sweepStaffWeekly)
 ];

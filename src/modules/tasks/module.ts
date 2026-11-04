@@ -11,22 +11,6 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { ACCOUNT_EXPORT_FAILED, ACCOUNT_EXPORT_READY } from '@modules/account';
-import {
-    FULFILLMENT_ORDER_CANCELLED,
-    FULFILLMENT_ORDER_DELAYED,
-    SHIPMENT_SHIPPED
-} from '@modules/delivery';
-import { HOLD_ORPHANED } from '@modules/inventory';
-import { ORDER_CANCELLED } from '@modules/orders';
-import {
-    PAYMENT_AMOUNT_MISMATCH,
-    PAYMENT_DISPUTE_OPENED,
-    PAYMENT_DISPUTE_UPDATED,
-    PAYMENT_REFUNDED,
-    PAYMENT_REFUND_CANCELED,
-    PAYMENT_REFUND_FAILED,
-    PAYMENT_REFUND_OWED_BY_HAND
-} from '@modules/payments';
 import { USER_REVIEW_CLEARED, USER_REVIEW_FLAGGED } from '@modules/users';
 import { router } from './routes';
 import { tasksJobs } from './jobs';
@@ -63,18 +47,6 @@ export default {
     subscribe: () => {
         onDomainEvent(USER_REVIEW_FLAGGED, systemTasks.onReviewFlagged);
         onDomainEvent(USER_REVIEW_CLEARED, systemTasks.onReviewCleared);
-        onDomainEvent(PAYMENT_REFUND_OWED_BY_HAND, systemTasks.onRefundOwedByHand);
-        onDomainEvent(PAYMENT_REFUND_FAILED, systemTasks.onRefundFailed);
-        onDomainEvent(PAYMENT_REFUNDED, systemTasks.onRefundClosed);
-        onDomainEvent(PAYMENT_REFUND_CANCELED, systemTasks.onRefundClosed);
-        onDomainEvent(PAYMENT_AMOUNT_MISMATCH, systemTasks.onAmountMismatch);
-        onDomainEvent(PAYMENT_DISPUTE_OPENED, systemTasks.onDispute);
-        onDomainEvent(PAYMENT_DISPUTE_UPDATED, systemTasks.onDispute);
-        onDomainEvent(HOLD_ORPHANED, systemTasks.onHoldOrphaned);
-        onDomainEvent(ORDER_CANCELLED, systemTasks.onOrderCancelled);
-        onDomainEvent(SHIPMENT_SHIPPED, systemTasks.onShipped);
-        onDomainEvent(FULFILLMENT_ORDER_CANCELLED, systemTasks.onFulfillmentOrderCancelled);
-        onDomainEvent(FULFILLMENT_ORDER_DELAYED, systemTasks.onDelayed);
         onDomainEvent(ACCOUNT_EXPORT_FAILED, systemTasks.onExportFailed);
         onDomainEvent(ACCOUNT_EXPORT_READY, systemTasks.onExportReady);
     },

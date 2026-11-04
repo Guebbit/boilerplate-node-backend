@@ -5,7 +5,7 @@
  */
 
 import { notificationRepository } from '../repository';
-import type { NotificationDocument } from '../model';
+import { notificationModel, type NotificationDocument } from '../model';
 import { makeNotification, type NotificationOverrides } from '../factories';
 
 /**
@@ -15,3 +15,7 @@ import { makeNotification, type NotificationOverrides } from '../factories';
 export const createNotification = (
     overrides: NotificationOverrides
 ): Promise<NotificationDocument> => notificationRepository.create(makeNotification(overrides));
+
+/** How many notifications exist, whoever owns them: what a test reads to prove none was written. */
+export const countNotifications = (): Promise<number> =>
+    notificationModel.countDocuments({}).exec();

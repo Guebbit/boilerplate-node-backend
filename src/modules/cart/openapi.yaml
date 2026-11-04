@@ -266,7 +266,7 @@ paths:
                 says how many are for sale. The same rule runs at checkout, which refuses, and in
                 `GET /cart`, which flags, all three reading the stock ledger. Lines that could not be
                 added at all (`removed`: the product is deleted or hidden) are also written as ONE notification
-                (`notifications.cart-merge-refused`); nothing is written when there are none. Safe to
+                (`shop-tasks.cart-merge-refused`); nothing is written when there are none. Safe to
                 retry with an `Idempotency-Key`: a lost answer replays instead of adding the same
                 quantities twice. The caller empties its local guest cart once this answers.
             operationId: mergeCart

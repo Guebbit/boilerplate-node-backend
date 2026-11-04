@@ -79,6 +79,8 @@ export interface TaskRepository extends Repository<TaskDocument, StoredTask> {
 export interface NewSystemTask {
     kind: TaskKind;
     routeSet: string;
+    /** The staff screen that does the work, handed over by the opener. */
+    work?: string | undefined;
     link: { type: TaskLinkType; id: string };
     openKey: string;
     subjectId?: string;
@@ -185,6 +187,7 @@ export const taskRepository: TaskRepository = {
             source: TaskSource.system,
             kind: opening.kind,
             routeSet: opening.routeSet,
+            ...(opening.work ? { work: opening.work } : {}),
             link: opening.link,
             openKey: opening.openKey,
             ...(opening.subjectId ? { subjectId: toObjectId(opening.subjectId) } : {}),

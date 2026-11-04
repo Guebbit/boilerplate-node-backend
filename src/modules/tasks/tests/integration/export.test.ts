@@ -91,13 +91,13 @@ describe('the tasks section of an export', () => {
             email: 'victim@example.com',
             subject: 'About my order',
             message: 'where is it',
-            category: 'order',
+            category: 'other',
             orderNumber: 'ORD-7'
         });
 
         const section = (await collect(subject(true))) as object[];
 
-        expect(section[0]).toMatchObject({ category: 'order', orderNumber: 'ORD-7' });
+        expect(section[0]).toMatchObject({ category: 'other', orderNumber: 'ORD-7' });
     });
 
     it('exports status, respondedAt and the note’s words and time, but never who wrote it', async () => {
@@ -120,12 +120,12 @@ describe('the tasks section of an export', () => {
 const aboutAccount = () =>
     taskRepository.create({
         source: TaskSource.system,
-        kind: TaskKind.manual_refund_owed,
-        routeSet: 'PaymentRefunding',
-        subject: 'A refund is owed by hand',
-        message: 'Refund r1',
-        link: { type: TaskLinkType.refund, id: 'r1' },
-        openKey: 'manual_refund_owed:refund:r1',
+        kind: TaskKind.export_failed,
+        routeSet: 'UserErasure',
+        subject: 'A data export failed',
+        message: 'Export e1',
+        link: { type: TaskLinkType.export, id: 'e1' },
+        openKey: 'export_failed:export:e1',
         subjectId: new Types.ObjectId(ACCOUNT_ID),
         assigneeId: new Types.ObjectId(),
         notes: [{ authorId: new Types.ObjectId(), body: 'asked the bank', at: new Date() }]
@@ -140,8 +140,8 @@ describe('the systemTasks section of an export', () => {
         const [exported] = (await collectSystem(subject(true))) as object[];
 
         expect(exported).toMatchObject({
-            kind: 'manual_refund_owed',
-            link: { type: 'refund', id: 'r1' },
+            kind: 'export_failed',
+            link: { type: 'export', id: 'e1' },
             notes: [{ body: 'asked the bank' }]
         });
         expect(exported).not.toHaveProperty('assigneeId');

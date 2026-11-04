@@ -45,6 +45,17 @@ const moduleKeys = (): Map<string, string[]> => {
     return found;
 };
 
+/**
+ * Namespaces a module that adds task kinds or categories writes its labels into. The names of a
+ * kind or a category belong to the staff mail that words them (`notifications`), but the values
+ * belong to whoever adds them (`shop-tasks`), so the PREFIX is co-owned while each KEY is still
+ * claimed by exactly one module (the test above this one).
+ */
+const CO_OWNED_NAMESPACES = [
+    'notifications.staff-mail.task-kind.',
+    'notifications.staff-mail.task-category.'
+];
+
 describe('locale namespaces across modules', () => {
     it('finds dictionaries in every module that ships copy', () => {
         // A canary: an empty sweep must mean "no module ships copy", not "the sweep broke".
@@ -87,7 +98,11 @@ describe('locale namespaces across modules', () => {
 
         for (const [name, keys] of moduleKeys())
             for (const key of keys)
-                if (!key.startsWith(`${name}.`)) strays.push(`${name} ships "${key}"`);
+                if (
+                    !key.startsWith(`${name}.`) &&
+                    CO_OWNED_NAMESPACES.every((prefix) => !key.startsWith(prefix))
+                )
+                    strays.push(`${name} ships "${key}"`);
 
         expect(strays).toEqual([]);
     });

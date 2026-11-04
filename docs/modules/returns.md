@@ -27,13 +27,13 @@ flowchart LR
     access["access"]
     delivery["delivery"]
     inventory["inventory"]
-    notifications["notifications"]
     orders["orders"]
     payments["payments"]
     shop["shop"]
+    shop_tasks["shop-tasks"]
     stats["stats"]
 
-    notifications --> returns
+    shop_tasks --> returns
     stats --> returns
     returns --> access
     returns --> delivery
@@ -42,14 +42,14 @@ flowchart LR
     returns --> payments
     returns --> shop
     payments -. "payment.refunded" .-> returns
-    returns -. "return.requested" .-> notifications
+    returns -. "return.requested" .-> shop_tasks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders core;
-    class delivery,inventory,notifications,payments,shop,stats supporting;
+    class delivery,inventory,payments,shop,shop_tasks,stats supporting;
     class access generic;
     class returns centre;
 ```

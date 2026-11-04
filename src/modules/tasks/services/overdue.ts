@@ -35,7 +35,8 @@ export const remindOverdue = async (now: Date = new Date()): Promise<number> => 
             taskId: String(task._id),
             kind: task.kind,
             routeSet: task.routeSet,
-            ...(task.category ? { category: task.category } : {})
+            ...(task.category ? { category: task.category } : {}),
+            ...(task.work ? { work: task.work } : {})
         });
         announced += 1;
         task = await taskRepository.claimOverdue(now);

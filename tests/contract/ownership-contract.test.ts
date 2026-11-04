@@ -7,7 +7,7 @@
  *   completeness   every customer-reachable path, body and query id is in exactly one list of
  *                  `owned-ids.ts`, and every list entry is still derived. Whole app, derived
  *                  from the mounted routes and `openapi.yaml`, never written down.
- *   the sweep      the foundation families: saved addresses and login sessions.
+ *   the sweep      the foundation families: saved addresses, login sessions and notifications.
  *
  * Differs from `authorization-contract.test.ts`, which sweeps PERMISSIONS (does this role reach
  * this route). This file sweeps OWNERSHIP: a role that does reach it, aimed at someone else's row.
@@ -28,6 +28,7 @@ import { MISSING_ID } from '@tests/ids';
 import { FAMILIES, NOT_AN_ID_BY_NAME, OWNED_PATH } from '@tests/owned-ids';
 import type { OwnedId } from '@tests/owned-ids';
 import { judge } from '@tests/ownership-sweep';
+import { createNotification } from '@modules/notifications/tests/factories';
 import type { OwnedCase, Verb } from '@tests/ownership-sweep';
 
 setupTestDb();
@@ -147,7 +148,7 @@ describe('every id a customer can send is classified (derived from the routes an
     });
 });
 
-/** A's address and A's login session, built over HTTP the way a client would. */
+/** A's address, A's login session and A's notification, built the way a client would. */
 const seedFoundation = async () => {
     const victim = await authenticateAs('user');
     const created = await api()
@@ -162,17 +163,19 @@ const seedFoundation = async () => {
         });
     const sessions = await api().get('/account/sessions').set('Authorization', victim.bearer);
     const attacker = await authenticateAsRole('customer');
+    const notification = await createNotification({ userId: victim.user.id });
     return {
         victim,
         attacker,
         addressId: String(created.body.id),
-        sessionId: String(sessions.body.sessions[0].id)
+        sessionId: String(sessions.body.sessions[0].id),
+        notificationId: String(notification._id)
     };
 };
 
-/** The cases of the foundation families, one per `OWNED_PATH` entry of `addresses` and `account`. */
+/** The cases of the foundation families, one per `OWNED_PATH` entry of `addresses`, `account` and `notifications`. */
 const foundationCases = (world: Awaited<ReturnType<typeof seedFoundation>>): OwnedCase[] => {
-    const { attacker, addressId, sessionId } = world;
+    const { attacker, addressId, sessionId, notificationId } = world;
     /** A path case: `key`'s method and `template`, aimed at `victimId` or at nothing. */
     const at = (key: string, template: string, victimId: string, body?: object): OwnedCase => ({
         key,
@@ -198,11 +201,13 @@ const foundationCases = (world: Awaited<ReturnType<typeof seedFoundation>>): Own
         at('DELETE /account/addresses/:addressId', address, addressId),
         at('PUT /account/addresses/:addressId/default', `${address}/default`, addressId),
         at('GET /account/sessions/:sessionId', '/account/sessions/:sessionId', sessionId),
-        at('DELETE /account/sessions/:sessionId', '/account/sessions/:sessionId', sessionId)
+        at('DELETE /account/sessions/:sessionId', '/account/sessions/:sessionId', sessionId),
+        at('GET /notifications/:id', '/notifications/:id', notificationId),
+        at('DELETE /notifications/:id', '/notifications/:id', notificationId)
     ];
 };
 
-describe('another customer’s saved address and login session answer like a missing one', () => {
+describe('another customer’s saved address, login session and notification answer like a missing one', () => {
     it('refuses every foundation path id, and leaves the victim’s rows as they were', async () => {
         const world = await seedFoundation();
         const cases = foundationCases(world);
@@ -210,16 +215,20 @@ describe('another customer’s saved address and login session answer like a mis
         const watch = () =>
             Promise.all([
                 api().get('/account/addresses').set('Authorization', bearer),
-                api().get('/account/sessions').set('Authorization', bearer)
-            ]).then(([addresses, sessions]) => ({
+                api().get('/account/sessions').set('Authorization', bearer),
+                api().get('/notifications').set('Authorization', bearer)
+            ]).then(([addresses, sessions, notifications]) => ({
                 addresses: addresses.body,
+                notifications: notifications.body,
                 // `lastUsedAt` moves with the victim's own reads, so only the handles are compared.
                 sessions: (sessions.body.sessions as { id: string }[]).map((one) => one.id)
             }));
 
         expect(cases.map((one) => one.key).toSorted()).toEqual(
             deployed(
-                OWNED_PATH.filter(({ module }) => ['addresses', 'account'].includes(module))
+                OWNED_PATH.filter(({ module }) =>
+                    ['addresses', 'account', 'notifications'].includes(module)
+                )
             ).toSorted()
         );
         const problems: string[] = [];

@@ -179,8 +179,8 @@ describe('what the export holds of the notifications module', () => {
         await createNotification({
             userId: user.id,
             body: {
-                code: 'notifications.wishlist-item-removed',
-                params: { productId: '64b7f1a2c3d4e5f607182930', titles: { en: 'Red mug' } }
+                code: 'notifications.staff.outbox-dead',
+                params: { eventName: 'user.updated', aggregateId: '64b7f1a2c3d4e5f607182930' }
             }
         });
         await createNotification({ userId: stranger.id });
@@ -194,8 +194,8 @@ describe('what the export holds of the notifications module', () => {
         };
 
         expect(document.notifications?.map(({ code }) => code).toSorted()).toEqual([
-            'notifications.cart-line-removed',
-            'notifications.wishlist-item-removed'
+            'notifications.staff.outbox-dead',
+            'notifications.staff.webhook-disabled'
         ]);
     });
 });

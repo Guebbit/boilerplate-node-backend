@@ -1,0 +1,45 @@
+{
+    "shop-tasks": {
+        "staff-mail": {
+            "purchase-hold-placed": {
+                "subject": "Checkout sospeso per un acquirente",
+                "meta-title": "Blocco acquisti applicato",
+                "title": "È stato applicato un blocco acquisti",
+                "summary": "Un acquirente ha annullato o lasciato scadere diversi ordini non pagati, quindi il suo checkout è sospeso fino a {{until}}. Ogni annullamento è stato elaborato normalmente; è bloccato solo l'inserimento di un nuovo ordine. La sospensione termina da sola; applica un blocco manuale all'account per prolungarla."
+            },
+            "digest": {
+                "subject": "Lavoro in attesa",
+                "meta-title": "Riepilogo giornaliero",
+                "title": "Cosa ti aspetta",
+                "transfers-due": "{{n}} bonifici in scadenza",
+                "preorders-late": "{{n}} preordini oltre la data prevista",
+                "delivery-holds-open": "{{n}} ordini trattenuti da troppo tempo",
+                "withdrawals-awaiting-goods": "{{n}} recessi in attesa della merce",
+                "returns-undecided": "{{n}} richieste di reso senza decisione",
+                "low-stock": "{{n}} prodotti con scorte basse",
+                "unshipped": "{{n}} ordini pagati non ancora spediti",
+                "awaiting-tracking": "{{n}} pacchi spediti ancora senza tracking",
+                "undelivered": "{{n}} pacchi spediti e mai segnati come arrivati",
+                "stale-refunds": "{{n}} rimborsi aperti da troppo tempo"
+            }
+        }
+    },
+    "notifications": {
+        "staff-mail": {
+            "task-kind": {
+                "manual_refund_owed": "Rimborso da fare a mano",
+                "refund_refused": "Rimborso rifiutato",
+                "amount_mismatch": "Importo del pagamento non corrispondente",
+                "dispute": "Contestazione di pagamento",
+                "paid_without_hold": "Ordine pagato senza riserva di stock",
+                "consent_due": "Consenso dell'acquirente da ottenere"
+            },
+            "task-category": {
+                "order": "Ordine",
+                "cancellation": "Annullamento",
+                "return": "Reso",
+                "payment": "Pagamento"
+            }
+        }
+    }
+}

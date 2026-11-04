@@ -21,6 +21,8 @@ declare module '@kernel/events' {
             routeSet: string;
             /** A contact task's category, when the visitor chose one. */
             category?: string;
+            /** The staff screen that does the work, when the opener named one: see `TaskDocument.work`. */
+            work?: string;
         };
 
         /**
@@ -35,6 +37,8 @@ declare module '@kernel/events' {
             routeSet: string;
             /** A contact task's category, when the visitor chose one. */
             category?: string;
+            /** The staff screen that does the work, when the opener named one: see `TaskDocument.work`. */
+            work?: string;
         };
 
         /** Someone gave a task to a colleague (taking your own task does not emit this). */

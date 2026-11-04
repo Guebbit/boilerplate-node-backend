@@ -31,7 +31,7 @@ afterEach(() => jest.restoreAllMocks());
 /** A member of staff holding every set. */
 const admin = callerContextAs('admin', new Types.ObjectId().toString());
 
-/** Support: reads and works contact messages, but is not in the refunds jurisdiction. */
+/** Support: reads and works contact messages, but is not in the account-review jurisdiction. */
 const support = callerContextAs('support', new Types.ObjectId().toString());
 
 /** A contact message, filed through the form. */
@@ -43,16 +43,16 @@ const fileContact = () =>
         message: 'The cart total is wrong.'
     });
 
-/** An open system task about a refund, as the system opens one. */
-const openRefundTask = (link = 'refund-1') =>
+/** An open system task about an account, as the system opens one. */
+const openReviewTask = (link = 'user-1') =>
     taskRepository.create({
         source: TaskSource.system,
-        kind: TaskKind.manual_refund_owed,
-        routeSet: 'PaymentRefunding',
-        subject: 'A refund is owed by hand',
-        message: 'Refund refund-1 needs a person.',
-        link: { type: TaskLinkType.refund, id: link },
-        openKey: `manual_refund_owed:refund:${link}`,
+        kind: TaskKind.account_review,
+        routeSet: 'UserBanning',
+        subject: 'Account flagged for review',
+        message: 'Account user-1 needs a person.',
+        link: { type: TaskLinkType.user, id: link },
+        openKey: `account_review:user:${link}`,
         dueAt: new Date('2030-01-01T00:00:00Z')
     });
 
@@ -79,7 +79,7 @@ describe('resolve', () => {
     });
 
     it('releases the dedup key of a linked task', async () => {
-        const task = await openRefundTask();
+        const task = await openReviewTask();
 
         await taskService.resolve(String(task._id), admin);
 
@@ -180,14 +180,14 @@ describe('reopen', () => {
     });
 
     it('restores the dedup key and keeps the deadline', async () => {
-        const task = await openRefundTask();
+        const task = await openReviewTask();
         const { dueAt } = task;
         await taskService.resolve(String(task._id), admin);
 
         await taskService.reopen(String(task._id), admin);
 
         const row = await stored(task._id);
-        expect(row.openKey).toBe('manual_refund_owed:refund:refund-1');
+        expect(row.openKey).toBe('account_review:user:user-1');
         expect(row.dueAt).toEqual(dueAt);
     });
 
@@ -201,9 +201,9 @@ describe('reopen', () => {
     });
 
     it('answers 409 TASK_SUPERSEDED, naming the newer task, when one holds the key', async () => {
-        const older = await openRefundTask();
+        const older = await openReviewTask();
         await taskService.resolve(String(older._id), admin);
-        const newer = await openRefundTask();
+        const newer = await openReviewTask();
 
         const result = asReject(await taskService.reopen(String(older._id), admin));
 
@@ -218,7 +218,7 @@ describe('reopen', () => {
 
 describe('jurisdiction', () => {
     it('hides a system task from a caller who does not hold its set', async () => {
-        const task = await openRefundTask();
+        const task = await openReviewTask();
 
         const read = await taskService.getById(String(task._id), support);
         const move = await taskService.resolve(String(task._id), support);
@@ -229,7 +229,7 @@ describe('jurisdiction', () => {
     });
 
     it('keeps system tasks out of the list of a caller outside the set, and shows them to an administrator', async () => {
-        await openRefundTask();
+        await openReviewTask();
         await fileContact();
 
         const seenBySupport = await taskService.search({}, support);
@@ -265,12 +265,41 @@ describe('assign and unassign', () => {
 
     it('refuses a person who does not hold the task’s set with 422', async () => {
         const outsider = await createUser({}, 'support');
-        const task = await openRefundTask();
+        const task = await openReviewTask();
 
         const result = asReject(await taskService.assign(String(task._id), outsider.id, admin));
 
         expect(result.status).toBe(422);
         expect(result.errors[0].code).toBe('TASK_ASSIGNEE_INVALID');
+    });
+
+    it('refuses a person who holds the set but may not work tasks: a moderator cannot be given an account review', async () => {
+        const moderator = await createUser({}, 'moderator');
+        const task = await openReviewTask();
+
+        const result = asReject(await taskService.assign(String(task._id), moderator.id, admin));
+
+        expect(result.status).toBe(422);
+        expect(result.errors[0].code).toBe('TASK_ASSIGNEE_INVALID');
+    });
+
+    it('refuses a person who may read a contact message but not work it: a manager', async () => {
+        const manager = await createUser({}, 'manager');
+        const task = await fileContact();
+
+        const result = asReject(await taskService.assign(String(task._id), manager.id, admin));
+
+        expect(result.status).toBe(422);
+        expect(result.errors[0].code).toBe('TASK_ASSIGNEE_INVALID');
+    });
+
+    it('gives an administrator any task', async () => {
+        const other = await createUser({}, 'admin');
+        const task = await openReviewTask();
+
+        const result = await taskService.assign(String(task._id), other.id, admin);
+
+        expect(asSuccess(result).data.assigneeId).toBe(other.id);
     });
 
     it('refuses a person who does not exist with 422', async () => {
@@ -338,7 +367,7 @@ describe('summary', () => {
         await fileContact();
         const done = await fileContact();
         await taskService.resolve(String(done._id), admin);
-        await openRefundTask();
+        await openReviewTask();
 
         const adminView = await taskService.summary(admin);
         const supportView = await taskService.summary(support);

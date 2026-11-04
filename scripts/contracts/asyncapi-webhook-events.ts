@@ -210,6 +210,58 @@ const appendExtensions = (document: Document, extended: unknown, label: string):
     }
 };
 
+/** A `$ref` to a schema of the same document: the capture is its name. */
+const LOCAL_SCHEMA_REF = /^#\/components\/schemas\/(\w+)$/;
+
+/**
+ * Every schema name one node references.
+ *
+ * @param node - a schema of the section
+ */
+const localReferencesIn = (node: unknown): string[] => {
+    const found = new Set<string>();
+    // `yaml`'s `visit`: walks every pair of the node. https://eemeli.org/yaml/#visitors
+    if (isNode(node))
+        visit(node, {
+            Pair(_key, pair) {
+                if (!isScalar(pair.key) || pair.key.value !== '$ref' || !isScalar(pair.value))
+                    return;
+                const match = LOCAL_SCHEMA_REF.exec(String(pair.value.value));
+                if (match !== null) found.add(match[1]);
+            }
+        });
+    return [...found];
+};
+
+/**
+ * Puts every schema after the schemas it references. The Zod emitter declares in order, and an
+ * extended union is written before the variants a fragment appends to it, so it must move behind
+ * them. A schema already after its references keeps its place, so a section nobody extends is
+ * left as written.
+ *
+ * @param document - the section's document, edited in place
+ */
+const orderByReference = (document: Document): void => {
+    const schemas = document.getIn(['components', 'schemas'], true);
+    if (!isMap(schemas)) return;
+
+    const byName = new Map(
+        schemas.items.map((pair) => [String(isScalar(pair.key) ? pair.key.value : pair.key), pair])
+    );
+    const ordered: typeof schemas.items = [];
+    const placed = new Set<string>();
+    const place = (name: string): void => {
+        const pair = byName.get(name);
+        if (placed.has(name) || pair === undefined) return;
+        // Marked before its references are placed, so a cycle stops instead of looping.
+        placed.add(name);
+        for (const reference of localReferencesIn(pair.value)) place(reference);
+        ordered.push(pair);
+    };
+    for (const name of byName.keys()) place(name);
+    schemas.items = ordered;
+};
+
 /**
  * Folds every module's fragment for this section into the section's document.
  *
@@ -233,6 +285,7 @@ export const withSectionFragments = (
         localiseOpenApiReferences(parsed, path.join(path.dirname(fragment), 'openapi.yaml'));
         merge(document, label, parsed);
         appendExtensions(document, parsed.get('x-extends', true), `${label} fragment`);
+        if (parsed.has('x-extends')) orderByReference(document);
     }
     return document;
 };

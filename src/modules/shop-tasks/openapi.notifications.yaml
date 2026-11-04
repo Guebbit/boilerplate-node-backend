@@ -1,0 +1,656 @@
+# The shop's additions to the notifications contract: the buyer messages and the staff work notices
+# only a shop sends. `x-extends` appends each variant below to `Notification` (`oneOf` and
+# `discriminator.mapping`); `notifications` never names them, so a project without a shop carries
+# five notices and none of these. Codes are `shop-tasks.<name>` and `shop-tasks.staff.<name>`: a code
+# is its own dictionary key in both repos.
+#
+# See: docs/api/contract-fragmentation.md#extending-another-modules-contract
+openapi: 3.1.0
+info:
+    title: shop-tasks — notifications extension
+    version: '0.1.0'
+x-extends:
+    Notification:
+        - NotificationFulfillmentHeld
+        - NotificationShipmentLost
+        - NotificationStockAlert
+        - NotificationFulfillmentDelayed
+        - NotificationCartLineRemoved
+        - NotificationWishlistItemRemoved
+        - NotificationCartMergeRefused
+        - NotificationStaffPurchaseHoldPlaced
+        - NotificationStaffReturnRequested
+        - NotificationStaffTransfersDue
+        - NotificationStaffPreordersLate
+        - NotificationStaffDeliveryHoldsOpen
+        - NotificationStaffWithdrawalsAwaitingGoods
+        - NotificationStaffReturnsUndecided
+        - NotificationStaffLowStock
+        - NotificationStaffUnshipped
+        - NotificationStaffAwaitingTracking
+        - NotificationStaffUndelivered
+        - NotificationStaffStaleRefunds
+components:
+    schemas:
+        # Locale → the product's name in it. Copied into the notification because the product may
+        # be gone by the time anyone reads it, so a reader sees their own language.
+        ProductTitles:
+            type: object
+            additionalProperties:
+                type: string
+
+        CartLineRemovedParams:
+            type: object
+            additionalProperties: false
+            required: [productId, titles]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                titles:
+                    $ref: '#/components/schemas/ProductTitles'
+
+        CartMergeRefusedParams:
+            type: object
+            additionalProperties: false
+            required: [lines]
+            properties:
+                lines:
+                    type: array
+                    description: The guest-cart lines `POST /cart/merge` could not add at all.
+                    items:
+                        type: object
+                        additionalProperties: false
+                        required: [productId, requested, titles]
+                        properties:
+                            productId:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                            requested:
+                                type: integer
+                                minimum: 1
+                            titles:
+                                $ref: '#/components/schemas/ProductTitles'
+
+        FulfillmentDelayedParams:
+            type: object
+            additionalProperties: false
+            required: [orderId, fulfillmentOrderId, titles, agreedAt]
+            description: >-
+                What the buyer needs to read a late-preorder notice: which order and fulfillment order,
+                what is waiting, the date they were promised and the date now expected (absent when there
+                is none).
+            properties:
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                fulfillmentOrderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                titles:
+                    type: array
+                    description: The waiting products' titles, as the order froze them.
+                    items:
+                        type: string
+                agreedAt:
+                    type: string
+                    format: date-time
+                expectedAt:
+                    type: string
+                    format: date-time
+
+        ShipmentLostParams:
+            type: object
+            additionalProperties: false
+            required: [orderId, shipmentId, reason]
+            description: >-
+                What the buyer needs to read a lost-parcel notice: which order and shipment, whether it
+                was lost or damaged in transit, the sentence staff wrote for them if any, and the
+                units the shelf could not cover again with the date they are now expected (absent
+                when everything is being sent again from the shelf).
+            properties:
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                shipmentId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                reason:
+                    type: string
+                    enum: [lost, damaged]
+                message:
+                    type: string
+                    maxLength: 500
+                owed:
+                    type: array
+                    description: The titles of the products still to be restocked, as the order froze them.
+                    items:
+                        type: string
+                expectedAt:
+                    type: string
+                    format: date-time
+
+        FulfillmentHeldParams:
+            type: object
+            additionalProperties: false
+            required: [orderId, fulfillmentOrderId, notice]
+            description: >-
+                What the buyer needs to read a hold notice: which order and fulfillment order, whether
+                the address needs a look (`check_address`) or the order is only `delayed`, and the
+                sentence staff wrote for them, if any. Never staff's reason.
+            properties:
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                fulfillmentOrderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                notice:
+                    type: string
+                    enum: [check_address, delayed]
+                message:
+                    type: string
+                    maxLength: 500
+
+        NotificationFulfillmentHeld:
+            type: object
+            additionalProperties: false
+            description: Part of an order the caller bought is held back, and they can act (check the address) or have a message from the shop.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [shop-tasks.fulfillment-held]
+                params:
+                    $ref: '#/components/schemas/FulfillmentHeldParams'
+                severity:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationShipmentLost:
+            type: object
+            additionalProperties: false
+            description: A parcel the caller was waiting for was reported lost or damaged in transit; the shop sends it again or refunds.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [shop-tasks.shipment-lost]
+                params:
+                    $ref: '#/components/schemas/ShipmentLostParams'
+                severity:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStockAlert:
+            type: object
+            additionalProperties: false
+            description: A product the caller asked to be told about can be ordered again. Sent once, then the request is gone.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [shop-tasks.stock-alert]
+                params:
+                    $ref: '#/components/schemas/CartLineRemovedParams'
+                severity:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationFulfillmentDelayed:
+            type: object
+            additionalProperties: false
+            description: A preorder the caller paid for will arrive later than promised; cancelling is open and silence keeps waiting.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [shop-tasks.fulfillment-delayed]
+                params:
+                    $ref: '#/components/schemas/FulfillmentDelayedParams'
+                severity:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationCartLineRemoved:
+            type: object
+            additionalProperties: false
+            description: A product left the catalogue and left the caller's cart with it.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [shop-tasks.cart-line-removed]
+                params:
+                    $ref: '#/components/schemas/CartLineRemovedParams'
+                severity:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationWishlistItemRemoved:
+            type: object
+            additionalProperties: false
+            description: A product left the catalogue and left the caller's wishlist with it.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [shop-tasks.wishlist-item-removed]
+                params:
+                    $ref: '#/components/schemas/CartLineRemovedParams'
+                severity:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationCartMergeRefused:
+            type: object
+            additionalProperties: false
+            description: Guest-cart lines `POST /cart/merge` could not add at all, because the product is no longer available.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [shop-tasks.cart-merge-refused]
+                params:
+                    $ref: '#/components/schemas/CartMergeRefusedParams'
+                severity:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        PurchaseHoldPlacedParams:
+            type: object
+            additionalProperties: false
+            required: [userId, until]
+            description: >-
+                The shop's rule paused a buyer's checkout. Ids and instants only: the account's own
+                page has the rest.
+            properties:
+                userId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                until:
+                    type: string
+                    format: date-time
+                    description: When the pause ends by itself.
+
+        NotificationStaffPurchaseHoldPlaced:
+            type: object
+            additionalProperties: false
+            description: A buyer's checkout was paused by the shop's cancellation rule; staff who can ban decide whether to step in.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [shop-tasks.staff.purchase-hold-placed]
+                params:
+                    $ref: '#/components/schemas/PurchaseHoldPlacedParams'
+                severity:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        ReturnRequestedParams:
+            type: object
+            additionalProperties: false
+            required: [returnId, orderId]
+            description: A return request is waiting for a decision. Ids only, the return's page has the rest.
+            properties:
+                returnId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+
+        NotificationStaffReturnRequested:
+            type: object
+            additionalProperties: false
+            description: A buyer asked to return goods; staff who decide returns take it.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [shop-tasks.staff.return-requested]
+                params:
+                    $ref: '#/components/schemas/ReturnRequestedParams'
+                severity:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        WorkCountParams:
+            type: object
+            additionalProperties: false
+            required: [count]
+            description: A summary row of how many items need the reader today. The screen it points at lists them.
+            properties:
+                count:
+                    type: integer
+                    minimum: 1
+
+        NotificationStaffTransfersDue:
+            type: object
+            additionalProperties: false
+            description: Bank transfers still unpaid whose pay-by date is near.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [shop-tasks.staff.transfers-due]
+                params:
+                    $ref: '#/components/schemas/WorkCountParams'
+                severity:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffPreordersLate:
+            type: object
+            additionalProperties: false
+            description: Preorders and backorders past their expected date with units still owed.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [shop-tasks.staff.preorders-late]
+                params:
+                    $ref: '#/components/schemas/WorkCountParams'
+                severity:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffDeliveryHoldsOpen:
+            type: object
+            additionalProperties: false
+            description: Fulfillment orders held for a reason other than waiting for stock, for longer than the shop allows.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [shop-tasks.staff.delivery-holds-open]
+                params:
+                    $ref: '#/components/schemas/WorkCountParams'
+                severity:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffWithdrawalsAwaitingGoods:
+            type: object
+            additionalProperties: false
+            description: Withdrawals after dispatch whose goods have not been received back.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [shop-tasks.staff.withdrawals-awaiting-goods]
+                params:
+                    $ref: '#/components/schemas/WorkCountParams'
+                severity:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffReturnsUndecided:
+            type: object
+            additionalProperties: false
+            description: Return requests still awaiting a decision after the shop reminder time.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [shop-tasks.staff.returns-undecided]
+                params:
+                    $ref: '#/components/schemas/WorkCountParams'
+                severity:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffLowStock:
+            type: object
+            additionalProperties: false
+            description: Products at or under the low-stock threshold.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [shop-tasks.staff.low-stock]
+                params:
+                    $ref: '#/components/schemas/WorkCountParams'
+                severity:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffUnshipped:
+            type: object
+            additionalProperties: false
+            description: Paid orders not handed to a carrier for longer than the shop allows.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [shop-tasks.staff.unshipped]
+                params:
+                    $ref: '#/components/schemas/WorkCountParams'
+                severity:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffAwaitingTracking:
+            type: object
+            additionalProperties: false
+            description: Shipped parcels on a tracked method that still have no tracking code.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [shop-tasks.staff.awaiting-tracking]
+                params:
+                    $ref: '#/components/schemas/WorkCountParams'
+                severity:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffUndelivered:
+            type: object
+            additionalProperties: false
+            description: Parcels shipped and never marked arrived, the buyer withdrawal window and guarantee have not started.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [shop-tasks.staff.undelivered]
+                params:
+                    $ref: '#/components/schemas/WorkCountParams'
+                severity:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffStaleRefunds:
+            type: object
+            additionalProperties: false
+            description: Provider refunds open past the attention threshold.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [shop-tasks.staff.stale-refunds]
+                params:
+                    $ref: '#/components/schemas/WorkCountParams'
+                severity:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time

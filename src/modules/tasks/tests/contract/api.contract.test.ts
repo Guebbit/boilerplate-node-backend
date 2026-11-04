@@ -173,7 +173,7 @@ describe('GET /tasks', () => {
             .send({ ...CONTACT_PAYLOAD, category: 'privacy', email: 'one@example.com' });
         await api()
             .post('/tasks')
-            .send({ ...CONTACT_PAYLOAD, category: 'order', email: 'two@example.com' });
+            .send({ ...CONTACT_PAYLOAD, category: 'other', email: 'two@example.com' });
 
         const response = await api().get('/tasks?category=privacy').set('Authorization', bearer);
 

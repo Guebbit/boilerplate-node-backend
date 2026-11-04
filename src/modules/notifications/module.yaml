@@ -1,29 +1,9 @@
 summary: 'A per-user inbox: messages that stay until the owner deletes them, fed by domain events and pushed live over SSE.'
 subdomain: supporting
-group: shop
+group: foundation
 dependsOn:
     - access # who holds the permission sets a work notice is for
-    - cart # subscribes to its two events
-    - delivery # subscribes to its event, a late preorder's notice
-    - inventory # the low-stock count of the daily digest
-    - orders # subscribes to its event, a purchase hold placed
-    - payments # the stale-refund count of the daily digest
-    - returns # subscribes to its event, a return requested
-    - stock-alerts # subscribes to its event, a back-in-stock request answered
-    - tasks # subscribes to its two events, and asks it to mail the fallback mailbox
+    - tasks # subscribes to its events, and asks it to mail the fallback mailbox
     - users # which of those members can act today, and where to mail them
     - webhooks # subscribes to its event, a subscription auto-disabled
-    - wishlist # subscribes to its event
 noAudit: "Writes and clears courtesy messages and pointers to work: nothing money, stock or identity related, every row is the owner's to delete, and the screen a work notice points at audits its own acts."
-jobs:
-    sweepStaffDigest:
-        name: sweep:staff-digest
-        schedule: 30 6 * * *
-        summary: Rewrites the staff summary rows (transfers due, unshipped, undecided returns, open
-            holds, missing tracking codes, undelivered parcels, stale refunds, low stock) and mails
-            each person the overdue ones that appeared or grew.
-    sweepStaffWeekly:
-        name: sweep:staff-weekly
-        schedule: 30 6 * * 1
-        summary: Rewrites the late-preorder summary row for the staff who edit orders, and mails it
-            when it appeared or grew.

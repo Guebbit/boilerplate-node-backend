@@ -36,6 +36,22 @@ const supportedLocale = (locale: string): string =>
     isServedLocale(locale) ? locale : getDefaultLocale();
 
 /**
+ * A path template with every `{name}` placeholder filled in and URL-encoded: the part of a link
+ * that follows the locale. Also what a module stores when it hands another a screen to open
+ * (`orders/64b7...`), before any origin or locale is known.
+ *
+ * @param template - the path, e.g. `orders/{id}`
+ * @param parameters - one value per `{name}` placeholder; a name the template lacks is never substituted
+ */
+export const fillPath = (template: string, parameters: Record<string, string> = {}): string => {
+    let path = template;
+    for (const [name, value] of Object.entries(parameters))
+        // A function replacer, so a `$&` in a value is text, not a replacement pattern.
+        path = path.replaceAll(`{${name}}`, () => encodeURIComponent(value));
+    return path;
+};
+
+/**
  * A link into the paired frontend: its origin, the email's own locale, and `template` with every
  * `{name}` placeholder filled in and URL-encoded. The locale segment is never part of `template` —
  * it always comes first, straight from `locale` — since every route on the paired frontend lives
@@ -51,11 +67,4 @@ export const frontendLink = (
     template: string,
     locale: string,
     parameters: Record<string, string> = {}
-): string => {
-    let path = template;
-    for (const [name, value] of Object.entries(parameters))
-        // A function replacer, so a `$&` in a value is text, not a replacement pattern.
-        path = path.replaceAll(`{${name}}`, () => encodeURIComponent(value));
-
-    return `${frontendOrigin()}/${supportedLocale(locale)}/${path}`;
-};
+): string => `${frontendOrigin()}/${supportedLocale(locale)}/${fillPath(template, parameters)}`;

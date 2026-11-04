@@ -102,7 +102,7 @@ describe('notificationsCreate', () => {
             'notifications.created',
             expect.objectContaining({
                 notification: expect.objectContaining({
-                    code: 'notifications.cart-line-removed',
+                    code: 'notifications.staff.webhook-disabled',
                     severity: 'warning'
                 })
             })
@@ -113,9 +113,9 @@ describe('notificationsCreate', () => {
         makeRow('64b7f1a2c3d4e5f607182931'),
         {
             userId: new Types.ObjectId('64b7f1a2c3d4e5f607182931'),
-            code: 'notifications.cart-merge-refused',
+            code: 'notifications.staff.outbox-dead',
             severity: 'warning',
-            params: { lines: [{ productId: 'p3', requested: 4, titles: { en: 'Green mug' } }] }
+            params: { eventName: 'order.paid', aggregateId: 'o1' }
         }
     ])('pushes a payload the AsyncAPI contract accepts, for $code', async (row) => {
         const publish = jest.mocked(stream.publishToUser);
@@ -412,8 +412,8 @@ describe('notificationsDeleteByUserId', () => {
 function makeRow(userId: string) {
     return {
         userId: new Types.ObjectId(userId),
-        code: 'notifications.cart-line-removed' as const,
+        code: 'notifications.staff.webhook-disabled' as const,
         severity: 'warning' as const,
-        params: { productId: 'p1', titles: { en: 'Blue mug' } }
+        params: { subscriptionId: 's1' }
     };
 }

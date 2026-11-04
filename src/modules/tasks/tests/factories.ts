@@ -11,19 +11,19 @@ import { taskRepository } from '../repository';
 import { taskModel } from '../model';
 
 /**
- * Persist an open system task about a refund owed by hand, the kind routed to
- * `PaymentRefunding`.
+ * Persist an open system task about a failed data export, the kind routed to `UserErasure`.
  *
  * @param subjectId - the account the task is about, when it is about one
  * @returns the stored task
  */
-export const createRefundTask = (subjectId?: string): Promise<TaskDocument> =>
+export const createSystemTask = (subjectId?: string): Promise<TaskDocument> =>
     taskRepository.create({
         source: TaskSource.system,
-        kind: TaskKind.manual_refund_owed,
-        routeSet: 'PaymentRefunding',
-        subject: 'A refund is owed by hand',
-        message: 'Refund r1 needs a person.',
+        kind: TaskKind.export_failed,
+        routeSet: 'UserErasure',
+        subject: 'A data export failed',
+        message: 'Export e1 needs a person.',
+        work: 'users/u1',
         ...(subjectId === undefined ? {} : { subjectId: toObjectId(subjectId) })
     });
 
@@ -50,3 +50,17 @@ export const closeDirectly = (id: string): Promise<unknown> =>
             { $set: { status: TaskStatus.resolved, resolution: TaskResolution.staff } }
         )
         .exec();
+
+/**
+ * Every task in the test database, oldest first — what a test that reads storage past the doors sees.
+ */
+export const findAllTasks = (): Promise<TaskDocument[]> =>
+    taskModel.find().sort({ createdAt: 1 }).exec();
+
+/**
+ * The tasks of one kind, read straight from storage.
+ *
+ * @param kind - the situation they were opened for
+ */
+export const findTasksOfKind = (kind: TaskKind): Promise<TaskDocument[]> =>
+    taskModel.find({ kind }).exec();

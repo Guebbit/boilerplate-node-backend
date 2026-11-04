@@ -42,7 +42,7 @@ import {
 import { toObjectId, type Lean } from '@infrastructure/persistence/create-repository';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
-import { OPEN_STATUSES, initialTaskStatus, ownTasksFilter, routeSetOf } from './domain';
+import { OPEN_STATUSES, initialTaskStatus, ownTasksFilter, CONTACT_ROUTE_SET } from './domain';
 import { tasksConfig } from './config';
 import { tasksAuditActions } from './audit';
 import { TASK_OPENED } from './events';
@@ -51,6 +51,7 @@ import { presentTask, withView } from './presenter';
 import { assigneeNamesOf, viewerOf } from './views';
 import { workflow } from './services/workflow';
 import { remindOverdue } from './services/overdue';
+import { clearSystemTasks, openSystemTask } from './services/system';
 
 /** How long a contact message may wait before it is overdue, in milliseconds. */
 const contactSlaMs = (): number => tasksConfig().NODE_TASKS_CONTACT_SLA_HOURS * 3_600_000;
@@ -92,7 +93,7 @@ const create = (payload: CreateContactTaskRequest, subjectId?: string): Promise<
                 ...(payload.orderNumber?.trim() ? { orderNumber: payload.orderNumber.trim() } : {}),
                 source: TaskSource.visitor,
                 kind: TaskKind.contact,
-                routeSet: routeSetOf(TaskKind.contact),
+                routeSet: CONTACT_ROUTE_SET,
                 status: initialTaskStatus(suspectedSpam),
                 // Spam is closed at birth: it ages from now and never owes work.
                 ...(suspectedSpam
@@ -446,6 +447,8 @@ export const taskService = {
     create,
     mailFallbackMailbox,
     remindOverdue,
+    openSystemTask,
+    clearSystemTasks,
     search,
     getById,
     removeById,

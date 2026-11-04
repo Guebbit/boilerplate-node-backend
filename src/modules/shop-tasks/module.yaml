@@ -1,0 +1,29 @@
+summary: "The shop's side of the helpdesk: opens a to-do for each payment, stock or delivery situation that needs a person, writes the buyer's messages and the staff's work notices, and sends the staff digest."
+subdomain: supporting
+group: shop
+dependsOn:
+    - cart # subscribes to its two events
+    - delivery # subscribes to its events; the digest counts its parcels
+    - inventory # subscribes to its event, a paid order with no stock set aside; the digest counts low stock
+    - notifications # writes the buyer's messages and staff notices, and the digest rows
+    - orders # subscribes to its events; the digest counts its orders
+    - payments # subscribes to its refund and dispute events; the digest counts stale refunds
+    - returns # subscribes to its event, a return requested; the digest counts its returns
+    - shop # the shop's country, which decides who owes a delay-consent reminder
+    - stock-alerts # subscribes to its event, a back-in-stock request answered
+    - tasks # opens and clears the to-dos
+    - users # who can act today, for the digest
+    - wishlist # subscribes to its event
+noAudit: 'Writes through `tasks` and `notifications`, which audit their own writes; this module owns no collection.'
+jobs:
+    sweepStaffDigest:
+        name: sweep:staff-digest
+        schedule: 30 6 * * *
+        summary: Rewrites the staff summary rows (transfers due, unshipped, undecided returns, open
+            holds, missing tracking codes, undelivered parcels, stale refunds, low stock) and mails
+            each person the overdue ones that appeared or grew.
+    sweepStaffWeekly:
+        name: sweep:staff-weekly
+        schedule: 30 6 * * 1
+        summary: Rewrites the late-preorder summary row for the staff who edit orders, and mails it
+            when it appeared or grew.

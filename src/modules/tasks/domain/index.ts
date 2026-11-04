@@ -23,15 +23,5 @@ export {
 } from './lifecycle';
 export { actionsOf, type ActionFacts, type TaskActionFlags } from './actions';
 export { ownTasksFilter, type OwnerRef, type OwnTasksFilter } from './ownership';
-export { ROUTED_SETS, routeSetOf, TASK_KINDS } from './routing';
-export {
-    accountReviewOpening,
-    amountMismatchOpening,
-    consentDueOpening,
-    disputeOpening,
-    exportFailedOpening,
-    paidWithoutHoldOpening,
-    refundOwedOpening,
-    refundRefusedOpening,
-    type SystemOpening
-} from './system';
+export { CONTACT_ROUTE_SET } from './routing';
+export { accountReviewOpening, exportFailedOpening, type SystemOpening } from './system';

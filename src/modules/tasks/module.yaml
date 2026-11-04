@@ -1,13 +1,9 @@
 summary: 'Situations someone must take and close: contact messages and system-opened tasks, routed to the staff who hold the matching permission set.'
 subdomain: generic
-group: shop
+group: foundation
 dependsOn:
     - access # the roles of a person a task may be assigned to
     - account # subscribes to its events, a data export failed or became ready
-    - delivery # subscribes to its events, a shipment left and a delay was told to the buyer
-    - inventory # subscribes to its event, a paid order with no stock set aside
-    - orders # subscribes to its event, an order cancelled
-    - payments # subscribes to its refund and dispute events, and asks when a refund is due
     - users # the assignee's name, and whether a person exists to be given a task; its review-flag events
 jobs:
     sweepTasksOverdue:

@@ -13,64 +13,14 @@ export interface NotificationsView {
 }
 
 /**
- * The `code` + `params` of a document, re-read as the contract's variant for that code. A switch
- * rather than `{ code, params }` read off the document: destructuring the two separately loses
- * the pairing the union exists to keep, and the compiler would stop checking it.
+ * The `code` + `params` of a document, re-read as the contract's variant for that code.
+ * Mixed storage loses the pairing the union exists to keep; every writer is typed per code
+ * (`NewNotification` is built from the same union), so one cast here restores what they promised
+ * rather than one switch arm per code, which a module adding codes could never extend.
  */
-const bodyOf = (notification: NotificationDocument): NotificationBody => {
-    switch (notification.code) {
-        case 'notifications.cart-merge-refused': {
-            return { code: notification.code, params: notification.params };
-        }
-        case 'notifications.cart-line-removed':
-        case 'notifications.stock-alert':
-        case 'notifications.wishlist-item-removed': {
-            return { code: notification.code, params: notification.params };
-        }
-        case 'notifications.fulfillment-delayed': {
-            return { code: notification.code, params: notification.params };
-        }
-        case 'notifications.fulfillment-held': {
-            return { code: notification.code, params: notification.params };
-        }
-        case 'notifications.shipment-lost': {
-            return { code: notification.code, params: notification.params };
-        }
-        case 'notifications.staff.purchase-hold-placed': {
-            return { code: notification.code, params: notification.params };
-        }
-        case 'notifications.staff.webhook-disabled': {
-            return { code: notification.code, params: notification.params };
-        }
-        case 'notifications.staff.task-opened': {
-            return { code: notification.code, params: notification.params };
-        }
-        case 'notifications.staff.task-overdue': {
-            return { code: notification.code, params: notification.params };
-        }
-        case 'notifications.staff.task-assigned': {
-            return { code: notification.code, params: notification.params };
-        }
-        case 'notifications.staff.return-requested': {
-            return { code: notification.code, params: notification.params };
-        }
-        case 'notifications.staff.outbox-dead': {
-            return { code: notification.code, params: notification.params };
-        }
-        case 'notifications.staff.transfers-due':
-        case 'notifications.staff.preorders-late':
-        case 'notifications.staff.delivery-holds-open':
-        case 'notifications.staff.withdrawals-awaiting-goods':
-        case 'notifications.staff.returns-undecided':
-        case 'notifications.staff.low-stock':
-        case 'notifications.staff.unshipped':
-        case 'notifications.staff.awaiting-tracking':
-        case 'notifications.staff.undelivered':
-        case 'notifications.staff.stale-refunds': {
-            return { code: notification.code, params: notification.params };
-        }
-    }
-};
+const bodyOf = (notification: NotificationDocument): NotificationBody =>
+    // Narrowing, not widening: see the paragraph above.
+    ({ code: notification.code, params: notification.params }) as NotificationBody;
 
 /** Turn one notification document into the contract's `Notification`, the variant for its code. */
 export const presentNotification = (notification: NotificationDocument): Notification => ({

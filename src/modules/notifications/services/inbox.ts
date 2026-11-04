@@ -7,6 +7,7 @@
 
 import type { ClientSession } from 'mongoose';
 import type { Caller, StaffNoticeExport } from '@types';
+import { DAY_MS } from '@domain-primitives/time';
 import { t } from '@infrastructure/i18n';
 import {
     generateSuccess,
@@ -163,12 +164,20 @@ const countOf = (row: { params: object } | null): number =>
  * unread again and pushed to the person's open tabs (as a delete then a create, so a tab holds one
  * copy, not two). A count that fell is quietly updated: good news does not need a ping.
  *
- * @param row - the summary, keyed by its code
+ * @param summary - the summary, keyed by its code; the inbox decides how long it lives
+ * @param now - the clock the lifetime is measured from
  * @returns what happened to the row, so the digest mails only what appeared or grew
  */
 export const notificationsWriteSummary = async (
-    row: NewStaffNotification
+    summary: Omit<NewStaffNotification, 'expiresAt'>,
+    now: Date = new Date()
 ): Promise<SummaryOutcome> => {
+    const row: NewStaffNotification = {
+        ...summary,
+        expiresAt: new Date(
+            now.getTime() + notificationsConfig().NODE_NOTIFICATIONS_STAFF_TTL_DAYS * DAY_MS
+        )
+    };
     const userId = String(row.userId);
     const before = await notificationRepository.findSummary(userId, row.dedupeKey);
     const outcome: SummaryOutcome =

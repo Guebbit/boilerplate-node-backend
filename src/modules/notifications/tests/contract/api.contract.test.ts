@@ -50,15 +50,15 @@ describe('GET /notifications', () => {
         await createNotification({
             userId: user.id,
             body: {
-                code: 'notifications.wishlist-item-removed',
-                params: { productId: 'p2', titles: { en: 'Red mug' } }
+                code: 'notifications.staff.webhook-disabled',
+                params: { subscriptionId: 's2' }
             }
         });
         await createNotification({
             userId: user.id,
             body: {
-                code: 'notifications.cart-merge-refused',
-                params: { lines: [{ productId: 'p3', requested: 4, titles: { en: 'Green mug' } }] }
+                code: 'notifications.staff.outbox-dead',
+                params: { eventName: 'order.paid', aggregateId: 'o1' }
             }
         });
 
@@ -66,8 +66,8 @@ describe('GET /notifications', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.items.map(({ code }: { code: string }) => code).toSorted()).toEqual([
-            'notifications.cart-merge-refused',
-            'notifications.wishlist-item-removed'
+            'notifications.staff.outbox-dead',
+            'notifications.staff.webhook-disabled'
         ]);
     });
 });
@@ -78,10 +78,10 @@ describe('GET /notifications for a work notice', () => {
         await createNotification({
             userId: user.id,
             body: {
-                code: 'notifications.staff.purchase-hold-placed',
-                params: { userId: MISSING_ID, until: '2026-10-30T09:00:00.000Z' }
+                code: 'notifications.staff.task-assigned',
+                params: { taskId: MISSING_ID, kind: 'contact' }
             },
-            staff: { tenantId: DEPLOYMENT_TENANT_ID, sets: ['UserBanning'] }
+            staff: { tenantId: DEPLOYMENT_TENANT_ID, sets: ['TaskManagement'] }
         });
         await createNotification({
             userId: user.id,
@@ -97,7 +97,7 @@ describe('GET /notifications for a work notice', () => {
         expect(response.status).toBe(200);
         expect(response.body.items).toHaveLength(2);
         for (const item of response.body.items) expect(item.audience).toBe('staff');
-        expect(JSON.stringify(response.body)).not.toContain('UserBanning');
+        expect(JSON.stringify(response.body)).not.toContain('TaskManagement');
     });
 
     it('answers 404 for a work notice whose sets the caller no longer holds', async () => {
@@ -317,9 +317,9 @@ describe('GET /notifications/stream', () => {
                     notificationsService.create([
                         {
                             userId: user._id,
-                            code: 'notifications.cart-line-removed',
+                            code: 'notifications.staff.webhook-disabled',
                             severity: 'warning',
-                            params: { productId: 'p1', titles: { en: 'Blue mug' } }
+                            params: { subscriptionId: 's1' }
                         }
                     ])
                 )
@@ -327,7 +327,7 @@ describe('GET /notifications/stream', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers['content-type']).toContain('text/event-stream');
-        expect(String(response.body)).toContain('"code":"notifications.cart-line-removed"');
+        expect(String(response.body)).toContain('"code":"notifications.staff.webhook-disabled"');
     });
 
     it('matches the error contract with no session', async () => {

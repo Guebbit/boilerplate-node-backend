@@ -1,116 +1,68 @@
 /**
  * @module
- * The routing table is the audit of "who is told": every work notice has a route, names permission
- * sets that exist, and a notice that mails has the words to do it in every served language.
+ * The routing table is the audit of "who is told" for the notices every project has: every one has
+ * a route, names permission sets that exist, and a notice that mails has the words to do it in
+ * every served language. The shop's notices are audited beside the module that owns them.
  */
 import { PERMISSION_SETS } from '@kernel/permissions';
-import { STAFF_NOTIFICATION_CODES } from '@modules/notifications/model';
 import { staffNoticeEmail } from '@modules/notifications/emails';
 import {
     STAFF_ROUTES,
     callerHoldsAnySet,
     setsOfRoute,
-    staffLinkOf,
-    type StaffNoticeBody
+    staffLinkOf
 } from '@modules/notifications/staff-routing';
 import { FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
 import { callerAs } from '@tests/callers';
 import { translator } from '@infrastructure/i18n';
-import { TASK_KINDS } from '@modules/tasks';
+import { TaskKind } from '@types';
 
 /** The shared staff screen paths the links are compared against. */
 const PAGES = FRONTEND_LINK_RULES.staffPages;
 
-/** One valid body per work notice code. */
-const BODIES: Record<(typeof STAFF_NOTIFICATION_CODES)[number], StaffNoticeBody> = {
-    'notifications.staff.purchase-hold-placed': {
-        code: 'notifications.staff.purchase-hold-placed',
-        params: { userId: 'u1', until: '2026-10-30T09:00:00.000Z' }
-    },
+/** One valid body per work notice code this module routes. */
+const BODIES = {
     'notifications.staff.webhook-disabled': {
         code: 'notifications.staff.webhook-disabled',
         params: { subscriptionId: 's1' }
     },
     'notifications.staff.task-opened': {
         code: 'notifications.staff.task-opened',
-        params: { taskId: 't1', kind: 'contact', category: 'cancellation' }
+        params: { taskId: 't1', kind: 'contact', category: 'privacy' }
     },
     'notifications.staff.task-overdue': {
         code: 'notifications.staff.task-overdue',
-        params: { taskId: 't1', kind: 'contact', category: 'cancellation' }
+        params: { taskId: 't1', kind: 'contact', category: 'privacy' }
     },
     'notifications.staff.task-assigned': {
         code: 'notifications.staff.task-assigned',
-        params: { taskId: 't1', kind: 'dispute' }
-    },
-    'notifications.staff.return-requested': {
-        code: 'notifications.staff.return-requested',
-        params: { returnId: 'r1', orderId: 'o1' }
+        params: { taskId: 't1', kind: 'export_failed' }
     },
     'notifications.staff.outbox-dead': {
         code: 'notifications.staff.outbox-dead',
         params: { eventName: 'user.updated', aggregateId: 'u1' }
-    },
-    'notifications.staff.transfers-due': {
-        code: 'notifications.staff.transfers-due',
-        params: { count: 3 }
-    },
-    'notifications.staff.preorders-late': {
-        code: 'notifications.staff.preorders-late',
-        params: { count: 3 }
-    },
-    'notifications.staff.delivery-holds-open': {
-        code: 'notifications.staff.delivery-holds-open',
-        params: { count: 3 }
-    },
-    'notifications.staff.withdrawals-awaiting-goods': {
-        code: 'notifications.staff.withdrawals-awaiting-goods',
-        params: { count: 3 }
-    },
-    'notifications.staff.returns-undecided': {
-        code: 'notifications.staff.returns-undecided',
-        params: { count: 3 }
-    },
-    'notifications.staff.low-stock': {
-        code: 'notifications.staff.low-stock',
-        params: { count: 3 }
-    },
-    'notifications.staff.unshipped': {
-        code: 'notifications.staff.unshipped',
-        params: { count: 3 }
-    },
-    'notifications.staff.awaiting-tracking': {
-        code: 'notifications.staff.awaiting-tracking',
-        params: { count: 3 }
-    },
-    'notifications.staff.undelivered': {
-        code: 'notifications.staff.undelivered',
-        params: { count: 3 }
-    },
-    'notifications.staff.stale-refunds': {
-        code: 'notifications.staff.stale-refunds',
-        params: { count: 3 }
     }
-};
+} as const;
 
 describe('STAFF_ROUTES', () => {
-    it('routes every work notice code', () => {
-        expect(Object.keys(STAFF_ROUTES).toSorted()).toEqual(
-            [...STAFF_NOTIFICATION_CODES].toSorted()
-        );
+    it('routes exactly the notices every project has', () => {
+        expect(Object.keys(STAFF_ROUTES).toSorted()).toEqual(Object.keys(BODIES).toSorted());
     });
 
-    it.each(STAFF_NOTIFICATION_CODES)('%s names permission sets that exist', (code) => {
-        const declared = new Set(PERMISSION_SETS.map(({ name }) => name));
+    it.each(Object.keys(STAFF_ROUTES) as (keyof typeof STAFF_ROUTES)[])(
+        '%s names permission sets that exist',
+        (code) => {
+            const declared = new Set(PERMISSION_SETS.map(({ name }) => name));
 
-        const { sets } = STAFF_ROUTES[code];
+            const { sets } = STAFF_ROUTES[code];
 
-        // A `per-notice` route names no sets of its own: the producer's are checked where it emits.
-        if (sets !== 'per-notice') for (const set of sets) expect(declared).toContain(set);
-    });
+            // A `per-notice` route names no sets of its own: the producer's are checked where it emits.
+            if (sets !== 'per-notice') for (const set of sets) expect(declared).toContain(set);
+        }
+    );
 
-    it('mails only where someone must act soon: a paused checkout, not a disabled webhook', () => {
-        expect(STAFF_ROUTES['notifications.staff.purchase-hold-placed'].email).toBe('now');
+    it('mails only where someone must act soon: a task, not a disabled webhook', () => {
+        expect(STAFF_ROUTES['notifications.staff.task-opened'].email).toBe('now');
         expect(STAFF_ROUTES['notifications.staff.webhook-disabled'].email).toBe('none');
     });
 
@@ -123,7 +75,7 @@ describe('STAFF_ROUTES', () => {
 });
 
 describe('staffLinkOf', () => {
-    it('points every task notice at the task page', () => {
+    it('points every task notice without a work screen at the task page', () => {
         expect(staffLinkOf(BODIES['notifications.staff.task-opened'])).toEqual({
             template: PAGES.task,
             parameters: { id: 't1' }
@@ -132,23 +84,31 @@ describe('staffLinkOf', () => {
         expect(staffLinkOf(BODIES['notifications.staff.task-assigned']).template).toBe(PAGES.task);
     });
 
-    it('points a hold at the buyer’s account and a disabled webhook at its subscription', () => {
-        expect(staffLinkOf(BODIES['notifications.staff.purchase-hold-placed'])).toEqual({
-            template: PAGES.user,
-            parameters: { id: 'u1' }
-        });
+    it('prefers the work screen the opener named over the to-do page', () => {
+        const withWork = {
+            code: 'notifications.staff.task-opened',
+            params: { taskId: 't1', kind: 'export_failed', work: 'users/u9' }
+        } as const;
+
+        expect(staffLinkOf(withWork)).toEqual({ template: 'users/u9', parameters: {} });
+        expect(
+            staffLinkOf({ code: 'notifications.staff.task-overdue', params: withWork.params })
+        ).toEqual({ template: 'users/u9', parameters: {} });
+    });
+
+    it('keeps a handed-over task on its own page: the assignee opens the to-do', () => {
+        expect(
+            staffLinkOf({
+                code: 'notifications.staff.task-assigned',
+                params: { taskId: 't1', kind: 'export_failed' }
+            }).template
+        ).toBe(PAGES.task);
+    });
+
+    it('points a disabled webhook at its subscription', () => {
         expect(staffLinkOf(BODIES['notifications.staff.webhook-disabled'])).toEqual({
             template: PAGES.webhookSubscription,
             parameters: { id: 's1' }
-        });
-    });
-});
-
-describe('staffLinkOf for the later notices', () => {
-    it('points a return request at the return', () => {
-        expect(staffLinkOf(BODIES['notifications.staff.return-requested'])).toEqual({
-            template: PAGES.return,
-            parameters: { id: 'r1' }
         });
     });
 
@@ -166,48 +126,39 @@ describe('staffLinkOf for the later notices', () => {
     });
 });
 
-describe('staffLinkOf for the summary rows', () => {
-    it.each([
-        ['notifications.staff.transfers-due', PAGES.salesOrders],
-        ['notifications.staff.preorders-late', PAGES.salesPreorders],
-        ['notifications.staff.delivery-holds-open', PAGES.salesOrders],
-        ['notifications.staff.withdrawals-awaiting-goods', PAGES.returns],
-        ['notifications.staff.returns-undecided', PAGES.returns],
-        ['notifications.staff.low-stock', PAGES.inventory],
-        ['notifications.staff.unshipped', PAGES.salesOrders],
-        ['notifications.staff.awaiting-tracking', PAGES.salesOrders],
-        ['notifications.staff.undelivered', PAGES.salesOrders],
-        ['notifications.staff.stale-refunds', PAGES.salesPayments]
-    ] as const)('points %s at its shared list screen', (code, path) => {
-        expect(staffLinkOf({ code, params: { count: 2 } })).toEqual({
-            template: path,
-            parameters: {}
-        });
-    });
-});
-
 describe('staffNoticeEmail', () => {
     it.each(['en', 'it'])('has the words for every mailing code in %s', (locale) => {
-        for (const code of STAFF_NOTIFICATION_CODES) {
+        for (const [code, body] of Object.entries(BODIES) as [
+            keyof typeof BODIES,
+            (typeof BODIES)[keyof typeof BODIES]
+        ][]) {
             if (STAFF_ROUTES[code].email !== 'now') continue;
 
-            const mail = staffNoticeEmail(locale, BODIES[code]);
+            const mail = staffNoticeEmail(locale, body, staffLinkOf(body));
 
             expect(mail.subject).not.toContain('notifications.staff-mail');
             expect(mail.data.summary).not.toContain('notifications.staff-mail');
-            expect(mail.data.link).toMatch(new RegExp(`/${locale}/(users/u1|tasks/t1)$`));
+            expect(mail.data.link).toMatch(new RegExp(`/${locale}/tasks/t1$`));
         }
+    });
+
+    it('opens the screen the caller handed over, not one it picked itself', () => {
+        const mail = staffNoticeEmail('en', BODIES['notifications.staff.task-opened'], {
+            template: 'orders/{id}',
+            parameters: { id: 'o 1' }
+        });
+
+        expect(mail.data.link).toMatch(/\/en\/orders\/o%201$/);
     });
 
     it.each(['en', 'it'])(
         'names a contact task by its category in %s, never by its text',
         (locale) => {
-            const mail = staffNoticeEmail(locale, BODIES['notifications.staff.task-opened']);
+            const body = BODIES['notifications.staff.task-opened'];
+            const mail = staffNoticeEmail(locale, body, staffLinkOf(body));
             const words = translator(locale);
 
-            expect(mail.subject).toContain(
-                words('notifications.staff-mail.task-category.cancellation')
-            );
+            expect(mail.subject).toContain(words('notifications.staff-mail.task-category.privacy'));
             expect(mail.data.link).toContain('/tasks/t1');
         }
     );
@@ -215,10 +166,11 @@ describe('staffNoticeEmail', () => {
     it.each(['en', 'it'])(
         'labels a contact task with no category as uncategorised in %s',
         (locale) => {
-            const mail = staffNoticeEmail(locale, {
+            const body = {
                 code: 'notifications.staff.task-opened',
                 params: { taskId: 't2', kind: 'contact' }
-            });
+            } as const;
+            const mail = staffNoticeEmail(locale, body, staffLinkOf(body));
 
             expect(mail.subject).toContain(
                 translator(locale)('notifications.staff-mail.task-category.none')
@@ -226,20 +178,14 @@ describe('staffNoticeEmail', () => {
         }
     );
 
-    it('has a label in every language for every task kind and category', () => {
+    it('has a label in every language for every task kind', () => {
         for (const locale of ['en', 'it']) {
             const words = translator(locale);
-            for (const kind of TASK_KINDS)
+            for (const kind of Object.values(TaskKind))
                 expect(words(`notifications.staff-mail.task-kind.${kind}`)).not.toContain(
                     'notifications.staff-mail'
                 );
         }
-    });
-
-    it('carries ids and instants only: no buyer address, no name', () => {
-        const mail = staffNoticeEmail('en', BODIES['notifications.staff.purchase-hold-placed']);
-
-        expect(JSON.stringify(mail)).not.toMatch(/@/);
     });
 });
 

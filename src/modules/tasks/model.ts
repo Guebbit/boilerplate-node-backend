@@ -21,7 +21,7 @@ import {
 import type { Task } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { tasksConfig } from './config';
-import { routeSetOf } from './domain';
+import { CONTACT_ROUTE_SET } from './domain';
 
 /**
  * How long a CLOSED task survives, in days, before Mongo's TTL index removes it. Read at import time
@@ -65,6 +65,11 @@ export interface TaskDocument
     notes: TaskNoteDocument[];
     /** Set only while a linked system task is open: the dedup key. */
     openKey?: string;
+    /**
+     * The staff screen the opener says does this work, as an opaque path under the staff
+     * frontend's locale (`orders/<id>`). Frozen beside `routeSet`, never on the Task API.
+     */
+    work?: string;
     /** The last system events that opened or touched it: what makes a redelivered event a no-op. */
     eventIds?: string[];
     dueAt?: Date;
@@ -136,7 +141,11 @@ export const taskSchema = new Schema<TaskDocument, TaskModel>(
         routeSet: {
             type: String,
             required: true,
-            default: () => routeSetOf(TaskKind.contact)
+            default: () => CONTACT_ROUTE_SET
+        },
+        // The staff screen that does the work: handed over by the opener, frozen with the set.
+        work: {
+            type: String
         },
         openKey: {
             type: String
@@ -256,7 +265,7 @@ taskSchema.index({ closedAt: 1 }, { expireAfterSeconds: retentionDays * 24 * 60 
  * same logic — see `./service` `search()`.
  */
 export const applyTaskTransform = applySerialization(taskSchema, {
-    omit: ['openKey', 'eventIds', 'overdueNotifiedAt'],
+    omit: ['openKey', 'eventIds', 'overdueNotifiedAt', 'work'],
     after: (serialized) => {
         // References and dates leave as the strings the wire declares, not as ObjectId and Date.
         for (const [key, value] of Object.entries(serialized)) {

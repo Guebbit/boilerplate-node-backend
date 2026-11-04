@@ -1,8 +1,9 @@
 /**
  * @module
  * The one email a work notice can send: a short "what happened" and a link to the screen where it
- * is dealt with, in the recipient's own language. Only codes whose route says `email: 'now'` have
- * copy here; the others are the bell's alone.
+ * is dealt with, in the recipient's own language. Only a notice whose route says `email: 'now'` is
+ * mailed; the others are the bell's alone. The wording is the notice code's own dictionary path, so
+ * a module that adds notices ships its copy beside them.
  *
  * See: docs/modules/notifications.md#work-notices-for-staff
  */
@@ -10,8 +11,7 @@
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
 import { frontendLink } from '@infrastructure/http/frontend-link';
-import type { StaffSummaryCode } from './model';
-import { staffLinkOf, type StaffNoticeBody } from './staff-routing';
+import type { StaffLink, StaffNoticeBody } from './staff-routing';
 
 /**
  * The words a task mail names the task by: its kind, and for a contact message its category.
@@ -42,37 +42,29 @@ const taskWhat = (
 const wordsOf = (
     t: ReturnType<typeof translator>,
     body: StaffNoticeBody
-): Record<string, string> => {
-    switch (body.code) {
-        case 'notifications.staff.task-opened':
-        case 'notifications.staff.task-overdue':
-        case 'notifications.staff.task-assigned': {
-            return { what: taskWhat(t, body.params) };
-        }
-        case 'notifications.staff.purchase-hold-placed':
-        case 'notifications.staff.webhook-disabled':
-        case 'notifications.staff.return-requested':
-        case 'notifications.staff.outbox-dead': {
-            return {};
-        }
-        default: {
-            // A summary row is never mailed on its own: the digest mail words it.
-            return {};
-        }
-    }
-};
+): Record<string, string> =>
+    body.code === 'notifications.staff.task-opened' ||
+    body.code === 'notifications.staff.task-overdue' ||
+    body.code === 'notifications.staff.task-assigned'
+        ? { what: taskWhat(t, body.params) }
+        : {};
 
 /**
  * The finished mail for a work notice.
  *
  * @param locale - the recipient's stored language
  * @param body - the notice; its code picks the wording, its params fill it
+ * @param link - the screen the mail opens, handed over by whoever wrote the notice
  */
-export const staffNoticeEmail = (locale: string, body: StaffNoticeBody): EmailContent => {
+export const staffNoticeEmail = (
+    locale: string,
+    body: StaffNoticeBody,
+    link: StaffLink
+): EmailContent => {
     const t = translator(locale);
-    const { template, parameters } = staffLinkOf(body);
-    // The code is its own dictionary path: `notifications.staff.<kind>` → `notifications.staff-mail.<kind>`.
-    const wording = body.code.replace('notifications.staff.', 'notifications.staff-mail.');
+    const { template, parameters } = link;
+    // The code is its own dictionary path: `<module>.staff.<kind>` → `<module>.staff-mail.<kind>`.
+    const wording = body.code.replace('.staff.', '.staff-mail.');
     const named = { ...body.params, ...wordsOf(t, body) };
     return {
         template: 'notifications.staff-notice',
@@ -84,44 +76,6 @@ export const staffNoticeEmail = (locale: string, body: StaffNoticeBody): EmailCo
             summary: t(`${wording}.summary`, named),
             link: frontendLink(template, locale, parameters),
             linkLabel: t('notifications.staff-mail.open')
-        }
-    };
-};
-
-/** One line of the digest mail: a summary row's code and how many it counts. */
-export interface DigestItem {
-    code: StaffSummaryCode;
-    count: number;
-}
-
-/**
- * The daily digest mail: one line per summary that appeared or grew, each with a link to the page
- * that lists it. Counts and links only, no names or addresses.
- *
- * @param locale - the recipient's stored language
- * @param items - the summaries to list; never empty
- */
-export const staffDigestEmail = (locale: string, items: readonly DigestItem[]): EmailContent => {
-    const t = translator(locale);
-    return {
-        template: 'notifications.staff-digest',
-        subject: t('notifications.staff-mail.digest.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('notifications.staff-mail.digest.meta-title'),
-            title: t('notifications.staff-mail.digest.title'),
-            lines: items.map(({ code, count }) => {
-                const { template, parameters } = staffLinkOf({ code, params: { count } });
-                return {
-                    text: t(
-                        code.replace('notifications.staff.', 'notifications.staff-mail.digest.'),
-                        {
-                            n: String(count)
-                        }
-                    ),
-                    link: frontendLink(template, locale, parameters)
-                };
-            })
         }
     };
 };

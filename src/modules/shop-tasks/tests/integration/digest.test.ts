@@ -18,8 +18,8 @@ import {
 } from '@modules/orders/tests/factories';
 import { backdateShipments, carryOrderTo, shipEverything } from '@modules/delivery/tests/factories';
 import { insertBareReturns } from '@modules/returns/tests/factories';
-import { notificationsService } from '@modules/notifications/services';
-import { runStaffDigest } from '@modules/notifications/services/digest';
+import { notificationsService } from '@modules/notifications';
+import { runStaffDigest } from '../../services/digest';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { callerInScope } from '@kernel/permissions';
@@ -73,7 +73,7 @@ const summariesOf = (role: string, userId: string) =>
 
 /** The digest mails queued so far. */
 const digestMails = () =>
-    mockEnqueueEmail.mock.calls.filter(([, template]) => template === 'notifications.staff-digest');
+    mockEnqueueEmail.mock.calls.filter(([, template]) => template === 'shop-tasks.staff-digest');
 
 /** A paid order the warehouse has not shipped for `days` days. */
 let buyers = 0;
@@ -99,7 +99,7 @@ describe('the daily digest', () => {
         await runStaffDigest('daily');
 
         await expect(summariesOf('warehouse', warehouse.id)).resolves.toEqual([
-            ['notifications.staff.unshipped', 1]
+            ['shop-tasks.staff.unshipped', 1]
         ]);
         await expect(summariesOf('support', support.id)).resolves.toEqual([]);
     });
@@ -129,7 +129,7 @@ describe('the daily digest', () => {
         await runStaffDigest('daily');
 
         await expect(summariesOf('warehouse', warehouse.id)).resolves.toEqual([
-            ['notifications.staff.unshipped', 2]
+            ['shop-tasks.staff.unshipped', 2]
         ]);
         expect(digestMails()).toHaveLength(2);
     });
@@ -158,7 +158,7 @@ describe('the daily digest', () => {
 
         expect(digestMails()).toHaveLength(0);
         await expect(summariesOf('moderator', moderator.id)).resolves.toContainEqual([
-            'notifications.staff.transfers-due',
+            'shop-tasks.staff.transfers-due',
             1
         ]);
     });
@@ -172,7 +172,7 @@ describe('the daily digest', () => {
         await runStaffDigest('daily');
 
         await expect(summariesOf('warehouse', warehouse.id)).resolves.toContainEqual([
-            'notifications.staff.undelivered',
+            'shop-tasks.staff.undelivered',
             1
         ]);
     });
@@ -192,7 +192,7 @@ describe('the daily digest', () => {
         await runStaffDigest('daily');
 
         await expect(summariesOf('warehouse', warehouse.id)).resolves.toContainEqual([
-            'notifications.staff.awaiting-tracking',
+            'shop-tasks.staff.awaiting-tracking',
             1
         ]);
     });
@@ -208,10 +208,10 @@ describe('the daily digest', () => {
         await runStaffDigest('daily');
 
         await expect(summariesOf('support', support.id)).resolves.toEqual([
-            ['notifications.staff.returns-undecided', 1]
+            ['shop-tasks.staff.returns-undecided', 1]
         ]);
         await expect(summariesOf('warehouse', warehouse.id)).resolves.toContainEqual([
-            'notifications.staff.withdrawals-awaiting-goods',
+            'shop-tasks.staff.withdrawals-awaiting-goods',
             1
         ]);
     });

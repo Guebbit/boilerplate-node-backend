@@ -22,23 +22,21 @@ flowchart LR
     delivery["delivery"]
     inventory["inventory"]
     invoicing["invoicing"]
-    notifications["notifications"]
     payments["payments"]
     products["products"]
     returns["returns"]
     shop["shop"]
+    shop_tasks["shop-tasks"]
     stats["stats"]
-    tasks["tasks"]
     users["users"]
 
     cart --> orders
     delivery --> orders
     invoicing --> orders
-    notifications --> orders
     payments --> orders
     returns --> orders
+    shop_tasks --> orders
     stats --> orders
-    tasks --> orders
     orders --> access
     orders --> inventory
     orders --> products
@@ -50,18 +48,18 @@ flowchart LR
     orders -. "order.status_changed" .-> delivery
     orders -. "order.status_overridden" .-> delivery
     orders -. "order.status_changed" .-> invoicing
-    orders -. "order.purchase_hold_placed" .-> notifications
     orders -. "order.cancelled" .-> payments
     orders -. "order.created" .-> payments
-    orders -. "order.cancelled" .-> tasks
+    orders -. "order.cancelled" .-> shop_tasks
+    orders -. "order.purchase_hold_placed" .-> shop_tasks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,products core;
-    class delivery,inventory,invoicing,notifications,payments,returns,shop,stats supporting;
-    class access,tasks,users generic;
+    class delivery,inventory,invoicing,payments,returns,shop,shop_tasks,stats supporting;
+    class access,users generic;
     class orders centre;
 ```
 

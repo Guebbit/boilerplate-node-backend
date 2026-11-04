@@ -4,7 +4,7 @@
  * `severity` are closed sets, and the one compound index serves both the inbox read and the cap's
  * trim, so a dropped enum or a flipped direction changes no valid fixture.
  */
-import { NOTIFICATION_CODES, notificationSchema } from '@modules/notifications/model';
+import { notificationSchema } from '@modules/notifications/model';
 import { NotificationSeverity } from '@types';
 import { defaultOf, enumOf, indexSpecs, optionsOf, refOf, requiredPaths } from '@tests/schema';
 
@@ -24,8 +24,9 @@ describe('notificationSchema', () => {
         expect(defaultOf(notificationSchema, 'readAt')).toBeUndefined();
     });
 
-    it('restricts code and severity to their closed sets', () => {
-        expect(enumOf(notificationSchema, 'code')).toEqual([...NOTIFICATION_CODES]);
+    it('restricts severity to its closed set and leaves code open to the module that writes it', () => {
+        // No list of codes lives here: the module that adds one owns it, and the writers are typed.
+        expect(enumOf(notificationSchema, 'code') ?? []).toEqual([]);
         expect(enumOf(notificationSchema, 'severity')).toEqual(Object.values(NotificationSeverity));
     });
 

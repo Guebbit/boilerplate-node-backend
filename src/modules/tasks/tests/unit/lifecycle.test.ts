@@ -126,13 +126,13 @@ describe('reopen', () => {
         const linked = reopen(
             facts({
                 status: TaskStatus.resolved,
-                kind: 'manual_refund_owed',
-                link: { type: 'refund', id: 'r1' }
+                kind: 'export_failed',
+                link: { type: 'export', id: 'e1' }
             })
         );
 
         expect(linked).toMatchObject({
-            patch: { set: { openKey: 'manual_refund_owed:refund:r1' } }
+            patch: { set: { openKey: 'export_failed:export:e1' } }
         });
         expect(reopen(facts({ status: TaskStatus.resolved }))).not.toHaveProperty(
             'patch.set.openKey'

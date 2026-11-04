@@ -13,88 +13,8 @@ import { NotificationAudience, NotificationSeverity } from '@types';
 import type { Notification } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
-/** One of the contract's notification codes: the `code` of each variant of `Notification`. */
+/** One of the contract's notification codes: the `code` of each variant of `Notification`, whichever module added it. */
 export type NotificationCode = Notification['code'];
-
-/**
- * Every code, as keys. The `satisfies` makes the list complete as well as valid: a code the
- * contract adds and this table lacks is a compile error, not a runtime refusal by the `enum`
- * of the schema below.
- */
-const CODE_TABLE = {
-    'notifications.cart-line-removed': true,
-    'notifications.wishlist-item-removed': true,
-    'notifications.cart-merge-refused': true,
-    'notifications.fulfillment-delayed': true,
-    'notifications.fulfillment-held': true,
-    'notifications.shipment-lost': true,
-    'notifications.stock-alert': true,
-    'notifications.staff.purchase-hold-placed': true,
-    'notifications.staff.webhook-disabled': true,
-    'notifications.staff.task-opened': true,
-    'notifications.staff.task-overdue': true,
-    'notifications.staff.task-assigned': true,
-    'notifications.staff.return-requested': true,
-    'notifications.staff.outbox-dead': true,
-    'notifications.staff.transfers-due': true,
-    'notifications.staff.preorders-late': true,
-    'notifications.staff.delivery-holds-open': true,
-    'notifications.staff.withdrawals-awaiting-goods': true,
-    'notifications.staff.returns-undecided': true,
-    'notifications.staff.low-stock': true,
-    'notifications.staff.unshipped': true,
-    'notifications.staff.awaiting-tracking': true,
-    'notifications.staff.undelivered': true,
-    'notifications.staff.stale-refunds': true
-} satisfies Record<NotificationCode, true>;
-
-/** Every code a notification can carry. */
-// `Object.keys` types as `string[]`; `CODE_TABLE`'s keys are exactly `NotificationCode`.
-export const NOTIFICATION_CODES = Object.keys(CODE_TABLE) as NotificationCode[];
-
-/** The codes of work notices: the ones `./staff-routing` finds an audience for. */
-export const STAFF_NOTIFICATION_CODES = [
-    'notifications.staff.purchase-hold-placed',
-    'notifications.staff.webhook-disabled',
-    'notifications.staff.task-opened',
-    'notifications.staff.task-overdue',
-    'notifications.staff.task-assigned',
-    'notifications.staff.return-requested',
-    'notifications.staff.outbox-dead',
-    'notifications.staff.transfers-due',
-    'notifications.staff.preorders-late',
-    'notifications.staff.delivery-holds-open',
-    'notifications.staff.withdrawals-awaiting-goods',
-    'notifications.staff.returns-undecided',
-    'notifications.staff.low-stock',
-    'notifications.staff.unshipped',
-    'notifications.staff.awaiting-tracking',
-    'notifications.staff.undelivered',
-    'notifications.staff.stale-refunds'
-] as const satisfies readonly NotificationCode[];
-
-/**
- * The work notices that are a count of what waits, rewritten by the daily digest instead of
- * announced once: one row per recipient whose `dedupeKey` is the code itself.
- */
-export const STAFF_SUMMARY_CODES = [
-    'notifications.staff.transfers-due',
-    'notifications.staff.preorders-late',
-    'notifications.staff.delivery-holds-open',
-    'notifications.staff.withdrawals-awaiting-goods',
-    'notifications.staff.returns-undecided',
-    'notifications.staff.low-stock',
-    'notifications.staff.unshipped',
-    'notifications.staff.awaiting-tracking',
-    'notifications.staff.undelivered',
-    'notifications.staff.stale-refunds'
-] as const satisfies readonly StaffNotificationCode[];
-
-/** One of {@link STAFF_SUMMARY_CODES}. */
-export type StaffSummaryCode = (typeof STAFF_SUMMARY_CODES)[number];
-
-/** One of {@link STAFF_NOTIFICATION_CODES}. */
-export type StaffNotificationCode = (typeof STAFF_NOTIFICATION_CODES)[number];
 
 /**
  * What each code's `params` holds — the contract's per-variant params, keyed by the code that
@@ -152,7 +72,8 @@ export type NotificationModel = Model<NotificationDocument>;
 export const notificationSchema: Schema<NotificationDocument> = new Schema<NotificationDocument>(
     {
         userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-        code: { type: String, enum: NOTIFICATION_CODES, required: true },
+        // Open set: the module that writes a code owns it, so no list here can go stale.
+        code: { type: String, required: true },
         params: { type: Schema.Types.Mixed, default: {} },
         severity: { type: String, enum: Object.values(NotificationSeverity), required: true },
         audience: {

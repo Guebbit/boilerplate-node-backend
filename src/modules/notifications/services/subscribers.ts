@@ -1,158 +1,20 @@
 /**
  * @module
- * What each domain event becomes in the inbox. One function per event, each a mapping from a
- * payload to the rows to write — the module's `subscribe()` wires them to the bus, and the writing
- * itself stays in `./inbox`.
+ * What each domain event becomes in the inbox, for the notices every project has: a webhook
+ * switched off, an outbox event parked, a to-do opened, overdue or handed over. One function per
+ * event, each a mapping from a payload to the work notice to write — the module's `subscribe()`
+ * wires them to the bus, and the writing itself stays in `./staff`.
  *
- * Own-message severity is `warning` throughout: each says "something you had changed without you
- * asking", which is worth a look and not an error. Work notices take theirs from `../staff-routing`.
+ * Notices a project adds (the shop's) live in the module that adds them and call
+ * `notificationsService.notifyStaff` / `create` with their own routing.
  */
 
-import { Types } from 'mongoose';
 import type { DomainEventMap } from '@kernel/events';
 import type { PermissionSetName } from '@kernel/permissions';
-import type { NewNotification } from '../repository';
-import { notificationsCreate } from './inbox';
-import { taskService } from '@modules/tasks';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { taskService } from '@modules/tasks';
+import { STAFF_ROUTES, staffLinkOf } from '../staff-routing';
 import { notifyStaff, notifyStaffMember } from './staff';
-
-/** One row per owner of a removed product, all the same message. */
-const removedFor = (
-    code: 'notifications.cart-line-removed' | 'notifications.wishlist-item-removed',
-    { userIds, productId, titles }: DomainEventMap['cart.lines_removed']
-): NewNotification[] =>
-    userIds.map((userId) => ({
-        userId: new Types.ObjectId(userId),
-        code,
-        severity: 'warning',
-        params: { productId, titles }
-    }));
-
-/** A product left the catalogue and with it these users' carts. */
-export const onCartLinesRemoved = (payload: DomainEventMap['cart.lines_removed']): Promise<void> =>
-    notificationsCreate(removedFor('notifications.cart-line-removed', payload));
-
-/** A product left the catalogue and with it these users' wishlists. */
-export const onWishlistItemsRemoved = (
-    payload: DomainEventMap['wishlist.items_removed']
-): Promise<void> => notificationsCreate(removedFor('notifications.wishlist-item-removed', payload));
-
-/** A product the user asked about can be ordered again. */
-export const onStockAlertSent = ({
-    userId,
-    productId,
-    titles
-}: DomainEventMap['stock_alert.sent']): Promise<void> =>
-    notificationsCreate([
-        {
-            userId: new Types.ObjectId(userId),
-            code: 'notifications.stock-alert',
-            severity: 'info',
-            params: { productId, titles }
-        }
-    ]);
-
-/** A guest-cart merge could not add some lines at all: one message listing all of them. */
-export const onCartMergeRefused = ({
-    userId,
-    lines
-}: DomainEventMap['cart.merge_refused']): Promise<void> =>
-    notificationsCreate([
-        {
-            userId: new Types.ObjectId(userId),
-            code: 'notifications.cart-merge-refused',
-            severity: 'warning',
-            params: { lines }
-        }
-    ]);
-
-/**
- * A hold gave the buyer something to do or read: the same message in their inbox, so it is still
- * there when the email is not. Staff's reason never gets here, only the notice. An erased account
- * has no inbox to write to.
- */
-export const onFulfillmentOrderHoldNoticed = (
-    held: DomainEventMap['fulfillment_order.hold_noticed']
-): Promise<void> =>
-    held.userId === undefined
-        ? Promise.resolve()
-        : notificationsCreate([
-              {
-                  userId: new Types.ObjectId(held.userId),
-                  code: 'notifications.fulfillment-held',
-                  severity: 'warning',
-                  params: {
-                      orderId: held.orderId,
-                      fulfillmentOrderId: held.fulfillmentOrderId,
-                      notice: held.notice,
-                      ...(held.message ? { message: held.message } : {})
-                  }
-              }
-          ]);
-
-/**
- * A parcel of the buyer's was reported lost or damaged: the same message in their inbox, so it is
- * still there when the email is not. Carries the sentence staff wrote for them and what is still
- * owed, never staff's note. An erased account has no inbox to write to.
- */
-export const onShipmentLost = (lost: DomainEventMap['shipment.lost']): Promise<void> =>
-    lost.userId === undefined
-        ? Promise.resolve()
-        : notificationsCreate([
-              {
-                  userId: new Types.ObjectId(lost.userId),
-                  code: 'notifications.shipment-lost',
-                  severity: 'warning',
-                  params: {
-                      orderId: lost.orderId,
-                      shipmentId: lost.shipmentId,
-                      reason: lost.reason,
-                      ...(lost.message ? { message: lost.message } : {}),
-                      ...(lost.owed.length > 0
-                          ? { owed: lost.owed.map(({ title }) => title) }
-                          : {}),
-                      ...(lost.expectedAt ? { expectedAt: lost.expectedAt } : {})
-                  }
-              }
-          ]);
-
-/**
- * A waiting preorder's buyer was told its date moved or will be missed: the same message in their inbox, so
- * it is still there when the email is not. It only informs: the buyer is asked nothing. An erased
- * account has no inbox to write to, and nothing here invents one.
- */
-export const onFulfillmentOrderDelayed = (
-    delayed: DomainEventMap['fulfillment_order.delayed']
-): Promise<void> =>
-    delayed.userId === undefined
-        ? Promise.resolve()
-        : notificationsCreate([
-              {
-                  userId: new Types.ObjectId(delayed.userId),
-                  code: 'notifications.fulfillment-delayed',
-                  severity: 'warning',
-                  params: {
-                      orderId: delayed.orderId,
-                      fulfillmentOrderId: delayed.fulfillmentOrderId,
-                      titles: delayed.titles,
-                      agreedAt: delayed.agreedAt,
-                      ...(delayed.expectedAt ? { expectedAt: delayed.expectedAt } : {})
-                  }
-              }
-          ]);
-
-/** A buyer's checkout was paused: the staff who can ban hear of it, once per hold taken. */
-export const onPurchaseHoldPlaced = ({
-    tenantId,
-    userId,
-    until
-}: DomainEventMap['order.purchase_hold_placed']): Promise<void> =>
-    notifyStaff({
-        tenantId,
-        body: { code: 'notifications.staff.purchase-hold-placed', params: { userId, until } },
-        dedupeKey: `purchase-hold-placed:${userId}:${until}`
-    }).then(() => undefined);
 
 /** A subscription was switched off: the staff who manage webhooks hear of it, once per disable. */
 export const onWebhookSubscriptionAutoDisabled = ({
@@ -163,26 +25,9 @@ export const onWebhookSubscriptionAutoDisabled = ({
     notifyStaff({
         tenantId,
         body: { code: 'notifications.staff.webhook-disabled', params: { subscriptionId } },
+        route: STAFF_ROUTES['notifications.staff.webhook-disabled'],
         dedupeKey: `webhook-disabled:${subscriptionId}:${disabledAt}`
     }).then(() => undefined);
-
-/**
- * A buyer asked to return goods: the staff who decide returns hear of it, once per request. A
- * withdrawal is a right, not a request awaiting a decision (it is born approved), so it is not
- * announced here: the digest counts it while its goods are expected.
- */
-export const onReturnRequested = ({
-    returnId,
-    orderId,
-    reason
-}: DomainEventMap['return.requested']): Promise<void> =>
-    reason === 'withdrawal'
-        ? Promise.resolve()
-        : notifyStaff({
-              tenantId: DEPLOYMENT_TENANT_ID,
-              body: { code: 'notifications.staff.return-requested', params: { returnId, orderId } },
-              dedupeKey: `return-requested:${returnId}`
-          }).then(() => undefined);
 
 /** An outbox event was parked after its last retry: the administrators hear of it, once per event. */
 export const onOutboxEventDead = ({
@@ -193,6 +38,7 @@ export const onOutboxEventDead = ({
     notifyStaff({
         tenantId: DEPLOYMENT_TENANT_ID,
         body: { code: 'notifications.staff.outbox-dead', params: { eventName, aggregateId } },
+        route: STAFF_ROUTES['notifications.staff.outbox-dead'],
         dedupeKey: `outbox-dead:${eventId}`
     }).then(() => undefined);
 
@@ -210,23 +56,35 @@ const alertSetsOf = ({ kind, routeSet }: DomainEventMap['task.opened']): string[
     kind === 'contact' ? [CONTACT_ALERT_SET] : [routeSet];
 
 /**
+ * The params of a to-do notice: ids and closed codes, plus the screen that does the work when the
+ * opener named one.
+ *
+ * @param fact - the `task.opened` or `task.overdue` fact
+ */
+const taskParametersOf = (fact: DomainEventMap['task.opened']) => ({
+    taskId: fact.taskId,
+    kind: fact.kind,
+    ...(fact.category ? { category: fact.category } : {}),
+    ...(fact.work ? { work: fact.work } : {})
+});
+
+/**
  * A task was opened: everyone who works its kind hears of it once, by id and kind alone.
  *
  * A contact message nobody could be told of (no staff with an address) goes to the fallback
  * mailbox instead, with the message in it: that mailbox is then the whole inbox. With even one
  * permitted recipient the mailbox hears nothing.
  */
-export const onTaskOpened = (opened: DomainEventMap['task.opened']): Promise<void> =>
-    notifyStaff({
+export const onTaskOpened = (opened: DomainEventMap['task.opened']): Promise<void> => {
+    const body = {
+        code: 'notifications.staff.task-opened',
+        params: taskParametersOf(opened)
+    } as const;
+    return notifyStaff({
         tenantId: opened.tenantId,
-        body: {
-            code: 'notifications.staff.task-opened',
-            params: {
-                taskId: opened.taskId,
-                kind: opened.kind,
-                ...(opened.category ? { category: opened.category } : {})
-            }
-        },
+        body,
+        route: STAFF_ROUTES[body.code],
+        link: staffLinkOf(body),
         sets: alertSetsOf(opened),
         dedupeKey: `task-opened:${opened.taskId}`
     }).then((told) =>
@@ -234,23 +92,23 @@ export const onTaskOpened = (opened: DomainEventMap['task.opened']): Promise<voi
             ? taskService.mailFallbackMailbox(opened.taskId)
             : undefined
     );
+};
 
 /**
  * An open task went overdue: the people the opener told hear of it once more, the same sets, the
  * same fallback mailbox for a contact message nobody could be told of. The sweep claims a task
  * once, so this runs once per task; the dedupe key is the second guard.
  */
-export const onTaskOverdue = (overdue: DomainEventMap['task.overdue']): Promise<void> =>
-    notifyStaff({
+export const onTaskOverdue = (overdue: DomainEventMap['task.overdue']): Promise<void> => {
+    const body = {
+        code: 'notifications.staff.task-overdue',
+        params: taskParametersOf(overdue)
+    } as const;
+    return notifyStaff({
         tenantId: overdue.tenantId,
-        body: {
-            code: 'notifications.staff.task-overdue',
-            params: {
-                taskId: overdue.taskId,
-                kind: overdue.kind,
-                ...(overdue.category ? { category: overdue.category } : {})
-            }
-        },
+        body,
+        route: STAFF_ROUTES[body.code],
+        link: staffLinkOf(body),
         sets: alertSetsOf(overdue),
         dedupeKey: `task-overdue:${overdue.taskId}`
     }).then((told) =>
@@ -258,6 +116,7 @@ export const onTaskOverdue = (overdue: DomainEventMap['task.overdue']): Promise<
             ? taskService.mailFallbackMailbox(overdue.taskId, true)
             : undefined
     );
+};
 
 /** A task was given to a colleague: the one who now holds it hears, and nobody else. */
 export const onTaskAssigned = (assigned: DomainEventMap['task.assigned']): Promise<void> =>
@@ -267,6 +126,7 @@ export const onTaskAssigned = (assigned: DomainEventMap['task.assigned']): Promi
             code: 'notifications.staff.task-assigned',
             params: { taskId: assigned.taskId, kind: assigned.kind }
         },
+        route: STAFF_ROUTES['notifications.staff.task-assigned'],
         sets: [assigned.routeSet],
         dedupeKey: `task-assigned:${assigned.taskId}:${assigned.assignedAt}`
     });

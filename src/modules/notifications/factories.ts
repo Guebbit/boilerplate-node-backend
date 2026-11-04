@@ -14,7 +14,7 @@ export interface NotificationOverrides {
     userId: string;
     /**
      * The code and its params together, so a row never pairs one code with another's params.
-     * Defaults to the cart-line message for one product with an English title.
+     * Defaults to the webhook-disabled work notice for one subscription.
      */
     body?: NotificationBody;
     /** Defaults to `warning`. */
@@ -36,8 +36,8 @@ export const makeNotification = (
 ): Partial<NotificationDocument> => ({
     userId: new Types.ObjectId(overrides.userId),
     ...(overrides.body ?? {
-        code: 'notifications.cart-line-removed',
-        params: { productId: '64b7f1a2c3d4e5f607182930', titles: { en: 'Blue mug' } }
+        code: 'notifications.staff.webhook-disabled',
+        params: { subscriptionId: '64b7f1a2c3d4e5f607182930' }
     }),
     severity: overrides.severity ?? 'warning',
     ...(overrides.staff

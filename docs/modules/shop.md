@@ -31,6 +31,7 @@ flowchart LR
     payments["payments"]
     products["products"]
     returns["returns"]
+    shop_tasks["shop-tasks"]
     stats["stats"]
 
     cart --> shop
@@ -40,6 +41,7 @@ flowchart LR
     payments --> shop
     products --> shop
     returns --> shop
+    shop_tasks --> shop
     stats --> shop
     shop --> account
 
@@ -48,7 +50,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders,products core;
-    class delivery,invoicing,payments,returns,stats supporting;
+    class delivery,invoicing,payments,returns,shop_tasks,stats supporting;
     class account generic;
     class shop centre;
 ```

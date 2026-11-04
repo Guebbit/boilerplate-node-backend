@@ -9,6 +9,7 @@
 #          src/modules/returns/asyncapi.webhooks.yaml
 #          src/modules/example/asyncapi.webhooks.yaml
 #          src/modules/users/asyncapi.webhooks.yaml
+#          src/modules/shop-tasks/asyncapi.notifications.yaml
 asyncapi: 3.0.0
 id: 'urn:boilerplate-node-backend:asyncapi:contracts'
 info:
@@ -1541,137 +1542,6 @@ components:
                 data:
                     $ref: '#/components/schemas/UserUpdatedPayload'
             additionalProperties: false
-        CartLineRemovedParamsPayload:
-            title: CartLineRemovedParamsPayload
-            type: object
-            required:
-                - productId
-                - titles
-            properties:
-                productId:
-                    type: string
-                titles:
-                    description: Locale → the product's name in it.
-                    type: object
-                    additionalProperties:
-                        type: string
-            additionalProperties: false
-        CartMergeRefusedLinePayload:
-            title: CartMergeRefusedLinePayload
-            type: object
-            required:
-                - productId
-                - requested
-                - titles
-            properties:
-                productId:
-                    type: string
-                requested:
-                    type: integer
-                    minimum: 1
-                titles:
-                    description: Locale → the product's name in it.
-                    type: object
-                    additionalProperties:
-                        type: string
-            additionalProperties: false
-        CartMergeRefusedParamsPayload:
-            title: CartMergeRefusedParamsPayload
-            type: object
-            required:
-                - lines
-            properties:
-                lines:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/CartMergeRefusedLinePayload'
-            additionalProperties: false
-        FulfillmentDelayedParamsPayload:
-            title: FulfillmentDelayedParamsPayload
-            type: object
-            required:
-                - orderId
-                - fulfillmentOrderId
-                - titles
-                - agreedAt
-            properties:
-                orderId:
-                    type: string
-                fulfillmentOrderId:
-                    type: string
-                titles:
-                    type: array
-                    items:
-                        type: string
-                agreedAt:
-                    type: string
-                    format: date-time
-                expectedAt:
-                    type: string
-                    format: date-time
-            additionalProperties: false
-        FulfillmentHeldParamsPayload:
-            title: FulfillmentHeldParamsPayload
-            type: object
-            required:
-                - orderId
-                - fulfillmentOrderId
-                - notice
-            properties:
-                orderId:
-                    type: string
-                fulfillmentOrderId:
-                    type: string
-                notice:
-                    type: string
-                    enum:
-                        - check_address
-                        - delayed
-                message:
-                    type: string
-                    maxLength: 500
-            additionalProperties: false
-        ShipmentLostParamsPayload:
-            title: ShipmentLostParamsPayload
-            type: object
-            required:
-                - orderId
-                - shipmentId
-                - reason
-            properties:
-                orderId:
-                    type: string
-                shipmentId:
-                    type: string
-                reason:
-                    type: string
-                    enum:
-                        - lost
-                        - damaged
-                message:
-                    type: string
-                    maxLength: 500
-                owed:
-                    type: array
-                    items:
-                        type: string
-                expectedAt:
-                    type: string
-                    format: date-time
-            additionalProperties: false
-        PurchaseHoldPlacedParamsPayload:
-            title: PurchaseHoldPlacedParamsPayload
-            type: object
-            required:
-                - userId
-                - until
-            properties:
-                userId:
-                    type: string
-                until:
-                    type: string
-                    format: date-time
-            additionalProperties: false
         WebhookDisabledParamsPayload:
             title: WebhookDisabledParamsPayload
             type: object
@@ -1680,46 +1550,6 @@ components:
             properties:
                 subscriptionId:
                     type: string
-            additionalProperties: false
-        NotificationStaffPurchaseHoldPlacedPayload:
-            title: NotificationStaffPurchaseHoldPlacedPayload
-            type: object
-            required:
-                - id
-                - audience
-                - code
-                - params
-                - severity
-                - createdAt
-            properties:
-                id:
-                    type: string
-                audience:
-                    description: Whose message it is — `own`, or a `staff` work notice.
-                    type: string
-                    enum:
-                        - own
-                        - staff
-                code:
-                    type: string
-                    enum:
-                        - notifications.staff.purchase-hold-placed
-                params:
-                    $ref: '#/components/schemas/PurchaseHoldPlacedParamsPayload'
-                severity:
-                    type: string
-                    enum:
-                        - info
-                        - success
-                        - warning
-                        - error
-                readAt:
-                    description: When the owner read it; absent while unread.
-                    type: string
-                    format: date-time
-                createdAt:
-                    type: string
-                    format: date-time
             additionalProperties: false
         NotificationStaffWebhookDisabledPayload:
             title: NotificationStaffWebhookDisabledPayload
@@ -1773,6 +1603,9 @@ components:
                 kind:
                     type: string
                 category:
+                    type: string
+                work:
+                    description: The staff screen that does the work, when the opener named one; absent means the to-do's own page.
                     type: string
             additionalProperties: false
         TaskAssignedParamsPayload:
@@ -1907,6 +1740,132 @@ components:
                     type: string
                     format: date-time
             additionalProperties: false
+        OutboxDeadParamsPayload:
+            title: OutboxDeadParamsPayload
+            type: object
+            required:
+                - eventName
+                - aggregateId
+            properties:
+                eventName:
+                    type: string
+                aggregateId:
+                    type: string
+            additionalProperties: false
+        NotificationStaffOutboxDeadPayload:
+            title: NotificationStaffOutboxDeadPayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - notifications.staff.outbox-dead
+                params:
+                    $ref: '#/components/schemas/OutboxDeadParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        PurchaseHoldPlacedParamsPayload:
+            title: PurchaseHoldPlacedParamsPayload
+            type: object
+            required:
+                - userId
+                - until
+            properties:
+                userId:
+                    type: string
+                until:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationStaffPurchaseHoldPlacedPayload:
+            title: NotificationStaffPurchaseHoldPlacedPayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - shop-tasks.staff.purchase-hold-placed
+                params:
+                    $ref: '#/components/schemas/PurchaseHoldPlacedParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        FulfillmentHeldParamsPayload:
+            title: FulfillmentHeldParamsPayload
+            type: object
+            required:
+                - orderId
+                - fulfillmentOrderId
+                - notice
+            properties:
+                orderId:
+                    type: string
+                fulfillmentOrderId:
+                    type: string
+                notice:
+                    type: string
+                    enum:
+                        - check_address
+                        - delayed
+                message:
+                    type: string
+                    maxLength: 500
+            additionalProperties: false
         NotificationFulfillmentHeldPayload:
             title: NotificationFulfillmentHeldPayload
             type: object
@@ -1929,7 +1888,7 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.fulfillment-held
+                        - shop-tasks.fulfillment-held
                 params:
                     $ref: '#/components/schemas/FulfillmentHeldParamsPayload'
                 severity:
@@ -1944,6 +1903,34 @@ components:
                     type: string
                     format: date-time
                 createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        ShipmentLostParamsPayload:
+            title: ShipmentLostParamsPayload
+            type: object
+            required:
+                - orderId
+                - shipmentId
+                - reason
+            properties:
+                orderId:
+                    type: string
+                shipmentId:
+                    type: string
+                reason:
+                    type: string
+                    enum:
+                        - lost
+                        - damaged
+                message:
+                    type: string
+                    maxLength: 500
+                owed:
+                    type: array
+                    items:
+                        type: string
+                expectedAt:
                     type: string
                     format: date-time
             additionalProperties: false
@@ -1969,7 +1956,7 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.shipment-lost
+                        - shop-tasks.shipment-lost
                 params:
                     $ref: '#/components/schemas/ShipmentLostParamsPayload'
                 severity:
@@ -1986,6 +1973,21 @@ components:
                 createdAt:
                     type: string
                     format: date-time
+            additionalProperties: false
+        CartLineRemovedParamsPayload:
+            title: CartLineRemovedParamsPayload
+            type: object
+            required:
+                - productId
+                - titles
+            properties:
+                productId:
+                    type: string
+                titles:
+                    description: Locale → the product's name in it.
+                    type: object
+                    additionalProperties:
+                        type: string
             additionalProperties: false
         NotificationStockAlertPayload:
             title: NotificationStockAlertPayload
@@ -2009,7 +2011,7 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.stock-alert
+                        - shop-tasks.stock-alert
                 params:
                     $ref: '#/components/schemas/CartLineRemovedParamsPayload'
                 severity:
@@ -2024,6 +2026,30 @@ components:
                     type: string
                     format: date-time
                 createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        FulfillmentDelayedParamsPayload:
+            title: FulfillmentDelayedParamsPayload
+            type: object
+            required:
+                - orderId
+                - fulfillmentOrderId
+                - titles
+                - agreedAt
+            properties:
+                orderId:
+                    type: string
+                fulfillmentOrderId:
+                    type: string
+                titles:
+                    type: array
+                    items:
+                        type: string
+                agreedAt:
+                    type: string
+                    format: date-time
+                expectedAt:
                     type: string
                     format: date-time
             additionalProperties: false
@@ -2049,7 +2075,7 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.fulfillment-delayed
+                        - shop-tasks.fulfillment-delayed
                 params:
                     $ref: '#/components/schemas/FulfillmentDelayedParamsPayload'
                 severity:
@@ -2089,7 +2115,7 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.cart-line-removed
+                        - shop-tasks.cart-line-removed
                 params:
                     $ref: '#/components/schemas/CartLineRemovedParamsPayload'
                 severity:
@@ -2129,7 +2155,7 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.wishlist-item-removed
+                        - shop-tasks.wishlist-item-removed
                 params:
                     $ref: '#/components/schemas/CartLineRemovedParamsPayload'
                 severity:
@@ -2146,6 +2172,36 @@ components:
                 createdAt:
                     type: string
                     format: date-time
+            additionalProperties: false
+        CartMergeRefusedLinePayload:
+            title: CartMergeRefusedLinePayload
+            type: object
+            required:
+                - productId
+                - requested
+                - titles
+            properties:
+                productId:
+                    type: string
+                requested:
+                    type: integer
+                    minimum: 1
+                titles:
+                    description: Locale → the product's name in it.
+                    type: object
+                    additionalProperties:
+                        type: string
+            additionalProperties: false
+        CartMergeRefusedParamsPayload:
+            title: CartMergeRefusedParamsPayload
+            type: object
+            required:
+                - lines
+            properties:
+                lines:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/CartMergeRefusedLinePayload'
             additionalProperties: false
         NotificationCartMergeRefusedPayload:
             title: NotificationCartMergeRefusedPayload
@@ -2169,7 +2225,7 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.cart-merge-refused
+                        - shop-tasks.cart-merge-refused
                 params:
                     $ref: '#/components/schemas/CartMergeRefusedParamsPayload'
                 severity:
@@ -2199,18 +2255,6 @@ components:
                 orderId:
                     type: string
             additionalProperties: false
-        OutboxDeadParamsPayload:
-            title: OutboxDeadParamsPayload
-            type: object
-            required:
-                - eventName
-                - aggregateId
-            properties:
-                eventName:
-                    type: string
-                aggregateId:
-                    type: string
-            additionalProperties: false
         NotificationStaffReturnRequestedPayload:
             title: NotificationStaffReturnRequestedPayload
             type: object
@@ -2233,49 +2277,9 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.staff.return-requested
+                        - shop-tasks.staff.return-requested
                 params:
                     $ref: '#/components/schemas/ReturnRequestedParamsPayload'
-                severity:
-                    type: string
-                    enum:
-                        - info
-                        - success
-                        - warning
-                        - error
-                readAt:
-                    description: When the owner read it; absent while unread.
-                    type: string
-                    format: date-time
-                createdAt:
-                    type: string
-                    format: date-time
-            additionalProperties: false
-        NotificationStaffOutboxDeadPayload:
-            title: NotificationStaffOutboxDeadPayload
-            type: object
-            required:
-                - id
-                - audience
-                - code
-                - params
-                - severity
-                - createdAt
-            properties:
-                id:
-                    type: string
-                audience:
-                    description: Whose message it is — `own`, or a `staff` work notice.
-                    type: string
-                    enum:
-                        - own
-                        - staff
-                code:
-                    type: string
-                    enum:
-                        - notifications.staff.outbox-dead
-                params:
-                    $ref: '#/components/schemas/OutboxDeadParamsPayload'
                 severity:
                     type: string
                     enum:
@@ -2323,7 +2327,7 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.staff.transfers-due
+                        - shop-tasks.staff.transfers-due
                 params:
                     $ref: '#/components/schemas/WorkCountParamsPayload'
                 severity:
@@ -2363,7 +2367,7 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.staff.preorders-late
+                        - shop-tasks.staff.preorders-late
                 params:
                     $ref: '#/components/schemas/WorkCountParamsPayload'
                 severity:
@@ -2403,7 +2407,7 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.staff.delivery-holds-open
+                        - shop-tasks.staff.delivery-holds-open
                 params:
                     $ref: '#/components/schemas/WorkCountParamsPayload'
                 severity:
@@ -2443,7 +2447,7 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.staff.withdrawals-awaiting-goods
+                        - shop-tasks.staff.withdrawals-awaiting-goods
                 params:
                     $ref: '#/components/schemas/WorkCountParamsPayload'
                 severity:
@@ -2483,7 +2487,7 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.staff.returns-undecided
+                        - shop-tasks.staff.returns-undecided
                 params:
                     $ref: '#/components/schemas/WorkCountParamsPayload'
                 severity:
@@ -2523,7 +2527,7 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.staff.low-stock
+                        - shop-tasks.staff.low-stock
                 params:
                     $ref: '#/components/schemas/WorkCountParamsPayload'
                 severity:
@@ -2563,7 +2567,7 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.staff.unshipped
+                        - shop-tasks.staff.unshipped
                 params:
                     $ref: '#/components/schemas/WorkCountParamsPayload'
                 severity:
@@ -2603,7 +2607,7 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.staff.awaiting-tracking
+                        - shop-tasks.staff.awaiting-tracking
                 params:
                     $ref: '#/components/schemas/WorkCountParamsPayload'
                 severity:
@@ -2643,7 +2647,7 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.staff.undelivered
+                        - shop-tasks.staff.undelivered
                 params:
                     $ref: '#/components/schemas/WorkCountParamsPayload'
                 severity:
@@ -2683,7 +2687,7 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.staff.stale-refunds
+                        - shop-tasks.staff.stale-refunds
                 params:
                     $ref: '#/components/schemas/WorkCountParamsPayload'
                 severity:
@@ -2704,20 +2708,20 @@ components:
         NotificationPayload:
             title: NotificationPayload
             oneOf:
-                - $ref: '#/components/schemas/NotificationCartLineRemovedPayload'
-                - $ref: '#/components/schemas/NotificationWishlistItemRemovedPayload'
-                - $ref: '#/components/schemas/NotificationCartMergeRefusedPayload'
-                - $ref: '#/components/schemas/NotificationFulfillmentDelayedPayload'
-                - $ref: '#/components/schemas/NotificationFulfillmentHeldPayload'
-                - $ref: '#/components/schemas/NotificationShipmentLostPayload'
-                - $ref: '#/components/schemas/NotificationStockAlertPayload'
-                - $ref: '#/components/schemas/NotificationStaffPurchaseHoldPlacedPayload'
                 - $ref: '#/components/schemas/NotificationStaffWebhookDisabledPayload'
                 - $ref: '#/components/schemas/NotificationStaffTaskOpenedPayload'
                 - $ref: '#/components/schemas/NotificationStaffTaskOverduePayload'
                 - $ref: '#/components/schemas/NotificationStaffTaskAssignedPayload'
-                - $ref: '#/components/schemas/NotificationStaffReturnRequestedPayload'
                 - $ref: '#/components/schemas/NotificationStaffOutboxDeadPayload'
+                - $ref: '#/components/schemas/NotificationStaffPurchaseHoldPlacedPayload'
+                - $ref: '#/components/schemas/NotificationFulfillmentHeldPayload'
+                - $ref: '#/components/schemas/NotificationShipmentLostPayload'
+                - $ref: '#/components/schemas/NotificationStockAlertPayload'
+                - $ref: '#/components/schemas/NotificationFulfillmentDelayedPayload'
+                - $ref: '#/components/schemas/NotificationCartLineRemovedPayload'
+                - $ref: '#/components/schemas/NotificationWishlistItemRemovedPayload'
+                - $ref: '#/components/schemas/NotificationCartMergeRefusedPayload'
+                - $ref: '#/components/schemas/NotificationStaffReturnRequestedPayload'
                 - $ref: '#/components/schemas/NotificationStaffTransfersDuePayload'
                 - $ref: '#/components/schemas/NotificationStaffPreordersLatePayload'
                 - $ref: '#/components/schemas/NotificationStaffDeliveryHoldsOpenPayload'

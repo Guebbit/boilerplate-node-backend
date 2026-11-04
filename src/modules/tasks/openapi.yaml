@@ -445,30 +445,24 @@ components:
         # (an order page links to `/contact?category=cancellation`).
         # `privacy` is the data-protection door (GDPR requests start here). A closed set, written
         # once, so the form, the inbox filter and the stored value cannot drift.
+        # `x-enum-from` opens the set to a module that adds values (`shop-tasks` adds the order
+        # ones); the written values stay, the added ones follow them.
         TaskCategory:
             type: string
-            enum: [order, cancellation, return, payment, account, privacy, other]
+            x-enum-from: TaskCategory
+            enum: [account, privacy, other]
 
         # Who opened it.
         TaskSource:
             type: string
             enum: [visitor, system]
 
-        # What the task is about. Each kind has one route set (the jurisdiction), frozen when it opens.
+        # What the task is about. Each kind has one route set (the jurisdiction), frozen when it opens;
+        # a module that adds kinds names their sets itself.
         TaskKind:
             type: string
-            enum:
-                [
-                    contact,
-                    account_review,
-                    manual_refund_owed,
-                    amount_mismatch,
-                    paid_without_hold,
-                    export_failed,
-                    consent_due,
-                    refund_refused,
-                    dispute
-                ]
+            x-enum-from: TaskKind
+            enum: [contact, account_review, export_failed]
 
         # How a closed task was closed: by a person, by the situation clearing itself, or as spam.
         TaskResolution:
@@ -477,7 +471,8 @@ components:
 
         TaskLinkType:
             type: string
-            enum: [order, user, payment, refund, fulfillment_order, export]
+            x-enum-from: TaskLinkType
+            enum: [user, export]
 
         # `me`, `none`, or a user id.
         TaskAssigneeFilter:

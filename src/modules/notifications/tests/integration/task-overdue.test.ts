@@ -12,7 +12,7 @@ import { setEnvironment } from '@tests/environment';
 import { createUser } from '@modules/users/tests/factories';
 import { notificationsService } from '@modules/notifications/services';
 import { taskService } from '@modules/tasks';
-import { backdateDue, closeDirectly, createRefundTask } from '@modules/tasks/tests/factories';
+import { backdateDue, closeDirectly, createSystemTask } from '@modules/tasks/tests/factories';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { callerInScope } from '@kernel/permissions';
@@ -147,21 +147,21 @@ describe('an overdue system task', () => {
     it('tells whoever holds the task’s own set, nobody else', async () => {
         const moderator = await staff('moderator', 'mod@example.com');
         const support = await staff('support', 'support@example.com');
-        const task = await createRefundTask();
+        const task = await createSystemTask();
         await backdateDue(String(task._id));
         mockEnqueueEmail.mockClear();
 
         await taskService.remindOverdue();
 
         await expect(overdueBellOf('moderator', moderator.id)).resolves.toMatchObject([
-            { code: 'notifications.staff.task-overdue', params: { kind: 'manual_refund_owed' } }
+            { code: 'notifications.staff.task-overdue', params: { kind: 'export_failed' } }
         ]);
         await expect(overdueBellOf('support', support.id)).resolves.toEqual([]);
         expect(overdueMails().map(([envelope]) => envelope.to)).toEqual(['mod@example.com']);
     });
 
     it('goes nowhere when nobody holds the set, like the opener: no fallback mailbox', async () => {
-        const task = await createRefundTask();
+        const task = await createSystemTask();
         await backdateDue(String(task._id));
         mockEnqueueEmail.mockClear();
 

@@ -21,32 +21,29 @@ flowchart LR
     inventory["inventory<br/><i>this module</i>"]
     cart["cart"]
     delivery["delivery"]
-    notifications["notifications"]
     orders["orders"]
     products["products"]
     returns["returns"]
-    tasks["tasks"]
+    shop_tasks["shop-tasks"]
 
     cart --> inventory
     delivery --> inventory
-    notifications --> inventory
     orders --> inventory
     returns --> inventory
-    tasks --> inventory
+    shop_tasks --> inventory
     inventory --> products
     products -. "product.created" .-> inventory
     products -. "product.deleted" .-> inventory
     inventory -. "inventory.backorder_allocated" .-> delivery
     inventory -. "inventory.reservation_expired" .-> orders
-    inventory -. "inventory.hold_orphaned" .-> tasks
+    inventory -. "inventory.hold_orphaned" .-> shop_tasks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders,products core;
-    class delivery,notifications,returns supporting;
-    class tasks generic;
+    class delivery,returns,shop_tasks supporting;
     class inventory centre;
 ```
 

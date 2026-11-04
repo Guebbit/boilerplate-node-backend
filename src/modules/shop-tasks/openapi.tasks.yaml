@@ -1,0 +1,29 @@
+# The shop's additions to the tasks contract: the kinds of to-do the shop opens by itself, the
+# records they point at, and the categories a buyer's contact message can name. `x-extends` appends
+# each list to the enum of the same name in `../tasks/openapi.yaml` (which declares `x-enum-from`
+# beside its own values); `tasks` never names them, so a project without a shop keeps `contact`,
+# `account_review` and `export_failed`.
+#
+# See: docs/api/contract-fragmentation.md#extending-another-modules-contract
+openapi: 3.1.0
+info:
+    title: shop-tasks — tasks extension
+    version: '0.1.0'
+x-extends:
+    TaskKind:
+        - manual_refund_owed
+        - refund_refused
+        - amount_mismatch
+        - dispute
+        - paid_without_hold
+        - consent_due
+    TaskLinkType:
+        - order
+        - payment
+        - refund
+        - fulfillment_order
+    TaskCategory:
+        - order
+        - cancellation
+        - return
+        - payment

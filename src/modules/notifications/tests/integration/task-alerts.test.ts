@@ -13,7 +13,7 @@ import { setEnvironment } from '@tests/environment';
 import { createUser } from '@modules/users/tests/factories';
 import { notificationsService } from '@modules/notifications/services';
 import { taskService } from '@modules/tasks';
-import { createRefundTask } from '@modules/tasks/tests/factories';
+import { createSystemTask } from '@modules/tasks/tests/factories';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { callerInScope } from '@kernel/permissions';
@@ -86,13 +86,13 @@ describe('a contact message', () => {
         const admin = await staff('admin', 'admin@example.com');
         const manager = await staff('manager', 'manager@example.com');
 
-        const task = await fileContact(TaskCategory.cancellation);
+        const task = await fileContact(TaskCategory.account);
 
         await expect(bellOf('support', support.id)).resolves.toMatchObject([
             {
                 audience: 'staff',
                 code: 'notifications.staff.task-opened',
-                params: { taskId: String(task._id), kind: 'contact', category: 'cancellation' }
+                params: { taskId: String(task._id), kind: 'contact', category: 'account' }
             }
         ]);
         await expect(bellOf('admin', admin.id)).resolves.toHaveLength(1);
@@ -135,14 +135,14 @@ describe('a contact message', () => {
     it('falls back to the mailbox, with the full message and a Reply-To, when nobody can be told', async () => {
         await createUser({ email: 'unarmed@example.com', username: 'unarmed' }, 'support');
 
-        await fileContact(TaskCategory.payment);
+        await fileContact(TaskCategory.other);
 
         expect(noticeMails()).toHaveLength(0);
         const [[envelope, , data]] = fallbackMails();
         expect(envelope).toMatchObject({ to: 'desk@example.com', replyTo: 'ada@example.com' });
         expect(data).toMatchObject({
             message: 'Please call me about the diagnosis.',
-            category: 'payment'
+            category: 'other'
         });
     });
 
@@ -185,12 +185,12 @@ describe('a system task', () => {
         await notificationsService.onTaskOpened({
             tenantId: DEPLOYMENT_TENANT_ID,
             taskId: '64b7f1a2c3d4e5f607182930',
-            kind: 'manual_refund_owed',
-            routeSet: 'PaymentRefunding'
+            kind: 'export_failed',
+            routeSet: 'UserErasure'
         });
 
         await expect(bellOf('moderator', moderator.id)).resolves.toMatchObject([
-            { code: 'notifications.staff.task-opened', params: { kind: 'manual_refund_owed' } }
+            { code: 'notifications.staff.task-opened', params: { kind: 'export_failed' } }
         ]);
         await expect(bellOf('support', support.id)).resolves.toEqual([]);
         expect(noticeMails().map(([envelope]) => envelope.to)).toEqual(['mod@example.com']);
@@ -201,19 +201,62 @@ describe('a system task', () => {
         await notificationsService.onTaskOpened({
             tenantId: DEPLOYMENT_TENANT_ID,
             taskId: '64b7f1a2c3d4e5f607182930',
-            kind: 'dispute',
-            routeSet: 'PaymentRefunding'
+            kind: 'export_failed',
+            routeSet: 'UserErasure'
         });
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });
+
+    it('opens the screen the opener named, in the bell and in the mail, else the to-do page', async () => {
+        const moderator = await staff('moderator', 'mod@example.com');
+        const fact = {
+            tenantId: DEPLOYMENT_TENANT_ID,
+            kind: 'export_failed',
+            routeSet: 'UserErasure'
+        };
+
+        await notificationsService.onTaskOpened({
+            ...fact,
+            taskId: '64b7f1a2c3d4e5f607182930',
+            work: 'users/64b7f1a2c3d4e5f607182931'
+        });
+        await notificationsService.onTaskOpened({ ...fact, taskId: '64b7f1a2c3d4e5f607182932' });
+
+        const mails = noticeMails().map((call) => (call[2] as { link: string }).link);
+        expect(mails).toEqual([
+            expect.stringMatching(/\/en\/users\/64b7f1a2c3d4e5f607182931$/),
+            expect.stringMatching(/\/en\/tasks\/64b7f1a2c3d4e5f607182932$/)
+        ]);
+        await expect(bellOf('moderator', moderator.id)).resolves.toContainEqual(
+            expect.objectContaining({
+                params: expect.objectContaining({ work: 'users/64b7f1a2c3d4e5f607182931' })
+            })
+        );
+    });
+
+    it('carries the screen into the overdue reminder too', async () => {
+        await staff('moderator', 'mod@example.com');
+
+        await notificationsService.onTaskOverdue({
+            tenantId: DEPLOYMENT_TENANT_ID,
+            taskId: '64b7f1a2c3d4e5f607182930',
+            kind: 'export_failed',
+            routeSet: 'UserErasure',
+            work: 'users/64b7f1a2c3d4e5f607182931'
+        });
+
+        expect(noticeMails()[0][2]).toMatchObject({
+            link: expect.stringMatching(/\/en\/users\/64b7f1a2c3d4e5f607182931$/)
+        });
+    });
 });
 
-/** A refund task and the two moderators around it. */
+/** A system task and the two administrators around it: only someone who may work tasks can take one. */
 const handOver = async () => {
     const giver = await staff('admin', 'giver@example.com');
-    const taker = await staff('moderator', 'taker@example.com');
-    const task = await createRefundTask();
+    const taker = await staff('admin', 'taker@example.com');
+    const task = await createSystemTask();
     return { giver, taker, id: String(task._id) };
 };
 
@@ -223,7 +266,7 @@ describe('a task handed to a colleague', () => {
 
         asSuccess(await taskService.assign(id, taker.id, callerContextAs('admin', giver.id)));
 
-        await expect(bellOf('moderator', taker.id)).resolves.toMatchObject([
+        await expect(bellOf('admin', taker.id)).resolves.toMatchObject([
             { code: 'notifications.staff.task-assigned', params: { taskId: id } }
         ]);
         await expect(bellOf('admin', giver.id)).resolves.toEqual([]);
@@ -246,6 +289,6 @@ describe('a task handed to a colleague', () => {
         await new Promise((resolve) => setTimeout(resolve, 5));
         asSuccess(await taskService.assign(id, taker.id, asGiver));
 
-        await expect(bellOf('moderator', taker.id)).resolves.toHaveLength(2);
+        await expect(bellOf('admin', taker.id)).resolves.toHaveLength(2);
     });
 });

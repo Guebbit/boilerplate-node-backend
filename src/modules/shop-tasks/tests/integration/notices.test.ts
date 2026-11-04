@@ -1,6 +1,6 @@
 /**
  * @module
- * What each domain event becomes in the inbox, driven the way production drives it: the real
+ * What each shop event becomes in the buyer's inbox, driven the way production drives it: the real
  * modules registered, a real product deletion (or merge) at one end and the rows at the other.
  * Nothing here calls a subscriber directly — the wiring in `module.ts` is part of what is tested.
  */
@@ -13,14 +13,14 @@ import { productService } from '@modules/products';
 import { fulfillmentOrdersOf, paidPreorderOrder } from '@modules/delivery/tests/factories';
 import { cartService } from '@modules/cart';
 import { wishlistService } from '@modules/wishlist';
-import { notificationsService } from '@modules/notifications/services';
+import { notificationsService } from '@modules/notifications';
 import { stockAlertService } from '@modules/stock-alerts';
 import { inventoryService } from '@modules/inventory';
 import { api, authenticateAs } from '@tests/http';
 import { userService } from '@modules/users';
 import { registerModules } from '@kernel/registry';
 import { emitDomainEvent, resetDomainEvents } from '@kernel/events';
-import { notificationModel } from '../../model';
+import { countNotifications } from '@modules/notifications/tests/factories';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { enabledModules } from '../../../../modules';
 
@@ -71,7 +71,7 @@ describe('the module subscriptions', () => {
             const [message, ...rest] = await inboxOf(holder.id);
             expect(rest).toEqual([]);
             expect(message).toMatchObject({
-                code: 'notifications.cart-line-removed',
+                code: 'shop-tasks.cart-line-removed',
                 severity: 'warning',
                 params: { productId: String(doomed._id), titles: { en: 'Blue mug' } }
             });
@@ -89,7 +89,7 @@ describe('the module subscriptions', () => {
 
             const [message] = await inboxOf(saver.id);
             expect(message).toMatchObject({
-                code: 'notifications.wishlist-item-removed',
+                code: 'shop-tasks.wishlist-item-removed',
                 params: { productId: String(doomed._id), titles: { en: 'Blue mug' } }
             });
         });
@@ -107,8 +107,8 @@ describe('the module subscriptions', () => {
             const inbox = await inboxOf(user.id);
             const codes = inbox.map(({ code }) => code).toSorted();
             expect(codes).toEqual([
-                'notifications.cart-line-removed',
-                'notifications.wishlist-item-removed'
+                'shop-tasks.cart-line-removed',
+                'shop-tasks.wishlist-item-removed'
             ]);
         });
 
@@ -160,7 +160,7 @@ describe('the module subscriptions', () => {
             const [message, ...rest] = await inboxOf(user.id);
             expect(rest).toEqual([]);
             expect(message).toMatchObject({
-                code: 'notifications.cart-merge-refused',
+                code: 'shop-tasks.cart-merge-refused',
                 params: {
                     lines: [
                         {
@@ -253,7 +253,7 @@ describe('the module subscriptions', () => {
             const [message, ...rest] = await inboxOf(asker.id);
             expect(rest).toEqual([]);
             expect(message).toMatchObject({
-                code: 'notifications.stock-alert',
+                code: 'shop-tasks.stock-alert',
                 params: { productId, titles: expect.any(Object) }
             });
         });
@@ -284,7 +284,7 @@ describe('the module subscriptions', () => {
 
             expect(rest).toEqual([]);
             expect(message).toMatchObject({
-                code: 'notifications.fulfillment-delayed',
+                code: 'shop-tasks.fulfillment-delayed',
                 severity: 'warning',
                 params: { orderId, titles: [expect.any(String)] }
             });
@@ -298,7 +298,7 @@ describe('the module subscriptions', () => {
 
             const [message] = await inboxOf(user.id);
 
-            expect(message?.code).toBe('notifications.fulfillment-delayed');
+            expect(message?.code).toBe('shop-tasks.fulfillment-delayed');
             expect(message?.params).not.toHaveProperty('answerBy');
         });
 
@@ -312,7 +312,7 @@ describe('the module subscriptions', () => {
             });
 
             // Not an inbox read: a stray row would belong to a made-up owner nobody can open.
-            await expect(notificationModel.countDocuments({})).resolves.toBe(0);
+            await expect(countNotifications()).resolves.toBe(0);
         });
 
         it('writes nothing when the date moves earlier', async () => {
@@ -331,7 +331,7 @@ describe('the module subscriptions', () => {
             const [message, ...rest] = await inboxOf(user.id);
             expect(rest).toEqual([]);
             expect(message).toMatchObject({
-                code: 'notifications.fulfillment-held',
+                code: 'shop-tasks.fulfillment-held',
                 severity: 'warning',
                 params: {
                     orderId: 'order-1',
@@ -345,7 +345,7 @@ describe('the module subscriptions', () => {
         it('writes no row at all for a buyer whose account was erased', async () => {
             await emitDomainEvent('fulfillment_order.hold_noticed', heldFor(undefined));
 
-            await expect(notificationModel.countDocuments({})).resolves.toBe(0);
+            await expect(countNotifications()).resolves.toBe(0);
         });
     });
 
@@ -358,7 +358,7 @@ describe('the module subscriptions', () => {
             const [message, ...rest] = await inboxOf(user.id);
             expect(rest).toEqual([]);
             expect(message).toMatchObject({
-                code: 'notifications.shipment-lost',
+                code: 'shop-tasks.shipment-lost',
                 severity: 'warning',
                 params: {
                     orderId: 'order-1',
@@ -393,7 +393,7 @@ describe('the module subscriptions', () => {
         it('writes no row at all for a buyer whose account was erased', async () => {
             await emitDomainEvent('shipment.lost', lostFor(undefined));
 
-            await expect(notificationModel.countDocuments({})).resolves.toBe(0);
+            await expect(countNotifications()).resolves.toBe(0);
         });
     });
 });

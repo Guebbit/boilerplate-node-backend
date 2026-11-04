@@ -17,23 +17,23 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     stock_alerts["stock-alerts<br/><i>this module</i>"]
-    notifications["notifications"]
     products["products"]
+    shop_tasks["shop-tasks"]
     users["users"]
 
-    notifications --> stock_alerts
+    shop_tasks --> stock_alerts
     stock_alerts --> products
     stock_alerts --> users
     products -. "product.buyable_again" .-> stock_alerts
     products -. "product.deleted" .-> stock_alerts
-    stock_alerts -. "stock_alert.sent" .-> notifications
+    stock_alerts -. "stock_alert.sent" .-> shop_tasks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class products core;
-    class notifications supporting;
+    class shop_tasks supporting;
     class users generic;
     class stock_alerts centre;
 ```

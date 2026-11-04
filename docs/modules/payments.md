@@ -20,19 +20,17 @@ flowchart LR
     access["access"]
     cart["cart"]
     invoicing["invoicing"]
-    notifications["notifications"]
     orders["orders"]
     returns["returns"]
     shop["shop"]
+    shop_tasks["shop-tasks"]
     stats["stats"]
-    tasks["tasks"]
 
     cart --> payments
     invoicing --> payments
-    notifications --> payments
     returns --> payments
+    shop_tasks --> payments
     stats --> payments
-    tasks --> payments
     payments --> access
     payments --> orders
     payments --> shop
@@ -40,21 +38,21 @@ flowchart LR
     orders -. "order.created" .-> payments
     payments -. "payment.refunded" .-> invoicing
     payments -. "payment.refunded" .-> returns
-    payments -. "payment.amount_mismatch" .-> tasks
-    payments -. "payment.dispute_opened" .-> tasks
-    payments -. "payment.dispute_updated" .-> tasks
-    payments -. "payment.refund_canceled" .-> tasks
-    payments -. "payment.refund_failed" .-> tasks
-    payments -. "payment.refund_owed_by_hand" .-> tasks
-    payments -. "payment.refunded" .-> tasks
+    payments -. "payment.amount_mismatch" .-> shop_tasks
+    payments -. "payment.dispute_opened" .-> shop_tasks
+    payments -. "payment.dispute_updated" .-> shop_tasks
+    payments -. "payment.refund_canceled" .-> shop_tasks
+    payments -. "payment.refund_failed" .-> shop_tasks
+    payments -. "payment.refund_owed_by_hand" .-> shop_tasks
+    payments -. "payment.refunded" .-> shop_tasks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class invoicing,notifications,returns,shop,stats supporting;
-    class access,tasks generic;
+    class invoicing,returns,shop,shop_tasks,stats supporting;
+    class access generic;
     class payments centre;
 ```
 

@@ -9,7 +9,6 @@
 import type { Caller } from '@types';
 import { holds, holdsSet } from '@kernel/ability';
 import { PERMISSION_SETS, permissionsOfRole, isUnrestrictedRole } from '@kernel/permissions';
-import { ROUTED_SETS } from './domain';
 import { TaskSource } from '@types';
 
 /** The two facts of a task that decide who may touch it. */
@@ -19,12 +18,13 @@ export interface Jurisdiction {
 }
 
 /**
- * Every route set the caller holds.
+ * Every route set the caller holds: a task is visible iff its frozen set is among them, so the
+ * query needs no list of the sets any opener uses.
  *
  * @param caller - the caller, in tenant scope
  */
 export const heldRouteSets = (caller: Caller): string[] =>
-    ROUTED_SETS.filter((setName) => holdsSet(caller, setName));
+    PERMISSION_SETS.map((set) => set.name).filter((setName) => holdsSet(caller, setName));
 
 /**
  * The Mongo scope that limits a read to the caller's jurisdiction: every visitor task, plus the
@@ -71,17 +71,18 @@ export const mayDelete = (caller: Caller, task: Jurisdiction): boolean =>
     holds(caller, 'delete', 'Task') && inJurisdiction(caller, task);
 
 /**
- * Whether a person holding the tenant role `roleName` holds the route set — the question asked of
- * an assignee, who is not the caller. A role is data, so this reads the rules it expands to.
+ * Whether a person holding the tenant role `roleName` may be given a task of `routeSet`: they hold
+ * the set AND may work a task at all (`update:Task`). A role is data, so this reads the rules it
+ * expands to. Someone who could only read the task would be handed work they cannot do.
  *
  * @param roleName - the person's tenant role, or `null` when they hold none
  * @param routeSet - the task's route set
  */
-export const roleHoldsRouteSet = (roleName: string | null, routeSet: string): boolean => {
+export const roleMayWorkRouteSet = (roleName: string | null, routeSet: string): boolean => {
     if (!roleName) return false;
     if (isUnrestrictedRole(roleName)) return true;
 
     const held = new Set(permissionsOfRole(roleName));
     const set = PERMISSION_SETS.find((candidate) => candidate.name === routeSet);
-    return set?.rules.every((id) => held.has(id)) ?? false;
+    return (held.has('update:Task') && set?.rules.every((id) => held.has(id))) ?? false;
 };

@@ -10,7 +10,7 @@ import { asRole } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import { notificationsService } from '@modules/notifications/services';
 import { tasksJobs } from '@modules/tasks/jobs';
-import { backdateDue, createRefundTask } from '@modules/tasks/tests/factories';
+import { backdateDue, createSystemTask } from '@modules/tasks/tests/factories';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { callerInScope } from '@kernel/permissions';
 import { resetDomainEvents } from '@kernel/events';
@@ -30,7 +30,7 @@ describe('the overdue sweep run through the job runner', () => {
             { email: 'admin@example.com', username: 'admin', authenticatorEnabledAt: new Date() },
             'admin'
         );
-        const task = await createRefundTask();
+        const task = await createSystemTask();
         await backdateDue(String(task._id), 2);
 
         await prepareJob(job);

@@ -108,11 +108,11 @@ describe('create', () => {
     it('keeps the category and the order number the visitor gave, trimmed', async () => {
         const task = await taskService.create({
             ...makePayload(),
-            category: 'cancellation',
+            category: 'account',
             orderNumber: '  ORD-1042  '
         });
 
-        expect(task.category).toBe('cancellation');
+        expect(task.category).toBe('account');
         expect(task.orderNumber).toBe('ORD-1042');
     });
 
@@ -141,7 +141,7 @@ describe('create — the announcement', () => {
     });
 
     it('announces task.opened with ids and closed codes only, never the visitor’s words', async () => {
-        const task = await taskService.create(makePayload({ category: 'cancellation' }));
+        const task = await taskService.create(makePayload({ category: 'account' }));
 
         expect(opened).toEqual([
             {
@@ -149,7 +149,7 @@ describe('create — the announcement', () => {
                 taskId: String(task._id),
                 kind: 'contact',
                 routeSet: 'TaskDisplay',
-                category: 'cancellation'
+                category: 'account'
             }
         ]);
         expect(JSON.stringify(opened)).not.toContain('Ada');
@@ -210,10 +210,10 @@ describe('mailFallbackMailbox', () => {
     it('sends nothing for a task the system opened: only a visitor’s message has a Reply-To', async () => {
         const system = await taskRepository.create({
             source: TaskSource.system,
-            kind: TaskKind.manual_refund_owed,
-            routeSet: 'PaymentRefunding',
-            subject: 'A refund is owed by hand',
-            message: 'Refund refund-1 needs a person.'
+            kind: TaskKind.export_failed,
+            routeSet: 'UserErasure',
+            subject: 'A data export failed',
+            message: 'Export e1 needs a person.'
         });
 
         await taskService.mailFallbackMailbox(String(system._id));
@@ -318,7 +318,7 @@ describe('search', () => {
 
     it('filters by category', async () => {
         await taskService.create({ ...makePayload(), category: 'privacy' });
-        await taskService.create({ ...makePayload(), category: 'order' });
+        await taskService.create({ ...makePayload(), category: 'other' });
         await taskService.create(makePayload());
 
         const { items } = await taskService.search({ category: 'privacy' }, staff);

@@ -16,7 +16,7 @@ import { nullPathsIn } from '@tests/response-contract';
 import { accessService, DEPLOYMENT_TENANT_SLUG } from '@modules/access';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { createExample } from '@modules/example/tests/factories';
-import { createRefundTask } from '@modules/tasks/tests/factories';
+import { createSystemTask } from '@modules/tasks/tests/factories';
 import { createNotification } from '@modules/notifications/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
@@ -106,7 +106,7 @@ describe('POST /account/export', () => {
             .set('Authorization', bearer)
             .send({ orderId: String(shipped._id), reason: 'withdrawal' });
         await createExample({ userId: user.id });
-        await createRefundTask(user.id);
+        await createSystemTask(user.id);
         const held = await createOrder(user, [toOrderItem(product, 1)]);
         await forceOrderStatus(String(held._id), OrderStatus.processing);
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(held._id));

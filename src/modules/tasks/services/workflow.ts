@@ -25,7 +25,7 @@ import { emitDomainEvent } from '@kernel/events';
 import { accessService } from '@modules/access';
 import { userService } from '@modules/users';
 import { tasksAuditActions } from '../audit';
-import { inJurisdiction, jurisdictionScope, mayWork, roleHoldsRouteSet } from '../access';
+import { inJurisdiction, jurisdictionScope, mayWork, roleMayWorkRouteSet } from '../access';
 import {
     isOpen,
     markSpam,
@@ -203,7 +203,7 @@ const mayBeAssigned = (userId: string, routeSet: string): Promise<boolean> =>
         if (!user || user.deletedAt) return false;
         return accessService
             .rolesOf(userId, DEPLOYMENT_TENANT_ID)
-            .then(({ tenant }) => roleHoldsRouteSet(tenant, routeSet));
+            .then(({ tenant }) => roleMayWorkRouteSet(tenant, routeSet));
     });
 
 /**

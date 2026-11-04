@@ -32,6 +32,7 @@ import payments from './modules/payments/module';
 import products from './modules/products/module';
 import returns from './modules/returns/module';
 import shop from './modules/shop/module';
+import shopTasks from './modules/shop-tasks/module';
 import sitemap from './modules/sitemap/module';
 import stats from './modules/stats/module';
 import stockAlerts from './modules/stock-alerts/module';
@@ -62,6 +63,7 @@ export const enabledModules: AppModule[] = [
     products,
     returns,
     shop,
+    shopTasks,
     sitemap,
     stats,
     stockAlerts,
@@ -116,6 +118,7 @@ export type ModuleName =
     | 'products'
     | 'returns'
     | 'shop'
+    | 'shop-tasks'
     | 'sitemap'
     | 'stats'
     | 'stock-alerts'

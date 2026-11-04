@@ -9,6 +9,8 @@
 
 export * from './services';
 
+export * from './emails';
+
 export type * from './model';
 
 export type * from './presenter';

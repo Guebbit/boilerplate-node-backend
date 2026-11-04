@@ -20,15 +20,15 @@ flowchart LR
     addresses["addresses"]
     delivery["delivery"]
     inventory["inventory"]
-    notifications["notifications"]
     orders["orders"]
     payments["payments"]
     products["products"]
     shop["shop"]
+    shop_tasks["shop-tasks"]
     users["users"]
     wishlist["wishlist"]
 
-    notifications --> cart
+    shop_tasks --> cart
     wishlist --> cart
     cart --> addresses
     cart --> delivery
@@ -39,15 +39,15 @@ flowchart LR
     cart --> shop
     cart --> users
     products -. "product.deleted" .-> cart
-    cart -. "cart.lines_removed" .-> notifications
-    cart -. "cart.merge_refused" .-> notifications
+    cart -. "cart.lines_removed" .-> shop_tasks
+    cart -. "cart.merge_refused" .-> shop_tasks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders,products core;
-    class addresses,delivery,inventory,notifications,payments,shop,wishlist supporting;
+    class addresses,delivery,inventory,payments,shop,shop_tasks,wishlist supporting;
     class users generic;
     class cart centre;
 ```

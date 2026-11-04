@@ -18,21 +18,21 @@ graph cannot see._
 flowchart LR
     wishlist["wishlist<br/><i>this module</i>"]
     cart["cart"]
-    notifications["notifications"]
     products["products"]
+    shop_tasks["shop-tasks"]
 
-    notifications --> wishlist
+    shop_tasks --> wishlist
     wishlist --> cart
     wishlist --> products
     products -. "product.deleted" .-> wishlist
-    wishlist -. "wishlist.items_removed" .-> notifications
+    wishlist -. "wishlist.items_removed" .-> shop_tasks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,products core;
-    class notifications supporting;
+    class shop_tasks supporting;
     class wishlist centre;
 ```
 

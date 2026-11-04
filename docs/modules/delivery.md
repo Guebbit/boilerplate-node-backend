@@ -19,17 +19,15 @@ flowchart LR
     delivery["delivery<br/><i>this module</i>"]
     cart["cart"]
     inventory["inventory"]
-    notifications["notifications"]
     orders["orders"]
     products["products"]
     returns["returns"]
     shop["shop"]
-    tasks["tasks"]
+    shop_tasks["shop-tasks"]
 
     cart --> delivery
-    notifications --> delivery
     returns --> delivery
-    tasks --> delivery
+    shop_tasks --> delivery
     delivery --> inventory
     delivery --> orders
     delivery --> products
@@ -41,20 +39,18 @@ flowchart LR
     orders -. "order.status_overridden" .-> delivery
     products -. "product.release_date_changed" .-> delivery
     products -. "product.restock_date_changed" .-> delivery
-    delivery -. "fulfillment_order.delayed" .-> notifications
-    delivery -. "fulfillment_order.hold_noticed" .-> notifications
-    delivery -. "shipment.lost" .-> notifications
-    delivery -. "fulfillment_order.cancelled" .-> tasks
-    delivery -. "fulfillment_order.delayed" .-> tasks
-    delivery -. "shipment.shipped" .-> tasks
+    delivery -. "fulfillment_order.cancelled" .-> shop_tasks
+    delivery -. "fulfillment_order.delayed" .-> shop_tasks
+    delivery -. "fulfillment_order.hold_noticed" .-> shop_tasks
+    delivery -. "shipment.lost" .-> shop_tasks
+    delivery -. "shipment.shipped" .-> shop_tasks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders,products core;
-    class inventory,notifications,returns,shop supporting;
-    class tasks generic;
+    class inventory,returns,shop,shop_tasks supporting;
     class delivery centre;
 ```
 

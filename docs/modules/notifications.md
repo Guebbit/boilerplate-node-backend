@@ -18,50 +18,26 @@ graph cannot see._
 flowchart LR
     notifications["notifications<br/><i>this module</i>"]
     access["access"]
-    cart["cart"]
-    delivery["delivery"]
-    inventory["inventory"]
-    orders["orders"]
-    payments["payments"]
-    returns["returns"]
-    stock_alerts["stock-alerts"]
+    shop_tasks["shop-tasks"]
     tasks["tasks"]
     users["users"]
     webhooks["webhooks"]
-    wishlist["wishlist"]
 
+    shop_tasks --> notifications
     notifications --> access
-    notifications --> cart
-    notifications --> delivery
-    notifications --> inventory
-    notifications --> orders
-    notifications --> payments
-    notifications --> returns
-    notifications --> stock_alerts
     notifications --> tasks
     notifications --> users
     notifications --> webhooks
-    notifications --> wishlist
-    cart -. "cart.lines_removed" .-> notifications
-    cart -. "cart.merge_refused" .-> notifications
-    delivery -. "fulfillment_order.delayed" .-> notifications
-    delivery -. "fulfillment_order.hold_noticed" .-> notifications
-    delivery -. "shipment.lost" .-> notifications
-    orders -. "order.purchase_hold_placed" .-> notifications
-    returns -. "return.requested" .-> notifications
-    stock_alerts -. "stock_alert.sent" .-> notifications
     tasks -. "task.assigned" .-> notifications
     tasks -. "task.opened" .-> notifications
     tasks -. "task.overdue" .-> notifications
     webhooks -. "webhook.subscription_auto_disabled" .-> notifications
-    wishlist -. "wishlist.items_removed" .-> notifications
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
-    class cart,orders core;
-    class delivery,inventory,payments,returns,stock_alerts,wishlist supporting;
+    class shop_tasks supporting;
     class access,tasks,users,webhooks generic;
     class notifications centre;
 ```

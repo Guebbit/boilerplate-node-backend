@@ -4,12 +4,6 @@
         "not-found": "This notification was not found.",
         "staff-mail": {
             "open": "Open it in the admin",
-            "purchase-hold-placed": {
-                "subject": "Checkout paused for a buyer",
-                "meta-title": "Purchase hold placed",
-                "title": "A purchase hold was placed",
-                "summary": "A buyer cancelled or let expire several unpaid orders, so their checkout is paused until {{until}}. Every cancellation was processed normally; nothing is blocked except placing a new order. The pause ends by itself; place a manual hold on the account to keep it longer."
-            },
             "task-opened": {
                 "subject": "New task: {{what}}",
                 "meta-title": "New task",
@@ -25,38 +19,13 @@
             "task-kind": {
                 "contact": "Contact message",
                 "account_review": "Account review",
-                "manual_refund_owed": "Refund owed by hand",
-                "amount_mismatch": "Payment amount mismatch",
-                "paid_without_hold": "Paid order without stock hold",
-                "export_failed": "Data export failed",
-                "consent_due": "Buyer consent due",
-                "refund_refused": "Refund refused",
-                "dispute": "Payment dispute"
+                "export_failed": "Data export failed"
             },
             "task-category": {
-                "order": "Order",
-                "cancellation": "Cancellation",
-                "return": "Return",
-                "payment": "Payment",
                 "account": "Account",
                 "privacy": "Privacy",
                 "other": "Other",
                 "none": "Uncategorised"
-            },
-            "digest": {
-                "subject": "Work waiting for you",
-                "meta-title": "Daily summary",
-                "title": "What is waiting for you",
-                "transfers-due": "{{n}} bank transfers are due soon",
-                "preorders-late": "{{n}} preorders are past their date",
-                "delivery-holds-open": "{{n}} held orders have waited too long",
-                "withdrawals-awaiting-goods": "{{n}} withdrawals are waiting for their goods",
-                "returns-undecided": "{{n}} return requests still need a decision",
-                "low-stock": "{{n}} products are low on stock",
-                "unshipped": "{{n}} paid orders have not shipped",
-                "awaiting-tracking": "{{n}} shipped parcels still have no tracking code",
-                "undelivered": "{{n}} parcels were shipped and never marked arrived",
-                "stale-refunds": "{{n}} refunds have been open too long"
             }
         }
     }

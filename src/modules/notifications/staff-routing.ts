@@ -1,7 +1,9 @@
 /**
  * @module
  * Who hears what: for each work notice, the permission sets whose holders do that work, whether it
- * is worth an email, and where the notice points. One file to read to audit "who is told".
+ * is worth an email, and where the notice points. One file to read to audit "who is told" for the
+ * notices every project has. A module that adds its own notices keeps its own table and hands it
+ * over with each call (`StaffNotice.route`, `StaffNotice.link`); this file lists none of them.
  *
  * The mail rule: `now` only where someone must act soon (money, a legal clock, security). Every
  * other code is inbox-only, so the bell is the default and the mailbox is the exception.
@@ -14,7 +16,7 @@ import type { Caller } from '@types';
 import type { PermissionSetName } from '@api/permission-vocabulary';
 import { holdsSet } from '@kernel/ability';
 import { FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
-import type { NotificationBody, StaffNotificationCode, StaffSummaryCode } from './model';
+import type { NotificationBody, NotificationCode } from './model';
 
 /** One work notice's routing: its audience, its mail class and how loud it is. */
 export interface StaffRoute {
@@ -26,20 +28,26 @@ export interface StaffRoute {
     sets: readonly PermissionSetName[] | 'per-notice';
     /**
      * `now`: one mail per recipient when the notice is first written. `digest`: a summary row,
-     * mailed in the daily digest when it appears or grows. `none`: the bell only.
+     * mailed in a daily digest when it appears or grows. `none`: the bell only.
      */
     email: 'now' | 'digest' | 'none';
     severity: NotificationSeverity;
 }
 
-/** Every work notice code and its routing. A code missing here does not compile. */
-export const STAFF_ROUTES: Readonly<Record<StaffNotificationCode, StaffRoute>> = {
-    // Abuse defence: a bot or a loop is placing and cancelling orders, and a person steps in soon.
-    'notifications.staff.purchase-hold-placed': {
-        sets: ['UserBanning'],
-        email: 'now',
-        severity: NotificationSeverity.warning
-    },
+/** A page of the paired frontend: the path template (no locale) and its placeholder values. */
+export interface StaffLink {
+    template: string;
+    parameters: Record<string, string>;
+}
+
+/** The body of a work notice: a code of the `<module>.staff.<name>` shape with its own params. */
+export type StaffNoticeBody = Extract<NotificationBody, { code: `${string}.staff.${string}` }>;
+
+/** A work notice code this module owns: the ones that ship with every project. */
+type FoundationStaffCode = Extract<NotificationCode, `notifications.staff.${string}`>;
+
+/** The five work notices every project has, and their routing. A code missing here does not compile. */
+export const STAFF_ROUTES = {
     // Fix the endpoint and re-enable it: worth a look, not worth waking anyone.
     'notifications.staff.webhook-disabled': {
         sets: ['WebhookManagement'],
@@ -66,111 +74,27 @@ export const STAFF_ROUTES: Readonly<Record<StaffNotificationCode, StaffRoute>> =
         email: 'none',
         severity: NotificationSeverity.info
     },
-    // The buyer waits for an answer and the shop owes one: the people who decide returns take it.
-    'notifications.staff.return-requested': {
-        sets: ['ReturnManagement'],
-        email: 'none',
-        severity: NotificationSeverity.info
-    },
     // No set does this work: an empty list is administrators only. Prometheus pages the operator
     // too, so the bell is enough here.
     'notifications.staff.outbox-dead': {
         sets: [],
         email: 'none',
         severity: NotificationSeverity.error
-    },
-    // The summary rows below are counts the daily digest rewrites. The ones that mail are the
-    // overdue ones (something is late and nobody has acted); a count of work in the normal course
-    // is the bell's alone.
-    'notifications.staff.transfers-due': {
-        sets: ['PaymentRecording'],
-        email: 'none',
-        severity: NotificationSeverity.info
-    },
-    'notifications.staff.preorders-late': {
-        sets: ['OrderEditing'],
-        email: 'digest',
-        severity: NotificationSeverity.warning
-    },
-    'notifications.staff.delivery-holds-open': {
-        sets: ['DeliveryManagement'],
-        email: 'digest',
-        severity: NotificationSeverity.warning
-    },
-    'notifications.staff.withdrawals-awaiting-goods': {
-        sets: ['ReturnReceiving'],
-        email: 'none',
-        severity: NotificationSeverity.info
-    },
-    'notifications.staff.returns-undecided': {
-        sets: ['ReturnManagement'],
-        email: 'digest',
-        severity: NotificationSeverity.warning
-    },
-    'notifications.staff.low-stock': {
-        sets: ['InventoryManagement'],
-        email: 'none',
-        severity: NotificationSeverity.info
-    },
-    'notifications.staff.unshipped': {
-        sets: ['DeliveryStart'],
-        email: 'digest',
-        severity: NotificationSeverity.warning
-    },
-    'notifications.staff.awaiting-tracking': {
-        sets: ['DeliveryManagement'],
-        email: 'none',
-        severity: NotificationSeverity.info
-    },
-    // Until a parcel is marked arrived, the buyer's withdrawal window and guarantee have not started.
-    'notifications.staff.undelivered': {
-        sets: ['DeliveryManagement'],
-        email: 'digest',
-        severity: NotificationSeverity.warning
-    },
-    // A refund open past the attention threshold runs against the 14-day refund clock.
-    'notifications.staff.stale-refunds': {
-        sets: ['PaymentRefunding'],
-        email: 'digest',
-        severity: NotificationSeverity.warning
     }
-};
+} as const satisfies Record<FoundationStaffCode, StaffRoute>;
 
 /**
  * The sets a notice is for: its route's, or the ones the producer named for a `per-notice` route.
  * A `per-notice` route with none named is administrators only, never everyone.
  *
- * @param route - the code's routing
+ * @param route - the notice's routing
  * @param named - the producer's sets, for a `per-notice` route
  */
 export const setsOfRoute = (route: StaffRoute, named: readonly string[] = []): readonly string[] =>
     route.sets === 'per-notice' ? named : route.sets;
 
-/** The body of a work notice: a staff code with its own params. */
-export type StaffNoticeBody = Extract<NotificationBody, { code: StaffNotificationCode }>;
-
-/** A page of the paired frontend: the path template (no locale) and its placeholder values. */
-export interface StaffLink {
-    template: string;
-    parameters: Record<string, string>;
-}
-
 /** Where the staff screens live: the shared `staffPages` paths, in the frontend's own router. */
 const PAGES = FRONTEND_LINK_RULES.staffPages;
-
-/** The admin page that lists what each summary row counts. */
-const SUMMARY_PAGES: Readonly<Record<StaffSummaryCode, string>> = {
-    'notifications.staff.transfers-due': PAGES.salesOrders,
-    'notifications.staff.preorders-late': PAGES.salesPreorders,
-    'notifications.staff.delivery-holds-open': PAGES.salesOrders,
-    'notifications.staff.withdrawals-awaiting-goods': PAGES.returns,
-    'notifications.staff.returns-undecided': PAGES.returns,
-    'notifications.staff.low-stock': PAGES.inventory,
-    'notifications.staff.unshipped': PAGES.salesOrders,
-    'notifications.staff.awaiting-tracking': PAGES.salesOrders,
-    'notifications.staff.undelivered': PAGES.salesOrders,
-    'notifications.staff.stale-refunds': PAGES.salesPayments
-};
 
 /**
  * The screen of the record a dead outbox event was about, read off the event name's first segment
@@ -187,16 +111,28 @@ const outboxAggregateLink = (eventName: string, aggregateId: string): StaffLink 
         : { template: '', parameters: {} };
 
 /**
- * The frontend screen a notice points at: the account for a hold, the subscription for a disabled
- * webhook. Ids only, as the params carry; the screen has the rest.
+ * The to-do's work screen when its opener named one, else the to-do's own page. `work` is an
+ * opaque path the opener supplied; nothing here knows which screen it is.
+ *
+ * @param params - the task notice's params
+ * @param params.taskId - the task
+ * @param params.work - the opener's screen, if any
+ */
+const taskLink = ({ taskId, work }: { taskId: string; work?: string | undefined }): StaffLink =>
+    work
+        ? { template: work, parameters: {} }
+        : { template: PAGES.task, parameters: { id: taskId } };
+
+/**
+ * The frontend screen a notice points at: the subscription for a disabled webhook, the screen of
+ * the work for a task. Ids only, as the params carry; the screen has the rest.
  *
  * @param body - the notice
  */
-export const staffLinkOf = (body: StaffNoticeBody): StaffLink => {
+export const staffLinkOf = (
+    body: Extract<StaffNoticeBody, { code: keyof typeof STAFF_ROUTES }>
+): StaffLink => {
     switch (body.code) {
-        case 'notifications.staff.purchase-hold-placed': {
-            return { template: PAGES.user, parameters: { id: body.params.userId } };
-        }
         case 'notifications.staff.webhook-disabled': {
             return {
                 template: PAGES.webhookSubscription,
@@ -204,18 +140,14 @@ export const staffLinkOf = (body: StaffNoticeBody): StaffLink => {
             };
         }
         case 'notifications.staff.task-opened':
-        case 'notifications.staff.task-overdue':
+        case 'notifications.staff.task-overdue': {
+            return taskLink(body.params);
+        }
         case 'notifications.staff.task-assigned': {
             return { template: PAGES.task, parameters: { id: body.params.taskId } };
         }
-        case 'notifications.staff.return-requested': {
-            return { template: PAGES.return, parameters: { id: body.params.returnId } };
-        }
         case 'notifications.staff.outbox-dead': {
             return outboxAggregateLink(body.params.eventName, body.params.aggregateId);
-        }
-        default: {
-            return { template: SUMMARY_PAGES[body.code], parameters: {} };
         }
     }
 };

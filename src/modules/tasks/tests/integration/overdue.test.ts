@@ -10,7 +10,7 @@ import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import type { DomainEventMap } from '@kernel/events';
 import { taskService } from '../../service';
 import { taskModel } from '@modules/tasks/model';
-import { backdateDue, closeDirectly, createRefundTask } from '../factories';
+import { backdateDue, closeDirectly, createSystemTask } from '../factories';
 import { TASK_OVERDUE } from '../../events';
 import { TaskStatus } from '@types';
 
@@ -31,15 +31,15 @@ afterEach(() => resetDomainEvents());
 
 const HOUR_MS = 3_600_000;
 
-/** An open refund task whose deadline passed `hoursAgo` hours ago (negative: still ahead). */
+/** An open system task whose deadline passed `hoursAgo` hours ago (negative: still ahead). */
 const dueAgo = async (hoursAgo: number) => {
-    const task = await createRefundTask();
+    const task = await createSystemTask();
     await backdateDue(String(task._id), hoursAgo);
     return String(task._id);
 };
 
 describe('remindOverdue', () => {
-    it('announces an open task past its due date, with its kind and route set', async () => {
+    it('announces an open task past its due date, with its kind, route set and work screen', async () => {
         const id = await dueAgo(2);
 
         await expect(taskService.remindOverdue()).resolves.toBe(1);
@@ -47,8 +47,9 @@ describe('remindOverdue', () => {
         expect(heard).toEqual([
             expect.objectContaining({
                 taskId: id,
-                kind: 'manual_refund_owed',
-                routeSet: 'PaymentRefunding'
+                kind: 'export_failed',
+                routeSet: 'UserErasure',
+                work: 'users/u1'
             })
         ]);
     });
@@ -87,7 +88,7 @@ describe('remindOverdue', () => {
     });
 
     it('leaves a task with no due date alone', async () => {
-        await createRefundTask();
+        await createSystemTask();
 
         await expect(taskService.remindOverdue()).resolves.toBe(0);
     });

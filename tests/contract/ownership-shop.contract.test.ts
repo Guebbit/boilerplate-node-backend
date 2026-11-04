@@ -1,7 +1,7 @@
 /**
  * @module
  * Ownership sweep, shop half: another customer's order, payment, refund, credit note, shipment,
- * fulfillment order, return or notification, named in the URL, the body or a list filter, answers
+ * fulfillment order or return, named in the URL, the body or a list filter, answers
  * exactly like an id that does not exist.
  *
  * Its own file because `demo:remove` deletes every test that imports a shop module, and this one
@@ -9,7 +9,7 @@
  * `ownership-contract.test.ts` and `@tests/ownership-sweep`; the lists are `@tests/owned-ids`.
  *
  * Customer A owns a paid, delivered, partly refunded order with its invoice, credit note,
- * shipment, a return and a notification. Customer B attacks all of it over HTTP. A's world is
+ * shipment and a return. Customer B attacks all of it over HTTP. A's world is
  * built with the modules' `tests/factories.ts`; the attacks only ever use the routes.
  */
 import '@tests/contract';
@@ -31,22 +31,13 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { payByCard, refundOrderPayment } from '@modules/payments/tests/factories';
 import { waitForInvoice } from '@modules/invoicing/tests/factories';
 import { carryOrderTo, fulfillmentOrdersOf } from '@modules/delivery/tests/factories';
-import { createNotification } from '@modules/notifications/tests/factories';
 import { deliveryService } from '@modules/delivery';
 import { OrderStatus } from '@types';
 
 setupTestDb();
 
 /** The modules whose routes this file sweeps. */
-const SHOP_MODULES = new Set([
-    'cart',
-    'delivery',
-    'invoicing',
-    'notifications',
-    'orders',
-    'payments',
-    'returns'
-]);
+const SHOP_MODULES = new Set(['cart', 'delivery', 'invoicing', 'orders', 'payments', 'returns']);
 
 /** The entries of one family that this file owns, in the modules this checkout still has. */
 const mine = (entries: readonly OwnedId[]): string[] =>
@@ -144,7 +135,6 @@ const seedShop = async () => {
         zip: '41121',
         country: 'IT'
     });
-    const notification = await createNotification({ userId: victim.user.id });
     return {
         victim,
         attacker,
@@ -156,7 +146,6 @@ const seedShop = async () => {
         fulfillmentOrderId: await firstId(`/orders/${orderId}/fulfillment-orders`, bearer),
         shipmentId: await firstId(`/orders/${orderId}/shipments`, bearer),
         returnId: idOf(returned.body),
-        notificationId: String(notification._id),
         addressId: idOf(address.body)
     };
 };
@@ -179,7 +168,6 @@ const watching = (world: ShopWorld) => () => {
         readAs(`/orders/${orderId}/payments`, victim.bearer),
         readAs(`/payments/${paymentId}`, victim.bearer),
         readAs(`/returns/${returnId}`, victim.bearer),
-        readAs('/notifications', victim.bearer),
         readAs('/account/addresses', victim.bearer),
         readAs('/cart', attacker.bearer),
         readAs('/orders', attacker.bearer),
@@ -261,8 +249,6 @@ const shopPathCases = (world: ShopWorld): OwnedCase[] => {
             attacker
         ),
         pathCase('GET /delivery/shipments/:id', { id: world.shipmentId }, attacker),
-        pathCase('GET /notifications/:id', { id: world.notificationId }, attacker),
-        pathCase('DELETE /notifications/:id', { id: world.notificationId }, attacker),
         pathCase('GET /returns/:id', { id: world.returnId }, attacker)
     ];
 };
@@ -507,7 +493,7 @@ const sweep = async (cases: OwnedCase[], world: ShopWorld, family: readonly Owne
     return problems;
 };
 
-describe('another customer’s order, payment, return and notification answer like a missing one', () => {
+describe('another customer’s order, payment and return answer like a missing one', () => {
     it('refuses every shop path id, and leaves A’s rows as they were', async () => {
         const world = await seedShop();
 

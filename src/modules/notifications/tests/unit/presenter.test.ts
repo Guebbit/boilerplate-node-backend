@@ -4,21 +4,18 @@
  */
 import { Types } from 'mongoose';
 import { asStub } from '@tests/stub';
-import {
-    NOTIFICATION_CODES,
-    type NotificationBody,
-    type NotificationDocument
-} from '@modules/notifications/model';
+import type { NotificationBody, NotificationDocument } from '@modules/notifications/model';
 import { presentNotification, presentNotifications } from '@modules/notifications/presenter';
+import { STAFF_ROUTES } from '@modules/notifications/staff-routing';
 
 /** A document with only the fields the presenter reads, plus one it must not leak. */
 const documentOf = (overrides: Partial<NotificationDocument> = {}): NotificationDocument =>
     asStub<NotificationDocument>({
         _id: new Types.ObjectId('64b7f1a2c3d4e5f607182930'),
         userId: new Types.ObjectId('64b7f1a2c3d4e5f607182931'),
-        code: 'notifications.cart-line-removed',
-        audience: 'own',
-        params: { productId: 'p1', titles: { en: 'Blue mug' } },
+        code: 'notifications.staff.webhook-disabled',
+        audience: 'staff',
+        params: { subscriptionId: 's1' },
         severity: 'warning',
         createdAt: new Date('2026-10-04T09:00:00.000Z'),
         ...overrides
@@ -28,9 +25,9 @@ describe('presentNotification', () => {
     it('answers exactly the contract fields, ids and dates as strings', () => {
         expect(presentNotification(documentOf())).toEqual({
             id: '64b7f1a2c3d4e5f607182930',
-            audience: 'own',
-            code: 'notifications.cart-line-removed',
-            params: { productId: 'p1', titles: { en: 'Blue mug' } },
+            audience: 'staff',
+            code: 'notifications.staff.webhook-disabled',
+            params: { subscriptionId: 's1' },
             severity: 'warning',
             createdAt: '2026-10-04T09:00:00.000Z'
         });
@@ -51,61 +48,6 @@ describe('presentNotification', () => {
 
 describe('presentNotification, per code', () => {
     const bodies: NotificationBody[] = [
-        {
-            code: 'notifications.cart-line-removed',
-            params: { productId: 'p1', titles: { en: 'Blue mug' } }
-        },
-        {
-            code: 'notifications.wishlist-item-removed',
-            params: { productId: 'p2', titles: { en: 'Red mug', it: 'Tazza rossa' } }
-        },
-        {
-            code: 'notifications.stock-alert',
-            params: { productId: 'p5', titles: { en: 'Red lamp' } }
-        },
-        {
-            code: 'notifications.cart-merge-refused',
-            params: {
-                lines: [
-                    { productId: 'p3', requested: 4, titles: { en: 'Green mug' } },
-                    { productId: 'p4', requested: 1, titles: {} }
-                ]
-            }
-        },
-        {
-            code: 'notifications.fulfillment-delayed',
-            params: {
-                orderId: 'o1',
-                fulfillmentOrderId: 'f1',
-                titles: ['Coming soon'],
-                agreedAt: '2026-12-01T00:00:00.000Z',
-                expectedAt: '2026-12-20T00:00:00.000Z'
-            }
-        },
-        {
-            code: 'notifications.fulfillment-held',
-            params: {
-                orderId: 'o3',
-                fulfillmentOrderId: 'f3',
-                notice: 'check_address',
-                message: 'Is the flat number right?'
-            }
-        },
-        {
-            code: 'notifications.shipment-lost',
-            params: {
-                orderId: 'o4',
-                shipmentId: 's4',
-                reason: 'lost',
-                message: 'A new one is on its way.',
-                owed: ['Vinyl'],
-                expectedAt: '2026-12-20T00:00:00.000Z'
-            }
-        },
-        {
-            code: 'notifications.staff.purchase-hold-placed',
-            params: { userId: 'u1', until: '2026-10-30T09:00:00.000Z' }
-        },
         { code: 'notifications.staff.webhook-disabled', params: { subscriptionId: 's1' } },
         {
             code: 'notifications.staff.task-opened',
@@ -113,30 +55,16 @@ describe('presentNotification, per code', () => {
         },
         {
             code: 'notifications.staff.task-overdue',
-            params: { taskId: 't1', kind: 'contact', category: 'privacy' }
+            params: { taskId: 't1', kind: 'export_failed', work: 'users/u1' }
         },
         {
             code: 'notifications.staff.task-assigned',
-            params: { taskId: 't1', kind: 'dispute' }
-        },
-        {
-            code: 'notifications.staff.return-requested',
-            params: { returnId: 'r1', orderId: 'o1' }
+            params: { taskId: 't1', kind: 'export_failed' }
         },
         {
             code: 'notifications.staff.outbox-dead',
             params: { eventName: 'order.paid', aggregateId: 'o1' }
-        },
-        { code: 'notifications.staff.transfers-due', params: { count: 3 } },
-        { code: 'notifications.staff.preorders-late', params: { count: 3 } },
-        { code: 'notifications.staff.delivery-holds-open', params: { count: 3 } },
-        { code: 'notifications.staff.withdrawals-awaiting-goods', params: { count: 3 } },
-        { code: 'notifications.staff.returns-undecided', params: { count: 3 } },
-        { code: 'notifications.staff.low-stock', params: { count: 3 } },
-        { code: 'notifications.staff.unshipped', params: { count: 3 } },
-        { code: 'notifications.staff.awaiting-tracking', params: { count: 3 } },
-        { code: 'notifications.staff.undelivered', params: { count: 3 } },
-        { code: 'notifications.staff.stale-refunds', params: { count: 3 } }
+        }
     ];
 
     it.each(bodies)('answers $code with its own params, untouched', (body) => {
@@ -146,10 +74,19 @@ describe('presentNotification, per code', () => {
         expect(view.params).toEqual(body.params);
     });
 
-    it('covers every code the model declares', () => {
+    it('covers every code this module routes', () => {
         // A new code with no row above would reach the wire without a test naming its params.
-        expect(bodies.map(({ code }) => code).toSorted()).toEqual(NOTIFICATION_CODES.toSorted());
+        expect(bodies.map(({ code }) => code).toSorted()).toEqual(
+            Object.keys(STAFF_ROUTES).toSorted()
+        );
     });
+
+    it.each(['own', 'staff'] as const)(
+        'carries a %s message with the audience it was written for',
+        (audience) => {
+            expect(presentNotification(documentOf({ audience })).audience).toBe(audience);
+        }
+    );
 });
 
 describe('presentNotifications', () => {
