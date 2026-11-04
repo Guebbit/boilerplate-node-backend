@@ -474,7 +474,7 @@ services:
     loki:
         logging: *container-logging
         profiles: ['observability']
-        image: grafana/loki:3.7.8
+        image: grafana/loki:3.7.9
         restart: unless-stopped
         command: ['-config.file=/etc/loki/loki-config.yaml']
         volumes:
@@ -531,7 +531,7 @@ services:
     alloy:
         logging: *container-logging
         profiles: ['observability']
-        image: grafana/alloy:v1.20.1
+        image: grafana/alloy:v1.21.3
         restart: unless-stopped
         command:
             - 'run'
@@ -701,7 +701,7 @@ services:
     mailpit:
         logging: *container-logging
         profiles: ['integrations']
-        image: axllent/mailpit:v1.31.5
+        image: axllent/mailpit:v1.32.0
         restart: unless-stopped
         environment:
             # Accept any login: the app sends NODE_SMTP_USER/PASS, and a sink has no accounts.
