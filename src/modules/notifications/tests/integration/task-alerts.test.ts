@@ -18,6 +18,7 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { callerInScope } from '@kernel/permissions';
 import { resetDomainEvents } from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { registerModules } from '@kernel/registry';
 import { TaskCategory } from '@types';
 import { asSuccess } from '@tests/response';
@@ -56,21 +57,26 @@ const staff = (role: string, email: string, locale = 'en') =>
 
 /** `userId` reading the bell as `role`, in the deployment's shop. */
 const bellOf = (role: string, userId: string) =>
-    notificationsService
-        .listVisible(
-            callerInScope({ ...asRole(role, userId), tenantId: DEPLOYMENT_TENANT_ID }, 'tenant')
+    settleOutboxNudges()
+        .then(() =>
+            notificationsService.listVisible(
+                callerInScope({ ...asRole(role, userId), tenantId: DEPLOYMENT_TENANT_ID }, 'tenant')
+            )
         )
         .then(({ items }) => items);
 
 /** A contact message with words nobody but the desk may read. */
 const fileContact = (category?: TaskCategory) =>
-    taskService.create({
-        name: 'Ada Lovelace',
-        email: 'ada@example.com',
-        subject: 'Where is my secret parcel',
-        message: 'Please call me about the diagnosis.',
-        ...(category ? { category } : {})
-    });
+    taskService
+        .create({
+            name: 'Ada Lovelace',
+            email: 'ada@example.com',
+            subject: 'Where is my secret parcel',
+            message: 'Please call me about the diagnosis.',
+            ...(category ? { category } : {})
+        })
+        // The notice travels through the outbox: wait for it before anyone looks.
+        .then((task) => settleOutboxNudges().then(() => task));
 
 /** The per-person staff-notice mails queued so far. */
 const noticeMails = () =>
@@ -112,7 +118,7 @@ describe('a contact message', () => {
         const mailed = JSON.stringify([envelope, data]);
         for (const secret of ['Ada', 'ada@', 'secret parcel', 'diagnosis'])
             expect(mailed).not.toContain(secret);
-        expect(mailed).toContain('Privacy');
+        expect(mailed).toContain('Dati personali');
         expect(fallbackMails()).toHaveLength(0);
     });
 
@@ -155,6 +161,7 @@ describe('a contact message', () => {
             message: 'Buy now',
             website: 'https://spam.example'
         });
+        await settleOutboxNudges();
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });

@@ -158,6 +158,8 @@ flowchart LR
   `notifications.staff.webhook-disabled` (bell only), `notifications.staff.task-opened` (mail
   `now`: a person waits), `notifications.staff.task-overdue` (mail `now`, once, when that task
   passes its due date unclosed; the same people) and `notifications.staff.task-assigned` (bell only, the assignee alone).
+  The three task events reach `notifications` through the [outbox](../tools/outbox.md), so a
+  failing handler is retried; each handler dedupes on its key (`task-opened:<id>` and so on).
   `notifications.staff.return-requested` (bell only, the people who decide returns; a withdrawal is
   a right and is not announced) and `notifications.staff.outbox-dead` (bell only, administrators:
   the kernel's `outbox.event_dead` fact, a plain emit because an outbox row about the outbox could

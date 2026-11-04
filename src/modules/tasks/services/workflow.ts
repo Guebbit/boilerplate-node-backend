@@ -21,7 +21,7 @@ import { t } from '@infrastructure/i18n';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-import { emitDomainEvent } from '@kernel/events';
+import { announceInTransaction } from '@kernel/outbox';
 import { accessService } from '@modules/access';
 import { userService } from '@modules/users';
 import { tasksAuditActions } from '../audit';
@@ -207,28 +207,41 @@ const mayBeAssigned = (userId: string, routeSet: string): Promise<boolean> =>
     });
 
 /**
- * Tell the bus a colleague was given a task. Taking your own does not: you know. The emit never
- * rejects (a failing subscriber is logged by the bus), so the assignment already made stands.
+ * Give the task to someone and, when it is a colleague, write the `task.assigned` row in the same
+ * transaction: the assignment and its notice stand or fall together, and the relay redelivers the
+ * notice. Taking your own task announces nothing: you know.
  *
- * @param task - the task as assigned
- * @param assigneeId - who now holds it
- * @param context - the caller who assigned it
+ * `assignedAt` is read once, inside the announcement, so the receiver's dedupe key
+ * (`task-assigned:<id>:<assignedAt>`) is the same on every redelivery of the stored row.
+ *
+ * @param id - the task
+ * @param assigneeId - who gets it
+ * @param context - the caller who assigns it
+ * @returns the task as assigned, or `null` when it is no longer open
  */
-const announceAssigned = (
-    task: TaskDocument,
+const assignAndAnnounce = (
+    id: string,
     assigneeId: string,
     context: CallerContext
-): Promise<void> =>
-    assigneeId === context.caller.id
-        ? Promise.resolve()
-        : emitDomainEvent(TASK_ASSIGNED, {
-              tenantId: DEPLOYMENT_TENANT_ID,
-              taskId: String(task._id),
-              kind: task.kind,
-              routeSet: task.routeSet,
-              assigneeId,
-              assignedAt: new Date().toISOString()
-          }).then(() => undefined);
+): Promise<TaskDocument | null> =>
+    announceInTransaction(
+        (session) => taskRepository.assign(id, assigneeId, session),
+        (task) =>
+            assigneeId === context.caller.id
+                ? []
+                : {
+                      name: TASK_ASSIGNED,
+                      payload: {
+                          tenantId: DEPLOYMENT_TENANT_ID,
+                          taskId: String(task._id),
+                          kind: task.kind,
+                          routeSet: task.routeSet,
+                          assigneeId,
+                          assignedAt: new Date().toISOString()
+                      },
+                      aggregateId: String(task._id)
+                  }
+    );
 
 /**
  * Give an open task to one person — taking it is assigning yourself. A `new` task becomes
@@ -258,7 +271,7 @@ const assign = (
                     }
                 ]);
 
-            return taskRepository.assign(id, userId).then((assigned) => {
+            return assignAndAnnounce(id, userId, context).then((assigned) => {
                 if (!assigned) return notOpen();
                 recordAudit(context, {
                     action: tasksAuditActions.ADMIN_TASK_ASSIGNED,
@@ -267,9 +280,7 @@ const assign = (
                     targetId: id,
                     metadata: { assigneeId: userId }
                 });
-                return announceAssigned(assigned, userId, context).then(() =>
-                    present(assigned, context).then((wire) => generateSuccess(wire))
-                );
+                return present(assigned, context).then((wire) => generateSuccess(wire));
             });
         });
     });

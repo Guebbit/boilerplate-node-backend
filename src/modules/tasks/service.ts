@@ -30,7 +30,7 @@ import {
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-import { emitDomainEvent } from '@kernel/events';
+import { announceInTransaction } from '@kernel/outbox';
 import { logger } from '@infrastructure/adapters/logger';
 import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
 import { contactRequestEmail } from './emails';
@@ -82,35 +82,47 @@ const create = (payload: CreateContactTaskRequest, subjectId?: string): Promise<
     return checkEmailPolicy(email).then((verdict) => {
         const suspectedSpam = honeypotFilled || verdict === 'refused';
 
-        return taskRepository
-            .create({
-                name: payload.name?.trim() || undefined,
-                ...(subjectId ? { subjectId: toObjectId(subjectId) } : {}),
-                email,
-                subject: payload.subject.trim(),
-                message: payload.message.trim(),
-                ...(payload.category ? { category: payload.category } : {}),
-                ...(payload.orderNumber?.trim() ? { orderNumber: payload.orderNumber.trim() } : {}),
-                source: TaskSource.visitor,
-                kind: TaskKind.contact,
-                routeSet: CONTACT_ROUTE_SET,
-                status: initialTaskStatus(suspectedSpam),
-                // Spam is closed at birth: it ages from now and never owes work.
-                ...(suspectedSpam
-                    ? { closedAt: now, resolution: TaskResolution.spam }
-                    : { dueAt: new Date(now.getTime() + contactSlaMs()) })
-            })
-            .then((created) =>
+        // The message and its `task.opened` row commit together. Suspected spam is stored
+        // (closed at birth) but announces nothing: contact spam tells nobody.
+        return announceInTransaction(
+            (session) =>
+                taskRepository.create(
+                    {
+                        name: payload.name?.trim() || undefined,
+                        ...(subjectId ? { subjectId: toObjectId(subjectId) } : {}),
+                        email,
+                        subject: payload.subject.trim(),
+                        message: payload.message.trim(),
+                        ...(payload.category ? { category: payload.category } : {}),
+                        ...(payload.orderNumber?.trim()
+                            ? { orderNumber: payload.orderNumber.trim() }
+                            : {}),
+                        source: TaskSource.visitor,
+                        kind: TaskKind.contact,
+                        routeSet: CONTACT_ROUTE_SET,
+                        status: initialTaskStatus(suspectedSpam),
+                        // Spam is closed at birth: it ages from now and never owes work.
+                        ...(suspectedSpam
+                            ? { closedAt: now, resolution: TaskResolution.spam }
+                            : { dueAt: new Date(now.getTime() + contactSlaMs()) })
+                    },
+                    session
+                ),
+            (created) =>
                 suspectedSpam
-                    ? created
-                    : emitDomainEvent(TASK_OPENED, {
-                          tenantId: DEPLOYMENT_TENANT_ID,
-                          taskId: String(created._id),
-                          kind: created.kind,
-                          routeSet: created.routeSet,
-                          ...(created.category ? { category: created.category } : {})
-                      }).then(() => created)
-            );
+                    ? []
+                    : {
+                          name: TASK_OPENED,
+                          payload: {
+                              tenantId: DEPLOYMENT_TENANT_ID,
+                              taskId: String(created._id),
+                              kind: created.kind,
+                              routeSet: created.routeSet,
+                              ...(created.category ? { category: created.category } : {})
+                          },
+                          aggregateId: String(created._id)
+                      }
+        );
     });
 };
 

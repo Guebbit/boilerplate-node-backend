@@ -91,6 +91,9 @@ does: a unique `(subscriptionId, eventId)` index turns a redelivered fan-out int
 | `account.authenticator-removed`                          | `src/modules/account/services/two-factor-enrollment.ts`                                                        |
 | `account.export_ready`, `account.export_failed`          | `src/modules/account/services/export-job.ts`                                                                   |
 | `stock_alert.sent`                                       | `src/modules/stock-alerts/service.ts`                                                                          |
+| `task.opened`                                            | `src/modules/tasks/{service,services/system}.ts`                                                               |
+| `task.overdue`                                           | `src/modules/tasks/services/overdue.ts`                                                                        |
+| `task.assigned`                                          | `src/modules/tasks/services/workflow.ts`                                                                       |
 
 No new queue, no new dependency. The relay hands rows to the same in-process bus every module
 already subscribes to, so no AsyncAPI channel is involved: nothing here crosses a process boundary

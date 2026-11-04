@@ -15,7 +15,13 @@ import * as auditPort from '@infrastructure/observability/audit';
 import { tasksAuditActions } from '@modules/tasks/audit';
 import { TaskKind, TaskSource, TaskStatus } from '@types';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-import { onDomainEvent, resetDomainEvents, type DomainEventMap } from '@kernel/events';
+import {
+    markDomainEventsWired,
+    onDomainEvent,
+    resetDomainEvents,
+    type DomainEventMap
+} from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { TASK_OPENED } from '@modules/tasks/events';
 import { asReject } from '@tests/response';
 import { MISSING_ID } from '@tests/ids';
@@ -50,6 +56,8 @@ beforeEach(() => {
     onDomainEvent(TASK_OPENED, (fact) => {
         opened.push(fact);
     });
+    // The outbox relay only delivers where the bus is wired: this suite subscribes by hand.
+    markDomainEventsWired();
 });
 afterEach(() => {
     jest.clearAllMocks();
@@ -143,6 +151,7 @@ describe('create — the announcement', () => {
     it('announces task.opened with ids and closed codes only, never the visitor’s words', async () => {
         const task = await taskService.create(makePayload({ category: 'account' }));
 
+        await settleOutboxNudges();
         expect(opened).toEqual([
             {
                 tenantId: DEPLOYMENT_TENANT_ID,
@@ -160,6 +169,7 @@ describe('create — the announcement', () => {
     it('leaves the category out of the announcement when the visitor chose none', async () => {
         await taskService.create(makePayload());
 
+        await settleOutboxNudges();
         expect(opened[0]).not.toHaveProperty('category');
     });
 
@@ -233,6 +243,7 @@ describe('create — honeypot', () => {
     it('announces the task when the honeypot is empty', async () => {
         await taskService.create(makePayload());
 
+        await settleOutboxNudges();
         expect(opened).toHaveLength(1);
     });
 
@@ -240,6 +251,7 @@ describe('create — honeypot', () => {
         const task = await taskService.create(makePayload({ website: 'https://spammer.example' }));
 
         expect(task.status).toBe(TaskStatus.spam);
+        await settleOutboxNudges();
         expect(opened).toEqual([]);
     });
 
@@ -247,6 +259,7 @@ describe('create — honeypot', () => {
         const task = await taskService.create(makePayload({ website: '   ' }));
 
         expect(task.status).toBe(TaskStatus.new);
+        await settleOutboxNudges();
         expect(opened).toHaveLength(1);
     });
 
@@ -269,6 +282,7 @@ describe('create — disposable-email policy', () => {
         const task = await taskService.create(makePayload({ email: 'someone@mailinator.com' }));
 
         expect(task.status).toBe(TaskStatus.new);
+        await settleOutboxNudges();
         expect(opened).toHaveLength(1);
     });
 
@@ -280,6 +294,7 @@ describe('create — disposable-email policy', () => {
         // Filed and returned exactly like the honeypot catches a bot: no visible refusal that
         // would tell a spam script which signal caught it.
         expect(task.status).toBe(TaskStatus.spam);
+        await settleOutboxNudges();
         expect(opened).toEqual([]);
     });
 });

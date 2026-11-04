@@ -44,7 +44,7 @@ export interface TaskRepository extends Repository<TaskDocument, StoredTask> {
     /** Apply a transition's patch, only if the task is still in `from`. `null`: it moved first. */
     moveFrom: (id: string, from: TaskStatus, patch: TaskPatch) => Promise<TaskDocument | null>;
     /** Give an open task to someone; a `new` one becomes `in_progress`. `null`: not open. */
-    assign: (id: string, userId: string) => Promise<TaskDocument | null>;
+    assign: (id: string, userId: string, session?: ClientSession) => Promise<TaskDocument | null>;
     /** Clear the assignee; an `in_progress` task goes back to `new`. `null`: no such task. */
     unassign: (id: string) => Promise<TaskDocument | null>;
     /** Append a note. `null`: no such task. */
@@ -54,11 +54,11 @@ export interface TaskRepository extends Repository<TaskDocument, StoredTask> {
      * and return it. One conditional write, so two sweeps cannot claim the same task. `null`:
      * nothing is left to claim.
      */
-    claimOverdue: (now: Date) => Promise<TaskDocument | null>;
+    claimOverdue: (now: Date, session?: ClientSession) => Promise<TaskDocument | null>;
     /** Whether a system event already opened or touched a task (a redelivery). */
     sawEvent: (eventId: string) => Promise<boolean>;
     /** Insert a system task. Rejects with a duplicate-key error when its dedup key is open. */
-    insertSystem: (opening: NewSystemTask) => Promise<TaskDocument>;
+    insertSystem: (opening: NewSystemTask, session?: ClientSession) => Promise<TaskDocument>;
     /** A repeat of an open situation: stamp it seen once more. `null`: not open any more. */
     touchOpen: (openKey: string, eventId: string | undefined, now: Date) => Promise<boolean>;
     /** The open system tasks matching a filter, to be cleared one by one. */
@@ -117,12 +117,12 @@ export const taskRepository: TaskRepository = {
             )
             .exec(),
 
-    assign: (id, userId) =>
+    assign: (id, userId, session) =>
         taskModel
             .findOneAndUpdate(
                 { _id: toObjectId(id), status: TaskStatus.new },
                 { $set: { assigneeId: toObjectId(userId), status: TaskStatus.in_progress } },
-                { new: true }
+                { new: true, session }
             )
             .exec()
             .then(
@@ -132,7 +132,7 @@ export const taskRepository: TaskRepository = {
                         .findOneAndUpdate(
                             { _id: toObjectId(id), status: TaskStatus.in_progress },
                             { $set: { assigneeId: toObjectId(userId) } },
-                            { new: true }
+                            { new: true, session }
                         )
                         .exec()
             ),
@@ -159,7 +159,7 @@ export const taskRepository: TaskRepository = {
             .findOneAndUpdate({ _id: toObjectId(id) }, { $push: { notes: note } }, { new: true })
             .exec(),
 
-    claimOverdue: (now) =>
+    claimOverdue: (now, session) =>
         // Mongoose: findOneAndUpdate with `new: true` returns the document AFTER the update; the
         // filter and the stamp are one atomic step.
         // https://mongoosejs.com/docs/api/model.html#Model.findOneAndUpdate()
@@ -172,7 +172,7 @@ export const taskRepository: TaskRepository = {
                 },
                 { $set: { overdueNotifiedAt: now } },
                 // Oldest deadline first, so a backlog is told in the order it went late.
-                { new: true, sort: { dueAt: 1 } }
+                { new: true, sort: { dueAt: 1 }, session }
             )
             .exec(),
 
@@ -182,21 +182,24 @@ export const taskRepository: TaskRepository = {
             .exec()
             .then((found) => found !== null),
 
-    insertSystem: (opening) =>
-        base.create({
-            source: TaskSource.system,
-            kind: opening.kind,
-            routeSet: opening.routeSet,
-            ...(opening.work ? { work: opening.work } : {}),
-            link: opening.link,
-            openKey: opening.openKey,
-            ...(opening.subjectId ? { subjectId: toObjectId(opening.subjectId) } : {}),
-            subject: opening.subject,
-            message: opening.message,
-            dueAt: opening.dueAt,
-            lastSeenAt: opening.now,
-            ...(opening.eventId ? { eventIds: [opening.eventId] } : {})
-        }),
+    insertSystem: (opening, session) =>
+        base.create(
+            {
+                source: TaskSource.system,
+                kind: opening.kind,
+                routeSet: opening.routeSet,
+                ...(opening.work ? { work: opening.work } : {}),
+                link: opening.link,
+                openKey: opening.openKey,
+                ...(opening.subjectId ? { subjectId: toObjectId(opening.subjectId) } : {}),
+                subject: opening.subject,
+                message: opening.message,
+                dueAt: opening.dueAt,
+                lastSeenAt: opening.now,
+                ...(opening.eventId ? { eventIds: [opening.eventId] } : {})
+            },
+            session
+        ),
 
     touchOpen: (openKey, eventId, now) =>
         taskModel

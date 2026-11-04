@@ -15,6 +15,7 @@ import { emitDomainEvent, onDomainEvent, resetDomainEvents } from '@kernel/event
 import { registerModules } from '@kernel/registry';
 import { taskModel } from '@modules/tasks/model';
 import { taskRepository } from '@modules/tasks/repository';
+import { outboxEventModel, relayOutbox, settleOutboxNudges } from '@kernel/outbox';
 import { TASK_OPENED } from '../../events';
 import { TaskKind, TaskResolution, TaskStatus } from '@types';
 import { enabledModules } from '../../../../modules';
@@ -200,9 +201,42 @@ describe('dedup', () => {
             { eventId: nextEventId() }
         );
 
+        await settleOutboxNudges();
+
         const task = await onlyTask();
         expect(task.seenCount).toBe(2);
         expect(opened).toHaveBeenCalledTimes(1);
+    });
+
+    it('delivers a notice whose handler failed once on the next relay pass', async () => {
+        let attempts = 0;
+        onDomainEvent(TASK_OPENED, () => {
+            attempts += 1;
+            if (attempts === 1) throw new Error('listener down');
+        });
+
+        await emitDomainEvent(
+            'account.export_failed',
+            { userId: USER, exportId: 'ex1' },
+            { eventId: nextEventId() }
+        );
+        await settleOutboxNudges();
+
+        // The first pass failed: the row waits, with its backoff, instead of being lost.
+        await expect(
+            outboxEventModel.countDocuments({ name: 'task.opened', status: 'pending' })
+        ).resolves.toBe(1);
+        await outboxEventModel.updateMany(
+            { name: 'task.opened' },
+            { $set: { nextAttemptAt: new Date(0) } }
+        );
+
+        await relayOutbox();
+
+        expect(attempts).toBe(2);
+        await expect(
+            outboxEventModel.countDocuments({ name: 'task.opened', status: 'published' })
+        ).resolves.toBe(1);
     });
 
     it('ignores a redelivery of the same event, even after the task closed', async () => {

@@ -191,6 +191,12 @@ A task never mails anyone itself. A new one (spam excluded) is announced as `tas
 [`notifications`](./notifications.md#work-notices-for-staff) hears all three and does the telling,
 so a situation is one task kind or one notice code, never both.
 
+All three go through the [transactional outbox](../tools/outbox.md): the event row is written in
+the same transaction as the change it announces (the insert, the assignment, the overdue claim),
+so a crash or a failing listener cannot lose a notice. Delivery is at-least-once, and the receiver
+dedupes (`task-opened:<id>`, `task-overdue:<id>`, `task-assigned:<id>:<assignedAt>`). The
+`aggregateId` is the task id, so a task's events arrive in order. Contact spam writes no row.
+
 | Event           | Told                                                                                          | Mail                                                                                                                                                       |
 | --------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `task.opened`   | everyone who works the kind (a contact message: `TaskManagement`, not the read-only managers) | a fixed phrase, the kind (a contact message also its category) and a link to the task. Never the visitor's name, address, subject, message or order number |
@@ -213,14 +219,15 @@ lives here, not in the shop's openers, because every kind has the same clock.
 ```mermaid
 flowchart LR
     J["sweep:tasks-overdue"] --> C{"claim: open, past dueAt,<br/>no overdueNotifiedAt"}
-    C -->|stamp overdueNotifiedAt, one write| E["task.overdue"]
+    C -->|stamp overdueNotifiedAt + outbox row, one transaction| E["task.overdue"]
     C -->|none left| Z["done"]
     E --> N["notifications: the opener's sets,<br/>bell + mail"]
 ```
 
 - **Once, never again.** The claim and the stamp (`overdueNotifiedAt`, internal, not on the wire)
-  are one conditional write, so overlapping sweeps cannot announce a task twice. A task is reminded once; a reopened task keeps that state. The cost is at-most-once: a crash between stamp
-  and event loses that one reminder.
+  are one transaction with the `task.overdue` outbox row, so overlapping sweeps cannot claim a task
+  twice, and a crash rolls back both: the next sweep claims it again. A task is reminded once; a
+  reopened task keeps that state. Delivery is at-least-once, deduped on `task-overdue:<id>`.
 - **Closed first, nothing sent.** A resolved or spam task is never claimed.
 - **Same audience as the opener.** `notifications` tells the sets that work the kind (a contact
   message: `TaskManagement`); a contact message nobody could be told of goes to the fallback

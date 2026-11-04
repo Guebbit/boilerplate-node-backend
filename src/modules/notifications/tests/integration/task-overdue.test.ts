@@ -16,6 +16,7 @@ import { backdateDue, closeDirectly, createSystemTask } from '@modules/tasks/tes
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { callerInScope } from '@kernel/permissions';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { resetDomainEvents } from '@kernel/events';
 import { registerModules } from '@kernel/registry';
 import { enabledModules } from '../../../../modules';
@@ -80,6 +81,8 @@ const overdueContact = async () => {
         subject: 'Where is my parcel',
         message: 'Please call me.'
     });
+    // The opener's notice is delivered through the outbox; let it land before clearing the mail log.
+    await settleOutboxNudges();
     await backdateDue(String(task._id));
     mockEnqueueEmail.mockClear();
     return task;
@@ -92,7 +95,9 @@ describe('an overdue contact task', () => {
         const task = await overdueContact();
 
         await taskService.remindOverdue();
+        await settleOutboxNudges();
         await taskService.remindOverdue();
+        await settleOutboxNudges();
 
         await expect(overdueBellOf('support', support.id)).resolves.toMatchObject([
             { audience: 'staff', params: { taskId: String(task._id), kind: 'contact' } }
@@ -124,6 +129,7 @@ describe('an overdue contact task', () => {
         await closeDirectly(String(task._id));
 
         await taskService.remindOverdue();
+        await settleOutboxNudges();
 
         await expect(overdueBellOf('support', support.id)).resolves.toEqual([]);
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
@@ -134,6 +140,7 @@ describe('an overdue contact task', () => {
         await overdueContact();
 
         await taskService.remindOverdue();
+        await settleOutboxNudges();
 
         expect(overdueMails()).toHaveLength(0);
         const [[envelope, , data]] = fallbackMails();
@@ -152,6 +159,7 @@ describe('an overdue system task', () => {
         mockEnqueueEmail.mockClear();
 
         await taskService.remindOverdue();
+        await settleOutboxNudges();
 
         await expect(overdueBellOf('moderator', moderator.id)).resolves.toMatchObject([
             { code: 'notifications.staff.task-overdue', params: { kind: 'export_failed' } }

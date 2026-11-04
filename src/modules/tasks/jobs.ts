@@ -6,6 +6,7 @@
  */
 
 import type { JobDeclaration } from '@kernel/registry';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { logger } from '@infrastructure/adapters/logger';
 import { tasksJobData } from './jobs.generated';
 import { taskService } from './service';
@@ -15,11 +16,16 @@ export const tasksJobs: readonly JobDeclaration[] = [
     {
         ...tasksJobData.sweepTasksOverdue,
         run: () =>
-            taskService.remindOverdue().then((announced) => {
-                logger.info({ message: 'Overdue task sweep done.', announced });
-            }),
-        // The sweep only emits `task.overdue`: `notifications` hears it through its subscription,
-        // and the staff mail is rendered from the translations.
+            taskService
+                .remindOverdue()
+                // The reminders are outbox rows; waiting for the nudged relay pass lets this
+                // process deliver them before it exits. The minute backstop catches any left.
+                .then((announced) => settleOutboxNudges().then(() => announced))
+                .then((announced) => {
+                    logger.info({ message: 'Overdue task sweep done.', announced });
+                }),
+        // The sweep only writes `task.overdue` rows: `notifications` hears them through its
+        // subscription, and the staff mail is rendered from the translations.
         needs: { subscriptions: true, i18n: true },
         // A sweep that outruns its day would only re-claim nothing, but one at a time is simpler.
         lease: { ttlMs: 30 * 60 * 1000 }

@@ -13,7 +13,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-import { emitDomainEvent } from '@kernel/events';
+import { announceInTransaction } from '@kernel/outbox';
 import type { DomainEventMap, DomainEventMeta } from '@kernel/events';
 import { systemCallerContext } from '@kernel/permissions';
 import { fillPath, FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
@@ -30,7 +30,7 @@ import { taskRepository } from '../repository';
 
 /**
  * Open one task for a situation, or stamp the open one seen again. Announces `task.opened`
- * only on an insert: a repeat tells nobody twice.
+ * (through the transactional outbox) only on an insert: a repeat tells nobody twice.
  *
  * @param opening - the situation
  * @param meta - the event's delivery facts; its `eventId` makes a redelivery a no-op
@@ -40,37 +40,50 @@ export const openSystemTask = (opening: SystemOpening, meta: DomainEventMeta): P
     const now = new Date();
     const touch = () => taskRepository.touchOpen(openKey, meta.eventId, now).then(() => undefined);
 
+    // The task and its `task.opened` row commit together: a crash or a failing listener cannot
+    // lose the notice, the relay redelivers it. The duplicate-key catch wraps the WHOLE
+    // transaction, so a lost race rolls back its row too and falls through to a touch.
     const open = () =>
-        taskRepository
-            .insertSystem({
-                kind: opening.kind,
-                routeSet: opening.routeSet,
-                ...(opening.work ? { work: opening.work } : {}),
-                link: opening.link,
-                openKey,
-                ...(opening.subjectId ? { subjectId: opening.subjectId } : {}),
-                subject: opening.subject,
-                message: opening.message,
-                dueAt: opening.dueAt,
-                eventId: meta.eventId,
-                now
+        announceInTransaction(
+            (session) =>
+                taskRepository.insertSystem(
+                    {
+                        kind: opening.kind,
+                        routeSet: opening.routeSet,
+                        ...(opening.work ? { work: opening.work } : {}),
+                        link: opening.link,
+                        openKey,
+                        ...(opening.subjectId ? { subjectId: opening.subjectId } : {}),
+                        subject: opening.subject,
+                        message: opening.message,
+                        dueAt: opening.dueAt,
+                        eventId: meta.eventId,
+                        now
+                    },
+                    session
+                ),
+            (created) => ({
+                name: TASK_OPENED,
+                payload: {
+                    tenantId: DEPLOYMENT_TENANT_ID,
+                    taskId: String(created._id),
+                    kind: created.kind,
+                    routeSet: created.routeSet,
+                    ...(created.work ? { work: created.work } : {})
+                },
+                aggregateId: String(created._id)
             })
-            .then((created) => {
+        )
+            .then((created) =>
+                // After the commit: an audit line for a task that rolled back would be a lie.
                 recordAudit(systemCallerContext('Task'), {
                     action: tasksAuditActions.SYSTEM_TASK_OPENED,
                     outcome: 'success',
                     targetType: 'task',
                     targetId: String(created._id),
                     metadata: { kind: created.kind }
-                });
-                return emitDomainEvent(TASK_OPENED, {
-                    tenantId: DEPLOYMENT_TENANT_ID,
-                    taskId: String(created._id),
-                    kind: created.kind,
-                    routeSet: created.routeSet,
-                    ...(created.work ? { work: created.work } : {})
-                }).then(() => undefined);
-            })
+                })
+            )
             // Another event opened it first: this one only touches.
             .catch((error: unknown) => {
                 if (!isDuplicateKey(error)) throw error;

@@ -6,11 +6,12 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
 import type { DomainEventMap } from '@kernel/events';
 import { taskService } from '../../service';
 import { taskModel } from '@modules/tasks/model';
 import { backdateDue, closeDirectly, createSystemTask } from '../factories';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { TASK_OVERDUE } from '../../events';
 import { TaskStatus } from '@types';
 
@@ -25,6 +26,8 @@ beforeEach(() => {
     onDomainEvent(TASK_OVERDUE, (fact) => {
         heard.push(fact);
     });
+    // The outbox relay only delivers where the bus is wired: this suite subscribes by hand.
+    markDomainEventsWired();
 });
 
 afterEach(() => resetDomainEvents());
@@ -43,6 +46,7 @@ describe('remindOverdue', () => {
         const id = await dueAgo(2);
 
         await expect(taskService.remindOverdue()).resolves.toBe(1);
+        await settleOutboxNudges();
 
         expect(heard).toEqual([
             expect.objectContaining({
@@ -59,6 +63,7 @@ describe('remindOverdue', () => {
 
         await taskService.remindOverdue();
         await expect(taskService.remindOverdue()).resolves.toBe(0);
+        await settleOutboxNudges();
 
         expect(heard).toHaveLength(1);
         const stored = await taskModel.findById(id).exec();
@@ -70,6 +75,7 @@ describe('remindOverdue', () => {
         await closeDirectly(id);
 
         await expect(taskService.remindOverdue()).resolves.toBe(0);
+        await settleOutboxNudges();
 
         expect(heard).toEqual([]);
         const stored = await taskModel.findById(id).exec();
@@ -83,6 +89,7 @@ describe('remindOverdue', () => {
         await expect(taskService.remindOverdue(new Date(Date.now() + 6 * HOUR_MS))).resolves.toBe(
             1
         );
+        await settleOutboxNudges();
 
         expect(heard.map((fact) => fact.taskId)).toEqual([id]);
     });
@@ -98,6 +105,7 @@ describe('remindOverdue', () => {
         const older = await dueAgo(9);
 
         await expect(taskService.remindOverdue()).resolves.toBe(2);
+        await settleOutboxNudges();
 
         expect(heard.map((fact) => fact.taskId)).toEqual([older, newer]);
     });
