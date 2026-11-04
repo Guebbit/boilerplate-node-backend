@@ -21,7 +21,7 @@ import path from 'node:path';
 import { isMap, parseDocument, type Document } from 'yaml';
 import { type ContractBundle } from './bundle-kinds';
 import { orderSections } from './section-order';
-import { webhookEventFragments, withWebhookEvents } from './asyncapi-webhook-events';
+import { sectionFragments, withSectionFragments } from './asyncapi-webhook-events';
 import { REPO_ROOT, MODULES_ROOT, modulesWith } from '../modules-on-disk';
 
 /**
@@ -130,9 +130,9 @@ const MERGED_PATHS = [
     ['components', 'schemas']
 ] as const;
 
-/** The module fragments a bundle carries: the webhook events, present only with the `webhooks` section. */
+/** The module fragments a bundle carries: each present section's `asyncapi.<section>.yaml` files from other modules. */
 const fragmentsFor = (sections: readonly AsyncSectionName[]): string[] =>
-    sections.includes('webhooks') ? webhookEventFragments() : [];
+    sections.flatMap((section) => sectionFragments(section));
 
 /** What a committed contract opens with, so the file says what it is and what produced it. */
 const marker = (sections: readonly AsyncSectionName[]): string =>
@@ -222,8 +222,8 @@ const compile = (scope: AsyncScope): string => {
 
     const sections = sectionsInScope(scope);
     for (const section of sections) {
-        // The `webhooks` section also carries every module's own webhook events.
-        const source = withWebhookEvents(
+        // A section also carries the fragments other modules ship for it (webhook events, extra notices).
+        const source = withSectionFragments(
             section,
             read(asyncSectionDocument(section)),
             mergeDocument

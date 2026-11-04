@@ -15,6 +15,11 @@
  *     x-enum-also: ['*']            # optional: values appended after the source's own
  * ```
  *
+ * With a hand-written `enum` beside it the marker means APPEND: the written values stay and the
+ * source's follow. That is how a module extends another module's open enum (`openapi.<owner>.yaml`'s
+ * `x-extends`, see `./openapi-extensions`); a source nobody supplies (the extending module is
+ * gone) then appends nothing.
+ *
  * Runs on the bundled document, like the other post-bundle steps in `./openapi-bundle`. A new
  * source is one more entry in the object `openapi-bundle.ts` hands to {@link withFilledEnums};
  * a new use of an existing one is two lines in a fragment. Nothing here knows any source by name.
@@ -44,30 +49,33 @@ const isStringList = (value: unknown): value is string[] =>
  * @param node - the schema node carrying `x-enum-from`
  * @param sources - every list the bundler can fill from
  * @param where - the node's location, for the error message
- * @throws Error if the source is unknown or empty, the appended list is malformed, or the node
- *   already has an `enum` of its own (a second, silent source of truth)
+ * @throws Error if the source is unknown or empty with no written enum to fall back on, the
+ *   appended list is malformed, or a value appears twice
  */
 const enumFor = (node: Placeholder, sources: EnumSources, where: string): string[] => {
     const name = node['x-enum-from'];
-    if (typeof name !== 'string' || !Object.hasOwn(sources, name))
+    const written = node.enum;
+    if (written !== undefined && !isStringList(written))
+        throw new Error(`[openapi] ${where}: a hand-written enum must be a list of strings.`);
+    const known = typeof name === 'string' && Object.hasOwn(sources, name);
+    if (!known && written === undefined)
         throw new Error(
             `[openapi] ${where}: x-enum-from names no known source (${String(name)}); known: ${Object.keys(sources).join(', ')}.`
-        );
-    if (node.enum !== undefined)
-        throw new Error(
-            `[openapi] ${where}: x-enum-from and a hand-written enum cannot both stand.`
         );
     const also = node['x-enum-also'] ?? [];
     if (!isStringList(also))
         throw new Error(`[openapi] ${where}: x-enum-also must be a list of strings.`);
 
-    const values = [...sources[name], ...also];
-    if (sources[name].length === 0)
+    const own = known ? sources[name] : [];
+    if (own.length === 0 && written === undefined)
         throw new Error(
-            `[openapi] ${where}: the source ${name} is empty, so its enum would be too.`
+            `[openapi] ${where}: the source ${String(name)} is empty, so its enum would be too.`
         );
+    const values = [...(written ?? []), ...own, ...also];
     if (new Set(values).size !== values.length)
-        throw new Error(`[openapi] ${where}: ${name} and x-enum-also name the same value twice.`);
+        throw new Error(
+            `[openapi] ${where}: ${String(name)} and the values beside it name the same value twice.`
+        );
     return values;
 };
 

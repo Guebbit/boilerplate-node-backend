@@ -30,6 +30,12 @@ import { withCookieAuth } from './cookie-auth';
 import { withImageUploadEncoding } from './image-upload-encoding';
 import { webhookEventNames } from './asyncapi-webhook-events';
 import { withFilledEnums } from './fill-enum';
+import {
+    checkExtensions,
+    enumSourcesOf,
+    extensionFragments,
+    withUnionExtensions
+} from './openapi-extensions';
 import { withAppLevelHeaders, withIdempotentReplay } from './response-headers';
 import { stageExportSchema } from './personal-data-assembly';
 import { pruneUnused } from './prune-unused';
@@ -509,42 +515,52 @@ const MARKER =
  *
  * @param errorCodes - the collected `x-error-codes` catalogue
  */
-const bundleSteps = (errorCodes: Record<string, ErrorCodeEntry>): readonly Step[] => [
-    // The analytics browser-event schemas.
-    withBrowserEvents,
-    // An enum named by `x-enum-from`, filled from its source.
-    (document_) => {
-        withFilledEnums(document_, { 'webhook-events': webhookEventNames() });
-    },
-    // The upload encoding on image-upload bodies.
-    withImageUploadEncoding,
-    // `cookieAuth` on every bearer operation, with the origin `403` on its unsafe methods.
-    withCookieAuth,
-    // The root's `x-app-level-responses` into every operation that doesn't declare its own.
-    withAppLevelResponses,
-    // The shared `304` on every read that declares `x-cache`.
-    withNotModified,
-    // `ETag`, `If-Match` and 412 on every path marked `x-versioned`.
-    withVersionedResources,
-    // The headers every answer carries.
-    withAppLevelHeaders,
-    // `Idempotent-Replay` on idempotent writes.
-    withIdempotentReplay,
-    // The `x-module` each operation's owning fragment names, never hand-written.
-    (document_) => {
-        withModuleStamps(document_, moduleOfPath());
-    },
-    // Refuses an operation naming an error code nobody declares.
-    (document_) => {
-        checkOperationErrorCodes(document_, errorCodes);
-    },
-    // Every fragment's own `x-error-codes`, published as one catalogue.
-    (document_) => {
-        withErrorCodes(document_, errorCodes);
-    },
-    // Drops the components nothing references any more.
-    pruneUnused
-];
+const bundleSteps = (errorCodes: Record<string, ErrorCodeEntry>): readonly Step[] => {
+    const extensions = extensionFragments();
+    return [
+        // The analytics browser-event schemas.
+        withBrowserEvents,
+        // Refuses an `x-extends` whose target the owner never opened (before the fill spends the marker).
+        checkExtensions(extensions),
+        // An enum named by `x-enum-from`, filled from its source (an extending module's values appended).
+        (document_) => {
+            withFilledEnums(document_, {
+                'webhook-events': webhookEventNames(),
+                ...enumSourcesOf(extensions)
+            });
+        },
+        // Another module's variants into the unions it opened (`x-extends`), before the prune.
+        withUnionExtensions(extensions),
+        // The upload encoding on image-upload bodies.
+        withImageUploadEncoding,
+        // `cookieAuth` on every bearer operation, with the origin `403` on its unsafe methods.
+        withCookieAuth,
+        // The root's `x-app-level-responses` into every operation that doesn't declare its own.
+        withAppLevelResponses,
+        // The shared `304` on every read that declares `x-cache`.
+        withNotModified,
+        // `ETag`, `If-Match` and 412 on every path marked `x-versioned`.
+        withVersionedResources,
+        // The headers every answer carries.
+        withAppLevelHeaders,
+        // `Idempotent-Replay` on idempotent writes.
+        withIdempotentReplay,
+        // The `x-module` each operation's owning fragment names, never hand-written.
+        (document_) => {
+            withModuleStamps(document_, moduleOfPath());
+        },
+        // Refuses an operation naming an error code nobody declares.
+        (document_) => {
+            checkOperationErrorCodes(document_, errorCodes);
+        },
+        // Every fragment's own `x-error-codes`, published as one catalogue.
+        (document_) => {
+            withErrorCodes(document_, errorCodes);
+        },
+        // Drops the components nothing references any more.
+        pruneUnused
+    ];
+};
 
 /** The bundle text once built this run; later callers reuse it instead of re-running redocly. */
 let compiled: string | undefined;
@@ -618,5 +634,9 @@ export const openapiBundle: CompiledBundle = {
     output: OPENAPI_OUTPUT,
     compiled: true,
     content: compile,
-    sources: () => [ROOT_SPEC, ...MODULE_SECTIONS.map((section) => moduleSpec(section))]
+    sources: () => [
+        ROOT_SPEC,
+        ...MODULE_SECTIONS.map((section) => moduleSpec(section)),
+        ...extensionFragments().map((fragment) => fragment.file)
+    ]
 };

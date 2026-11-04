@@ -1,12 +1,13 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseDocument } from 'yaml';
 import {
     localiseOpenApiReferences,
+    sectionFragments,
     webhookEventFragments,
     webhookEventNames,
-    withWebhookEvents
+    withSectionFragments
 } from '../../../../scripts/contracts/asyncapi-webhook-events';
 
 /** A section document with nothing in it, standing in for any section's parsed file. */
@@ -30,12 +31,12 @@ describe('webhookEventNames', () => {
     });
 });
 
-describe('withWebhookEvents', () => {
+describe('withSectionFragments', () => {
     it('merges one fragment per owner into the webhooks section', () => {
         const merge = jest.fn();
         const document = emptySection();
 
-        const result = withWebhookEvents('webhooks', document, merge);
+        const result = withSectionFragments('webhooks', document, merge);
 
         expect(result).toBe(document);
         expect(merge.mock.calls.map((call) => call[1])).toEqual([
@@ -51,9 +52,65 @@ describe('withWebhookEvents', () => {
     it('leaves every other section alone', () => {
         const merge = jest.fn();
 
-        withWebhookEvents('observability', emptySection(), merge);
+        withSectionFragments('observability', emptySection(), merge);
 
         expect(merge).not.toHaveBeenCalled();
+    });
+});
+
+/** The owner's section, with a union the fragment may extend. */
+const section = () =>
+    parseDocument(
+        'components:\n    schemas:\n        Payload:\n            oneOf:\n                - $ref: "#/components/schemas/Own"\n'
+    );
+
+describe('sections other than webhooks', () => {
+    const roots: string[] = [];
+
+    afterEach(() => {
+        for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+    });
+
+    /** A scratch modules root with a notifications fragment in module `shop`. */
+    const modulesRoot = (fragment: string): string => {
+        const root = mkdtempSync(path.join(os.tmpdir(), 'section-fragments-'));
+        roots.push(root);
+        mkdirSync(path.join(root, 'shop'));
+        writeFileSync(path.join(root, 'shop', 'asyncapi.notifications.yaml'), fragment);
+        return root;
+    };
+
+    const FRAGMENT =
+        'x-extends:\n    Payload: [ShopPayload]\ncomponents:\n    schemas:\n        ShopPayload:\n            type: object\n';
+
+    it('finds fragments named for the section, and none for a section nobody extends', () => {
+        const root = modulesRoot(FRAGMENT);
+
+        expect(sectionFragments('notifications', root)).toEqual([
+            path.join(root, 'shop', 'asyncapi.notifications.yaml')
+        ]);
+        expect(sectionFragments('webhooks', root)).toEqual([]);
+    });
+
+    it('merges the fragment and appends its x-extends names to the union’s oneOf', () => {
+        const merge = jest.fn();
+        const document = section();
+
+        withSectionFragments('notifications', document, merge, modulesRoot(FRAGMENT));
+
+        expect(merge.mock.calls.map((call) => call[1])).toEqual(['shop']);
+        expect(document.toJS().components.schemas.Payload.oneOf).toEqual([
+            { $ref: '#/components/schemas/Own' },
+            { $ref: '#/components/schemas/ShopPayload' }
+        ]);
+    });
+
+    it('refuses an x-extends naming a schema that is no oneOf of the section', () => {
+        const root = modulesRoot(FRAGMENT.replace('Payload: [', 'Missing: ['));
+
+        expect(() => withSectionFragments('notifications', section(), jest.fn(), root)).toThrow(
+            /x-extends Missing names no oneOf/
+        );
     });
 });
 
@@ -97,6 +154,26 @@ describe('localiseOpenApiReferences', () => {
             'First',
             'Second'
         ]);
+    });
+
+    it('reads a sibling module’s REST file for a ../<module>/openapi.yaml ref', () => {
+        const owner = restFile(REASON);
+        // The fragment's own module sits beside the owner and ships no openapi.yaml.
+        const ownModule = path.join(path.dirname(path.dirname(owner)), 'shop', 'openapi.yaml');
+        const fragment = parseDocument(
+            `components:\n    schemas:\n        User:\n            properties:\n                why:\n                    $ref: '../${path.basename(path.dirname(owner))}/openapi.yaml#/components/schemas/Reason'\n`
+        );
+
+        localiseOpenApiReferences(fragment, ownModule);
+
+        expect(fragment.toJS().components.schemas.Reason).toEqual({
+            type: 'string',
+            enum: ['a', 'b'],
+            'x-openapi-schema': 'Reason'
+        });
+        expect(fragment.toJS().components.schemas.User.properties.why).toEqual({
+            $ref: '#/components/schemas/Reason'
+        });
     });
 
     it('does not read the REST file when nothing references it', () => {
