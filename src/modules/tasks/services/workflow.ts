@@ -192,8 +192,8 @@ const move = (
     });
 
 /**
- * Whether a person may be given a task: they exist, are live, and hold the permission set that
- * works it.
+ * Whether a person may be given a task: they exist, are live, and hold both the permission set
+ * that works it and `update:Task` (an assignee must be able to note and close it).
  *
  * @param userId - the proposed assignee
  * @param routeSet - the task's route set

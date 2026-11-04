@@ -128,8 +128,9 @@ A visitor task is the inbox's: anyone who may read tasks reads it. A system task
 and workable only to a caller who holds its route set; to anyone else it is a **404**, not a 403 (it
 does not admit to existing). Every route also asks the plain `Task` rule, so today the people who
 reach this page are the holders of `TaskDisplay` / `TaskManagement`; a role that holds only a
-routed set (a warehouse worker and `paid_without_hold`) needs the route guard widened first — see
-the open question in the lane report.
+routed set (a warehouse worker and `paid_without_hold`) needs the route guard widened first.
+Assignment is stricter on purpose: an assignee needs the route set and `update:Task`, so with the
+preset roles only `admin` (and `support` for contact messages) can be handed a system task.
 
 ### Lifecycle
 
@@ -166,7 +167,7 @@ flowchart LR
 | `POST …/resolve`    | new, in progress, spam     | resolved                               | `resolution: staff`, `closedAt` (kept if already closed), `respondedAt` once; releases the dedup key |
 | `POST …/mark-spam`  | new, in progress, resolved | spam                                   | `resolution: spam`, `closedAt` (kept); releases the dedup key                                        |
 | `POST …/reopen`     | resolved, spam             | in progress with an assignee, else new | clears `closedAt` and `resolution`; restores the dedup key; **keeps `dueAt`**                        |
-| `PUT …/assignee`    | new, in progress           | in progress                            | the assignee must hold the task's route set (else 422)                                               |
+| `PUT …/assignee`    | new, in progress           | in progress                            | the assignee must hold the task's route set and `update:Task` (else 422)                             |
 | `DELETE …/assignee` | any                        | an in-progress task goes back to new   | clears the assignee                                                                                  |
 
 Every move is **one conditional write** filtered on the status that was read, so two clicks give one
