@@ -2,7 +2,8 @@
  * @module
  * Notifications — public barrel; the only surface a sibling may import (see
  * `docs/theory/strategic-ddd.md` §5 for the rule). A sibling that wants to tell a user something
- * emits a domain event instead of calling in, so what is published here is mostly for reading.
+ * usually emits a domain event; one that writes a notice itself, or reads who works a set, calls
+ * the service published here.
  *
  * See: docs/modules/notifications.md
  */
