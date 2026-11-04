@@ -94,14 +94,27 @@ const fromEnvironment = (name, fallback) => {
     return Number.isInteger(configured) && configured > 0 ? configured : fallback;
 };
 
+/** How many workers this config runs; the recycle limit below is derived from it. */
+const maxWorkers = fromEnvironment('JEST_WORKERS', DEFAULT_MAX_WORKERS);
+
 module.exports = {
     preset: 'ts-jest',
     clearMocks: true,
     // `node`, plus clearing every timer a file leaves running — without it each file's whole module
     // graph stays alive, which a single-process run (Stryker's dry run) cannot survive.
     testEnvironment: '<rootDir>/tests/support/test-environment.ts',
-    maxWorkers: fromEnvironment('JEST_WORKERS', DEFAULT_MAX_WORKERS),
-    workerIdleMemoryLimit: `${fromEnvironment('JEST_WORKER_MEMORY_MB', DEFAULT_WORKER_MEMORY_MB)}MB`,
+    maxWorkers,
+    /*
+     * Only where there are workers to recycle. Jest takes its implicit in-band path (one worker, or
+     * few files) only while this is undefined, so a one-worker run must not carry it — that was a
+     * run that reported nothing for 87 minutes. A config that narrows `maxWorkers` after spreading
+     * this one must drop the limit with it (see `jest.config.mutation.js`).
+     * https://jestjs.io/docs/configuration#workeridlememorylimit-numberstring
+     */
+    workerIdleMemoryLimit:
+        maxWorkers > 1
+            ? `${fromEnvironment('JEST_WORKER_MEMORY_MB', DEFAULT_WORKER_MEMORY_MB)}MB`
+            : undefined,
     testMatch: ['**/tests/**/*.test.ts'],
     /*
      * `tests/cluster` runs under `jest.config.cluster.js` instead: those tests spawn `src/cluster.ts`
