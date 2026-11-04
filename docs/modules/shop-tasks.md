@@ -196,7 +196,7 @@ flowchart LR
 
 - To-do kinds, openers, closers, who works them: [Tasks](./tasks.md#who-is-told) and the kind table above.
 - Notice codes, sets and mail class: [Notifications](./notifications.md#work-notices-for-staff).
-- The daily and weekly counts: [Notifications](./notifications.md#the-daily-digest).
+- The daily and weekly counts: [the staff digest](#the-staff-digest) above.
 - Every mail, one row each: [Mails we send](../tools/email-and-rendering.md#mails-we-send).
 - Events that survive a crash: [Outbox](../tools/outbox.md). Public events: [Webhooks](./webhooks.md).
 

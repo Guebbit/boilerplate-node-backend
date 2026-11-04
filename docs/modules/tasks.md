@@ -72,20 +72,14 @@ A producer module announces a situation through the outbox; `tasks` subscribes (
 closes it as `resolved` with `resolution: cleared`, so "the system closed it" shows, and its notes
 are kept. The producers never import `tasks`.
 
-| Kind                 | Opens on                                                      | Cleared by                                             | Due (`dueAt`)                                                                      |
-| -------------------- | ------------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| `account_review`     | `user.review_flagged` (paid cancellations over the limit)     | `user.review_cleared` (a hold placed or lifted)        | +72 h                                                                              |
-| `manual_refund_owed` | `payment.refund_owed_by_hand`                                 | `payment.refunded`, `payment.refund_canceled`          | + `NODE_PAYMENT_ATTENTION_MINUTES`                                                 |
-| `refund_refused`     | `payment.refund_failed` with `final: true`                    | `payment.refunded`, `payment.refund_canceled`          | the legal 14 days for a return refund (`refundDueBy`), else + the attention window |
-| `amount_mismatch`    | `payment.amount_mismatch`                                     | **never**: staff close it once they know why           | + the attention window                                                             |
-| `dispute`            | `payment.dispute_opened` / `_updated` while it needs the shop | `payment.dispute_updated` with a decided or closed one | the provider's `evidenceDueBy`                                                     |
-| `paid_without_hold`  | `inventory.hold_orphaned` (the payment step only)             | `order.cancelled`, `shipment.shipped`                  | +4 h                                                                               |
-| `export_failed`      | `account.export_failed`                                       | a later `account.export_ready` for the same account    | +72 h                                                                              |
-| `consent_due`        | `fulfillment_order.delayed`, see below                        | `shipment.shipped`, `fulfillment_order.cancelled`      | `agreedAt` + 30 d, or the date the buyer holds                                     |
+| Kind             | Opens on                                                  | Cleared by                                          | Due (`dueAt`) |
+| ---------------- | --------------------------------------------------------- | --------------------------------------------------- | ------------- |
+| `account_review` | `user.review_flagged` (paid cancellations over the limit) | `user.review_cleared` (a hold placed or lifted)     | +72 h         |
+| `export_failed`  | `account.export_failed`                                   | a later `account.export_ready` for the same account | +72 h         |
 
 **One situation is a task or a notice, never both.** `account_review` is opened only by the
 review flag that pauses nothing; the automatic hold already tells the staff who can ban it
-(`notifications.staff.purchase-hold-placed`). A `task.opened` is what `notifications` turns into
+(`shop-tasks.staff.purchase-hold-placed`). A `task.opened` is what `notifications` turns into
 a work notice.
 
 **Dedup and replays.** The dedup key is `<kind>:<link.type>:<link.id>`, unique while open. A repeat
@@ -95,19 +89,10 @@ event ids, and an id already seen is a no-op, so a redelivery after the task clo
 it again. The same situation returning after a close opens a **new** task. A clearing event on a
 task staff closed first does nothing.
 
-**The delay reminder (`consent_due`, 16 CFR 435.2).** The shop never asks the buyer and never
-cancels; the task is the reminder that a person must, and by when. `delivery` keeps
-`promisedAt` on the fulfillment order, the date the buyer holds now: it starts as `agreedAt`, a
-later date from a notice replaces it, a "no date yet" notice removes it. The `delayed` event
-carries the value before the notice and the ship-to country.
-
-| Before this notice                    | Opens when                             | Due               |
-| ------------------------------------- | -------------------------------------- | ----------------- |
-| the buyer holds the date they ordered | no new date, or past `agreedAt` + 30 d | `agreedAt` + 30 d |
-| the buyer holds a later date          | no new date, or past that date         | that date         |
-| the buyer was told "no date yet"      | never: the earlier task stands         | —                 |
-
-Only for ship-to countries in `NODE_TICKETS_FTC_COUNTRIES` (default `US,PR,GU,VI,AS,MP`).
+**The shop's kinds.** The kinds a payment, stock or delivery situation opens (a refund owed by
+hand, a refused refund, a mismatch, a dispute, a payment with no hold, the delay reminder) belong
+to [`shop-tasks`](./shop-tasks.md#the-shops-to-dos), which opens them through this engine. The
+dedup and replay rules above apply to them unchanged.
 
 ### Jurisdiction
 
@@ -115,20 +100,19 @@ Each kind of task is routed to one **permission set**, frozen on the task when i
 (`domain/routing.ts`). A role is a bundle of sets, so routing to a set routes to every role that
 holds it, and the administrator holds every set, with no special case.
 
-| Kind                                                                 | Route set             |
-| -------------------------------------------------------------------- | --------------------- |
-| `contact`                                                            | `TaskDisplay`         |
-| `account_review`                                                     | `UserBanning`         |
-| `manual_refund_owed`, `amount_mismatch`, `refund_refused`, `dispute` | `PaymentRefunding`    |
-| `paid_without_hold`                                                  | `InventoryManagement` |
-| `export_failed`                                                      | `UserErasure`         |
-| `consent_due`                                                        | `OrderEditing`        |
+| Kind             | Route set     |
+| ---------------- | ------------- |
+| `contact`        | `TaskDisplay` |
+| `account_review` | `UserBanning` |
+| `export_failed`  | `UserErasure` |
+
+The shop's kinds route to the sets listed in [shop-tasks](./shop-tasks.md#the-shops-to-dos).
 
 A visitor task is the inbox's: anyone who may read tasks reads it. A system task is visible
 and workable only to a caller who holds its route set; to anyone else it is a **404**, not a 403 (it
 does not admit to existing). Every route also asks the plain `Task` rule, so today the people who
 reach this page are the holders of `TaskDisplay` / `TaskManagement`; a role that holds only a
-routed set (a warehouse worker and `paid_without_hold`) needs the route guard widened first — see
+routed set (a warehouse worker and a shop to-do) needs the route guard widened first — see
 the open question in the lane report.
 
 ### Lifecycle

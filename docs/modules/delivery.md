@@ -201,7 +201,7 @@ once in `domain/hold-notice.ts`:
 
 A staff hold also records `heldAt` (removed on release; never set for `awaiting_stock`). The
 daily staff digest counts holds older than `NODE_STAFF_HOLD_OPEN_DAYS` from it
-([`notifications`](./notifications.md#the-daily-digest)).
+([`shop-tasks`](./shop-tasks.md#the-staff-digest)).
 
 Hiding the hold instead would put a false "being prepared" on a held order (UCPD Art. 6(1)(b)) and leave
 a wrong address unfixable. `holdReason` and `holdNote` are staff's (and the buyer's own GDPR export);
@@ -249,7 +249,7 @@ the 30-day default, `defaulted`: a later change to the catalogue's date leaves s
 because the buyer was never promised a date. `product.restock_date_changed` is the backorder's twin of
 the release-date event, and `GET /delivery/fulfillment-orders/restock-date-impact` its staff preview.
 A delay is worded without the word preorder (`delivery.fulfillment-delayed`,
-`notifications.fulfillment-delayed`): late is late whatever the cause, and a preorder still waiting
+`shop-tasks.fulfillment-delayed`): late is late whatever the cause, and a preorder still waiting
 after release is a backorder in all but name.
 
 The buyer of a preorder was promised a date, and that promise is law: the date shown when ordering
@@ -324,8 +324,8 @@ flowchart LR
 
 Every notice is one transaction with the state it leaves on the fulfillment order and one outbox
 event, `fulfillment_order.delayed`; the email follows the commit and links to the buyer's order
-page, where the cancel button already is. [`notifications`](./notifications.md) turns the event into
-an inbox row, `notifications.fulfillment-delayed`.
+page, where the cancel button already is. [`shop-tasks`](./shop-tasks.md#the-notices) turns the event into
+an inbox row, `shop-tasks.fulfillment-delayed`.
 
 #### The daily sweep
 
@@ -356,11 +356,11 @@ own. Selling to **US** buyers adds the FTC's mail-order rule (16 CFR 435.2): for
 buyer's express OK is needed. Staff ask for it by email by hand, and cancel with a refund if there is
 no OK within 30 days. See [before you sell](../demo-ecommerce/before-you-sell.md).
 
-The reminder is a task: a delay to a ship-to country in `NODE_TICKETS_FTC_COUNTRIES` opens a
-`consent_due` task for the staff who hold `OrderEditing`, due 30 days after the agreed date (or on
+The reminder is a task: a delay that the FTC rule covers (a shop in the United States or one of its
+territories, or a buyer shipped to one) opens a `consent_due` task for the staff who hold `OrderEditing`, due 30 days after the agreed date (or on
 the date the buyer last held), and shipping or cancelling closes it. The human rule above is
 unchanged. `promisedAt` on the fulfillment order is the date the buyer holds now; the rule is in
-[tasks](tasks.md#system-tasks).
+[shop-tasks](shop-tasks.md#the-shops-to-dos).
 
 ### The preorder board
 
@@ -535,15 +535,15 @@ sequenceDiagram
     S->>D: ship again (the ordinary door)
 ```
 
-| Step              | What it does                                                                                                                                                                                                                                                 |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Shipment          | `shipped → lost`, with `lostAt`, `lostReason`, `lostMessage` (kept) and `lostNote` (reaped with the hold notes). One conditional write, so two reports of one parcel cannot both land                                                                        |
-| Fulfillment order | every lost unit comes off the line's `shippedQuantity`, so the units are open again; staff ship them with the ordinary ship door. The net `shippedQuantity` is what `returns` gates on, so a buyer can never return twice what they bought                   |
-| Stock             | the hold is topped up with the shelf units that are free, never units held for another order. What the shelf cannot cover is **owed**: see below                                                                                                             |
-| Order             | a `shipped` order steps back to `processing` (the system-only `reopen` edge, the one backward move); a `processing` one stays                                                                                                                                |
-| Records           | timeline `shipment_lost` (buyer-visible), audit `admin.shipment.lost` (the reason code only), event and webhook `shipment.lost` (the reason code, never the free text)                                                                                       |
-| Buyer             | a mail with a fixed text per reason, what the parcel carried, what is owed and when, and staff's `message` in a quote; the same in the inbox (`notifications.shipment-lost`). Always sent, there is no switch. The `note` is for colleagues and never leaves |
-| Untouched         | no invoice, no credit note, no revenue                                                                                                                                                                                                                       |
+| Step              | What it does                                                                                                                                                                                                                                              |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shipment          | `shipped → lost`, with `lostAt`, `lostReason`, `lostMessage` (kept) and `lostNote` (reaped with the hold notes). One conditional write, so two reports of one parcel cannot both land                                                                     |
+| Fulfillment order | every lost unit comes off the line's `shippedQuantity`, so the units are open again; staff ship them with the ordinary ship door. The net `shippedQuantity` is what `returns` gates on, so a buyer can never return twice what they bought                |
+| Stock             | the hold is topped up with the shelf units that are free, never units held for another order. What the shelf cannot cover is **owed**: see below                                                                                                          |
+| Order             | a `shipped` order steps back to `processing` (the system-only `reopen` edge, the one backward move); a `processing` one stays                                                                                                                             |
+| Records           | timeline `shipment_lost` (buyer-visible), audit `admin.shipment.lost` (the reason code only), event and webhook `shipment.lost` (the reason code, never the free text)                                                                                    |
+| Buyer             | a mail with a fixed text per reason, what the parcel carried, what is owed and when, and staff's `message` in a quote; the same in the inbox (`shop-tasks.shipment-lost`). Always sent, there is no switch. The `note` is for colleagues and never leaves |
+| Untouched         | no invoice, no credit note, no revenue                                                                                                                                                                                                                    |
 
 A lost shipment still counts as shipped in the order's summary (`shipped: true`), which keeps the
 whole-order cancel closed; it counts as neither out nor arrived (`undelivered` leaves it out).
