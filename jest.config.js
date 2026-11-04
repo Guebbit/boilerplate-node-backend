@@ -123,7 +123,9 @@ module.exports = {
     setupFilesAfterEnv: [
         '<rootDir>/tests/support/setup-file-sandbox.ts',
         // After the sandbox, which it marks: every case then starts from that environment.
-        '<rootDir>/tests/support/setup-environment-reset.ts'
+        '<rootDir>/tests/support/setup-environment-reset.ts',
+        // Fails a case on a warning it did not declare (`tests/support/expect-warning.ts`).
+        '<rootDir>/tests/support/setup-fail-on-warning.ts'
     ],
     testTimeout: 30_000,
     transform: {

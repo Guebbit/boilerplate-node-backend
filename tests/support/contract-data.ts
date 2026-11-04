@@ -28,15 +28,11 @@
  *              printed on first use) — not reseeded per call, so repeated calls in one test file
  *              draw different-but-reproducible values (distinct emails, ids, ...) from the same
  *              seeded stream.
- * Shared name: `RANDOM_DATA_SEED` is deliberately the same name the paired frontend reads for its
- *              own random mock profile generator, over in `<paired-frontend>`. The two sides keep
- *              their own PRNGs — this Mulberry32 against faker's Mersenne Twister — and given one
- *              seed they produce unrelated values. That is fine and intended: they generate
- *              opposite halves of the same contract (requests here, responses there) from
- *              different schema surfaces, so making the streams agree would buy nothing and would
- *              couple two independently-correct implementations. What the shared name buys is a
- *              shared vocabulary — a seed quoted in a failure report is a number both repos
- *              understand how to act on, instead of one that means something in only one of them.
+ * Shared name: `RANDOM_DATA_SEED` is deliberately the same name the paired frontend reads. Its
+ *              `<paired-frontend>/tests/support/unit/contract-data.ts` is a declared fork of this file, pointed at
+ *              the frontend's own Zod schemas and not kept in step. The two sides keep separate
+ *              PRNG streams, so one seed does not give them the same values; what the shared name
+ *              buys is a seed quoted in a failure report that means the same thing in both repos.
  */
 import { asStub } from './stub';
 import { sampleForPattern } from './pattern-samples';

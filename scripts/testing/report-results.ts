@@ -3,8 +3,8 @@
  * Turns a runner's JSON report into the two things a raw log cannot tell you: which MODULE a
  * failure belongs to, and where the time went — `npm run test:report`.
  *
- * SHARED SCRIPT: started byte-identical in `boilerplate-node-backend` and
- * `boilerplate-vue-frontend`, kept in step by hand (`diff`), not enforced by `SHARED_FILES`.
+ * The frontend's copy is a declared fork of this file, not kept in step and not checked
+ * (`SHARED_FILES` does not list it).
  *
  * Why JSON and not JUnit, why per module: docs/tools/testing-quickstart.md#why-the-report-reads-json
  *

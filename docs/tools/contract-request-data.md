@@ -101,7 +101,7 @@ Both are seeded once per process — not reseeded per call — from `RANDOM_DATA
 
 The name is deliberately generic rather than backend-specific: seeded generation is a thing either repo may want, and a seed printed by a failing nightly run is only reproducible if both sides read the same variable to set it.
 
-The PRNGs stay separate — Mulberry32 here, faker's Mersenne Twister there — and given one seed the two produce entirely unrelated values. That is intended, not a defect to fix later. The two generators produce **opposite halves of the same contract** (requests here, responses there) from different schema surfaces (zod `_zod.def` here, orval factories there); making the streams agree would buy nothing and would couple two implementations that are independently correct. What the shared name buys is a shared vocabulary, not shared output.
+The frontend's `<paired-frontend>/tests/support/unit/contract-data.ts` is a declared fork of this generator, pointed at its own Zod schemas and not kept in step. The PRNG streams stay separate, so one seed does not give both sides the same values. That is intended: what the shared name buys is a shared vocabulary, a seed quoted in a failure report that both repos know how to act on.
 
 ## Every write operation
 

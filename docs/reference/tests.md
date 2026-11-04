@@ -58,6 +58,22 @@ of gating on it. Not part of `npm run test` or the merge gate: it runs nightly i
 `.github/workflows/order-random.yml`, and is cheap enough to run by hand after touching shared test
 fixtures or module-level state. `--showSeed` prints the seed a red run needs to reproduce.
 
+## Warnings fail the case
+
+A warning printed to a green run is read by nobody, and a deprecation is cheapest to fix the day it first appears. `tests/support/setup-fail-on-warning.ts` (a `setupFilesAfterEnv` entry) wraps `console.warn` and `console.error` and listens for `process` `'warning'` events (a `DeprecationWarning`, a `MaxListenersExceededWarning`, a driver warning) around every case, and fails the case that caused one it did not declare.
+
+A case that warns on purpose says so, with `expectWarning` from `tests/support/expect-warning.ts`:
+
+```ts
+import { expectWarning } from '@tests/expect-warning';
+
+expectWarning(/connection pool/); // a substring or a pattern; it must fire, or the case fails
+```
+
+The declaration must fire: a stale one fails the case, so it cannot outlive the warning it covered. A case that spies on the console itself stands on top of the watcher and keeps its own control of what it expects. The app's own logger (`winston`) writes to the stream, not to `console`, so a logged warning is not a test warning.
+
+The paired frontend has the same idea for `[Vue warn]`, as a declared fork that is not kept in step.
+
 ## Three numbers, and they are not the same question
 
 This trips people up, so it is stated before anything else on this page.
@@ -393,6 +409,8 @@ No assertions live here. These are what the suites are built from.
 | `tests/support/environment.ts`                                                                       | The ways a test changes config: overrides on the config store (`setEnvironment`, `withEnvironmentOverrides`) and, for a script that reads it directly, the real `process.env`.              | [Configuration](../tools/configuration.md#in-tests)                                  |
 | `tests/support/setup-environment-reset.ts`                                                           | After every case, puts the config overrides back to what the file began with.                                                                                                               | [Configuration](../tools/configuration.md#in-tests)                                  |
 | `tests/support/test-environment.ts`                                                                  | The jest environment every file runs in: `node`, plus clearing every timer and performance observer a file left running, so the file's memory is freed.                                     | [Mutation Testing](../tools/mutation-testing.md#one-process-per-dry-run)             |
+| `tests/support/setup-fail-on-warning.ts`                                                             | After every case, fails it on a `console.warn`, `console.error` or `process` warning it did not declare with `expectWarning`.                                                               | [Warnings fail the case](#warnings-fail-the-case)                                    |
+| `tests/support/expect-warning.ts`                                                                    | The watcher behind that, and `expectWarning(matcher)` to declare one a case expects.                                                                                                        | [Warnings fail the case](#warnings-fail-the-case)                                    |
 | `tests/support/global-setup.ts`                                                                      | Starts the shared in-memory Mongo for the jest instance.                                                                                                                                    | [Integration Testing](../tools/integration-testing.md)                               |
 | `tests/support/global-teardown.ts`                                                                   | Stops it, once, after the last worker exits — and fails the run if any test file left files in its sandbox.                                                                                 | [Integration Testing](../tools/integration-testing.md)                               |
 | `tests/support/file-sandbox.ts`                                                                      | The per-test-file directory that uploads, quarantine and staging are redirected into.                                                                                                       | [Below](#a-test-leaves-no-files-behind)                                              |
