@@ -19,7 +19,7 @@ Read off the code, not assumed:
 flowchart TD
     Start(["Can my host run this?"]) --> Q1{"Long-running process,\nor any OCI container?"}
     Q1 -->|No| Serverless["No — serverless functions\ncan't hold a queue consumer\nor a persistent disk"]
-    Q1 -->|Yes| Q2{"MongoDB 8,\nbundled or managed?"}
+    Q1 -->|Yes| Q2{"MongoDB 9,\nbundled or managed?"}
     Q2 -->|Neither| NoDB["No"]
     Q2 -->|Yes| Q3{"Persistent disk?"}
     Q3 -->|No| Uploads["With changes —\nuploads have nowhere to live"]
@@ -38,7 +38,7 @@ flowchart TD
 | Need                                                        | Required?                | Why                                                                                                                                                                                                                                                                        |
 | ----------------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A long-running Node 24 process, or an OCI container runtime | **Yes**                  | The API, its queue consumers and its graceful shutdown all assume a process that stays up                                                                                                                                                                                  |
-| MongoDB 8 — bundled or managed                              | **Yes**                  | The only store of record; a single-node replica set is what the shipped compose file runs (see [Two Client Stacks](./two-client-stacks.md))                                                                                                                                |
+| MongoDB 9 — bundled or managed                              | **Yes**                  | The only store of record; a single-node replica set is what the shipped compose file runs (see [Two Client Stacks](./two-client-stacks.md))                                                                                                                                |
 | A persistent disk for uploads                               | **Yes**                  | Uploaded images live on disk (the only image store there is); an ephemeral filesystem loses them on every deploy                                                                                                                                                           |
 | TLS termination in front                                    | **Yes**                  | The API listens on plain HTTP; its auth cookies need HTTPS                                                                                                                                                                                                                 |
 | Frontend and API on the same registrable domain             | **Yes**                  | Auth cookies are `SameSite=lax` (`account/session/cookies.ts`), not `none` — the browser only sends them cross-SITE-navigation-safe, which still requires the two origins to share a registrable domain (`api.example.com` + `app.example.com`, not two unrelated domains) |
