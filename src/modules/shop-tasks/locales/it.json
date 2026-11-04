@@ -32,7 +32,7 @@
                 "amount_mismatch": "Importo del pagamento non corrispondente",
                 "dispute": "Contestazione di pagamento",
                 "paid_without_hold": "Ordine pagato senza riserva di stock",
-                "consent_due": "Consenso dell'acquirente da ottenere"
+                "consent_due": "Consenso dell'acquirente al ritardo da ottenere"
             },
             "task-category": {
                 "order": "Ordine",

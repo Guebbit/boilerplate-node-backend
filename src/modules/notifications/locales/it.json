@@ -23,7 +23,7 @@
             },
             "task-category": {
                 "account": "Account",
-                "privacy": "Privacy",
+                "privacy": "Dati personali",
                 "other": "Altro",
                 "none": "Senza categoria"
             }
