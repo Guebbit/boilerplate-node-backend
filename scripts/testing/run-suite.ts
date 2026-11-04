@@ -14,16 +14,18 @@
  * every N files does, and `--shard` is jest's own way to say which N.
  *
  * ── WHY IN BAND INSIDE A SHARD ───────────────────────────────────────────────────────────────────
- * The layers marked `serialized` below run `--runInBand` inside each shard.
+ * The layers marked `serialized` below run `--runInBand` inside each shard, and so does any layer
+ * narrowed to one worker (`JEST_WORKERS=1`). Only an in-band layer is sharded.
  * `--workerIdleMemoryLimit` set below a worker's steady-state baseline restarts it after every
  * single file — measured, and slower than the retention problem it exists to solve.
  *
  * ── WHY --unsharded EXISTS TOO ────────────────────────────────────────────────────────────────────
  * Coverage, the JSON report and the randomized-order run each want every pattern this file knows
  * about in ONE jest process — they already picked their own flags and heap, sharding would only
- * cost them a repeated `mongod` boot. `--unsharded` skips the budget math below entirely and runs
- * the named suites' patterns as one process, so {@link SUITES} stays the one place a suite's
- * patterns are written down instead of copied into `package.json`.
+ * cost them a repeated `mongod` boot. `--unsharded` skips the shard math below and runs the named
+ * suites' patterns as one process, so {@link SUITES} stays the one place a suite's patterns are
+ * written down instead of copied into `package.json`. It still bounds the workers, unless the
+ * caller passed `--runInBand` or `--maxWorkers` itself.
  *
  * See: docs/tools/weak-machines.md
  */
@@ -66,6 +68,31 @@ const splitSuiteNames = (arguments_: readonly string[]): { names: string[]; rest
         : { names: arguments_.slice(0, boundary), rest: arguments_.slice(boundary) };
 };
 
+/**
+ * The flags that bound a jest process's workers.
+ *
+ * `--runInBand` is what actually puts jest in band. `--workerIdleMemoryLimit` is not passed
+ * alongside it, because a run with no worker has nothing to recycle.
+ *
+ * @param workers how many workers the process may run; 1 means in band
+ * @param recycleLimitMb the `--workerIdleMemoryLimit` for a worker, floored by {@link recycleLimitFor}
+ * @returns the jest CLI flags
+ */
+const workerFlags = (workers: number, recycleLimitMb: number): string[] =>
+    workers === 1
+        ? ['--runInBand']
+        : [`--maxWorkers=${workers}`, `--workerIdleMemoryLimit=${recycleLimitMb}MB`];
+
+/**
+ * The recycle limit for a worker whose peak is `workerPeakMb`. The `1024` floor keeps a small peak
+ * from setting a limit so low jest recycles a worker after nearly every file — the failure mode
+ * the module header's "WHY IN BAND" section describes.
+ *
+ * @param workerPeakMb measured peak cost of one worker
+ * @returns the limit in MB
+ */
+const recycleLimitFor = (workerPeakMb: number): number => Math.max(1024, workerPeakMb);
+
 /** The layer name(s) from argv, and everything after them, passed through to jest untouched. */
 const { names: suiteNames, rest: passthrough } = splitSuiteNames(argumentsWithoutFlag);
 
@@ -84,12 +111,34 @@ if (unsharded) {
     // the caller (the JSON report, randomized order) already chose its own jest flags.
     const patterns = suiteNames.flatMap((name) => SUITES[name].patterns);
 
+    // Worker-bounded like a sharded run, unless the caller already chose in band or a count.
+    const callerBounded = passthrough.some(
+        (argument) => argument === '--runInBand' || argument.startsWith('--maxWorkers')
+    );
+    const parallelPeaks = suiteNames.flatMap((name) => {
+        const named = SUITES[name];
+        return named.serialized ? [] : [named.workerPeakMb];
+    });
+    const peakMb = Math.max(0, ...parallelPeaks);
+    const unshardedFlags = callerBounded
+        ? []
+        : workerFlags(
+              parallelPeaks.length === 0
+                  ? 1
+                  : workerCount({
+                        peakMb,
+                        cpuReserve: 2,
+                        override: environmentKnob('JEST_WORKERS')
+                    }),
+              recycleLimitFor(peakMb)
+          );
+
     /**
      * node:child_process `spawnSync`: run jest to completion, connected to this process's own
      * stdio (`inherit`) so its live output and exit code both reach the caller unchanged.
      * https://nodejs.org/api/child_process.html#child_processspawnsynccommand-args-options
      */
-    const result = spawnSync('npx', ['jest', ...patterns, ...passthrough], {
+    const result = spawnSync('npx', ['jest', ...patterns, ...unshardedFlags, ...passthrough], {
         cwd: REPO_ROOT,
         stdio: 'inherit'
     });
@@ -165,8 +214,8 @@ const workers = suite.serialized
  * Whether this layer runs its files in band, in the jest process itself.
  *
  * A serialized layer always does. A layer narrowed to ONE worker does too, and must: jest takes
- * its own implicit in-band path only while `workerIdleMemoryLimit` is undefined, and
- * `jest.config.js` defines it unconditionally — so the `--runInBand` below is the only route there.
+ * its own implicit in-band path only while `workerIdleMemoryLimit` is undefined, and a CLI
+ * `--maxWorkers=1` cannot unset what the config sets for more workers — so `--runInBand` is passed.
  * Left as one worker under a recycle ceiling, a 419-file unit run reported nothing for 87 minutes.
  */
 const inBand = suite.serialized || workers === 1;
@@ -196,7 +245,7 @@ const shards = shardsOverride
 /** `--workerIdleMemoryLimit` for a parallel layer's worker; meaningless (and unused) in band,
  *  which has no worker to recycle. The `suite.serialized` test stays: it carries the narrowing
  *  that makes `workerPeakMb` reachable. */
-const recycleLimitMb = Math.max(1024, suite.serialized ? 0 : suite.workerPeakMb);
+const recycleLimitMb = recycleLimitFor(suite.serialized ? 0 : suite.workerPeakMb);
 
 /**
  * `--max-old-space-size` for one spawned process.
@@ -211,18 +260,8 @@ const heapMb = inBand
     ? heapCapMb(targetMb)
     : Math.max(recycleLimitMb + 1, heapCapMb(budgetMb, workers));
 
-/**
- * The flags that bound ONE shard.
- *
- * `--runInBand` is what actually puts jest in band. `--workerIdleMemoryLimit` is not passed
- * alongside it, because a run with no worker has nothing to recycle. The `1024` floor inside
- * {@link recycleLimitMb} keeps a small `workerPeakMb` from setting a limit so low jest recycles a
- * worker after nearly every file — the failure mode the module header's "WHY IN BAND" section
- * describes.
- */
-const boundingFlags = inBand
-    ? ['--runInBand']
-    : [`--maxWorkers=${workers}`, `--workerIdleMemoryLimit=${recycleLimitMb}MB`];
+/** The flags that bound ONE shard. */
+const boundingFlags = inBand ? ['--runInBand'] : workerFlags(workers, recycleLimitMb);
 
 /**
  * Runs one shard to completion.
