@@ -177,13 +177,28 @@ extension point; the digest is lifted back into `notifications` only when a foun
 
 ### Who is told
 
+The shape of every "something happened, who hears it" flow. The diagram names no codes on
+purpose: which codes, sets and mails exist is on the pages linked under it.
+
 ```mermaid
 flowchart LR
-    E["a shop event"] --> D{"to-do, notice,<br/>or both?"}
+    E["a domain event<br/>(bus or outbox)"] --> D{"to-do, notice,<br/>or both?"}
     D -->|"to-do"| OT["taskService.openSystemTask<br/>routeSet + work"]
     D -->|"notice"| NS["notificationsService<br/>create / notifyStaff<br/>route + link"]
-    OT -. "task.opened" .-> TN["notifications: staff.task-opened<br/>to the holders of routeSet<br/>link = work"]
+    OT -. "task.opened" .-> TN["notifications: task notice<br/>to the holders of routeSet<br/>link = work"]
+    NS --> BELL["the bell<br/>(SSE to open tabs)"]
+    TN --> BELL
+    NS -->|"route says mail: now"| MAIL["mail queue"]
+    TN -->|"route says mail: now"| MAIL
+    E -->|"customer-facing"| CM["module's own mail<br/>to the customer"]
+    E -->|"public event"| WH["webhooks<br/>to subscribers"]
 ```
+
+- To-do kinds, openers, closers, who works them: [Tasks](./tasks.md#who-is-told) and the kind table above.
+- Notice codes, sets and mail class: [Notifications](./notifications.md#work-notices-for-staff).
+- The daily and weekly counts: [Notifications](./notifications.md#the-daily-digest).
+- Every mail, one row each: [Mails we send](../tools/email-and-rendering.md#mails-we-send).
+- Events that survive a crash: [Outbox](../tools/outbox.md). Public events: [Webhooks](./webhooks.md).
 
 ## Configuration
 

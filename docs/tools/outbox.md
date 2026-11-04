@@ -51,32 +51,46 @@ does: a unique `(subscriptionId, eventId)` index turns a redelivered fan-out int
 
 ## Where the code is
 
-| Piece                                     | File                                                     |
-| ----------------------------------------- | -------------------------------------------------------- |
-| Model, `enqueueOutboxEvent`, relay, nudge | `src/kernel/outbox.ts`                                   |
-| `meta.eventId` on the bus                 | `src/kernel/events.ts` (`DomainEventMeta`)               |
-| Backstop relay, every minute              | `sweep:outbox` (`npm run job sweep:outbox`)              |
-| Counters                                  | `src/infrastructure/observability/metrics-outbox.ts`     |
-| One write + its event, atomically         | `announceInTransaction` in `src/kernel/outbox.ts`        |
-| …inside a transaction the caller owns     | `announceWithin` in `src/kernel/outbox.ts`               |
-| `payment.succeeded`, `payment.failed`     | `src/modules/payments/services/announce.ts`              |
-| `payment.refunded`                        | `src/modules/payments/services/refunds.ts`               |
-| `order.created`, `order.status_changed`   | `src/modules/orders/services/{place,status,override}.ts` |
-| `order.cancelled`                         | `src/modules/orders/services/cancel.ts`                  |
-| `inventory.reservation_expired`           | `src/modules/inventory/services/sweep.ts`                |
-| `product.created`                         | `src/modules/products/services/crud.ts`                  |
-| `product.deleted`                         | `src/modules/products/services/remove.ts`                |
-| `account.sessions-revoked`                | `src/modules/account/services/{revocation,profile}.ts`   |
-| `user.setup-requested`                    | `src/modules/users/services/create.ts`                   |
-| `user.deactivated`                        | `src/modules/users/services/update.ts`                   |
-| `user.deletion-cancelled`                 | `src/modules/users/services/remove.ts`                   |
-| `user.erased`                             | `src/modules/users/services/remove.ts`                   |
-| `example.published`                       | `src/modules/example/services/crud.ts`                   |
-| `return.requested`                        | `src/modules/returns/services/create.ts`                 |
-| `return.received`                         | `src/modules/returns/services/receive.ts`                |
-| `return.closed`                           | `src/modules/returns/services/{close,create}.ts`         |
-| `shipment.*`, `fulfillment_order.*`       | `src/modules/delivery/services/announce.ts`              |
-| `order.status_overridden`                 | `src/modules/orders/services/override.ts`                |
+| Piece                                                    | File                                                                                                           |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Model, `enqueueOutboxEvent`, relay, nudge                | `src/kernel/outbox.ts`                                                                                         |
+| `meta.eventId` on the bus                                | `src/kernel/events.ts` (`DomainEventMeta`)                                                                     |
+| Backstop relay, every minute                             | `sweep:outbox` (`npm run job sweep:outbox`)                                                                    |
+| Counters                                                 | `src/infrastructure/observability/metrics-outbox.ts`                                                           |
+| One write + its event, atomically                        | `announceInTransaction` in `src/kernel/outbox.ts`                                                              |
+| …inside a transaction the caller owns                    | `announceWithin` in `src/kernel/outbox.ts`                                                                     |
+| `payment.succeeded`, `payment.failed`                    | `src/modules/payments/services/announce.ts`                                                                    |
+| `payment.refunded`                                       | `src/modules/payments/services/{refund-settlement,external-refunds}.ts`, `returns/services/{close,receive}.ts` |
+| `order.created`, `order.status_changed`                  | `src/modules/orders/services/{place,status,override}.ts`                                                       |
+| `order.cancelled`                                        | `src/modules/orders/services/cancel.ts`                                                                        |
+| `inventory.reservation_expired`                          | `src/modules/inventory/services/sweep.ts`                                                                      |
+| `product.created`                                        | `src/modules/products/services/crud.ts`                                                                        |
+| `product.deleted`                                        | `src/modules/products/services/remove.ts`                                                                      |
+| `account.sessions-revoked`                               | `src/modules/account/services/{revocation,profile}.ts`                                                         |
+| `user.setup-requested`                                   | `src/modules/users/services/create.ts`                                                                         |
+| `user.deactivated`                                       | `src/modules/users/services/update.ts`                                                                         |
+| `user.deletion-cancelled`                                | `src/modules/users/services/remove.ts`                                                                         |
+| `user.erased`                                            | `src/modules/users/services/remove.ts`                                                                         |
+| `example.published`                                      | `src/modules/example/services/crud.ts`                                                                         |
+| `return.requested`                                       | `src/modules/returns/services/create.ts`                                                                       |
+| `return.received`                                        | `src/modules/returns/services/receive.ts`                                                                      |
+| `return.closed`                                          | `src/modules/returns/services/{close,create}.ts`                                                               |
+| `shipment.*`, `fulfillment_order.*`                      | `src/modules/delivery/services/announce.ts`                                                                    |
+| `order.status_overridden`                                | `src/modules/orders/services/override.ts`                                                                      |
+| `return.decided`                                         | `src/modules/returns/services/{decide,outcome}.ts`                                                             |
+| `product.buyable_again`                                  | `src/modules/products/services/{crud,lookups}.ts`                                                              |
+| `user.profile_changed`                                   | `src/modules/users/services/{update,credentials}.ts`                                                           |
+| `user.review_flagged`, `user.review_cleared`             | `src/modules/users/services/purchase-hold.ts`                                                                  |
+| `inventory.stock_retaken`, `inventory.hold_orphaned`     | `src/modules/inventory/services/holds.ts`                                                                      |
+| `inventory.backorder_allocated`                          | `src/modules/inventory/services/{allocate,holds}.ts`                                                           |
+| `payment.refund_owed_by_hand`, `payment.refund_canceled` | `src/modules/payments/services/refunds.ts`                                                                     |
+| `payment.refund_reversed`                                | `src/modules/payments/services/refund-settlement.ts`                                                           |
+| `payment.dispute_opened`, `payment.dispute_updated`      | `src/modules/payments/services/disputes.ts`                                                                    |
+| `payment.amount_mismatch`                                | `src/modules/payments/services/settlement.ts`                                                                  |
+| `account.analytics_consent_withdrawn`                    | `src/modules/account/services/profile.ts`                                                                      |
+| `account.authenticator-removed`                          | `src/modules/account/services/two-factor-enrollment.ts`                                                        |
+| `account.export_ready`, `account.export_failed`          | `src/modules/account/services/export-job.ts`                                                                   |
+| `stock_alert.sent`                                       | `src/modules/stock-alerts/service.ts`                                                                          |
 
 No new queue, no new dependency. The relay hands rows to the same in-process bus every module
 already subscribes to, so no AsyncAPI channel is involved: nothing here crosses a process boundary
