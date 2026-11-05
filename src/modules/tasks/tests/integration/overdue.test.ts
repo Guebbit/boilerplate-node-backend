@@ -11,7 +11,7 @@ import type { DomainEventMap } from '@kernel/events';
 import { taskService } from '../../service';
 import { taskModel } from '@modules/tasks/model';
 import { backdateDue, closeDirectly, createSystemTask } from '../factories';
-import { settleOutboxNudges } from '@kernel/outbox';
+import { outboxEventModel, relayOutbox, settleOutboxNudges } from '@kernel/outbox';
 import { TASK_OVERDUE } from '../../events';
 import { TaskStatus } from '@types';
 
@@ -100,14 +100,48 @@ describe('remindOverdue', () => {
         await expect(taskService.remindOverdue()).resolves.toBe(0);
     });
 
-    it('announces a whole backlog in the order it went late', async () => {
+    it('announces a whole backlog, claiming the oldest deadline first', async () => {
         const newer = await dueAgo(1);
         const older = await dueAgo(9);
 
         await expect(taskService.remindOverdue()).resolves.toBe(2);
         await settleOutboxNudges();
 
-        expect(heard.map((fact) => fact.taskId)).toEqual([older, newer]);
+        // Each task is its own aggregate: the relay delivers them in parallel, so only the claim
+        // order (the rows' write order) is promised.
+        expect(heard.map((fact) => fact.taskId)).toEqual(expect.arrayContaining([older, newer]));
+        const rows = await outboxEventModel
+            .find({ name: 'task.overdue' })
+            .sort({ createdAt: 1, _id: 1 })
+            .lean<{ payload: { taskId: string } }[]>()
+            .exec();
+        expect(rows.map((row) => row.payload.taskId)).toEqual([older, newer]);
+    });
+
+    it('redelivers a notice whose handler failed once, on the next relay pass', async () => {
+        let attempts = 0;
+        onDomainEvent(TASK_OVERDUE, () => {
+            attempts += 1;
+            if (attempts === 1) throw new Error('listener down');
+        });
+        await dueAgo(2);
+
+        await taskService.remindOverdue();
+        await settleOutboxNudges();
+        await expect(
+            outboxEventModel.countDocuments({ name: 'task.overdue', status: 'pending' })
+        ).resolves.toBe(1);
+        await outboxEventModel.updateMany(
+            { name: 'task.overdue' },
+            { $set: { nextAttemptAt: new Date(0) } }
+        );
+
+        await relayOutbox();
+
+        expect(attempts).toBe(2);
+        await expect(
+            outboxEventModel.countDocuments({ name: 'task.overdue', status: 'published' })
+        ).resolves.toBe(1);
     });
 
     it('does not announce a reopened task again: the deadline and the stamp both stay', async () => {

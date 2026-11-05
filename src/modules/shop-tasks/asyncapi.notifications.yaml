@@ -3,7 +3,7 @@
 #
 # A FRAGMENT, not a document: the bundler merges it into the `notifications` section only while
 # this module exists, and `x-extends` appends each payload below to `NotificationPayload`
-# (`scripts/contracts/asyncapi-webhook-events.ts`). Delete the module and the stream's union falls
+# (`scripts/contracts/asyncapi-section-fragments.ts`). Delete the module and the stream's union falls
 # back to the five notices every project has.
 x-extends:
     NotificationPayload:

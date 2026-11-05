@@ -16,7 +16,7 @@
 #
 # The CHANNELS are not here. Each event belongs to the module that fires it, in that module's own
 # `asyncapi.webhooks.yaml` (`orders`, `payments`, `returns`, `example`), and the bundler merges
-# those fragments into this section (`scripts/contracts/asyncapi-webhook-events.ts`) while this
+# those fragments into this section (`scripts/contracts/asyncapi-section-fragments.ts`) while this
 # module exists. What stays here is what every event shares: the `subscriberEndpoint` server and
 # the `WebhookHeaders` schema. A new webhook is one fragment in the owning module; `example`
 # shows the shape.

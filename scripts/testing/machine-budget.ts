@@ -19,31 +19,17 @@ import { parseEnv } from 'node:util';
 /**
  * Memory a new workload can actually claim, in MB.
  *
- * `os.freemem()` maps to `MemFree` on Linux, which counts only untouched pages and so excludes the
- * reclaimable page cache — on a machine that has been up for a day it reads as a small fraction of
- * what a new process can really have. `MemAvailable` is the kernel's own estimate of exactly that,
- * so it is preferred and `os.freemem()` is the fallback for platforms without it.
+ * `process.availableMemory()` is libuv's own answer: `MemAvailable` on Linux, which counts the
+ * reclaimable page cache that `os.freemem()` (`MemFree`) leaves out, and the cgroup limit inside a
+ * container, which a `/proc/meminfo` parse would miss.
+ * https://nodejs.org/api/process.html#processavailablememory
  *
  * @returns available memory in MB, never above the machine's total
  */
 export const availableMemoryMb = (): number => {
     const totalMb = Math.floor(os.totalmem() / 1024 / 1024);
+    const availableMb = Math.floor(process.availableMemory() / 1024 / 1024);
 
-    // Caught, not checked: /proc doesn't exist on macOS or Windows, and there is no cheaper way to
-    // find that out than trying to read it.
-    const fromProc = (): number | undefined => {
-        try {
-            const line = readFileSync('/proc/meminfo', 'utf8')
-                .split('\n')
-                .find((row) => row.startsWith('MemAvailable:'));
-            const kb = Number(line?.replaceAll(/\D+/g, ''));
-            return Number.isFinite(kb) && kb > 0 ? Math.floor(kb / 1024) : undefined;
-        } catch {
-            return undefined;
-        }
-    };
-
-    const availableMb = fromProc() ?? Math.floor(os.freemem() / 1024 / 1024);
     return Math.max(1, Math.min(availableMb, totalMb));
 };
 
@@ -106,8 +92,8 @@ export const PROCESS_BASELINE_MB = 1100;
  *
  * Measured 2026-09-15: `--shard=1/4 --runInBand` over the integration layer ran 19 files and peaked
  * at 2407 MB RSS, so the 19 files added ~1.3 GB above {@link PROCESS_BASELINE_MB}. Jest gives every
- * file a fresh module registry but the process keeps what that registry allocated, which is why the
- * full 75-file run reaches Node's heap ceiling and dies.
+ * file a fresh module registry but the process keeps what that registry allocated, which is why a
+ * whole layer in one process reaches Node's heap ceiling and dies.
  *
  * This is the constant that makes sharding necessary rather than decorative.
  */

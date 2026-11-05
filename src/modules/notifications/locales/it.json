@@ -18,7 +18,7 @@
             },
             "task-kind": {
                 "contact": "Messaggio di contatto",
-                "account_review": "Revisione account",
+                "account_review": "Account in verifica",
                 "export_failed": "Esportazione dati non riuscita"
             },
             "task-category": {

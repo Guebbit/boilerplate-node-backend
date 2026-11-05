@@ -3,7 +3,7 @@
  * The two figures the daily staff digest reads off the returns: requests nobody has decided, and
  * withdrawals whose goods are still expected. Counts only.
  *
- * See: docs/modules/notifications.md#the-daily-digest
+ * See: docs/modules/shop-tasks.md#the-staff-digest
  */
 
 import { ReturnKind, ReturnReason, ReturnStatus } from '@types';

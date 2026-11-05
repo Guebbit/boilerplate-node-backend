@@ -2,8 +2,8 @@
 
 ::: tip At a glance
 **Owns** — the per-user inbox: one row per message, kept until its owner deletes it.
-**Depends on** — [`cart`](./cart.md), [`delivery`](./delivery.md), [`orders`](./orders.md), [`stock-alerts`](./stock-alerts.md), [`webhooks`](./webhooks.md) and [`wishlist`](./wishlist.md) for the event names it listens to; [`access`](./access.md) and [`users`](./users.md) to find who a work notice is for.
-**Breaks if you change** — nothing outside this folder. No module imports it: a producer announces an event and never calls in.
+**Depends on** — [`tasks`](./tasks.md) and [`webhooks`](./webhooks.md) for the event names it listens to; [`access`](./access.md) and [`users`](./users.md) to find who a work notice is for.
+**Breaks if you change** — [`shop-tasks`](./shop-tasks.md), which writes the shop's notices and digest rows through this module's service. A producer that only announces an event never calls in.
 :::
 
 ## Its neighbourhood
@@ -46,9 +46,8 @@ flowchart LR
 
 ## The story
 
-A product is deleted, and `cart` and `wishlist` strip it from every list. This module is where
-the owner is told:
-a row in a per-user inbox that stays until the user deletes it.
+A webhook endpoint is switched off after too many failures. This module is where the people who
+can fix it are told: a row in a per-user inbox that stays until the user deletes it.
 
 Two kinds of message exist, and only one lives here.
 
@@ -63,33 +62,20 @@ The backend stores a **code and its params, never the sentence**. The frontend t
 from its own locale files, like every other API code, so a row survives a language change and this
 backend keeps no copy in step with the UI.
 
-`Notification` is a discriminated union on `code`, and each variant types its own `params`:
+`Notification` is a discriminated union on `code`, and each variant types its own `params`. This
+module's own codes are the staff work notices, under `notifications.staff.*`:
 
-| `code`                                | `params`                                                         |
-| ------------------------------------- | ---------------------------------------------------------------- |
-| `notifications.cart-line-removed`     | `{ productId, titles }`                                          |
-| `notifications.wishlist-item-removed` | `{ productId, titles }`                                          |
-| `notifications.cart-merge-refused`    | `{ lines: [{ productId, requested, titles }] }`                  |
-| `notifications.fulfillment-delayed`   | `{ orderId, fulfillmentOrderId, titles, agreedAt, expectedAt? }` |
-| `notifications.fulfillment-held`      | `{ orderId, fulfillmentOrderId, notice, message? }`              |
-| `notifications.shipment-lost`         | `{ orderId, shipmentId, reason, message?, owed?, expectedAt? }`  |
-| `notifications.stock-alert`           | `{ productId, titles }`                                          |
+| `code`                                 | `params`                      |
+| -------------------------------------- | ----------------------------- |
+| `notifications.staff.webhook-disabled` | `{ subscriptionId }`          |
+| `notifications.staff.task-opened`      | `{ taskId, kind, category? }` |
+| `notifications.staff.task-overdue`     | the same as `task-opened`     |
+| `notifications.staff.task-assigned`    | `{ taskId, kind }`            |
+| `notifications.staff.outbox-dead`      | `{ eventName, aggregateId }`  |
 
-`fulfillment-delayed` is a late preorder's notice ([delivery](./delivery.md#preorders-and-a-moved-date)): it
-informs and offers the cancel, and asks nothing. It is written from `fulfillment_order.delayed`, and an
-erased account has no inbox to write to.
-
-`notifications.stock-alert` is the answer to a back-in-stock request ([stock-alerts](./stock-alerts.md)),
-written from `stock_alert.sent`.
-
-`notifications.fulfillment-held` is a hold the buyer can act on or should read about, written from
-`fulfillment_order.hold_noticed` ([delivery](./delivery.md#holds)): `notice` is `check_address` or `delayed`,
-`message` is what staff wrote for them. It never carries staff's reason.
-
-`notifications.shipment-lost` is a parcel reported lost or damaged in transit, written from `shipment.lost`
-([delivery](./delivery.md#lost-in-transit)): `reason` is `lost` or `damaged`, `message` is what staff wrote for
-the buyer, `owed` the titles the shelf could not cover again and `expectedAt` when they are expected. It
-never carries staff's note.
+A module that sits on top adds its own variants to the union by contract fragment. The shop does:
+its buyer messages (a cart line removed, a delayed preorder, a lost parcel, a stock alert) and its
+staff notices are in [shop-tasks](./shop-tasks.md#the-notices), under `shop-tasks.*`.
 
 The stored `params` is `Mixed` in Mongo, but the document type is the same union
 (`NotificationBody` in `model.ts`), so a writer cannot pair a code with another code's params and
@@ -101,19 +87,18 @@ same union.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
-    P["products<br/><i>deletes a product</i>"] -. "product.deleted<br/>+ titles" .-> C["cart / wishlist<br/><i>find owners, pull the line</i>"]
-    C -. "cart.lines_removed<br/>wishlist.items_removed" .-> N["notifications<br/><i>one row per owner</i>"]
-    M["POST /cart/merge"] -. "cart.merge_refused" .-> N
-    A["stock-alerts<br/><i>answers a request</i>"] -. "stock_alert.sent" .-> N
+    W["webhooks<br/><i>endpoint auto-disabled</i>"] -. "webhook.subscription_auto_disabled" .-> N["notifications<br/><i>one row per person</i>"]
+    T["tasks<br/><i>opens, hands over, passes due</i>"] -. "task.opened · task.assigned · task.overdue" .-> N
+    S["shop-tasks<br/><i>the shop's notices and digest</i>"] -->|"create / notifyStaff / writeSummary"| N
     N --> DB[("notifications")]
-    N -->|"SSE"| T["open tab<br/><i>the bell</i>"]
-    T -->|"GET /notifications<br/>on load, reload, reconnect"| N
-    T -->|"read-all · delete · delete all"| N
+    N -->|"SSE"| B["open tab<br/><i>the bell</i>"]
+    B -->|"GET /notifications<br/>on load, reload, reconnect"| N
+    B -->|"read-all · delete · delete all"| N
 
     classDef own fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef peer fill:#dbeafe,stroke:#2563eb,color:#111827;
     class N,DB own;
-    class P,C,M,A,T peer;
+    class W,T,S,B peer;
 ```
 
 ## Work notices for staff
@@ -124,7 +109,7 @@ one cap logic and one erasure path.
 
 ```mermaid
 flowchart LR
-    E["a producer's event<br/><i>order.purchase_hold_placed<br/>webhook.subscription_auto_disabled</i>"] -.-> R["staff-routing<br/><i>code → sets, mail class</i>"]
+    E["a producer's event<br/><i>task.opened<br/>webhook.subscription_auto_disabled</i>"] -.-> R["staff-routing<br/><i>code → sets, mail class</i>"]
     R -->|"who holds the sets?"| AC["access<br/>membersHolding"]
     AC -->|"who can act today?"| U["users<br/>staffContacts"]
     U --> W[("one row per person<br/>per situation")]
@@ -154,73 +139,35 @@ flowchart LR
   both kinds.
 - **Retention.** Work notices have their own cap (`NODE_NOTIFICATIONS_STAFF_MAX_PER_USER`) and a TTL
   (`NODE_NOTIFICATIONS_STAFF_TTL_DAYS`), so a flood of them cannot push a person's own messages out.
-- **Today's codes.** `notifications.staff.purchase-hold-placed` (mail `now`: abuse defence),
-  `notifications.staff.webhook-disabled` (bell only), `notifications.staff.task-opened` (mail
-  `now`: a person waits), `notifications.staff.task-overdue` (mail `now`, once, when that task
-  passes its due date unclosed; the same people) and `notifications.staff.task-assigned` (bell only, the assignee alone).
-  The three task events reach `notifications` through the [outbox](../tools/outbox.md), so a
-  failing handler is retried; each handler dedupes on its key (`task-opened:<id>` and so on).
-  `notifications.staff.return-requested` (bell only, the people who decide returns; a withdrawal is
-  a right and is not announced) and `notifications.staff.outbox-dead` (bell only, administrators:
-  the kernel's `outbox.event_dead` fact, a plain emit because an outbox row about the outbox could
-  itself die).
+- **This module's codes.** `notifications.staff.webhook-disabled` (bell only),
+  `notifications.staff.task-opened` (mail `now`: a person waits), `notifications.staff.task-overdue`
+  (mail `now`, once, when that task passes its due date unclosed; the same people),
+  `notifications.staff.task-assigned` (bell only, the assignee alone) and
+  `notifications.staff.outbox-dead` (bell only, administrators: the kernel's `outbox.event_dead`
+  fact, a plain emit because an outbox row about the outbox could itself die). The three task events
+  reach `notifications` through the [outbox](../tools/outbox.md), so a failing handler is retried;
+  each handler dedupes on its key (`task-opened:<id>` and so on).
+- **The shop's codes.** `shop-tasks.staff.*` register their own route with each call, so the table
+  above is not theirs: see [shop-tasks](./shop-tasks.md#the-notices) for their sets and mail class.
 - **Task notices.** The task codes name their sets per notice (`per-notice` in the route
   table): the set of the opened task's kind. Params are the task id, its kind and a contact
   message's category, nothing the visitor typed. A contact message that finds no recipient with
   an address is handed to the tasks module's fallback mailbox
   ([`tasks`](./tasks.md#who-is-told)).
 
-## The daily digest
+## Summary rows
 
-Some work is not an event but a count of what waits. `sweep:staff-digest` (06:30 UTC daily) and
-`sweep:staff-weekly` (06:30 UTC Mondays, the late preorders only) read each count from the module
-that owns it, through its barrel, and rewrite one **summary row** per person whose role does that
-work. The row's `dedupeKey` is its code, so a re-run replaces it instead of piling copies.
-
-```mermaid
-flowchart LR
-    J["sweep:staff-digest / -weekly"] --> F["counts via barrels:<br/>orders · returns · delivery · payments · inventory"]
-    F --> R["staffRecipients(sets)"]
-    R --> W["write summary row<br/>(one per person per code)"]
-    W -->|appeared or grew| P["unread again · pushed · digest mail"]
-    W -->|fell| Q["updated quietly"]
-    F -->|zero| C["row removed"]
-```
-
-- **Appeared or grew** -> unread again, pushed to open tabs, and (for the codes below marked
-  `digest`) listed in that person's one digest mail. **Fell or the same** -> quiet. **Zero** ->
-  the row is removed. An unchanged re-run mails nothing.
-- **Mail is for what is overdue**, not for work in the normal course (B14). The task reminder
-  (`task-overdue`) is that rule applied to a single task: see
-  [the overdue reminder](./tasks.md#the-overdue-reminder).
-
-| Code                         | Who (set)             | Counts                                                                                                                                                                         | Mail   |
-| ---------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
-| `transfers-due`              | `PaymentRecording`    | unpaid bank transfers with `payBy` within `NODE_STAFF_TRANSFER_DUE_HOURS`                                                                                                      | bell   |
-| `unshipped`                  | `DeliveryStart`       | paid orders unshipped for `NODE_STAFF_UNSHIPPED_DAYS`                                                                                                                          | digest |
-| `returns-undecided`          | `ReturnManagement`    | requests undecided for `NODE_STAFF_RETURN_DECISION_DAYS`                                                                                                                       | digest |
-| `withdrawals-awaiting-goods` | `ReturnReceiving`     | approved withdrawals whose goods are not back                                                                                                                                  | bell   |
-| `delivery-holds-open`        | `DeliveryManagement`  | staff holds older than `NODE_STAFF_HOLD_OPEN_DAYS` (`heldAt`)                                                                                                                  | digest |
-| `awaiting-tracking`          | `DeliveryManagement`  | shipped, tracked-method parcels with no code for `NODE_STAFF_TRACKING_MISSING_HOURS`                                                                                           | bell   |
-| `undelivered`                | `DeliveryManagement`  | physical parcels shipped and never marked arrived for `NODE_DELIVERY_UNDELIVERED_REMINDER_DAYS` (the withdrawal window, the guarantee and the PII clock start only on arrival) | digest |
-| `stale-refunds`              | `PaymentRefunding`    | provider refunds open past the payment attention threshold                                                                                                                     | digest |
-| `low-stock`                  | `InventoryManagement` | products at or under `NODE_LOW_STOCK_THRESHOLD`                                                                                                                                | bell   |
-| `preorders-late`             | `OrderEditing`        | waiting preorders and backorders past their date (weekly)                                                                                                                      | digest |
-
-A situation that is a task (`manual_refund_owed`, `amount_mismatch`, `refund_refused`, ...) has no
-notice code here: `task-opened` alerts it. That is why a refused refund has none.
+Some work is not an event but a count of what waits. A **summary row** is one notice per person per
+code whose `dedupeKey` is its code, so a re-run replaces it instead of piling copies. This module
+holds the primitives (`writeSummary`, `clearSummary`, `staffRecipients`); the jobs that count, the
+codes and the digest mail are the shop's: see [the staff digest](./shop-tasks.md#the-staff-digest).
 
 ## What decides what
 
-- **Who reaches the inbox.** Only domain events. `cart` knows whose carts held a product, so `cart`
-  emits `cart.lines_removed`; `notifications` never listens to `product.deleted` itself.
-- **The merge message.** Only for guest-cart lines that could not be added at all (the product
-  is not publicly visible: deleted or hidden, `reason: removed`). A sold-out, short or off-sale
-  product is added and flagged through its `availability` instead, and a line that landed with another quantity is the cart page's alert to show, not the
-  inbox's: it can be seen again later, a vanished product cannot.
-- **The product's name.** `product.deleted` carries `titles`, every translated name, read before a
-  hard delete drops the translation rows. The notification copies them in: the product is gone, so
-  nothing can be looked up afterwards. The reader sees their own language.
+- **Who reaches the inbox.** Only domain events, or a module that sits on top calling the
+  service. A producer knows whose records are concerned and says so; `notifications` never works
+  that out from a bare fact. The shop's buyer messages are described in
+  [shop-tasks](./shop-tasks.md#the-notices).
 - **The cap.** The newest `NODE_NOTIFICATIONS_MAX_PER_USER` rows are kept (default 100); a write
   past that deletes the oldest. Without it one bulk delete can flood an inbox, and the inactivity
   reaper is off by default. GDPR (Art. 5(1)(e)) does not ask for an expiry here: the rows die with
@@ -236,7 +183,7 @@ notice code here: `task-opened` alerts it. That is why a refused refund has none
 
 ## Personal data
 
-A notification says what was in someone's cart, so it is personal data: it is in the account
+A notification can name a person's records, so it is personal data: it is in the account
 export (`personalData.collect`) and removed with the account (`personalData.erase`, inside the
 hard-delete transaction). A staff member's work notices are exported as a kind and a date only
 (`staffNotifications`): their facts name other people's accounts and orders.
@@ -269,8 +216,8 @@ evaluator — [Authorization](../theory/authorization.md) explains the model.
 
 ## Related pages
 
-- [`cart`](./cart.md) — `cart.lines_removed`, and `POST /cart/merge` with `cart.merge_refused`
-- [`wishlist`](./wishlist.md) — `wishlist.items_removed`
-- [`products`](./products.md) — `product.deleted` and its `titles`
+- [`shop-tasks`](./shop-tasks.md) — the shop's buyer messages, staff notices and daily digest
+- [`tasks`](./tasks.md) — `task.opened`, `task.overdue` and `task.assigned`
+- [`webhooks`](./webhooks.md) — `webhook.subscription_auto_disabled`
 - [Observability](./observability.md) — the SSE stream this one follows
 - [Events & Logging](../tools/events-and-logging.md) — why events, and what the bus does not promise

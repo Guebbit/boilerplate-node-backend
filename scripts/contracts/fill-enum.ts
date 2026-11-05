@@ -49,8 +49,8 @@ const isStringList = (value: unknown): value is string[] =>
  * @param node - the schema node carrying `x-enum-from`
  * @param sources - every list the bundler can fill from
  * @param where - the node's location, for the error message
- * @throws Error if the source is unknown or empty with no written enum to fall back on, the
- *   appended list is malformed, or a value appears twice
+ * @throws Error if the source is unknown (with no written enum, or one that is not this schema's own
+ *   name), empty with no written enum to fall back on, a list is malformed, or a value appears twice
  */
 const enumFor = (node: Placeholder, sources: EnumSources, where: string): string[] => {
     const name = node['x-enum-from'];
@@ -61,6 +61,12 @@ const enumFor = (node: Placeholder, sources: EnumSources, where: string): string
     if (!known && written === undefined)
         throw new Error(
             `[openapi] ${where}: x-enum-from names no known source (${String(name)}); known: ${Object.keys(sources).join(', ')}.`
+        );
+    // Written values make the marker mean "append what extenders supply". An unknown source is then
+    // only legitimate as the schema's own name, with no extender; anything else is a typo.
+    if (!known && written !== undefined && name !== where.split('/').at(-1))
+        throw new Error(
+            `[openapi] ${where}: x-enum-from names no known source (${String(name)}) and is not this schema's own name.`
         );
     const also = node['x-enum-also'] ?? [];
     if (!isStringList(also))
@@ -110,7 +116,8 @@ const fillIn = (value: unknown, sources: EnumSources, where: string): number => 
  *
  * @param document_ - the bundled OpenAPI document
  * @param sources - every list the bundler can fill from, by name
- * @throws Error if a placeholder names an unknown or empty source, or conflicts with an `enum`
+ * @throws Error if a placeholder names an unknown or empty source, or its written `enum` is
+ *   malformed or repeats a value
  */
 export const withFilledEnums = (document_: OpenApiDocument, sources: EnumSources): void => {
     fillIn(document_, sources, '#');

@@ -32,8 +32,10 @@ export interface ShopOpening {
     dueAt: Date;
 }
 
+/** One hour in milliseconds. */
 const HOUR_MS = 3_600_000;
 
+/** One day in milliseconds. */
 const DAY_MS = 24 * HOUR_MS;
 
 /** How long a paid order without stock set aside may wait: the customer is already owed goods. */
@@ -153,7 +155,9 @@ export const disputeOpening = (
 
 /** What a delay notice says, as far as the consent reminder is concerned. */
 export interface DelayFacts {
+    /** The fulfillment order the delay is on. */
     fulfillmentOrderId: string;
+    /** The order it belongs to. */
     orderId: string;
     /** The date promised when ordering (ISO). */
     agreedAt: string;

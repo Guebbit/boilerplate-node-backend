@@ -15,6 +15,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { taskService } from '@modules/tasks/service';
 import { taskRepository } from '@modules/tasks/repository';
 import { tasksAuditActions } from '@modules/tasks/audit';
+import { outboxEventModel } from '@kernel/outbox';
 import * as auditPort from '@infrastructure/observability/audit';
 import type { TaskDocument } from '@modules/tasks/model';
 import { TaskKind, TaskLinkType, TaskSource, TaskStatus } from '@types';
@@ -249,6 +250,19 @@ describe('jurisdiction', () => {
 });
 
 describe('assign and unassign', () => {
+    it('writes the assignment and its task.assigned outbox row together', async () => {
+        const worker = await createUser({ username: 'sam' }, 'support');
+        const task = await fileContact();
+
+        await taskService.assign(String(task._id), worker.id, admin);
+
+        const rows = await outboxEventModel.find({ name: 'task.assigned' }).lean().exec();
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({
+            payload: expect.objectContaining({ assigneeId: worker.id })
+        });
+    });
+
     it('takes a new task into progress and names the assignee', async () => {
         const worker = await createUser({ username: 'sam' }, 'support');
         const task = await fileContact();

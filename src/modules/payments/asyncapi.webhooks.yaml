@@ -3,7 +3,7 @@
 # A FRAGMENT, not a document: it refs `#/servers/subscriberEndpoint` and
 # `#/components/schemas/WebhookHeaders`, which `webhooks/asyncapi.yaml` declares. The bundler
 # merges it into the `webhooks` section only while that module exists
-# (`scripts/contracts/asyncapi-webhook-events.ts`), and `GET /webhooks/events` lists it only while
+# (`scripts/contracts/asyncapi-section-fragments.ts`), and `GET /webhooks/events` lists it only while
 # this module is registered. Delete the module and its events leave the contract with it.
 # Each event is the Standard Webhooks envelope `{ type, timestamp, data }`; the module's
 # `publicEvents` (`module.ts`) is what actually fires it.

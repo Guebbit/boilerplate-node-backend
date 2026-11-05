@@ -96,7 +96,7 @@ One task per situation, opened by the event that starts it and cleared by the ev
 The dedup, the replay rules and the overdue sweep are the engine's: see
 [System tasks](./tasks.md#system-tasks).
 
-| Kind                 | Opens on                                                      | Cleared by                                             | Due (`dueAt`)                                                                      | Worked by (`routeSet`) | Told                      | `work` screen                  |
+| Kind                 | Opens on                                                      | Cleared by                                             | Due (`dueAt`)                                                                      | Route set (`routeSet`) | Told                      | `work` screen                  |
 | -------------------- | ------------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------- | ---------------------- | ------------------------- | ------------------------------ |
 | `manual_refund_owed` | `payment.refund_owed_by_hand`                                 | `payment.refunded`, `payment.refund_canceled`          | + `NODE_PAYMENT_ATTENTION_MINUTES`                                                 | `PaymentRefunding`     | moderator, admin          | `sales/payments?tab=attention` |
 | `refund_refused`     | `payment.refund_failed` with `final: true`                    | `payment.refunded`, `payment.refund_canceled`          | the legal 14 days for a return refund (`refundDueBy`), else + the attention window | `PaymentRefunding`     | moderator, admin          | `sales/payments?tab=attention` |
@@ -108,7 +108,9 @@ The dedup, the replay rules and the overdue sweep are the engine's: see
 The kinds, link types (`order`, `payment`, `refund`, `fulfillment_order`) and categories (`order`,
 `cancellation`, `return`, `payment`) are appended to the core's enums by
 `openapi.tasks.yaml`. Admin alone closes an `amount_mismatch` and an accepted `consent_due`: the
-other roles read the alert and open the screen, but only `TaskManagement` works a task.
+other roles read the alert and open the screen, but only `TaskManagement` works a task. The route set
+says who is told and who may see the task; to be **assigned** one a person needs it _and_
+`update:Task`.
 
 **The delay reminder (`consent_due`, 16 CFR 435.2).** The shop never asks the buyer and never
 cancels; the task is the reminder that a person must, and by when. `delivery` keeps `promisedAt` on
@@ -196,7 +198,7 @@ flowchart LR
 
 - To-do kinds, openers, closers, who works them: [Tasks](./tasks.md#who-is-told) and the kind table above.
 - Notice codes, sets and mail class: [Notifications](./notifications.md#work-notices-for-staff).
-- The daily and weekly counts: [Notifications](./notifications.md#the-daily-digest).
+- The daily and weekly counts: [the staff digest](#the-staff-digest) above.
 - Every mail, one row each: [Mails we send](../tools/email-and-rendering.md#mails-we-send).
 - Events that survive a crash: [Outbox](../tools/outbox.md). Public events: [Webhooks](./webhooks.md).
 

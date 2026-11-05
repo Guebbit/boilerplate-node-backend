@@ -15,7 +15,7 @@ x-error-codes:
     TASK_ALREADY_OPEN: { status: 409, description: 'The task is already open (new or in progress), so there is nothing to reopen.' }
     TASK_SUPERSEDED: { status: 409, description: 'A newer open task already covers the same situation, so this one cannot be reopened. `details.taskId` names the newer one.' }
     TASK_NOT_OPEN: { status: 409, description: 'The task is closed; reopen it before assigning it.' }
-    TASK_ASSIGNEE_INVALID: { status: 422, description: 'The person does not exist, or does not hold the permission set that works this task.' }
+    TASK_ASSIGNEE_INVALID: { status: 422, description: 'The person does not exist, or does not hold both the permission set that works this task and `update:Task`.' }
 
 # This module's sections of the account data export (`POST /account/export`): the bundler
 # adds them to `AccountExportResponse`. Removing the module removes the sections.
@@ -342,11 +342,13 @@ paths:
             summary: Assign a task
             description: >
                 Hands the task to one person (taking it is assigning yourself). A `new` task
-                becomes `in_progress`. The person must hold the permission set that works the task.
+                becomes `in_progress`. The person must hold the permission set that works the task
+                and `update:Task`, so they can open, note and close it.
                 Replaces any earlier assignee. A closed task answers 409 `TASK_NOT_OPEN`.
             operationId: assignTask
             x-error-codes:
                 '409': [TASK_NOT_OPEN]
+                '422': [TASK_ASSIGNEE_INVALID]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []

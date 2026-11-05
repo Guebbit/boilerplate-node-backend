@@ -55,7 +55,7 @@ keeps them apart. The mechanism is in [Sessions](../modules/account-sessions.md#
 A login makes one random 256-bit id and keeps only its hash in the database. A browser carries it in
 one HttpOnly, `Secure`, `SameSite=Lax` cookie, `__Host-session`; the page holds nothing it could
 read. A client with no cookie jar (a script, a mobile app) logs in with `transport: "bearer"` instead:
-no cookie is set, the response carries the id as `ses_…`, and the client sends it back as
+no session cookie is set, the response carries the id as `ses_…`, and the client sends it back as
 `Authorization: Bearer ses_…`.
 
 ```mermaid

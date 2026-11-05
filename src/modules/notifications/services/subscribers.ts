@@ -97,7 +97,7 @@ export const onTaskOpened = (opened: DomainEventMap['task.opened']): Promise<voi
 /**
  * An open task went overdue: the people the opener told hear of it once more, the same sets, the
  * same fallback mailbox for a contact message nobody could be told of. The sweep claims a task
- * once, so this runs once per task; the dedupe key is the second guard.
+ * once, but the outbox delivers at least once, so the dedupe key is what keeps it to one notice.
  */
 export const onTaskOverdue = (overdue: DomainEventMap['task.overdue']): Promise<void> => {
     const body = {

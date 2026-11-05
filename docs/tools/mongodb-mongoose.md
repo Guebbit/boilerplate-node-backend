@@ -29,8 +29,11 @@ Why 9.0.4 and not an 8.x:
 - 8.2 boots only because it has no refusal at all, and it is end of life since 2026-07-31.
   9.0 is supported until 2031 ([lifecycles](https://www.mongodb.com/legal/support-policy/lifecycles)).
 
-Dependabot bumps the compose images like any other; the `mongo` line stays literal (no YAML anchor)
-so its rewrite sees it.
+Dependabot proposes MongoDB patch bumps only (9.0.x): minors are short-lived, so it ignores them.
+It gives mongo its own PR, and the PR stays red until `config.mongodbMemoryServer.version` is bumped
+in it too. `tests/cross-cutting/mongo-version-pin.test.ts` compares every compose `mongo` tag with
+that pin, so a new patch is tested before it lands. The `mongo` line stays literal (no YAML anchor)
+so Dependabot's rewrite sees it.
 
 ## Persistence visual
 

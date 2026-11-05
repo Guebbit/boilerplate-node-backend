@@ -31,7 +31,7 @@
                 "refund_refused": "Refund refused",
                 "amount_mismatch": "Payment amount mismatch",
                 "dispute": "Payment dispute",
-                "paid_without_hold": "Paid order without stock hold",
+                "paid_without_hold": "Paid order without a stock hold",
                 "consent_due": "Buyer consent to the delay due"
             },
             "task-category": {

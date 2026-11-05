@@ -746,7 +746,7 @@ the paid count. The flag outlives the hold's end, so an unreviewed pause does no
 list; it stays until a staff member acts: placing a hold or `DELETE /users/{id}/purchase-hold` clears
 it and restarts the count from that moment, so the same cancellations never trigger a second hold. The hold is stored on the user (`users` owns it, see
 [users](./users.md#purchase-hold)); `orders` only owns the count. Staff are told by a work notice
-(`order.purchase_hold_placed` → [notifications](./notifications.md#work-notices-for-staff): the bell,
+(`order.purchase_hold_placed` → [shop-tasks](./shop-tasks.md#the-notices): the bell,
 and one mail to each member who can ban), an audit row `system.user.purchase_hold_set`
 (or `system.user.purchase_hold_flagged` for a flag alone), and the users-list filters
 `purchaseHold=true` (held right now) and `purchaseHoldReview=true` (flagged, not yet reviewed). The buyer is told too, by a mail to the account's own

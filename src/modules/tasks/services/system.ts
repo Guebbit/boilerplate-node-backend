@@ -12,7 +12,6 @@ import { TaskKind } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
-import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { announceInTransaction } from '@kernel/outbox';
 import type { DomainEventMap, DomainEventMeta } from '@kernel/events';
 import { systemCallerContext } from '@kernel/permissions';
@@ -25,7 +24,7 @@ import {
     openKeyOf,
     type SystemOpening
 } from '../domain';
-import { TASK_OPENED } from '../events';
+import { TASK_OPENED, taskFactOf } from '../events';
 import { taskRepository } from '../repository';
 
 /**
@@ -64,13 +63,7 @@ export const openSystemTask = (opening: SystemOpening, meta: DomainEventMeta): P
                 ),
             (created) => ({
                 name: TASK_OPENED,
-                payload: {
-                    tenantId: DEPLOYMENT_TENANT_ID,
-                    taskId: String(created._id),
-                    kind: created.kind,
-                    routeSet: created.routeSet,
-                    ...(created.work ? { work: created.work } : {})
-                },
+                payload: taskFactOf(created),
                 aggregateId: String(created._id)
             })
         )
