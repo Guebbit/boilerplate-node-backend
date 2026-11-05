@@ -58,7 +58,7 @@ const collideWithInFlight = (fingerprint: string, ageMs: number) => {
         lean: () => ({
             exec: () =>
                 Promise.resolve({
-                    state: 'in-flight',
+                    state: 'in_flight',
                     fingerprint,
                     updatedAt: new Date(Date.now() - ageMs)
                 })

@@ -118,7 +118,7 @@ describe('webhookDeliverySchema', () => {
         // retries left goes back to `pending`, only `exhausted` is terminal.
         expect(enumOf(webhookDeliverySchema, 'status')).toEqual([
             'pending',
-            'in-flight',
+            'in_flight',
             'succeeded',
             'exhausted'
         ]);

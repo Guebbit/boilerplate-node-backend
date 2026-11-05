@@ -68,13 +68,13 @@ it('publishes a due pending row, without claiming it', async () => {
         payload: { deliveryId: String(due._id) }
     });
 
-    // Unclaimed: the sweep never sets `in-flight` — see `sweep.ts`'s own docblock for why a
+    // Unclaimed: the sweep never sets `in_flight` — see `sweep.ts`'s own docblock for why a
     // duplicate publish is safe without it.
     const stored = await webhookDeliveryRepository.findById(String(due._id));
     expect(stored?.status).toBe('pending');
 });
 
-it('republishes a stranded in-flight row whose lease already expired', async () => {
+it('republishes a stranded in_flight row whose lease already expired', async () => {
     const subscription = await createSubscription();
     const stranded = await webhookDeliveryRepository.create({
         tenant: TEST_TENANT_ID,
@@ -83,7 +83,7 @@ it('republishes a stranded in-flight row whose lease already expired', async () 
         eventType: 'order.paid',
         payload: { orderId: 'order_2' },
         attempt: 2,
-        status: 'in-flight',
+        status: 'in_flight',
         leaseToken: 'a-dead-workers-token',
         leaseExpiresAt: new Date(Date.now() - 1000)
     });
@@ -106,7 +106,7 @@ it('ignores a row still under a live lease', async () => {
         eventType: 'order.paid',
         payload: { orderId: 'order_3' },
         attempt: 1,
-        status: 'in-flight',
+        status: 'in_flight',
         leaseToken: 'a-live-workers-token',
         leaseExpiresAt: new Date(Date.now() + 60_000)
     });
@@ -184,7 +184,7 @@ describe('with no broker to take the message', () => {
             eventType: 'order.paid',
             payload: { orderId: 'x' },
             attempt: 1,
-            status: 'in-flight',
+            status: 'in_flight',
             leaseToken: 'a-live-workers-token',
             leaseExpiresAt: new Date(Date.now() + 60_000)
         });

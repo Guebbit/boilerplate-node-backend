@@ -89,7 +89,7 @@ const PRODUCT_TYPES: ProductType[] = [
         blurb: 'a stable, easy-to-clean feeding solution',
         basePrice: 15,
         weight: 400,
-        tax: { taxClass: 'zero', rateType: 'zero-rated' },
+        tax: { taxClass: 'zero', rateType: 'zero_rated' },
         it: {
             name: 'Ciotola per Alimenti',
             blurb: "una soluzione per l'alimentazione stabile e facile da pulire"

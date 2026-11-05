@@ -210,9 +210,9 @@ describe('taxCategoryCode — EN 16931 category, C4', () => {
         expect(taxCategoryCode(0.1, 'exempt')).toBe('S');
     });
 
-    it('is Z for a 0% rate with no rateType, or an explicit zero-rated', () => {
+    it('is Z for a 0% rate with no rateType, or an explicit zero_rated', () => {
         expect(taxCategoryCode(0, undefined)).toBe('Z');
-        expect(taxCategoryCode(0, 'zero-rated')).toBe('Z');
+        expect(taxCategoryCode(0, 'zero_rated')).toBe('Z');
     });
 
     it('is E for a 0% rate marked exempt', () => {
@@ -230,7 +230,7 @@ describe('buildDocumentView — the VAT table’s category column, C4', () => {
                     quantity: 1,
                     unitPrice: 10,
                     taxRate: 0,
-                    rateType: 'zero-rated'
+                    rateType: 'zero_rated'
                 },
                 {
                     title: 'Exempt widget',

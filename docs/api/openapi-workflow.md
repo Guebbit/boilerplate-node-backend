@@ -94,6 +94,8 @@ Object.values(TaskStatus);
 
 A shared enum is a named schema (`TaskStatus`) that every property `$ref`s, and the const keeps that name. An enum declared inline on a property is named schema name + property name, PascalCase. For example, `HealthPing.status` → `HealthPingStatus`.
 
+Enum values are lowercase snake_case, except JSON:API sort tokens (`-createdAt`) and i18n message keys.
+
 ## Commands used in this repo
 
 ```bash

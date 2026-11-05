@@ -76,12 +76,12 @@ describe('Idempotency-Key — POST /tasks', () => {
     it('answers 409 while a request with the same key is still in flight', async () => {
         await api().post('/tasks').set('Idempotency-Key', 'in-flight-key-1').send(PAYLOAD);
 
-        // The first request already finished (state 'done'). Forcing it back to 'in-flight'
+        // The first request already finished (state 'done'). Forcing it back to 'in_flight'
         // simulates a second request racing the first rather than following it — the one branch
         // an end-to-end HTTP test cannot otherwise reach without two real concurrent sockets.
         await idempotencyRecordModel.updateOne(
             { key: 'in-flight-key-1' },
-            { $set: { state: 'in-flight' } }
+            { $set: { state: 'in_flight' } }
         );
 
         const response = await api()

@@ -23,15 +23,15 @@ sequenceDiagram
     participant Handler as Route handler
 
     Client->>Middleware: POST + Idempotency-Key: abc
-    Middleware->>Mongo: insert {key, caller, fingerprint, state: in-flight}
+    Middleware->>Mongo: insert {key, caller, fingerprint, state: in_flight}
     alt insert succeeded
         Middleware->>Handler: next()
         Handler-->>Middleware: response
         Middleware->>Mongo: mark done {status, body}
         Middleware-->>Client: response
-    else duplicate key, in-flight, under 5 minutes old
+    else duplicate key, in_flight, under 5 minutes old
         Middleware-->>Client: 409 Conflict
-    else duplicate key, in-flight, older (the attempt died)
+    else duplicate key, in_flight, older (the attempt died)
         Middleware->>Handler: take the key over, next()
     else duplicate key, done, fingerprint matches
         Middleware-->>Client: stored response, Idempotent-Replay: true
@@ -55,7 +55,7 @@ server makes.
 
 The lock is one atomic insert against a unique index on `(key, caller)`. Whoever's insert lands
 first runs the handler; every other insert collides with `E11000`, and that collision — not a
-second lookup — is what decides which of the outcomes above a retry gets. An `in-flight` record
+second lookup — is what decides which of the outcomes above a retry gets. An `in_flight` record
 older than five minutes belongs to an attempt that crashed; a retry takes it over with a
 conditional update, so of two racing retries exactly one wins. "Caller" is the
 authenticated account id, or the request's address for a public route with no account yet

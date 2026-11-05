@@ -133,7 +133,7 @@ const replayedHeadersOf = (response: Response): Record<string, string> =>
     );
 
 /**
- * How long an 'in-flight' record holds its key. Past this, the attempt that claimed it is taken
+ * How long an 'in_flight' record holds its key. Past this, the attempt that claimed it is taken
  * to be dead (a crash, a killed process) and a retry may claim the key again. Without it, a crash
  * mid-request answers 409 to every retry for the whole retention window.
  *
@@ -142,17 +142,17 @@ const replayedHeadersOf = (response: Response): Record<string, string> =>
 const IN_FLIGHT_LEASE_MS = 5 * 60_000;
 
 /**
- * Whether an 'in-flight' record outlived {@link IN_FLIGHT_LEASE_MS}.
+ * Whether an 'in_flight' record outlived {@link IN_FLIGHT_LEASE_MS}.
  *
  * @param existing - the record holding the key
  */
 const isAbandoned = (existing: StoredRecord): boolean =>
-    existing.state === 'in-flight' &&
+    existing.state === 'in_flight' &&
     existing.updatedAt !== undefined &&
     Date.now() - existing.updatedAt.getTime() > IN_FLIGHT_LEASE_MS;
 
 /**
- * Take over an abandoned 'in-flight' record, atomically: the filter pins the `updatedAt` this
+ * Take over an abandoned 'in_flight' record, atomically: the filter pins the `updatedAt` this
  * request saw, so of two retries racing for the same dead record exactly one wins. The winner runs
  * the handler with its answer captured; the loser answers 409, as for any live attempt.
  *
@@ -167,9 +167,9 @@ const reclaimAbandoned = (
 ): Promise<void> =>
     idempotencyRecordModel
         .updateOne(
-            { key: raw, caller, state: 'in-flight', updatedAt: existing.updatedAt },
+            { key: raw, caller, state: 'in_flight', updatedAt: existing.updatedAt },
             // `timestamps: true` restamps `updatedAt`, which restarts the lease for this attempt.
-            { $set: { state: 'in-flight' } }
+            { $set: { state: 'in_flight' } }
         )
         .exec()
         .then(({ modifiedCount }) => {
@@ -220,7 +220,7 @@ const armOutcomeCapture = (response: Response, key: string, caller: string): voi
             .exec()
             .catch((error: unknown) => {
                 // The response has already gone out — there is nothing left to roll back. Left
-                // 'in-flight', the record simply rides out its TTL and a retry sees 409 until
+                // 'in_flight', the record simply rides out its TTL and a retry sees 409 until
                 // then, exactly as if the process had crashed here.
                 // Stryker disable all
                 logger.warn({
@@ -248,7 +248,7 @@ const respondToCollision = (
     existing: StoredRecord,
     fingerprint: string
 ): Response => {
-    if (existing.state === 'in-flight')
+    if (existing.state === 'in_flight')
         return rejectResponse(response, 409, [
             {
                 code: ERROR_CODES.IDEMPOTENCY_IN_FLIGHT,
@@ -338,7 +338,7 @@ const claimIdempotencyKey = (
     retriesLeft: number
 ): void => {
     idempotencyRecordModel
-        .create({ key: raw, caller, fingerprint, state: 'in-flight' })
+        .create({ key: raw, caller, fingerprint, state: 'in_flight' })
         .then(() => {
             armOutcomeCapture(response, raw, caller);
             next();

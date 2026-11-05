@@ -601,9 +601,9 @@ describe('SKU', () => {
 });
 
 describe('VAT rate type', () => {
-    // `rateType` says WHY a `taxClass: zero` product is 0% — `zero-rated` or `exempt` — round
+    // `rateType` says WHY a `taxClass: zero` product is 0% — `zero_rated` or `exempt` — round
     // tripping each value the same way `taxClass` itself already does.
-    it.each(['zero-rated', 'exempt'] as const)(
+    it.each(['zero_rated', 'exempt'] as const)(
         'creates a product carrying rateType %s',
         async (rateType) => {
             const { bearer } = await authenticateAsRole('editor');

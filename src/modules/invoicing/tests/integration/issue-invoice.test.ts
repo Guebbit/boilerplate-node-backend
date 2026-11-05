@@ -138,13 +138,13 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
 
     // `rateType` rides frozen onto the order line at checkout (`orders/services/snapshot.ts`)
     // and freezes again onto the invoice line here — the field a rendered PDF needs to tell a
-    // zero-rated line from an exempt one, neither of which `taxRate` alone can say.
+    // zero_rated line from an exempt one, neither of which `taxRate` alone can say.
     it('freezes the order line’s rateType onto the invoice line', async () => {
         const user = await createUser();
         const zeroRated = await createProduct({
             price: 10,
             taxClass: 'zero',
-            rateType: 'zero-rated'
+            rateType: 'zero_rated'
         });
         const exempt = await createProduct({ price: 20, taxClass: 'zero', rateType: 'exempt' });
         const order = await createOrder(user, [toOrderItem(zeroRated, 1), toOrderItem(exempt, 1)]);
@@ -152,7 +152,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         await orderService.markPaid(String(order._id));
         const invoice = await waitForInvoice(String(order._id));
 
-        expect(invoice.lines.map((line) => line.rateType)).toEqual(['zero-rated', 'exempt']);
+        expect(invoice.lines.map((line) => line.rateType)).toEqual(['zero_rated', 'exempt']);
     });
 
     it('numbers two invoices in the same year one apart', async () => {

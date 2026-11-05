@@ -283,7 +283,7 @@ VAT can differ from the invoice's by a minor unit in total; every document is se
 
 EN 16931's category codes distinguish a 0%-rated line (`Z`) from an exempt one (`E`) — a
 distinction `products`' `taxClass` enum (`reduced`/`zero`) alone cannot make, since `zero` covers
-both reasons. `products`' `rateType` (`standard`/`zero-rated`/`exempt`) says which, frozen onto the
+both reasons. `products`' `rateType` (`standard`/`zero_rated`/`exempt`) says which, frozen onto the
 order line the same way `taxClass` resolves into `taxRate` — but copied AS IS rather than resolved,
 since there is no numeric form for a reason code to become.
 

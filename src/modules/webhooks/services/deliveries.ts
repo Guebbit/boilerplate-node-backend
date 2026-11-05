@@ -125,7 +125,7 @@ const rejectInProgress = (): ResponseReject =>
  * attempt this makes.
  *
  * Looks up the subscription BEFORE claiming (`repository.ts#claimForReplay`): a 404 must never
- * claim the row first — a claim that then answers 404 leaves the row `in-flight` under a 60s
+ * claim the row first — a claim that then answers 404 leaves the row `in_flight` under a 60s
  * lease with nobody left to finish it, until the sweep's stranded-lease read finally reclaims it
  * as `exhausted`. Once the subscription is confirmed to exist, claiming takes the same lease a
  * queued attempt would — without it, replaying a delivery a live worker is mid-attempt on would

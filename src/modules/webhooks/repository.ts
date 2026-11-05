@@ -231,7 +231,7 @@ const lease = (): { leaseToken: string; leaseExpiresAt: Date } => ({
 });
 
 /**
- * Atomically claim one row for exclusive work: `pending` → `in-flight`, or a STRANDED `in-flight`
+ * Atomically claim one row for exclusive work: `pending` → `in_flight`, or a STRANDED `in_flight`
  * row whose lease has already expired — a worker that crashed mid-attempt, or a sweep whose own
  * queue publish never arrived. The queued/sweep path's own claim; see {@link claimForReplay} for
  * the admin path, which may also reclaim a row already at a terminal status.
@@ -240,7 +240,7 @@ const lease = (): { leaseToken: string; leaseExpiresAt: Date } => ({
  * step, or the race this exists to prevent just moves earlier.
  *
  * @param id - the delivery row to claim
- * @returns the claimed row, now `in-flight` under a fresh lease (read `leaseToken` off it for
+ * @returns the claimed row, now `in_flight` under a fresh lease (read `leaseToken` off it for
  *   {@link applyOutcome}), or `null` if it is claimed by a live lease or already resolved
  */
 const claimPending = (id: string): Promise<WebhookDeliveryDocument | null> =>
@@ -250,10 +250,10 @@ const claimPending = (id: string): Promise<WebhookDeliveryDocument | null> =>
                 _id: toObjectId(id),
                 $or: [
                     { status: 'pending' },
-                    { status: 'in-flight', leaseExpiresAt: { $lt: new Date() } }
+                    { status: 'in_flight', leaseExpiresAt: { $lt: new Date() } }
                 ]
             },
-            { $set: { status: 'in-flight', ...lease() } },
+            { $set: { status: 'in_flight', ...lease() } },
             { returnDocument: 'after' }
         )
         .exec();
@@ -272,9 +272,9 @@ const claimForReplay = (id: string): Promise<WebhookDeliveryDocument | null> =>
         .findOneAndUpdate(
             {
                 _id: toObjectId(id),
-                $or: [{ status: { $ne: 'in-flight' } }, { leaseExpiresAt: { $lt: new Date() } }]
+                $or: [{ status: { $ne: 'in_flight' } }, { leaseExpiresAt: { $lt: new Date() } }]
             },
-            { $set: { status: 'in-flight', ...lease() } },
+            { $set: { status: 'in_flight', ...lease() } },
             { returnDocument: 'after' }
         )
         .exec();
@@ -291,7 +291,7 @@ type OutcomePatch = Partial<
  * Apply an outcome patch to a delivery, but ONLY while `leaseToken` still matches the claim writing
  * it — a write from a superseded claim (its lease expired and something else has since picked the
  * row up) must not clobber a newer attempt's state. `services/attempt.ts` is the one caller, and
- * the one place a delivery's status legitimately moves past `in-flight`.
+ * the one place a delivery's status legitimately moves past `in_flight`.
  *
  * @param id - the delivery row to update
  * @param leaseToken - the token the claim that is writing this outcome was handed — a caller
@@ -315,7 +315,7 @@ const applyOutcome = (
         .exec();
 
 /**
- * Every delivery row due for an attempt right now, oldest first, PLUS any stranded `in-flight` row
+ * Every delivery row due for an attempt right now, oldest first, PLUS any stranded `in_flight` row
  * whose lease already expired — the sweep's own read.
  *
  * Published without claiming: `services/sweep.ts` does not call {@link claimPending} before
@@ -331,7 +331,7 @@ const findDue = (limit: number): Promise<WebhookDeliveryDocument[]> =>
         .find({
             $or: [
                 { status: 'pending', nextAttemptAt: { $lte: new Date() } },
-                { status: 'in-flight', leaseExpiresAt: { $lt: new Date() } }
+                { status: 'in_flight', leaseExpiresAt: { $lt: new Date() } }
             ]
         })
         .sort({ nextAttemptAt: 1 })

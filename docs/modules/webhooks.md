@@ -121,7 +121,7 @@ flowchart LR
     PUB --> MATCH{"matching<br/>subscriptions?"}
     MATCH -->|none| DROP["nothing"]
     MATCH -->|n| Q["worker.webhook.deliver<br/>one message per subscription"]
-    Q --> CLAIM{"claim the lease?<br/>pending, or a stranded<br/>expired in-flight row"}
+    Q --> CLAIM{"claim the lease?<br/>pending, or a stranded<br/>expired in_flight row"}
     CLAIM -->|no, live lease held| ACK["ack — nothing to do"]
     CLAIM -->|yes| W["webhooks' own<br/>consumer (module.ts)"]
     W --> HTTP["signed POST<br/>SSRF-checked, timed out"]
@@ -190,13 +190,13 @@ A first attempt then waits for the next sweep, up to a minute, instead of going 
 **The sweep publishes; only a claim delivers — a visibility-timeout lease, the way SQS does it.**
 The sweep does NOT claim a row before publishing it: publishing is safe to do more than once (the
 claim below is what actually decides who sends), and a sweep that claimed first would move the row to
-`in-flight` before the worker's own claim ran, so every retry past the first attempt would be
+`in_flight` before the worker's own claim ran, so every retry past the first attempt would be
 silently acknowledged without ever being sent. So:
 
 - `webhookDeliveryRepository.claimPending` (worker/queue path) and `claimForReplay` (admin replay)
-  are the only two places a row becomes `in-flight` — each stamps a `leaseToken` and a
+  are the only two places a row becomes `in_flight` — each stamps a `leaseToken` and a
   `leaseExpiresAt` well above the 10s delivery timeout, in the same atomic `findOneAndUpdate`.
-- `claimPending` matches `pending`, or an `in-flight` row whose lease has already expired — the
+- `claimPending` matches `pending`, or an `in_flight` row whose lease has already expired — the
   crash-recovery path for a worker that took the row and never finished. `claimForReplay` matches
   anything NOT under a live lease, including a terminal `succeeded`/`exhausted` row, since replay's
   whole point is re-sending one of those.

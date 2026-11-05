@@ -203,7 +203,7 @@ describe('each subject names a row that really has the property', () => {
     it('the catalogue carries the VAT and shipping data the journeys need', async () => {
         const reduced = await productModel.countDocuments({ taxClass: 'reduced' }).exec();
         const zeroRated = await productModel
-            .countDocuments({ taxClass: 'zero', rateType: 'zero-rated' })
+            .countDocuments({ taxClass: 'zero', rateType: 'zero_rated' })
             .exec();
         const exempt = await productModel
             .countDocuments({ taxClass: 'zero', rateType: 'exempt' })
