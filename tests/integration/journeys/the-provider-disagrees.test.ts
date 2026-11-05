@@ -62,7 +62,7 @@ describe('the provider reports the wrong amount', () => {
         await drain();
 
         expect(confirm.status).toBe(409);
-        expect(await orderOf(bearer, order.id)).toMatchObject({ status: 'cancelled' });
+        expect(await orderOf(bearer, order.id)).toMatchObject({ status: 'canceled' });
         const payment = await paymentOf(staff, order.id);
         expect(payment).toMatchObject({
             amount: order.totalPrice - 1,

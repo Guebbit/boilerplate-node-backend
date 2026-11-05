@@ -118,14 +118,14 @@ describe('a refund outside a return mails the buyer', () => {
         expect(second).toContain('everything');
     });
 
-    it('follows a paid cancel: the cancelled notice first, then the refund when it lands', async () => {
+    it('follows a paid cancel: the canceled notice first, then the refund when it lands', async () => {
         const { user, orderId } = await paidOrder();
         mockEnqueueEmail.mockClear();
 
         await orderService.cancelOnRequestById(orderId, asCustomer(user.id), {}, testCallerContext);
         await waitForMails(() => mailsOf('payments.refund-issued').length > 0);
 
-        expect(mailsOf('orders.order-cancelled')).toHaveLength(1);
+        expect(mailsOf('orders.order-canceled')).toHaveLength(1);
         expect(mailsOf('payments.refund-issued')).toHaveLength(1);
     });
 });

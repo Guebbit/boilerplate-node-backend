@@ -1,6 +1,6 @@
 /**
  * @module
- * Which units of an order are already accounted for — cancelled before they shipped, or back —
+ * Which units of an order are already accounted for — canceled before they shipped, or back —
  * and how much delivery has already been refunded. Pure, so the rule behind "shipping is refunded
  * by whichever cancel or return takes the LAST unit" is testable without a database.
  */
@@ -24,7 +24,7 @@ export interface AccountedReturn {
 
 /** What the order's other returns and cancels have already settled. */
 export interface OrderAccounts {
-    /** Units cancelled before they shipped, plus units that came back. */
+    /** Units canceled before they shipped, plus units that came back. */
     accountedFor: ProductQuantity[];
     /** The delivery already refunded, summed. */
     shippingRefunded: number;

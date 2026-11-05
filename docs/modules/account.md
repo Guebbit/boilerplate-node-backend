@@ -29,10 +29,10 @@ flowchart LR
     account --> access
     account --> users
     users -. "user.deactivated" .-> account
-    users -. "user.deletion-cancelled" .-> account
-    users -. "user.setup-requested" .-> account
-    account -. "account.authenticator-removed" .-> api_keys
-    account -. "account.sessions-revoked" .-> api_keys
+    users -. "user.deletion_canceled" .-> account
+    users -. "user.setup_requested" .-> account
+    account -. "account.authenticator_removed" .-> api_keys
+    account -. "account.sessions_revoked" .-> api_keys
     account -. "account.export_failed" .-> tasks
     account -. "account.export_ready" .-> tasks
 
@@ -107,7 +107,7 @@ flowchart LR
     RC -->|refresh| T
     T --> G["every guarded request<br/><i>the kernel asks, this module answers</i>"]
     LO["logout everywhere"] -.->|revokes| RC
-    US["users"] -. "user.setup-requested" .-> SU["setup link sent"]
+    US["users"] -. "user.setup_requested" .-> SU["setup link sent"]
 
     classDef entry fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef token fill:#ede9fe,stroke:#7c3aed,color:#111827;
@@ -265,11 +265,11 @@ loses are in [the retention page](../theory/data-retention.md#self-deletion-a-gr
 | --------------- | -------------------------------------------- | ------------------------------------------------------------------- |
 | the mailed link | `POST /account/restore {token}`              | the `account-restore` token; it does not sign anyone in             |
 | signing in      | `POST /account/login`, then `/login/restore` | password (and second factor), then a `deletion-restore` claim check |
-| staff           | `POST /users/{id}/restore`                   | `delete:User`; `account` hears `user.deletion-cancelled`            |
+| staff           | `POST /users/{id}/restore`                   | `delete:User`; `account` hears `user.deletion_canceled`             |
 
 The purge is `reap:scheduled-deletions` (hourly, leased). Per due account it copies the address and
 name, runs `eraseScheduledDeletion` (the whole erase cascade), then mails the goodbye and records
-`auth.account_delete.completed`. Audit: `.scheduled`, `.cancelled` (`metadata.via` is `link`,
+`auth.account_delete.completed`. Audit: `.scheduled`, `.canceled` (`metadata.via` is `link`,
 `sign-in` or `staff`), `.completed`. Metric `auth_account_delete_total{status}`; analytics
 `account_deletion_scheduled` and `account_restored` (the purge fires nothing).
 

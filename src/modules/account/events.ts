@@ -19,14 +19,14 @@ declare module '@kernel/events' {
          * revoking what the person minted, since a key outlives every session. Internal only: no
          * AsyncAPI channel carries it, nothing outside this application needs to know.
          */
-        'account.sessions-revoked': { userId: string; reason: SessionsRevokedReason };
+        'account.sessions_revoked': { userId: string; reason: SessionsRevokedReason };
 
         /**
          * A staff member's last authenticator app was removed: their role grants nothing from now
          * on, and `api-keys` revokes what they minted under it. Not a compromise, so it is not a
          * session revocation. Internal only: no AsyncAPI channel carries it.
          */
-        'account.authenticator-removed': { userId: string };
+        'account.authenticator_removed': { userId: string };
 
         /**
          * The owner withdrew analytics consent (`true` → `false`), committed with the profile save.
@@ -51,11 +51,11 @@ declare module '@kernel/events' {
     }
 }
 
-/** See `DomainEventMap['account.sessions-revoked']` above. */
-export const ACCOUNT_SESSIONS_REVOKED = 'account.sessions-revoked';
+/** See `DomainEventMap['account.sessions_revoked']` above. */
+export const ACCOUNT_SESSIONS_REVOKED = 'account.sessions_revoked';
 
-/** See `DomainEventMap['account.authenticator-removed']` above. */
-export const ACCOUNT_AUTHENTICATOR_REMOVED = 'account.authenticator-removed';
+/** See `DomainEventMap['account.authenticator_removed']` above. */
+export const ACCOUNT_AUTHENTICATOR_REMOVED = 'account.authenticator_removed';
 
 /** See `DomainEventMap['account.analytics_consent_withdrawn']` above. */
 export const ACCOUNT_ANALYTICS_CONSENT_WITHDRAWN = 'account.analytics_consent_withdrawn';

@@ -128,12 +128,12 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `account`        | `AUTH_2FA_CODE_SENT`                         | `auth.two_factor.code_sent`                  | —                      |
 | `account`        | `AUTH_2FA_DISABLED`                          | `auth.two_factor.disabled`                   | —                      |
 | `account`        | `AUTH_2FA_ENROLLED`                          | `auth.two_factor.enrolled`                   | —                      |
-| `account`        | `AUTH_ACCOUNT_DELETE_CANCELLED`              | `auth.account_delete.cancelled`              | —                      |
+| `account`        | `AUTH_ACCOUNT_DELETE_CANCELED`               | `auth.account_delete.canceled`               | —                      |
 | `account`        | `AUTH_ACCOUNT_DELETE_COMPLETED`              | `auth.account_delete.completed`              | —                      |
 | `account`        | `AUTH_ACCOUNT_DELETE_SCHEDULED`              | `auth.account_delete.scheduled`              | —                      |
 | `account`        | `AUTH_DATA_EXPORT_DOWNLOADED`                | `auth.data_export.downloaded`                | `account_export`       |
 | `account`        | `AUTH_DATA_EXPORT_REQUESTED`                 | `auth.data_export.requested`                 | `account_export`       |
-| `account`        | `AUTH_EMAIL_CHANGE_CANCELLED`                | `auth.email_change.cancelled`                | —                      |
+| `account`        | `AUTH_EMAIL_CHANGE_CANCELED`                 | `auth.email_change.canceled`                 | —                      |
 | `account`        | `AUTH_EMAIL_CHANGE_COMPLETED`                | `auth.email_change.completed`                | —                      |
 | `account`        | `AUTH_EMAIL_CHANGE_REQUESTED`                | `auth.email_change.requested`                | —                      |
 | `account`        | `AUTH_EMAIL_CHANGE_RESENT`                   | `auth.email_change.resent`                   | —                      |
@@ -167,7 +167,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `delivery`       | `ADMIN_FULFILLMENT_ORDER_RELEASED`           | `admin.fulfillment_order.released`           | —                      |
 | `delivery`       | `ADMIN_ORDER_DELIVERED`                      | `admin.order.delivered`                      | `order`                |
 | `delivery`       | `ADMIN_ORDER_FULFILLED`                      | `admin.order.fulfilled`                      | `order`                |
-| `delivery`       | `ADMIN_ORDER_FULFILMENT_STARTED`             | `admin.order.fulfilment_started`             | `order`                |
+| `delivery`       | `ADMIN_ORDER_FULFILLMENT_STARTED`            | `admin.order.fulfillment_started`            | `order`                |
 | `delivery`       | `ADMIN_ORDER_SHIPPED`                        | `admin.order.shipped`                        | `order`                |
 | `delivery`       | `ADMIN_SHIPMENT_LOST`                        | `admin.shipment.lost`                        | `order`                |
 | `delivery`       | `ADMIN_SHIPMENT_TRACKING_EDITED`             | `admin.shipment.tracking_edited`             | `order`                |
@@ -204,7 +204,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `orders`         | `ADMIN_ORDER_ADDRESS_CORRECTED`              | `admin.order.address_corrected`              | `order`                |
 | `orders`         | `ADMIN_ORDER_VIEWED`                         | `admin.order.viewed`                         | `order`                |
 | `orders`         | `ADMIN_ORDERS_EXPORTED`                      | `admin.orders.exported`                      | `order`                |
-| `orders`         | `ORDER_CANCELLED`                            | `order.cancelled`                            | `order`                |
+| `orders`         | `ORDER_CANCELED`                             | `order.canceled`                             | `order`                |
 | `orders`         | `ORDER_CREATED`                              | `order.created`                              | `order`                |
 | `orders`         | `ORDER_DELETED`                              | `order.deleted`                              | `order`                |
 | `orders`         | `ORDER_RESTORED`                             | `order.restored`                             | `order`                |

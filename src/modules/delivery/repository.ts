@@ -59,7 +59,7 @@ export interface ProductSummaryRow {
     waiting: number;
     allocated: number;
     shipped: number;
-    cancelled: number;
+    canceled: number;
     late: number;
 }
 
@@ -97,8 +97,8 @@ const stateCondition = (state: PreorderFulfillmentState): QueryFilter<Fulfillmen
         case PreorderFulfillmentState.shipped: {
             return { status: FulfillmentOrderStatus.closed };
         }
-        case PreorderFulfillmentState.cancelled: {
-            return { status: FulfillmentOrderStatus.cancelled };
+        case PreorderFulfillmentState.canceled: {
+            return { status: FulfillmentOrderStatus.canceled };
         }
     }
 };
@@ -361,7 +361,7 @@ export const fulfillmentOrderRepository: Repository<
     /**
      * A page of per-product unit counts across every preorder fulfillment order, earliest promise
      * first. Units, not fulfillment orders; one `$group` over the unwound lines. A product's counts
-     * add up: `paid = waiting + allocated + shipped + cancelled`.
+     * add up: `paid = waiting + allocated + shipped + canceled`.
      *
      * Mongo aggregation: https://www.mongodb.com/docs/manual/aggregation/
      *
@@ -373,7 +373,7 @@ export const fulfillmentOrderRepository: Repository<
         const remaining = {
             $subtract: [
                 '$lines.quantity',
-                { $add: ['$lines.shippedQuantity', '$lines.cancelledQuantity'] }
+                { $add: ['$lines.shippedQuantity', '$lines.canceledQuantity'] }
             ]
         };
         const onHoldForStock = {
@@ -405,7 +405,7 @@ export const fulfillmentOrderRepository: Repository<
                             firstAgreedAt: { $min: '$agreedAt' },
                             paid: { $sum: '$lines.quantity' },
                             shipped: { $sum: '$lines.shippedQuantity' },
-                            cancelled: { $sum: '$lines.cancelledQuantity' },
+                            canceled: { $sum: '$lines.canceledQuantity' },
                             waiting: sumWhere(onHoldForStock),
                             allocated: sumWhere({
                                 $or: [

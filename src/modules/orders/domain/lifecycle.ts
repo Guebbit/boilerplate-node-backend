@@ -45,7 +45,7 @@ export const ORDER_EVENTS = {
     /** The payment settled. `payments` is the only caller — nothing else may set `paid`. */
     pay: { from: [OrderStatus.pending], to: OrderStatus.paid, actors: ['system'] },
     /**
-     * Fulfilment started, recorded through `delivery`'s own door (`start:Shipment`). `admin`
+     * Fulfillment started, recorded through `delivery`'s own door (`start:Shipment`). `admin`
      * reaches `processing` only through the override door (`canOverrideTo`).
      */
     process: { from: [OrderStatus.paid], to: OrderStatus.processing, actors: ['system'] },
@@ -66,10 +66,10 @@ export const ORDER_EVENTS = {
     /** The last shipment arrived, as `delivery` records it. */
     deliver: { from: [OrderStatus.shipped], to: OrderStatus.delivered, actors: ['system'] },
     /**
-     * The order became complete in one act: a digital fulfilment (the one `processing -> delivered`
+     * The order became complete in one act: a digital fulfillment (the one `processing -> delivered`
      * edge), or a remainder cancel that lands after every shipment arrived.
      */
-    fulfilmentComplete: {
+    fulfillmentComplete: {
         from: [OrderStatus.processing],
         to: OrderStatus.delivered,
         actors: ['system']
@@ -79,31 +79,31 @@ export const ORDER_EVENTS = {
      * must never cancel an order that landed a payment in the same race, which `cancelBeforeDispatch`
      * legitimately may (an operator's or buyer's own choice, not a stale deadline).
      */
-    expire: { from: [OrderStatus.pending], to: OrderStatus.cancelled, actors: ['system'] },
-    /** A buyer's or operator's cancel before fulfilment started. */
+    expire: { from: [OrderStatus.pending], to: OrderStatus.canceled, actors: ['system'] },
+    /** A buyer's or operator's cancel before fulfillment started. */
     cancel: {
         from: [OrderStatus.pending, OrderStatus.paid],
-        to: OrderStatus.cancelled,
+        to: OrderStatus.canceled,
         actors: ['customer', 'admin', 'withdrawal']
     },
-    /** A cancel once fulfilment started: staff or the right of withdrawal, never the buyer's own. */
-    cancelInFulfilment: {
+    /** A cancel once fulfillment started: staff or the right of withdrawal, never the buyer's own. */
+    cancelInFulfillment: {
         from: [OrderStatus.processing],
-        to: OrderStatus.cancelled,
+        to: OrderStatus.canceled,
         actors: ['admin', 'withdrawal']
     }
 } as const satisfies Record<string, OrderEvent>;
 
 /**
- * The settlement of a lost parcel nobody reshipped: `processing -> cancelled`, written by the
+ * The settlement of a lost parcel nobody reshipped: `processing -> canceled`, written by the
  * system as cause `lost`. Deliberately NOT in {@link ORDER_EVENTS}: a `system` actor on that
- * edge would make `statusesLeadingTo(cancelled, 'system')` include `processing`, and the three
- * system cancels (`cancel()` reads that column) would start matching orders in fulfilment. Its
+ * edge would make `statusesLeadingTo(canceled, 'system')` include `processing`, and the three
+ * system cancels (`cancel()` reads that column) would start matching orders in fulfillment. Its
  * one door, `markUndeliverable`, filters on this `from` itself.
  */
 export const UNDELIVERABLE_EVENT = {
     from: [OrderStatus.processing],
-    to: OrderStatus.cancelled
+    to: OrderStatus.canceled
 } as const satisfies Omit<OrderEvent, 'actors'>;
 
 /** The name of one lifecycle event. */
@@ -140,7 +140,7 @@ export const isPayable = (status: OrderStatus): boolean =>
 const PROCESSABLE_FROM: readonly OrderStatus[] = ORDER_EVENTS.process.from;
 
 /**
- * Whether fulfilment may start on an order in `status` — `paid` only. Keyed on the `process` event's
+ * Whether fulfillment may start on an order in `status` — `paid` only. Keyed on the `process` event's
  * own `from`, not on `canTransition`: that is exactly the set `markProcessing`'s conditional write
  * uses, so a pre-check and the write can never disagree.
  * @param status - current status
@@ -151,9 +151,9 @@ export const canProcessOrder = (status: OrderStatus): boolean => PROCESSABLE_FRO
 /**
  * Whether the order's goods are still to be handed over — `paid` or `processing`: money in, nothing
  * out. `shipped` and `delivered` orders have had their goods handed over, so a fulfillment order
- * for them would offer to ship twice; a hold on a finished or cancelled order means nothing.
+ * for them would offer to ship twice; a hold on a finished or canceled order means nothing.
  * @param status - current status
- * @returns whether fulfilment work (making, holding, releasing, awaiting an answer) still applies
+ * @returns whether fulfillment work (making, holding, releasing, awaiting an answer) still applies
  */
 export const isAwaitingGoods = (status: OrderStatus): boolean =>
     ORDER_STATUS_TRAITS[status].stockCommitted && ORDER_STATUS_TRAITS[status].beforeDispatch;
@@ -162,8 +162,8 @@ export const isAwaitingGoods = (status: OrderStatus): boolean =>
 const SHIPPABLE_FROM: readonly OrderStatus[] = ORDER_EVENTS.ship.from;
 
 /**
- * Whether a shipment may leave, or a digital fulfilment may complete, on an order in `status` —
- * `processing` only, the `from` of `ship` and of `fulfilmentComplete` alike.
+ * Whether a shipment may leave, or a digital fulfillment may complete, on an order in `status` —
+ * `processing` only, the `from` of `ship` and of `fulfillmentComplete` alike.
  * @param status - current status
  * @returns whether shipping (or completing a digital order) is open
  */
@@ -171,7 +171,7 @@ export const canShip = (status: OrderStatus): boolean => SHIPPABLE_FROM.includes
 
 /**
  * Whether a shipment's arrival may be recorded on an order in `status`. `processing` counts
- * because one shipment can land while the others are still unshipped; `delivered` and `cancelled`
+ * because one shipment can land while the others are still unshipped; `delivered` and `canceled`
  * are over.
  * @param status - current status
  * @returns whether an arrival can be taken
@@ -180,9 +180,9 @@ export const canRecordArrival = (status: OrderStatus): boolean =>
     status === OrderStatus.processing || status === OrderStatus.shipped;
 
 /**
- * Whether the shop has begun on the order: anything past `paid`, `cancelled` included — a cancel
+ * Whether the shop has begun on the order: anything past `paid`, `canceled` included — a cancel
  * after the start still means the shop was at work, which the right of cancellation reads as
- * "started". `pending` and `paid` are the two statuses before the first fulfilment move.
+ * "started". `pending` and `paid` are the two statuses before the first fulfillment move.
  * @param status - current status
  * @returns whether the order is past the point where nothing had been done to it
  */
@@ -191,7 +191,7 @@ export const hasShopStarted = (status: OrderStatus): boolean =>
 
 /**
  * Whether an order in `status` has already been paid — `paid`, or further along. `pending` has
- * only a stock hold, and `cancelled` gave it up. The one place this fact is declared, so a caller
+ * only a stock hold, and `canceled` gave it up. The one place this fact is declared, so a caller
  * deciding whether a hold's commit is still owed never hand-lists the same statuses.
  * @param status - current status
  * @returns whether the order's hold should be (or already is) `committed` or later
@@ -202,7 +202,7 @@ export const paymentSettled = (status: OrderStatus): boolean =>
 /**
  * The forward sequence an admin override may move an order along — never `paid` (that destination
  * stays `system`-only in absolute terms, see {@link canTransition}) and never
- * `cancelled` (that has its own endpoint, with its own refund/stock-release sequence). Order in
+ * `canceled` (that has its own endpoint, with its own refund/stock-release sequence). Order in
  * this array IS the "forward" rule: an override may only move to a LATER index than the order's
  * current status sits at within it. `pending` is not in it: leaving `pending` goes only through the
  * offline-payment door, which records the money and issues the invoice.
@@ -222,19 +222,19 @@ const OVERRIDABLE_SEQUENCE: readonly OrderStatus[] = [
  * @param from - the order's current status
  * @param to - the status an override is being asked to move it to
  * @param digitalOnly - whether every line is digital: such an order has no parcel to have left, so
- *   `shipped` is never a target (it goes `processing → delivered` through fulfilment)
+ *   `shipped` is never a target (it goes `processing → delivered` through fulfillment)
  * @returns whether the move is a legal forward override
  */
 export const canOverrideTo = (from: OrderStatus, to: OrderStatus, digitalOnly = false): boolean => {
     if (digitalOnly && to === OrderStatus.shipped) return false;
 
-    // Stryker disable next-line ConditionalExpression: equivalent, `paid`/`pending`/`cancelled` fail the index test below anyway.
+    // Stryker disable next-line ConditionalExpression: equivalent, `paid`/`pending`/`canceled` fail the index test below anyway.
     if (to !== OrderStatus.processing && to !== OrderStatus.shipped && to !== OrderStatus.delivered)
         return false;
 
     const fromIndex = OVERRIDABLE_SEQUENCE.indexOf(from);
     const toIndex = OVERRIDABLE_SEQUENCE.indexOf(to);
-    // `from` not in the sequence at all (`pending`, which only the offline-payment door leaves, or `cancelled`) → no override lands on it.
+    // `from` not in the sequence at all (`pending`, which only the offline-payment door leaves, or `canceled`) → no override lands on it.
     return fromIndex !== -1 && toIndex > fromIndex;
 };
 
@@ -287,7 +287,7 @@ type StatusDerivedActions = Pick<OrderActions, 'cancel' | 'pay'>;
  */
 export const orderActionsFor = (status: OrderStatus, actor: OrderActor): StatusDerivedActions => ({
     // `canTransition` allows a write that changes nothing; "may I cancel this" is not that.
-    cancel: status !== OrderStatus.cancelled && canTransition(status, OrderStatus.cancelled, actor),
+    cancel: status !== OrderStatus.canceled && canTransition(status, OrderStatus.canceled, actor),
     // Asked outside the request table: paying is a move no request makes. A client needs the
     // answer anyway — it is what decides whether to offer the card form on an order that has no
     // payment record yet.

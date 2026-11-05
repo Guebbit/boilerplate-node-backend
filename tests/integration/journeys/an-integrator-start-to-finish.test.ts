@@ -120,7 +120,7 @@ it('delivers every event once, signed, in causal order', async () => {
     await api().post(`/returns/${returned.id}/receive`).set('Authorization', admin).expect(200);
     steps.push(await arrivals());
 
-    // Order B is placed, then cancelled before it is paid.
+    // Order B is placed, then canceled before it is paid.
     const second = await placeOrder(bearer, [{ productId: dogFoodId, quantity: 1 }]);
     steps.push(await arrivals());
     await api()
@@ -140,7 +140,7 @@ it('delivers every event once, signed, in causal order', async () => {
         ['return.requested'],
         ['payment.refunded', 'return.closed', 'return.received'],
         ['order.created'],
-        ['order.cancelled']
+        ['order.canceled']
     ]);
     const everything = endpoint.received([secret]);
     expect(everything.every(({ signed }) => signed)).toBe(true);

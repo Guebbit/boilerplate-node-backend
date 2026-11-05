@@ -32,7 +32,7 @@ const presentLines = (lines: FulfillmentOrderDocument['lines']): FulfillmentOrde
         title: line.title,
         quantity: line.quantity,
         shippedQuantity: line.shippedQuantity,
-        cancelledQuantity: line.cancelledQuantity,
+        canceledQuantity: line.canceledQuantity,
         remaining: remainingOfLine(line)
     }));
 
@@ -208,6 +208,6 @@ export const presentProductSummary = (row: ProductSummaryRow): PreorderProductSu
     waiting: row.waiting,
     allocated: row.allocated,
     shipped: row.shipped,
-    cancelled: row.cancelled,
+    canceled: row.canceled,
     late: row.late
 });

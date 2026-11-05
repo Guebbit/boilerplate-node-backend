@@ -28,7 +28,7 @@ describe('fulfillmentStatusOf', () => {
             { shipped: true, remaining: 1 },
             'unfulfilled'
         ],
-        ['1 · cancelled', OrderStatus.cancelled, {}, 'unfulfilled'],
+        ['1 · canceled', OrderStatus.canceled, {}, 'unfulfilled'],
         ['1 · delivered', OrderStatus.delivered, { shipped: true }, 'fulfilled'],
         ['1 · shipped', OrderStatus.shipped, { shipped: true, undelivered: 1 }, 'shipped'],
         [
@@ -81,7 +81,7 @@ describe('fulfillmentStatusOf', () => {
  */
 const SAMPLES: readonly { status: OrderStatus; fulfillment?: FulfillmentSummary }[] = [
     { status: OrderStatus.pending },
-    { status: OrderStatus.cancelled },
+    { status: OrderStatus.canceled },
     { status: OrderStatus.paid },
     { status: OrderStatus.paid, fulfillment: summary({ remaining: 2 }) },
     { status: OrderStatus.paid, fulfillment: summary({ remaining: 1, onHold: 1 }) },

@@ -23,7 +23,7 @@ export {
     statusOfLines,
     checkShipLines,
     withShipped,
-    withRemainderCancelled,
+    withRemainderCanceled,
     summarize,
     isShippable,
     isFulfillable,

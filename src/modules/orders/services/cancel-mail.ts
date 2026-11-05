@@ -1,27 +1,27 @@
 /**
  * @module
- * The buyer's explanation of a cancel, sent from `order.cancelled`'s listener. The cause on the
+ * The buyer's explanation of a cancel, sent from `order.canceled`'s listener. The cause on the
  * event picks the mail (`CANCEL_CAUSES[cause].mail`), so every door that cancels is explained the
  * same way, and a crash between the commit and the send still sends it.
  */
 
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import type { DomainEventMap } from '@kernel/events';
-import { cardHoldExpiredEmail, orderCancelledEmail } from '../emails';
+import { cardHoldExpiredEmail, orderCanceledEmail } from '../emails';
 import { CANCEL_CAUSES } from './cancel';
 import { mailBuyerOfOrder } from './notify';
 
 /**
- * Tell the buyer their order was cancelled, or that its card hold ran out. A bank transfer nobody
+ * Tell the buyer their order was canceled, or that its card hold ran out. A bank transfer nobody
  * sent is answered by `payments`, which owns the transfer's deadline, so its expiry is not mailed
  * here. A cause with its own acknowledgement, or with nobody to tell, sends nothing.
- * @param payload - the `order.cancelled` fact
+ * @param payload - the `order.canceled` fact
  */
-export const mailOrderCancelled = ({
+export const mailOrderCanceled = ({
     orderId,
     refund,
     cause
-}: DomainEventMap['order.cancelled']): Promise<void> => {
+}: DomainEventMap['order.canceled']): Promise<void> => {
     const { mail: kind } = CANCEL_CAUSES[cause];
     if (kind === 'none') return Promise.resolve();
 
@@ -34,7 +34,7 @@ export const mailOrderCancelled = ({
             return;
         }
         // The one thing the buyer cannot see for themselves is what became of their money.
-        const mail = orderCancelledEmail(locale, name, order, order.orderNumber, refund);
+        const mail = orderCanceledEmail(locale, name, order, order.orderNumber, refund);
         // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
         void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
     });

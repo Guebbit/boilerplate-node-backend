@@ -29,7 +29,16 @@ export interface AcknowledgedBreak {
  * diff for that exact pointer only; delete it once the change has reached `origin/main`, where the
  * gate compares against it anyway.
  */
-const ACKNOWLEDGED_BREAKS: readonly AcknowledgedBreak[] = [];
+const ACKNOWLEDGED_BREAKS: readonly AcknowledgedBreak[] = [
+    {
+        path: '/operations/webhookOrderCancelled',
+        reason: 'US spelling: renamed to webhookOrderCanceled. A subscriber filters on the new event name.'
+    },
+    {
+        path: '/channels/order.cancelled',
+        reason: 'US spelling: the event is order.canceled now. A subscriber re-subscribes under the new name.'
+    }
+];
 
 /**
  * The changes between two dereferenced AsyncAPI documents that a subscriber would feel, less the

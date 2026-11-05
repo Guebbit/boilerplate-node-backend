@@ -57,10 +57,10 @@ const takeOf = (
  *
  * A preorder line asks for the claim first. Units of that product already allocated into shelf
  * units (stock arrived, and the fulfillment order has not yet heard) stand in for what the claim no
- * longer covers, so a cancelled remainder never strands them on a hold with nothing to ship them.
+ * longer covers, so a canceled remainder never strands them on a hold with nothing to ship them.
  *
  * @param items - what the hold still sets aside
- * @param lines - what is leaving it (shipped, or cancelled)
+ * @param lines - what is leaving it (shipped, or canceled)
  * @returns what remains in the hold and what was actually taken
  */
 export const takeFromHold = (items: readonly HoldLine[], lines: readonly HoldLine[]): HoldTake => {

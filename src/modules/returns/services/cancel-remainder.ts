@@ -1,14 +1,14 @@
 /**
  * @module
  * Cancelling what has not shipped yet — a Return of `kind: cancellation`, closed when made. Once
- * something has shipped, an order can no longer be cancelled whole; what remains is cancelled one
+ * something has shipped, an order can no longer be canceled whole; what remains is canceled one
  * fulfillment order at a time, by the buyer as part of their withdrawal (CRD recital 40: withdraw
  * before delivery) or by staff under the refund key (Shopify's rule: you refund the unshipped items).
  *
  * `returns` owns it because a remainder cancel moves money, stock and the shipping rule, and only
  * this module already reaches all four. In ONE transaction, under the order's lock row:
  *
- * - `delivery` marks the lines cancelled (and recomputes the order's summary);
+ * - `delivery` marks the lines canceled (and recomputes the order's summary);
  * - `inventory` gives the units back;
  * - the Return row is written, closed, with its refund record.
  *
@@ -56,13 +56,13 @@ import {
 import { returnPostagePayer } from '@modules/shop';
 
 /** What the cancellation is made from, once the transaction has decided it. */
-interface Cancelled {
+interface Canceled {
     created: ReturnDocument;
     lines: ProductQuantity[];
     /** The refund record opened with the cancel, or `null` when nothing is owed. */
     opened: OpenedReturnRefund | null;
     /** Reports a lost-parcel order cancel (audit + analytics); called once the transaction commits. */
-    reportCancelled?: () => void;
+    reportCanceled?: () => void;
 }
 
 /**
@@ -70,8 +70,8 @@ interface Cancelled {
  * @param order - the order
  * @param input - the request
  * @param opening - what the buyer stated, and who recorded it when it was staff
- * @param fulfillmentOrderId - the fulfillment order whose remainder was cancelled
- * @param lines - what was cancelled
+ * @param fulfillmentOrderId - the fulfillment order whose remainder was canceled
+ * @param lines - what was canceled
  * @param breakdown - what the cancel refunds
  */
 const rowFor = (
@@ -120,10 +120,10 @@ const rowFor = (
  * @param order - the order
  * @param input - the request
  * @param opening - what the buyer stated, and who recorded it when it was staff
- * @param fulfillmentOrderId - the fulfillment order whose remainder is cancelled
- * @param reason - who cancelled it, stored on the fulfillment order
- * @param context - the account that cancelled (the buyer or a staff member), for the order's timeline and the refund
- * @returns what was cancelled, or why nothing was
+ * @param fulfillmentOrderId - the fulfillment order whose remainder is canceled
+ * @param reason - who canceled it, stored on the fulfillment order
+ * @param context - the account that canceled (the buyer or a staff member), for the order's timeline and the refund
+ * @returns what was canceled, or why nothing was
  */
 const cancelUnderLock = (
     order: OrderDocument,
@@ -132,33 +132,33 @@ const cancelUnderLock = (
     fulfillmentOrderId: string,
     reason: FulfillmentCancelReason,
     context: CallerContext
-): Promise<Cancelled | 'nothing-to-cancel' | 'not-found'> =>
+): Promise<Canceled | 'nothing-to-cancel' | 'not-found'> =>
     withTransaction(async (session) => {
         const orderId = String(order._id);
         await returnRepository.lockOrder(orderId, session);
         const earlier = await returnRepository.findByOrderId(orderId, session);
 
-        const cancelled = await deliveryService.cancelRemainder(
+        const canceled = await deliveryService.cancelRemainder(
             fulfillmentOrderId,
             orderId,
             session,
             reason,
             context.caller.id
         );
-        if (!cancelled.ok)
-            return cancelled.reason === 'not-found' ? 'not-found' : 'nothing-to-cancel';
+        if (!canceled.ok)
+            return canceled.reason === 'not-found' ? 'not-found' : 'nothing-to-cancel';
 
-        const breakdown = cancellationRefundOn(order, earlier, cancelled.lines);
+        const breakdown = cancellationRefundOn(order, earlier, canceled.lines);
         // A fulfillment order held for stock gives back its preorder allowance, not shelf units.
         await orderService.releaseStock(
             orderId,
-            cancelled.waitingForStock
-                ? cancelled.lines.map((line) => ({ ...line, kind: 'backorder' as const }))
-                : cancelled.lines,
+            canceled.waitingForStock
+                ? canceled.lines.map((line) => ({ ...line, kind: 'backorder' as const }))
+                : canceled.lines,
             session
         );
         const created = await returnRepository.create(
-            rowFor(order, input, opening, fulfillmentOrderId, cancelled.lines, breakdown),
+            rowFor(order, input, opening, fulfillmentOrderId, canceled.lines, breakdown),
             session
         );
         await enqueueRequested(created, session);
@@ -171,7 +171,7 @@ const cancelUnderLock = (
                       {
                           returnId: String(created._id),
                           amount: owed,
-                          lines: cancelled.lines,
+                          lines: canceled.lines,
                           shipping: created.shippingRefund ?? 0,
                           reason: 'cancellation'
                       },
@@ -181,9 +181,9 @@ const cancelUnderLock = (
                 : null;
         return {
             created,
-            lines: cancelled.lines,
+            lines: canceled.lines,
             opened,
-            ...(cancelled.reportCancelled && { reportCancelled: cancelled.reportCancelled })
+            ...(canceled.reportCanceled && { reportCanceled: canceled.reportCanceled })
         };
     });
 
@@ -195,7 +195,7 @@ const cancelUnderLock = (
  * @param done - the cancellation just committed
  * @param context - the caller, audited on the refund
  */
-const refund = (order: OrderDocument, done: Cancelled, context: CallerContext): Promise<void> =>
+const refund = (order: OrderDocument, done: Canceled, context: CallerContext): Promise<void> =>
     done.opened
         ? paymentService
               .sendOpenedRefund(String(order._id), done.opened.refundId, context)
@@ -210,14 +210,14 @@ const refund = (order: OrderDocument, done: Cancelled, context: CallerContext): 
  * @param done - the cancellation just committed
  * @param context - the caller
  */
-const announceCancelled = (
+const announceCanceled = (
     order: OrderDocument,
-    done: Cancelled,
+    done: Canceled,
     context: CallerContext
 ): Promise<CreateReturnOutcome> => {
     nudgeOutbox();
     recordOpened(order, done.created, context);
-    done.reportCancelled?.();
+    done.reportCanceled?.();
 
     return inventoryService
         .refreshStockCacheForProducts(done.lines.map(({ productId }) => productId))
@@ -237,7 +237,7 @@ const announceCancelled = (
  * @param input - the request
  * @param authContext - the caller
  * @param context - the caller, for the audit entry of a refusal
- * @param remainder - the lines of the fulfillment order being cancelled
+ * @param remainder - the lines of the fulfillment order being canceled
  * @returns a refusal, or the statement to write when the caller may go on
  */
 const refuseCaller = (
@@ -300,7 +300,7 @@ export const createCancellation = (
             .remainderOptions(input.orderId, order.fulfillment?.shipped === true)
             .then((options) => {
                 const option = options.find((one) => one.fulfillmentOrderId === fulfillmentOrderId);
-                // Nothing shipped yet, or nothing left on it: the whole order is cancelled instead.
+                // Nothing shipped yet, or nothing left on it: the whole order is canceled instead.
                 if (!option) return nothingToCancel();
 
                 const checked = refuseCaller(order, input, authContext, context, option.lines);
@@ -324,7 +324,7 @@ export const createCancellation = (
                             ? done === 'not-found'
                                 ? badCancellation()
                                 : nothingToCancel()
-                            : announceCancelled(order, done, context)
+                            : announceCanceled(order, done, context)
                     )
                     .catch((error: unknown) => {
                         if (error instanceof ActRefusal) return error.reject;

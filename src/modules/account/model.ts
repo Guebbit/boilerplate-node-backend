@@ -7,7 +7,7 @@
  *                       store (`@infrastructure/adapters/export-store`), named by `file`.
  * `sessions`:           one row per signed-in session (cookie mode) or per refresh token (jwt mode).
  * `verificationtokens`: one row per one-time link or challenge in flight.
- * `erasureledgers`:     one row per account erased, scheduled for deletion or cancelled, kept past the oldest backup.
+ * `erasureledgers`:     one row per account erased, scheduled for deletion or canceled, kept past the oldest backup.
  *
  * Never serialized to the wire as-is: the contract's shapes are built from these rows by hand, and
  * the token digests are stripped from `toJSON` regardless.
@@ -200,13 +200,13 @@ export const verificationTokenModel = model<VerificationTokenDocument, Verificat
 );
 
 /** What a ledger row says happened to an account. */
-export const ERASURE_LEDGER_KINDS = ['erased', 'scheduled', 'cancelled'] as const;
+export const ERASURE_LEDGER_KINDS = ['erased', 'scheduled', 'canceled'] as const;
 
 /** One of {@link ERASURE_LEDGER_KINDS}. */
 export type ErasureLedgerKind = (typeof ERASURE_LEDGER_KINDS)[number];
 
 /**
- * One row of the erasure ledger: who was erased (or had a scheduled deletion cancelled) and when.
+ * One row of the erasure ledger: who was erased (or had a scheduled deletion canceled) and when.
  * Nothing else is stored on purpose: no email, ip or user agent, since a deletion record must
  * carry no content data (SDM Baustein 60).
  */
@@ -215,7 +215,7 @@ export interface ErasureLedgerDocument extends Document {
     userId: Types.ObjectId;
     /**
      * `erased`: the account was hard-deleted. `scheduled`: its owner asked to delete it.
-     * `cancelled`: its owner or staff stopped a scheduled deletion.
+     * `canceled`: its owner or staff stopped a scheduled deletion.
      */
     kind: ErasureLedgerKind;
     /** When it happened. A repeat erasure after a restore keeps the original date. */
@@ -234,7 +234,7 @@ export type ErasureLedgerModel = Model<ErasureLedgerDocument>;
 
 /**
  * `erasureledgers`' schema. `unique` on `{ userId, kind }`: an account is erased once, and a repeat
- * (a cancelled scheduled deletion asked twice, an erasure repeated after a restore) moves `at`
+ * (a canceled scheduled deletion asked twice, an erasure repeated after a restore) moves `at`
  * instead of adding a row.
  */
 export const erasureLedgerSchema = new Schema<ErasureLedgerDocument, ErasureLedgerModel>(

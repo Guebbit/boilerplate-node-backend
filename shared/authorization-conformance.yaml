@@ -441,7 +441,7 @@ cases:
       expect: allow
 
     # `start:Shipment` is narrower than `update:Order` on purpose: the warehouse can
-    # begin fulfilment without being handed the run of the order record.
+    # begin fulfillment without being handed the run of the order record.
     - name: the warehouse may start fulfilling a paid order
       caller: { id: usr_5, scope: tenant, tenantId: shop_1, permissions: [start:Shipment] }
       action: start
@@ -449,7 +449,7 @@ cases:
       resource: { tenantId: shop_1 }
       expect: allow
 
-    - name: advancing a consignment does not also let the warehouse start fulfilment
+    - name: advancing a consignment does not also let the warehouse start fulfillment
       caller: { id: usr_5, scope: tenant, tenantId: shop_1, permissions: [update:Shipment] }
       action: start
       subject: Shipment

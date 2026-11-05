@@ -35,7 +35,7 @@ export interface RefundInputs {
     reason: ReturnReason;
     /** The returned lines, with the gross unit price the order froze. */
     lines: readonly { quantity: number; unitPrice: number }[];
-    /** Whether this return takes the last unit of the order: every other unit is already cancelled or back. */
+    /** Whether this return takes the last unit of the order: every other unit is already canceled or back. */
     takesLastUnit: boolean;
     /** The delivery still owed back: what the customer paid, less what earlier refunds returned. */
     shippingPaid: number;
@@ -117,7 +117,7 @@ export const refundAmountFor = (inputs: RefundInputs): RefundVerdict => {
 /** What a remainder cancel needs from the order and its other returns. */
 export interface CancellationInputs {
     currency: string;
-    /** The cancelled lines, with the gross unit price the order froze. */
+    /** The canceled lines, with the gross unit price the order froze. */
     lines: readonly { quantity: number; unitPrice: number }[];
     /** Whether this cancel takes the last unit of the order. */
     takesLastUnit: boolean;
@@ -126,7 +126,7 @@ export interface CancellationInputs {
 }
 
 /**
- * What cancelling a fulfillment order's remainder refunds: the cancelled lines, plus ALL the
+ * What cancelling a fulfillment order's remainder refunds: the canceled lines, plus ALL the
  * delivery still owed when this cancel takes the last unit (as a cancel before dispatch always
  * refunds it — no goods were delivered for it, so Art. 13(2)'s cheapest-standard cap, which
  * exists for delivery that happened, has nothing to apply to). No handling deduction: nothing came

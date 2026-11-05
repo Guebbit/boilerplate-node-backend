@@ -324,7 +324,7 @@ export interface PersonalDataSection {
      * skips it rather than calling a no-op.
      *
      * May resolve to an {@link AfterErase}: work that must wait for the commit, because it is
-     * not a database write that can roll back (a hold released, a payment intent cancelled).
+     * not a database write that can roll back (a hold released, a payment intent canceled).
      */
     erase?: PersonalDataEraser;
 

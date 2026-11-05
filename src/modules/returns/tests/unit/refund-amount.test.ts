@@ -156,7 +156,7 @@ describe('cancellationRefundFor', () => {
         shippingPaid: 15
     };
 
-    it('is the cancelled lines alone when other units remain', () => {
+    it('is the canceled lines alone when other units remain', () => {
         expect(cancellationRefundFor(cancel)).toEqual({
             goods: 70,
             shipping: 0,

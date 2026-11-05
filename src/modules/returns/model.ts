@@ -50,9 +50,9 @@ export interface ReturnDocument extends Document {
     currency: string;
     status: ReturnStatus;
     reason: ReturnReason;
-    /** `return` — goods that left coming back; `cancellation` — an unshipped remainder, cancelled. */
+    /** `return` — goods that left coming back; `cancellation` — an unshipped remainder, canceled. */
     kind: ReturnKind;
-    /** The fulfillment order whose remainder a `cancellation` cancelled. Absent on a `return`. */
+    /** The fulfillment order whose remainder a `cancellation` canceled. Absent on a `return`. */
     fulfillmentOrderId?: Types.ObjectId;
     /** What the customer wrote. Free text — never trusted, never rendered as HTML. */
     note?: string;

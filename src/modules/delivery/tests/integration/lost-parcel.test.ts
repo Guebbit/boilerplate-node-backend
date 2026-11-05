@@ -281,13 +281,13 @@ describe('the admin override after a loss', () => {
 });
 
 describe('what it refuses', () => {
-    it('a shipment already delivered, already lost, or on a cancelled order', async () => {
+    it('a shipment already delivered, already lost, or on a canceled order', async () => {
         const delivered = await shippedOrder(1, 10, 'd@example.com');
         await deliveryService.deliverShipment(delivered.shipmentId, asAdmin(), admin);
         const lost = await shippedOrder(1, 10, 'l@example.com');
         await reportLost(lost.shipmentId);
-        const cancelled = await shippedOrder(1, 10, 'c@example.com');
-        await forceOrderStatus(cancelled.orderId, OrderStatus.cancelled);
+        const canceled = await shippedOrder(1, 10, 'c@example.com');
+        await forceOrderStatus(canceled.orderId, OrderStatus.canceled);
 
         const results = await Promise.all([
             deliveryService.markShipmentLost(
@@ -298,7 +298,7 @@ describe('what it refuses', () => {
             ),
             deliveryService.markShipmentLost(lost.shipmentId, { reason: 'lost' }, asAdmin(), admin),
             deliveryService.markShipmentLost(
-                cancelled.shipmentId,
+                canceled.shipmentId,
                 { reason: 'lost' },
                 asAdmin(),
                 admin
@@ -467,7 +467,7 @@ describe('a short shelf', () => {
         expect(String(data?.owedIntro)).not.toBe('');
     });
 
-    it('owes every unit when the shelf is empty, and keeps the origin order from reading as cancelled', async () => {
+    it('owes every unit when the shelf is empty, and keeps the origin order from reading as canceled', async () => {
         const { orderId, productId, shipmentId } = await shippedOrder(2, 2);
 
         await reportLost(shipmentId);
@@ -556,7 +556,7 @@ describe('the lost parcel arrives after all', () => {
         expect(await levelOf(productId)).toMatchObject({ reserved: 0, backordered: 0 });
         const all = await fulfillmentOrdersOf(orderId);
         expect(all[0].lines[0]).toMatchObject({ quantity: 3, shippedQuantity: 3 });
-        expect(all[1]).toMatchObject({ status: 'cancelled', cancelReason: 'found' });
+        expect(all[1]).toMatchObject({ status: 'canceled', cancelReason: 'found' });
         expect(await statusOf(orderId)).toBe(OrderStatus.delivered);
     });
 
@@ -590,13 +590,13 @@ describe('the lost parcel arrives after all', () => {
         expect(asReject(result).errors[0].code).toBe('DELIVERY_LOST_SUPERSEDED');
     });
 
-    it('is refused when the owed units were cancelled', async () => {
+    it('is refused when the owed units were canceled', async () => {
         const { orderId, shipmentId } = await shippedOrder(3, 4);
         await reportLost(shipmentId);
         const all = await fulfillmentOrdersOf(orderId);
         await shipmentModel.db
             .collection('fulfillmentorders')
-            .updateOne({ _id: all[1]._id }, { $set: { 'lines.0.cancelledQuantity': 2 } });
+            .updateOne({ _id: all[1]._id }, { $set: { 'lines.0.canceledQuantity': 2 } });
 
         const result = await deliveryService.deliverShipment(shipmentId, asAdmin(), admin);
 
@@ -640,23 +640,23 @@ const cancelRemainderOf = async (orderId: string) => {
     await cancelRemainderOn(String(origin._id), orderId);
 };
 
-/** The stored `order.cancelled` outbox rows of the order. */
-const cancelledRows = (orderId: string) =>
-    outboxEventModel.find({ name: 'order.cancelled', aggregateId: orderId }).lean().exec();
+/** The stored `order.canceled` outbox rows of the order. */
+const canceledRows = (orderId: string) =>
+    outboxEventModel.find({ name: 'order.canceled', aggregateId: orderId }).lean().exec();
 
 describe('cancelling the remainder after a loss', () => {
-    it('ends cancelled with cause lost, and no listener moves stock', async () => {
+    it('ends canceled with cause lost, and no listener moves stock', async () => {
         const { orderId, productId, shipmentId } = await shippedOrder(2);
         await reportLost(shipmentId);
         const before = await levelOf(productId);
 
         await cancelRemainderOf(orderId);
 
-        expect(await statusOf(orderId)).toBe(OrderStatus.cancelled);
-        const rows = await cancelledRows(orderId);
+        expect(await statusOf(orderId)).toBe(OrderStatus.canceled);
+        const rows = await canceledRows(orderId);
         expect(rows).toHaveLength(1);
         expect(rows[0].payload).toMatchObject({ cause: 'lost', refund: false });
-        // No listener of `order.cancelled` touches the shelf for a lost cancel.
+        // No listener of `order.canceled` touches the shelf for a lost cancel.
         expect(await levelOf(productId)).toEqual(before);
     });
 
@@ -694,7 +694,7 @@ describe('cancelling the remainder after a loss', () => {
         const settled = await readOrder(orderId);
         expect(settled?.status).toBe(OrderStatus.delivered);
         expect(settled?.withdrawUntil).toBeDefined();
-        expect(await cancelledRows(orderId)).toHaveLength(0);
+        expect(await canceledRows(orderId)).toHaveLength(0);
     });
 
     it('scrubs the buyer at paidAt plus the undelivered days, not before', async () => {

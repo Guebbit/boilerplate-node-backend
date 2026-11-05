@@ -387,7 +387,7 @@ export const orderSchema = new Schema<OrderDocument>(
         /*
          * When this order's stock hold ends, stamped at checkout from the SAME duration handed
          * to `inventoryService.reserveForOrder` — the two must never disagree, which is why
-         * neither is a second copy of the other's fallback. Absent once paid or cancelled: the
+         * neither is a second copy of the other's fallback. Absent once paid or canceled: the
          * hold is over either way.
          */
         payBy: {

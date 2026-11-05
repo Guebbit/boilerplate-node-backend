@@ -408,20 +408,20 @@ describe('the daily sweep', () => {
             'awaiting_stock',
             undefined
         ]);
-        expect(await typesOf(orderId)).not.toContain('remainder_cancelled');
+        expect(await typesOf(orderId)).not.toContain('remainder_canceled');
     });
 });
 
-describe('why a fulfillment order was cancelled', () => {
-    it('says order when the whole order was cancelled', async () => {
+describe('why a fulfillment order was canceled', () => {
+    it('says order when the whole order was canceled', async () => {
         const { orderId } = await preorder(30);
         await waitingOf(orderId);
         await deliveryService.runPreorderSweep(inDays(31));
 
         await deliveryService.cancelAllForOrder(orderId);
 
-        const [cancelled] = await fulfillmentOrdersOf(orderId);
-        expect(cancelled.cancelReason).toBe('order');
+        const [canceled] = await fulfillmentOrdersOf(orderId);
+        expect(canceled.cancelReason).toBe('order');
     });
 });
 

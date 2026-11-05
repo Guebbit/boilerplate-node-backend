@@ -14,12 +14,12 @@ x-error-codes:
     ORDER_EXPORT_TOO_LARGE: { status: 422, description: 'The export would carry more orders than `NODE_ORDER_EXPORT_MAX_ROWS` allows. The message names the cap; narrow the filters and ask again.' }
     ORDER_INVOICED: { status: 409, description: 'This action is not allowed once an order has been invoiced.' }
     ORDER_LINE_LIMIT_EXCEEDED: { status: 422, description: 'An admin-created order has more lines, or a larger quantity on one line, than this deployment allows (`NODE_ADMIN_ORDER_MAX_LINES`, `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`). The message names the limit.' }
-    ORDER_NOT_CANCELLABLE: { status: 409, description: 'The order is not in a state that can still be cancelled.' }
-    ORDER_NOT_CANCELLED: { status: 409, description: 'A delete, soft or hard, needs a cancelled order: this one is still open. Cancel it first (`POST /orders/{id}/cancel`), which refunds a paid one.' }
-    ORDER_HAS_MONEY_HISTORY: { status: 409, description: 'A hard delete is refused: money was recorded on the order after it was cancelled (a late payment and its refund still point at it). Soft delete it instead.' }
+    ORDER_NOT_CANCELABLE: { status: 409, description: 'The order is not in a state that can still be canceled.' }
+    ORDER_NOT_CANCELED: { status: 409, description: 'A delete, soft or hard, needs a canceled order: this one is still open. Cancel it first (`POST /orders/{id}/cancel`), which refunds a paid one.' }
+    ORDER_HAS_MONEY_HISTORY: { status: 409, description: 'A hard delete is refused: money was recorded on the order after it was canceled (a late payment and its refund still point at it). Soft delete it instead.' }
     ORDER_NOT_DELETED: { status: 409, description: 'A restore is refused: the order is not soft-deleted.' }
     ORDER_OVERRIDE_NOT_ALLOWED: { status: 409, description: 'This status transition is not on the admin override''s allowed list.' }
-    ORDER_ADDRESS_LOCKED: { status: 409, description: 'The order cannot be redirected: nothing is left to send (every unit has shipped or been cancelled), it is over, or it has no shipping address (a pickup, a digital order).' }
+    ORDER_ADDRESS_LOCKED: { status: 409, description: 'The order cannot be redirected: nothing is left to send (every unit has shipped or been canceled), it is over, or it has no shipping address (a pickup, a digital order).' }
     ORDER_SHIP_TO_COUNTRY_NOT_SUPPORTED: { status: 422, description: 'The corrected shipping address names a country outside the shop''s ship-to list (`Shop.shipToCountries`), the list checkout refuses by; VAT is charged at the shop''s own rates.' }
     ORDER_OVERRIDE_AWAITING_STOCK: { status: 409, description: 'The order still has units awaiting stock; overriding it forward would ship goods the stock ledger never counted out.' }
 
@@ -179,10 +179,10 @@ paths:
         delete:
             tags: [Orders]
             summary: Delete order
-            description: Deletes the order identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record, which is only allowed for an order that is cancelled and was never paid (409 `ORDER_NOT_CANCELLED` while it is open, 409 `ORDER_INVOICED` once paid, 409 `ORDER_HAS_MONEY_HISTORY` once money was recorded after the cancel); a `true` from any source wins, so a `false` sent elsewhere does not cancel it. A soft delete hides a cancelled order from its buyer (409 `ORDER_NOT_CANCELLED` while it is open), is safe to repeat, and is undone with `POST /orders/{id}/restore`.
+            description: Deletes the order identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record, which is only allowed for an order that is canceled and was never paid (409 `ORDER_NOT_CANCELED` while it is open, 409 `ORDER_INVOICED` once paid, 409 `ORDER_HAS_MONEY_HISTORY` once money was recorded after the cancel); a `true` from any source wins, so a `false` sent elsewhere does not cancel it. A soft delete hides a canceled order from its buyer (409 `ORDER_NOT_CANCELED` while it is open), is safe to repeat, and is undone with `POST /orders/{id}/restore`.
             operationId: deleteOrder
             x-error-codes:
-                '409': [ORDER_HAS_MONEY_HISTORY, ORDER_INVOICED, ORDER_NOT_CANCELLED]
+                '409': [ORDER_HAS_MONEY_HISTORY, ORDER_INVOICED, ORDER_NOT_CANCELED]
             x-alias-of: deleteOrderById
             security:
                 - bearerAuth: []
@@ -425,10 +425,10 @@ paths:
         delete:
             tags: [Orders]
             summary: Delete order
-            description: Deletes the order identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record, which is only allowed for an order that is cancelled and was never paid (409 `ORDER_NOT_CANCELLED` while it is open, 409 `ORDER_INVOICED` once paid, 409 `ORDER_HAS_MONEY_HISTORY` once money was recorded after the cancel). A soft delete hides a cancelled order from its buyer (409 `ORDER_NOT_CANCELLED` while it is open), is safe to repeat, and is undone with `POST /orders/{id}/restore`. Functionally equivalent to `DELETE /orders`.
+            description: Deletes the order identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record, which is only allowed for an order that is canceled and was never paid (409 `ORDER_NOT_CANCELED` while it is open, 409 `ORDER_INVOICED` once paid, 409 `ORDER_HAS_MONEY_HISTORY` once money was recorded after the cancel). A soft delete hides a canceled order from its buyer (409 `ORDER_NOT_CANCELED` while it is open), is safe to repeat, and is undone with `POST /orders/{id}/restore`. Functionally equivalent to `DELETE /orders`.
             operationId: deleteOrderById
             x-error-codes:
-                '409': [ORDER_HAS_MONEY_HISTORY, ORDER_INVOICED, ORDER_NOT_CANCELLED]
+                '409': [ORDER_HAS_MONEY_HISTORY, ORDER_INVOICED, ORDER_NOT_CANCELED]
             security:
                 - bearerAuth: []
             parameters:
@@ -476,10 +476,10 @@ paths:
         delete:
             tags: [Orders]
             summary: Permanently delete order
-            description: Permanently removes the order identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /orders/{id}?hardDelete=true`, and only for an order that is cancelled and was never paid (409 `ORDER_NOT_CANCELLED` while it is open, 409 `ORDER_INVOICED` once paid).
+            description: Permanently removes the order identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /orders/{id}?hardDelete=true`, and only for an order that is canceled and was never paid (409 `ORDER_NOT_CANCELED` while it is open, 409 `ORDER_INVOICED` once paid).
             operationId: hardDeleteOrderById
             x-error-codes:
-                '409': [ORDER_HAS_MONEY_HISTORY, ORDER_INVOICED, ORDER_NOT_CANCELLED]
+                '409': [ORDER_HAS_MONEY_HISTORY, ORDER_INVOICED, ORDER_NOT_CANCELED]
             x-alias-of: deleteOrderById
             security:
                 - bearerAuth: []
@@ -518,7 +518,7 @@ paths:
                 '401': [REAUTH_REQUIRED]
                 # A customer's own order cancels only while pending or paid; an operator's also while processing,
                 # until anything ships.
-                '409': [ORDER_NOT_CANCELLABLE]
+                '409': [ORDER_NOT_CANCELABLE]
             security:
                 - bearerAuth: []
             parameters:
@@ -531,7 +531,7 @@ paths:
                             $ref: '#/components/schemas/CancelOrderRequest'
             responses:
                 '200':
-                    description: The cancelled order
+                    description: The canceled order
                     content:
                         application/json:
                             schema:
@@ -624,7 +624,7 @@ paths:
                 which is `paid` or later: an order still `pending` is refused, since leaving
                 `pending` goes only through the offline-payment door, which records the money and
                 issues the invoice. Never into `paid` (that stays system-only in absolute terms)
-                and never `cancelled` (`POST /orders/{id}/cancel` is that door). Requires `override:Order`, itself
+                and never `canceled` (`POST /orders/{id}/cancel` is that door). Requires `override:Order`, itself
                 step-up gated, and a non-empty `reason` recorded on the order's timeline (`status_overridden`).
                 Webhooks still fire for this move; no shipped email does.
             operationId: overrideOrderStatus
@@ -677,7 +677,7 @@ components:
                 - processing
                 - shipped
                 - delivered
-                - cancelled
+                - canceled
                 - status_overridden
                 - payment_declined
                 - refund_issued
@@ -692,7 +692,7 @@ components:
                 - shipment_lost
                 - fulfillment_held
                 - fulfillment_released
-                - remainder_cancelled
+                - remainder_canceled
                 - return_requested
                 - return_approved
                 - return_declined
@@ -706,10 +706,10 @@ components:
                 - address_corrected
             description: >-
                 What happened. Order: `created`, `paid`, `processing`, `shipped`, `delivered`,
-                `cancelled`, `status_overridden`. Payment: `payment_declined`, `refund_issued`,
+                `canceled`, `status_overridden`. Payment: `payment_declined`, `refund_issued`,
                 `refund_settled`, `refund_failed`, `refund_canceled`, `refund_reversed`, `dispute_opened`, `dispute_closed`. Shipments: `shipment_shipped`,
                 `shipment_delivered`, `shipment_lost`, `fulfillment_held`, `fulfillment_released`,
-                `remainder_cancelled`. Returns: `return_requested`, `return_approved`,
+                `remainder_canceled`. Returns: `return_requested`, `return_approved`,
                 `return_declined`, `return_received`, `return_closed`, `return_canceled`. Documents: `invoice_issued`,
                 `credit_note_issued`. Preorders: `release_date_moved`, `delay_notice_sent`.
                 Which of these a buyer sees is the row's own `audience` (`buyer` or `staff`), set per type by the server.
@@ -752,7 +752,7 @@ components:
                     description: >-
                         What the type needs to say, as ids, codes and numbers — never another
                         module's free text. `status_overridden`: `mode` (`status`),
-                        `from`, `to`. `paid`: `method` (absent when unknown). `delivered`: `withdrawUntil`. `cancelled`:
+                        `from`, `to`. `paid`: `method` (absent when unknown). `delivered`: `withdrawUntil`. `canceled`:
                         `by`, `cause` (why: `customer`, `operator`, `withdrawal`, `reservation_expired`,
                         `erasure`, `payment_mismatch` or `lost`: a lost parcel refunded with nothing ever delivered; `by` is shared by the
                         system's causes), `refund` (whether the cancel returned the money). Shipment and hold rows: `shipmentId` or `fulfillmentOrderId`,
@@ -812,7 +812,7 @@ components:
                     description: >-
                         What the type needs to say, as ids, codes and numbers — never another
                         module's free text. `status_overridden`: `mode` (`status`),
-                        `from`, `to`. `paid`: `method` (absent when unknown). `delivered`: `withdrawUntil`. `cancelled`:
+                        `from`, `to`. `paid`: `method` (absent when unknown). `delivered`: `withdrawUntil`. `canceled`:
                         `by`, `cause` (why: `customer`, `operator`, `withdrawal`, `reservation_expired`,
                         `erasure`, `payment_mismatch` or `lost`: a lost parcel refunded with nothing ever delivered; `by` is shared by the
                         system's causes), `refund` (whether the cancel returned the money). Shipment and hold rows: `shipmentId` or `fulfillmentOrderId`,
@@ -1173,7 +1173,7 @@ components:
 
         OrderStatus:
             type: string
-            enum: [pending, paid, processing, shipped, delivered, cancelled]
+            enum: [pending, paid, processing, shipped, delivered, canceled]
             description: >-
                 Where an order is in its lifecycle. The set is closed here; which value may FOLLOW
                 which is the server's own lifecycle rules, answered per caller by `OrderActions`.
@@ -1192,11 +1192,11 @@ components:
             enum: [unfulfilled, in_progress, on_hold, partially_fulfilled, shipped, fulfilled]
             description: >-
                 Where the goods stand, beside `status` — Shopify's `fulfillment_status`. Derived
-                from the status and the fulfilment summary delivery reports. First match wins:
+                from the status and the fulfillment summary delivery reports. First match wins:
                 `fulfilled` once everything arrived; `shipped` once everything has left;
                 `partially_fulfilled` once something left and more remains; `on_hold` while every
                 remaining unit is held back; `in_progress` while being prepared; `unfulfilled` before
-                work starts, and for a pending or cancelled order. Read-only.
+                work starts, and for a pending or canceled order. Read-only.
 
         OrderReturnStatus:
             type: string
@@ -1215,7 +1215,7 @@ components:
                 Why the buyer's withdrawal button is not offered, first reason that applies.
                 `all_excluded`: every line is goods Art. 16 CRD takes the right of withdrawal away
                 from (made to order, perishable), so there is nothing to withdraw from — an unpaid
-                or paid order can still be cancelled with the ordinary cancel. `window_closed`:
+                or paid order can still be canceled with the ordinary cancel. `window_closed`:
                 the withdrawal period ended. `nothing_left`: every unit is already back with the
                 shop.
 
@@ -1249,7 +1249,7 @@ components:
                         Whether `POST /orders/{id}/cancel` would be accepted for this caller. A
                         customer may cancel while unpaid or paid; an operator one step further — and
                         only while nothing has shipped: once any shipment left, what remains is
-                        cancelled one fulfillment order at a time (`POST /returns`, `kind: cancellation`).
+                        canceled one fulfillment order at a time (`POST /returns`, `kind: cancellation`).
                 pay:
                     type: boolean
                     description: >-
@@ -1304,18 +1304,18 @@ components:
                     description: >-
                         Why `withdraw` is `false`, for the order's own buyer on an order that is
                         otherwise withdrawable. Absent when `withdraw` is `true`, for anyone who is
-                        not the buyer, and for an order whose status offers no withdrawal (cancelled).
+                        not the buyer, and for an order whose status offers no withdrawal (canceled).
                         A client shows the button disabled with this reason rather than hiding it.
                 delete:
                     type: boolean
                     description: >-
                         Whether `DELETE /orders/{id}` would be accepted for this caller: the caller
-                        holds `delete:Order`, the order is `cancelled` and not already hidden.
+                        holds `delete:Order`, the order is `canceled` and not already hidden.
                 hardDelete:
                     type: boolean
                     description: >-
                         Whether `DELETE /orders/{id}?hardDelete=true` would be accepted for this
-                        caller: the caller holds `delete:Order`, and the order is `cancelled`, was
+                        caller: the caller holds `delete:Order`, and the order is `canceled`, was
                         never paid (a paid order's invoice must survive it) and holds no money
                         recorded after the cancel (a late payment and its refund still point at it).
                 restore:
@@ -1507,7 +1507,7 @@ components:
                 # When this order's stock hold ends — `NODE_RESERVATION_TTL_MINUTES` for `card`,
                 # `NODE_BANK_TRANSFER_HOLD_HOURS` for `bank_transfer`. Past this with no payment,
                 # the sweep releases the stock and cancels the order. Absent once paid or
-                # cancelled: the hold is over either way.
+                # canceled: the hold is over either way.
                 payBy:
                     type: string
                     format: date-time
@@ -1720,7 +1720,7 @@ components:
                 # When this order's stock hold ends — `NODE_RESERVATION_TTL_MINUTES` for `card`,
                 # `NODE_BANK_TRANSFER_HOLD_HOURS` for `bank_transfer`. Past this with no payment,
                 # the sweep releases the stock and cancels the order. Absent once paid or
-                # cancelled: the hold is over either way.
+                # canceled: the hold is over either way.
                 payBy:
                     type: string
                     format: date-time

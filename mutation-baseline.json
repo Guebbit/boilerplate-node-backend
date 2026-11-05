@@ -181,7 +181,7 @@
         "src/modules/payments/repository.ts": 0,
         "src/modules/payments/routes.ts": 0,
         "src/modules/products/controllers/delete-products.ts": 0,
-        "src/modules/products/controllers/get-catalogue-facets.ts": 0,
+        "src/modules/products/controllers/get-catalog-facets.ts": 0,
         "src/modules/products/controllers/get-product-item.ts": 0,
         "src/modules/products/controllers/get-products.ts": 0,
         "src/modules/products/events.ts": 0,

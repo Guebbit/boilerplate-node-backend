@@ -26,7 +26,7 @@ export interface DispatchCandidate {
  * (goods are on their way, or arrived). Read off `fulfillment.shipped`, not `processing`: an order
  * that shipped in part is still `processing`, and refunding it whole would refund goods the buyer
  * already holds.
- * @param order - the order's status and its fulfilment summary
+ * @param order - the order's status and its fulfillment summary
  */
 export const isBeforeDispatch = (order: DispatchCandidate): boolean =>
     ORDER_STATUS_TRAITS[order.status].beforeDispatch && order.fulfillment?.shipped !== true;
@@ -42,10 +42,10 @@ export interface AddressCandidate {
 
 /**
  * Whether staff may still redirect the order: it has an address, is not over (`shipped`,
- * `delivered`, `cancelled`) and still has units to send. A parcel already on its way went where it
+ * `delivered`, `canceled`) and still has units to send. A parcel already on its way went where it
  * went — each shipment keeps its own copy of that address — but the rest of the order, held,
  * waiting for stock or simply not cut yet, may go somewhere else.
- * @param order - the order's status, fulfilment summary and address
+ * @param order - the order's status, fulfillment summary and address
  */
 export const canCorrectAddress = (order: AddressCandidate): boolean =>
     Boolean(order.shippingAddress) &&
@@ -213,7 +213,7 @@ export interface WithdrawalCandidate {
  * | `window_closed` | the frozen period ended, and its silent grace day with it |
  * | `nothing_left` | every unit is already back with the shop |
  *
- * A status that offers no withdrawal (cancelled) has no reason: there is no button to explain.
+ * A status that offers no withdrawal (canceled) has no reason: there is no button to explain.
  * @param order - the order's status, lines, frozen deadline and return status
  * @param now - the moment being asked about
  */

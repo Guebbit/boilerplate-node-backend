@@ -52,7 +52,7 @@ operations:
         summary: A shipment was marked delivered.
         description: >-
             One-to-one with the `shipment.delivered` domain event — see `delivery/services/deliver.ts`.
-            A digital fulfilment fires it too, right after `shipment.shipped`.
+            A digital fulfillment fires it too, right after `shipment.shipped`.
         messages:
             - $ref: '#/channels/shipment.delivered/messages/ShipmentDeliveredEvent'
     webhookShipmentLost:

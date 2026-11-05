@@ -1,7 +1,7 @@
 /**
  * @module
  * Cutting one shipment from a fulfillment order, inside the act's transaction — the write every
- * way of shipping shares: staff shipping, the digital fulfilment, and the shipments an admin status
+ * way of shipping shares: staff shipping, the digital fulfillment, and the shipments an admin status
  * override brings in step. The fulfillment order is claimed by its revision, so two acts racing the
  * same remainder cannot both land.
  */
@@ -43,7 +43,7 @@ export interface Cut {
 
 /**
  * The order's shipping address, encrypted for a shipment about to be written under `shipmentId`;
- * `undefined` for a digital fulfilment and for an order that ships nowhere.
+ * `undefined` for a digital fulfillment and for an order that ships nowhere.
  * @param before - the fulfillment order the shipment leaves from
  * @param shipmentId - the shipment's pre-allocated `_id`
  * @param session - the act's transaction

@@ -425,7 +425,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/WebhookEventCatalogueResponse'
+                                $ref: '#/components/schemas/WebhookEventCatalogResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
 
@@ -656,7 +656,7 @@ components:
             maxLength: 100
             description: One event name from `GET /webhooks/events`, or `*` for every event.
 
-        WebhookEventCatalogueEntry:
+        WebhookEventCatalogEntry:
             type: object
             additionalProperties: false
             required: [name]
@@ -756,7 +756,7 @@ components:
                 meta:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
 
-        WebhookEventCatalogueResponse:
+        WebhookEventCatalogResponse:
             type: object
             additionalProperties: false
             required: [items]
@@ -764,5 +764,5 @@ components:
                 items:
                     type: array
                     items:
-                        $ref: '#/components/schemas/WebhookEventCatalogueEntry'
+                        $ref: '#/components/schemas/WebhookEventCatalogEntry'
 

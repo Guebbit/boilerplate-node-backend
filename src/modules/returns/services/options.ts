@@ -2,7 +2,7 @@
  * @module
  * What an order can still send back, and what it can still cancel — computed here, once, so no
  * client re-derives a quantity or a refund. `returnable` is what has SHIPPED and is not already
- * coming back, offered only to the buyer and only while a `reasons` deadline is open; `cancellable` is each fulfillment order with a remainder and the exact refund
+ * coming back, offered only to the buyer and only while a `reasons` deadline is open; `cancelable` is each fulfillment order with a remainder and the exact refund
  * cancelling it would owe, delivery included when it takes the last unit.
  *
  * See: docs/modules/returns.md#the-options-read
@@ -160,7 +160,7 @@ export const getReturnOptions = (
                     reasons.length === 0
                         ? []
                         : optionLines(order, returnableQuantities(returnable, back), excluded),
-                cancellable: remainders.map((remainder) => {
+                cancelable: remainders.map((remainder) => {
                     const refund = cancellationRefundOn(order, returns, remainder.lines);
                     return {
                         fulfillmentOrderId: remainder.fulfillmentOrderId,

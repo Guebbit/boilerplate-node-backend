@@ -43,7 +43,7 @@ operations:
         description: >-
             One-to-one with the `return.requested` domain event — see `returns/services/create.ts`.
             A withdrawal before dispatch fires it too, followed at once by `return.closed`: the
-            return is born closed, and `order.cancelled` says the order was cancelled.
+            return is born closed, and `order.canceled` says the order was canceled.
         messages:
             - $ref: '#/channels/return.requested/messages/ReturnRequestedEvent'
     webhookReturnReceived:

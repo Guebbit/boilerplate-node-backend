@@ -238,7 +238,7 @@ describe('fakePaymentProvider.cancel', () => {
         ).resolves.toBeUndefined();
     });
 
-    it('lets a declined attempt be cancelled — nothing at the provider is still moving', async () => {
+    it('lets a declined attempt be canceled — nothing at the provider is still moving', async () => {
         await fakePaymentProvider.confirm('fake_pi_declined_cancel', FAKE_DECLINE_METHOD);
 
         await expect(

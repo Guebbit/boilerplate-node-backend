@@ -322,9 +322,9 @@ export const completeEmailChange = (
 
 /**
  * Spend an undo link's work: put the account back as it was before the change. While the change is
- * still pending it is cancelled and its confirmation link dies; once the new address was confirmed
+ * still pending it is canceled and its confirmation link dies; once the new address was confirmed
  * the previous one is restored. Either way every session ends — the owner is saying "this was not
- * me", so what a thief holds must stop working. Nothing to undo (the change was already cancelled)
+ * me", so what a thief holds must stop working. Nothing to undo (the change was already canceled)
  * is not an error: the account is as the caller wants it.
  *
  * `postEmailChangeUndo` already found and spent the token, the same split as

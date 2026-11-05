@@ -94,7 +94,7 @@ describe('projectReturnStatus', () => {
     });
 
     it('reads returned once every unit that could come back has — what a cancel took is out of the order', () => {
-        // Ordered 2 of `a`, 1 of `b`: the caller subtracts the cancelled `b` before asking.
+        // Ordered 2 of `a`, 1 of `b`: the caller subtracts the canceled `b` before asking.
         const left = new Map([
             ['a', 2],
             ['b', 0]

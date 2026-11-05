@@ -127,7 +127,7 @@ export const getOperationsStats = (period: Period): Promise<WithoutLimits<Operat
         const currencies = [...new Set(money.map((row) => row.currency))].toSorted();
         return {
             period: period.echo,
-            cancellation: { ...cohort, rate: rateOf(cohort.cancelled, cohort.placed) },
+            cancellation: { ...cohort, rate: rateOf(cohort.canceled, cohort.placed) },
             returns: { unitsOrdered, unitsReturned, rate: rateOf(unitsReturned, unitsOrdered) },
             refunds: currencies.map((currency) => {
                 const rows = money.filter((row) => row.currency === currency);

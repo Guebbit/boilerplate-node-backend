@@ -60,7 +60,7 @@ export const counterDeltaFor = (
             return { onHandDelta: -quantity, reservedDelta: -quantity, backorderedDelta: 0 };
         }
 
-        // The hold is given up — cancelled, or timed out. The units become sellable again.
+        // The hold is given up — canceled, or timed out. The units become sellable again.
         case StockMovementReason.release:
         case StockMovementReason.expire: {
             // A preorder claim never touched `reserved`, so giving it up gives back the allowance.

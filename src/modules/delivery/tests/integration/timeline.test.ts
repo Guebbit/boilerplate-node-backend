@@ -128,7 +128,7 @@ describe('shipping and delivering', () => {
         expect(await timelineOf(String(order._id))).toEqual(before);
     });
 
-    it('writes the digital fulfilment as a shipment born delivered and the order delivered', async () => {
+    it('writes the digital fulfillment as a shipment born delivered and the order delivered', async () => {
         const order = await seedDigitalOrder(OrderStatus.processing, new Date());
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
 
@@ -147,7 +147,7 @@ describe('shipping and delivering', () => {
     });
 });
 
-describe('starting fulfilment', () => {
+describe('starting fulfillment', () => {
     it('names the operator on the processing row, as the first shipment does', async () => {
         const user = await createUser();
         const product = await createProduct({ price: 10 });
@@ -185,8 +185,8 @@ describe('holds', () => {
     });
 });
 
-describe('an order cancelled whole', () => {
-    it('adds no remainder rows: the order`s own `cancelled` already says it', async () => {
+describe('an order canceled whole', () => {
+    it('adds no remainder rows: the order`s own `canceled` already says it', async () => {
         const { order } = await processingOrder();
         const orderId = String(order._id);
 

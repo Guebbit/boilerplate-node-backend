@@ -21,7 +21,7 @@ import { registerModules } from '@kernel/registry';
 import {
     ORDER_CREATED,
     ORDER_STATUS_CHANGED,
-    ORDER_CANCELLED,
+    ORDER_CANCELED,
     ORDER_REDACTED
 } from '@modules/orders';
 import { USER_ERASED, USER_PROFILE_CHANGED } from '@modules/users';
@@ -51,7 +51,7 @@ import { webhooksService } from '@modules/webhooks/services';
 
 setupTestDb();
 
-/** A syntactically valid Mongo id — `payments`' own `ORDER_CANCELLED` listener looks one up by it. */
+/** A syntactically valid Mongo id — `payments`' own `ORDER_CANCELED` listener looks one up by it. */
 const ORDER_ID = '507f1f77bcf86cd799439011';
 
 /** Same shape, a different value — so a payment's `orderId` is never mistaken for the order's own id. */
@@ -61,7 +61,7 @@ const PAYMENT_ID = '507f1f77bcf86cd799439012';
 const REGISTERED_OWNERS = ['orders', 'payments', 'returns', 'example', 'users'] as const;
 
 /** Every event those modules' `asyncapi.webhooks.yaml` fragments declare. */
-const declaredCatalogue = (): string[] => declaredWebhookEvents(REGISTERED_OWNERS);
+const declaredCatalog = (): string[] => declaredWebhookEvents(REGISTERED_OWNERS);
 
 /** One subscription wanting every event (`'*'`), so any producer's fan-out reaches it. */
 const createCatchAllSubscription = () => {
@@ -110,7 +110,7 @@ describe('every public webhook event has exactly one producer, and no producer n
             from: 'paid',
             to: 'shipped'
         });
-        await emitDomainEvent(ORDER_CANCELLED, {
+        await emitDomainEvent(ORDER_CANCELED, {
             orderId: ORDER_ID,
             refund: true,
             cause: 'customer'
@@ -181,15 +181,15 @@ describe('every public webhook event has exactly one producer, and no producer n
         const deliveries = await webhookDeliveryRepository.findAll({}, { limit: 100 });
         const produced = new Set(deliveries.map((delivery) => delivery.eventType));
 
-        expect([...produced].toSorted()).toEqual(declaredCatalogue().toSorted());
+        expect([...produced].toSorted()).toEqual(declaredCatalog().toSorted());
     });
 
     it('GET /webhooks/events lists exactly what the registered modules declare', () => {
         expect(
             webhooksService
-                .listWebhookEventCatalogue()
+                .listWebhookEventCatalog()
                 .map((event) => event.name)
                 .toSorted()
-        ).toEqual(declaredCatalogue());
+        ).toEqual(declaredCatalog());
     });
 });

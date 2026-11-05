@@ -43,14 +43,14 @@ flowchart LR
     orders --> shop
     orders --> users
     inventory -. "inventory.reservation_expired" .-> orders
-    orders -. "order.cancelled" .-> delivery
+    orders -. "order.canceled" .-> delivery
     orders -. "order.redacted" .-> delivery
     orders -. "order.status_changed" .-> delivery
     orders -. "order.status_overridden" .-> delivery
     orders -. "order.status_changed" .-> invoicing
-    orders -. "order.cancelled" .-> payments
+    orders -. "order.canceled" .-> payments
     orders -. "order.created" .-> payments
-    orders -. "order.cancelled" .-> shop_tasks
+    orders -. "order.canceled" .-> shop_tasks
     orders -. "order.purchase_hold_placed" .-> shop_tasks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -99,9 +99,9 @@ The status enum is the module's public vocabulary:
 | ----------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `pending`               | created, unpaid, units held                  | checkout or an admin                                                                                                                                                     |
 | `paid`                  | money taken, units committed                 | [`payments`](./payments.md) on confirm                                                                                                                                   |
-| `processing`            | fulfilment started                           | [`delivery`](./delivery.md), reporting a recorded fulfilment-start fact (until that door exists, an admin correction)                                                    |
+| `processing`            | fulfilment started                           | [`delivery`](./delivery.md), reporting a recorded fulfillment-start fact (until that door exists, an admin correction)                                                   |
 | `shipped` · `delivered` | fulfilment                                   | [`delivery`](./delivery.md): `shipped` once the LAST unit has left (an order shipped in parts stays `processing` until then), `delivered` once the last shipment arrived |
-| `cancelled`             | units released, refund issued if one was due | admin, or an expired hold. A product hidden, taken off sale or removed afterwards does not cancel it ([why](./products.md#hiding-taking-off-sale-removing))              |
+| `canceled`              | units released, refund issued if one was due | admin, or an expired hold. A product hidden, taken off sale or removed afterwards does not cancel it ([why](./products.md#hiding-taking-off-sale-removing))              |
 
 An operator's cancel (a caller holding `update:Order`) asks for a fresh session first, since it
 can refund or keep a paid order's money (`401 REAUTH_REQUIRED` on a stale one); the buyer's own
@@ -129,7 +129,7 @@ flowchart LR
     D4 --> C
     D5 --> C
     C --> T["CANCEL_CAUSES<br/><i>column, mail, analytics, refund rule</i>"]
-    T --> M["one transaction: status, stock,<br/>order.cancelled { refund }"]
+    T --> M["one transaction: status, stock,<br/>order.canceled { refund }"]
 ```
 
 | Door                           | Cause                 | Column     | Buyer is mailed        | Refund                                |
@@ -151,14 +151,14 @@ a reason — see [Who writes the status](#who-writes-the-status) below.
 
 ::: warning Two modules reach back, and both do it through events
 [`inventory`](./inventory.md) cancels an order when its hold times out (`inventory.reservation_expired`), and
-this module announces `order.cancelled` with the `refund` it owes, so [`payments`](./payments.md)
+this module announces `order.canceled` with the `refund` it owes, so [`payments`](./payments.md)
 can open the refund from the same outbox row. Neither is an import, which is what keeps a mutually-aware pair acyclic.
-The `refund` flag is the cancel's policy, for `payments` alone: the public `order.cancelled` webhook
+The `refund` flag is the cancel's policy, for `payments` alone: the public `order.canceled` webhook
 carries only `{ orderId }`, since "owed" is not "paid back", and a subscriber hears `payment.refunded`
 when money actually moved.
 :::
 
-Each account reads back only its own orders; writing and soft-deleting is admin-only, and an order can be soft-deleted (hidden) only once it is `cancelled`. The
+Each account reads back only its own orders; writing and soft-deleting is admin-only, and an order can be soft-deleted (hidden) only once it is `canceled`. The
 `userId: 1, deletedAt: 1` index is what makes both of those cheap at once.
 
 One scheduled job via `docker/crontab`: `npm run job reap:orders`, nightly, replaces an order's
@@ -170,9 +170,9 @@ their personal fields, since order history is part of the contract
 the sweep works in batches of 500, and a batch scrubs its orders and writes one `order.redacted`
 outbox row each (`data: { orderId }`) in the same transaction, so the
 [webhook](./webhooks.md) exists exactly when the scrub does (GDPR Art. 19). It fires when the data
-goes, not at the erasure, which only detaches `userId`. An admin can still hard-delete an order, but only one that is `cancelled` and was never paid
+goes, not at the erasure, which only detaches `userId`. An admin can still hard-delete an order, but only one that is `canceled` and was never paid
 (`services/remove.ts`'s `remove`): the cancel owns every end-of-order effect (stock, payment intent,
-`order.cancelled`), so an open order answers 409 `ORDER_NOT_CANCELLED` until it is cancelled. This
+`order.canceled`), so an open order answers 409 `ORDER_NOT_CANCELED` until it is cancelled. This
 reap is what protects the far more common case, the order nobody ever deletes. An order that was
 never paid but was handed money after its cancel (a transfer or card payment that landed late, and
 its refund) refuses it too, 409 `ORDER_HAS_MONEY_HISTORY`: `payments` stamps `moneyReceivedAt`
@@ -181,7 +181,7 @@ payment landing mid-delete turns it into the 409. A paid order refuses
 a hard delete instead (409 `ORDER_INVOICED`), once and for as long as `paidAt` is stamped:
 `invoicing` freezes a legal document from that same transition, and it must survive the order it
 was issued for. The refusal does not trust the document the caller read: the hard delete is one
-`deleteOne` that filters on `status: cancelled` and `paidAt: null`, so a settlement or a reopen
+`deleteOne` that filters on `status: canceled` and `paidAt: null`, so a settlement or a reopen
 that commits in between turns it into the matching 409. Restoring a soft delete of an order that is
 not hidden answers 409 `ORDER_NOT_DELETED`; `actions.restore` says when it would be accepted.
 
@@ -206,11 +206,11 @@ sequenceDiagram
     U->>U: commit the transaction
     U->>S: cancel each order as the system
     S->>S: release the stock hold
-    S->>S: order.cancelled, so payments cancels the open intent
+    S->>S: order.canceled, so payments cancels the open intent
 ```
 
 The cancel is the system's own (`cancelForErasureById`, the lifecycle column the reservation
-sweep's expiry uses), so it releases the hold and, through `order.cancelled`, cancels the payment
+sweep's expiry uses), so it releases the hold and, through `order.canceled`, cancels the payment
 intent. It runs after the commit because it
 moves stock and talks to a provider, neither of which a rolled-back erasure could undo. It sends
 no mail: the address belongs to an account that no longer exists. A failed cancel is logged and
@@ -289,11 +289,11 @@ flowchart LR
     SH -->|"system: the last shipment arrives"| DE["delivered"]
     SH -->|"system, a backward move:<br/>a shipment is reported lost"| PR
     DE -->|"system, a backward move:<br/>a replacement under the guarantee"| PR
-    PR -->|"system: every parcel lost, remainder<br/>cancelled and refunded (cause lost)"| CA
-    PR -->|"system: a digital fulfilment, or a<br/>remainder cancelled after every<br/>shipment arrived — both moves at once"| DE
-    P -.->|"admin · or an expired hold"| CA["cancelled<br/><i>units released</i>"]
+    PR -->|"system: every parcel lost, remainder<br/>canceled and refunded (cause lost)"| CA
+    PR -->|"system: a digital fulfillment, or a<br/>remainder canceled after every<br/>shipment arrived — both moves at once"| DE
+    P -.->|"admin · or an expired hold"| CA["canceled<br/><i>units released</i>"]
     PA -.->|"admin · refund due"| CA
-    CA -. "order.cancelled" .-> PM["payments<br/><i>refunds if one was due</i>"]
+    CA -. "order.canceled" .-> PM["payments<br/><i>refunds if one was due</i>"]
 
     classDef open fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
@@ -312,17 +312,17 @@ override all ASK for a move, never assign the field themselves. See
 
 ## Who writes the status
 
-| Move                                        | Who asks                                                                         | Through                                                                                                                                                                                                                                        |
-| ------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pending` → `paid`                          | `system`                                                                         | `payments`' settlement, on confirm                                                                                                                                                                                                             |
-| `paid` → `processing`                       | `system`                                                                         | `POST /orders/{id}/process`, `start:Shipment` — a first shipment or fulfil from `paid` makes it too — or `POST /orders/{id}/status-override`, `override:Order`                                                                                 |
-| `processing` → `shipped`                    | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/shipments` — only the shipment that leaves **nothing** remaining                                                                                                                                       |
-| `shipped` → `delivered`                     | `system`                                                                         | `POST /delivery/shipments/{id}/deliver` — only the last arrival, with nothing left to ship                                                                                                                                                     |
-| `shipped` → `processing`                    | `system`                                                                         | `POST /delivery/shipments/{id}/lost` — the `reopen` event, the one backward move; `canOverrideTo` stays forward-only, so no override makes it. `order.status_changed` carries it                                                               |
-| `delivered` → `processing`                  | `system`                                                                         | A return received with `remedy: replace` — the `reship` event, the second backward move; the replacement leaves through the ordinary shipping door, and its arrival keeps the first `withdrawUntil` and only ever pushes `conformityUntil` out |
-| `processing` → `delivered`                  | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/fulfill` (digital), or a remainder cancel after every shipment arrived — `markFulfilmentComplete`, the one named double move                                                                           |
-| `processing` → `cancelled`                  | `system`                                                                         | `markUndeliverable`: a lost parcel's remainder was cancelled and refunded and nothing ever arrived — cause `lost`, `refund: false`, no clock. Outside the actor table, so the system cancels stay on `pending`                                 |
-| `pending`/`paid`/`processing` → `cancelled` | `customer` (own order, `pending`/`paid` only) or an operator (also `processing`) | `POST /orders/{id}/cancel` — **only while nothing has shipped**, conditional on `fulfillment.shipped` in the write's own filter                                                                                                                |
+| Move                                       | Who asks                                                                         | Through                                                                                                                                                                                                                                        |
+| ------------------------------------------ | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pending` → `paid`                         | `system`                                                                         | `payments`' settlement, on confirm                                                                                                                                                                                                             |
+| `paid` → `processing`                      | `system`                                                                         | `POST /orders/{id}/process`, `start:Shipment` — a first shipment or fulfil from `paid` makes it too — or `POST /orders/{id}/status-override`, `override:Order`                                                                                 |
+| `processing` → `shipped`                   | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/shipments` — only the shipment that leaves **nothing** remaining                                                                                                                                       |
+| `shipped` → `delivered`                    | `system`                                                                         | `POST /delivery/shipments/{id}/deliver` — only the last arrival, with nothing left to ship                                                                                                                                                     |
+| `shipped` → `processing`                   | `system`                                                                         | `POST /delivery/shipments/{id}/lost` — the `reopen` event, the one backward move; `canOverrideTo` stays forward-only, so no override makes it. `order.status_changed` carries it                                                               |
+| `delivered` → `processing`                 | `system`                                                                         | A return received with `remedy: replace` — the `reship` event, the second backward move; the replacement leaves through the ordinary shipping door, and its arrival keeps the first `withdrawUntil` and only ever pushes `conformityUntil` out |
+| `processing` → `delivered`                 | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/fulfill` (digital), or a remainder cancel after every shipment arrived — `markFulfillmentComplete`, the one named double move                                                                          |
+| `processing` → `canceled`                  | `system`                                                                         | `markUndeliverable`: a lost parcel's remainder was cancelled and refunded and nothing ever arrived — cause `lost`, `refund: false`, no clock. Outside the actor table, so the system cancels stay on `pending`                                 |
+| `pending`/`paid`/`processing` → `canceled` | `customer` (own order, `pending`/`paid` only) or an operator (also `processing`) | `POST /orders/{id}/cancel` — **only while nothing has shipped**, conditional on `fulfillment.shipped` in the write's own filter                                                                                                                |
 
 ### The fulfilment summary
 
@@ -347,12 +347,12 @@ summary, the status move and the events commit together or not at all.
 
 `fulfillmentStatus` is derived from the status and that summary. First match wins:
 
-| #   | When                                                                            | Value                               |
-| --- | ------------------------------------------------------------------------------- | ----------------------------------- |
-| 1   | the status ignores the summary (`pending`, `shipped`, `delivered`, `cancelled`) | its trait's value                   |
-| 2   | something shipped, units remain                                                 | `partially_fulfilled`               |
-| 3   | nothing shipped, every remaining unit held                                      | `on_hold` (wins over `in_progress`) |
-| 4   | otherwise (`paid`, `processing`)                                                | its trait's value                   |
+| #   | When                                                                           | Value                               |
+| --- | ------------------------------------------------------------------------------ | ----------------------------------- |
+| 1   | the status ignores the summary (`pending`, `shipped`, `delivered`, `canceled`) | its trait's value                   |
+| 2   | something shipped, units remain                                                | `partially_fulfilled`               |
+| 3   | nothing shipped, every remaining unit held                                     | `on_hold` (wins over `in_progress`) |
+| 4   | otherwise (`paid`, `processing`)                                               | its trait's value                   |
 
 The per-status half (rows 1 and 4) is the `fulfillment` trait in [the status traits](#status-traits).
 
@@ -382,15 +382,15 @@ Every question the module asks of a status alone reads one record,
 `ORDER_STATUS_TRAITS` (`domain/status-traits.ts`), declared `satisfies Record<OrderStatus, ...>`.
 A status added to the contract fails the build there instead of falling into a default category.
 
-| Trait            | Read by                               | `pending` | `paid`    | `processing` | `shipped` | `delivered` | `cancelled` |
-| ---------------- | ------------------------------------- | --------- | --------- | ------------ | --------- | ----------- | ----------- |
-| `stockCommitted` | `paymentSettled`                      | no        | yes       | yes          | yes       | yes         | no          |
-| `beforeDispatch` | `isBeforeDispatch` (with the summary) | yes       | yes       | yes          | no        | no          | no          |
-| `withdrawable`   | `canWithdraw`                         | yes       | yes       | yes          | yes       | yes         | no          |
-| `fulfillment`    | `fulfillmentStatusOf`, its filter     | see below | see below | see below    | see below | see below   | see below   |
+| Trait            | Read by                               | `pending` | `paid`    | `processing` | `shipped` | `delivered` | `canceled` |
+| ---------------- | ------------------------------------- | --------- | --------- | ------------ | --------- | ----------- | ---------- |
+| `stockCommitted` | `paymentSettled`                      | no        | yes       | yes          | yes       | yes         | no         |
+| `beforeDispatch` | `isBeforeDispatch` (with the summary) | yes       | yes       | yes          | no        | no          | no         |
+| `withdrawable`   | `canWithdraw`                         | yes       | yes       | yes          | yes       | yes         | no         |
+| `fulfillment`    | `fulfillmentStatusOf`, its filter     | see below | see below | see below    | see below | see below   | see below  |
 
 `fulfillment` is a value plus whether the summary may refine it: `unfulfilled` (`pending`,
-`cancelled`, and `paid` which follows the summary), `in_progress` (`processing`, follows the
+`canceled`, and `paid` which follows the summary), `in_progress` (`processing`, follows the
 summary), `shipped`, `fulfilled`. The edges between statuses are not traits; they live in the
 [event table](../theory/tactical-ddd.md#1-the-order-lifecycle).
 
@@ -435,7 +435,7 @@ days, and rebuilding from the siblings would need reads `orders` may not make.
 ```mermaid
 flowchart LR
     subgraph orders
-        M[status moves<br/>created, paid, processing,<br/>shipped, delivered, cancelled,<br/>status_overridden]
+        M[status moves<br/>created, paid, processing,<br/>shipped, delivered, canceled,<br/>status_overridden]
     end
     subgraph siblings["modules that import orders"]
         P[payments<br/>declines, refunds]
@@ -454,7 +454,7 @@ flowchart LR
 ```
 
 **Two writers, one door.** `orders` writes its own moves inside the move's transaction (the
-`markPaid`, `markProcessing`, `markShipped`, `markDelivered` and `markFulfilmentComplete` doors take
+`markPaid`, `markProcessing`, `markShipped`, `markDelivered` and `markFulfillmentComplete` doors take
 an `actor`). A module that depends on `orders` calls `orderService.appendTimeline(orderId, entry,
 session)` in its own transaction, so a row commits with the fact it describes or not at all, and a
 write that lost its race leaves no row. `orders` cannot listen to them: they import it.
@@ -468,13 +468,13 @@ keeping a copy of this table.
 
 | Group     | Type                                                                                                            | Buyer sees |
 | --------- | --------------------------------------------------------------------------------------------------------------- | ---------- |
-| Order     | `created`, `paid`, `processing`, `shipped`, `delivered`, `cancelled`                                            | yes        |
+| Order     | `created`, `paid`, `processing`, `shipped`, `delivered`, `canceled`                                             | yes        |
 | Order     | `status_overridden` (mode, from, to, and the staff's reason as `text`)                                          | no         |
 | Order     | `address_corrected` (staff-only)                                                                                | no         |
 | Payment   | `payment_declined`, `refund_issued`, `refund_settled`                                                           | yes        |
 | Payment   | `refund_failed` (a failure code, never the provider's wording)                                                  | no         |
 | Payment   | `refund_canceled` (a refund staff voided; ids and amount only)                                                  | no         |
-| Shipments | `shipment_shipped`, `shipment_delivered`, `shipment_lost`, `remainder_cancelled`                                | yes        |
+| Shipments | `shipment_shipped`, `shipment_delivered`, `shipment_lost`, `remainder_canceled`                                 | yes        |
 | Shipments | `fulfillment_held`, `fulfillment_released` (a hold's reason code)                                               | no         |
 | Returns   | `return_requested`, `return_approved`, `return_declined`, `return_received`, `return_closed`, `return_canceled` | yes        |
 | Documents | `invoice_issued`, `credit_note_issued`                                                                          | yes        |
@@ -580,8 +580,8 @@ owns is the clock and the button:
 flowchart LR
     paid["paid<br/><i>right exists, no end yet</i>"] --> shipped["shipped<br/><i>still no end</i>"]
     shipped -- "markDelivered(the LAST arrival)" --> goods["delivered<br/><i>withdrawUntil = end of day (last delivery + the period)</i>"]
-    paid -- "markFulfilmentComplete (digital)" --> digital["delivered<br/><i>withdrawUntil = end of day (paidAt + the period)</i>"]
-    shipped -- "remainder cancelled after every arrival" --> late["delivered<br/><i>withdrawUntil = from the cancellation, the later date</i>"]
+    paid -- "markFulfillmentComplete (digital)" --> digital["delivered<br/><i>withdrawUntil = end of day (paidAt + the period)</i>"]
+    shipped -- "remainder canceled after every arrival" --> late["delivered<br/><i>withdrawUntil = from the cancellation, the later date</i>"]
 ```
 
 - **`conformityUntil` is frozen beside it**, two calendar years from the arrival plus seven days of margin, to the end of that UTC day (the legal guarantee of conformity); `returns` judges a defect or a wrong item by it, see [the two deadlines](./returns.md#the-two-deadlines).
@@ -665,7 +665,7 @@ Every cancel and every refund leaves one written trace, and each has exactly one
 
 | What happened                                      | The mail                                                                                             | Template                                                 |
 | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| The customer, or staff, cancelled                  | what the cancel did to their money: going back, no refund, or nothing charged                        | `orders.order-cancelled`                                 |
+| The customer, or staff, cancelled                  | what the cancel did to their money: going back, no refund, or nothing charged                        | `orders.order-canceled`                                  |
 | The reservation sweep cancelled (a hold timed out) | a card hold's expiry notice; a transfer's is `payments`' (`cause: reservation_expired` on the event) | `orders.order-card-expired`, `payments.transfer-expired` |
 | The customer withdrew before dispatch              | `returns`' withdrawal acknowledgement                                                                | `returns.notice`                                         |
 | The account was erased                             | none: the address belongs to an account that no longer exists                                        |                                                          |
@@ -674,7 +674,7 @@ Every cancel and every refund leaves one written trace, and each has exactly one
 
 The analytics event follows the same split: only a hold that timed out reports
 `order_reservation_expired`. An erasure's cancel, which also has no request behind it, reports
-`order_cancelled` like any other, and so does a lost-parcel settlement (`markUndeliverable`, which
+`order_canceled` like any other, and so does a lost-parcel settlement (`markUndeliverable`, which
 reports through `afterCancel` too, as the system actor with cause `lost`: the status move hands the
 report back up through `delivery`, and `returns`, which owns the transaction, calls it once the
 commit lands).
@@ -684,8 +684,8 @@ any mail to it would only bounce.
 
 ```mermaid
 flowchart TD
-    cancel["a cancel door succeeds"] --> person{"a person cancelled,<br/>not a withdrawal?"}
-    person -- yes --> cancelled["orders.order-cancelled"]
+    cancel["a cancel door succeeds"] --> person{"a person canceled,<br/>not a withdrawal?"}
+    person -- yes --> canceled["orders.order-canceled"]
     person -- no --> own["its own mail, or none"]
     cancel --> owed{"refund owed?"}
     owed -- yes --> refund["payments settles the refund"]
@@ -694,7 +694,7 @@ flowchart TD
     ret -- yes --> closed["returns' closing notice"]
 ```
 
-The cancelled mail is sent from the `order.cancelled` listener (`services/cancel-mail.ts`, the rule
+The cancelled mail is sent from the `order.canceled` listener (`services/cancel-mail.ts`, the rule
 is [Customer mail](../tools/outbox.md#customer-mail)), so it says what is being returned. The refunded
 mail belongs to `payments`, which sends it from its own `payment.refunded` listener once the refund settles, so it only ever says what already went back. A paid
 cancel therefore sends both, a few moments apart. A refund the provider refused sends nothing: no
@@ -719,13 +719,13 @@ dispatch, and both count.
 | **Flag only**        | PAID cancels by the buyer, by either door                                                                                                                  | nothing is paused; staff are mailed ("review only"), once               |
 | Never counts         | a cancel by staff, an erasure, a payment mismatch; returns after delivery                                                                                  |                                                                         |
 
-Both counts read the order timeline (`cancelled` rows: `by` and, for the system's causes, `cause`),
+Both counts read the order timeline (`canceled` rows: `by` and, for the system's causes, `cause`),
 only the rows after the last hold was set or staff last acted on the account (set or lifted a hold),
 and split orders by whether money ever reached them (`paidAt`).
 
 ```mermaid
 flowchart TD
-    cancel["order.cancelled<br/>cause customer, withdrawal or reservation_expired"] --> count["count the buyer's cancels since the last hold or review,<br/>inside the window, in two piles:<br/>unpaid (+ expired reservations) and paid"]
+    cancel["order.canceled<br/>cause customer, withdrawal or reservation_expired"] --> count["count the buyer's cancels since the last hold or review,<br/>inside the window, in two piles:<br/>unpaid (+ expired reservations) and paid"]
     count --> unpaid{"unpaid pile<br/>reached the limit?"}
     unpaid -- yes --> claim["users — takeAutomaticPurchaseHold<br/>one atomic write: hold + review flag"]
     claim --> won{"this call took it?"}
@@ -859,4 +859,4 @@ evaluator — [Authorization](../theory/authorization.md) explains the model.
 - [`inventory`](./inventory.md) — where the units actually move
 - [`payments`](./payments.md) — the money half of the same transition
 - [Tactical DDD](../theory/tactical-ddd.md) — why this is the aggregate candidate
-- [Events & Logging](../tools/events-and-logging.md) — `order.cancelled` and `inventory.reservation_expired`
+- [Events & Logging](../tools/events-and-logging.md) — `order.canceled` and `inventory.reservation_expired`

@@ -22,10 +22,10 @@ import { onDomainEvent, type DomainEventMap } from '@kernel/events';
 import { RESERVATION_EXPIRED } from '@modules/inventory';
 import { router } from './routes';
 import { orderService } from './services';
-// Also registers this module's event declarations (ORDER_CANCELLED, ORDER_CREATED,
+// Also registers this module's event declarations (ORDER_CANCELED, ORDER_CREATED,
 // ORDER_STATUS_CHANGED) into the kernel's `DomainEventMap`. Reached directly, never through this
 // module's own barrel — see CLAUDE.md's module-barrel rule.
-import { ORDER_CANCELLED, ORDER_CREATED, ORDER_REDACTED, ORDER_STATUS_CHANGED } from './events';
+import { ORDER_CANCELED, ORDER_CREATED, ORDER_REDACTED, ORDER_STATUS_CHANGED } from './events';
 import { ordersConfig } from './config';
 import { ordersRateLimits } from './rate-limits';
 import { ordersJobs } from './jobs';
@@ -52,9 +52,9 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
                 ? { eventType: 'order.paid', data: { orderId: payload.orderId } }
                 : undefined
     },
-    [ORDER_CANCELLED]: {
-        toPublicEvent: (payload: DomainEventMap[typeof ORDER_CANCELLED]) => ({
-            eventType: 'order.cancelled',
+    [ORDER_CANCELED]: {
+        toPublicEvent: (payload: DomainEventMap[typeof ORDER_CANCELED]) => ({
+            eventType: 'order.canceled',
             // The refund flag is a policy for `payments`; a subscriber hears `payment.refunded`.
             data: { orderId: payload.orderId, cause: payload.cause }
         })
@@ -83,7 +83,7 @@ export default {
             section: 'orders',
             collect: (subject) => orderService.findOwnOrders(subject.userId),
             // Detach, never delete — the order survives the account, inside the same
-            // hard-delete transaction. A never-paid order is also cancelled, after the commit.
+            // hard-delete transaction. A never-paid order is also canceled, after the commit.
             // See `eraseUserOrders`.
             erase: ({ userId }, session) => orderService.eraseUserOrders(userId, session),
             // An inactive account keeps its orders and its link to them; only the PII clock starts.
@@ -115,9 +115,9 @@ export default {
         // One handler for the event: the cancel mail and the shop's own pause after repeated buyer
         // cancellations (`./services/purchase-hold.ts`, which logs its own failure and never
         // rejects, so it cannot stall the mail or the order's later events).
-        onDomainEvent(ORDER_CANCELLED, (payload) =>
+        onDomainEvent(ORDER_CANCELED, (payload) =>
             Promise.all([
-                orderService.mailOrderCancelled(payload),
+                orderService.mailOrderCanceled(payload),
                 orderService.considerPurchaseHold(payload)
             ]).then(() => undefined)
         );
@@ -138,11 +138,11 @@ export default {
             'order.paid',
             'order.paidExpress',
             'order.shipped',
-            // Shipped in part, held back by staff, and shipped in part with the rest cancelled by
+            // Shipped in part, held back by staff, and shipped in part with the rest canceled by
             // the buyer: the states splitting an order into shipments adds.
             'order.partiallyFulfilled',
             'order.onHold',
-            'order.remainderCancelled',
+            'order.remainderCanceled',
             'order.delivered',
             // One delivered order per withdrawal state, aged from the period: open (1 day back),
             // last day (exactly `period` days back, closes at the end of today UTC), closed.
@@ -155,7 +155,7 @@ export default {
             'order.deliveredTwoLines',
             // Delivered at the start of the shop's history, so its withdrawal window is long closed.
             'order.deliveredLongAgo',
-            'order.cancelled',
+            'order.canceled',
             'order.softDeleted',
             'order.paidOffline',
             'order.awaitingTransfer',

@@ -29,7 +29,7 @@ import {
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
 import { presentFulfillmentOrder, presentShipment } from '../presenter';
 
-/** How the caller stands to an order: may they update fulfilment or start it. */
+/** How the caller stands to an order: may they update fulfillment or start it. */
 export interface Standing {
     /** The caller holds `update:Shipment`. */
     staff: boolean;
@@ -38,7 +38,7 @@ export interface Standing {
 }
 
 /**
- * How the caller stands to a fulfilment.
+ * How the caller stands to a fulfillment.
  * @param authContext - the caller, or `undefined` for no request behind the read
  */
 export const standingOn = (authContext: AuthContext | undefined): Standing =>

@@ -11,7 +11,7 @@
 import {
     cardHoldExpiredEmail,
     orderConfirmEmail,
-    orderCancelledEmail,
+    orderCanceledEmail,
     type OrderLines
 } from '@modules/orders/emails';
 import { orderTotal } from '@modules/orders/domain';
@@ -235,7 +235,7 @@ describe('orderConfirmEmail', () => {
     });
 });
 
-describe('orderCancelledEmail', () => {
+describe('orderCanceledEmail', () => {
     const PAID = { ...ORDER, currency: 'EUR', paidAt: new Date('2026-09-19T12:00:00.000Z') };
     const UNPAID = { ...ORDER, currency: 'EUR' };
     /** The grand total the order itself computes — what a full refund returns. */
@@ -243,38 +243,38 @@ describe('orderCancelledEmail', () => {
         orderTotal({ ...ORDER, currency: 'EUR' })
     );
 
-    it('names the cancelled template and the order', () => {
-        const mail = orderCancelledEmail('en', NAME, PAID, '2026-000041', true);
+    it('names the canceled template and the order', () => {
+        const mail = orderCanceledEmail('en', NAME, PAID, '2026-000041', true);
 
-        expect(mail.template).toBe('orders.order-cancelled');
+        expect(mail.template).toBe('orders.order-canceled');
         expect(mail.data.body).toContain('2026-000041');
     });
 
     it('says the paid total is going back when the cancel refunds', () => {
-        const { data } = orderCancelledEmail('en', NAME, PAID, ORDER_ID, true);
+        const { data } = orderCanceledEmail('en', NAME, PAID, ORDER_ID, true);
 
         expect(data.refundNote).toContain(TOTAL);
         expect(data.refundNote).toContain('returned');
     });
 
-    it('says no refund was issued when an operator cancelled a paid order without one', () => {
-        const { data } = orderCancelledEmail('en', NAME, PAID, ORDER_ID, false);
+    it('says no refund was issued when an operator canceled a paid order without one', () => {
+        const { data } = orderCanceledEmail('en', NAME, PAID, ORDER_ID, false);
 
         expect(data.refundNote).toContain('No refund');
         expect(data.refundNote).not.toContain(TOTAL);
     });
 
     it('says nothing was charged for an order that was never paid, refund flag or not', () => {
-        const withFlag = orderCancelledEmail('en', NAME, UNPAID, ORDER_ID, true).data.refundNote;
-        const without = orderCancelledEmail('en', NAME, UNPAID, ORDER_ID, false).data.refundNote;
+        const withFlag = orderCanceledEmail('en', NAME, UNPAID, ORDER_ID, true).data.refundNote;
+        const without = orderCanceledEmail('en', NAME, UNPAID, ORDER_ID, false).data.refundNote;
 
         expect(withFlag).toContain('nothing was charged');
         expect(without).toBe(withFlag);
     });
 
     it('translates by the recipient locale and echoes no key', () => {
-        const english = orderCancelledEmail('en', NAME, PAID, ORDER_ID, true);
-        const italian = orderCancelledEmail('it', NAME, PAID, ORDER_ID, true);
+        const english = orderCanceledEmail('en', NAME, PAID, ORDER_ID, true);
+        const italian = orderCanceledEmail('it', NAME, PAID, ORDER_ID, true);
 
         expect(italian.subject).not.toBe(english.subject);
         for (const mail of [english, italian])

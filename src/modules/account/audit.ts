@@ -17,8 +17,8 @@ export const accountAuditActions = {
     AUTH_PASSWORD_CHANGED: 'auth.password.changed',
     /** `DELETE /account` locked the account and scheduled its erasure at `purgeAt`. */
     AUTH_ACCOUNT_DELETE_SCHEDULED: 'auth.account_delete.scheduled',
-    /** A scheduled deletion was cancelled — `metadata.via` is `link`, `sign-in` or `staff`. */
-    AUTH_ACCOUNT_DELETE_CANCELLED: 'auth.account_delete.cancelled',
+    /** A scheduled deletion was canceled — `metadata.via` is `link`, `sign-in` or `staff`. */
+    AUTH_ACCOUNT_DELETE_CANCELED: 'auth.account_delete.canceled',
     /**
      * `ops:reapply-erasures` erased accounts again on a restored database: the restoration log
      * (ISO/IEC 27701). `metadata` holds who restored, which snapshot and the counts.
@@ -33,8 +33,8 @@ export const accountAuditActions = {
     /** `pendingEmail` swapped into `email` and every refresh token revoked. */
     AUTH_EMAIL_CHANGE_COMPLETED: 'auth.email_change.completed',
     /** `DELETE /account/email-change` discarded a pending change without proving it. */
-    AUTH_EMAIL_CHANGE_CANCELLED: 'auth.email_change.cancelled',
-    /** `POST /account/email-change/undo` reverted (or cancelled) a change from the old address's link. */
+    AUTH_EMAIL_CHANGE_CANCELED: 'auth.email_change.canceled',
+    /** `POST /account/email-change/undo` reverted (or canceled) a change from the old address's link. */
     AUTH_EMAIL_CHANGE_UNDONE: 'auth.email_change.undone',
     /** `POST /account/email-change/resend` mailed the pending address a fresh link. */
     AUTH_EMAIL_CHANGE_RESENT: 'auth.email_change.resent',

@@ -44,7 +44,7 @@ type OrderForActions = Lean<OrderDocument>;
  * `delivery`'s start door, plus `orders`' own override — neither decided by `actorOf`'s
  * customer/admin split, since a warehouse operator holds `start:Shipment` without
  * `update:Order` and would otherwise read as a plain customer. Each is asked of the caller's
- * OWN key, at the same tenant scope `actorOf` already resolves. The ship, deliver and fulfil doors
+ * OWN key, at the same tenant scope `actorOf` already resolves. The ship, deliver and fulfill doors
  * are not here: they act on a fulfillment order or a shipment, each of which carries its own
  * `actions` (`delivery`'s presenter).
  * @param order - the order being served
@@ -74,7 +74,7 @@ const startAndOverrideActions = (
 
 /**
  * The status-derived actions with the cancel withdrawn once anything has shipped: a cancel is the
- * WHOLE order, and goods that left cannot be cancelled. What remains is cancelled one fulfillment
+ * WHOLE order, and goods that left cannot be canceled. What remains is canceled one fulfillment
  * order at a time through `returns`, which `GET /returns/options` answers.
  * @param actions - what the status and actor alone allow
  * @param shipped - the order's `fulfillment.shipped`

@@ -40,7 +40,7 @@ import { examplePublishedEmail } from '@modules/example';
 import {
     orderConfirmEmail,
     cardHoldExpiredEmail,
-    orderCancelledEmail
+    orderCanceledEmail
 } from '@modules/orders/emails';
 import {
     paymentReceivedEmail,
@@ -171,7 +171,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }],
         currency: 'EUR'
     }),
-    'orders.order-cancelled': orderCancelledEmail(
+    'orders.order-canceled': orderCanceledEmail(
         locale,
         'Ada',
         {
@@ -273,7 +273,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
  * as they are for most real mails. Only a builder with an optional input has an entry.
  */
 const minimalContentFor = (locale: string): Record<string, EmailContent> => ({
-    'orders.order-cancelled': orderCancelledEmail(
+    'orders.order-canceled': orderCanceledEmail(
         locale,
         'Ada',
         {

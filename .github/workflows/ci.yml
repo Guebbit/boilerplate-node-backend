@@ -164,6 +164,9 @@ jobs:
             - name: Lint AsyncAPI spec
               run: npm run lint:asyncapi
 
+            - name: Lint AsyncAPI names
+              run: npm run lint:asyncapi:names
+
     spec-identity:
         # The cross-repo contract gate. Mirrors the job of the same name in the frontend.
         #

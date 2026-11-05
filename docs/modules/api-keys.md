@@ -4,7 +4,7 @@
 **Owns** — machine-to-machine credentials: mint, list, revoke, and the `CredentialResolver` that
 lets an `sk_...` bearer token authenticate a request the way a JWT does.
 **Depends on** — [`users`](./users.md) for the minting user's account, [`access`](./access.md)
-for their current role, and [`account`](./account.md) for the `account.sessions-revoked` event.
+for their current role, and [`account`](./account.md) for the `account.sessions_revoked` event.
 **Breaks if you change** — the `sk_` token prefix (`kernel/authentication.ts`'s dispatch between
 this module's credential path and `account`'s JWT path assumes it), or the mint-time/check-time
 permission-floor pair in `services/api-keys.ts` and `services/resolver.ts`.
@@ -28,8 +28,8 @@ flowchart LR
     api_keys --> access
     api_keys --> account
     api_keys --> users
-    account -. "account.authenticator-removed" .-> api_keys
-    account -. "account.sessions-revoked" .-> api_keys
+    account -. "account.authenticator_removed" .-> api_keys
+    account -. "account.sessions_revoked" .-> api_keys
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -103,7 +103,7 @@ flowchart LR
     E -->|no| U["422"]
     E -->|yes| K["key minted · minter mailed"]
     L["logout everywhere /<br/>password reset /<br/>email change undone"] --> T["one transaction:<br/>epoch + credential + outbox row"]
-    T --> V["account.sessions-revoked"]
+    T --> V["account.sessions_revoked"]
     V -->|"relay delivers; a failing consumer is retried"| X["every live key the person minted revoked · list mailed"]
 ```
 
@@ -134,13 +134,13 @@ a person with none live gets neither audit row nor mail), so a redelivery does n
   means for keys. An ordinary password change, where the owner typed the current password, leaves
   keys alone.
 - **Losing a staff authenticator app revokes the keys.** The removal that takes a staff member's last
-  app announces `account.authenticator-removed`; this module revokes what they minted and mails the
+  app announces `account.authenticator_removed`; this module revokes what they minted and mails the
   list. Not a compromise, so it is not a session revocation. And a key never holds more than its
   minter does: a minter with no app lends it no staff rule
   ([Staff need an authenticator app](./account-two-factor.md#staff-need-an-authenticator-app)).
 - **A replayed refresh token leaves keys alone.** It signs every device out (see
   [Refresh rotation](./account-sessions.md#refresh-rotation)) but does not announce
-  `account.sessions-revoked`: it shows one browser's token leaked, not that the owner's account
+  `account.sessions_revoked`: it shows one browser's token leaked, not that the owner's account
   was taken over. In `cookie` mode there is no rotation, so nothing to replay: a stolen cookie ends
   with "log out that device", logout everywhere or a password reset.
 

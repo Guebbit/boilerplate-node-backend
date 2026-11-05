@@ -47,7 +47,7 @@ describe('returnSchema', () => {
             'other'
         ]);
         expect(enumOf(returnSchema, 'returnPostage')).toEqual(['consumer', 'shop']);
-        // A return is goods coming back unless it says it cancelled what never shipped.
+        // A return is goods coming back unless it says it canceled what never shipped.
         expect(defaultOf(returnSchema, 'kind')).toBe('return');
         expect(enumOf(returnSchema, 'kind')).toEqual(['return', 'cancellation']);
     });

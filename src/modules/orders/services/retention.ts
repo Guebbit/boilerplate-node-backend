@@ -69,7 +69,7 @@ export const anonymizeDueOrders = (): Promise<number> =>
 
 /**
  * Cancels each order through the reservation sweep's own path — `cancelForErasureById`, which
- * releases the stock hold and, through `ORDER_CANCELLED`, cancels the open payment intent.
+ * releases the stock hold and, through `ORDER_CANCELED`, cancels the open payment intent.
  *
  * Not the expiry mail: the address belongs to an account that no longer exists. Never rejects:
  * one order failing (a payment racing in, a write conflict) is logged and the rest go on, since
@@ -85,7 +85,7 @@ const cancelUnpaidOrders = (orderIds: readonly string[]): Promise<void> =>
                     if (!result.success)
                         // Stryker disable next-line all
                         logger.warn({
-                            message: "An erased account's unpaid order was not cancelled.",
+                            message: "An erased account's unpaid order was not canceled.",
                             orderId,
                             status: result.status
                         });

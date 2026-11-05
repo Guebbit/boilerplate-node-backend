@@ -18,12 +18,12 @@ export const ordersAuditActions = {
     ORDER_DELETED: 'order.deleted',
     ORDER_RESTORED: 'order.restored',
     /*
-     * The one order write a customer performs. Audited because a cancelled order is a support
-     * question with a money answer — who cancelled it, the customer or the shop, decides who owes
+     * The one order write a customer performs. Audited because a canceled order is a support
+     * question with a money answer — who canceled it, the customer or the shop, decides who owes
      * whom an apology. `actorRole` on the record carries who did it; `metadata` carries `cause`,
      * `refund` (whether the money went back) and `paid` (whether there was money to return).
      */
-    ORDER_CANCELLED: 'order.cancelled',
+    ORDER_CANCELED: 'order.canceled',
     /* An admin skipped or corrected the normal lifecycle. `metadata` carries mode/from/to/reason. */
     ORDER_STATUS_OVERRIDDEN: 'order.status_overridden',
     /* Staff changed where an unshipped order ships. `metadata` never carries the address itself. */

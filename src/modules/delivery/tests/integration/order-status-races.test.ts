@@ -123,7 +123,7 @@ describe('a ship racing a cancel of the whole order', () => {
         const shipments = await shipmentsOf(String(order._id));
         const [after] = await fulfillmentOrdersOf(String(order._id));
         if (ship.status === 201) {
-            // The shipment won: the cancel was refused and nothing was cancelled.
+            // The shipment won: the cancel was refused and nothing was canceled.
             expect(cancel.status).toBe(409);
             expect(stored?.status).toBe(OrderStatus.shipped);
             expect(shipments).toHaveLength(1);
@@ -132,9 +132,9 @@ describe('a ship racing a cancel of the whole order', () => {
             // The cancel won: the shipment was refused, and every fulfillment order followed it.
             expect(cancel.status).toBe(200);
             expect(ship.status).toBe(409);
-            expect(stored?.status).toBe(OrderStatus.cancelled);
+            expect(stored?.status).toBe(OrderStatus.canceled);
             expect(shipments).toEqual([]);
-            expect(after.status).toBe('cancelled');
+            expect(after.status).toBe('canceled');
         }
     });
 });

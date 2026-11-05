@@ -61,7 +61,7 @@ const PENDING_TOKEN_TYPES: readonly VerificationTokenType[] = [
 
 /**
  * Move the epoch, for a cause that owns it. An announcing cause writes the
- * `account.sessions-revoked` row in the SAME transaction, so subscribers hear of it exactly when
+ * `account.sessions_revoked` row in the SAME transaction, so subscribers hear of it exactly when
  * the sessions died, and a failing subscriber is retried by the relay rather than skipped.
  *
  * @param cause - why sessions end

@@ -42,9 +42,9 @@ export const IN_FLIGHT_PAYMENT_STATUSES: readonly PaymentStatus[] = [
 
 /**
  * The statuses a settlement (confirm, sync, or the provider's webhook) may move a payment away
- * from — every non-terminal one. `succeeded` and `cancelled` are absent, which is what makes
+ * from — every non-terminal one. `succeeded` and `canceled` are absent, which is what makes
  * `settlePayment` at-most-once: a webhook retried after `succeeded` has landed finds nothing left
- * to move, and a late `processing` or `declined` report cannot reopen a cancelled intent.
+ * to move, and a late `processing` or `declined` report cannot reopen a canceled intent.
  */
 export const SETTLEABLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
     'requires_confirmation',
@@ -54,14 +54,14 @@ export const SETTLEABLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
 ];
 
 /**
- * The statuses the SUCCESS write may run from: the settleable ones plus `cancelled`. Money that
- * lands on a cancelled intent is real, so it is recorded and (the order being gone) returned in
+ * The statuses the SUCCESS write may run from: the settleable ones plus `canceled`. Money that
+ * lands on a canceled intent is real, so it is recorded and (the order being gone) returned in
  * the same transaction. Only the success write, the amount-mismatch write and the provider
  * re-read's gate use this; every other write stays on {@link SETTLEABLE_PAYMENT_STATUSES}.
  */
 export const SUCCESS_SETTLEABLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
     ...SETTLEABLE_PAYMENT_STATUSES,
-    'cancelled'
+    'canceled'
 ];
 
 /**
@@ -70,7 +70,7 @@ export const SUCCESS_SETTLEABLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
  */
 export const REAPABLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
     ...SETTLEABLE_PAYMENT_STATUSES,
-    'cancelled'
+    'canceled'
 ];
 
 /** The `provider` of a payment an operator recorded by hand: no PSP is behind it. */

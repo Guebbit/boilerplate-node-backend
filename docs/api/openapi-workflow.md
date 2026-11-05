@@ -105,6 +105,10 @@ npm run test:prism        # smoke-test Prism mock server against the spec
 
 The full "I changed X, run Y" table is [Regenerating After a Change](./regenerating.md).
 
+## Names are US English (rule N6)
+
+Names in US English (AIP-190 / Zalando #103); prose is free. The rule covers what a machine reads: operationIds, schema names, property names, enum values, error-code keys, and on the async side channels, messages and operations. `cancelled`, `cancellable`, `catalogue`, `fulfil…` and the other British stems fail `npm run lint:openapi` (`names-in-us-english-*` in `shared/contracts/spectral.yaml`) and `npm run lint:asyncapi:names` (`shared/contracts/spectral.asyncapi.names.yaml`, run on the bundled `asyncapi.yaml`). `cancellation*` is the US spelling too and stays; `cancel` verbs stay.
+
 ## Nullable fields (OpenAPI 3.1)
 
 The contract is OpenAPI **3.1.0**, where `nullable: true` does not exist: JSON Schema 2020-12 has no such keyword, so every tool ignores it without complaint and the field silently stops accepting `null`. The `no-nullable-keyword` Spectral rule fails the lint on it.

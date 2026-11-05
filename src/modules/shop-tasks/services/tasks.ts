@@ -185,9 +185,9 @@ export const shopTasks = {
             )
         ),
 
-    /** `order.cancelled`: nothing is owed stock for a cancelled order. */
-    onOrderCancelled: (payload: { orderId: string }) =>
-        guarded('order.cancelled', () =>
+    /** `order.canceled`: nothing is owed stock for a canceled order. */
+    onOrderCanceled: (payload: { orderId: string }) =>
+        guarded('order.canceled', () =>
             taskService.clearSystemTasks([TaskKind.paid_without_hold], {
                 type: 'order',
                 id: payload.orderId
@@ -210,9 +210,9 @@ export const shopTasks = {
                 )
         ),
 
-    /** `fulfillment_order.cancelled`: the buyer is out of the delay. */
-    onFulfillmentOrderCancelled: (payload: { fulfillmentOrderId: string }) =>
-        guarded('fulfillment_order.cancelled', () =>
+    /** `fulfillment_order.canceled`: the buyer is out of the delay. */
+    onFulfillmentOrderCanceled: (payload: { fulfillmentOrderId: string }) =>
+        guarded('fulfillment_order.canceled', () =>
             taskService.clearSystemTasks([TaskKind.consent_due], {
                 type: 'fulfillment_order',
                 id: payload.fulfillmentOrderId

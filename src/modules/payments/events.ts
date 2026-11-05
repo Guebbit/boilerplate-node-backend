@@ -54,7 +54,7 @@ declare module '@kernel/events' {
         /**
          * One refund settled — emitted from `./services/refunds.ts`'s `settleRefund`, on the same
          * at-most-once write, whether an operator asked for it (`refundPayment`) or the automatic
-         * `order.cancelled` listener did. A payment can raise it more than once: each partial
+         * `order.canceled` listener did. A payment can raise it more than once: each partial
          * refund is its own fact. `invoicing` is the listener that issues a credit note from it —
          * see `docs/modules/invoicing.md`. Absent while a hand-paid refund waits for an operator
          * (`leaveForOperator`): its record is open and nothing has settled yet.
@@ -183,7 +183,7 @@ declare module '@kernel/events' {
 
         /**
          * The provider reported a success that is not the payment frozen for the order (another
-         * amount, currency or payment id). The order was cancelled and the refund opened; a person
+         * amount, currency or payment id). The order was canceled and the refund opened; a person
          * has to look at why. Written in the settlement's transaction. Internal only.
          *
          * Delivered through the transactional outbox: at-least-once, so a listener dedupes on

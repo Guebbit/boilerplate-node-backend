@@ -1,6 +1,6 @@
 /**
  * @module
- * Taking some lines out of a hold — the arithmetic of a partial shipment and of a cancelled
+ * Taking some lines out of a hold — the arithmetic of a partial shipment and of a canceled
  * remainder, pure.
  */
 
@@ -95,7 +95,7 @@ describe('takeFromHold, with preorder claims', () => {
     });
 
     it('lets a preorder line fall back on the shelf units that replaced its claim', () => {
-        // Stock arrived and was allocated, but the fulfillment order has not heard yet: its cancelled
+        // Stock arrived and was allocated, but the fulfillment order has not heard yet: its canceled
         // remainder still names the claim, and the units that replaced it must not be stranded.
         const allocated = [{ productId: 'a', quantity: 2 }];
 

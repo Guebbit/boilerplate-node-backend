@@ -343,7 +343,7 @@ src/modules/<name>/
                                                the scaffolder starts here: crud.ts + actions.ts + index.ts
   model.ts repository.ts                       IF it owns a collection; every conditional write is a named repository method
   domain/                                      IF a rule is worth a unit test; a 3+-state stored status almost always has one
-  events.ts                                    IF it emits: past tense, emitted AFTER the write, with an id
+  events.ts                                    IF it emits: past tense or a reached-state word, emitted AFTER the write, with an id (naming: asyncapi-workflow)
   audit/analytics/metrics/probes/rate-limits/config/emails.ts   IF there is something to declare
   providers/                                   IF it owns a port to an outside service (an ACL)
   presenter.ts                                 IF it serves HTTP and owns a model — see below

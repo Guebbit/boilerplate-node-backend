@@ -187,7 +187,7 @@ const settleMismatch = (
         for (const field of fields) paymentAmountMismatchTotal.inc({ field });
         // Stryker disable all
         logger.error({
-            message: `Payments: the provider reported a success for order ${orderId} that is not the payment frozen for it — order cancelled, money to be returned`,
+            message: `Payments: the provider reported a success for order ${orderId} that is not the payment frozen for it — order canceled, money to be returned`,
             paymentId: String(payment._id),
             fields,
             expected: { amount: payment.amount, currency: payment.currency },
@@ -242,7 +242,7 @@ type SettlementOutcome =
  * Replay:  `markPaid` answering `null` on an order that is already past payment (a move that
  *          landed some other way) still announces; nothing is lost. Whoever moved the order
  *          committed its hold, in the same transaction as the move.
- * Lost:    the order was cancelled (or otherwise left `pending`) before the money arrived. The
+ * Lost:    the order was canceled (or otherwise left `pending`) before the money arrived. The
  *          refund record is opened here, so the money is never durable without its way back; the
  *          provider call happens after the commit.
  *
@@ -358,7 +358,7 @@ const afterSettlement = (
  * settles once.
  *
  * The gate:     the PAYMENT write. The settleable sets exclude `succeeded`, and the non-success
- *               ones `cancelled`, so exactly one caller ever sees its own write succeed.
+ *               ones `canceled`, so exactly one caller ever sees its own write succeed.
  * Not the gate: the order's own `pending → paid` move. A webhook retried after
  *               {@link applyWebhookDelivery} failed re-enters here and can lose that
  *               race (the order got there on the failed first attempt) while still being the one
@@ -536,7 +536,7 @@ const findConfirmable = (
 
 /**
  * Whether an order can still be charged into — the gate {@link confirmPayment} checks before
- * reaching the provider, so a cancelled order is refused up front instead of charged then
+ * reaching the provider, so a canceled order is refused up front instead of charged then
  * refunded, which loses the provider's fee on the refund. `syncPayment` has no need for this:
  * `retrieve` only re-reads what the provider already decided, it never asks it to take money.
  *

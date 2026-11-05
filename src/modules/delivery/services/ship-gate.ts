@@ -1,6 +1,6 @@
 /**
  * @module
- * The one order-state question the ship door, the fulfil door and their `actions` flags all ask:
+ * The one order-state question the ship door, the fulfill door and their `actions` flags all ask:
  * may a shipment leave an order in this status? Kept apart from `ship.ts` and `fulfill.ts` (the
  * acts) and `actions.ts` (the flags) so none imports another. Also the shared "may this caller
  * make the `paid → processing` move" step, since both acts make it themselves.
@@ -15,8 +15,8 @@ import type { CallerContext, OrderStatus } from '@types';
 import { ActRefusal } from './act';
 
 /**
- * Whether a shipment (or a digital fulfilment) may leave an order in this status: `processing`, or
- * `paid` when the caller may also start fulfilment — the act then makes the `paid → processing`
+ * Whether a shipment (or a digital fulfillment) may leave an order in this status: `processing`, or
+ * `paid` when the caller may also start fulfillment — the act then makes the `paid → processing`
  * move itself, so shipping from `paid` is an ordinary act and not an override.
  * @param status - the order's status
  * @param mayStart - whether the caller holds `start:Shipment`
@@ -25,11 +25,11 @@ export const isOpenForShipment = (status: OrderStatus, mayStart: boolean): boole
     canShip(status) || (mayStart && canProcessOrder(status));
 
 /**
- * Whether the caller holds the key for the `paid → processing` move the ship and fulfil acts make
+ * Whether the caller holds the key for the `paid → processing` move the ship and fulfill acts make
  * themselves. Read before the act's transaction opens, so a retried transaction cannot change it.
  * @param context - the caller
  */
-export const mayStartFulfilment = (context: CallerContext): boolean =>
+export const mayStartFulfillment = (context: CallerContext): boolean =>
     holds(context.caller, 'start', 'Shipment');
 
 /**

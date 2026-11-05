@@ -316,7 +316,7 @@ describe('what closes a task', () => {
             () => emitDomainEvent('payment.dispute_updated', { ...DISPUTE, status: 'lost' })
         ],
         [
-            'order.cancelled',
+            'order.canceled',
             () =>
                 emitDomainEvent(
                     'inventory.hold_orphaned',
@@ -324,7 +324,7 @@ describe('what closes a task', () => {
                     { eventId: nextEventId() }
                 ),
             () =>
-                emitDomainEvent('order.cancelled', {
+                emitDomainEvent('order.canceled', {
                     orderId: ORDER,
                     refund: true,
                     cause: 'operator'
@@ -358,10 +358,10 @@ describe('what closes a task', () => {
                 })
         ],
         [
-            'fulfillment_order.cancelled',
+            'fulfillment_order.canceled',
             () => emitDomainEvent('fulfillment_order.delayed', DELAY, { eventId: nextEventId() }),
             () =>
-                emitDomainEvent('fulfillment_order.cancelled', {
+                emitDomainEvent('fulfillment_order.canceled', {
                     orderId: ORDER,
                     fulfillmentOrderId: 'fo1'
                 })
@@ -384,7 +384,7 @@ describe('what closes a task', () => {
             { eventId: nextEventId() }
         );
         await emitDomainEvent('payment.refunded', { ...REFUND, full: true });
-        await emitDomainEvent('order.cancelled', {
+        await emitDomainEvent('order.canceled', {
             orderId: ORDER,
             refund: true,
             cause: 'operator'

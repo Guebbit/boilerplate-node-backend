@@ -1,6 +1,6 @@
 /**
  * @module
- * Giving money back — the operator action (`refundPayment`) and the `order.cancelled` listener's
+ * Giving money back — the operator action (`refundPayment`) and the `order.canceled` listener's
  * compensation (`refundForOrder`), both through `performRefund`. Nothing else in this module may
  * move money out.
  *
@@ -196,7 +196,7 @@ export const recordOwedByHand = (
  *
  * @param payment - the payment, still `succeeded`
  * @param request - what to return; a cancellation takes everything still left
- * @param context - the caller, absent for the `order.cancelled` listener
+ * @param context - the caller, absent for the `order.canceled` listener
  * @returns the payment with the record open, or `null` when nothing was left to open
  */
 const leaveForOperator = (
@@ -359,7 +359,7 @@ export const openRefund = (
  *
  * @param payment - the payment the refund is taken from
  * @param refund - the record that just opened
- * @param context - the caller; the `order.cancelled` listener has none and writes no row
+ * @param context - the caller; the `order.canceled` listener has none and writes no row
  */
 const auditRefundRequested = (
     payment: PaymentDocument,
@@ -402,7 +402,7 @@ const keepPending = (
 /**
  * Ask the provider to return one refund's money, and record its answer. A refusal marks the record
  * `failed` and throws {@link RefundLeftOpenError}; the record stays open for the refund sweep, and
- * the caller (the `order.cancelled` listener) logs it instead of rethrowing.
+ * the caller (the `order.canceled` listener) logs it instead of rethrowing.
  *
  * @param payment - the payment (never `manual`, never without a `providerRef`)
  * @param refund - the record to send
@@ -694,7 +694,7 @@ const performCardRefund = (
  *
  * @param orderId - the order whose payment is being returned
  * @param context - present only for a request with a caller (`refundPayment`);
- *  the `order.cancelled` listener (`refundForOrder`) has none
+ *  the `order.canceled` listener (`refundForOrder`) has none
  * @param request - the amount and the reason; omitted, it is everything left, for a cancellation
  * @returns the payment as it now stands — always still `succeeded`, whatever was returned (its
  *   `displayStatus` says how much) — and whether the record was left open for an operator; or
@@ -1098,7 +1098,7 @@ export const cancelRefund = (
     });
 
 /**
- * The `order.cancelled` listener's refund: give the money back if any was taken. The event is the
+ * The `order.canceled` listener's refund: give the money back if any was taken. The event is the
  * only promise of it, delivered by the outbox until this resolves.
  *
  * Idempotent: a redelivery, or a cancel of a never-paid order, finds nothing left to return and
@@ -1109,8 +1109,8 @@ export const cancelRefund = (
  *
  * A hand-paid order opens its record and waits for an operator (`leaveForOperator`).
  *
- * @param orderId - the order that was cancelled
- * @internal The `order.cancelled` listener's refund, which has no caller of its own to check: only
+ * @param orderId - the order that was canceled
+ * @internal The `order.canceled` listener's refund, which has no caller of its own to check: only
  *   this module's `subscribe` may run it, so it is not on `paymentService`.
  */
 export const refundForOrder = (orderId: string): Promise<void> =>
@@ -1157,7 +1157,7 @@ export interface OpenedReturnRefund {
 }
 
 /**
- * Record the money owed for goods a customer returned, or for a remainder cancelled before it
+ * Record the money owed for goods a customer returned, or for a remainder canceled before it
  * shipped — `returns`' one door into the refund. It runs INSIDE the return's own transaction, so
  * the return and what it owes commit together or not at all: nothing durable is ever missing.
  *

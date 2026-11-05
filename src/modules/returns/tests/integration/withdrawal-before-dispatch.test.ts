@@ -1,6 +1,6 @@
 /**
  * @module
- * A withdrawal before dispatch with real money behind it: the order is cancelled, the payment goes
+ * A withdrawal before dispatch with real money behind it: the order is canceled, the payment goes
  * back in full through the order's own refund path, and the return written beside it is closed at
  * birth. Pins what crosses module lines — one `payment.refunded`, one credit note, one mail from
  * `returns` — so a refund and a return never announce the same money twice.
@@ -73,7 +73,7 @@ describe('a withdrawal before dispatch on a paid order', () => {
 
         expect(outcome.success).toBe(true);
         const stored = await readOrder(orderId);
-        expect(stored?.status).toBe(OrderStatus.cancelled);
+        expect(stored?.status).toBe(OrderStatus.canceled);
         // The refund is the cancel's event, delivered by the relay after the response.
         await settleOutboxNudges();
         const payment = await paymentService.getForOrder(orderId, asAdmin());
@@ -135,6 +135,6 @@ describe('a withdrawal before dispatch on a paid order', () => {
         expect(named('payments.refund-issued')).toHaveLength(1);
         expect(named('returns.notice')).toHaveLength(1);
         // A withdrawal is acknowledged by `returns`; the person-cancel mail is not for it.
-        expect(named('orders.order-cancelled')).toHaveLength(0);
+        expect(named('orders.order-canceled')).toHaveLength(0);
     });
 });

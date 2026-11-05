@@ -166,13 +166,13 @@ describe('cancelling an order whose intent already succeeded at the provider', (
     it('returns the money that landed in the last minutes before the cancel', async () => {
         const { user, orderId } = await chargedAtProvider();
 
-        const cancelled = await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
+        const canceled = await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
 
-        expect(cancelled.success).toBe(true);
-        // `order.cancelled` reaches the listener through the outbox, not inline.
+        expect(canceled.success).toBe(true);
+        // `order.canceled` reaches the listener through the outbox, not inline.
         await settleOutboxNudges();
         const payment = await paymentRepository.findByOrderId(orderId);
         const order = await orderService.getById(orderId);
-        expect([payment?.status, order?.status]).toEqual(['succeeded', 'cancelled']);
+        expect([payment?.status, order?.status]).toEqual(['succeeded', 'canceled']);
     });
 });

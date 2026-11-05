@@ -101,14 +101,14 @@ channels:
         messages:
             OrderPaidEvent:
                 $ref: '#/components/messages/OrderPaidEvent'
-    order.cancelled:
-        address: order.cancelled
-        description: An order was cancelled.
+    order.canceled:
+        address: order.canceled
+        description: An order was canceled.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
         messages:
-            OrderCancelledEvent:
-                $ref: '#/components/messages/OrderCancelledEvent'
+            OrderCanceledEvent:
+                $ref: '#/components/messages/OrderCanceledEvent'
     order.redacted:
         address: order.redacted
         description: An order's personal data was scrubbed.
@@ -316,15 +316,15 @@ operations:
             Derived from `order.status_changed` (`to: 'paid'`) rather than its own domain event — see `orders/events.ts`: "listeners filter on `to`; the event doesn't know who cares."
         messages:
             - $ref: '#/channels/order.paid/messages/OrderPaidEvent'
-    webhookOrderCancelled:
+    webhookOrderCanceled:
         action: send
         channel:
-            $ref: '#/channels/order.cancelled'
+            $ref: '#/channels/order.canceled'
         summary: A cancel went through; stock is back on the shelf, except for `cause` lost.
         description: >-
-            The `order.cancelled` domain event, without its refund policy: whether the cancel owes the buyer money back is for `payments`, and a subscriber learns that money actually moved from `payment.refunded`. `cause` says why. A `lost` parcel's units are not restocked: they were never on the shelf to come back to. See `orders/events.ts`.
+            The `order.canceled` domain event, without its refund policy: whether the cancel owes the buyer money back is for `payments`, and a subscriber learns that money actually moved from `payment.refunded`. `cause` says why. A `lost` parcel's units are not restocked: they were never on the shelf to come back to. See `orders/events.ts`.
         messages:
-            - $ref: '#/channels/order.cancelled/messages/OrderCancelledEvent'
+            - $ref: '#/channels/order.canceled/messages/OrderCanceledEvent'
     webhookOrderRedacted:
         action: send
         channel:
@@ -349,7 +349,7 @@ operations:
             $ref: '#/channels/shipment.delivered'
         summary: A shipment was marked delivered.
         description: >-
-            One-to-one with the `shipment.delivered` domain event — see `delivery/services/deliver.ts`. A digital fulfilment fires it too, right after `shipment.shipped`.
+            One-to-one with the `shipment.delivered` domain event — see `delivery/services/deliver.ts`. A digital fulfillment fires it too, right after `shipment.shipped`.
         messages:
             - $ref: '#/channels/shipment.delivered/messages/ShipmentDeliveredEvent'
     webhookShipmentLost:
@@ -429,7 +429,7 @@ operations:
             $ref: '#/channels/return.requested'
         summary: A return was opened — a withdrawal or a request.
         description: >-
-            One-to-one with the `return.requested` domain event — see `returns/services/create.ts`. A withdrawal before dispatch fires it too, followed at once by `return.closed`: the return is born closed, and `order.cancelled` says the order was cancelled.
+            One-to-one with the `return.requested` domain event — see `returns/services/create.ts`. A withdrawal before dispatch fires it too, followed at once by `return.closed`: the return is born closed, and `order.canceled` says the order was canceled.
         messages:
             - $ref: '#/channels/return.requested/messages/ReturnRequestedEvent'
     webhookReturnReceived:
@@ -532,13 +532,13 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/OrderPaidEnvelope'
-        OrderCancelledEvent:
-            name: OrderCancelledEvent
-            title: Order cancelled
+        OrderCanceledEvent:
+            name: OrderCanceledEvent
+            title: Order canceled
             headers:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
-                $ref: '#/components/schemas/OrderCancelledEnvelope'
+                $ref: '#/components/schemas/OrderCanceledEnvelope'
         OrderRedactedEvent:
             name: OrderRedactedEvent
             title: Order redacted
@@ -818,7 +818,7 @@ components:
                 data:
                     $ref: '#/components/schemas/OrderIdPayload'
             additionalProperties: false
-        OrderCancelledPayload:
+        OrderCanceledPayload:
             type: object
             required:
                 - orderId
@@ -828,7 +828,7 @@ components:
                     $ref: '#/components/schemas/Id'
                 cause:
                     title: OrderCancelCause
-                    description: Why the order was cancelled.
+                    description: Why the order was canceled.
                     type: string
                     enum:
                         - customer
@@ -839,7 +839,7 @@ components:
                         - payment_mismatch
                         - lost
             additionalProperties: false
-        OrderCancelledEnvelope:
+        OrderCanceledEnvelope:
             type: object
             required:
                 - type
@@ -847,15 +847,15 @@ components:
                 - data
             properties:
                 type:
-                    title: OrderCancelledEventType
+                    title: OrderCanceledEventType
                     type: string
                     enum:
-                        - order.cancelled
+                        - order.canceled
                 timestamp:
                     type: string
                     format: date-time
                 data:
-                    $ref: '#/components/schemas/OrderCancelledPayload'
+                    $ref: '#/components/schemas/OrderCanceledPayload'
             additionalProperties: false
         OrderRedactedEnvelope:
             type: object

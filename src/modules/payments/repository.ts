@@ -230,10 +230,10 @@ const aggregateRefundRows = (pipeline: PipelineStage[]): Promise<RefundRow[]> =>
 const OPEN_TRANSFER_ROW = { status: 'requires_action', provider: MANUAL_PROVIDER };
 
 /**
- * The row of a bank transfer whose order was cancelled before the money came. Only an operator
+ * The row of a bank transfer whose order was canceled before the money came. Only an operator
  * recording a late transfer takes it over; a card never does.
  */
-const CANCELLED_TRANSFER_ROW = { status: 'cancelled', transferReference: { $exists: true } };
+const CANCELED_TRANSFER_ROW = { status: 'canceled', transferReference: { $exists: true } };
 
 /** What an upsert answers: the row, and whether this call inserted it rather than refreshing one. */
 export interface UpsertedPayment {
@@ -510,7 +510,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * amount and resets to `requires_confirmation`, but ONLY from a state where nobody has paid —
      * the `$in` guard enforces that the same way the order's own status machine does.
      *
-     * Past confirmation (`succeeded`, `cancelled`) the filter misses and the upsert collides with
+     * Past confirmation (`succeeded`, `canceled`) the filter misses and the upsert collides with
      * the unique index instead: that duplicate key IS the answer "this order's money already
      * moved", surfaced as `null` rather than an exception.
      */
@@ -547,9 +547,9 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                 providerRef: undefined,
                 cardLast4: undefined
             },
-            // The open transfer row is the very payment being recorded; a cancelled one is a
-            // transfer that arrived after its order was cancelled (the settlement owes it back).
-            [OPEN_TRANSFER_ROW, CANCELLED_TRANSFER_ROW]
+            // The open transfer row is the very payment being recorded; a canceled one is a
+            // transfer that arrived after its order was canceled (the settlement owes it back).
+            [OPEN_TRANSFER_ROW, CANCELED_TRANSFER_ROW]
         ),
 
     /**

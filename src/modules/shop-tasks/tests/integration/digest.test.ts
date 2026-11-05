@@ -154,7 +154,7 @@ describe('the daily digest', () => {
         const order = await paidAndWaiting(5);
         await runStaffDigest('daily');
 
-        await forceOrderStatus(String(order._id), OrderStatus.cancelled);
+        await forceOrderStatus(String(order._id), OrderStatus.canceled);
         await runStaffDigest('daily');
 
         await expect(summariesOf('warehouse', warehouse.id)).resolves.toEqual([]);

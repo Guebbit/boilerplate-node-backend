@@ -1,7 +1,7 @@
 /**
  * @module
  * What opening a return answers with, and the refusals and writes both ways of opening one share —
- * `create.ts` (goods coming back) and `cancel-remainder.ts` (an unshipped remainder, cancelled).
+ * `create.ts` (goods coming back) and `cancel-remainder.ts` (an unshipped remainder, canceled).
  * One home, so neither imports the other.
  */
 
@@ -32,7 +32,7 @@ export interface CreateReturnInput {
     reason: ReturnReason;
     /** `return` (the default) sends goods back; `cancellation` cancels a fulfillment order's remainder. */
     kind?: ReturnKind;
-    /** The fulfillment order whose remainder is cancelled — exactly when `kind` is `cancellation`. */
+    /** The fulfillment order whose remainder is canceled — exactly when `kind` is `cancellation`. */
     fulfillmentOrderId?: string;
     note?: string;
     /** What the buyer would like for a defect or a wrong item; refused for any other reason. */
@@ -58,7 +58,7 @@ export type CreateReturnOutcome = ResponseSuccess<ReturnDocument> | ResponseReje
 
 /**
  * The answer for a return just written: a 201 whose message says what happened. A cancellation
- * gave back what had not shipped, a return closed at birth was a withdrawal that cancelled and
+ * gave back what had not shipped, a return closed at birth was a withdrawal that canceled and
  * refunded the order, anything else waits for its goods.
  * @param created - the return that was written
  */

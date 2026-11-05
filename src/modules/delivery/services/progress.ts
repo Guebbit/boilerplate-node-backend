@@ -26,9 +26,9 @@ export interface ProgressReport {
 }
 
 /**
- * Recompute the order's fulfilment summary from every fulfillment order and shipment as the act's
+ * Recompute the order's fulfillment summary from every fulfillment order and shipment as the act's
  * snapshot sees them, and hand it to `orders`. Refuses the act when `orders` says the order can no
- * longer be fulfilled — cancelled in the meantime, which is the half of "a ship racing a cancel
+ * longer be fulfilled — canceled in the meantime, which is the half of "a ship racing a cancel
  * cannot both win" that lives here.
  *
  * @param orderId - the order
@@ -62,7 +62,7 @@ export const reportProgress = (orderId: string, session: ClientSession): Promise
  * @param actor - the staff member whose act this is, for the order's timeline
  * @throws {ActRefusal} 409 `ORDER_NOT_PAID` when the order moved away from `paid` since the read
  */
-export const startFulfilment = async (
+export const startFulfillment = async (
     order: OrderDocument,
     session: ClientSession,
     actor: string | null | undefined
@@ -88,11 +88,11 @@ const expectMoved = (moved: OrderDocument | null): void => {
  * | units remain, or nothing shipped | nowhere |
  * | nothing remains, a shipment is still out | `processing → shipped` |
  * | nothing remains, every shipment arrived | `shipped → delivered`, or both at once from `processing` |
- * | nothing remains, nothing out, nothing ever arrived | `processing → cancelled` (cause `lost`) |
+ * | nothing remains, nothing out, nothing ever arrived | `processing → canceled` (cause `lost`) |
  *
- * The third row from `processing` is the one named double move: a digital fulfilment, or a remainder
- * cancelled after every shipment had already arrived. The last row is a lost parcel whose remainder
- * was cancelled and refunded: the order never delivered anything, so it does not claim to have.
+ * The third row from `processing` is the one named double move: a digital fulfillment, or a remainder
+ * canceled after every shipment had already arrived. The last row is a lost parcel whose remainder
+ * was canceled and refunded: the order never delivered anything, so it does not claim to have.
  *
  * @param orderId - the order
  * @param status - the order's status as the summary write left it
@@ -100,7 +100,7 @@ const expectMoved = (moved: OrderDocument | null): void => {
  * @param at - the instant the clock starts for a completed order: the last arrival, or the cancel
  * @param session - the act's transaction
  * @param actor - the staff member whose act this is, for the order's timeline; absent for the system
- * @returns a report-after-commit callback when the settlement cancelled the order (a lost parcel);
+ * @returns a report-after-commit callback when the settlement canceled the order (a lost parcel);
  *   the caller owns the transaction, so it calls it once that commits
  */
 export const settleOrder = (
@@ -121,15 +121,15 @@ export const settleOrder = (
                   .then(() => undefined)
             : Promise.resolve(undefined);
 
-    // A digital fulfilment is a shipment born delivered, so `lastDeliveredAt` covers it too.
+    // A digital fulfillment is a shipment born delivered, so `lastDeliveredAt` covers it too.
     if (status === OrderStatus.processing && !summary.lastDeliveredAt)
         return orderService.markUndeliverable(orderId, session).then((settled) => {
             expectMoved(settled?.order ?? null);
-            return settled?.reportCancelled;
+            return settled?.reportCanceled;
         });
     if (status === OrderStatus.processing)
         return orderService
-            .markFulfilmentComplete(orderId, at, session, actor)
+            .markFulfillmentComplete(orderId, at, session, actor)
             .then(expectMoved)
             .then(() => undefined);
     if (status === OrderStatus.shipped)

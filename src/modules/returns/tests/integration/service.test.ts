@@ -122,7 +122,7 @@ describe('a withdrawal before dispatch', () => {
             expect(outcome.success).toBe(true);
             await settleOutboxNudges();
             const stored = await readOrder(orderId);
-            expect(stored?.status).toBe(OrderStatus.cancelled);
+            expect(stored?.status).toBe(OrderStatus.canceled);
             const [written, ...others] = await returnRepository.findByOrderId(orderId);
             expect(others).toHaveLength(0);
             expect(written).toMatchObject({ status: 'closed', reason: 'withdrawal', lines: [] });
@@ -186,7 +186,7 @@ describe('a withdrawal before dispatch', () => {
         expect(stored?.toJSON().returnStatus).toBe('none');
     });
 
-    it('cannot be made twice: the cancelled order is not returnable', async () => {
+    it('cannot be made twice: the canceled order is not returnable', async () => {
         const { user, orderId } = await orderIn(OrderStatus.paid);
         await returnService.createReturn(
             { orderId, reason: 'withdrawal' },
@@ -680,8 +680,8 @@ describe('a return on goods that have shipped', () => {
         });
     });
 
-    it('refuses a cancelled order', async () => {
-        const { user, orderId } = await orderIn(OrderStatus.cancelled);
+    it('refuses a canceled order', async () => {
+        const { user, orderId } = await orderIn(OrderStatus.canceled);
 
         const outcome = await returnService.createReturn(
             { orderId, reason: 'withdrawal' },
@@ -1201,7 +1201,7 @@ describe('what a new return leaves behind', () => {
         expect(mailData(1).address).toEqual(expect.stringContaining('Send the goods to:'));
     });
 
-    it('answers a withdrawal before dispatch with the cancel refusal untouched when the order cannot be cancelled', async () => {
+    it('answers a withdrawal before dispatch with the cancel refusal untouched when the order cannot be canceled', async () => {
         const { user, orderId } = await orderIn(OrderStatus.paid);
         jest.spyOn(orderService, 'withdrawById').mockResolvedValue(
             asStub<Awaited<ReturnType<typeof orderService.withdrawById>>>({

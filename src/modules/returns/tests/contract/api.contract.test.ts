@@ -84,7 +84,7 @@ describe('POST /returns', () => {
         });
 
         const order = await api().get(`/orders/${orderId}`).set('Authorization', bearer);
-        expect(order.body).toMatchObject({ status: 'cancelled' });
+        expect(order.body).toMatchObject({ status: 'canceled' });
         expect(order.body.actions.withdraw).toBe(false);
     });
 
@@ -125,8 +125,8 @@ describe('POST /returns', () => {
         expect(response.status).toBe(422);
     });
 
-    it('refuses a cancelled order with 409 RETURN_ORDER_NOT_RETURNABLE', async () => {
-        const { bearer, orderId } = await customerWithOrder(OrderStatus.cancelled);
+    it('refuses a canceled order with 409 RETURN_ORDER_NOT_RETURNABLE', async () => {
+        const { bearer, orderId } = await customerWithOrder(OrderStatus.canceled);
 
         const response = await api()
             .post('/returns')
@@ -587,7 +587,7 @@ describe('POST /returns/{id}/cancel', () => {
 
 /**
  * A customer logged in, with a `processing` order of two products of which only the first has
- * shipped — so the second is a remainder waiting to be cancelled.
+ * shipped — so the second is a remainder waiting to be canceled.
  */
 const customerWithPartlyShippedOrder = async () => {
     const { user, bearer } = await authenticateAs('user');
@@ -630,7 +630,7 @@ describe('GET /returns/options', () => {
             orderId,
             currency: 'EUR',
             returnable: [{ quantity: 1 }],
-            cancellable: [
+            cancelable: [
                 {
                     fulfillmentOrderId,
                     number: 1,
@@ -729,7 +729,7 @@ const staleModerator = async () => {
     return { moderator, bearer: await staleBearerFor(moderator, 'critical') };
 };
 
-/** Whether the remainder is still waiting: nothing cancelled, nothing refunded. */
+/** Whether the remainder is still waiting: nothing canceled, nothing refunded. */
 const stillWaiting = (orderId: string) =>
     fulfillmentOrdersOf(orderId).then(([first]) => first.status === 'in_progress');
 

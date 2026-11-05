@@ -28,7 +28,7 @@ const STATUSES = [
     OrderStatus.pending,
     OrderStatus.paid,
     OrderStatus.processing,
-    OrderStatus.cancelled
+    OrderStatus.canceled
 ] as const;
 
 /** Whether a response is the door opening. */
@@ -51,7 +51,7 @@ describe('the ship action and the ship door agree', () => {
                 });
                 const orderId = String(order._id);
                 // A paid order has the fulfillment orders its payment made; the status under test
-                // is then forced onto it, so even `pending` and `cancelled` carry one.
+                // is then forced onto it, so even `pending` and `canceled` carry one.
                 const [fulfillmentOrder] = await fulfillmentOrdersOf(orderId);
                 if (status !== OrderStatus.paid) await forceOrderStatus(orderId, status);
                 const view = await api()

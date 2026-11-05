@@ -288,13 +288,13 @@ describe('cancelPendingEmailChange', () => {
         expect(afterCancel.some((token) => token.type === EMAIL_CHANGE_TOKEN_TYPE)).toBe(false);
     });
 
-    it('audits AUTH_EMAIL_CHANGE_CANCELLED only when a change was actually pending', async () => {
+    it('audits AUTH_EMAIL_CHANGE_CANCELED only when a change was actually pending', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser({ email: 'before@example.com' });
 
         await accountService.cancelPendingEmailChange(user.id, testCallerContext);
         expect(auditSpy).not.toHaveBeenCalledWith(
-            expect.objectContaining({ action: accountAuditActions.AUTH_EMAIL_CHANGE_CANCELLED })
+            expect.objectContaining({ action: accountAuditActions.AUTH_EMAIL_CHANGE_CANCELED })
         );
 
         await accountService.updateProfile(
@@ -306,7 +306,7 @@ describe('cancelPendingEmailChange', () => {
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
-                action: accountAuditActions.AUTH_EMAIL_CHANGE_CANCELLED,
+                action: accountAuditActions.AUTH_EMAIL_CHANGE_CANCELED,
                 outcome: 'success'
             })
         );

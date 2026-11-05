@@ -506,7 +506,7 @@ every "I may be compromised" event also moves `tokensValidAfter` on the user, an
 ### One table, keyed by cause {#revocation}
 
 `REVOCATION` (`domain/revocation.ts`) lists every cause once: where its epoch is written, whether
-pending links are purged, whether it announces `account.sessions-revoked`, whether the caller is
+pending links are purged, whether it announces `account.sessions_revoked`, whether the caller is
 re-minted, and which session modes it applies to. `revokeFor(cause, userId)` in
 `services/revocation.ts` acts on a row; the reasons an event can carry (`SessionsRevokedReason`),
 and so the cases `api-keys` mails about, are derived from the rows that announce. Adding a cause
@@ -520,7 +520,7 @@ this purge, and is deliberately not among the links it kills.
 
 **Where the epoch is written.** In the credential's own write, so a second write failing cannot
 leave an old session live: the password's transaction, the swap's `save`, the factor's `save`. Two
-cases stand apart. Logout everywhere writes the epoch and its `account.sessions-revoked`
+cases stand apart. Logout everywhere writes the epoch and its `account.sessions_revoked`
 [outbox](../tools/outbox.md) row in one transaction. The email undo does the same **before**
 restoring the address, because its link is already spent: if the old address was taken meanwhile
 the restore answers 409, and the owner has no retry, so the thief must already be out. Deleting the

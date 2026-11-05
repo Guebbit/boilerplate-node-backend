@@ -2,7 +2,7 @@
  * @module
  * Cancelling what has not shipped: a Return of `kind: cancellation`, closed when made — against a
  * real database and the real `fake` payment provider. What is worth pinning: the lines, the stock,
- * the order's summary and the Return row commit together; the money is the cancelled lines plus the
+ * the order's summary and the Return row commit together; the money is the canceled lines plus the
  * delivery only on the cancel (or return) that takes the LAST unit, and never twice; the buyer's
  * door and staff's (under the refund key) differ in who may use them; and what `GET /returns/options`
  * quotes is what the cancel then refunds.
@@ -230,7 +230,7 @@ describe('the buyer cancelling what has not shipped', () => {
         expect(
             fulfillmentOrder.lines.find(({ productId }) => productId === String(fixture.mug._id))
         ).toMatchObject({
-            cancelledQuantity: 1,
+            canceledQuantity: 1,
             shippedQuantity: 0
         });
         const stored = await readOrder(fixture.orderId);
@@ -298,7 +298,7 @@ describe('the buyer cancelling what has not shipped', () => {
         expect(await returnRepository.findByOrderId(fixture.orderId)).toEqual([]);
     });
 
-    it('answers 409 when nothing has shipped yet — that order is cancelled whole instead', async () => {
+    it('answers 409 when nothing has shipped yet — that order is canceled whole instead', async () => {
         customers += 1;
         const user = await createUser({ email: `cancel-${customers}@example.com` });
         const product = await createProduct({ price: 10 });
@@ -428,13 +428,13 @@ describe('the buyer cancelling what has not shipped', () => {
             const fixture = await partlyShipped();
             jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
 
-            const cancelled = created(await buyerCancels(fixture));
+            const canceled = created(await buyerCancels(fixture));
 
-            expect(cancelled.status).toBe('closed');
+            expect(canceled.status).toBe('closed');
             const before = await paymentService.getForOrder(fixture.orderId, asAdmin());
             expect(before.success && before.data.refunds[0]).toMatchObject({
                 status: 'failed',
-                returnId: String(cancelled._id)
+                returnId: String(canceled._id)
             });
             await paymentService.retryOpenRefunds();
             expect(await refundsOf(fixture.orderId)).toEqual([
@@ -558,8 +558,8 @@ describe('cancelling one fulfillment order before anything ships', () => {
             asCustomer(whole.user.id)
         );
 
-        expect(offeredSplit.success && offeredSplit.data.cancellable).toHaveLength(2);
-        expect(offeredWhole.success && offeredWhole.data.cancellable).toEqual([]);
+        expect(offeredSplit.success && offeredSplit.data.cancelable).toHaveLength(2);
+        expect(offeredWhole.success && offeredWhole.data.cancelable).toEqual([]);
     });
 });
 
@@ -569,7 +569,7 @@ describe('withdrawing from an order that holds made-to-order goods', () => {
 
         expect(outcome.success).toBe(true);
         const stored = await readOrder(fixture.orderId);
-        expect(stored?.status).toBe(OrderStatus.cancelled);
+        expect(stored?.status).toBe(OrderStatus.canceled);
     });
 
     it('cancels only the eligible groups once the order is processing: the mug stays', async () => {
@@ -580,7 +580,7 @@ describe('withdrawing from an order that holds made-to-order goods', () => {
         expect(stored?.status).toBe(OrderStatus.processing);
         expect(await refundsOf(fixture.orderId)).toEqual([{ reason: 'cancellation', amount: 60 }]);
         const groups = await fulfillmentOrdersOf(fixture.orderId);
-        expect(groups.map(({ status }) => status)).toEqual(['cancelled', 'open']);
+        expect(groups.map(({ status }) => status)).toEqual(['canceled', 'open']);
     });
 
     it('answers a second withdrawal with nothing left to cancel', async () => {
@@ -596,32 +596,30 @@ describe('withdrawing from an order that holds made-to-order goods', () => {
     });
 });
 
-describe('the order timeline of a cancelled remainder', () => {
-    it('says the remainder was cancelled, and leaves the return rows to the returns it is not', async () => {
+describe('the order timeline of a canceled remainder', () => {
+    it('says the remainder was canceled, and leaves the return rows to the returns it is not', async () => {
         const fixture = await partlyShipped();
 
         created(await buyerCancels(fixture));
 
         const rows = await timelineOf(fixture.orderId);
-        expect(rows.map(({ type }) => type)).toContain('remainder_cancelled');
-        expect(rows.find(({ type }) => type === 'remainder_cancelled')?.data).toEqual({
+        expect(rows.map(({ type }) => type)).toContain('remainder_canceled');
+        expect(rows.find(({ type }) => type === 'remainder_canceled')?.data).toEqual({
             fulfillmentOrderId: fixture.fulfillmentOrderId
         });
         expect(rows.map(({ type }) => type)).not.toContain('return_requested');
     });
 
-    it('names the buyer who cancelled their own remainder', async () => {
+    it('names the buyer who canceled their own remainder', async () => {
         const fixture = await partlyShipped();
 
         created(await buyerCancels(fixture));
 
         const rows = await timelineOf(fixture.orderId);
-        expect(rows.find(({ type }) => type === 'remainder_cancelled')?.actor).toBe(
-            fixture.user.id
-        );
+        expect(rows.find(({ type }) => type === 'remainder_canceled')?.actor).toBe(fixture.user.id);
     });
 
-    it('names the staff member who cancelled it, and the same one on the delivery it completes', async () => {
+    it('names the staff member who canceled it, and the same one on the delivery it completes', async () => {
         const fixture = await partlyShipped();
         await deliverEverything(fixture.orderId);
 
@@ -639,7 +637,7 @@ describe('the order timeline of a cancelled remainder', () => {
         );
 
         const rows = await timelineOf(fixture.orderId);
-        expect(rows.find(({ type }) => type === 'remainder_cancelled')?.actor).toBe('moderator-7');
+        expect(rows.find(({ type }) => type === 'remainder_canceled')?.actor).toBe('moderator-7');
         // The cancel completed the order in the same transaction: that move is theirs too.
         expect(rows.find(({ type }) => type === 'delivered')?.actor).toBe('moderator-7');
     });
@@ -873,7 +871,7 @@ describe('the delivery, across several cancels and returns', () => {
 
         const cancellation = created(await buyerCancels(fixture));
 
-        // 10.00 of mug and all 5.00 of delivery: nothing was delivered for the cancelled unit.
+        // 10.00 of mug and all 5.00 of delivery: nothing was delivered for the canceled unit.
         expect(cancellation.refundAmount).toBe(15);
         expect(
             await refundsOf(fixture.orderId).then((all) => all.map(({ amount }) => amount))
@@ -955,7 +953,7 @@ describe('GET /returns/options', () => {
             orderId: fixture.orderId,
             currency: 'EUR',
             returnable: [{ productId: String(fixture.shirt._id), title: 'Shirt', quantity: 2 }],
-            cancellable: [
+            cancelable: [
                 {
                     fulfillmentOrderId: fixture.fulfillmentOrderId,
                     number: 1,
@@ -965,7 +963,7 @@ describe('GET /returns/options', () => {
                 }
             ]
         });
-        const quoted = options.success ? options.data.cancellable[0].refundAmount : -1;
+        const quoted = options.success ? options.data.cancelable[0].refundAmount : -1;
         const cancellation = created(await buyerCancels(fixture));
         expect(cancellation.refundAmount).toBe(quoted);
     });
@@ -980,7 +978,7 @@ describe('GET /returns/options', () => {
         );
 
         expect(options.success && options.data.returnable).toEqual([]);
-        expect(options.success && options.data.cancellable[0]).toMatchObject({
+        expect(options.success && options.data.cancelable[0]).toMatchObject({
             refundAmount: 15,
             shippingRefund: 5
         });
@@ -1002,7 +1000,7 @@ describe('GET /returns/options', () => {
             asCustomer(stranger.id)
         );
 
-        expect(own.success && own.data).toMatchObject({ returnable: [], cancellable: [] });
+        expect(own.success && own.data).toMatchObject({ returnable: [], cancelable: [] });
         expect(asReject(other).status).toBe(404);
     });
 
@@ -1011,7 +1009,7 @@ describe('GET /returns/options', () => {
         const fixture = await partlyShipped();
         const cancelFor = async (caller: Parameters<typeof returnService.getReturnOptions>[1]) => {
             const options = await returnService.getReturnOptions(fixture.orderId, caller);
-            return options.success ? options.data.cancellable.map(({ cancel }) => cancel) : [];
+            return options.success ? options.data.cancelable.map(({ cancel }) => cancel) : [];
         };
 
         expect(await cancelFor(asCustomer(fixture.user.id))).toEqual([true]);
@@ -1033,8 +1031,8 @@ describe('GET /returns/options', () => {
             asCustomer(excluded.user.id)
         );
 
-        expect(afterWindow.success && afterWindow.data.cancellable[0].cancel).toBe(false);
-        expect(engraved.success && engraved.data.cancellable[0].cancel).toBe(false);
+        expect(afterWindow.success && afterWindow.data.cancelable[0].cancel).toBe(false);
+        expect(engraved.success && engraved.data.cancelable[0].cancel).toBe(false);
     });
 
     it('lets staff who read returns see any order’s', async () => {
@@ -1042,7 +1040,7 @@ describe('GET /returns/options', () => {
 
         const options = await returnService.getReturnOptions(fixture.orderId, asAdmin());
 
-        expect(options.success && options.data.cancellable).toHaveLength(1);
+        expect(options.success && options.data.cancelable).toHaveLength(1);
     });
 });
 
@@ -1125,7 +1123,7 @@ describe('returning goods that shipped in part', () => {
         const stored = await readOrder(orderId);
         const returns = await returnRepository.findByOrderId(orderId);
         if (shipped.success) {
-            // The shipment won: the order is not cancelled, and the withdrawal is a return of what left.
+            // The shipment won: the order is not canceled, and the withdrawal is a return of what left.
             expect(stored?.status).toBe(OrderStatus.shipped);
             expect(withdrawn.success).toBe(true);
             expect(returns).toHaveLength(1);
@@ -1133,7 +1131,7 @@ describe('returning goods that shipped in part', () => {
             expect(returns[0].lines).toHaveLength(1);
         } else {
             // The cancel won: nothing shipped, and the shipment was refused.
-            expect(stored?.status).toBe(OrderStatus.cancelled);
+            expect(stored?.status).toBe(OrderStatus.canceled);
             expect(await shipmentsOf(orderId)).toEqual([]);
         }
     });

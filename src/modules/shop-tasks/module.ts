@@ -16,14 +16,14 @@ import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { CART_LINES_REMOVED, CART_MERGE_REFUSED } from '@modules/cart';
 import {
-    FULFILLMENT_ORDER_CANCELLED,
+    FULFILLMENT_ORDER_CANCELED,
     FULFILLMENT_ORDER_DELAYED,
     FULFILLMENT_ORDER_HOLD_NOTICED,
     SHIPMENT_LOST,
     SHIPMENT_SHIPPED
 } from '@modules/delivery';
 import { HOLD_ORPHANED } from '@modules/inventory';
-import { ORDER_CANCELLED, ORDER_PURCHASE_HOLD_PLACED } from '@modules/orders';
+import { ORDER_CANCELED, ORDER_PURCHASE_HOLD_PLACED } from '@modules/orders';
 import {
     PAYMENT_AMOUNT_MISMATCH,
     PAYMENT_DISPUTE_OPENED,
@@ -59,9 +59,9 @@ export default {
         onDomainEvent(PAYMENT_DISPUTE_OPENED, shopTasksService.onDispute);
         onDomainEvent(PAYMENT_DISPUTE_UPDATED, shopTasksService.onDispute);
         onDomainEvent(HOLD_ORPHANED, shopTasksService.onHoldOrphaned);
-        onDomainEvent(ORDER_CANCELLED, shopTasksService.onOrderCancelled);
+        onDomainEvent(ORDER_CANCELED, shopTasksService.onOrderCanceled);
         onDomainEvent(SHIPMENT_SHIPPED, shopTasksService.onShipped);
-        onDomainEvent(FULFILLMENT_ORDER_CANCELLED, shopTasksService.onFulfillmentOrderCancelled);
+        onDomainEvent(FULFILLMENT_ORDER_CANCELED, shopTasksService.onFulfillmentOrderCanceled);
         // Both a to-do and a buyer's message: one handler runs the two in order.
         onDomainEvent(FULFILLMENT_ORDER_DELAYED, shopTasksService.onFulfillmentOrderDelayed);
 

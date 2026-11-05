@@ -10,15 +10,15 @@ tags:
 
 x-error-codes:
     DELIVERY_LINES_INVALID: { status: 422, description: 'A shipment line names a product that is not on the fulfillment order, asks for more than remains of it, or names the same product twice.' }
-    DELIVERY_NOT_SHIPPABLE: { status: 409, description: 'The fulfillment order cannot ship now: it is on hold, closed or cancelled, or the order is cancelled, or still `pending` (never paid: start or pay it first).' }
-    DELIVERY_NOT_PHYSICAL: { status: 409, description: 'A digital fulfillment order has nothing to ship (fulfil it instead), and a digital shipment has no tracking code to set.' }
+    DELIVERY_NOT_SHIPPABLE: { status: 409, description: 'The fulfillment order cannot ship now: it is on hold, closed or canceled, or the order is canceled, or still `pending` (never paid: start or pay it first).' }
+    DELIVERY_NOT_PHYSICAL: { status: 409, description: 'A digital fulfillment order has nothing to ship (fulfill it instead), and a digital shipment has no tracking code to set.' }
     DELIVERY_NOT_DIGITAL: { status: 409, description: 'A physical fulfillment order cannot be fulfilled without a shipment; ship it instead.' }
     DELIVERY_NOT_HOLDABLE: { status: 409, description: 'Only an open or in-progress fulfillment order can be put on hold.' }
     DELIVERY_NOT_RELEASABLE: { status: 409, description: 'The fulfillment order is not on hold, or waits for stock and is released only by the stock arriving.' }
     DELIVERY_NOT_DELIVERABLE: { status: 409, description: 'The shipment has already been delivered, or its order is no longer in a state this can run from.' }
-    DELIVERY_NOT_LOSABLE: { status: 409, description: 'Only a `shipped` parcel can be reported lost or damaged, and only while its order is `processing` or `shipped`. A parcel already `delivered` or `lost`, a digital fulfilment and a cancelled order are refused.' }
-    DELIVERY_NOT_REOPENABLE: { status: 409, description: 'The units of a replacement under the guarantee cannot be sent again: the order shipped fewer physical units than come back, or is cancelled or unpaid.' }
-    DELIVERY_LOST_SUPERSEDED: { status: 409, description: 'A `lost` shipment cannot be recorded as arrived because its units were already shipped again or cancelled: taking them back would count the goods twice.' }
+    DELIVERY_NOT_LOSABLE: { status: 409, description: 'Only a `shipped` parcel can be reported lost or damaged, and only while its order is `processing` or `shipped`. A parcel already `delivered` or `lost`, a digital fulfillment and a canceled order are refused.' }
+    DELIVERY_NOT_REOPENABLE: { status: 409, description: 'The units of a replacement under the guarantee cannot be sent again: the order shipped fewer physical units than come back, or is canceled or unpaid.' }
+    DELIVERY_LOST_SUPERSEDED: { status: 409, description: 'A `lost` shipment cannot be recorded as arrived because its units were already shipped again or canceled: taking them back would count the goods twice.' }
     ORDER_NOT_PAID: { status: 409, description: 'The order must be paid before this delivery action.' }
     ORDER_NOT_PROCESSING: { status: 409, description: 'The order is not in a state this delivery action can run from.' }
 
@@ -113,7 +113,7 @@ paths:
             tags: [Delivery]
             summary: Process a paid order
             description: >-
-                Reports that fulfilment has started — the order moves `paid → processing`. The verb names
+                Reports that fulfillment has started — the order moves `paid → processing`. The verb names
                 the status it reaches, as `cancel` does; the module behind it is `delivery`'s. No
                 shipment exists yet at this point; that comes later, at
                 `POST /delivery/fulfillment-orders/{id}/shipments`. Narrower than `update:Order` on
@@ -208,7 +208,7 @@ paths:
             summary: Preorder units by product and state
             description: |
                 For each product sold as a preorder, how its units stand across every fulfillment order made from it:
-                paid, waiting for stock, allocated, shipped, cancelled, and late. Units,
+                paid, waiting for stock, allocated, shipped, canceled, and late. Units,
                 not fulfillment orders. `firstAgreedAt` is the earliest date any buyer was promised. For the Products
                 tab of the preorder board; same audience and scope as the list.
             operationId: summarizePreorderFulfillmentOrders
@@ -356,7 +356,7 @@ paths:
                 order's summary, any status move and the events are written in ONE transaction.
                 `trackingCode` is optional: a `tracked` method may get its code later, with
                 `PATCH /delivery/shipments/{id}` (`Shipment.awaitingTracking` says who is still waiting).
-                Refuses a fulfillment order that is on hold, closed or cancelled
+                Refuses a fulfillment order that is on hold, closed or canceled
                 (`DELIVERY_NOT_SHIPPABLE`), a digital one (`DELIVERY_NOT_PHYSICAL`), and an order that
                 is neither `processing` nor `paid` (`ORDER_NOT_PROCESSING`). From `paid` it moves the
                 order to `processing` itself, in the same transaction, so it also needs `start:Shipment`
@@ -405,7 +405,7 @@ paths:
     /delivery/fulfillment-orders/{id}/fulfill:
         post:
             tags: [Delivery]
-            summary: Fulfil a digital fulfillment order
+            summary: Fulfill a digital fulfillment order
             description: >-
                 The digital act: a shipment with no tracking, born and delivered in the same write. A
                 `digital` fulfillment order has nothing to carry, so this is its only door. Refuses
@@ -424,7 +424,7 @@ paths:
                 - bearerAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
-                  description: The digital fulfillment order to fulfil
+                  description: The digital fulfillment order to fulfill
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             responses:
                 '201':
@@ -530,7 +530,7 @@ paths:
             tags: [Delivery]
             summary: Correct a shipment's tracking code
             description: >-
-                Merges the given fields into the shipment — RFC 7396. Only the tracking code can change: added when the parcel left without one, or corrected. Allowed at any time after the shipment left, `shipped`, `delivered` or `lost`; a digital fulfilment never had a carrier and answers `DELIVERY_NOT_PHYSICAL` (409). The buyer is mailed only when the code really changed — an "added" notice for the first code, a "corrected" one for a replacement. The audit row records the code before and after.
+                Merges the given fields into the shipment — RFC 7396. Only the tracking code can change: added when the parcel left without one, or corrected. Allowed at any time after the shipment left, `shipped`, `delivered` or `lost`; a digital fulfillment never had a carrier and answers `DELIVERY_NOT_PHYSICAL` (409). The buyer is mailed only when the code really changed — an "added" notice for the first code, a "corrected" one for a replacement. The audit row records the code before and after.
             operationId: updateShipment
             x-error-codes:
                 '409': [DELIVERY_NOT_PHYSICAL]
@@ -574,7 +574,7 @@ paths:
 
 
                 A `lost` shipment that turns up is accepted too, but only while every unit on it is
-                still open: not shipped again and not cancelled, the owed units of a short shelf
+                still open: not shipped again and not canceled, the owed units of a short shelf
                 included. All or nothing, in one transaction: the shipment becomes `delivered` (its
                 `lostAt` and `lostReason` stay as history), the units go back on the fulfillment order,
                 the top-up of the stock hold is given back and the owed fulfillment order is closed
@@ -701,12 +701,12 @@ components:
 
         FulfillmentOrderStatus:
             type: string
-            enum: [open, in_progress, on_hold, closed, cancelled]
+            enum: [open, in_progress, on_hold, closed, canceled]
             description: >-
                 Where a fulfillment order stands (Shopify's names). `open` until something ships;
                 `in_progress` once part of it has shipped and lines remain; `on_hold` while staff, or
                 the stock it awaits, holds it back; `closed` once nothing remains and something
-                shipped from it; `cancelled` once nothing remains and nothing ever shipped from it.
+                shipped from it; `canceled` once nothing remains and nothing ever shipped from it.
 
         FulfillmentHoldReason:
             type: string
@@ -729,8 +729,8 @@ components:
             type: string
             enum: [buyer, staff, order, found]
             description: >-
-                Who cancelled what was left of a fulfillment order. `buyer`: the buyer's own cancel of
-                the remainder. `staff`: a refund by staff. `order`: the whole order was cancelled.
+                Who canceled what was left of a fulfillment order. `buyer`: the buyer's own cancel of
+                the remainder. `staff`: a refund by staff. `order`: the whole order was canceled.
                 `found`: the lost parcel turned up, so the units owed for it are no longer owed (no
                 refund).
 
@@ -742,8 +742,8 @@ components:
         FulfillmentOrderLine:
             type: object
             additionalProperties: false
-            required: [productId, title, quantity, shippedQuantity, cancelledQuantity, remaining]
-            description: One product on a fulfillment order, with how much has shipped, been cancelled and still remains.
+            required: [productId, title, quantity, shippedQuantity, canceledQuantity, remaining]
+            description: One product on a fulfillment order, with how much has shipped, been canceled and still remains.
             properties:
                 productId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -757,14 +757,14 @@ components:
                 shippedQuantity:
                     type: integer
                     minimum: 0
-                cancelledQuantity:
+                canceledQuantity:
                     type: integer
                     minimum: 0
-                    description: Units cancelled before they shipped — a remainder cancel.
+                    description: Units canceled before they shipped — a remainder cancel.
                 remaining:
                     type: integer
                     minimum: 0
-                    description: '`quantity − shippedQuantity − cancelledQuantity`, computed here so no client counts.'
+                    description: '`quantity − shippedQuantity − canceledQuantity`, computed here so no client counts.'
 
         FulfillmentOrderActions:
             type: object
@@ -824,7 +824,7 @@ components:
                 holdNote:
                     type: string
                     maxLength: 1000
-                    description: Staff's free text about the hold. Left out for anyone who cannot update fulfilment.
+                    description: Staff's free text about the hold. Left out for anyone who cannot update fulfillment.
                 agreedAt:
                     type: string
                     format: date-time
@@ -854,7 +854,7 @@ components:
             description: >-
                 The tail of the order's lifecycle, as the carrier sees it. `lost`: staff reported the
                 parcel lost or damaged in transit, so its units are open again; it can still become
-                `delivered` if it turns up and nothing was shipped or cancelled meanwhile.
+                `delivered` if it turns up and nothing was shipped or canceled meanwhile.
 
         ShipmentLostReason:
             type: string
@@ -900,7 +900,7 @@ components:
             required: [id, orderId, fulfillmentOrderId, number, status, lines, forced, awaitingTracking, shippedAt, actions]
             description: >-
                 What actually left, at one time, with one tracking code (Shopify's `Fulfillment`).
-                Born `shipped`; a digital fulfilment is born `delivered`. A parcel that will not arrive
+                Born `shipped`; a digital fulfillment is born `delivered`. A parcel that will not arrive
                 becomes `lost`; one that turns up after all becomes `delivered`.
             properties:
                 id:
@@ -915,7 +915,7 @@ components:
                     description: 1-based position within the order, in the order shipments were cut.
                 trackingCode:
                     type: string
-                    description: The carrier's handle on the parcel. Absent for a method that carries no tracking (ShippingMethod.tracked is false), and for a digital fulfilment.
+                    description: The carrier's handle on the parcel. Absent for a method that carries no tracking (ShippingMethod.tracked is false), and for a digital fulfillment.
                 status:
                     $ref: '#/components/schemas/ShipmentStatus'
                 lines:
@@ -924,7 +924,7 @@ components:
                         $ref: '#/components/schemas/ShipmentLine'
                 destination:
                     $ref: '../orders/openapi.yaml#/components/schemas/OrderAddress'
-                    description: Where this parcel went — the order's shipping address as it stood when the shipment was cut, so a later correction of the order's address never rewrites it. Absent for a pickup, a digital fulfilment, and once the order's own address has been scrubbed.
+                    description: Where this parcel went — the order's shipping address as it stood when the shipment was cut, so a later correction of the order's address never rewrites it. Absent for a pickup, a digital fulfillment, and once the order's own address has been scrubbed.
                 forced:
                     type: boolean
                     description: Whether an admin status override cut this shipment.
@@ -950,7 +950,7 @@ components:
                 lostNote:
                     type: string
                     maxLength: 1000
-                    description: Staff's free text about the loss. Left out for anyone who cannot update fulfilment.
+                    description: Staff's free text about the loss. Left out for anyone who cannot update fulfillment.
                 actions:
                     $ref: '#/components/schemas/ShipmentActions'
                 createdAt:
@@ -1005,7 +1005,7 @@ components:
                         $ref: '#/components/schemas/ShipmentLine'
                 destination:
                     $ref: '../orders/openapi.yaml#/components/schemas/OrderAddress'
-                    description: Where this parcel went — the order's shipping address as it stood when the shipment was cut, so a later correction of the order's address never rewrites it. Absent for a pickup, a digital fulfilment, and once the order's own address has been scrubbed.
+                    description: Where this parcel went — the order's shipping address as it stood when the shipment was cut, so a later correction of the order's address never rewrites it. Absent for a pickup, a digital fulfillment, and once the order's own address has been scrubbed.
                 shippedAt:
                     type: string
                     format: date-time
@@ -1149,11 +1149,11 @@ components:
 
         PreorderFulfillmentState:
             type: string
-            enum: [waiting, allocated, shipped, cancelled]
+            enum: [waiting, allocated, shipped, canceled]
             description: >-
                 Where a preorder's fulfillment order stands, as the board reads it. `waiting`: paid, held for
                 stock. `allocated`: stock is set aside for it, not all
-                shipped. `shipped`: nothing remains and something shipped. `cancelled`: nothing remains and
+                shipped. `shipped`: nothing remains and something shipped. `canceled`: nothing remains and
                 nothing shipped; `cancelReason` says who.
 
         PreorderBuyer:
@@ -1238,10 +1238,10 @@ components:
         PreorderProductSummary:
             type: object
             additionalProperties: false
-            required: [productId, title, firstAgreedAt, paid, waiting, allocated, shipped, cancelled, late]
+            required: [productId, title, firstAgreedAt, paid, waiting, allocated, shipped, canceled, late]
             description: >-
                 One product's preorder units across every fulfillment order made from it. `paid` is every
-                unit paid for, so `waiting + allocated + shipped + cancelled` equals it.
+                unit paid for, so `waiting + allocated + shipped + canceled` equals it.
                 `late` is a subset: units remaining on fulfillment orders whose expected date has passed.
             properties:
                 productId:
@@ -1265,7 +1265,7 @@ components:
                 shipped:
                     type: integer
                     minimum: 0
-                cancelled:
+                canceled:
                     type: integer
                     minimum: 0
                 late:

@@ -56,7 +56,7 @@ const deliverAct = async (
 
     const order = await orderService.readOrder(orderId, session);
     if (!order) return refuseMissing('delivery.order-not-found');
-    // Only an order with goods out can take an arrival; `delivered` and `cancelled` are over.
+    // Only an order with goods out can take an arrival; `delivered` and `canceled` are over.
     if (!canRecordArrival(order.status))
         refuse(409, ERROR_CODES.DELIVERY_NOT_DELIVERABLE, 'delivery.not-deliverable');
 

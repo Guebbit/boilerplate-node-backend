@@ -13,7 +13,7 @@ import {
     markProcessing,
     markShipped,
     markDelivered,
-    markFulfilmentComplete
+    markFulfillmentComplete
 } from '../../services/status';
 import { orderService } from '../../services';
 import { ORDER_STATUS_CHANGED } from '../../events';
@@ -49,7 +49,7 @@ describe('markPaid', () => {
         ]);
     });
 
-    it.each([OrderStatus.paid, OrderStatus.processing, OrderStatus.cancelled])(
+    it.each([OrderStatus.paid, OrderStatus.processing, OrderStatus.canceled])(
         'refuses and announces nothing from %s',
         async (status) => {
             const order = await seedOrder(status);
@@ -177,7 +177,7 @@ describe('markDelivered', () => {
 const inTransaction = <T>(door: (session: ClientSession) => Promise<T>): Promise<T> =>
     withTransaction(door);
 
-describe('markFulfilmentComplete', () => {
+describe('markFulfillmentComplete', () => {
     it('moves a physical order through shipped to delivered in one write, announcing both moves', async () => {
         const order = await seedOrder(OrderStatus.processing);
         const events: unknown[] = [];
@@ -185,7 +185,7 @@ describe('markFulfilmentComplete', () => {
         const at = new Date('2026-04-10T15:00:00Z');
 
         const updated = await inTransaction((session) =>
-            markFulfilmentComplete(String(order._id), at, session)
+            markFulfillmentComplete(String(order._id), at, session)
         );
         // The caller of the session variant wakes the relay after its own commit.
         nudgeOutbox();
@@ -209,7 +209,7 @@ describe('markFulfilmentComplete', () => {
         onDomainEvent(ORDER_STATUS_CHANGED, (payload) => events.push(payload));
 
         const updated = await inTransaction((session) =>
-            markFulfilmentComplete(String(order._id), new Date(), session)
+            markFulfillmentComplete(String(order._id), new Date(), session)
         );
         nudgeOutbox();
         await settleOutboxNudges();
@@ -227,7 +227,7 @@ describe('markFulfilmentComplete', () => {
             const order = await seedOrder(status);
 
             const updated = await inTransaction((session) =>
-                markFulfilmentComplete(String(order._id), new Date(), session)
+                markFulfillmentComplete(String(order._id), new Date(), session)
             );
 
             expect(updated).toBeNull();
@@ -240,7 +240,7 @@ describe('markFulfilmentComplete', () => {
 
         await expect(
             inTransaction((session) =>
-                markFulfilmentComplete(String(order._id), new Date(), session).then(() => {
+                markFulfillmentComplete(String(order._id), new Date(), session).then(() => {
                     throw new Error('a later write of the act failed');
                 })
             )

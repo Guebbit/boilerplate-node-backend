@@ -136,13 +136,13 @@ describe('DELETE /stock-alerts/:productId and GET /stock-alerts', () => {
         const productId = await soldOut();
         await api().post('/stock-alerts').set('Authorization', bearer).send({ productId });
 
-        const cancelled = await api()
+        const canceled = await api()
             .delete(`/stock-alerts/${productId}`)
             .set('Authorization', bearer);
         const again = await api().delete(`/stock-alerts/${productId}`).set('Authorization', bearer);
         const listed = await api().get('/stock-alerts').set('Authorization', bearer);
 
-        expect([cancelled.status, again.status]).toEqual([200, 404]);
+        expect([canceled.status, again.status]).toEqual([200, 404]);
         expect(listed.body.items).toEqual([]);
     });
 
@@ -229,7 +229,7 @@ describe('the signal', () => {
         expect(await stockAlertModel.countDocuments()).toBe(0);
     });
 
-    it('gives a request cancelled before the signal nothing', async () => {
+    it('gives a request canceled before the signal nothing', async () => {
         const { bearer } = await shopper();
         const productId = await soldOut();
         await api().post('/stock-alerts').set('Authorization', bearer).send({ productId });

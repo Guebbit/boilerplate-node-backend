@@ -12,7 +12,7 @@ import type { OrderDocument } from '@modules/orders';
 import { holdNeedsBuyerNotice, holdNoticeOf } from '../domain';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
 import {
-    FULFILLMENT_ORDER_CANCELLED,
+    FULFILLMENT_ORDER_CANCELED,
     FULFILLMENT_ORDER_DELAYED,
     FULFILLMENT_ORDER_HELD,
     FULFILLMENT_ORDER_HOLD_NOTICED,
@@ -41,7 +41,7 @@ const shipmentPayload = (shipment: ShipmentDocument) => ({
  * @param shipment - the shipment that left
  * @param session - the act's transaction
  * @param actor - the staff member who shipped it, when a person did
- * @param remainingUnits - units still to come in later shipments; omitted for a digital fulfilment
+ * @param remainingUnits - units still to come in later shipments; omitted for a digital fulfillment
  */
 export const announceShipped = (
     shipment: ShipmentDocument,
@@ -280,16 +280,16 @@ export const announceReleased = (
         );
 
 /**
- * Write `fulfillment_order.cancelled`.
- * @param fulfillmentOrder - the fulfillment order whose remainder was cancelled
+ * Write `fulfillment_order.canceled`.
+ * @param fulfillmentOrder - the fulfillment order whose remainder was canceled
  * @param session - the act's transaction
  */
-export const announceCancelled = (
+export const announceCanceled = (
     fulfillmentOrder: FulfillmentOrderDocument,
     session: ClientSession
 ): Promise<void> =>
     enqueueOutboxEvent(
-        FULFILLMENT_ORDER_CANCELLED,
+        FULFILLMENT_ORDER_CANCELED,
         {
             orderId: String(fulfillmentOrder.orderId),
             fulfillmentOrderId: String(fulfillmentOrder._id)
@@ -299,14 +299,14 @@ export const announceCancelled = (
     );
 
 /**
- * Write the timeline's `remainder_cancelled` for a remainder cancelled after something shipped.
- * Not part of {@link announceCancelled}: that one also runs when a whole cancelled order takes its
- * fulfillment orders with it, and the order's own `cancelled` row already says so.
- * @param fulfillmentOrder - the fulfillment order whose remainder was cancelled
+ * Write the timeline's `remainder_canceled` for a remainder canceled after something shipped.
+ * Not part of {@link announceCanceled}: that one also runs when a whole canceled order takes its
+ * fulfillment orders with it, and the order's own `canceled` row already says so.
+ * @param fulfillmentOrder - the fulfillment order whose remainder was canceled
  * @param session - the act's transaction
- * @param actor - the account that cancelled it; absent when the system did
+ * @param actor - the account that canceled it; absent when the system did
  */
-export const recordRemainderCancelled = (
+export const recordRemainderCanceled = (
     fulfillmentOrder: FulfillmentOrderDocument,
     session: ClientSession,
     actor?: string | null
@@ -314,7 +314,7 @@ export const recordRemainderCancelled = (
     orderService.appendTimeline(
         String(fulfillmentOrder.orderId),
         {
-            type: 'remainder_cancelled',
+            type: 'remainder_canceled',
             actor,
             data: { fulfillmentOrderId: String(fulfillmentOrder._id) }
         },

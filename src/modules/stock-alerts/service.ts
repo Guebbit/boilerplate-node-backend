@@ -112,7 +112,7 @@ const titleFor = (titles: Record<string, string>, locale: string): string =>
 
 /**
  * Answer one request: delete it and announce the inbox row in one transaction, then send the mail.
- * The delete is the guard, so a request cancelled meanwhile, or answered by a redelivery of the
+ * The delete is the guard, so a request canceled meanwhile, or answered by a redelivery of the
  * signal, finds nothing to delete and sends nothing.
  *
  * @param alert - the waiting request

@@ -134,7 +134,7 @@ describe('a card payment that lands on a released hold', () => {
         // The late cancellation then ends the order, with nothing left to give back.
         await orderService.expireReservationById(orderId);
         await settleOutboxNudges();
-        expect(await orderStatusOf(orderId)).toBe('cancelled');
+        expect(await orderStatusOf(orderId)).toBe('canceled');
         expect(await levelOf(productId)).toEqual({ onHand: 1, reserved: 1 });
     });
 
@@ -156,7 +156,7 @@ describe('a card payment that lands on a released hold', () => {
         expect(refund.reason).toBe('late_payment');
     });
 
-    it('does not keep the units of an order that was cancelled before the money landed', async () => {
+    it('does not keep the units of an order that was canceled before the money landed', async () => {
         const { orderId, productId, providerRef } = await expiredCardOrder(5);
         await orderService.expireReservationById(orderId);
         await settleOutboxNudges();
@@ -165,9 +165,9 @@ describe('a card payment that lands on a released hold', () => {
         await paymentService.applyWebhookSettlement(providerRef);
         await settleOutboxNudges();
 
-        expect(await orderStatusOf(orderId)).toBe('cancelled');
+        expect(await orderStatusOf(orderId)).toBe('canceled');
         expect(await levelOf(productId)).toEqual({ onHand: 5, reserved: 0 });
-        // The cancelled order never reached the retake: the ledger holds the hold and its
+        // The canceled order never reached the retake: the ledger holds the hold and its
         // expiry, with no reserve-then-release pair added by the late money.
         const ledger = await inventoryService.listMovements({ productId });
         expect(ledger.items.map(({ reason }) => reason).toSorted()).toEqual(['expire', 'reserve']);
@@ -238,15 +238,15 @@ describe('an order handed money it could not take', () => {
         await heldOrderFor(await createUser({ email: 'stranger3@example.com' }), product);
         await fakePaymentProvider.confirm(providerRef, 'pm_card_visa');
         await paymentService.applyWebhookSettlement(providerRef);
-        // The late cancellation ends the order: cancelled, never paid, a succeeded payment and a
+        // The late cancellation ends the order: canceled, never paid, a succeeded payment and a
         // refund pointing at it.
         await orderService.expireReservationById(orderId);
         await settleOutboxNudges();
-        const cancelled = await orderService.getById(orderId);
-        expect(cancelled?.status).toBe('cancelled');
-        expect(cancelled?.paidAt).toBeUndefined();
+        const canceled = await orderService.getById(orderId);
+        expect(canceled?.status).toBe('canceled');
+        expect(canceled?.paidAt).toBeUndefined();
 
-        const flags = await orderService.withActions(cancelled!, asAdmin());
+        const flags = await orderService.withActions(canceled!, asAdmin());
         const refused = await orderService.removeById(orderId, true);
 
         expect(flags.actions).toMatchObject({ delete: true, hardDelete: false });

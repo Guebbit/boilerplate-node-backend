@@ -12,7 +12,7 @@ import { callerAs } from '@tests/callers';
 import { setEnvironment } from '@tests/environment';
 import * as auditPort from '@infrastructure/observability/audit';
 import { logger } from '@infrastructure/adapters/logger';
-import { registerWebhookCatalogue } from '../../services/catalogue';
+import { registerWebhookCatalog } from '../../services/catalog';
 import {
     create,
     disable,
@@ -67,12 +67,12 @@ setupTestDb();
 beforeEach(() => {
     mockChecked.length = 0;
     mockEmitAuditEvent.mockClear();
-    registerWebhookCatalogue(['orders']);
+    registerWebhookCatalog(['orders']);
     jest.spyOn(logger, 'warn').mockImplementation(() => logger);
 });
 
 afterEach(() => {
-    registerWebhookCatalogue([]);
+    registerWebhookCatalog([]);
     jest.restoreAllMocks();
 });
 

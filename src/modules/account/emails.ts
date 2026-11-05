@@ -427,10 +427,10 @@ export const deletionScheduledEmail = (
 };
 
 /**
- * Account restored: the deletion was cancelled. The staff variant adds one line, so an owner who
+ * Account restored: the deletion was canceled. The staff variant adds one line, so an owner who
  * never asked staff for this knows to delete the account again.
  *
- * @param byStaff - whether staff, not the owner, cancelled the deletion
+ * @param byStaff - whether staff, not the owner, canceled the deletion
  */
 export const accountRestoredEmail = (
     locale: string,

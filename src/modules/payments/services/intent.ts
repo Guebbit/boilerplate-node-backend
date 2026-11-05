@@ -127,7 +127,7 @@ export const createIntent = async (
         payment.providerRef
     );
     // Backstop for an adapter that opened a new intent instead of resuming: the row keeps the
-    // first, so the browser must not be handed the second's secret. The stray is cancelled.
+    // first, so the browser must not be handed the second's secret. The stray is canceled.
     if (payment.providerRef && providerRef !== payment.providerRef)
         return rejectStrayIntent(provider, providerRef, orderId);
     const stored = await paymentRepository.attachProviderRef(String(payment._id), providerRef);
@@ -147,7 +147,7 @@ export const createIntent = async (
 /**
  * Ask the provider to close a payment's own intent, if it has one open there — the counterpart to
  * {@link createIntent}. Nothing to close (no reference yet, or paid by hand — `manual` has no
- * provider to ask) answers success outright, the same as the provider's own "already cancelled".
+ * provider to ask) answers success outright, the same as the provider's own "already canceled".
  *
  * @param payment - the payment whose intent may need closing
  * @param reason - recorded at the provider, for support and reconciliation
@@ -164,24 +164,24 @@ export const cancelOpenIntent = (payment: PaymentDocument, reason: string): Prom
 };
 
 /**
- * `order.cancelled`'s listener (see `../module.ts`): close a still-open, never-settled intent at
+ * `order.canceled`'s listener (see `../module.ts`): close a still-open, never-settled intent at
  * the provider once its order is gone, so an abandoned one cannot resolve on its own later with no
- * local row left to catch it, then record it `cancelled`. A `succeeded` or already `cancelled`
- * payment is skipped outright — money is the refund half of the same `order.cancelled` listener
+ * local row left to catch it, then record it `canceled`. A `succeeded` or already `canceled`
+ * payment is skipped outright — money is the refund half of the same `order.canceled` listener
  * to give back, not this one's to cancel.
  *
  * Best-effort, unlike {@link cancelOpenIntent}'s other caller (`recordOfflinePayment`): the order
- * is already cancelled by the time this runs, so there is no request left here to refuse — a
+ * is already canceled by the time this runs, so there is no request left here to refuse — a
  * provider failure is only logged, never rethrown, so it cannot stop the cancel that already
  * happened. A provider that says the intent already succeeded is the one case acted on: the
- * payment is reconciled on the spot, which refunds money that landed on the cancelled order.
- * `cancelled` is written only once the provider confirmed the close, and only from a still-open
+ * payment is reconciled on the spot, which refunds money that landed on the canceled order.
+ * `canceled` is written only once the provider confirmed the close, and only from a still-open
  * status, so a success racing this call wins.
  *
  * A bank transfer's row (no provider behind it) is closed the same way, and when the cancel was
  * the hold running out, the buyer is told no transfer arrived — by the call whose write moved it.
  *
- * @param orderId - the order that was cancelled
+ * @param orderId - the order that was canceled
  * @param expired - whether the cancel was the stock hold running out unpaid
  * @internal Closes any order's open intent with no caller to check: only this module's `subscribe`
  *   may run it, so it is not on `paymentService`.
@@ -190,13 +190,9 @@ export const cancelOpenIntentForOrder = (orderId: string, expired = false): Prom
     paymentRepository.findByOrderId(orderId).then((payment) => {
         if (!payment || !SETTLEABLE_PAYMENT_STATUSES.includes(payment.status)) return undefined;
 
-        return cancelOpenIntent(payment, 'Order cancelled')
+        return cancelOpenIntent(payment, 'Order canceled')
             .then(() =>
-                paymentRepository.updateStatusIfIn(
-                    orderId,
-                    SETTLEABLE_PAYMENT_STATUSES,
-                    'cancelled'
-                )
+                paymentRepository.updateStatusIfIn(orderId, SETTLEABLE_PAYMENT_STATUSES, 'canceled')
             )
             .then((moved) =>
                 moved?.transferReference && expired ? mailTransferExpired(orderId) : undefined

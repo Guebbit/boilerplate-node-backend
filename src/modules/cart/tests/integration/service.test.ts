@@ -1614,16 +1614,16 @@ describe('orderConfirm — paymentMethod', () => {
         );
     });
 
-    it('does not count a cancelled order against the cap', async () => {
+    it('does not count a canceled order against the cap', async () => {
         const user = await createUser();
         await giveUserAnAddress(user.id);
         const product = await createProduct();
         await createOrder(user, [toOrderItem(product)], {
-            status: 'cancelled',
+            status: 'canceled',
             paymentMethod: 'card'
         });
         await createOrder(user, [toOrderItem(product)], {
-            status: 'cancelled',
+            status: 'canceled',
             paymentMethod: 'card'
         });
         await cartService.setItemById(user.id, String(product._id), 1);

@@ -295,7 +295,7 @@ describe('each subject names a row that really has the property', () => {
         ['order.paid', 'paid'],
         ['order.shipped', 'shipped'],
         ['order.delivered', 'delivered'],
-        ['order.cancelled', 'cancelled']
+        ['order.canceled', 'canceled']
     ])('%s is in status %s', async (subject, status) => {
         const order = await orderModel.findById(subjects[subject]).exec();
         expect(order?.status).toBe(status);
@@ -344,18 +344,18 @@ describe('each subject names a row that really has the property', () => {
         expect(held).toMatchObject({ status: 'on_hold', holdReason: 'high_risk' });
     });
 
-    it('order.remainderCancelled shipped one product and had the other cancelled and refunded', async () => {
-        const order = await orderModel.findById(subjects['order.remainderCancelled']).exec();
+    it('order.remainderCanceled shipped one product and had the other canceled and refunded', async () => {
+        const order = await orderModel.findById(subjects['order.remainderCanceled']).exec();
         expect(order?.status).toBe('shipped');
         expect(order?.fulfillment).toMatchObject({ shipped: true, remaining: 0 });
 
         const [cancellation] = await returnModel
-            .find({ orderId: subjects['order.remainderCancelled'] })
+            .find({ orderId: subjects['order.remainderCanceled'] })
             .exec();
         expect(cancellation).toMatchObject({ kind: 'cancellation', status: 'closed' });
         expect(cancellation.lines).toHaveLength(1);
         const payment = await paymentModel
-            .findOne({ orderId: subjects['order.remainderCancelled'] })
+            .findOne({ orderId: subjects['order.remainderCanceled'] })
             .exec();
         expect(payment?.refunds[0]).toMatchObject({ reason: 'cancellation' });
     });

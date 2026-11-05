@@ -47,7 +47,7 @@ paths:
             tags: [Inventory]
             summary: Preorder allowances
             description: |
-                Every product with a preorder allowance or an outstanding preorder, for the admin's preorder board: the cap, what is outstanding against it and how that splits between orders still unpaid and orders already paid. `backordered` is OUTSTANDING units, not units ever sold: it falls when stock arrives and is allocated, and when an order is cancelled or expires. `ordered` is the lifetime count, read off the ledger.
+                Every product with a preorder allowance or an outstanding preorder, for the admin's preorder board: the cap, what is outstanding against it and how that splits between orders still unpaid and orders already paid. `backordered` is OUTSTANDING units, not units ever sold: it falls when stock arrives and is allocated, and when an order is canceled or expires. `ordered` is the lifetime count, read off the ledger.
 
                 The release date and the title come from the catalogue. Never public: exact counts are what a competitor wants.
             operationId: listPreorderLevels
@@ -258,7 +258,7 @@ paths:
             tags: [Inventory]
             summary: Expire stale reservations
             description: |
-                Releases every hold whose window has closed and announces each one, so the orders behind them get cancelled.
+                Releases every hold whose window has closed and announces each one, so the orders behind them get canceled.
 
                 A job behind an admin endpoint rather than an internal schedule. The application ships no scheduler, so the tick is driven from outside — a cron entry, the platform's scheduled job, or an operator. Idempotent; running it twice releases nothing the first run already released.
             operationId: sweepReservations
@@ -290,7 +290,7 @@ components:
             description: |
                 * `reserve` — an order claimed units. `reserved` up, `onHand` unchanged.
                 * `ship` — the parcel left (or a digital order was fulfilled). Both down: the units are off the shelf.
-                * `release` — the hold was given up (the order was cancelled, paid or not). `reserved` down.
+                * `release` — the hold was given up (the order was canceled, paid or not). `reserved` down.
                 * `expire` — the hold timed out unpaid. Same counters as `release`, different story.
                 * `receive` — a supplier delivery. `onHand` up.
                 * `adjust` — a stocktake correction, signed. `onHand` moves either way.

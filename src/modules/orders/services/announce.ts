@@ -14,7 +14,7 @@ import { ORDER_CREATED, ORDER_STATUS_CHANGED, ORDER_STATUS_OVERRIDDEN } from '..
  * The `order.status_changed` announcement for one landed status move.
  *
  * Every order's events share the order id as their aggregate, so per-order ordering holds
- * across `created`, `status_changed` and `cancelled`.
+ * across `created`, `status_changed` and `canceled`.
  *
  * @param orderId - the order that moved
  * @param from - the status it moved from

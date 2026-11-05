@@ -76,11 +76,12 @@ Three rulesets rather than one, because a fragment and a whole document cannot b
 same rules — a fragment has no `info` block and no servers, and would fail every structural rule
 a valid document must pass.
 
-| File                                              | What it is                                                                                                                                                       | Read next                                                              |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `shared/contracts/spectral.yaml`                  | The rules for the bundled `openapi.yaml` — the whole-document lint that `npm run lint:openapi` runs.                                                             | [OpenAPI Workflow](../api/openapi-workflow.md)                         |
-| `shared/contracts/spectral.modules.yaml`          | The rules for a REST fragment. Checks what a fragment can be checked on: operation ids, tags, response shapes, the conventions this repo adds on top of OpenAPI. | [Contract Ownership & Fragmentation](../api/contract-fragmentation.md) |
-| `shared/contracts/spectral.asyncapi.modules.yaml` | The same for an async fragment, plus the shared workers document.                                                                                                | [AsyncAPI Workflow](../api/asyncapi-workflow.md)                       |
+| File                                              | What it is                                                                                                                                                       | Read next                                                                   |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `shared/contracts/spectral.yaml`                  | The rules for the bundled `openapi.yaml` — the whole-document lint that `npm run lint:openapi` runs.                                                             | [OpenAPI Workflow](../api/openapi-workflow.md)                              |
+| `shared/contracts/spectral.modules.yaml`          | The rules for a REST fragment. Checks what a fragment can be checked on: operation ids, tags, response shapes, the conventions this repo adds on top of OpenAPI. | [Contract Ownership & Fragmentation](../api/contract-fragmentation.md)      |
+| `shared/contracts/spectral.asyncapi.modules.yaml` | The same for an async fragment, plus the shared workers document.                                                                                                | [AsyncAPI Workflow](../api/asyncapi-workflow.md)                            |
+| `shared/contracts/spectral.asyncapi.names.yaml`   | The spelling rules (US English names) for the bundled `asyncapi.yaml`, run by `npm run lint:asyncapi:names`.                                                     | [OpenAPI Workflow](../api/openapi-workflow.md#names-are-us-english-rule-n6) |
 
 ## The client collections
 

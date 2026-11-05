@@ -1,6 +1,6 @@
 /**
  * @module
- * `cancelled` — what a payment says once its order is gone. Written only after the provider
+ * `canceled` — what a payment says once its order is gone. Written only after the provider
  * confirms the intent closed; money that still lands on it is recorded and returned, and every
  * other late report leaves it alone.
  *
@@ -52,8 +52,8 @@ const providerRefOf = (orderId: string) =>
 const orderStatusOf = (orderId: string) =>
     orderService.getById(orderId).then((order) => order?.status);
 
-/** An order with a card intent nobody confirmed, then cancelled and drained. */
-const cancelledOrder = async () => {
+/** An order with a card intent nobody confirmed, then canceled and drained. */
+const canceledOrder = async () => {
     const user = await createUser();
     const product = await createProduct({ price: 25, onHand: 10 });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
@@ -61,22 +61,22 @@ const cancelledOrder = async () => {
     await paymentService.createIntent(orderId, asCustomer(user.id));
     const providerRef = String(await providerRefOf(orderId));
     await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
-    // `order.cancelled` reaches the listener through the outbox, not inline.
+    // `order.canceled` reaches the listener through the outbox, not inline.
     await settleOutboxNudges();
     return { user, orderId, providerRef };
 };
 
 describe('cancelling an order with an open intent', () => {
-    it('writes `cancelled` once the provider has closed the intent', async () => {
-        const { orderId } = await cancelledOrder();
+    it('writes `canceled` once the provider has closed the intent', async () => {
+        const { orderId } = await canceledOrder();
 
         const payment = await paymentRepository.findByOrderId(orderId);
 
-        expect(payment?.status).toBe('cancelled');
-        expect(presentPayment(payment!).displayStatus).toBe('cancelled');
+        expect(payment?.status).toBe('canceled');
+        expect(presentPayment(payment!).displayStatus).toBe('canceled');
     });
 
-    it('writes `cancelled` for a payment that never reached the provider', async () => {
+    it('writes `canceled` for a payment that never reached the provider', async () => {
         const user = await createUser();
         const product = await createProduct({ price: 25, onHand: 10 });
         const order = await createOrder(user, [toOrderItem(product, 1)]);
@@ -96,7 +96,7 @@ describe('cancelling an order with an open intent', () => {
         await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
         await settleOutboxNudges();
 
-        expect(await statusOf(orderId)).toBe('cancelled');
+        expect(await statusOf(orderId)).toBe('canceled');
     });
 
     it('leaves the payment as it was when the provider refuses to close the intent', async () => {
@@ -114,23 +114,23 @@ describe('cancelling an order with an open intent', () => {
     });
 });
 
-describe('a late report on a cancelled payment', () => {
+describe('a late report on a canceled payment', () => {
     it.each(['processing', 'declined'] as const)(
         'moves nothing and announces nothing for `%s`',
         async (status) => {
-            const { orderId, providerRef } = await cancelledOrder();
+            const { orderId, providerRef } = await canceledOrder();
             setFakeOutcome(providerRef, { status });
 
             await paymentService.applyWebhookSettlement(providerRef);
             await settleOutboxNudges();
 
-            expect(await statusOf(orderId)).toBe('cancelled');
+            expect(await statusOf(orderId)).toBe('canceled');
             expect(await outboxEventModel.countDocuments({ name: PAYMENT_FAILED })).toBe(0);
         }
     );
 
     it('is not re-read by the buyer sync', async () => {
-        const { user, orderId } = await cancelledOrder();
+        const { user, orderId } = await canceledOrder();
         const payment = await paymentRepository.findByOrderId(orderId);
 
         const answer = await paymentService.syncPayment(
@@ -139,11 +139,11 @@ describe('a late report on a cancelled payment', () => {
             testCallerContext
         );
 
-        expect(answer.success && answer.data.status).toBe('cancelled');
+        expect(answer.success && answer.data.status).toBe('canceled');
     });
 
     it('is recorded as `succeeded` and returned in full when money landed on it', async () => {
-        const { orderId, providerRef } = await cancelledOrder();
+        const { orderId, providerRef } = await canceledOrder();
         await fakePaymentProvider.confirm(providerRef, 'pm_card_visa');
 
         await paymentService.applyWebhookSettlement(providerRef);
@@ -152,11 +152,11 @@ describe('a late report on a cancelled payment', () => {
         expect(payment?.status).toBe('succeeded');
         expect(payment?.refunds).toHaveLength(1);
         expect(presentPayment(payment!).displayStatus).toBe('refunded');
-        expect(await orderStatusOf(orderId)).toBe('cancelled');
+        expect(await orderStatusOf(orderId)).toBe('canceled');
     });
 
     it('is a no-op the second time, so a redelivered success refunds once', async () => {
-        const { orderId, providerRef } = await cancelledOrder();
+        const { orderId, providerRef } = await canceledOrder();
         await fakePaymentProvider.confirm(providerRef, 'pm_card_visa');
         await paymentService.applyWebhookSettlement(providerRef);
 
@@ -167,18 +167,18 @@ describe('a late report on a cancelled payment', () => {
 
     it('is skipped by the reconciliation sweep', () =>
         withEnvironmentOverrides({ NODE_PAYMENT_RECONCILE_MINUTES: '0' }, async () => {
-            const { orderId, providerRef } = await cancelledOrder();
+            const { orderId, providerRef } = await canceledOrder();
             await fakePaymentProvider.confirm(providerRef, 'pm_card_visa');
 
             expect(await paymentService.reconcileStalePayments()).toBe(0);
 
-            expect(await statusOf(orderId)).toBe('cancelled');
+            expect(await statusOf(orderId)).toBe('canceled');
         }));
 });
 
 describe('the retention reaper', () => {
-    it('deletes an old cancelled payment and keeps an old succeeded one', async () => {
-        const { orderId } = await cancelledOrder();
+    it('deletes an old canceled payment and keeps an old succeeded one', async () => {
+        const { orderId } = await canceledOrder();
         const buyer = await createUser({ email: 'second@example.com' });
         const product = await createProduct({ price: 10, onHand: 5 });
         const paidOrder = await createOrder(buyer, [toOrderItem(product, 1)]);

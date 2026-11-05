@@ -82,7 +82,7 @@ export interface FulfillmentOrderDocument extends Document {
     lastNoticeAt?: Date;
     /** The `expectedAt` the sweep's due notice was sent for: what stops a daily repeat. */
     dueNoticeFor?: Date;
-    /** Who cancelled what was left, once something was. */
+    /** Who canceled what was left, once something was. */
     cancelReason?: FulfillmentCancelReason;
     /**
      * The lost shipment whose owed units this fulfillment order waits for: present on the order made
@@ -114,7 +114,7 @@ export interface ShipmentDocument extends Document {
     /**
      * Where this parcel went: a copy of the order's shipping address at the cut, stored encrypted
      * under the shipment's `_id` (`./pii`). Absent for a method with no address (a pickup) and for a
-     * digital fulfilment. Wiped when the order's own address is (`order.redacted`).
+     * digital fulfillment. Wiped when the order's own address is (`order.redacted`).
      */
     destination?: OrderAddress;
     /** Staff skipped a step to record it, or an override recorded it. */
@@ -145,7 +145,7 @@ const fulfillmentLineSchema = new Schema<FulfillmentOrderLine>(
         title: { type: String, required: true },
         quantity: { type: Number, required: true, min: 1 },
         shippedQuantity: { type: Number, required: true, min: 0, default: 0 },
-        cancelledQuantity: { type: Number, required: true, min: 0, default: 0 }
+        canceledQuantity: { type: Number, required: true, min: 0, default: 0 }
     },
     { _id: false }
 );

@@ -23,7 +23,7 @@ import type { EphemeralMongo } from './ephemeral-mongo';
  * `mongodb-memory-server`'s own lock around `~/.cache/mongodb-binaries` (shared machine-wide, not
  * owned by this repo) has no timeout of its own: it polls every 3s for a pid it read from the lock
  * file to die. If that pid belonged to a process that was killed rather than exited — an OOM, a
- * Stryker worker SIGKILL, a cancelled session — and the number has since been reused by anything
+ * Stryker worker SIGKILL, a canceled session — and the number has since been reused by anything
  * else on the machine, the wait never ends, silently, with no output at all.
  */
 const CREATE_SERVER_TIMEOUT_MS = 120_000;

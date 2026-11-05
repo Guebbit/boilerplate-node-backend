@@ -48,7 +48,7 @@ export const displayStatusOf = ({
             : PaymentDisplayStatus.partially_refunded;
     }
     if (status === 'processing') return PaymentDisplayStatus.pending;
-    if (status === 'cancelled') return PaymentDisplayStatus.cancelled;
+    if (status === 'canceled') return PaymentDisplayStatus.canceled;
     return status === 'declined' ? PaymentDisplayStatus.failed : PaymentDisplayStatus.incomplete;
 };
 
@@ -87,7 +87,7 @@ const FILTERS: Record<PaymentDisplayStatus, Record<string, unknown>> = {
             NO_OPEN_REFUND
         ]
     },
-    [PaymentDisplayStatus.cancelled]: { $and: [{ status: 'cancelled' }, NO_OPEN_REFUND] },
+    [PaymentDisplayStatus.canceled]: { $and: [{ status: 'canceled' }, NO_OPEN_REFUND] },
     // No settled refund and none open: a payment whose only refunds were canceled reads the same
     // as one never refunded.
     [PaymentDisplayStatus.succeeded]: {

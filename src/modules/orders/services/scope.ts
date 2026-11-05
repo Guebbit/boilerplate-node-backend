@@ -74,8 +74,8 @@ export const ownLiveScope = (userId: string): Record<string, unknown> => ({
  *
  * `SYSTEM_ACTOR` carries `roles.tenant: 'admin'` for every ORDINARY permission check, so this must
  * ask the identity question FIRST — an `authContext && holds(...)` check alone would read it as
- * a plain admin and hand the sweep's expiry the admin column's wider `cancelled` rule, exactly the
- * race this rule closes (see `../domain/lifecycle.ts`'s own comment on `pending.cancelled`).
+ * a plain admin and hand the sweep's expiry the admin column's wider `canceled` rule, exactly the
+ * race this rule closes (see `../domain/lifecycle.ts`'s own comment on `pending.canceled`).
  *
  * Otherwise gated on `update:Order` by name, the same key `cancelOnRequestById` asks for its own
  * operator/customer split — a broader check would have missed a moderator or manager and

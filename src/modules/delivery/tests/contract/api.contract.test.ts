@@ -2,7 +2,7 @@
  * @module
  * Contract tests for /delivery over real HTTP — every response is judged against the spec
  * automatically (`@tests/contract`). Ten routes, three audiences: the methods list is public, the
- * fulfilment read is the owner's, the write doors are staff's. These pin that each contract
+ * fulfillment read is the owner's, the write doors are staff's. These pin that each contract
  * branch is reached over HTTP; the acts' own rules live in the unit and integration suites.
  */
 
@@ -98,7 +98,7 @@ describe('GET /delivery/methods', () => {
 });
 
 describe('GET /orders/{id}/fulfillment-orders and /shipments', () => {
-    it('match the contract for the caller’s own fulfilment: two lists, each item with its actions', async () => {
+    it('match the contract for the caller’s own fulfillment: two lists, each item with its actions', async () => {
         const { bearer, order } = await authenticateWithShipment();
 
         const plan = await api()
@@ -395,21 +395,21 @@ describe('POST /delivery/fulfillment-orders/{id}/fulfill', () => {
         ).toBeUndefined();
     });
 
-    it('replays a retried fulfil under the same Idempotency-Key', async () => {
+    it('replays a retried fulfill under the same Idempotency-Key', async () => {
         const { user, bearer } = await authenticateAs('admin');
         const digital = await createProduct({ requiresShipping: false });
         const order = await createOrder(user, [toOrderItem(digital, 1)], {
             status: OrderStatus.processing
         });
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
-        const fulfil = () =>
+        const fulfill = () =>
             api()
                 .post(`/delivery/fulfillment-orders/${String(fulfillmentOrder._id)}/fulfill`)
                 .set('Authorization', bearer)
-                .set('Idempotency-Key', 'fulfil-once');
+                .set('Idempotency-Key', 'fulfill-once');
 
-        const first = await fulfil();
-        const retry = await fulfil();
+        const first = await fulfill();
+        const retry = await fulfill();
 
         expect(retry.status).toBe(201);
         expect(retry.headers['idempotent-replay']).toBe('true');
@@ -971,7 +971,7 @@ describe('GET /delivery/fulfillment-orders/summary', () => {
                 waiting: 3,
                 allocated: 0,
                 shipped: 0,
-                cancelled: 0,
+                canceled: 0,
                 late: 0
             }
         ]);

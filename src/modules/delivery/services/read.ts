@@ -1,6 +1,6 @@
 /**
  * @module
- * Reading an order's fulfilment — what the order page asks (`GET /orders/:id/fulfillment-orders` and
+ * Reading an order's fulfillment — what the order page asks (`GET /orders/:id/fulfillment-orders` and
  * `/shipments`), the narrow reads `returns` makes (what has shipped, what a remainder cancel would take) and the
  * account export's two sections. A fulfillment order and a shipment have no owner of their own:
  * ownership is the order's, read through the same scope every order read uses.
@@ -179,9 +179,9 @@ export interface RemainderOption {
 
 /**
  * Every fulfillment order of an order with units still to cancel. Once something has shipped each
- * one is a remainder. Before that, a group can be cancelled alone only while ANOTHER group stays
+ * one is a remainder. Before that, a group can be canceled alone only while ANOTHER group stays
  * live (the order keeps something to ship); the last live group is the whole order, and that is
- * cancelled as an order instead.
+ * canceled as an order instead.
  *
  * @param orderId - the order
  * @param shipped - whether anything has shipped from the order (`order.fulfillment.shipped`)

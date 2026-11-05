@@ -50,7 +50,7 @@ const groupableLinesOf = (order: OrderDocument): GroupableLine[] =>
  *
  * @param orderId - the order
  * @returns settles once the order has its fulfillment orders; does nothing for an order that is
- *   missing, not yet paid, cancelled, or already past dispatch — including one cancelled between
+ *   missing, not yet paid, canceled, or already past dispatch — including one canceled between
  *   the read and the write, which rolls the transaction back and is not a failure: a failing
  *   `paid` listener would hold up every later event of the order, the cancel's refund among them
  */
@@ -80,7 +80,7 @@ export const ensureFulfillmentOrders = (orderId: string): Promise<void> =>
                 }
                 await reportProgress(orderId, session);
             }).catch((error: unknown) => {
-                // The order was cancelled after it was read: nothing was written, nothing to make.
+                // The order was canceled after it was read: nothing was written, nothing to make.
                 if (error instanceof ActRefusal) return undefined;
                 throw error;
             });

@@ -459,12 +459,12 @@ describe('staff recording a withdrawal the buyer stated outside the shop', () =>
         });
         expect(outcome.success && outcome.data.requestedAt.getTime()).toBe(stated.getTime());
         const order = await readOrder(orderId);
-        expect(order?.status).toBe(OrderStatus.cancelled);
+        expect(order?.status).toBe(OrderStatus.canceled);
         await settleOutboxNudges();
         const payment = await paymentService.getForOrder(orderId, asModerator());
         expect(payment.success && payment.data.amountRefunded).toBe(40);
-        const cancelled = await timelineOf(orderId, 'cancelled');
-        expect(cancelled[0]).toMatchObject({
+        const canceled = await timelineOf(orderId, 'canceled');
+        expect(canceled[0]).toMatchObject({
             actor: 'test-moderator',
             data: { cause: 'withdrawal' }
         });

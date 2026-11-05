@@ -5,7 +5,7 @@
 
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
-import type { WebhookEventCatalogueEntry } from '@types';
+import type { WebhookEventCatalogEntry } from '@types';
 import { webhooksService } from '../services';
 
 /**
@@ -13,6 +13,6 @@ import { webhooksService } from '../services';
  * Every event a subscription may filter on, served straight from `../asyncapi.yaml`.
  */
 export const listWebhookEvents = (_request: Request, response: Response) =>
-    successResponse<{ items: WebhookEventCatalogueEntry[] }>(response, {
-        items: [...webhooksService.listWebhookEventCatalogue()]
+    successResponse<{ items: WebhookEventCatalogEntry[] }>(response, {
+        items: [...webhooksService.listWebhookEventCatalog()]
     });

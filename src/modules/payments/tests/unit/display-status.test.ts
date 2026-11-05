@@ -41,7 +41,7 @@ describe('displayStatusOf', () => {
         ['succeeded', [...canceled, ...settled], 50, PaymentDisplayStatus.refunded],
         ['succeeded', [...settled, ...open], 50, PaymentDisplayStatus.refund_pending],
         ['declined', [], 0, PaymentDisplayStatus.failed],
-        ['cancelled', [], 0, PaymentDisplayStatus.cancelled]
+        ['canceled', [], 0, PaymentDisplayStatus.canceled]
     ])(
         'reads %s with refunds %j and %d refunded as %s',
         (status, refunds, amountRefunded, expected) => {

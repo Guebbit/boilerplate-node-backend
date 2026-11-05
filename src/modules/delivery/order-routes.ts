@@ -1,8 +1,8 @@
 /**
  * @module
  * The delivery doors that sit under `/orders`: `POST /orders/{id}/process` and the order's two
- * fulfilment lists. The verb names the
- * status it reaches (`cancel` → `cancelled`, `process` → `processing`), so the URL belongs to the
+ * fulfillment lists. The verb names the
+ * status it reaches (`cancel` → `canceled`, `process` → `processing`), so the URL belongs to the
  * order; the module and its narrow `start:Shipment` key stay delivery's. Mounted at `/orders` by
  * `./module.ts`.
  */
@@ -18,7 +18,7 @@ import { postProcessOrder } from './controllers/post-process-order';
 /** Express router for the delivery operations that live under an order. */
 export const orderRouter = Router();
 
-// POST /orders/:id/process — begins fulfilment; moves the order paid -> processing. Optional:
+// POST /orders/:id/process — begins fulfillment; moves the order paid -> processing. Optional:
 // shipping from `paid` makes the same move itself.
 // No `forced` variant, so no step-up guard: the admin override is the other reachable path here.
 orderRouter.post(

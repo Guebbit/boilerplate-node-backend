@@ -42,13 +42,13 @@ flowchart LR
     shop_tasks --> wishlist
     cart -. "cart.lines_removed" .-> shop_tasks
     cart -. "cart.merge_refused" .-> shop_tasks
-    delivery -. "fulfillment_order.cancelled" .-> shop_tasks
+    delivery -. "fulfillment_order.canceled" .-> shop_tasks
     delivery -. "fulfillment_order.delayed" .-> shop_tasks
     delivery -. "fulfillment_order.hold_noticed" .-> shop_tasks
     delivery -. "shipment.lost" .-> shop_tasks
     delivery -. "shipment.shipped" .-> shop_tasks
     inventory -. "inventory.hold_orphaned" .-> shop_tasks
-    orders -. "order.cancelled" .-> shop_tasks
+    orders -. "order.canceled" .-> shop_tasks
     orders -. "order.purchase_hold_placed" .-> shop_tasks
     payments -. "payment.amount_mismatch" .-> shop_tasks
     payments -. "payment.dispute_opened" .-> shop_tasks
@@ -105,8 +105,8 @@ The dedup, the replay rules and the overdue sweep are the engine's: see
 | `amount_mismatch`       | `payment.amount_mismatch`                                                                | **never**: staff close it once they know why                                                 | + the attention window                                                                                 | `AuditDisplay`         | admin only                | `orders/<orderId>`             |
 | `dispute`               | `payment.dispute_opened` / `_updated` while it needs the shop's proof (`needs_response`) | the dispute leaves `needs_response`: proof sent, or decided early                            | the provider's `evidenceDueBy`                                                                         | `PaymentRefunding`     | moderator, admin          | `sales/payments?tab=attention` |
 | `dispute_awaiting_bank` | `payment.dispute_updated` with `under_review`: proof sent, the bank decides              | a decided or closed dispute (`won`, `lost`, `accepted`, `closed`); the closing note names it | opening + 75 days, the card networks' usual outer limit (`AWAITING_BANK_MS`)                           | `PaymentRefunding`     | moderator, admin          | `sales/payments?tab=attention` |
-| `paid_without_hold`     | `inventory.hold_orphaned` (the payment step only)                                        | `order.cancelled`, `shipment.shipped`                                                        | +4 h                                                                                                   | `InventoryManagement`  | warehouse, admin          | `orders/<orderId>`             |
-| `consent_due`           | `fulfillment_order.delayed`, see below                                                   | `shipment.shipped`, `fulfillment_order.cancelled`                                            | `agreedAt` + 30 d, or the date the buyer holds                                                         | `OrderEditing`         | manager, moderator, admin | `orders/<orderId>`             |
+| `paid_without_hold`     | `inventory.hold_orphaned` (the payment step only)                                        | `order.canceled`, `shipment.shipped`                                                         | +4 h                                                                                                   | `InventoryManagement`  | warehouse, admin          | `orders/<orderId>`             |
+| `consent_due`           | `fulfillment_order.delayed`, see below                                                   | `shipment.shipped`, `fulfillment_order.canceled`                                             | `agreedAt` + 30 d, or the date the buyer holds                                                         | `OrderEditing`         | manager, moderator, admin | `orders/<orderId>`             |
 
 **A refund the bank sends back.** A settled refund can come back weeks later (a closed card), and
 the shop owes the money again. `payment.refund_reversed` opens a `refund_reversed` to-do, "Refund

@@ -2,7 +2,7 @@
  * @module
  * The mails this module sends. Two are listeners on its own events — `payment.succeeded` and
  * `payment.refunded` — and two belong to the bank transfer: its instructions, when the transfer
- * payment opens, and "no transfer received", when its order is cancelled for lack of one. A listener covers every path that settles money — the webhook, the
+ * payment opens, and "no transfer received", when its order is canceled for lack of one. A listener covers every path that settles money — the webhook, the
  * browser confirm, an offline record and the crash-recovery sweep — where an inline send would
  * miss the ones that only announce. A mail that fails never undoes money that landed: both
  * listeners log and swallow.
@@ -199,10 +199,10 @@ export const mailTransferInstructions = (
 };
 
 /**
- * Tell the buyer their transfer did not arrive in time and the order is cancelled. Sent by the
- * call that moved the transfer payment to `cancelled`, so one cancel mails once.
+ * Tell the buyer their transfer did not arrive in time and the order is canceled. Sent by the
+ * call that moved the transfer payment to `canceled`, so one cancel mails once.
  *
- * @param orderId - the order that was cancelled
+ * @param orderId - the order that was canceled
  */
 export const mailTransferExpired = (orderId: string): Promise<void> =>
     orderService.mailBuyerOfOrder(orderId, (order, locale) => {

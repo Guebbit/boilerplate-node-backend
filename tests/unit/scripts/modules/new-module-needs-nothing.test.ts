@@ -16,9 +16,9 @@ import { modulesDeclaringProbes } from '../../../../scripts/contracts/client-col
 import { assembleRoot, readModuleFragments } from '../../../../scripts/contracts/root-assembly';
 import {
     moduleSidebar,
-    readCatalogue,
+    readCatalog,
     renderModuleList
-} from '../../../../scripts/docs/module-catalogue';
+} from '../../../../scripts/docs/module-catalog';
 import { readAllModuleDescriptors } from '../../../../scripts/docs/module-descriptor';
 
 import { routedModulesOf } from '@tests/routes';
@@ -97,7 +97,7 @@ describe('a module folder alone is enough', () => {
     });
 
     it('is listed in the docs index and the sidebar under its group, with its deeper page', () => {
-        const catalogue = readCatalogue(modulesRoot(), path.join(scratch, 'docs', 'modules'));
+        const catalogue = readCatalog(modulesRoot(), path.join(scratch, 'docs', 'modules'));
 
         expect(renderModuleList(catalogue)).toContain(
             '- [`widgets`](./widgets.md) — Widgets, for the test. Deeper: [Going deeper](./widgets-deep.md).'

@@ -124,7 +124,7 @@ const seedEveryLabel = async (): Promise<Map<PaymentDisplayStatus, string>> => {
             { amountRefunded: 50, refunds: [refundRecord({ amount: 50 })] }
         ],
         [PaymentDisplayStatus.failed, { status: 'declined' }],
-        [PaymentDisplayStatus.cancelled, { status: 'cancelled' }]
+        [PaymentDisplayStatus.canceled, { status: 'canceled' }]
     ];
     const ids = new Map<PaymentDisplayStatus, string>();
     for (const [label, overrides] of cases) {
@@ -429,7 +429,7 @@ describe('listAttention', () => {
         ]);
     });
 
-    it('shows a cancelled hand-paid order as owed by hand, once, until an operator confirms it', async () => {
+    it('shows a canceled hand-paid order as owed by hand, once, until an operator confirms it', async () => {
         const { order } = await seedPayment({
             provider: 'manual',
             providerRef: undefined,

@@ -1,6 +1,6 @@
 /**
  * @module
- * Starting fulfilment on a paid order, and the shipping-methods catalogue. Neither is about a
+ * Starting fulfillment on a paid order, and the shipping-methods catalogue. Neither is about a
  * fulfillment order or a shipment, so neither belongs in an act.
  */
 
@@ -42,7 +42,7 @@ const notPaid = (): ResponseReject =>
     generateReject(409, [{ code: ERROR_CODES.ORDER_NOT_PAID, message: t('delivery.not-paid') }]);
 
 /**
- * Report that fulfilment has started on a paid order — the `paid → processing` door, before any
+ * Report that fulfillment has started on a paid order — the `paid → processing` door, before any
  * shipment exists to record. Makes the order's fulfillment orders too if the `paid` listener has not
  * yet. Shipping from `paid` makes this move itself, so this door is the optional "mark in
  * progress". No `forced` variant: the admin override (`override:Order`,
@@ -70,7 +70,7 @@ export const processOrder = (
                 if (!moved) return notPaid();
 
                 recordAudit(context, {
-                    action: deliveryAuditActions.ADMIN_ORDER_FULFILMENT_STARTED,
+                    action: deliveryAuditActions.ADMIN_ORDER_FULFILLMENT_STARTED,
                     outcome: 'success',
                     targetType: 'order',
                     targetId: orderId

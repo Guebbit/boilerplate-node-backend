@@ -15,7 +15,7 @@ describe('webhookEventNames', () => {
     it('lists the channels of every fragment once, in fragment order', () => {
         const names = webhookEventNames();
 
-        expect(names.slice(0, 3)).toEqual(['order.created', 'order.paid', 'order.cancelled']);
+        expect(names.slice(0, 3)).toEqual(['order.created', 'order.paid', 'order.canceled']);
         expect(new Set(names).size).toBe(names.length);
         expect(names).toContain('payment.refunded');
     });

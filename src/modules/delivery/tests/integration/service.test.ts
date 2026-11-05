@@ -1,10 +1,10 @@
 /**
  * @module
- * Delivery — the rates rules and the fulfilment acts. What is worth pinning: the free-above rule
+ * Delivery — the rates rules and the fulfillment acts. What is worth pinning: the free-above rule
  * prices against the items total alone; an order that is paid gets one fulfillment order, and
  * shipping it writes the shipment and moves the order together; shipping in parts keeps the order
  * `processing` until nothing remains, and the withdrawal clock starts from the LAST arrival; holds,
- * digital fulfilment, shipping from `paid` and an order cancel all leave the records and the order in
+ * digital fulfillment, shipping from `paid` and an order cancel all leave the records and the order in
  * step. Real Mongo (`setupTestDb`); the shipped email is asserted through the mocked queue, the
  * cart's confirmation-email seam.
  */
@@ -142,7 +142,7 @@ describe('the fulfillment orders of a paid order', () => {
 
     // The `paid` listener can read an order paid and then lose it to a cancel before it writes. A
     // throw there would hold up every later event of the order, the cancel's refund among them.
-    it('are not made, and nothing fails, when the order is cancelled between the read and the write', async () => {
+    it('are not made, and nothing fails, when the order is canceled between the read and the write', async () => {
         const user = await createUser();
         const order = await createOrder(user, [toOrderItem(await createProduct(), 1)], {
             status: OrderStatus.paid
@@ -771,8 +771,8 @@ describe('what the audit rows carry', () => {
     });
 });
 
-describe('digital fulfilment', () => {
-    it('fulfils a digital-only order in one act: shipment born delivered, order delivered, clock from payment', async () => {
+describe('digital fulfillment', () => {
+    it('fulfills a digital-only order in one act: shipment born delivered, order delivered, clock from payment', async () => {
         const paidAt = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
         const order = await seedDigitalOrder(OrderStatus.processing, paidAt);
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
@@ -793,7 +793,7 @@ describe('digital fulfilment', () => {
         expect(stored!.withdrawUntil).toEqual(withdrawUntilFrom(paidAt, 30));
     });
 
-    it('fulfils from `paid` too: the order starts itself, for a caller who may start it', async () => {
+    it('fulfills from `paid` too: the order starts itself, for a caller who may start it', async () => {
         const order = await seedDigitalOrder(OrderStatus.paid, new Date());
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
 
@@ -825,7 +825,7 @@ describe('digital fulfilment', () => {
         expect((await orderService.getById(String(order._id)))!.status).toBe(OrderStatus.paid);
     });
 
-    it('mails only the arrival of a digital fulfilment, never "on its way"', async () => {
+    it('mails only the arrival of a digital fulfillment, never "on its way"', async () => {
         wireDelivery();
         const order = await seedDigitalOrder(OrderStatus.processing, new Date());
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
@@ -843,7 +843,7 @@ describe('digital fulfilment', () => {
         ]);
     });
 
-    it('refuses to fulfil a physical fulfillment order, and to ship a digital one', async () => {
+    it('refuses to fulfill a physical fulfillment order, and to ship a digital one', async () => {
         const { order } = await processingOrderOf();
         const user = await createUser({ email: 'digital-buyer@example.com' });
         const digital = await createOrder(
@@ -854,7 +854,7 @@ describe('digital fulfilment', () => {
         const [physicalFo] = await fulfillmentOrdersOf(String(order._id));
         const [digitalFo] = await fulfillmentOrdersOf(String(digital._id));
 
-        const fulfilPhysical = await deliveryService.fulfillFulfillmentOrder(
+        const fulfillPhysical = await deliveryService.fulfillFulfillmentOrder(
             String(physicalFo._id),
             asAdmin(),
             admin
@@ -866,7 +866,7 @@ describe('digital fulfilment', () => {
             admin
         );
 
-        expect(asReject(fulfilPhysical).errors[0].code).toBe('DELIVERY_NOT_DIGITAL');
+        expect(asReject(fulfillPhysical).errors[0].code).toBe('DELIVERY_NOT_DIGITAL');
         expect(asReject(shipDigital).errors[0].code).toBe('DELIVERY_NOT_PHYSICAL');
     });
 
@@ -1044,7 +1044,7 @@ describe('holds', () => {
     });
 });
 
-describe('an order that is cancelled', () => {
+describe('an order that is canceled', () => {
     it('cancels every fulfillment order through the cancel event, and a redelivery changes nothing', async () => {
         wireDelivery();
         const { order } = await processingOrderOf([1], { status: OrderStatus.paid });
@@ -1056,18 +1056,18 @@ describe('an order that is cancelled', () => {
         await deliveryService.cancelAllForOrder(orderId);
 
         const all = await fulfillmentOrderRepository.findByOrderId(orderId);
-        expect(all.map(({ status }) => status)).toEqual(['cancelled']);
-        expect(all[0].lines[0]).toMatchObject({ cancelledQuantity: 1, shippedQuantity: 0 });
+        expect(all.map(({ status }) => status)).toEqual(['canceled']);
+        expect(all[0].lines[0]).toMatchObject({ canceledQuantity: 1, shippedQuantity: 0 });
     });
 
-    it('cannot be cancelled whole once a shipment left, and a ship cannot land on a cancelled order', async () => {
+    it('cannot be canceled whole once a shipment left, and a ship cannot land on a canceled order', async () => {
         const { order, products } = await processingOrderOf([2]);
         const orderId = String(order._id);
         await shipFrom(orderId, { lines: [{ productId: String(products[0]._id), quantity: 1 }] });
 
-        const cancelled = await orderService.cancelOnRequestById(orderId, asAdmin(), {}, admin);
+        const canceled = await orderService.cancelOnRequestById(orderId, asAdmin(), {}, admin);
 
-        expect(asReject(cancelled).status).toBe(409);
+        expect(asReject(canceled).status).toBe(409);
         const stored = await orderService.getById(orderId);
         expect(stored!.status).toBe(OrderStatus.processing);
 
@@ -1171,7 +1171,7 @@ describe('a short stock delivery', () => {
         expect(after.lines[0].quantity).toBe(1);
     });
 
-    it('does nothing for a cancelled order', async () => {
+    it('does nothing for a canceled order', async () => {
         const { orderId, fulfillmentOrderId, productId } = await awaitingStock(2);
         await orderService.cancelOnRequestById(orderId, asAdmin(), {}, admin);
 

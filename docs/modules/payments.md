@@ -34,7 +34,7 @@ flowchart LR
     payments --> access
     payments --> orders
     payments --> shop
-    orders -. "order.cancelled" .-> payments
+    orders -. "order.canceled" .-> payments
     orders -. "order.created" .-> payments
     payments -. "payment.refunded" .-> invoicing
     payments -. "payment.refunded" .-> returns
@@ -62,11 +62,11 @@ flowchart LR
 ## The story
 
 A payment is _about_ an order: the intent freezes its total, the confirm moves its status to
-`paid`. The arrow never comes back — [`orders`](./orders.md) announces `order.cancelled` with the
+`paid`. The arrow never comes back — [`orders`](./orders.md) announces `order.canceled` with the
 `refund` it owes, and this module answers by opening the refund. The event is an outbox row written
 with the cancel, so the promise survives a crash; the refund RECORD is the promise from then on.
 
-This module's `order.cancelled` listener also closes a card intent nobody ever finished, so an
+This module's `order.canceled` listener also closes a card intent nobody ever finished, so an
 abandoned one cannot resolve at the provider days later with no local row left to catch the charge
 it makes. Best-effort and first: a payment already `succeeded` is the refund's to give back, never
 the intent close's.
@@ -236,7 +236,7 @@ both end in the one settlement the webhook, the confirm and the sync already sha
 ```mermaid
 flowchart LR
     sweep["sweep:payment-effects<br/>reconcileStalePayments"] --> ask["provider.retrieve"]
-    cancel["order.cancelled<br/>cancelOpenIntentForOrder"] -- "provider refuses to close<br/>(already succeeded)" --> ask
+    cancel["order.canceled<br/>cancelOpenIntentForOrder"] -- "provider refuses to close<br/>(already succeeded)" --> ask
     hook["webhook"] --> ask
     ask --> settle["settlePayment"]
     settle -- "order still payable" --> paid["order paid, stock committed"]
@@ -265,16 +265,16 @@ non-terminal status. Three sets in `domain/lifecycle.ts` say which write may run
 | ------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `CONFIRMABLE_PAYMENT_STATUSES`        | `requires_confirmation`, `declined`                                  | `POST /payments/{id}/confirm` (a decline is retryable with another method)   |
 | `SETTLEABLE_PAYMENT_STATUSES`         | `requires_confirmation`, `requires_action`, `processing`, `declined` | every write except the success write: in-flight, decline, the order's cancel |
-| `SUCCESS_SETTLEABLE_PAYMENT_STATUSES` | the settleable ones plus `cancelled`                                 | the success write, the amount-mismatch write and the provider re-read's gate |
+| `SUCCESS_SETTLEABLE_PAYMENT_STATUSES` | the settleable ones plus `canceled`                                  | the success write, the amount-mismatch write and the provider re-read's gate |
 
 `succeeded` is terminal, and stays `succeeded` however much is refunded: refund state is read from
 the refund records and `amountRefunded` ([Refund records](#refund-records)), the way Stripe's
 PaymentIntent and Shopify's transactions do, and the order already carries `paymentStatus`.
 
-`cancelled` is written by the `order.cancelled` listener (`cancelOpenIntentForOrder`), only after
+`canceled` is written by the `order.canceled` listener (`cancelOpenIntentForOrder`), only after
 the provider confirmed the intent closed, and only from a still-open status: a success racing it
 wins. A report that arrives later (`processing`, `declined`) moves nothing and announces nothing.
-Money that arrives on it is real: the success write runs from `cancelled`, finds the order gone and
+Money that arrives on it is real: the success write runs from `canceled`, finds the order gone and
 opens the refund for the whole amount in the same transaction.
 
 ```mermaid
@@ -297,11 +297,11 @@ stateDiagram-v2
     declined --> declined: confirm, refused again
     requires_confirmation --> succeeded: recorded by hand
     declined --> succeeded: recorded by hand
-    requires_confirmation --> cancelled: order cancelled
-    requires_action --> cancelled: order cancelled
-    processing --> cancelled: order cancelled
-    declined --> cancelled: order cancelled
-    cancelled --> succeeded: late success, refunded in the same transaction
+    requires_confirmation --> canceled: order canceled
+    requires_action --> canceled: order canceled
+    processing --> canceled: order canceled
+    declined --> canceled: order canceled
+    canceled --> succeeded: late success, refunded in the same transaction
     succeeded --> succeeded: a refund, partial or whole
 ```
 
@@ -764,10 +764,10 @@ stateDiagram-v2
     [*] --> requires_action: order.created, paymentMethod = bank_transfer<br/>RF reference + payBy, hand-recorded
     requires_action --> succeeded: admin records the transfer<br/>POST /orders/:id/payments
     requires_action --> requires_confirmation: the buyer pays by card instead<br/>(same row, reference kept)
-    requires_action --> cancelled: order cancelled, or payBy passed with no money
-    cancelled --> succeeded: a late transfer is recorded<br/>(the order is gone: the refund record stays open)
+    requires_action --> canceled: order canceled, or payBy passed with no money
+    canceled --> succeeded: a late transfer is recorded<br/>(the order is gone: the refund record stays open)
     succeeded --> [*]
-    cancelled --> [*]: deleted a year after the last touch
+    canceled --> [*]: deleted a year after the last touch
 ```
 
 - **`order.created` opens it.** A listener (`services/transfer.ts`) inserts the row if absent: a
@@ -801,7 +801,7 @@ stateDiagram-v2
 - **Three mails, one of them not this module's.** The order-placed confirmation is `orders`', with
   the withdrawal notice, for every method. This module sends the **instructions** when it opens the
   payment, and **"no transfer received"** when the order was cancelled because the hold ran out — by
-  the call whose write moved the payment to `cancelled`, so one cancel mails once. The buyer's own
+  the call whose write moved the payment to `canceled`, so one cancel mails once. The buyer's own
   cancel is answered by `orders`' cancel mail alone. A card hold's expiry stays `orders`'.
 - **A cancelled transfer payment is kept a year**, not the thirty days of every other abandoned
   attempt (`TRANSFER_PAYMENT_RETENTION_DAYS`), so the reference still finds the order when a late
@@ -881,7 +881,7 @@ flowchart LR
     ST -.->|declined| E["order stays pending<br/><i>units still held</i>"]
     ST -->|succeeded| F["order → paid<br/><i>orders</i>"]
     F --> G["commit the hold<br/><i>orders · no counter moves<br/>until the parcel ships</i>"]
-    OC["orders"] -. "order.cancelled" .-> R["refund<br/><i>if one was due</i>"]
+    OC["orders"] -. "order.canceled" .-> R["refund<br/><i>if one was due</i>"]
 
     classDef step fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef port fill:#ede9fe,stroke:#7c3aed,color:#111827;
@@ -928,7 +928,7 @@ every label both ways.
 | `partially_refunded` | `succeeded`, at least one settled refund, none open                      |
 | `refunded`           | `succeeded`, a settled refund, none open, `amountRefunded` = `amount`    |
 | `failed`             | `declined`                                                               |
-| `cancelled`          | `cancelled`                                                              |
+| `canceled`           | `canceled`                                                               |
 
 **What staff see that a payer does not.** `providerRef`, each refund's `providerRefundRef` and a
 failed refund's `failureReason`. The reason is a closed code (`declined`, `insufficient_funds`,
@@ -1035,10 +1035,10 @@ invoice to keep. `npm run job reap:payments` deletes it once it has sat untouche
 `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` (default 30 days) — an abandoned checkout, not a financial
 record. Retrying resets the clock, the same way editing a cart resets `carts`' own TTL.
 
-| Payment state                                                                  | Kept forever? | Mechanism                                      |
-| ------------------------------------------------------------------------------ | :-----------: | ---------------------------------------------- |
-| `succeeded`                                                                    |      Yes      | Never touched by any timer — it is the invoice |
-| `requires_*`, `processing`, `declined`, `cancelled`, untouched past the window |      No       | `npm run job reap:payments` deletes the row    |
+| Payment state                                                                 | Kept forever? | Mechanism                                      |
+| ----------------------------------------------------------------------------- | :-----------: | ---------------------------------------------- |
+| `succeeded`                                                                   |      Yes      | Never touched by any timer — it is the invoice |
+| `requires_*`, `processing`, `declined`, `canceled`, untouched past the window |      No       | `npm run job reap:payments` deletes the row    |
 
 `npm run job reap:payments` runs nightly from `docker/crontab`, alongside the rest of this repo's
 scheduled jobs — see [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism

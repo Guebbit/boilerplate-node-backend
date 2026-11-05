@@ -98,7 +98,7 @@ export const cancelPendingEmailChange = (
             const hadPending = emailChangeNext(emailChangeStateOf(user), 'cancel') !== undefined;
             return userService
                 .cancelPendingEmail(user)
-                .then((saved) => revokeCancelledChange(hadPending, saved, context))
+                .then((saved) => revokeCanceledChange(hadPending, saved, context))
                 .then((saved) => generateSuccess(saved, 200));
         })
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
@@ -107,7 +107,7 @@ export const cancelPendingEmailChange = (
  * Revoke the now-pointless `email-change` token and audit the cancel — only when a change was
  * actually pending, so a no-op cancel doesn't claim (or log) one that never happened.
  */
-const revokeCancelledChange = (
+const revokeCanceledChange = (
     hadPending: boolean,
     user: UserDocument,
     context: CallerContext
@@ -115,7 +115,7 @@ const revokeCancelledChange = (
     if (!hadPending) return Promise.resolve(user);
     return removeTokens(user.id, [EMAIL_CHANGE_TOKEN_TYPE]).then(() => {
         recordAudit(context, {
-            action: accountAuditActions.AUTH_EMAIL_CHANGE_CANCELLED,
+            action: accountAuditActions.AUTH_EMAIL_CHANGE_CANCELED,
             outcome: 'success'
         });
         return user;

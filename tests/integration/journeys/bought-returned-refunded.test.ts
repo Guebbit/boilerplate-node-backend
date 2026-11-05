@@ -225,7 +225,7 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
     const timesOf = (action: string) => audit.filter((one) => one === action).length;
     expect(
         [
-            'admin.order.fulfilment_started',
+            'admin.order.fulfillment_started',
             'admin.order.shipped',
             'admin.order.delivered',
             'admin.return.received',

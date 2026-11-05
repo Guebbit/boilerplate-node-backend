@@ -2,7 +2,7 @@
  * @module
  * A hard delete racing a settlement or a reopen. `remove` reads `status` and `paidAt` on the
  * document it was handed, so a change that commits after that read must still stop the delete:
- * the write itself is conditional on the order being cancelled and unpaid, and a miss is
+ * the write itself is conditional on the order being canceled and unpaid, and a miss is
  * answered from a fresh read. Real Mongo.
  */
 
@@ -21,11 +21,11 @@ import { remove } from '../../services/remove';
 
 setupTestDb();
 
-/** A cancelled, unpaid order, read the way `removeById` reads it. */
-const cancelledOrder = async () => {
+/** A canceled, unpaid order, read the way `removeById` reads it. */
+const canceledOrder = async () => {
     const user = await createUser();
     const product = await createProduct({ onHand: 10 });
-    const created = await createOrder(user, [toOrderItem(product, 3)], { status: 'cancelled' });
+    const created = await createOrder(user, [toOrderItem(product, 3)], { status: 'canceled' });
     const orderId = String(created._id);
     const order = await readOrder(orderId);
     if (!order) throw new Error('order vanished');
@@ -34,7 +34,7 @@ const cancelledOrder = async () => {
 
 describe('remove: a hard delete', () => {
     it('refuses with 409 ORDER_INVOICED when a settlement commits between the read and the delete', async () => {
-        const { order, orderId } = await cancelledOrder();
+        const { order, orderId } = await canceledOrder();
         // The order in hand still says unpaid; the settlement lands behind its back.
         await markOrderPaidAt(orderId, new Date());
 
@@ -45,18 +45,18 @@ describe('remove: a hard delete', () => {
         expect(await readOrder(orderId)).not.toBeNull();
     });
 
-    it('refuses with 409 ORDER_NOT_CANCELLED when the order is reopened between the read and the delete', async () => {
-        const { order, orderId } = await cancelledOrder();
+    it('refuses with 409 ORDER_NOT_CANCELED when the order is reopened between the read and the delete', async () => {
+        const { order, orderId } = await canceledOrder();
         await forceOrderStatus(orderId, 'pending');
 
         const result = await remove(order, true);
 
-        expect(asReject(result).errors[0].code).toBe('ORDER_NOT_CANCELLED');
+        expect(asReject(result).errors[0].code).toBe('ORDER_NOT_CANCELED');
         expect(await readOrder(orderId)).not.toBeNull();
     });
 
     it('answers 404 when the order is deleted between the read and the delete', async () => {
-        const { order, orderId } = await cancelledOrder();
+        const { order, orderId } = await canceledOrder();
         await remove(await readOrder(orderId).then((current) => current!), true);
 
         const result = await remove(order, true);
@@ -64,8 +64,8 @@ describe('remove: a hard delete', () => {
         expect(asReject(result).status).toBe(404);
     });
 
-    it('deletes a cancelled, unpaid order', async () => {
-        const { order, orderId } = await cancelledOrder();
+    it('deletes a canceled, unpaid order', async () => {
+        const { order, orderId } = await canceledOrder();
 
         const result = await remove(order, true);
 

@@ -85,11 +85,11 @@ const seedOrder = async () => {
 };
 
 /** {@link seedOrder}'s order after a cancel, read back the way `removeById` reads it. */
-const seedCancelledOrder = async () => {
+const seedCanceledOrder = async () => {
     const seeded = await seedOrder();
-    const cancelled = await forceOrderStatus(String(seeded.order._id), 'cancelled');
-    if (!cancelled) throw new Error('order vanished');
-    return { ...seeded, order: cancelled };
+    const canceled = await forceOrderStatus(String(seeded.order._id), 'canceled');
+    if (!canceled) throw new Error('order vanished');
+    return { ...seeded, order: canceled };
 };
 
 /** Creates an order of `quantities.length` lines, one fresh well-stocked product each. */
@@ -673,8 +673,8 @@ describe('update', () => {
 });
 
 describe('remove — the hard path', () => {
-    it('deletes a cancelled order that was never paid', async () => {
-        const { order } = await seedCancelledOrder();
+    it('deletes a canceled order that was never paid', async () => {
+        const { order } = await seedCanceledOrder();
 
         const result = await remove(order, true);
 
@@ -683,7 +683,7 @@ describe('remove — the hard path', () => {
     });
 
     it.each(['pending', 'paid', 'shipped', 'delivered'])(
-        'refuses a %s order with 409 ORDER_NOT_CANCELLED and keeps it',
+        'refuses a %s order with 409 ORDER_NOT_CANCELED and keeps it',
         async (status) => {
             const { order } = await seedOrder();
             const open = await forceOrderStatus(String(order._id), status);
@@ -691,7 +691,7 @@ describe('remove — the hard path', () => {
             const result = await remove(open!, true);
 
             expect(asReject(result).status).toBe(409);
-            expect(asReject(result).errors[0].code).toBe('ORDER_NOT_CANCELLED');
+            expect(asReject(result).errors[0].code).toBe('ORDER_NOT_CANCELED');
             await expect(orderRepository.count({})).resolves.toBe(1);
         }
     );
@@ -702,7 +702,7 @@ describe('remove — the hard path', () => {
      * ever soft-deleted.
      */
     it('refuses a hard delete once the order has been paid (and therefore invoiced)', async () => {
-        const { order } = await seedCancelledOrder();
+        const { order } = await seedCanceledOrder();
         order.paidAt = new Date();
         await orderRepository.save(order);
 
@@ -714,7 +714,7 @@ describe('remove — the hard path', () => {
         await expect(orderRepository.count({})).resolves.toBe(1);
     });
 
-    it('refuses a soft delete on a paid order too: an open order is cancelled first', async () => {
+    it('refuses a soft delete on a paid order too: an open order is canceled first', async () => {
         const { order } = await seedOrder();
         order.paidAt = new Date();
         await orderRepository.save(order);
@@ -722,7 +722,7 @@ describe('remove — the hard path', () => {
         const result = await remove(order, false);
 
         expect(asReject(result).status).toBe(409);
-        expect(asReject(result).errors[0].code).toBe('ORDER_NOT_CANCELLED');
+        expect(asReject(result).errors[0].code).toBe('ORDER_NOT_CANCELED');
         const stored = await orderRepository.findById(String(order._id));
         expect(stored!.deletedAt).toBeUndefined();
     });
@@ -756,7 +756,7 @@ describe('updateById', () => {
 
 describe('remove', () => {
     it('soft-deletes by default, keeping the row', async () => {
-        const { order } = await seedCancelledOrder();
+        const { order } = await seedCanceledOrder();
 
         const result = await remove(order);
 
@@ -770,7 +770,7 @@ describe('remove', () => {
 
     it('leaves an already soft-deleted order deleted when the delete is repeated', async () => {
         // DELETE must be safe to retry: a second one never brings the order back.
-        const { order } = await seedCancelledOrder();
+        const { order } = await seedCanceledOrder();
 
         await remove(order);
         await remove(order);
@@ -788,7 +788,7 @@ describe('remove', () => {
             const result = await remove(order);
 
             expect(asReject(result).status).toBe(409);
-            expect(asReject(result).errors[0].code).toBe('ORDER_NOT_CANCELLED');
+            expect(asReject(result).errors[0].code).toBe('ORDER_NOT_CANCELED');
             const stored = await orderRepository.findById(String(order._id));
             expect(stored!.deletedAt).toBeUndefined();
         }
@@ -797,7 +797,7 @@ describe('remove', () => {
 
 describe('restoreById', () => {
     it('restores a soft-deleted order', async () => {
-        const { order } = await seedCancelledOrder();
+        const { order } = await seedCanceledOrder();
         await remove(order);
 
         const result = await orderService.restoreById(String(order._id));
@@ -820,7 +820,7 @@ describe('restoreById', () => {
 
 describe('removeById', () => {
     it('soft-deletes an existing order by default', async () => {
-        const { order } = await seedCancelledOrder();
+        const { order } = await seedCanceledOrder();
 
         const result = await orderService.removeById(String(order._id));
 
@@ -830,8 +830,8 @@ describe('removeById', () => {
         expect(stored!.deletedAt).toBeInstanceOf(Date);
     });
 
-    it('hard-deletes an existing cancelled order when asked', async () => {
-        const { order } = await seedCancelledOrder();
+    it('hard-deletes an existing canceled order when asked', async () => {
+        const { order } = await seedCanceledOrder();
 
         const result = await orderService.removeById(String(order._id), true);
 
@@ -879,7 +879,7 @@ describe('getForCaller', () => {
 
 describe('callerScope hides soft-deleted orders', () => {
     it('excludes a soft-deleted order from its own owner, but not from an admin', async () => {
-        const { order } = await seedCancelledOrder();
+        const { order } = await seedCanceledOrder();
         const userId = String(order.userId);
 
         await orderService.removeById(String(order._id));

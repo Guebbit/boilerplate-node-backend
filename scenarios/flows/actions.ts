@@ -203,7 +203,7 @@ export const recordOfflinePayment = (
 export const startProcessing = (owner: Caller, orderId: string): Promise<void> =>
     owner.call('POST', `/orders/${orderId}/process`).then(() => undefined);
 
-/** What the flows read of an order's two fulfilment lists: what can ship and what is out. */
+/** What the flows read of an order's two fulfillment lists: what can ship and what is out. */
 interface FulfillmentData {
     fulfillmentOrders: {
         id: string;
@@ -336,7 +336,7 @@ export const cancelRemainder = (caller: Caller, orderId: string): Promise<string
                 fulfillmentOrderId: open?.id
             });
         })
-        .then((cancelled) => cancelled.id);
+        .then((canceled) => canceled.id);
 
 /**
  * Cancel an order. `refund` is the operator's choice alone — a customer cancelling their own paid

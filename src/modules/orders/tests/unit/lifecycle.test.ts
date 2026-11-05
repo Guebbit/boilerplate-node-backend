@@ -35,8 +35,8 @@ const EVERY_ACTOR: readonly OrderActor[] = ['customer', 'admin', 'system', 'with
 /** The two an HTTP caller can be. `system` names moves that follow a fact from outside the app. */
 const REQUEST_ACTORS: readonly OrderActor[] = ['customer', 'admin'];
 
-/** The order fulfilment moves through. Cancellation is not on it — it leaves the line. */
-const FULFILMENT_SEQUENCE: readonly OrderStatus[] = [
+/** The order fulfillment moves through. Cancellation is not on it — it leaves the line. */
+const FULFILLMENT_SEQUENCE: readonly OrderStatus[] = [
     OrderStatus.pending,
     OrderStatus.paid,
     OrderStatus.processing,
@@ -68,7 +68,7 @@ describe("the table names only the contract's statuses", () => {
     });
 
     it('leaves a terminal status through no event', () => {
-        expect(events.filter((event) => event.from.includes(OrderStatus.cancelled))).toEqual([]);
+        expect(events.filter((event) => event.from.includes(OrderStatus.canceled))).toEqual([]);
         // `delivered` is left only by a replacement's `reship`, which the system alone makes.
         expect(events.filter((event) => event.from.includes(OrderStatus.delivered))).toEqual([
             ORDER_EVENTS.reship
@@ -78,7 +78,7 @@ describe("the table names only the contract's statuses", () => {
 
 describe('the named events', () => {
     it('reads `ship`, `deliver` and the digital completion off the table', () => {
-        // The digital fulfilment is the one `processing -> delivered` edge.
+        // The digital fulfillment is the one `processing -> delivered` edge.
         expect(ORDER_EVENTS.ship).toMatchObject({
             from: [OrderStatus.processing],
             to: OrderStatus.shipped
@@ -87,7 +87,7 @@ describe('the named events', () => {
             from: [OrderStatus.shipped],
             to: OrderStatus.delivered
         });
-        expect(ORDER_EVENTS.fulfilmentComplete).toMatchObject({
+        expect(ORDER_EVENTS.fulfillmentComplete).toMatchObject({
             from: [OrderStatus.processing],
             to: OrderStatus.delivered,
             actors: ['system']
@@ -97,9 +97,9 @@ describe('the named events', () => {
     it('keeps the lost-parcel settlement out of the actor table, so the system cancels stay on pending', () => {
         expect(UNDELIVERABLE_EVENT).toEqual({
             from: [OrderStatus.processing],
-            to: OrderStatus.cancelled
+            to: OrderStatus.canceled
         });
-        expect(statusesLeadingTo(OrderStatus.cancelled, 'system')).toEqual([OrderStatus.pending]);
+        expect(statusesLeadingTo(OrderStatus.canceled, 'system')).toEqual([OrderStatus.pending]);
     });
 
     it('keeps the expiry apart from every cancel an order that landed a payment may take', () => {
@@ -122,7 +122,7 @@ describe('who may write `paid`', () => {
 });
 
 describe('who may write `processing`', () => {
-    it('lets nothing but a recorded fulfilment-start fact reach it', () => {
+    it('lets nothing but a recorded fulfillment-start fact reach it', () => {
         // Neither a request a human makes directly, same as `shipped`/`delivered` below —
         // `delivery`'s own door records the fact first, then reports it here. See
         // `src/modules/orders/services/status.ts`'s `markProcessing`.
@@ -166,15 +166,15 @@ describe('who may write `shipped` and `delivered`', () => {
 
 describe('who may cancel', () => {
     it('stops a customer once the order is in the queue', () => {
-        // The refund listener is what makes `paid` cancellable.
-        expect(statusesLeadingTo(OrderStatus.cancelled, 'customer')).toEqual([
+        // The refund listener is what makes `paid` cancelable.
+        expect(statusesLeadingTo(OrderStatus.canceled, 'customer')).toEqual([
             OrderStatus.pending,
             OrderStatus.paid
         ]);
     });
 
     it('lets an operator cancel one step further, and no further', () => {
-        expect(statusesLeadingTo(OrderStatus.cancelled, 'admin')).toEqual([
+        expect(statusesLeadingTo(OrderStatus.canceled, 'admin')).toEqual([
             OrderStatus.pending,
             OrderStatus.paid,
             OrderStatus.processing
@@ -183,7 +183,7 @@ describe('who may cancel', () => {
 
     it('lets a withdrawal reach the same statuses as an operator, but is its own actor', () => {
         // The consumer may withdraw right up to the moment the goods leave (Directive Art. 9).
-        expect(statusesLeadingTo(OrderStatus.cancelled, 'withdrawal')).toEqual([
+        expect(statusesLeadingTo(OrderStatus.canceled, 'withdrawal')).toEqual([
             OrderStatus.pending,
             OrderStatus.paid,
             OrderStatus.processing
@@ -191,23 +191,23 @@ describe('who may cancel', () => {
         expect(canTransition(OrderStatus.processing, OrderStatus.paid, 'withdrawal')).toBe(false);
     });
 
-    it('never lets shipped goods be cancelled, by anyone', () => {
+    it('never lets shipped goods be canceled, by anyone', () => {
         // Goods in transit come back as a return — a flow of its own, not a rewind.
         for (const actor of EVERY_ACTOR)
-            expect(canTransition(OrderStatus.shipped, OrderStatus.cancelled, actor)).toBe(false);
+            expect(canTransition(OrderStatus.shipped, OrderStatus.canceled, actor)).toBe(false);
     });
 
     it("stops the system actor at `pending` — B21's race", () => {
         // The reservation-sweep expiry must never cancel an order a payment already reached,
         // unlike `admin`'s own wider set two tests up.
-        expect(statusesLeadingTo(OrderStatus.cancelled, 'system')).toEqual([OrderStatus.pending]);
+        expect(statusesLeadingTo(OrderStatus.canceled, 'system')).toEqual([OrderStatus.pending]);
     });
 });
 
 describe('terminal states', () => {
-    it('lets nobody leave cancelled', () => {
+    it('lets nobody leave canceled', () => {
         for (const actor of EVERY_ACTOR)
-            expect(statusesReachableFrom(OrderStatus.cancelled, actor)).toEqual([]);
+            expect(statusesReachableFrom(OrderStatus.canceled, actor)).toEqual([]);
     });
 
     it('lets only the system leave delivered, for a replacement under the guarantee', () => {
@@ -217,9 +217,9 @@ describe('terminal states', () => {
             );
     });
 
-    it('refuses the move that reopens a cancelled order', () => {
-        // The bug the table closes: a reopened order re-enters the customer's cancellable set.
-        expect(canTransition(OrderStatus.cancelled, OrderStatus.pending, 'admin')).toBe(false);
+    it('refuses the move that reopens a canceled order', () => {
+        // The bug the table closes: a reopened order re-enters the customer's cancelable set.
+        expect(canTransition(OrderStatus.canceled, OrderStatus.pending, 'admin')).toBe(false);
     });
 
     it('refuses the move that reopens a delivered order, to every actor but the system', () => {
@@ -230,11 +230,11 @@ describe('terminal states', () => {
 });
 
 describe('direction', () => {
-    it('never moves backwards along the fulfilment sequence', () => {
+    it('never moves backwards along the fulfillment sequence', () => {
         // A property over the whole table, so a future edge in the wrong direction is caught
         // whether or not anyone writes a case for it.
-        const backwards = FULFILMENT_SEQUENCE.flatMap((from, index) =>
-            FULFILMENT_SEQUENCE.slice(0, index).flatMap((to) =>
+        const backwards = FULFILLMENT_SEQUENCE.flatMap((from, index) =>
+            FULFILLMENT_SEQUENCE.slice(0, index).flatMap((to) =>
                 EVERY_ACTOR.filter((actor) => canTransition(from, to, actor)).map(
                     (actor) => `${actor}: ${from} → ${to}`
                 )
@@ -292,24 +292,20 @@ describe('canTransition', () => {
     it('reads a literal forward direction off the table, not just its own reverse', () => {
         // The check above only proves the two wrappers agree WITH EACH OTHER — both route through
         // the same `canTransition`, so it cannot catch a wrong edge in `ORDER_LIFECYCLE`.
-        // `statusesLeadingTo` already has literal anchors above (`paid`, `cancelled` sections);
+        // `statusesLeadingTo` already has literal anchors above (`paid`, `canceled` sections);
         // `statusesReachableFrom` had none outside the terminal (empty) case.
-        expect(statusesReachableFrom(OrderStatus.pending, 'admin')).toEqual([
-            OrderStatus.cancelled
-        ]);
-        // The system actor also reaches `cancelled` from `pending` — the reservation-sweep
+        expect(statusesReachableFrom(OrderStatus.pending, 'admin')).toEqual([OrderStatus.canceled]);
+        // The system actor also reaches `canceled` from `pending` — the reservation-sweep
         // expiry, narrower than `admin`'s own reach since it stops there (see the `who may cancel`
         // describe block below).
         expect(statusesReachableFrom(OrderStatus.pending, 'system')).toEqual([
             OrderStatus.paid,
-            OrderStatus.cancelled
+            OrderStatus.canceled
         ]);
         // `processing` left `admin`'s reach with SH1 — a paid order's only admin-reachable move
-        // through the ordinary lifecycle is now `cancelled`, same as a customer's.
-        expect(statusesReachableFrom(OrderStatus.paid, 'admin')).toEqual([OrderStatus.cancelled]);
-        expect(statusesReachableFrom(OrderStatus.paid, 'customer')).toEqual([
-            OrderStatus.cancelled
-        ]);
+        // through the ordinary lifecycle is now `canceled`, same as a customer's.
+        expect(statusesReachableFrom(OrderStatus.paid, 'admin')).toEqual([OrderStatus.canceled]);
+        expect(statusesReachableFrom(OrderStatus.paid, 'customer')).toEqual([OrderStatus.canceled]);
     });
 });
 
@@ -333,7 +329,7 @@ describe('canProcessOrder', () => {
 
     it('agrees with the statuses that lead to processing as the system', () => {
         // `reopen` (from `shipped`) and `reship` (from `delivered`) also lead to `processing`, but
-        // they are steps back, not the start of fulfilment.
+        // they are steps back, not the start of fulfillment.
         const stepsBack = new Set<OrderStatus>([OrderStatus.shipped, OrderStatus.delivered]);
         const leadingTo: ReadonlySet<OrderStatus> = new Set(
             statusesLeadingTo(OrderStatus.processing, 'system').filter(
@@ -378,7 +374,7 @@ describe('canRecordArrival', () => {
 });
 
 describe('hasShopStarted', () => {
-    it('is false for pending and paid alone, so cancelled counts as started', () => {
+    it('is false for pending and paid alone, so canceled counts as started', () => {
         for (const status of EVERY_STATUS)
             expect(hasShopStarted(status)).toBe(
                 status !== OrderStatus.pending && status !== OrderStatus.paid
@@ -393,7 +389,7 @@ describe('orderActionsFor', () => {
                 const actions = orderActionsFor(status, actor);
 
                 expect(actions.cancel).toBe(
-                    statusesReachableFrom(status, actor).includes(OrderStatus.cancelled)
+                    statusesReachableFrom(status, actor).includes(OrderStatus.canceled)
                 );
             }
     });
@@ -413,11 +409,11 @@ describe('orderActionsFor', () => {
         });
     });
 
-    it('never advertises a cancel on an order already cancelled', () => {
+    it('never advertises a cancel on an order already canceled', () => {
         // `canTransition` allows a write that changes nothing, which is right for an edit
         // repeating the current status and wrong for "may I cancel this".
         for (const actor of EVERY_ACTOR)
-            expect(orderActionsFor(OrderStatus.cancelled, actor).cancel).toBe(false);
+            expect(orderActionsFor(OrderStatus.canceled, actor).cancel).toBe(false);
     });
 
     it('offers `pay` on a pending order to both actors that reach the HTTP surface', () => {
@@ -428,12 +424,12 @@ describe('orderActionsFor', () => {
     });
 
     it('withdraws `pay` once the money has landed or the order is over', () => {
-        for (const status of [OrderStatus.paid, OrderStatus.delivered, OrderStatus.cancelled])
+        for (const status of [OrderStatus.paid, OrderStatus.delivered, OrderStatus.canceled])
             expect(orderActionsFor(status, 'admin').pay).toBe(false);
     });
 });
 
-describe('canOverrideTo — the admin override, forward only, never onto paid or cancelled', () => {
+describe('canOverrideTo — the admin override, forward only, never onto paid or canceled', () => {
     const OVERRIDABLE_DESTINATIONS = [
         OrderStatus.processing,
         OrderStatus.shipped,
@@ -444,13 +440,13 @@ describe('canOverrideTo — the admin override, forward only, never onto paid or
         for (const from of EVERY_STATUS) expect(canOverrideTo(from, OrderStatus.paid)).toBe(false);
     });
 
-    it('never allows cancelled as a destination, from any status', () => {
+    it('never allows canceled as a destination, from any status', () => {
         for (const from of EVERY_STATUS)
-            expect(canOverrideTo(from, OrderStatus.cancelled)).toBe(false);
+            expect(canOverrideTo(from, OrderStatus.canceled)).toBe(false);
     });
 
-    it('never moves a cancelled order anywhere — it has left the fulfilment sequence', () => {
-        for (const to of EVERY_STATUS) expect(canOverrideTo(OrderStatus.cancelled, to)).toBe(false);
+    it('never moves a canceled order anywhere — it has left the fulfillment sequence', () => {
+        for (const to of EVERY_STATUS) expect(canOverrideTo(OrderStatus.canceled, to)).toBe(false);
     });
 
     it('never moves a pending order anywhere — only the offline-payment door leaves pending', () => {
@@ -458,7 +454,7 @@ describe('canOverrideTo — the admin override, forward only, never onto paid or
     });
 
     it('allows every forward move within processing/shipped/delivered, from paid onward', () => {
-        const overridable = FULFILMENT_SEQUENCE.filter((status) => status !== OrderStatus.pending);
+        const overridable = FULFILLMENT_SEQUENCE.filter((status) => status !== OrderStatus.pending);
         for (const from of overridable)
             for (const to of OVERRIDABLE_DESTINATIONS) {
                 const fromIndex = overridable.indexOf(from);
@@ -484,8 +480,8 @@ describe('canOverrideTo — the admin override, forward only, never onto paid or
 });
 
 describe('paymentSettled — true from `paid` onwards', () => {
-    it('is true exactly for the statuses from `paid` on in the fulfilment sequence', () => {
-        const fromPaid = FULFILMENT_SEQUENCE.slice(FULFILMENT_SEQUENCE.indexOf(OrderStatus.paid));
+    it('is true exactly for the statuses from `paid` on in the fulfillment sequence', () => {
+        const fromPaid = FULFILLMENT_SEQUENCE.slice(FULFILLMENT_SEQUENCE.indexOf(OrderStatus.paid));
 
         for (const status of EVERY_STATUS)
             expect(paymentSettled(status)).toBe(fromPaid.includes(status));
@@ -500,7 +496,7 @@ describe('paymentSettled — true from `paid` onwards', () => {
         for (const from of EVERY_STATUS.filter(paymentSettled))
             for (const actor of EVERY_ACTOR)
                 for (const to of statusesReachableFrom(from, actor))
-                    expect(paymentSettled(to) || to === OrderStatus.cancelled).toBe(true);
+                    expect(paymentSettled(to) || to === OrderStatus.canceled).toBe(true);
     });
 
     it('never holds for a status that can still be paid', () => {
@@ -510,11 +506,11 @@ describe('paymentSettled — true from `paid` onwards', () => {
 });
 
 describe('overridableTargetsFrom — what an admin override could land on', () => {
-    it('only moves forward along the fulfilment sequence, in sequence order', () => {
+    it('only moves forward along the fulfillment sequence, in sequence order', () => {
         for (const from of EVERY_STATUS) {
             const targets = overridableTargetsFrom(from);
-            const fromIndex = FULFILMENT_SEQUENCE.indexOf(from);
-            const indices = targets.map((to) => FULFILMENT_SEQUENCE.indexOf(to));
+            const fromIndex = FULFILLMENT_SEQUENCE.indexOf(from);
+            const indices = targets.map((to) => FULFILLMENT_SEQUENCE.indexOf(to));
 
             expect(indices.every((index) => index > fromIndex)).toBe(true);
             expect(indices).toEqual(indices.toSorted((a, b) => a - b));
@@ -522,15 +518,15 @@ describe('overridableTargetsFrom — what an admin override could land on', () =
     });
 
     it('is empty outside the sequence', () => {
-        expect(overridableTargetsFrom(OrderStatus.cancelled)).toEqual([]);
+        expect(overridableTargetsFrom(OrderStatus.canceled)).toEqual([]);
     });
 
-    it('never offers pending, cancelled or the order own status', () => {
+    it('never offers pending, canceled or the order own status', () => {
         for (const from of EVERY_STATUS) {
             const targets = overridableTargetsFrom(from);
 
             expect(targets).not.toContain(OrderStatus.pending);
-            expect(targets).not.toContain(OrderStatus.cancelled);
+            expect(targets).not.toContain(OrderStatus.canceled);
             expect(targets).not.toContain(from);
         }
     });

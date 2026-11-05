@@ -104,7 +104,7 @@ const periodOf = (from: string, to: string, interval: 'day' | 'week' | 'month' =
  *  - B: a customer who also paid in February, 2 units, paid 00:30 Rome on the 11th (23:30 UTC the 10th)
  *  - C: B's customer, February, outside the period
  *  - credit note for all of A on the 12th
- *  - F: a cancelled order placed in the period; E: a bank transfer still owed
+ *  - F: a canceled order placed in the period; E: a bank transfer still owed
  */
 const seedScenario = async () => {
     const product = await createProduct({ price: 122, categories: ['shoes'] });
@@ -127,7 +127,7 @@ const seedScenario = async () => {
         })
     );
     await createOrder(first, [toOrderItem(product, 1)], {
-        status: OrderStatus.cancelled,
+        status: OrderStatus.canceled,
         createdAt: '2026-03-12T09:00:00Z'
     });
     await createOrder(first, [toOrderItem(product, 1)], {
@@ -347,8 +347,8 @@ describe('the breakdowns', () => {
 
         const stats = await statsService.getOperationsStats(periodOf('2026-03-09', '2026-03-13'));
 
-        // A and B were placed in the period, and so was the cancelled F.
-        expect(stats.cancellation).toEqual({ placed: 3, cancelled: 1, rate: 1 / 3 });
+        // A and B were placed in the period, and so was the canceled F.
+        expect(stats.cancellation).toEqual({ placed: 3, canceled: 1, rate: 1 / 3 });
         expect(stats.refunds).toEqual([
             { currency: 'EUR', invoiced: 366, credited: 122, rate: 122 / 366 }
         ]);

@@ -26,7 +26,7 @@ beforeEach(() => registerCheckoutModules());
 
 afterEach(() => resetDomainEvents());
 
-describe('erasing an account whose unpaid order cannot be cancelled', () => {
+describe('erasing an account whose unpaid order cannot be canceled', () => {
     it('still erases the account, detaches the order, and resolves', async () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 10 });

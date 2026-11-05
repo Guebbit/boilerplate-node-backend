@@ -32,7 +32,7 @@ import {
     userService,
     USER_SETUP_REQUESTED,
     USER_DEACTIVATED,
-    USER_DELETION_CANCELLED
+    USER_DELETION_CANCELED
 } from '@modules/users';
 import { accountAuthResolver } from './session/resolver';
 import { accountConfig } from './config';
@@ -139,11 +139,11 @@ export default {
          */
         onDomainEvent(USER_DEACTIVATED, ({ userId }) => revokeFor('deactivation', userId));
         /*
-         * Staff cancelled an owner's scheduled deletion in `users`; the restore link this module
+         * Staff canceled an owner's scheduled deletion in `users`; the restore link this module
          * mailed is spent by that, and the owner is told it happened.
          */
-        onDomainEvent(USER_DELETION_CANCELLED, ({ userId, cancelledAt }) =>
-            handleRestoredByStaff(userId, new Date(cancelledAt))
+        onDomainEvent(USER_DELETION_CANCELED, ({ userId, canceledAt }) =>
+            handleRestoredByStaff(userId, new Date(canceledAt))
         );
         /*
          * Consent withdrawn: the analytics provider may hold what was captured under it. A

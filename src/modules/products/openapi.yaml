@@ -177,7 +177,7 @@ paths:
             summary: Catalogue facets
             description: >-
                 Every category and tag the PUBLIC catalogue carries, each with how many visible products hold it — what a storefront renders as filter chips. Sorted by count descending, then name. Counts follow the same visibility rule the listing does, so one chip alone never leads to an empty page. Counts are catalogue-wide: they do not follow the filters already chosen.
-            operationId: getCatalogueFacets
+            operationId: getCatalogFacets
             security: []
             responses:
                 '200':
@@ -189,7 +189,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CatalogueFacetsResponse'
+                                $ref: '#/components/schemas/CatalogFacetsResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
 
     /products/{id}:
@@ -554,7 +554,7 @@ components:
                     type: integer
                     minimum: 1
 
-        CatalogueFacetsResponse:
+        CatalogFacetsResponse:
             type: object
             additionalProperties: false
             required: [categories, tags]

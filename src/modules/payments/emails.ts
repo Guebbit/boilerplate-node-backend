@@ -156,7 +156,7 @@ export interface TransferInstructions {
  * @param name - the greeting's name
  * @param order - the order's lines, shipping and currency
  * @param instructions - where to send the money, and under which reference
- * @param payBy - when the hold ends and the order is cancelled with no money received
+ * @param payBy - when the hold ends and the order is canceled with no money received
  * @param orderId - the order's id, for the link to its page
  */
 export const transferInstructionsEmail = (
@@ -206,7 +206,7 @@ export const transferInstructionsEmail = (
 };
 
 /**
- * The sweep cancelled a `bank_transfer` order whose deadline passed with no money — the
+ * The sweep canceled a `bank_transfer` order whose deadline passed with no money — the
  * customer's answer to "what happened to my order".
  *
  * @param locale - the recipient's language

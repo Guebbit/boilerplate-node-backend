@@ -1,7 +1,7 @@
 /**
  * @module
  * Deleting an order and undoing a soft delete. An order is a financial record, so the default is a
- * soft delete; a hard delete is only for an order that was cancelled and never paid (see
+ * soft delete; a hard delete is only for an order that was canceled and never paid (see
  * {@link remove}).
  */
 
@@ -41,9 +41,9 @@ const orderNotDeleted = (): ResponseReject =>
 const orderMissing = (): ResponseReject => generateReject(404, [t('orders.not-found')]);
 
 /** The 409 a hard delete answers with while the order is still open: cancel it first. */
-const orderNotCancelled = (): ResponseReject =>
+const orderNotCanceled = (): ResponseReject =>
     generateReject(409, [
-        { code: ERROR_CODES.ORDER_NOT_CANCELLED, message: t('orders.not-cancelled') }
+        { code: ERROR_CODES.ORDER_NOT_CANCELED, message: t('orders.not-canceled') }
     ]);
 
 /**
@@ -56,18 +56,18 @@ const orderNotCancelled = (): ResponseReject =>
 const hardDeleteRefusal = (order: OrderDocument): ResponseReject | undefined => {
     if (hardDeletable(order)) return undefined;
     if (order.paidAt) return orderInvoiced();
-    return order.moneyReceivedAt ? orderHasMoneyHistory() : orderNotCancelled();
+    return order.moneyReceivedAt ? orderHasMoneyHistory() : orderNotCanceled();
 };
 
 /**
  * The hard delete: one conditional delete, nothing else. The cancel that put the order in
- * `cancelled` already released its stock, cancelled the payment intent and announced it, so
+ * `canceled` already released its stock, canceled the payment intent and announced it, so
  * this is cleanup only. On a miss the order is read again to say why.
  * @param order - the order, as the caller read it
  * @returns `undefined` when the row went, otherwise the refusal
  */
-const hardDeleteCancelled = (order: OrderDocument): Promise<ResponseReject | undefined> =>
-    orderRepository.deleteCancelledUnpaid(order).then((deleted) => {
+const hardDeleteCanceled = (order: OrderDocument): Promise<ResponseReject | undefined> =>
+    orderRepository.deleteCanceledUnpaid(order).then((deleted) => {
         // Its timeline goes with it: a history of an order that no longer exists narrates nothing.
         if (deleted) return deleteTimelineOf(String(order._id)).then(() => undefined);
         // Moved on since the read (paid, reopened) or already gone: the current row says which.
@@ -81,10 +81,10 @@ const hardDeleteCancelled = (order: OrderDocument): Promise<ResponseReject | und
 /**
  * Remove an order document (soft or hard delete). Soft stamps `deletedAt` once — an order is a
  * financial record, so hiding it isn't destroying it; `restoreById` undoes it — and only on a
- * `cancelled` order. Hard is only for an order that is `cancelled` and never paid: the cancel owns every end-of-order effect (stock,
+ * `canceled` order. Hard is only for an order that is `canceled` and never paid: the cancel owns every end-of-order effect (stock,
  * payment intent, webhook), so a delete of an open order would skip them all.
  *
- * Both refused (`ORDER_NOT_CANCELLED`) while the order is still open; a hard delete also outright once `paidAt` is stamped: `invoicing` freezes an invoice from that exact
+ * Both refused (`ORDER_NOT_CANCELED`) while the order is still open; a hard delete also outright once `paidAt` is stamped: `invoicing` freezes an invoice from that exact
  * transition, and a legal invoice document must survive the order it was issued for — the same
  * reason `docs/modules/invoicing.md` gives for the module never hard-deleting one of its own. Money
  * recorded after the cancel (`moneyReceivedAt`) refuses it too (`ORDER_HAS_MONEY_HISTORY`): a
@@ -106,7 +106,7 @@ export const remove = (
 
     // HARD delete
     if (hardDelete)
-        return Promise.resolve(hardDeleteRefusal(order) ?? hardDeleteCancelled(order)).then(
+        return Promise.resolve(hardDeleteRefusal(order) ?? hardDeleteCanceled(order)).then(
             (refusal) => {
                 if (refusal) return refusal;
                 recordAudit(context, {
@@ -126,7 +126,7 @@ export const remove = (
 
     // Hidden means finished: a hidden open order could still be paid or shipped while its buyer
     // can neither see, cancel nor withdraw it. Cancel first (which refunds), then hide.
-    if (!softDeletable(order)) return Promise.resolve(orderNotCancelled());
+    if (!softDeletable(order)) return Promise.resolve(orderNotCanceled());
 
     order.deletedAt = new Date();
     return orderRepository.save(order).then((saved) => {

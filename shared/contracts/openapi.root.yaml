@@ -1551,7 +1551,7 @@ paths:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1orders~1{id}~1payments'
 
     # ---------- delivery's doors under an order ---------- (`POST /orders/{id}/process` and the two
-    # fulfilment lists: the order's URL, delivery's module and key; mounted through a second entry in
+    # fulfillment lists: the order's URL, delivery's module and key; mounted through a second entry in
     # delivery's `mounts`)
     /orders/{id}/process:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1orders~1{id}~1process'

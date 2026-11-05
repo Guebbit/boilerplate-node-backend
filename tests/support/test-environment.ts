@@ -68,7 +68,7 @@ const tracked =
     };
 
 /**
- * Wraps a timer canceller so a cancelled timer stops being tracked.
+ * Wraps a timer canceller so a canceled timer stops being tracked.
  *
  * @param cancel - the real `clearTimeout` or `clearInterval`
  * @param pending - the file's still-waiting timers

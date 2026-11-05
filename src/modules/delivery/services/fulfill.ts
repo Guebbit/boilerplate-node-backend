@@ -1,11 +1,11 @@
 /**
  * @module
  * The digital act: fulfilling a `digital` fulfillment order with no parcel to carry. It cuts a
- * shipment with no tracking, born AND delivered in the same write (Shopify fulfils digital lines
+ * shipment with no tracking, born AND delivered in the same write (Shopify fulfills digital lines
  * without shipping too), and — when nothing else remains or is still out — completes the order in
  * one transaction, its withdrawal clock counted from payment (digital content, Art. 9(2)(c)).
  *
- * See: docs/modules/delivery.md#digital-fulfilment
+ * See: docs/modules/delivery.md#digital-fulfillment
  */
 
 import type { ClientSession } from 'mongoose';
@@ -29,12 +29,12 @@ import { cutShipment } from './cut';
 import {
     auditUnearnedStart,
     isOpenForShipment,
-    mayStartFulfilment,
+    mayStartFulfillment,
     refuseUnearnedStart
 } from './ship-gate';
-import { reportProgress, settleOrder, startFulfilment } from './progress';
+import { reportProgress, settleOrder, startFulfillment } from './progress';
 
-/** What a committed fulfilment leaves for the steps that follow it. */
+/** What a committed fulfillment leaves for the steps that follow it. */
 interface Fulfilled {
     shipment: ShipmentDocument;
     order: OrderDocument;
@@ -77,7 +77,7 @@ const fulfillAct = async (
         session
     );
     // From `paid` the act makes the `start` move itself, before the summary and the settle read it.
-    await startFulfilment(order, session, actor);
+    await startFulfillment(order, session, actor);
     const progress = await reportProgress(orderId, session);
     await settleOrder(orderId, progress.order.status, progress.summary, at, session, actor);
     await announceShipped(shipment, session, actor);
@@ -87,7 +87,7 @@ const fulfillAct = async (
 };
 
 /**
- * Fulfil a digital fulfillment order.
+ * Fulfill a digital fulfillment order.
  *
  * @param fulfillmentOrderId - the digital fulfillment order
  * @param authContext - the caller, for the response's own `actions`
@@ -100,7 +100,7 @@ export const fulfillFulfillmentOrder = (
     context: CallerContext
 ): Promise<ResponseSuccess<Shipment> | ResponseReject> => {
     // Decided before the transaction opens: a retried transaction must not change the verdict.
-    const mayStart = mayStartFulfilment(context);
+    const mayStart = mayStartFulfillment(context);
     return runAct((session) => fulfillAct(fulfillmentOrderId, context, mayStart, session)).then(
         (result) => {
             if (result.refused) {

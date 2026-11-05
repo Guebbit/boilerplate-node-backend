@@ -31,7 +31,7 @@ export {
 } from './webhook-signature';
 
 /**
- * What the money is doing at the provider. `cancelled` and refund state are ours, not theirs.
+ * What the money is doing at the provider. `canceled` and refund state are ours, not theirs.
  * `open` is an intent nobody has attempted yet (Stripe's `requires_payment_method` /
  * `requires_confirmation`): there is nothing to settle, so settlement writes nothing for it.
  */
@@ -269,7 +269,7 @@ export interface PaymentProvider {
      * Close an intent that has not succeeded yet — the customer abandoned it, or this application
      * is recording the money another way instead. The counterpart to `prepare`.
      *
-     * Idempotent: a provider that already considers the intent cancelled answers success, since
+     * Idempotent: a provider that already considers the intent canceled answers success, since
      * the caller's own goal — nothing left open — already holds. Every reference platform allows
      * this from any pre-success state; Stripe's own `PaymentIntent`s never expire on their own,
      * which is why this exists at all.

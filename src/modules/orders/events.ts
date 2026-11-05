@@ -27,7 +27,7 @@ declare module '@kernel/events' {
          * `./services/cancel-mail.ts`), and `reservation_expired` is the cancel a transfer nobody
          * sent is answered for by `payments`, a card hold by `orders`.
          */
-        'order.cancelled': { orderId: string; refund: boolean; cause: CancelCause };
+        'order.canceled': { orderId: string; refund: boolean; cause: CancelCause };
 
         /**
          * An order's status moved, whoever moved it — a status-only admin override
@@ -102,7 +102,7 @@ declare module '@kernel/events' {
 }
 
 /** Exported so an emitter and its listeners share one spelling instead of duplicated literals. */
-export const ORDER_CANCELLED = 'order.cancelled';
+export const ORDER_CANCELED = 'order.canceled';
 
 /** See `DomainEventMap['order.status_changed']` above. */
 export const ORDER_STATUS_CHANGED = 'order.status_changed';

@@ -256,7 +256,7 @@ paths:
                 open past `NODE_PAYMENT_ATTENTION_MINUTES` (`stale_refund`), card refunds the
                 provider refused for good (`refused_refund`: shown at once, the money has to go back
                 another way), and refunds owed by hand on a `manual` payment
-                (`manual_refund_owed`: the sweep never finishes those, so they show at any age). A cancelled order's refund is one of them, because its
+                (`manual_refund_owed`: the sweep never finishes those, so they show at any age). A canceled order's refund is one of them, because its
                 record opens before the provider is asked. Oldest first, each source capped at
                 100 rows. An amount mismatch is not here: it is an audit row
                 (`payment.amount_mismatch`), not stored state. Needs `display:Payment`.
@@ -540,7 +540,7 @@ paths:
                 already existed: a card intent nobody paid, or the open payment of a `bank_transfer`
                 order (the very payment being recorded).
 
-                A transfer that arrives after its order was cancelled is recorded too, onto the
+                A transfer that arrives after its order was canceled is recorded too, onto the
                 payment the cancel closed: the money is real, the order cannot be paid any more, so
                 it answers 200 with the payment `succeeded` and a refund record left open (a hand-paid
                 refund is returned by the operator, off-system, and then marked done).
@@ -802,7 +802,7 @@ components:
                 payBy:
                     type: string
                     format: date-time
-                    description: When the order's stock hold ends. Past it, with no money received, the order is cancelled.
+                    description: When the order's stock hold ends. Past it, with no money received, the order is canceled.
 
         OrderPaymentsResponse:
             type: object
@@ -834,7 +834,7 @@ components:
                         The order's total as the intent froze it. Always two decimal places,
                         rounded half-up at the point of calculation. If the provider reports a success for
                         a different amount or currency, the payment reads `succeeded` with what
-                        ARRIVED here, its order is cancelled and the money is returned.
+                        ARRIVED here, its order is canceled and the money is returned.
                 currency:
                     allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     description: ISO-4217 currency code (e.g. EUR)
@@ -853,11 +853,11 @@ components:
                     description: One record per refund attempt, oldest first.
                 status:
                     type: string
-                    enum: [requires_confirmation, requires_action, processing, succeeded, declined, cancelled]
+                    enum: [requires_confirmation, requires_action, processing, succeeded, declined, canceled]
                     description: >-
                         The provider-facing lifecycle. A refunded payment, whole or in part, stays
                         `succeeded`: `displayStatus` and `amountRefunded` say how much went back.
-                        `cancelled` means the order was cancelled and the provider confirmed the
+                        `canceled` means the order was canceled and the provider confirmed the
                         intent closed; money that still arrives on it is settled and returned.
                         `requires_action` means the buyer has something to do: the bank wants a
                         challenge answered in the browser (3-D Secure), or a bank transfer is waiting to be
@@ -1185,7 +1185,7 @@ components:
 
         PaymentDisplayStatus:
             type: string
-            enum: [incomplete, pending, succeeded, refund_pending, partially_refunded, refunded, failed, cancelled]
+            enum: [incomplete, pending, succeeded, refund_pending, partially_refunded, refunded, failed, canceled]
             description: >-
                 The label a payment shows, derived from the stored status and its refund records
                 (Shopify's `displayFinancialStatus`). `incomplete` — awaiting confirmation or
@@ -1193,7 +1193,7 @@ components:
                 `refund_pending` — any refund still pending or failed (wins over the next two);
                 `partially_refunded` — paid with at least one settled refund; `refunded` — fully
                 returned (every unit of `amount`, no refund still open); `failed` — declined;
-                `cancelled` — the order was cancelled before the payment settled.
+                `canceled` — the order was canceled before the payment settled.
 
         PaymentSort:
             description: >-
@@ -1389,11 +1389,11 @@ components:
             type: string
             enum: [cancellation, goodwill, return, late_payment, external]
             description: >-
-                Why the money went back. `cancellation` — the order was cancelled after payment, or the
+                Why the money went back. `cancellation` — the order was canceled after payment, or the
                 unshipped remainder of one fulfillment order was (then `returnId` names that cancellation);
                 `return` — goods came back and were received; `goodwill` — an operator chose to;
                 `late_payment` — the money arrived after the order could no longer be paid (its stock
-                reservation had expired or it was cancelled), so the sale was lost and the money went back.
+                reservation had expired or it was canceled), so the sale was lost and the money went back.
                 The buyer is mailed it like a cancellation's refund. `external` — the refund was made in
                 the payment provider's own dashboard, not here: the application found it and recorded
                 it so the credit note, the buyer's mail and the order's state follow; it is `succeeded`
@@ -1614,7 +1614,7 @@ components:
                         $ref: '#/components/schemas/Refund'
                 status:
                     type: string
-                    enum: [requires_confirmation, requires_action, processing, succeeded, declined, cancelled]
+                    enum: [requires_confirmation, requires_action, processing, succeeded, declined, canceled]
                 provider:
                     type: string
                 cardLast4:

@@ -34,7 +34,7 @@ const emailLines = (shipment: ShipmentDocument) =>
 
 /**
  * Tell the buyer a shipment left — the carrier email, addressed in the buyer's own language when
- * an account is still attached, plus the operator-facing log line. A digital fulfilment carries no
+ * an account is still attached, plus the operator-facing log line. A digital fulfillment carries no
  * `remainingUnits` and is not mailed: it is born delivered, and its arrival mail says it all.
  *
  * @param payload - the `shipment.shipped` fact

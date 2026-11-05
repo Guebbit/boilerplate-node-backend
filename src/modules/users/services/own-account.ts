@@ -233,7 +233,7 @@ export const eraseAgain = (
  * {@link restoreOwnAccount} refuses once `purgeAt` has passed. Records the change in the audit trail.
  *
  * @param userId - the account the ledger names
- * @param schedule - the stored dates the owner was promised, or `null` for "cancelled"
+ * @param schedule - the stored dates the owner was promised, or `null` for "canceled"
  * @param context - the operator's system context; any other caller is refused
  * @returns `null` when the database does not hold the account; else whether it changed
  */

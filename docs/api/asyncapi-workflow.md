@@ -225,7 +225,19 @@ for what a cross-instance broadcast would take.
 
 ## Naming convention
 
-Channels use dot-separated topic-style naming (for example `observability.metrics.updated`). These names are used as event identifiers at runtime (SSE event names, queue names).
+Channels use dot-separated topic-style naming (for example `observability.metrics.updated`). These names are used as event identifiers at runtime (SSE event names, queue names). Names are US English (`canceled`, `catalog`, `fulfillment`): `npm run lint:asyncapi:names` refuses the British forms in channels, messages, operations, schemas, properties and enum values.
+
+### Internal event names
+
+A domain event is named `<prefix>.<what_happened>`:
+
+- the prefix is the resource or namespace the contract exposes (`account`, `inventory`, `order`…): it is kept as is, even where it is a module name;
+- snake_case inside each segment, never a dash (`account.sessions_revoked`, `user.setup_requested`, `user.deletion_canceled`);
+- the second segment is a past participle or a reached-state word (`product.buyable_again` stays, like Stripe `invoice.overdue`).
+
+Two families are outside it: worker queues are imperative commands (`worker.email.send`), and SSE channels are `<stream>.<event>` (`notifications.created`, `observability.metrics.updated`, `observability.heartbeat`).
+
+The standards behind it: Stripe ("`resource.event`"), Solidus (`:order_finalized`) and Zalando #213 (a domain prefix).
 
 Every channel here describes something that actually crosses a process boundary — a frame on an SSE stream, a message on a RabbitMQ queue. An in-process notification is not a channel.
 

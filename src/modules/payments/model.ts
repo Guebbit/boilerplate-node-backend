@@ -3,7 +3,7 @@
  * One payment document per order, made a database fact by `unique` on `orderId` — a retry after a
  * decline re-confirms the SAME document rather than minting a second one. The status vocabulary
  * (`requires_confirmation`, `requires_action` and `processing` in flight, `succeeded`, `declined`
- * retryable, `cancelled` terminal) is the provider-facing lifecycle, distinct from the order's
+ * retryable, `canceled` terminal) is the provider-facing lifecycle, distinct from the order's
  * customer-facing status, and comes from `PaymentStatus` in the contract so the enum and the wire
  * cannot disagree.
  */
@@ -196,7 +196,7 @@ export interface PaymentDocument extends Document {
     /**
      * The RF creditor reference the buyer writes into a bank transfer, minted when the transfer
      * payment opens (`order.created` for a `bank_transfer` order). Kept for as long as the row is,
-     * even once the buyer switches to a card or the payment is cancelled: a late transfer is
+     * even once the buyer switches to a card or the payment is canceled: a late transfer is
      * matched back to its order by it. Never published on its own — it rides in `nextAction`.
      */
     transferReference?: string;

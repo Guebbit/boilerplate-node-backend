@@ -257,7 +257,7 @@ describe('a refund the chargeback blocks', () => {
             await deliver(providerRef);
             const send = jest.spyOn(fakePaymentProvider, 'refund').mockClear();
 
-            // The order is cancelled: the listener tries to give the money back.
+            // The order is canceled: the listener tries to give the money back.
             await refundForOrder(orderId).catch(() => undefined);
             await paymentService.retryOpenRefunds();
 

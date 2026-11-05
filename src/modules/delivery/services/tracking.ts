@@ -2,7 +2,7 @@
  * @module
  * Setting or correcting a shipment's tracking code — at any time after it left, delivered and
  * lost ones included: the code matters most later, as evidence in a "never arrived" dispute. A digital
- * fulfilment never had a carrier, so it has no code to set. The first code of a parcel that left
+ * fulfillment never had a carrier, so it has no code to set. The first code of a parcel that left
  * without one mails the buyer an "added" notice; a replacement mails the "corrected" one.
  */
 

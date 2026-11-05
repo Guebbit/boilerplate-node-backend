@@ -41,7 +41,7 @@ export interface AccountDeletionSchedule {
     purgeAt: Date;
 }
 
-/** How a scheduled deletion was cancelled by its owner (staff cancel through `users`). */
+/** How a scheduled deletion was canceled by its owner (staff cancel through `users`). */
 export type RestoreVia = 'link' | 'sign-in';
 
 /**
@@ -153,7 +153,7 @@ export const announceRestored = (
     context: CallerContext
 ): void => {
     recordAudit(context, {
-        action: accountAuditActions.AUTH_ACCOUNT_DELETE_CANCELLED,
+        action: accountAuditActions.AUTH_ACCOUNT_DELETE_CANCELED,
         actorUserId: user.id,
         outcome: 'success',
         metadata: { via }
@@ -164,7 +164,7 @@ export const announceRestored = (
             distinctId: user.id,
             event: accountAnalyticsEvents.ACCOUNT_RESTORED
         });
-    authAccountDeleteTotal.inc({ status: 'cancelled' });
+    authAccountDeleteTotal.inc({ status: 'canceled' });
 
     const mail = accountRestoredEmail(
         recipientLocale(user.locale, context),
@@ -197,16 +197,16 @@ export const restoreAccountByLink = (
     );
 
 /**
- * Staff cancelled a deletion through `users`: drop the restore link, which has nothing left to
- * restore, and tell the owner. Driven by the `user.deletion-cancelled` event; an account erased
+ * Staff canceled a deletion through `users`: drop the restore link, which has nothing left to
+ * restore, and tell the owner. Driven by the `user.deletion_canceled` event; an account erased
  * before the event is handled has nobody left to tell.
  *
  * @param userId - the restored account
- * @param cancelledAt - when staff cancelled, from the event: a retried handler must not re-date it
+ * @param canceledAt - when staff canceled, from the event: a retried handler must not re-date it
  */
-export const handleRestoredByStaff = (userId: string, cancelledAt: Date): Promise<void> =>
+export const handleRestoredByStaff = (userId: string, canceledAt: Date): Promise<void> =>
     removeTokens(userId, [ACCOUNT_RESTORE_TOKEN_TYPE])
-        .then(() => recordCancellation(userId, cancelledAt))
+        .then(() => recordCancellation(userId, canceledAt))
         .then(() => userService.getById(userId))
         .then((user) => {
             // The staff member is in `users`' own audit row; this trail records the cancellation.

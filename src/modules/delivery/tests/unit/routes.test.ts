@@ -51,7 +51,7 @@ describe('delivery routes', () => {
     it.each(['GET /:id/fulfillment-orders', 'GET /:id/shipments'])(
         'requires a session and the order key to read %s',
         (signature) => {
-            // The fulfilment is tied to one caller's order. The ownership check itself lives in the
+            // The fulfillment is tied to one caller's order. The ownership check itself lives in the
             // service; this is the gate that guarantees there is a caller to check.
             const guards = guardsOn(orderRouter, signature);
 

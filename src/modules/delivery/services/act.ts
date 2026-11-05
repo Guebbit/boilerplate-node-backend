@@ -1,6 +1,6 @@
 /**
  * @module
- * One fulfilment act, as one transaction. A ship, deliver, fulfil, hold, release or remainder cancel
+ * One fulfillment act, as one transaction. A ship, deliver, fulfill, hold, release or remainder cancel
  * writes the fulfillment order or shipment, the order's summary, the order's status move (when one
  * is due) and the outbox events together or not at all — so no reader ever sees a shipment the
  * order does not know about, or an order that says `shipped` with nothing left the door.
@@ -81,7 +81,7 @@ export const runAct = <T>(work: (session: ClientSession) => Promise<T>): Promise
 
 /**
  * Read a fulfillment order and its order in the act's snapshot, refusing a 404 for either. The
- * acts that start from a fulfillment order (hold, release, ship, fulfil) read it here, so the
+ * acts that start from a fulfillment order (hold, release, ship, fulfill) read it here, so the
  * door needs no read of its own: this one is the one the writes land in.
  *
  * @param fulfillmentOrderId - the fulfillment order

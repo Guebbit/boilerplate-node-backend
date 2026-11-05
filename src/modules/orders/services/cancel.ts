@@ -1,9 +1,9 @@
 /**
  * @module
  * Cancelling an order, and making its consequences stick. The status move, the hold's release, a
- * paid order's claim on stock and the `order.cancelled` outbox row are ONE transaction: a release
+ * paid order's claim on stock and the `order.canceled` outbox row are ONE transaction: a release
  * that throws rolls the status back too, so units are never lost from sale behind an order that
- * already reads `cancelled`. The refund is not in it — that is money at a provider, which cannot
+ * already reads `canceled`. The refund is not in it — that is money at a provider, which cannot
  * roll back — so only the promise to make it is written down, as `refund` on the event itself.
  * `payments` opens its refund record from that event, and the outbox relay retries the event
  * until it has.
@@ -31,7 +31,7 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { recordAudit } from '@infrastructure/observability/audit';
 import { ordersAnalyticsEvents } from '../analytics';
 import { ordersAuditActions } from '../audit';
-import { ORDER_CANCELLED } from '../events';
+import { ORDER_CANCELED } from '../events';
 import { orderRepository } from '../repository';
 import { buyerIdOf, statusesLeadingTo, type OrderActor } from '../domain';
 import { getById } from './read';
@@ -46,7 +46,7 @@ import { ERROR_CODES } from '@api/error-codes';
  * shipment), so nothing is restocked. Each claims its status conditionally, so calling the second
  * speculatively is safe: a hold in any other state claims nothing. A hold already expired is an
  * ordinary sequence, the units are already back.
- * @param orderId - the order being cancelled
+ * @param orderId - the order being canceled
  * @param session - the cancel's transaction
  */
 const giveBackStock = async (orderId: string, session: ClientSession): Promise<void> => {
@@ -56,17 +56,17 @@ const giveBackStock = async (orderId: string, session: ClientSession): Promise<v
 
 /**
  * The cancel's one atomic step: the conditional status move, and — only if it landed — the stock
- * coming back and the `order.cancelled` outbox row. The catalogue's stock cache is refreshed after
+ * coming back and the `order.canceled` outbox row. The catalogue's stock cache is refreshed after
  * the commit, since that write cannot roll back.
  * @param id - the order to cancel
  * @param from - the statuses the caller may cancel from
  * @param scope - the caller's ownership scope, riding in the same filter as the write
  * @param refund - whether the cancel owes the customer their money, carried on the announcement
- * @param cause - why it was cancelled: names who did it on the timeline, and whether the hold ran out
- * @param actorId - the account that cancelled, when a person did
- * @returns the cancelled order, or `null` when the conditional move matched nothing
+ * @param cause - why it was canceled: names who did it on the timeline, and whether the hold ran out
+ * @param actorId - the account that canceled, when a person did
+ * @returns the canceled order, or `null` when the conditional move matched nothing
  */
-const moveToCancelled = (
+const moveToCanceled = (
     id: string,
     from: readonly string[],
     scope: Record<string, unknown> | undefined,
@@ -78,13 +78,13 @@ const moveToCancelled = (
         async (session) => {
             const order = await withTimeline(
                 (active) =>
-                    orderRepository.updateStatusIfIn(id, from, OrderStatus.cancelled, {
+                    orderRepository.updateStatusIfIn(id, from, OrderStatus.canceled, {
                         scope,
                         session: active
                     }),
                 () => [
                     {
-                        type: 'cancelled',
+                        type: 'canceled',
                         actor: actorId,
                         data: { by: CANCEL_CAUSES[cause].by, cause, refund }
                     }
@@ -94,7 +94,7 @@ const moveToCancelled = (
             return order;
         },
         () => ({
-            name: ORDER_CANCELLED,
+            name: ORDER_CANCELED,
             payload: { orderId: id, refund, cause },
             aggregateId: id
         })
@@ -103,7 +103,7 @@ const moveToCancelled = (
     );
 
 /**
- * Why an order was cancelled. One value per reason, never inferred from which argument happens to
+ * Why an order was canceled. One value per reason, never inferred from which argument happens to
  * be missing: it decides the lifecycle column, the mail, the analytics name and the refund rule
  * from {@link CANCEL_CAUSES}, and names who did it on the order's timeline.
  */
@@ -121,18 +121,18 @@ interface CauseRules {
     /** The lifecycle column the move is read from, and who the timeline row says did it. */
     by: OrderActor;
     /**
-     * The buyer's explanation, sent by `./cancel-mail.ts`: `cancelled` says what became of their money, `reservation-expiry`
+     * The buyer's explanation, sent by `./cancel-mail.ts`: `canceled` says what became of their money, `reservation-expiry`
      * says the hold timed out, `none` is for a cause with its own acknowledgement (a withdrawal's
      * is `returns`') or with nobody to tell (an erased account).
      */
-    mail: 'cancelled' | 'reservation-expiry' | 'none';
+    mail: 'canceled' | 'reservation-expiry' | 'none';
     /** The analytics event: a timeout is never counted as a choice to cancel, nor the reverse. */
     analytics:
-        | typeof ordersAnalyticsEvents.ORDER_CANCELLED
+        | typeof ordersAnalyticsEvents.ORDER_CANCELED
         | typeof ordersAnalyticsEvents.ORDER_RESERVATION_EXPIRED;
     /**
      * Whether the caller decides if the money goes back. Only an operator does: a customer is
-     * always refunded, because that is the promise `paid` is cancellable on, and it is not theirs
+     * always refunded, because that is the promise `paid` is cancelable on, and it is not theirs
      * to waive; the system's causes refund whatever was paid. Read by `cancel()` only, so `lost`
      * (which never goes through it and refunds nothing) leaves it `false`.
      */
@@ -143,20 +143,20 @@ interface CauseRules {
 export const CANCEL_CAUSES = {
     customer: {
         by: 'customer',
-        mail: 'cancelled',
-        analytics: ordersAnalyticsEvents.ORDER_CANCELLED,
+        mail: 'canceled',
+        analytics: ordersAnalyticsEvents.ORDER_CANCELED,
         refundIsChoice: false
     },
     operator: {
         by: 'admin',
-        mail: 'cancelled',
-        analytics: ordersAnalyticsEvents.ORDER_CANCELLED,
+        mail: 'canceled',
+        analytics: ordersAnalyticsEvents.ORDER_CANCELED,
         refundIsChoice: true
     },
     withdrawal: {
         by: 'withdrawal',
         mail: 'none',
-        analytics: ordersAnalyticsEvents.ORDER_CANCELLED,
+        analytics: ordersAnalyticsEvents.ORDER_CANCELED,
         refundIsChoice: false
     },
     reservation_expired: {
@@ -168,13 +168,13 @@ export const CANCEL_CAUSES = {
     erasure: {
         by: 'system',
         mail: 'none',
-        analytics: ordersAnalyticsEvents.ORDER_CANCELLED,
+        analytics: ordersAnalyticsEvents.ORDER_CANCELED,
         refundIsChoice: false
     },
     payment_mismatch: {
         by: 'system',
         mail: 'none',
-        analytics: ordersAnalyticsEvents.ORDER_CANCELLED,
+        analytics: ordersAnalyticsEvents.ORDER_CANCELED,
         refundIsChoice: false
     },
     // Written by `markUndeliverable`, not by `cancel()`: the remainder cancel (returns' transaction)
@@ -182,19 +182,19 @@ export const CANCEL_CAUSES = {
     lost: {
         by: 'system',
         mail: 'none',
-        analytics: ordersAnalyticsEvents.ORDER_CANCELLED,
+        analytics: ordersAnalyticsEvents.ORDER_CANCELED,
         refundIsChoice: false
     }
 } as const satisfies Record<CancelCause, CauseRules>;
 
 /**
  * Everything a successful cancel unlocks after its commit: the audit row and the analytics event.
- * The refund and the customer's mail are not here: they ride the `order.cancelled` row the cancel's
+ * The refund and the customer's mail are not here: they ride the `order.canceled` row the cancel's
  * own transaction wrote.
- * @param order - the cancelled order
- * @param cause - why it was cancelled
+ * @param order - the canceled order
+ * @param cause - why it was canceled
  * @param refund - whether the cancel returned the money; with `paid`, the audit row's answer to
- *   "cancelled and refunded, or cancelled and the money kept"
+ *   "canceled and refunded, or canceled and the money kept"
  * @param context - the caller's context; absent for a system-initiated cancel, which is still
  *   audited as the system actor rather than skipped
  */
@@ -211,7 +211,7 @@ export const afterCancel = (
     // and `buildAuditEvent`'s defaults already read `actorUserId`/`actorRole` off
     // `context.caller.id`/`.system` — see `resolveActorRole`.
     recordAudit(emitContext, {
-        action: ordersAuditActions.ORDER_CANCELLED,
+        action: ordersAuditActions.ORDER_CANCELED,
         outcome: 'success',
         targetType: 'order',
         targetId: String(order._id),
@@ -269,12 +269,12 @@ const cancel = (
      * table answers per column: a customer may cancel from `pending` and `paid`, an operator also
      * from `processing`.
      */
-    return moveToCancelled(
+    return moveToCanceled(
         id,
-        statusesLeadingTo(OrderStatus.cancelled, rules.by),
+        statusesLeadingTo(OrderStatus.canceled, rules.by),
         // Part of the WRITE's filter, not a preceding read: a shipment racing this cancel
         // writes `fulfillment.shipped` in its own transaction, and exactly one of the two
-        // matches. Goods that left cannot be cancelled whole.
+        // matches. Goods that left cannot be canceled whole.
         { ...scope, 'fulfillment.shipped': { $ne: true } },
         refund,
         cause,
@@ -289,8 +289,8 @@ const cancel = (
                   existing
                       ? generateReject(409, [
                             {
-                                code: ERROR_CODES.ORDER_NOT_CANCELLABLE,
-                                message: t('orders.cancel.not-cancellable')
+                                code: ERROR_CODES.ORDER_NOT_CANCELABLE,
+                                message: t('orders.cancel.not-cancelable')
                             }
                         ])
                       : generateReject(404, [t('orders.not-found')])
@@ -381,7 +381,7 @@ export const cancelForErasureById = (
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => cancel(id, 'erasure', SYSTEM_ACTOR);
 
 /**
- * An order whose payment arrived as something other than what was frozen for it: cancelled by the
+ * An order whose payment arrived as something other than what was frozen for it: canceled by the
  * system so the money can go back. The buyer is not mailed a cancel they did not ask for.
  *
  * @param id - the order to cancel

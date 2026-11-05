@@ -1,6 +1,6 @@
 /**
  * @module
- * `account.sessions-revoked` travels through the transactional outbox: it commits with the
+ * `account.sessions_revoked` travels through the transactional outbox: it commits with the
  * credential write and the epoch bump, and a failing `api-keys` consumer is retried by the relay
  * instead of being logged and forgotten. Driven over HTTP, the way a real reset and a real
  * logout-everywhere arrive.
@@ -93,11 +93,11 @@ const resetWith = (token: string) =>
 const makeDue = () =>
     outboxEventModel.updateMany({}, { $set: { nextAttemptAt: new Date(0) } }).exec();
 
-/** The pending `account.sessions-revoked` rows. */
+/** The pending `account.sessions_revoked` rows. */
 const pendingRows = () =>
-    outboxEventModel.find({ name: 'account.sessions-revoked', status: 'pending' }).lean().exec();
+    outboxEventModel.find({ name: 'account.sessions_revoked', status: 'pending' }).lean().exec();
 
-describe('account.sessions-revoked through the outbox', () => {
+describe('account.sessions_revoked through the outbox', () => {
     it('a throwing api-keys consumer leaves the row pending, and the relay retry revokes the keys', async () => {
         const { user, secret } = await adminWithKey();
         await plantToken(user.id, 'password', 'outbox-reset', { ttlMs: 3_600_000 });
@@ -143,7 +143,7 @@ describe('account.sessions-revoked through the outbox', () => {
         await settleOutboxNudges();
 
         expect(response.status).toBeGreaterThanOrEqual(400);
-        expect(await outboxEventModel.countDocuments({ name: 'account.sessions-revoked' })).toBe(0);
+        expect(await outboxEventModel.countDocuments({ name: 'account.sessions_revoked' })).toBe(0);
         const login = await api()
             .post('/account/login')
             .send({ email: user.email, password: PLAIN_PASSWORD });
@@ -160,7 +160,7 @@ describe('account.sessions-revoked through the outbox', () => {
 
         // The relay delivers at least once: put the published row back and let it run again.
         await outboxEventModel
-            .updateMany({ name: 'account.sessions-revoked' }, { $set: { status: 'pending' } })
+            .updateMany({ name: 'account.sessions_revoked' }, { $set: { status: 'pending' } })
             .exec();
         await relayOutbox();
 

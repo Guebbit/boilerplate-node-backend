@@ -55,7 +55,7 @@ const reopenLines = async (
 
 /**
  * Put the order back to being fulfilled: a `delivered` one steps back to `processing`, a `shipped`
- * one likewise; a `processing` one is already there. A cancelled or unpaid order cannot be sent to.
+ * one likewise; a `processing` one is already there. A canceled or unpaid order cannot be sent to.
  * @param status - the order's status
  * @param orderId - the order
  * @param session - the caller's transaction

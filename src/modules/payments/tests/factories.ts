@@ -22,7 +22,7 @@ import type { PaymentDocument } from '../model';
 
 /**
  * The cancel listener's refund, for a sibling's test that needs a refunded order. Not on
- * `paymentService`: only this module's own `order.cancelled` listener runs it in production.
+ * `paymentService`: only this module's own `order.canceled` listener runs it in production.
  */
 export { refundForOrder } from '../services/refunds';
 

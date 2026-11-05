@@ -1,7 +1,7 @@
 /**
  * @module
  * A provider reporting `succeeded` for money that is not the payment we froze — another amount,
- * another currency, another payment's id. Nothing is accepted: the order is cancelled, the money
+ * another currency, another payment's id. Nothing is accepted: the order is canceled, the money
  * collected is returned through the existing refund path, no `payment.succeeded` is announced, no
  * stock is committed and no invoice is issued. Real Mongo throughout; the provider is the real
  * `fake` one, told what to collect through its receipt lever.
@@ -93,7 +93,7 @@ describe.each(MISMATCHES)('a provider success whose %s is not the one frozen', (
 
         expect(asReject(result).status).toBe(409);
         expect(asReject(result).errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
-        expect((await orderService.getById(orderId))!.status).toBe('cancelled');
+        expect((await orderService.getById(orderId))!.status).toBe('canceled');
         const payment = await paymentRepository.findByOrderId(orderId);
         expect(payment!.status).toBe('succeeded');
         expect(payment!.refunds).toHaveLength(1);
@@ -133,7 +133,7 @@ describe('a mismatch recorded', () => {
         expect(payment!.refunds[0].amount).toBe(47.5);
     });
 
-    it('keeps the cancelled order from a hard delete: a payment and a refund point at it', async () => {
+    it('keeps the canceled order from a hard delete: a payment and a refund point at it', async () => {
         const { user, orderId, paymentId, providerRef } = await openIntent();
         setFakeReceipt(providerRef, { amountReceived: 1 });
         await paymentService.confirmPayment(
@@ -204,7 +204,7 @@ describe('the other doors into the same settlement', () => {
         );
 
         expect(asReject(result).errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
-        expect((await orderService.getById(orderId))!.status).toBe('cancelled');
+        expect((await orderService.getById(orderId))!.status).toBe('canceled');
         expect((await paymentRepository.findByOrderId(orderId))!.status).toBe('succeeded');
     });
 
@@ -217,7 +217,7 @@ describe('the other doors into the same settlement', () => {
             paymentService.applyWebhookDelivery({ id: 'evt_mismatch', providerRef }, 'fake')
         ).resolves.toBeUndefined();
 
-        expect((await orderService.getById(orderId))!.status).toBe('cancelled');
+        expect((await orderService.getById(orderId))!.status).toBe('canceled');
         expect((await paymentRepository.findByOrderId(orderId))!.status).toBe('succeeded');
     });
 
@@ -235,7 +235,7 @@ describe('the other doors into the same settlement', () => {
         );
 
         expect(asReject(result).errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
-        expect((await orderService.getById(orderId))!.status).toBe('cancelled');
+        expect((await orderService.getById(orderId))!.status).toBe('canceled');
     });
 });
 
@@ -299,7 +299,7 @@ describe('a crash after the mismatch was recorded', () => {
         jest.restoreAllMocks();
         await orderService.expireReservationById(orderId);
 
-        expect((await orderService.getById(orderId))!.status).toBe('cancelled');
+        expect((await orderService.getById(orderId))!.status).toBe('canceled');
         expect((await paymentRepository.findByOrderId(orderId))!.status).toBe('succeeded');
         expect(user.id).toBeTruthy();
     });
@@ -310,7 +310,7 @@ describe('a crash after the mismatch was recorded', () => {
         // The order moved on by itself an instant before: the cancel finds nothing to cancel.
         jest.spyOn(orderService, 'cancelForPaymentMismatchById').mockResolvedValueOnce(
             generateReject(409, [
-                { code: 'ORDER_NOT_CANCELLABLE', message: t('orders.cancel.not-cancellable') }
+                { code: 'ORDER_NOT_CANCELABLE', message: t('orders.cancel.not-cancelable') }
             ])
         );
 

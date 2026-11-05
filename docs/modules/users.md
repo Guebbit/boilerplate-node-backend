@@ -37,8 +37,8 @@ flowchart LR
     tasks --> users
     users --> access
     users -. "user.deactivated" .-> account
-    users -. "user.deletion-cancelled" .-> account
-    users -. "user.setup-requested" .-> account
+    users -. "user.deletion_canceled" .-> account
+    users -. "user.setup_requested" .-> account
     users -. "user.review_cleared" .-> tasks
     users -. "user.review_flagged" .-> tasks
 
@@ -314,7 +314,7 @@ job once `purgeAt` passes ([the grace](../theory/data-retention.md#self-deletion
 Staff see it in the list (`User.purgeAt`, "erases on {date}") and may restore it with
 `POST /users/{id}/restore` while `purgeAt` is ahead, the same `delete:User` key as any restore. Past
 it the answer is 409 `USER_ERASURE_DUE` and `actions.restore` is false. The restore commits with the
-outbox event `user.deletion-cancelled`; `account` drops the restore link and tells the owner staff did
+outbox event `user.deletion_canceled`; `account` drops the restore link and tells the owner staff did
 it. There is no reason field: the audit row records who.
 
 ## Webhook events

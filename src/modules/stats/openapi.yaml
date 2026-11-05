@@ -161,7 +161,7 @@ paths:
             tags: [Stats]
             summary: Operations rates (staff)
             description: >-
-                Cancellation rate as a cohort (orders placed in the period that ended cancelled,
+                Cancellation rate as a cohort (orders placed in the period that ended canceled,
                 including an order whose every parcel was lost and refunded), return rate (units returned ÷ units ordered, Shopify's `returned_quantity_rate`)
                 and refund rate (credit notes ÷ invoices, VAT included). Needs `read:Stats`.
             operationId: getOperationsStats
@@ -499,11 +499,11 @@ components:
                 cancellation:
                     type: object
                     additionalProperties: false
-                    required: [placed, cancelled, rate]
-                    description: A cohort, meaning orders placed in the period that ended cancelled (a lost-and-refunded order among them), not cancellations dated by when they happened.
+                    required: [placed, canceled, rate]
+                    description: A cohort, meaning orders placed in the period that ended canceled (a lost-and-refunded order among them), not cancellations dated by when they happened.
                     properties:
                         placed: { type: integer, minimum: 0 }
-                        cancelled: { type: integer, minimum: 0 }
+                        canceled: { type: integer, minimum: 0 }
                         rate: { type: number, format: double, minimum: 0, maximum: 1 }
                 returns:
                     type: object

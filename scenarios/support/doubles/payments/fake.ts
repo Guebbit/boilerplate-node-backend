@@ -346,10 +346,10 @@ export const ageFakeRefundKeys = (ms: number): void => {
 export const fakeRefundsMade = (): number => refundsByRecord.size;
 
 /**
- * `providerRef`s this stub has already cancelled — so a second `cancel` of the same one is the
+ * `providerRef`s this stub has already canceled — so a second `cancel` of the same one is the
  * provider's own idempotent success, never a repeat refusal.
  */
-const cancelledIntents = new Set<string>();
+const canceledIntents = new Set<string>();
 
 /** The last four digits a reference implies: its own trailing digits, or the demo's default. */
 const lastFourOf = (paymentMethodRef: string): string =>
@@ -511,9 +511,9 @@ export const fakePaymentProvider: PaymentProvider = {
         ),
 
     cancel: (providerRef, { reason }) => {
-        if (cancelledIntents.has(providerRef)) {
+        if (canceledIntents.has(providerRef)) {
             // Stryker disable next-line all
-            logger.info(`[fake-psp] cancel ${providerRef} → already cancelled`);
+            logger.info(`[fake-psp] cancel ${providerRef} → already canceled`);
             return Promise.resolve();
         }
         // Only `succeeded` is checked: `confirm` above writes STRAIGHT to the settled outcome
@@ -526,7 +526,7 @@ export const fakePaymentProvider: PaymentProvider = {
                 new PaymentInFlightError(`Payment ${providerRef} already succeeded at the provider`)
             );
         }
-        cancelledIntents.add(providerRef);
+        canceledIntents.add(providerRef);
         // Stryker disable next-line all
         logger.info(`[fake-psp] cancel ${providerRef} (${reason})`);
         return Promise.resolve();

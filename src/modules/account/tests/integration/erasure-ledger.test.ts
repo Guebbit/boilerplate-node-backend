@@ -53,7 +53,7 @@ const ledger = () => erasureLedgerModel.find().sort({ at: 1 }).lean().exec();
 const rowsOf = (userId: string) => erasureLedgerModel.find({ userId }).lean().exec();
 
 /** Put a ledger row's date back in time, as a row written before a snapshot would carry. */
-const backdate = (userId: string, kind: 'erased' | 'cancelled', at: Date) =>
+const backdate = (userId: string, kind: 'erased' | 'canceled', at: Date) =>
     erasureLedgerModel.updateOne({ userId, kind }, { $set: { at } }).exec();
 
 /**
@@ -109,7 +109,7 @@ describe('the ledger is written with the erasure', () => {
         expect(rows.map((row) => row.kind)).toEqual(['erased']);
     });
 
-    it('notes a cancelled deletion, once, however often it is cancelled', async () => {
+    it('notes a canceled deletion, once, however often it is canceled', async () => {
         const user = await createUser({
             email: 'changed-mind@example.com',
             verifiedAt: new Date(),
@@ -126,7 +126,7 @@ describe('the ledger is written with the erasure', () => {
 
         expect(restored.success).toBe(true);
         const rows = await rowsOf(user.id);
-        expect(rows.map((row) => row.kind)).toEqual(['cancelled']);
+        expect(rows.map((row) => row.kind)).toEqual(['canceled']);
     });
 });
 
@@ -135,14 +135,14 @@ describe('reapplyErasures', () => {
         const since = new Date(Date.now() - 10 * DAY);
         const recent = await createUser({ email: 'recent@example.com' });
         const old = await createUser({ email: 'old@example.com' });
-        const cancelled = await createUser({ email: 'cancelled@example.com' });
+        const canceled = await createUser({ email: 'canceled@example.com' });
         await eraseAsScheduled(recent);
         await eraseAsScheduled(old);
         // Erased before the snapshot: the snapshot already lacks it, so it is not replayed.
         await backdate(old.id, 'erased', new Date(Date.now() - 20 * DAY));
         await erasureLedgerModel.create({
-            userId: cancelled._id,
-            kind: 'cancelled',
+            userId: canceled._id,
+            kind: 'canceled',
             at: new Date(),
             expiresAt: new Date(Date.now() + DAY)
         });
@@ -153,13 +153,13 @@ describe('reapplyErasures', () => {
         const report = await reapplyErasures({ since });
 
         expect(report.erased).toEqual([recent.id]);
-        expect(report.unchanged).toEqual([cancelled.id]);
+        expect(report.unchanged).toEqual([canceled.id]);
         expect(countsOf(report)).toEqual(
             expect.objectContaining({ alreadyGone: 0, rescheduled: 0, unscheduled: 0, failed: 0 })
         );
         expect(await userRepository.findById(recent.id)).toBeNull();
         expect(await userRepository.findById(old.id)).not.toBeNull();
-        expect(await userRepository.findById(cancelled.id)).not.toBeNull();
+        expect(await userRepository.findById(canceled.id)).not.toBeNull();
     });
 
     it('keeps the original date and adds no second row', async () => {
@@ -259,7 +259,7 @@ describe('reapplyErasures', () => {
 });
 
 /** A ledger row as `recordSchedule` / `recordCancellation` write it. */
-const plantRow = (userId: string, kind: 'scheduled' | 'cancelled', at: Date, purgeAt?: Date) =>
+const plantRow = (userId: string, kind: 'scheduled' | 'canceled', at: Date, purgeAt?: Date) =>
     erasureLedgerModel.create({
         userId,
         kind,
@@ -280,12 +280,12 @@ const lockedInSnapshot = (email: string, purgeAt: Date) =>
 const since = () => new Date(Date.now() - 10 * DAY);
 
 describe('reapplyErasures — deletion locks', () => {
-    it('clears a lock the owner cancelled after the snapshot, even when its purgeAt has passed', async () => {
+    it('clears a lock the owner canceled after the snapshot, even when its purgeAt has passed', async () => {
         const user = await lockedInSnapshot(
-            'cancelled-late@example.com',
+            'canceled-late@example.com',
             new Date(Date.now() - DAY)
         );
-        await plantRow(user.id, 'cancelled', new Date(Date.now() - 2 * DAY));
+        await plantRow(user.id, 'canceled', new Date(Date.now() - 2 * DAY));
 
         const report = await reapplyErasures({ since: since() });
 
@@ -313,10 +313,10 @@ describe('reapplyErasures — deletion locks', () => {
         expect(reloaded!.tokensValidAfter).toEqual(requestedAt);
     });
 
-    it('keeps an account scheduled when the owner cancelled and then asked again', async () => {
+    it('keeps an account scheduled when the owner canceled and then asked again', async () => {
         const user = await createUser({ email: 'asked-twice@example.com' });
         const stored = new Date(Date.now() + 9 * DAY);
-        await plantRow(user.id, 'cancelled', new Date(Date.now() - 5 * DAY));
+        await plantRow(user.id, 'canceled', new Date(Date.now() - 5 * DAY));
         await plantRow(user.id, 'scheduled', new Date(Date.now() - 1 * DAY), stored);
 
         await reapplyErasures({ since: since() });
@@ -330,7 +330,7 @@ describe('reapplyErasures — deletion locks', () => {
         const user = await createUser({ email: 'erased-wins@example.com' });
         await eraseAsScheduled(user);
         await restoreFromSnapshot(user.id, 'erased-wins@example.com');
-        await plantRow(user.id, 'cancelled', new Date(Date.now() + 1000));
+        await plantRow(user.id, 'canceled', new Date(Date.now() + 1000));
         await plantRow(
             user.id,
             'scheduled',
@@ -344,7 +344,7 @@ describe('reapplyErasures — deletion locks', () => {
         expect(await userRepository.findById(user.id)).toBeNull();
     });
 
-    it('does not lock an account the owner scheduled and cancelled after the snapshot', async () => {
+    it('does not lock an account the owner scheduled and canceled after the snapshot', async () => {
         const user = await createUser({ email: 'both-late@example.com' });
         await plantRow(
             user.id,
@@ -352,7 +352,7 @@ describe('reapplyErasures — deletion locks', () => {
             new Date(Date.now() - 4 * DAY),
             new Date(Date.now() + DAY)
         );
-        await plantRow(user.id, 'cancelled', new Date(Date.now() - 2 * DAY));
+        await plantRow(user.id, 'canceled', new Date(Date.now() - 2 * DAY));
 
         const report = await reapplyErasures({ since: since() });
 
@@ -370,8 +370,8 @@ describe('reapplyErasures — deletion locks', () => {
             deletedAt: new Date(Date.now() - 3 * DAY),
             deletedBy: 'reaper'
         });
-        await plantRow(staff.id, 'cancelled', new Date(Date.now() - DAY));
-        await plantRow(reaper.id, 'cancelled', new Date(Date.now() - DAY));
+        await plantRow(staff.id, 'canceled', new Date(Date.now() - DAY));
+        await plantRow(reaper.id, 'canceled', new Date(Date.now() - DAY));
 
         const report = await reapplyErasures({ since: since() });
 
@@ -391,7 +391,7 @@ describe('reapplyErasures — deletion locks', () => {
             new Date(Date.now() + DAY)
         );
         const kept = await lockedInSnapshot('second-run-b@example.com', new Date(Date.now() - DAY));
-        await plantRow(kept.id, 'cancelled', new Date(Date.now() - 2 * DAY));
+        await plantRow(kept.id, 'canceled', new Date(Date.now() - 2 * DAY));
         await reapplyErasures({ since: since() });
 
         const again = await reapplyErasures({ since: since() });
@@ -459,12 +459,12 @@ describe('the lock and its ledger row commit together', () => {
             email: 'staff-cancel@example.com',
             verifiedAt: new Date()
         });
-        const cancelledAt = new Date(Date.now() - 2 * DAY);
+        const canceledAt = new Date(Date.now() - 2 * DAY);
 
-        await handleRestoredByStaff(user.id, cancelledAt);
+        await handleRestoredByStaff(user.id, canceledAt);
 
         const rows = await rowsOf(user.id);
-        expect(rows.map((row) => [row.kind, row.at])).toEqual([['cancelled', cancelledAt]]);
+        expect(rows.map((row) => [row.kind, row.at])).toEqual([['canceled', canceledAt]]);
     });
 });
 

@@ -299,28 +299,28 @@ export const cardHoldExpiredEmail = (locale: string, order: OrderLines): EmailCo
 
 /**
  * What a cancellation did to the buyer's money, as the copy key that says it: money taken and
- * going back, money taken and kept (an operator cancelled without refunding), or no money taken.
+ * going back, money taken and kept (an operator canceled without refunding), or no money taken.
  * @param paid - whether the order was ever paid (`paidAt` set)
  * @param refund - whether the cancel decided to give the money back
  */
-const cancelledRefundKey = (paid: boolean, refund: boolean): string => {
+const canceledRefundKey = (paid: boolean, refund: boolean): string => {
     if (!paid) return 'refund-unpaid';
     return refund ? 'refund-paid' : 'refund-none';
 };
 
 /**
- * The customer's answer to "what happened to my order" when a PERSON cancelled it — their own
+ * The customer's answer to "what happened to my order" when a PERSON canceled it — their own
  * cancel, or staff's. Says what the cancel did to their money: the amount going back, no refund,
  * or nothing charged to begin with. The other cancels each mail their own explanation (the
  * reservation sweep, a product removed, a withdrawal), so none reaches this builder.
  *
  * @param locale - the recipient's language
  * @param name - the greeting's name
- * @param order - the cancelled order; `paidAt` says whether money was ever taken
+ * @param order - the canceled order; `paidAt` says whether money was ever taken
  * @param orderRef - the order's human number, or its id when it has none
  * @param refund - whether the cancel returns the money
  */
-export const orderCancelledEmail = (
+export const orderCanceledEmail = (
     locale: string,
     name: string,
     order: OrderLines & { paidAt?: Date | null },
@@ -329,14 +329,14 @@ export const orderCancelledEmail = (
 ): EmailContent => {
     const t = translator(locale);
     return {
-        template: 'orders.order-cancelled',
-        subject: t('orders.email-cancelled.subject'),
+        template: 'orders.order-canceled',
+        subject: t('orders.email-canceled.subject'),
         data: {
             locale,
-            pageMetaTitle: t('orders.email-cancelled.meta-title'),
-            greeting: t('orders.email-cancelled.greeting', { name }),
-            body: t('orders.email-cancelled.body', { order: orderRef }),
-            refundNote: t(`orders.email-cancelled.${cancelledRefundKey(!!order.paidAt, refund)}`, {
+            pageMetaTitle: t('orders.email-canceled.meta-title'),
+            greeting: t('orders.email-canceled.greeting', { name }),
+            body: t('orders.email-canceled.body', { order: orderRef }),
+            refundNote: t(`orders.email-canceled.${canceledRefundKey(!!order.paidAt, refund)}`, {
                 amount: formatMoney(locale, orderTotal(order), order.currency)
             }),
             footer: t('email.footer')

@@ -17,7 +17,7 @@ import {
     toOrderItem
 } from '@modules/orders/tests/factories';
 import { orderService } from '@modules/orders/services';
-import { ORDER_CANCELLED } from '../../events';
+import { ORDER_CANCELED } from '../../events';
 import { orderRepository } from '../../repository';
 import { orderModel } from '../../model';
 import { OrderStatus } from '@types';
@@ -85,7 +85,7 @@ describe('cancelOnRequestById', () => {
 
         expect(result.success).toBe(true);
         const stored = await orderRepository.findById(String(order._id));
-        expect(stored?.status).toBe('cancelled');
+        expect(stored?.status).toBe('canceled');
     });
 
     it("refuses another user's order with 404 — indistinguishable from absence", async () => {
@@ -112,7 +112,7 @@ describe('cancelOnRequestById', () => {
         expect(result.success).toBe(false);
         expect(result.status).toBe(409);
         expect(!result.success && result.errors[0]).toMatchObject({
-            code: 'ORDER_NOT_CANCELLABLE'
+            code: 'ORDER_NOT_CANCELABLE'
         });
         const stored = await orderRepository.findById(String(order._id));
         expect(stored?.status).toBe('shipped');
@@ -135,7 +135,7 @@ describe('cancelOnRequestById', () => {
     });
 
     /**
-     * `processing → cancelled` belongs to `admin` alone, and this is the only path that can run
+     * `processing → canceled` belongs to `admin` alone, and this is the only path that can run
      * it — `update()` refuses to execute the transition otherwise. Read as `customer` regardless
      * of caller, this edge would silently exist in the table for everyone.
      */
@@ -152,13 +152,13 @@ describe('cancelOnRequestById', () => {
 
         expect(allowed.success).toBe(true);
         const stored = await orderRepository.findById(String(order._id));
-        expect(stored?.status).toBe('cancelled');
+        expect(stored?.status).toBe('canceled');
     });
 
     /**
      * The reservation-sweep expiry (the system actor) must never cancel an order that has
      * already been paid, even when its own deadline check runs just after payment landed —
-     * `pending.cancelled` is the ONLY edge the system actor holds, unlike `admin`'s wider one.
+     * `pending.canceled` is the ONLY edge the system actor holds, unlike `admin`'s wider one.
      */
     it("the system actor cannot cancel an order that is already paid — closes B21's race", async () => {
         const owner = await createUser({ email: 'owner@example.com', username: 'admin' });
@@ -194,7 +194,7 @@ describe('cancelOnRequestById — who gets their money back', () => {
         cancellations.length = 0;
         // The outbox relay only delivers in a process whose modules are subscribed.
         markDomainEventsWired();
-        onDomainEvent(ORDER_CANCELLED, (payload) => {
+        onDomainEvent(ORDER_CANCELED, (payload) => {
             cancellations.push(payload);
             return undefined;
         });
@@ -205,7 +205,7 @@ describe('cancelOnRequestById — who gets their money back', () => {
     });
 
     it('refunds a customer whatever they ask for', async () => {
-        // Not the customer's to waive: `paid` is cancellable BECAUSE the money comes back.
+        // Not the customer's to waive: `paid` is cancelable BECAUSE the money comes back.
         const user = await createUser();
         const order = await seedOrder(user);
 
@@ -275,7 +275,7 @@ describe('cancelOnRequestById — who gets their money back', () => {
 });
 
 describe('cancelOnRequestById — audit and analytics', () => {
-    it('a customer cancel reports order_cancelled, audited as the customer', async () => {
+    it('a customer cancel reports order_canceled, audited as the customer', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
         const user = await createUser();
@@ -290,13 +290,13 @@ describe('cancelOnRequestById — audit and analytics', () => {
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
-                action: ordersAuditActions.ORDER_CANCELLED,
+                action: ordersAuditActions.ORDER_CANCELED,
                 outcome: 'success',
                 actorRole: 'anonymous'
             })
         );
         expect(analyticsSpy).toHaveBeenCalledWith(
-            expect.objectContaining({ event: ordersAnalyticsEvents.ORDER_CANCELLED })
+            expect.objectContaining({ event: ordersAnalyticsEvents.ORDER_CANCELED })
         );
     });
 
@@ -314,11 +314,11 @@ describe('cancelOnRequestById — audit and analytics', () => {
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
-                action: ordersAuditActions.ORDER_CANCELLED,
+                action: ordersAuditActions.ORDER_CANCELED,
                 metadata: { cause: 'operator', refund: false, paid: false }
             })
         );
-        const rows = await timelineOf(String(order._id), 'cancelled');
+        const rows = await timelineOf(String(order._id), 'canceled');
         expect(rows.map(({ data }) => data)).toEqual([
             { by: 'admin', cause: 'operator', refund: false }
         ]);
@@ -338,11 +338,11 @@ describe('cancelOnRequestById — audit and analytics', () => {
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
-                action: ordersAuditActions.ORDER_CANCELLED,
+                action: ordersAuditActions.ORDER_CANCELED,
                 metadata: { cause: 'customer', refund: true, paid: false }
             })
         );
-        const rows = await timelineOf(String(order._id), 'cancelled');
+        const rows = await timelineOf(String(order._id), 'canceled');
         expect(rows.map(({ data }) => data)).toEqual([
             { by: 'customer', cause: 'customer', refund: true }
         ]);
@@ -359,7 +359,7 @@ describe('cancelOnRequestById — audit and analytics', () => {
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
-                action: ordersAuditActions.ORDER_CANCELLED,
+                action: ordersAuditActions.ORDER_CANCELED,
                 outcome: 'success',
                 // The system actor, not admin — `SYSTEM_ACTOR` is its own role now, not an
                 // alias for a human admin's, and the audit trail says so.
@@ -369,7 +369,7 @@ describe('cancelOnRequestById — audit and analytics', () => {
         );
     });
 
-    it('a reservation timing out reports order_reservation_expired, not order_cancelled', async () => {
+    it('a reservation timing out reports order_reservation_expired, not order_canceled', async () => {
         const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
         const user = await createUser();
         const order = await seedOrder(user);
@@ -381,13 +381,13 @@ describe('cancelOnRequestById — audit and analytics', () => {
             expect.objectContaining({ event: ordersAnalyticsEvents.ORDER_RESERVATION_EXPIRED })
         );
         expect(analyticsSpy).not.toHaveBeenCalledWith(
-            expect.objectContaining({ event: ordersAnalyticsEvents.ORDER_CANCELLED })
+            expect.objectContaining({ event: ordersAnalyticsEvents.ORDER_CANCELED })
         );
     });
 });
 
 describe('cancelOnRequestById — the payment-window-expired email', () => {
-    // The mails ride `order.cancelled`: this module's listener must be wired.
+    // The mails ride `order.canceled`: this module's listener must be wired.
     beforeEach(() => {
         registerModules([ordersModule]);
     });
@@ -412,7 +412,7 @@ describe('cancelOnRequestById — the payment-window-expired email', () => {
 
         await settleOutboxNudges();
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
-        const [row] = await outboxEventModel.find({ name: ORDER_CANCELLED }).lean();
+        const [row] = await outboxEventModel.find({ name: ORDER_CANCELED }).lean();
         expect(row.payload).toEqual({
             orderId: String(order._id),
             refund: true,
@@ -454,10 +454,10 @@ describe('cancelOnRequestById — the payment-window-expired email', () => {
             testCallerContext
         );
 
-        // The cancelled notice is the answer to a person's cancel; the expiry one is not.
+        // The canceled notice is the answer to a person's cancel; the expiry one is not.
         await settleOutboxNudges();
         const templates = mockEnqueueEmail.mock.calls.map(([, template]) => template);
-        expect(templates).toEqual(['orders.order-cancelled']);
+        expect(templates).toEqual(['orders.order-canceled']);
     });
 
     it('still cancels and sends the expiry notice when the buyer lookup fails', async () => {
@@ -474,7 +474,7 @@ describe('cancelOnRequestById — the payment-window-expired email', () => {
 
         expect(result.success).toBe(true);
         const stored = await orderRepository.findById(String(order._id));
-        expect(stored?.status).toBe('cancelled');
+        expect(stored?.status).toBe('canceled');
         await settleOutboxNudges();
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template] = mockEnqueueEmail.mock.calls[0];
@@ -520,7 +520,7 @@ const mailsFor = async (
     };
 };
 
-describe('cancelOnRequestById — the cancelled notice', () => {
+describe('cancelOnRequestById — the canceled notice', () => {
     beforeEach(() => {
         registerModules([ordersModule]);
     });
@@ -546,11 +546,11 @@ describe('cancelOnRequestById — the cancelled notice', () => {
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template, data] = mockEnqueueEmail.mock.calls[0];
         expect(envelope.to).toBe(user.email);
-        expect(template).toBe('orders.order-cancelled');
+        expect(template).toBe('orders.order-canceled');
         expect((data as { refundNote: string }).refundNote).toContain('nothing was charged');
     });
 
-    it('says the money is going back when the cancelled order was paid', async () => {
+    it('says the money is going back when the canceled order was paid', async () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)], {
@@ -568,7 +568,7 @@ describe('cancelOnRequestById — the cancelled notice', () => {
 
         await settleOutboxNudges();
         const [, template, data] = mockEnqueueEmail.mock.calls[0];
-        expect(template).toBe('orders.order-cancelled');
+        expect(template).toBe('orders.order-canceled');
         expect((data as { refundNote: string }).refundNote).toContain('returned');
     });
 
@@ -592,7 +592,7 @@ describe('cancelOnRequestById — the cancelled notice', () => {
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template, data] = mockEnqueueEmail.mock.calls[0];
         expect(envelope.to).toBe(user.email);
-        expect(template).toBe('orders.order-cancelled');
+        expect(template).toBe('orders.order-canceled');
         expect((data as { refundNote: string }).refundNote).toContain('No refund');
     });
 
@@ -625,7 +625,7 @@ describe('cancelOnRequestById — the cancelled notice', () => {
         expect(mails).toEqual([]);
         // Still a cancel: the status moved and the order says the system did it.
         const stored = await orderRepository.findById(String(order._id));
-        expect(stored?.status).toBe(OrderStatus.cancelled);
+        expect(stored?.status).toBe(OrderStatus.canceled);
     });
 
     it('mails nothing when the cancel is refused', async () => {
@@ -697,13 +697,13 @@ describe('withActions — withdraw', () => {
         expect(new Date(body.withdrawUntil!).toISOString()).toBe(announced.toISOString());
     });
 
-    it('is never offered on a cancelled order', async () => {
+    it('is never offered on a canceled order', async () => {
         const user = await createUser();
         const order = await seedOrder(user);
         await orderService.cancelOnRequestById(String(order._id), asUser(user));
-        const cancelled = await orderRepository.findById(String(order._id));
+        const canceled = await orderRepository.findById(String(order._id));
 
-        const body = await orderService.withActions(cancelled!, asUser(user));
+        const body = await orderService.withActions(canceled!, asUser(user));
 
         expect(body.actions?.withdraw).toBe(false);
     });
@@ -735,9 +735,9 @@ describe('withActions', () => {
         const user = await createUser();
         const order = await seedOrder(user);
         await orderService.cancelOnRequestById(String(order._id), asAdmin());
-        const cancelled = await orderRepository.findById(String(order._id));
+        const canceled = await orderRepository.findById(String(order._id));
 
-        const body = await orderService.withActions(cancelled!, asAdmin());
+        const body = await orderService.withActions(canceled!, asAdmin());
 
         expect(body.actions).toEqual({
             cancel: false,
@@ -826,7 +826,7 @@ describe('withActions', () => {
         expect(admin.status).toBe('processing');
         expect(admin.fulfillmentStatus).toBe('partially_fulfilled');
         expect(admin.actions).toMatchObject({ cancel: false });
-        // The buyer's withdrawal still stands: what has not shipped is cancelled through `returns`.
+        // The buyer's withdrawal still stands: what has not shipped is canceled through `returns`.
         expect(buyer.actions).toMatchObject({ cancel: false, withdraw: true });
     });
 

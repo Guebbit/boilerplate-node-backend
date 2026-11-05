@@ -79,7 +79,7 @@ Three objects, each owned once:
 
 ```mermaid
 stateDiagram-v2
-    [*] --> closed: withdrawal before dispatch — the order was cancelled, nothing comes back
+    [*] --> closed: withdrawal before dispatch — the order was canceled, nothing comes back
     [*] --> approved: withdrawal after dispatch — a right, nothing to decide
     [*] --> requested: any other reason
     requested --> approved: staff approve
@@ -206,7 +206,7 @@ flowchart TD
     D --> G["acknowledgement mailed<br/><i>201 + Location</i>"]
     B -- "something has shipped" --> E["a Return, born approved<br/><i>lines coming back: at most what shipped,<br/>less what earlier returns took</i>"]
     E --> F["acknowledgement mailed<br/><i>201 + Location, with date and time</i>"]
-    B -- "kind: cancellation" --> X["the remainder of one fulfillment order<br/>cancelled — see below"]
+    B -- "kind: cancellation" --> X["the remainder of one fulfillment order<br/>canceled — see below"]
 ```
 
 **Before dispatch** reads `fulfillment.shipped`, not the order's status: an order that shipped in part
@@ -223,10 +223,10 @@ refund.
   my withdrawal" the same way whatever the order's state. The client reloads the order from
   `Return.orderId`.
 - **The money does not move through the Return.** The cancel's own refund runs as for any cancel
-  (the `refund` on `order.cancelled`, finished by the refund sweep if the provider refuses), so its `payment.refunded`
+  (the `refund` on `order.canceled`, finished by the refund sweep if the provider refuses), so its `payment.refunded`
   carries no `returnId`, and `returns` does not close anything on it: the Return was closed already.
   The credit note follows that event as usual.
-- **Events:** the order's own `order.cancelled` first, then `return.requested` and `return.closed`
+- **Events:** the order's own `order.canceled` first, then `return.requested` and `return.closed`
   back to back (both written in the transaction that writes the return). A subscriber to `return.closed` therefore also hears about withdrawals that never
   had goods.
 - **One mail from this module:** the acknowledgement, with no postage line and no address (nothing
@@ -358,11 +358,11 @@ Both are **stamped by their owner through `orders`' own service door** (`markPay
 `markReturnStatus`), the way `delivery` reports a shipment. `fulfillmentStatus` reads the summary
 `delivery` reports, so it is derived on read.
 
-| Field               | Values                                                                                      | Stamped by                                                                                   |
-| ------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `paymentStatus`     | `unpaid` · `paid` · `partially_refunded` · `refunded`                                       | `payments` (the refund states); `paid`/`unpaid` from `paidAt`                                |
-| `fulfillmentStatus` | `unfulfilled` · `in_progress` · `on_hold` · `partially_fulfilled` · `shipped` · `fulfilled` | derived from `status` and `delivery`'s summary ([table](./orders.md#the-fulfilment-summary)) |
-| `returnStatus`      | `none` · `requested` · `in_progress` · `partially_returned` · `returned`                    | `returns`, after every move (`services/projection.ts`)                                       |
+| Field               | Values                                                                                      | Stamped by                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `paymentStatus`     | `unpaid` · `paid` · `partially_refunded` · `refunded`                                       | `payments` (the refund states); `paid`/`unpaid` from `paidAt`                                 |
+| `fulfillmentStatus` | `unfulfilled` · `in_progress` · `on_hold` · `partially_fulfilled` · `shipped` · `fulfilled` | derived from `status` and `delivery`'s summary ([table](./orders.md#the-fulfillment-summary)) |
+| `returnStatus`      | `none` · `requested` · `in_progress` · `partially_returned` · `returned`                    | `returns`, after every move (`services/projection.ts`)                                        |
 
 `returnStatus` measures what came back against what the order held **less what a remainder cancel took**:
 a cancelled unit never shipped, so it can never return, and without that a cancel would keep the order
@@ -494,7 +494,7 @@ items, under the Refund permission.
 
 | Case                     | The door                                                           | Result                                                                                                   |
 | ------------------------ | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| nothing shipped anywhere | the order's own cancel (as always)                                 | order `cancelled`, full refund including delivery; every fulfillment order cancelled                     |
+| nothing shipped anywhere | the order's own cancel (as always)                                 | order `canceled`, full refund including delivery; every fulfillment order cancelled                      |
 | something shipped        | `POST /returns` `{kind: cancellation, fulfillmentOrderId, reason}` | the remainder's lines cancelled; refund of those lines (+ delivery on the last unit); units back on sale |
 | everything shipped       | a return, as always                                                | —                                                                                                        |
 
@@ -519,12 +519,12 @@ sequenceDiagram
     C->>R: POST /returns {kind: cancellation, fulfillmentOrderId}
     Note over R: owner or key checks · then one transaction under the order's lock
     R->>D: cancelRemainder(fulfillmentOrderId)
-    D-->>R: the lines cancelled, the summary updated
+    D-->>R: the lines canceled, the summary updated
     R->>O: releaseStock(lines)
     R->>R: write the Return (closed) · return.requested · return.closed
     R->>P: openReturnRefund(reason: cancellation, returnId)
     Note over R: commit
-    R->>O: report the lost-parcel cancel (audit + analytics), when the settlement cancelled the order
+    R->>O: report the lost-parcel cancel (audit + analytics), when the settlement canceled the order
     R->>P: sendOpenedRefund
     P-->>C: the refund's own mail
 ```
@@ -588,8 +588,8 @@ the return's id, the reason code and, for received and closed, the refund amount
 close it leads to name the staff member who received the goods; a return the payment sweep closes
 later names no one. The customer's
 `note` and staff's `declineMessage` are never copied (nor is the note of a hand close: it stays in the audit row): `reap:returns` owns their clock. A withdrawal
-before dispatch and a cancelled remainder write no return rows, since the order's `cancelled` and
-delivery's `remainder_cancelled` already say it.
+before dispatch and a cancelled remainder write no return rows, since the order's `canceled` and
+delivery's `remainder_canceled` already say it.
 
 ## The options read
 
@@ -600,7 +600,7 @@ for staff holding `update:Return` every reason, with `exceptions` naming the non
 already past their deadline (a preview of what opening them waives); `returnable` is the quantity per product that
 has **shipped** and is not already coming back, empty while `reasons` is, with each line's
 `withdrawable` flag (false for Art. 16 goods, which only a defect or a wrong item may name, and
-which staff may take for a goodwill return); `cancellable` lists each fulfillment order with a
+which staff may take for a goodwill return); `cancelable` lists each fulfillment order with a
 remainder and the exact refund cancelling it would owe (the delivery included when it takes the last
 unit), each with `cancel`: whether THIS caller may cancel it. The buyer may inside the window and
 unless the remainder holds excluded goods and the shop has started on the order; anyone else when

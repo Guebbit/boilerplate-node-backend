@@ -512,8 +512,8 @@ describe('cancelling an order that was already partly refunded', () => {
         const { user, orderId } = await paidOrder();
         await refund(orderId, { amount: 30 });
 
-        const cancelled = await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
-        expect(cancelled.success).toBe(true);
+        const canceled = await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
+        expect(canceled.success).toBe(true);
         await settleOutboxNudges();
 
         const payment = await paymentOf(orderId);

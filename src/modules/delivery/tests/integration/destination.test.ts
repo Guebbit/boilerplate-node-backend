@@ -97,7 +97,7 @@ describe('a shipment keeps where it went', () => {
         expect([first.number, second.number]).toEqual([1, 2]);
     });
 
-    it('stores none for a digital fulfilment, and none for an order that ships nowhere', async () => {
+    it('stores none for a digital fulfillment, and none for an order that ships nowhere', async () => {
         const digital = await seedDigitalOrder(OrderStatus.processing, new Date());
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(digital._id));
         await deliveryService.fulfillFulfillmentOrder(

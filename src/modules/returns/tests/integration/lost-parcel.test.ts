@@ -132,7 +132,7 @@ describe('cancelling what a lost parcel carried', () => {
             available: 6
         });
 
-        const cancelled = await returnService.createReturn(
+        const canceled = await returnService.createReturn(
             {
                 orderId: parcel.orderId,
                 reason: 'withdrawal',
@@ -143,7 +143,7 @@ describe('cancelling what a lost parcel carried', () => {
             callerContextAs('customer', parcel.user.id)
         );
 
-        expect(cancelled.success && cancelled.data.refundAmount).toBe(75);
+        expect(canceled.success && canceled.data.refundAmount).toBe(75);
         expect(await refundsOf(parcel.orderId)).toEqual([{ reason: 'cancellation', amount: 75 }]);
         expect(await countersOf(parcel.shirt._id)).toEqual({
             onHand: 8,
@@ -172,14 +172,14 @@ const cancelRemainder = (parcel: Parcel) =>
     );
 
 describe('settling an order whose every parcel was lost and refunded', () => {
-    it('ends cancelled with cause lost: no clocks, no delivered row, one refund, nothing reserved', async () => {
+    it('ends canceled with cause lost: no clocks, no delivered row, one refund, nothing reserved', async () => {
         const parcel = await shippedParcel();
         await lose(parcel);
 
         await cancelRemainder(parcel);
 
         const order = await readOrder(parcel.orderId);
-        expect(order?.status).toBe(OrderStatus.cancelled);
+        expect(order?.status).toBe(OrderStatus.canceled);
         expect(order?.paymentStatus).toBe('refunded');
         expect(order?.withdrawUntil).toBeUndefined();
         expect(order?.conformityUntil).toBeUndefined();
@@ -187,10 +187,10 @@ describe('settling an order whose every parcel was lost and refunded', () => {
         // The one real `shipped` row is the parcel leaving; the settle adds none, nor a `delivered`.
         expect(rows.filter(({ type }) => type === 'shipped')).toHaveLength(1);
         expect(rows.some(({ type }) => type === 'delivered')).toBe(false);
-        const cancelledRows = rows.filter(({ type }) => type === 'cancelled');
-        expect(cancelledRows).toHaveLength(1);
-        expect(cancelledRows[0].actor).toBeUndefined();
-        expect(cancelledRows[0].data).toMatchObject({ by: 'system', cause: 'lost', refund: false });
+        const canceledRows = rows.filter(({ type }) => type === 'canceled');
+        expect(canceledRows).toHaveLength(1);
+        expect(canceledRows[0].actor).toBeUndefined();
+        expect(canceledRows[0].data).toMatchObject({ by: 'system', cause: 'lost', refund: false });
         expect(await refundsOf(parcel.orderId)).toEqual([{ reason: 'cancellation', amount: 75 }]);
         expect(await reservationRepository.findByOrderId(parcel.orderId)).toMatchObject({
             status: 'released'
@@ -210,9 +210,9 @@ describe('settling an order whose every parcel was lost and refunded', () => {
 
         await cancelRemainder(parcel);
         await settleOutboxNudges();
-        // A relay retry re-runs every `order.cancelled` listener; the count must not follow it.
+        // A relay retry re-runs every `order.canceled` listener; the count must not follow it.
         await outboxEventModel.updateMany(
-            { name: 'order.cancelled', aggregateId: parcel.orderId },
+            { name: 'order.canceled', aggregateId: parcel.orderId },
             { $set: { status: 'pending', nextAttemptAt: new Date(0) }, $unset: { publishedAt: 1 } }
         );
         nudgeOutbox();
@@ -220,11 +220,11 @@ describe('settling an order whose every parcel was lost and refunded', () => {
 
         const counted = analyticsSpy.mock.calls.filter(
             ([event]) =>
-                event.event === 'order_cancelled' && event.properties?.order_id === parcel.orderId
+                event.event === 'order_canceled' && event.properties?.order_id === parcel.orderId
         );
         expect(counted).toHaveLength(1);
         const audited = auditSpy.mock.calls.filter(
-            ([entry]) => entry.action === 'order.cancelled' && entry.targetId === parcel.orderId
+            ([entry]) => entry.action === 'order.canceled' && entry.targetId === parcel.orderId
         );
         expect(audited).toHaveLength(1);
         expect(audited[0][0]).toMatchObject({
@@ -249,7 +249,7 @@ describe('settling an order whose every parcel was lost and refunded', () => {
 
     it('stays delivered when another parcel did arrive', async () => {
         const parcel = await shippedParcel();
-        // The shirts go out again and arrive; only the mug stays lost and is then cancelled.
+        // The shirts go out again and arrive; only the mug stays lost and is then canceled.
         await lose(parcel);
         await deliveryService.shipFulfillmentOrder(
             parcel.fulfillmentOrderId,

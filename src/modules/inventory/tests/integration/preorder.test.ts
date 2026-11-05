@@ -171,7 +171,7 @@ describe('giving a preorder claim back', () => {
         expect(await levelOf(productId)).toMatchObject({ reserved: 0, backordered: 0 });
     });
 
-    it('a paid order cancelled before stock arrives gives the allowance back', async () => {
+    it('a paid order canceled before stock arrives gives the allowance back', async () => {
         const productId = await preorderProduct(5);
         const orderId = anOrderId();
         await inventoryService.reserveForOrder(orderId, [claim(productId, 3)]);

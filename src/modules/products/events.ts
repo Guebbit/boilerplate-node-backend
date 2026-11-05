@@ -11,7 +11,7 @@ declare module '@kernel/events' {
         /**
          * A product just stopped being reachable — soft-deleted or hard-deleted. The ONLY catalogue
          * event that pulls cart and wishlist lines: hiding a product (`active: false`) or taking it
-         * off sale (`purchasable: false`) emits nothing, and no placed order is ever cancelled by a
+         * off sale (`purchasable: false`) emits nothing, and no placed order is ever canceled by a
          * catalogue change. Never fires on a restore: what the delete already set in motion (carts and wishlists emptied) stays
          * done, since a restore puts the product back on sale, not undoes
          * the past — see `restoreById`'s own docblock.

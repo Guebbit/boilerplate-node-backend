@@ -33,14 +33,14 @@ export type ProjectedReturnStatus = Exclude<OrderReturnStatus, 'none'> | undefin
  *
  * @param returns - every return on the order
  * @param ordered - how many units of each product are left to come back: what the order held, less
- *   what a remainder cancel took (a cancelled unit never shipped, so it can never return — without
+ *   what a remainder cancel took (a canceled unit never shipped, so it can never return — without
  *   this a cancel would keep the order from ever reading `returned`)
  */
 export const projectReturnStatus = (
     returns: readonly ProjectedReturn[],
     ordered: ReadonlyMap<string, number>
 ): ProjectedReturnStatus => {
-    // A return with no lines (a withdrawal before dispatch: the order was cancelled, nothing comes
+    // A return with no lines (a withdrawal before dispatch: the order was canceled, nothing comes
     // back) holds no goods, so it says nothing about how much of the order is back.
     const holding = returns.filter(
         ({ status, kind, lines, remedy }) =>

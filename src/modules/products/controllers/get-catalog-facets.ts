@@ -8,7 +8,7 @@ import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { productService } from '../services';
 import { catchAs } from '@infrastructure/http/controller';
-import type { CatalogueFacetsResponse } from '@types';
+import type { CatalogFacetsResponse } from '@types';
 
 /**
  * GET /products/facets
@@ -16,10 +16,10 @@ import type { CatalogueFacetsResponse } from '@types';
  * chips. Public and cached like the listing it filters; the products cache tag invalidates it
  * whenever the catalogue changes.
  */
-export const getCatalogueFacets = (request: Request, response: Response) =>
+export const getCatalogFacets = (request: Request, response: Response) =>
     productService
         .facets()
         .then((facets) => {
-            successResponse<CatalogueFacetsResponse>(response, facets);
+            successResponse<CatalogFacetsResponse>(response, facets);
         })
-        .catch(catchAs(response, 'getCatalogueFacets'));
+        .catch(catchAs(response, 'getCatalogFacets'));

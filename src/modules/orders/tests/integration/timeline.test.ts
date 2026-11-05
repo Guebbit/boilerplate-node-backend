@@ -90,10 +90,10 @@ describe('what each move writes', () => {
         const digital = await orderOfBuyer(2, OrderStatus.processing, { digital: true });
 
         await withTransaction((session) =>
-            orderService.markFulfilmentComplete(String(physical._id), new Date(), session)
+            orderService.markFulfillmentComplete(String(physical._id), new Date(), session)
         );
         await withTransaction((session) =>
-            orderService.markFulfilmentComplete(String(digital._id), new Date(), session)
+            orderService.markFulfillmentComplete(String(digital._id), new Date(), session)
         );
 
         expect(typesOf(await timelineOf(String(physical._id)))).toEqual(['shipped', 'delivered']);
@@ -101,7 +101,7 @@ describe('what each move writes', () => {
     });
 
     it('writes nothing for a move that lost its race', async () => {
-        const order = await seedOrder(OrderStatus.cancelled);
+        const order = await seedOrder(OrderStatus.canceled);
 
         expect(await orderService.markPaid(String(order._id))).toBeNull();
 
@@ -117,7 +117,7 @@ describe('what each move writes', () => {
         expect(await timelineOf(String(order._id))).toEqual([]);
     });
 
-    it('records who cancelled: the buyer by their own id, the sweep by no one', async () => {
+    it('records who canceled: the buyer by their own id, the sweep by no one', async () => {
         const user = await createUser();
         const product = await createProduct();
         const mine = await createOrder(user, [toOrderItem(product, 1)]);
@@ -127,10 +127,10 @@ describe('what each move writes', () => {
         await cancelForErasureById(String(swept._id));
 
         expect(await timelineOf(String(mine._id))).toMatchObject([
-            { type: 'cancelled', actor: user.id, data: { by: 'customer' } }
+            { type: 'canceled', actor: user.id, data: { by: 'customer' } }
         ]);
         const [sweep] = await timelineOf(String(swept._id));
-        expect(sweep).toMatchObject({ type: 'cancelled', data: { by: 'system' } });
+        expect(sweep).toMatchObject({ type: 'canceled', data: { by: 'system' } });
         expect(sweep).not.toHaveProperty('actor');
     });
 
@@ -289,7 +289,7 @@ describe('the buyer`s data export', () => {
         const exported = await orderService.collectTimelineOf(user.id);
 
         expect(exported).toMatchObject([
-            { orderId: String(mine._id), type: 'cancelled', actor: user.id }
+            { orderId: String(mine._id), type: 'canceled', actor: user.id }
         ]);
     });
 
