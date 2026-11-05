@@ -61,6 +61,8 @@ interface Cancelled {
     lines: ProductQuantity[];
     /** The refund record opened with the cancel, or `null` when nothing is owed. */
     opened: OpenedReturnRefund | null;
+    /** Reports a lost-parcel order cancel (audit + analytics); called once the transaction commits. */
+    afterCommit?: () => void;
 }
 
 /**
@@ -177,7 +179,12 @@ const cancelUnderLock = (
                       session
                   )
                 : null;
-        return { created, lines: cancelled.lines, opened };
+        return {
+            created,
+            lines: cancelled.lines,
+            opened,
+            ...(cancelled.afterCommit && { afterCommit: cancelled.afterCommit })
+        };
     });
 
 /**
@@ -210,6 +217,7 @@ const announceCancelled = (
 ): Promise<CreateReturnOutcome> => {
     nudgeOutbox();
     recordOpened(order, done.created, context);
+    done.afterCommit?.();
 
     return inventoryService
         .refreshStockCacheForProducts(done.lines.map(({ productId }) => productId))

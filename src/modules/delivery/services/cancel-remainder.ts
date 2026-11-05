@@ -31,6 +31,11 @@ export type RemainderCancel =
            * allowance, not units on the shelf, and `inventory` gives back the right one.
            */
           waitingForStock: boolean;
+          /**
+           * Present when the settlement cancelled the order (every parcel lost). The caller calls
+           * it after ITS transaction commits: it writes the audit row and the analytics event.
+           */
+          afterCommit?: () => void;
       }
     | {
           ok: false;
@@ -114,10 +119,17 @@ export const cancelRemainder = async (
         return refuse(409, ERROR_CODES.DELIVERY_NOT_SHIPPABLE, 'delivery.not-shippable');
 
     const progress = await reportProgress(orderId, session);
-    await settleOrder(orderId, progress.order.status, progress.summary, new Date(), session, actor);
+    const afterCommit = await settleOrder(
+        orderId,
+        progress.order.status,
+        progress.summary,
+        new Date(),
+        session,
+        actor
+    );
     await recordRemainderCancelled(cancelled, session, actor);
     await announceCancelled(cancelled, session);
-    return { ok: true, lines, waitingForStock };
+    return { ok: true, lines, waitingForStock, ...(afterCommit && { afterCommit }) };
 };
 
 /**
