@@ -218,7 +218,11 @@ describe('what opens a task', () => {
             'fulfillment_order.delayed',
             { ...DELAY, promisedAt: undefined }
         ],
-        ['a dispute already decided', 'payment.dispute_opened', { ...DISPUTE, status: 'won' }]
+        [
+            'a dispute decided before any to-do',
+            'payment.dispute_opened',
+            { ...DISPUTE, status: 'won' }
+        ]
     ] as const)('opens nothing for %s', async (_name, name, payload) => {
         await emitDomainEvent(name, payload as never, { eventId: nextEventId() });
         expect(await allTasks()).toHaveLength(0);
@@ -482,5 +486,91 @@ describe('who is told, and where the alert takes them', () => {
         await settleOutboxNudges();
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
+    });
+});
+
+/** The kinds of every task in storage, oldest first. */
+const kinds = () => allTasks().then((tasks) => tasks.map((task) => task.kind));
+
+describe('a dispute is two to-dos', () => {
+    it('moves from the proof to the wait: closes `dispute`, opens one `dispute_awaiting_bank`', async () => {
+        await emitDomainEvent('payment.dispute_opened', DISPUTE, { eventId: nextEventId() });
+
+        await emitDomainEvent(
+            'payment.dispute_updated',
+            { ...DISPUTE, status: 'under_review' },
+            { eventId: nextEventId() }
+        );
+
+        const tasks = await allTasks();
+        expect(tasks.map((task) => [task.kind, task.status])).toEqual([
+            [TaskKind.dispute, TaskStatus.resolved],
+            [TaskKind.dispute_awaiting_bank, TaskStatus.new]
+        ]);
+        expect(tasks[0].resolution).toBe(TaskResolution.cleared);
+        expect(tasks[0].notes.map((note) => note.body)).toEqual([
+            'Proof sent; the bank is deciding.'
+        ]);
+        expect(tasks[1].routeSet).toBe('PaymentRefunding');
+        expect(tasks[1].work).toBe('sales/payments?tab=attention');
+    });
+
+    it('opens nothing twice when the same report is delivered again', async () => {
+        const meta = { eventId: nextEventId() };
+        const under = { ...DISPUTE, status: 'under_review' } as const;
+        await emitDomainEvent('payment.dispute_opened', DISPUTE, { eventId: nextEventId() });
+        await emitDomainEvent('payment.dispute_updated', under, meta);
+
+        await emitDomainEvent('payment.dispute_updated', under, meta);
+
+        expect(await kinds()).toEqual([TaskKind.dispute, TaskKind.dispute_awaiting_bank]);
+        const [, waiting] = await allTasks();
+        expect(waiting.seenCount).toBe(1);
+    });
+
+    it.each(['won', 'lost', 'accepted', 'closed'] as const)(
+        'closes the wait when the bank decides: %s, naming the outcome',
+        async (status) => {
+            await emitDomainEvent(
+                'payment.dispute_opened',
+                { ...DISPUTE, status: 'under_review' },
+                { eventId: nextEventId() }
+            );
+
+            await emitDomainEvent('payment.dispute_updated', { ...DISPUTE, status });
+
+            const tasks = await allTasks();
+            const waiting = tasks.find((task) => task.kind === TaskKind.dispute_awaiting_bank);
+            expect(waiting?.status).toBe(TaskStatus.resolved);
+            expect(waiting?.notes.map((note) => note.body)).toEqual([
+                `The dispute ended: ${status}.`
+            ]);
+        }
+    );
+
+    it('opens no waiting to-do when the bank decides straight from needs_response', async () => {
+        await emitDomainEvent('payment.dispute_opened', DISPUTE, { eventId: nextEventId() });
+
+        await emitDomainEvent('payment.dispute_updated', { ...DISPUTE, status: 'lost' });
+
+        const tasks = await allTasks();
+        expect(tasks.map((task) => [task.kind, task.status])).toEqual([
+            [TaskKind.dispute, TaskStatus.resolved]
+        ]);
+    });
+
+    it('dates the wait 75 days out and never reminds before the deadline', async () => {
+        await emitDomainEvent(
+            'payment.dispute_opened',
+            { ...DISPUTE, status: 'under_review' },
+            { eventId: nextEventId() }
+        );
+
+        const { dueAt, noDueSoon } = await onlyTask();
+
+        const days = ((dueAt?.getTime() ?? 0) - Date.now()) / 86_400_000;
+        expect(days).toBeGreaterThan(74.9);
+        expect(days).toBeLessThanOrEqual(75);
+        expect(noDueSoon).toBe(true);
     });
 });

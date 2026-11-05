@@ -18,15 +18,13 @@ import { taskService } from '@modules/tasks';
 import {
     amountMismatchOpening,
     consentDueOpening,
+    disputeAwaitingBankOpening,
     disputeOpening,
     paidWithoutHoldOpening,
     refundOwedOpening,
     refundRefusedOpening,
     type ShopOpening
 } from '../domain/openings';
-
-/** The statuses of a dispute that still owe the shop an answer. */
-const OPEN_DISPUTE = new Set(['needs_response', 'under_review']);
 
 /** The payments page, on the tab of what needs a person. */
 const PAYMENTS_ATTENTION_WORK = `${FRONTEND_LINK_RULES.staffPages.salesPayments}?tab=attention`;
@@ -124,20 +122,36 @@ export const shopTasks = {
             )
         ),
 
-    /** `payment.dispute_opened` and `payment.dispute_updated`: open while it needs the shop. */
+    /**
+     * `payment.dispute_opened` and `payment.dispute_updated`: one to-do per stage. While the shop
+     * owes proof there is a `dispute`; once the proof is sent the bank decides and the to-do becomes
+     * a `dispute_awaiting_bank`; a decision closes whichever is open, naming the outcome.
+     */
     onDispute: (payload: DomainEventMap['payment.dispute_opened'], meta: DomainEventMeta) =>
-        guarded('payment dispute', () =>
-            OPEN_DISPUTE.has(payload.status)
-                ? open(
-                      disputeOpening(payload, attentionDueAt(new Date())),
-                      PAYMENTS_ATTENTION_WORK,
-                      meta
-                  )
-                : taskService.clearSystemTasks([TaskKind.dispute], {
-                      type: 'payment',
-                      id: payload.paymentId
-                  })
-        ),
+        guarded('payment dispute', () => {
+            const link = { type: 'payment', id: payload.paymentId } as const;
+            if (payload.status === 'needs_response')
+                return open(
+                    disputeOpening(payload, attentionDueAt(new Date())),
+                    PAYMENTS_ATTENTION_WORK,
+                    meta
+                );
+            if (payload.status === 'under_review')
+                return taskService
+                    .clearSystemTasks([TaskKind.dispute], link, 'Proof sent; the bank is deciding.')
+                    .then(() =>
+                        open(
+                            disputeAwaitingBankOpening(payload, new Date()),
+                            PAYMENTS_ATTENTION_WORK,
+                            meta
+                        )
+                    );
+            return taskService.clearSystemTasks(
+                [TaskKind.dispute, TaskKind.dispute_awaiting_bank],
+                link,
+                `The dispute ended: ${payload.status}.`
+            );
+        }),
 
     /** `inventory.hold_orphaned`: paid, nothing set aside. */
     onHoldOrphaned: (payload: DomainEventMap['inventory.hold_orphaned'], meta: DomainEventMeta) =>

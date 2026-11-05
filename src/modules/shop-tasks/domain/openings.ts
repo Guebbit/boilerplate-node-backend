@@ -30,6 +30,8 @@ export interface ShopOpening {
     message: string;
     /** When it is overdue. */
     dueAt: Date;
+    /** Set for a wait on someone else: no "due soon" reminder, see `SystemOpening`. */
+    noDueSoon?: true;
 }
 
 /** One hour in milliseconds. */
@@ -40,6 +42,9 @@ const DAY_MS = 24 * HOUR_MS;
 
 /** How long a paid order without stock set aside may wait: the customer is already owed goods. */
 const ORPHAN_WINDOW_MS = 4 * HOUR_MS;
+
+/** How long a bank may take to decide a dispute: the card networks' usual outer limit, 75 days. */
+const AWAITING_BANK_MS = 75 * DAY_MS;
 
 /** FTC 16 CFR 435.2: a seller may delay up to 30 days past the promised date without consent. */
 const FTC_GRACE_MS = 30 * DAY_MS;
@@ -151,6 +156,27 @@ export const disputeOpening = (
     subject: `Payment dispute (${dispute.kind})`,
     message: `The buyer's bank opened a ${dispute.kind} on payment ${dispute.paymentId} of order ${dispute.orderId} (${dispute.reason}). Send the evidence in the provider's dashboard before the deadline.`,
     dueAt: dispute.evidenceDueBy ? new Date(dispute.evidenceDueBy) : fallbackDueAt
+});
+
+/**
+ * The wait after the proof is sent: nothing to do unless the bank runs late. Not a deadline of the
+ * shop's, so no "due soon" reminder; it is overdue only past the bank's usual limit.
+ *
+ * @param dispute - the dispute as the provider last reported it
+ * @param dispute.paymentId - the disputed payment
+ * @param now - the clock
+ */
+export const disputeAwaitingBankOpening = (
+    dispute: { paymentId: string },
+    now: Date
+): ShopOpening => ({
+    kind: TaskKind.dispute_awaiting_bank,
+    routeSet: 'PaymentRefunding',
+    link: { type: TaskLinkType.payment, id: dispute.paymentId },
+    subject: 'Dispute: waiting for the bank',
+    message: `Proof sent. Waiting for the bank's decision on payment ${dispute.paymentId}. Nothing to do unless it runs late.`,
+    dueAt: new Date(now.getTime() + AWAITING_BANK_MS),
+    noDueSoon: true
 });
 
 /** What a delay notice says, as far as the consent reminder is concerned. */

@@ -719,6 +719,8 @@ flowchart TD
 | Shop won                    | a refund refused as `disputed` can only be voided (`cancelRefund`)                                                                           |
 | Unshipped goods             | nothing is held by itself; staff use the existing `high_risk` hold                                                                           |
 
+**To-dos.** The proof the shop owes is the `dispute` to-do; once it is sent (`under_review`) that closes and a `dispute_awaiting_bank` to-do waits for the bank's decision, see [shop-tasks](./shop-tasks.md#the-shops-to-dos).
+
 **Visibility.** The attention list gets `dispute_needs_response` for a dispute waiting on the shop,
 with `since`, `dueBy` (the provider's evidence deadline) and `disputeId` (it has no `refundId`). When
 the payment already had refunds succeed, the row carries `alreadyRefunded`: send that refund as

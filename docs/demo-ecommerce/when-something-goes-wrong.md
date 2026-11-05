@@ -153,7 +153,9 @@ If you had already refunded part of the payment, the row says how much: that ref
 1. Open the dispute in your payment provider's dashboard (the banner links to it) before the deadline.
 2. Send the evidence there: proof of delivery, the tracking page, the order and the emails, and any
    refund you already made.
-3. Wait for the bank. The banner updates by itself when the provider reports a decision.
+3. Wait for the bank. The banner updates by itself when the provider reports a decision. Your to-do
+   changes with it: once the provider says the evidence is under review, the "send proof" to-do closes
+   and a quiet "waiting for the bank" one takes its place, closed when the bank decides.
 
 If the shop **wins**, the money comes back to you and the refund button returns. If it **loses**, the
 bank keeps the money: what you can still refund is reduced by that amount. A refund that was waiting

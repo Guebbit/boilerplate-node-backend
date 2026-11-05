@@ -93,8 +93,9 @@ export const openSystemTask = (opening: SystemOpening, meta: DomainEventMeta): P
  * write on the status read, so staff closing at the same moment wins and this one steps aside.
  *
  * @param filter - which open tasks the ending situation closes
+ * @param note - a system note (no author) left on each task it closes, naming how it ended
  */
-const clearMatching = (filter: Record<string, unknown>): Promise<void> => {
+const clearMatching = (filter: Record<string, unknown>, note?: string): Promise<void> => {
     const now = new Date();
     return taskRepository
         .findOpenSystem(filter)
@@ -104,14 +105,20 @@ const clearMatching = (filter: Record<string, unknown>): Promise<void> => {
                     taskRepository
                         .moveFrom(String(task._id), task.status, clear(now))
                         .then((moved) => {
-                            if (moved)
-                                recordAudit(systemCallerContext('Task'), {
-                                    action: tasksAuditActions.SYSTEM_TASK_CLEARED,
-                                    outcome: 'success',
-                                    targetType: 'task',
-                                    targetId: String(moved._id),
-                                    metadata: { kind: moved.kind }
-                                });
+                            if (!moved) return undefined;
+                            recordAudit(systemCallerContext('Task'), {
+                                action: tasksAuditActions.SYSTEM_TASK_CLEARED,
+                                outcome: 'success',
+                                targetType: 'task',
+                                targetId: String(moved._id),
+                                metadata: { kind: moved.kind }
+                            });
+                            return note === undefined
+                                ? undefined
+                                : taskRepository.appendNote(String(moved._id), {
+                                      body: note,
+                                      at: now
+                                  });
                         })
                 )
             )
@@ -127,11 +134,14 @@ const clearMatching = (filter: Record<string, unknown>): Promise<void> => {
  * @param link - the record
  * @param link.type - the record's type
  * @param link.id - the record's id
+ * @param note - how the situation ended, left as a system note on each task closed
  */
 export const clearSystemTasks = (
     kinds: readonly TaskKind[],
-    link: { type: SystemOpening['link']['type']; id: string }
-): Promise<void> => clearMatching({ openKey: { $in: kinds.map((kind) => openKeyOf(kind, link)) } });
+    link: { type: SystemOpening['link']['type']; id: string },
+    note?: string
+): Promise<void> =>
+    clearMatching({ openKey: { $in: kinds.map((kind) => openKeyOf(kind, link)) } }, note);
 
 /**
  * Log a handler's failure and let the outbox redeliver: a missed open is a lost task, so the

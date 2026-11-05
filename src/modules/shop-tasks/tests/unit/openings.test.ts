@@ -11,6 +11,7 @@ import { openKeyOf, type SystemOpening } from '@modules/tasks';
 import {
     amountMismatchOpening,
     consentDueOpening,
+    disputeAwaitingBankOpening,
     disputeOpening,
     FTC_JURISDICTIONS,
     paidWithoutHoldOpening,
@@ -134,5 +135,19 @@ describe('the other openings', () => {
 
     it('carries ids only, never an address or a name', () => {
         for (const [, opening] of all) expect(opening.message).not.toMatch(/@/);
+    });
+});
+
+describe('disputeAwaitingBankOpening', () => {
+    it('waits on the payment, 75 days out, with no due-soon reminder', () => {
+        const opening = disputeAwaitingBankOpening({ paymentId: 'p1' }, NOW);
+
+        expect(opening).toMatchObject({
+            kind: TaskKind.dispute_awaiting_bank,
+            routeSet: 'PaymentRefunding',
+            link: { type: TaskLinkType.payment, id: 'p1' },
+            noDueSoon: true
+        });
+        expect(opening.dueAt).toEqual(new Date(NOW.getTime() + 75 * DAY_MS));
     });
 });
