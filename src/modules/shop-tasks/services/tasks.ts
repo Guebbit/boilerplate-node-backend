@@ -23,6 +23,7 @@ import {
     paidWithoutHoldOpening,
     refundOwedOpening,
     refundRefusedOpening,
+    refundReversedOpening,
     type ShopOpening
 } from '../domain/openings';
 
@@ -92,7 +93,7 @@ export const shopTasks = {
         guarded('payment.refund_failed', () =>
             payload.final && payload.failureReason !== RefundFailureReason.disputed
                 ? paymentService
-                      .refundDueAt(payload.paymentId, payload.refundId)
+                      .refundLegalDueAt(payload.paymentId, payload.refundId)
                       .then((dueAt) =>
                           open(
                               refundRefusedOpening(payload, dueAt ?? attentionDueAt(new Date())),
@@ -103,13 +104,34 @@ export const shopTasks = {
                 : Promise.resolve()
         ),
 
+    /**
+     * `payment.refund_reversed`: a settled refund came back from the bank, so the money is owed
+     * again. A `disputed` one is not work for a person to start: the dispute to-do carries it.
+     * The date is the legal one when the law sets one (a past date is truthful), else the
+     * attention window from now, never the refund's creation.
+     */
+    onRefundReversed: (payload: DomainEventMap['payment.refund_reversed'], meta: DomainEventMeta) =>
+        guarded('payment.refund_reversed', () =>
+            payload.failureReason === RefundFailureReason.disputed
+                ? Promise.resolve()
+                : paymentService
+                      .refundLegalDueAt(payload.paymentId, payload.refundId)
+                      .then((dueAt) =>
+                          open(
+                              refundReversedOpening(payload, dueAt ?? attentionDueAt(new Date())),
+                              PAYMENTS_ATTENTION_WORK,
+                              meta
+                          )
+                      )
+        ),
+
     /** `payment.refunded` and `payment.refund_canceled`: the refund no longer owes anything. */
     onRefundClosed: (payload: { refundId: string }) =>
         guarded('refund closed', () =>
-            taskService.clearSystemTasks([TaskKind.manual_refund_owed, TaskKind.refund_refused], {
-                type: 'refund',
-                id: payload.refundId
-            })
+            taskService.clearSystemTasks(
+                [TaskKind.manual_refund_owed, TaskKind.refund_refused, TaskKind.refund_reversed],
+                { type: 'refund', id: payload.refundId }
+            )
         ),
 
     /** `payment.amount_mismatch`: staff close it themselves once they know why. */

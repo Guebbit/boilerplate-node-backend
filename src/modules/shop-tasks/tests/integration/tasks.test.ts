@@ -20,6 +20,7 @@ import { callerInScope } from '@kernel/permissions';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { registerModules } from '@kernel/registry';
 import { notificationsService } from '@modules/notifications';
+import { paymentService } from '@modules/payments';
 import { findAllTasks } from '@modules/tasks/tests/factories';
 import { RefundFailureReason, TaskKind, TaskResolution, TaskStatus } from '@types';
 import { enabledModules } from '../../../../modules';
@@ -52,7 +53,10 @@ beforeEach(() => {
     registerModules(enabledModules);
 });
 
-afterEach(() => resetDomainEvents());
+afterEach(() => {
+    resetDomainEvents();
+    jest.restoreAllMocks();
+});
 
 /** Every task in storage, oldest first. */
 const allTasks = findAllTasks;
@@ -70,6 +74,10 @@ const REFUND = {
     refundId: 'ref1',
     amount: 10,
     currency: 'EUR'
+};
+const REVERSAL: DomainEventMap['payment.refund_reversed'] = {
+    ...REFUND,
+    failureReason: RefundFailureReason.declined
 };
 const DISPUTE: DomainEventMap['payment.dispute_opened'] = {
     paymentId: PAYMENT,
@@ -111,6 +119,13 @@ const OPENERS = [
                 { eventId: nextEventId() }
             ),
         TaskKind.refund_refused,
+        'PaymentRefunding',
+        'sales/payments?tab=attention'
+    ],
+    [
+        'payment.refund_reversed',
+        () => emitDomainEvent('payment.refund_reversed', REVERSAL, { eventId: nextEventId() }),
+        TaskKind.refund_reversed,
         'PaymentRefunding',
         'sales/payments?tab=attention'
     ],
@@ -219,6 +234,11 @@ describe('what opens a task', () => {
             { ...DELAY, promisedAt: undefined }
         ],
         [
+            'a reversal because the bank already took the money back',
+            'payment.refund_reversed',
+            { ...REVERSAL, failureReason: RefundFailureReason.disputed }
+        ],
+        [
             'a dispute decided before any to-do',
             'payment.dispute_opened',
             { ...DISPUTE, status: 'won' }
@@ -284,6 +304,11 @@ describe('what closes a task', () => {
                     { eventId: nextEventId() }
                 ),
             () => emitDomainEvent('payment.refund_canceled', REFUND)
+        ],
+        [
+            'a refund marked returned after the bank sent it back',
+            () => emitDomainEvent('payment.refund_reversed', REVERSAL, { eventId: nextEventId() }),
+            () => emitDomainEvent('payment.refunded', { ...REFUND, full: true })
         ],
         [
             'a closed dispute',
@@ -572,5 +597,49 @@ describe('a dispute is two to-dos', () => {
         expect(days).toBeGreaterThan(74.9);
         expect(days).toBeLessThanOrEqual(75);
         expect(noDueSoon).toBe(true);
+    });
+});
+
+describe('a refund sent back by the bank', () => {
+    const DAY_MS = 86_400_000;
+
+    it('opens one to-do however often the same report is delivered', async () => {
+        const meta = { eventId: nextEventId() };
+        await emitDomainEvent('payment.refund_reversed', REVERSAL, meta);
+
+        await emitDomainEvent('payment.refund_reversed', REVERSAL, meta);
+
+        await expect(allTasks()).resolves.toHaveLength(1);
+    });
+
+    it('is not overdue when the law sets no deadline, however late the bank sent it back', async () => {
+        await emitDomainEvent('payment.refund_reversed', REVERSAL, { eventId: nextEventId() });
+
+        const { dueAt } = await onlyTask();
+
+        expect((dueAt?.getTime() ?? 0) - Date.now()).toBeGreaterThan(0);
+    });
+
+    it('opens with the past legal date of a return refund reversed after day 14', async () => {
+        const legal = new Date(Date.now() - 3 * DAY_MS);
+        jest.spyOn(paymentService, 'refundLegalDueAt').mockResolvedValue(legal);
+
+        await emitDomainEvent('payment.refund_reversed', REVERSAL, { eventId: nextEventId() });
+
+        const { dueAt } = await onlyTask();
+        expect(dueAt).toEqual(legal);
+    });
+
+    it('opens a refund refused late as refund_refused with a date still ahead, not overdue', async () => {
+        await emitDomainEvent(
+            'payment.refund_failed',
+            { ...REFUND, failureReason: 'declined', final: true },
+            { eventId: nextEventId() }
+        );
+
+        const { kind, dueAt } = await onlyTask();
+
+        expect(kind).toBe(TaskKind.refund_refused);
+        expect((dueAt?.getTime() ?? 0) - Date.now()).toBeGreaterThan(0);
     });
 });

@@ -16,6 +16,7 @@ x-extends:
         - amount_mismatch
         - dispute
         - dispute_awaiting_bank
+        - refund_reversed
         - paid_without_hold
         - consent_due
     TaskLinkType:

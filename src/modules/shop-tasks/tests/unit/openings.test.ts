@@ -16,7 +16,8 @@ import {
     FTC_JURISDICTIONS,
     paidWithoutHoldOpening,
     refundOwedOpening,
-    refundRefusedOpening
+    refundRefusedOpening,
+    refundReversedOpening
 } from '../../domain/openings';
 
 const NOW = new Date('2030-05-01T10:00:00Z');
@@ -149,5 +150,24 @@ describe('disputeAwaitingBankOpening', () => {
             noDueSoon: true
         });
         expect(opening.dueAt).toEqual(new Date(NOW.getTime() + 75 * DAY_MS));
+    });
+});
+
+describe('refund openings', () => {
+    it('words a refusal without offering to cancel it, and a reversal as money owed again', () => {
+        const refund = { refundId: 'r1', orderId: 'o1', failureReason: 'declined' };
+
+        const refused = refundRefusedOpening(refund, NOW);
+        const reversed = refundReversedOpening(refund, NOW);
+
+        expect(refused.message).not.toContain('cancel');
+        expect(reversed).toMatchObject({
+            kind: TaskKind.refund_reversed,
+            routeSet: 'PaymentRefunding',
+            link: { type: TaskLinkType.refund, id: 'r1' },
+            subject: 'Refund sent back by the bank',
+            dueAt: NOW
+        });
+        expect(reversed.message).not.toContain('cancel');
     });
 });

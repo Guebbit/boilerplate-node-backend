@@ -12,7 +12,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
-import { paymentAttentionMinutes, paymentService } from '@modules/payments/services';
+import { paymentService } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
 import { PAYMENT_REFUND_OWED_BY_HAND, PAYMENT_REFUNDED } from '@modules/payments/events';
 import paymentsModule from '@modules/payments/module';
@@ -228,18 +228,16 @@ describe('settleRefundByHand', () => {
     });
 });
 
-describe('refundDueAt', () => {
-    it('is the record plus the attention window when the law sets no deadline', async () => {
+describe('refundLegalDueAt', () => {
+    it('is nothing when the law sets no deadline', async () => {
         const { orderId } = await cashOrder();
         await refundForOrder(orderId);
         const payment = await paymentOf(orderId);
         const refund = payment.refunds[0];
 
-        const dueAt = await paymentService.refundDueAt(String(payment._id), String(refund._id));
-
-        expect(dueAt?.getTime()).toBe(
-            refund.createdAt.getTime() + paymentAttentionMinutes() * 60_000
-        );
+        await expect(
+            paymentService.refundLegalDueAt(String(payment._id), String(refund._id))
+        ).resolves.toBeUndefined();
     });
 
     it('is the legal 14 days for a refund that pays for a return', async () => {
@@ -250,7 +248,10 @@ describe('refundDueAt', () => {
         refund.returnId = 'return-1';
         await payment.save();
 
-        const dueAt = await paymentService.refundDueAt(String(payment._id), String(refund._id));
+        const dueAt = await paymentService.refundLegalDueAt(
+            String(payment._id),
+            String(refund._id)
+        );
 
         expect(dueAt?.getTime()).toBe(refund.createdAt.getTime() + 14 * 24 * 60 * 60_000);
     });
@@ -261,7 +262,7 @@ describe('refundDueAt', () => {
         const payment = await paymentOf(orderId);
 
         await expect(
-            paymentService.refundDueAt(String(payment._id), '65dc8a99604c307b702b5ccc')
+            paymentService.refundLegalDueAt(String(payment._id), '65dc8a99604c307b702b5ccc')
         ).resolves.toBeUndefined();
     });
 });

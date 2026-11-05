@@ -125,7 +125,28 @@ export const refundRefusedOpening = (
     routeSet: 'PaymentRefunding',
     link: { type: TaskLinkType.refund, id: refund.refundId },
     subject: 'Refund refused by the provider',
-    message: `Refund ${refund.refundId} on order ${refund.orderId} was refused for good (${refund.failureReason}). Return the money another way, then mark the refund returned or cancel it.`,
+    message: `Refund ${refund.refundId} on order ${refund.orderId} was refused for good (${refund.failureReason}). Return the money another way, then mark the refund returned.`,
+    dueAt
+});
+
+/**
+ * A refund the bank sent back after it had settled: the shop owes the money again.
+ *
+ * @param refund - the refund and what it belongs to
+ * @param refund.refundId - the refund record
+ * @param refund.orderId - the order it pays back
+ * @param refund.failureReason - the closed code the provider gave
+ * @param dueAt - when it is overdue
+ */
+export const refundReversedOpening = (
+    refund: { refundId: string; orderId: string; failureReason: string },
+    dueAt: Date
+): ShopOpening => ({
+    kind: TaskKind.refund_reversed,
+    routeSet: 'PaymentRefunding',
+    link: { type: TaskLinkType.refund, id: refund.refundId },
+    subject: 'Refund sent back by the bank',
+    message: `Refund ${refund.refundId} on order ${refund.orderId} settled, but the bank returned it (${refund.failureReason}). Agree a way with the buyer, pay, then mark the refund returned.`,
     dueAt
 });
 

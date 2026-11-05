@@ -31,7 +31,8 @@ import {
     PAYMENT_REFUNDED,
     PAYMENT_REFUND_CANCELED,
     PAYMENT_REFUND_FAILED,
-    PAYMENT_REFUND_OWED_BY_HAND
+    PAYMENT_REFUND_OWED_BY_HAND,
+    PAYMENT_REFUND_REVERSED
 } from '@modules/payments';
 import { RETURN_REQUESTED } from '@modules/returns';
 import { STOCK_ALERT_SENT } from '@modules/stock-alerts';
@@ -51,6 +52,7 @@ export default {
         // The to-dos: each situation's opening event and the event that ends it.
         onDomainEvent(PAYMENT_REFUND_OWED_BY_HAND, shopTasksService.onRefundOwedByHand);
         onDomainEvent(PAYMENT_REFUND_FAILED, shopTasksService.onRefundFailed);
+        onDomainEvent(PAYMENT_REFUND_REVERSED, shopTasksService.onRefundReversed);
         onDomainEvent(PAYMENT_REFUNDED, shopTasksService.onRefundClosed);
         onDomainEvent(PAYMENT_REFUND_CANCELED, shopTasksService.onRefundClosed);
         onDomainEvent(PAYMENT_AMOUNT_MISMATCH, shopTasksService.onAmountMismatch);

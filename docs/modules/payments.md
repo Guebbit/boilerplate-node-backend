@@ -44,6 +44,7 @@ flowchart LR
     payments -. "payment.refund_canceled" .-> shop_tasks
     payments -. "payment.refund_failed" .-> shop_tasks
     payments -. "payment.refund_owed_by_hand" .-> shop_tasks
+    payments -. "payment.refund_reversed" .-> shop_tasks
     payments -. "payment.refunded" .-> shop_tasks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -565,6 +566,8 @@ stateDiagram-v2
   it bounced. It is only for a refund that HAD settled (`reversedAfterSettling` on the record); the
   provider refusing an open one shows as `refused_refund`, with `reversedAt` as the once-guard.
   A reversed refund cannot be cancelled (it settled once): only paid by hand.
+  `payment.refund_reversed` also opens a `refund_reversed` to-do for `PaymentRefunding`, closed when
+  the refund is marked returned (see [shop-tasks](./shop-tasks.md#the-shops-to-dos)).
 
 ### Telling the buyer their refund cannot reach the card {#telling-the-buyer}
 
