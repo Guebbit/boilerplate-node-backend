@@ -235,7 +235,7 @@ const loadProbes = (() => {
         loaded ??= Promise.all(
             modulesDeclaringProbes().map((name) =>
                 // Dynamic `import()` of a computed path: which modules have probes is only known
-                // after the scan. tsx and ts-jest both resolve a bare `.ts` path.
+                // after the scan. tsx and @swc/jest both resolve a bare `.ts` path.
                 import(path.join(REPO_ROOT, 'src', 'modules', name, 'probes')).then(
                     (module_: unknown) => {
                         if (!hasProbes(module_))

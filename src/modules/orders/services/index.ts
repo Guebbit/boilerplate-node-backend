@@ -36,8 +36,7 @@ import {
     withdrawById,
     withdrawOnBuyersBehalfById,
     expireReservationById,
-    cancelForPaymentMismatchById,
-    analyseLostCancel
+    cancelForPaymentMismatchById
 } from './cancel';
 import {
     markPaid,
@@ -124,7 +123,6 @@ export const orderService = {
     mailOrderPlaced,
     mailOrderCancelled,
     considerPurchaseHold,
-    analyseLostCancel,
     mailBuyer,
     mailBuyerOfOrder,
     openUnpaidOrderIds,

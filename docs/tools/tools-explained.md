@@ -40,7 +40,7 @@ flowchart TD
     end
 
     subgraph TEST["Testing"]
-        JEST["Jest · ts-jest"]
+        JEST["Jest · @swc/jest"]
         SUPERTEST["supertest"]
         MEMSERVER["mongodb-memory-server"]
         FC["fast-check"]
@@ -453,6 +453,6 @@ derived from a schema — a rename, a backfill — are one-off scripts under `sc
 
 **Problem it solves.** Without automated tests, every change requires manual verification of every feature. Tests encode expectations about behaviour so regressions are caught automatically — and so future developers can refactor with confidence.
 
-**In this repo.** Five suites — unit, cross-cutting, integration, contract and fuzz (`npm test` runs them all). Config lives in `jest.config.js` and `tsconfig.jest.json`; see [Testing & Docs](./testing-and-docs.md).
+**In this repo.** Five suites — unit, cross-cutting, integration, contract and fuzz (`npm test` runs them all). Config lives in `jest.config.js`; see [Testing & Docs](./testing-and-docs.md).
 
 → [Testing & Docs](./testing-and-docs.md)

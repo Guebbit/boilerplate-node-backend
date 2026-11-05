@@ -100,6 +100,8 @@ const expectMoved = (moved: OrderDocument | null): void => {
  * @param at - the instant the clock starts for a completed order: the last arrival, or the cancel
  * @param session - the act's transaction
  * @param actor - the staff member whose act this is, for the order's timeline; absent for the system
+ * @returns a report-after-commit callback when the settlement cancelled the order (a lost parcel);
+ *   the caller owns the transaction, so it calls it once that commits
  */
 export const settleOrder = (
     orderId: string,
@@ -108,20 +110,32 @@ export const settleOrder = (
     at: Date,
     session: ClientSession,
     actor?: string | null
-): Promise<void> => {
-    if (summary.remaining > 0 || !summary.shipped) return Promise.resolve();
+): Promise<(() => void) | undefined> => {
+    if (summary.remaining > 0 || !summary.shipped) return Promise.resolve(undefined);
 
     if (summary.undelivered > 0)
         return status === OrderStatus.processing
-            ? orderService.markShipped(orderId, session, actor).then(expectMoved)
-            : Promise.resolve();
+            ? orderService
+                  .markShipped(orderId, session, actor)
+                  .then(expectMoved)
+                  .then(() => undefined)
+            : Promise.resolve(undefined);
 
     // A digital fulfilment is a shipment born delivered, so `lastDeliveredAt` covers it too.
     if (status === OrderStatus.processing && !summary.lastDeliveredAt)
-        return orderService.markUndeliverable(orderId, session).then(expectMoved);
+        return orderService.markUndeliverable(orderId, session).then((settled) => {
+            expectMoved(settled?.order ?? null);
+            return settled?.reportCancelled;
+        });
     if (status === OrderStatus.processing)
-        return orderService.markFulfilmentComplete(orderId, at, session, actor).then(expectMoved);
+        return orderService
+            .markFulfilmentComplete(orderId, at, session, actor)
+            .then(expectMoved)
+            .then(() => undefined);
     if (status === OrderStatus.shipped)
-        return orderService.markDelivered(orderId, at, session, actor).then(expectMoved);
-    return Promise.resolve();
+        return orderService
+            .markDelivered(orderId, at, session, actor)
+            .then(expectMoved)
+            .then(() => undefined);
+    return Promise.resolve(undefined);
 };

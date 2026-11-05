@@ -9,7 +9,7 @@ merged.
 ```mermaid
 flowchart LR
     DE["dotenv 17 → 18"] -->|"nothing gained"| DEW["skip; or drop it for process.loadEnvFile"]
-    TS["typescript 6 → 7"] -->|"tsc works, the JS API is gone"| TSW["blocked by typescript-eslint and ts-jest"]
+    TS["typescript 6 → 7"] -->|"tsc works, the JS API is gone"| TSW["blocked by typescript-eslint"]
 
     PC["prom-client → @prometheus-io/client"] -->|"pre-1.0, still churning"| PCW["wait for its 1.0"]
 
@@ -50,17 +50,16 @@ Everything that calls `require('typescript')` breaks:
 | Tool                                          | Uses the JS API for         | Position on 7                             |
 | --------------------------------------------- | --------------------------- | ----------------------------------------- |
 | `typescript-eslint` (parser, type-aware lint) | the whole type-checked lint | peer range `>=4.8.4 <6.1.0` — refuses 7   |
-| `ts-jest`                                     | transpiling every test file | peer range `>=4.3 <7` — refuses 7         |
 | `dependency-cruiser`                          | optional TS parsing         | not tried; check its own peer range first |
 | `tsx`                                         | nothing (esbuild)           | unaffected                                |
 | `tsc` itself (`npm run ts-check`)             | —                           | works; this is the part that is ready     |
 
-| Question       | Answer                                                                                                                                                                                             |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Blocked by     | `typescript-eslint` and `ts-jest` releasing a 7-compatible range, which depends on the 7.1 API.                                                                                                    |
-| Half-step      | Alias 7 for the CLI only (`"typescript-7": "npm:typescript@7"`) and run `ts-check` through it, keeping `typescript@6` for the tools. Two compilers in one tree is the cost.                        |
-| Recommendation | Wait for 7.1. Re-check `npm view typescript-eslint peerDependencies` and `npm view ts-jest peerDependencies` when it lands; the day both accept 7, the upgrade is a bump plus a lint and test run. |
-| Effort         | M–L once unblocked: a `tsconfig` deprecation pass, then every rule in the type-aware lint re-run for changed diagnostics.                                                                          |
+| Question       | Answer                                                                                                                                                                      |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Blocked by     | `typescript-eslint` releasing a 7-compatible range, which depends on the 7.1 API.                                                                                           |
+| Half-step      | Alias 7 for the CLI only (`"typescript-7": "npm:typescript@7"`) and run `ts-check` through it, keeping `typescript@6` for the tools. Two compilers in one tree is the cost. |
+| Recommendation | Wait for 7.1. Re-check `npm view typescript-eslint peerDependencies` when it lands; the day it accepts 7, the upgrade is a bump plus a lint and test run.                   |
+| Effort         | M–L once unblocked: a `tsconfig` deprecation pass, then every rule in the type-aware lint re-run for changed diagnostics.                                                   |
 
 ## prom-client → @prometheus-io/client
 
@@ -75,7 +74,6 @@ Everything that calls `require('typescript')` breaks:
 
 ```sh
 npm view typescript-eslint peerDependencies   # does the range admit 7 yet?
-npm view ts-jest peerDependencies
 npm view @prometheus-io/client version        # has it reached 1.0?
 ```
 

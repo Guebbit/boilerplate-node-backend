@@ -194,7 +194,7 @@ export interface RefundFacts {
     amount: number;
     currency: string;
     failureReason?: RefundFailureReason | undefined;
-    /** Set once when the provider took back a refund it had settled; never cleared. */
+    /** Set once when the provider reported the refund failed, settled or not; never cleared. */
     reversedAt?: Date | undefined;
     /** The provider's id for the refund: present once the provider has accepted it. */
     providerRefundRef?: string | undefined;
@@ -209,8 +209,8 @@ export interface RefundablePayment extends DisputablePayment {
 }
 
 /**
- * Whether the provider took this refund back after settling it (the bank sent it back): the money
- * is with the shop again and is owed another way.
+ * Whether the provider has reported this refund failed (a bank sent a settled one back, or the
+ * provider refused an open one): it is owed another way and never sent again.
  * @param refund - the refund record
  */
 export const isReversed = (refund: { reversedAt?: Date | undefined }): boolean =>

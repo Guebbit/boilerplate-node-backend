@@ -104,6 +104,11 @@ export interface RefundRecord {
      * never resends it, and a redelivered report finds nothing left to change.
      */
     reversedAt?: Date;
+    /**
+     * Set with `reversedAt` when the refund HAD settled before the provider took it back. Absent on a
+     * refund the provider refused while still open: that one is a refusal, not a bounce.
+     */
+    reversedAfterSettling?: true;
     createdAt: Date;
 }
 
@@ -247,7 +252,8 @@ const refundSchema = new Schema<RefundRecord>(
         nextAttemptAt: { type: Date },
         settledByHand: { type: Boolean },
         settledAt: { type: Date },
-        reversedAt: { type: Date }
+        reversedAt: { type: Date },
+        reversedAfterSettling: { type: Boolean }
     },
     { timestamps: { createdAt: true, updatedAt: false } }
 );

@@ -97,20 +97,6 @@ export const setsOfRoute = (route: StaffRoute, named: readonly string[] = []): r
 const PAGES = FRONTEND_LINK_RULES.staffPages;
 
 /**
- * The screen of the record a dead outbox event was about, read off the event name's first segment
- * (`user.updated` is about a user). An event of any other kind has no screen: the link is the
- * admin's home, never a guess. An order event has none either: the frontend builds that link
- * itself, and only when the shop is there.
- *
- * @param eventName - the parked event
- * @param aggregateId - what it was about
- */
-const outboxAggregateLink = (eventName: string, aggregateId: string): StaffLink =>
-    eventName.split('.', 1).join('') === 'user'
-        ? { template: PAGES.user, parameters: { id: aggregateId } }
-        : { template: '', parameters: {} };
-
-/**
  * The to-do's work screen when its opener named one, else the to-do's own page. `work` is an
  * opaque path the opener supplied; nothing here knows which screen it is.
  *
@@ -125,12 +111,15 @@ const taskLink = ({ taskId, work }: { taskId: string; work?: string | undefined 
 
 /**
  * The frontend screen a notice points at: the subscription for a disabled webhook, the screen of
- * the work for a task. Ids only, as the params carry; the screen has the rest.
+ * the work for a task. A dead outbox event has no link here: the frontend maps it itself. Ids only, as the params carry; the screen has the rest.
  *
  * @param body - the notice
  */
 export const staffLinkOf = (
-    body: Extract<StaffNoticeBody, { code: keyof typeof STAFF_ROUTES }>
+    body: Exclude<
+        Extract<StaffNoticeBody, { code: keyof typeof STAFF_ROUTES }>,
+        { code: 'notifications.staff.outbox-dead' }
+    >
 ): StaffLink => {
     switch (body.code) {
         case 'notifications.staff.webhook-disabled': {
@@ -145,9 +134,6 @@ export const staffLinkOf = (
         }
         case 'notifications.staff.task-assigned': {
             return { template: PAGES.task, parameters: { id: body.params.taskId } };
-        }
-        case 'notifications.staff.outbox-dead': {
-            return outboxAggregateLink(body.params.eventName, body.params.aggregateId);
         }
     }
 };

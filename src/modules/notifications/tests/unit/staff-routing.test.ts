@@ -111,19 +111,6 @@ describe('staffLinkOf', () => {
             parameters: { id: 's1' }
         });
     });
-
-    it('points a dead event at the account it was about, and at home when it names none', () => {
-        expect(staffLinkOf(BODIES['notifications.staff.outbox-dead'])).toEqual({
-            template: PAGES.user,
-            parameters: { id: 'u1' }
-        });
-        expect(
-            staffLinkOf({
-                code: 'notifications.staff.outbox-dead',
-                params: { eventName: 'order.created', aggregateId: 'o1' }
-            })
-        ).toEqual({ template: '', parameters: {} });
-    });
 });
 
 describe('staffNoticeEmail', () => {
@@ -132,7 +119,12 @@ describe('staffNoticeEmail', () => {
             keyof typeof BODIES,
             (typeof BODIES)[keyof typeof BODIES]
         ][]) {
-            if (STAFF_ROUTES[code].email !== 'now') continue;
+            // A mailing route carries a link; the dead-event notice mails nobody and has none.
+            if (
+                STAFF_ROUTES[code].email !== 'now' ||
+                body.code === 'notifications.staff.outbox-dead'
+            )
+                continue;
 
             const mail = staffNoticeEmail(locale, body, staffLinkOf(body));
 

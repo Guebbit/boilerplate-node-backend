@@ -98,7 +98,6 @@ const fromEnvironment = (name, fallback) => {
 const maxWorkers = fromEnvironment('JEST_WORKERS', DEFAULT_MAX_WORKERS);
 
 module.exports = {
-    preset: 'ts-jest',
     clearMocks: true,
     // `node`, plus clearing every timer a file leaves running — without it each file's whole module
     // graph stays alive, which a single-process run (Stryker's dry run) cannot survive.
@@ -142,19 +141,22 @@ module.exports = {
     ],
     testTimeout: 30_000,
     transform: {
+        /*
+         * @swc/jest: transpile-only TypeScript, no type-check (`npm run ts-check` checks types once).
+         * `target` is the runtime, not a browser matrix. `useDefineForClassFields: false` keeps the
+         * assign semantics production runs with. `module: commonjs` downlevels `import()` for
+         * Jest's CJS runtime.
+         * https://swc.rs/docs/configuration/compilation
+         */
         '^.+\\.tsx?$': [
-            'ts-jest',
+            '@swc/jest',
             {
-                tsconfig: 'tsconfig.jest.json',
-                /*
-                 * Silences ts-jest's `ModernNodeModule` warning (151002), which `module: node16`
-                 * triggers to ask for `isolatedModules` — a setting that would break dynamic
-                 * import under jest's CJS runtime. The reasoning is in `tsconfig.jest.json`.
-                 * https://kulshekhar.github.io/ts-jest/docs/getting-started/options/diagnostics
-                 */
-                diagnostics: {
-                    ignoreCodes: [151_002]
-                }
+                jsc: {
+                    parser: { syntax: 'typescript' },
+                    target: 'es2022',
+                    transform: { useDefineForClassFields: false }
+                },
+                module: { type: 'commonjs' }
             }
         ],
         /*
