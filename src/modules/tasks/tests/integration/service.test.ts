@@ -21,7 +21,7 @@ import {
     resetDomainEvents,
     type DomainEventMap
 } from '@kernel/events';
-import { settleOutboxNudges } from '@kernel/outbox';
+import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { TASK_OPENED } from '@modules/tasks/events';
 import { asReject } from '@tests/response';
 import { MISSING_ID } from '@tests/ids';
@@ -236,6 +236,24 @@ describe('mailFallbackMailbox', () => {
         mockEnqueueEmail.mockRejectedValueOnce(new Error('queue down'));
 
         await expect(taskService.mailFallbackMailbox(String(task._id))).resolves.toBeUndefined();
+    });
+});
+
+describe('create — outbox', () => {
+    it('writes a contact message and its task.opened row together', async () => {
+        const task = await taskService.create(makePayload());
+
+        const rows = await outboxEventModel.find({ name: 'task.opened' }).lean().exec();
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({
+            payload: expect.objectContaining({ taskId: String(task._id) })
+        });
+    });
+
+    it('writes no task.opened row for spam', async () => {
+        await taskService.create(makePayload({ website: 'https://spammer.example' }));
+
+        await expect(outboxEventModel.countDocuments({ name: 'task.opened' })).resolves.toBe(0);
     });
 });
 

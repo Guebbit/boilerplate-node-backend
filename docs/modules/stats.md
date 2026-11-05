@@ -90,7 +90,7 @@ is the amount with VAT taken out.
 | Units                    | ordered, reversed, net                                                                   | order lines; returns received                  |
 | Top products, categories | net sales from the frozen line price and rate                                            | order lines                                    |
 | Payments mix             | payments that took money, by method and provider                                         | `payments`                                     |
-| Cancellation rate        | orders placed in the period that ended cancelled (a cohort)                              | `orders`, by `createdAt`                       |
+| Cancellation rate        | orders placed in the period that ended cancelled, lost-and-refunded ones too (a cohort)  | `orders`, by `createdAt`                       |
 | Return rate              | units received back divided by units ordered                                             | `returns`, `orders`                            |
 | Customers                | accounts that paid in the period; new = first paid order falls in it                     | `orders`, by `userId`                          |
 | Pipeline                 | transfers awaiting money (count, amount, nearest `payBy`), paid orders not shipped       | `orders`, a snapshot                           |

@@ -118,8 +118,11 @@ const readFigures = (now: Date): Promise<Figures> => {
 
 /** What one run did, for the job's log line. */
 export interface DigestResult {
+    /** Summary rows created or updated. */
     written: number;
+    /** Summary rows removed because their count fell to zero. */
     cleared: number;
+    /** Staff mailed about a line that appeared or grew. */
     mailed: number;
 }
 

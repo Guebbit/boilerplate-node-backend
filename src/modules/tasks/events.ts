@@ -6,6 +6,10 @@
  * work notices, so a task is never alerted twice (once from its producer event, once from here).
  */
 
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import type { DomainEventMap } from '@kernel/events';
+import type { TaskDocument } from './model';
+
 /** Registers this module's event payloads into the kernel's app-wide `DomainEventMap`. */
 declare module '@kernel/events' {
     interface DomainEventMap {
@@ -54,6 +58,18 @@ declare module '@kernel/events' {
         };
     }
 }
+
+/** The facts `task.opened` and `task.overdue` carry about a task: one shape, built in one place. */
+export const taskFactOf = (
+    task: Pick<TaskDocument, '_id' | 'kind' | 'routeSet' | 'category' | 'work'>
+): DomainEventMap['task.opened'] => ({
+    tenantId: DEPLOYMENT_TENANT_ID,
+    taskId: String(task._id),
+    kind: task.kind,
+    routeSet: task.routeSet,
+    ...(task.category ? { category: task.category } : {}),
+    ...(task.work ? { work: task.work } : {})
+});
 
 /** See `DomainEventMap['task.opened']` above. */
 export const TASK_OPENED = 'task.opened';

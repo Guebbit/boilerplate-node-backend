@@ -22,18 +22,24 @@ import { createProduct } from '@modules/products/tests/factories';
 import {
     createOrder,
     forceOrderStatus,
+    detachOrderUserId,
+    markOrderPaidAt,
     readOrder,
     timelineOf,
     toOrderItem
 } from '@modules/orders/tests/factories';
 import { inventoryService } from '@modules/inventory';
+import { withTransaction } from '@infrastructure/runtime/database';
+import { setEnvironment } from '@tests/environment';
+import * as analyticsPort from '@infrastructure/observability/analytics';
 import { reservationRepository, stockLevelRepository } from '@modules/inventory/tests/factories';
 import { OrderStatus } from '@types';
+import ordersModule from '@modules/orders/module';
 import { deliveryService } from '@modules/delivery/services';
 import { shipmentModel } from '@modules/delivery/model';
 import { fulfillmentOrdersOf, shipmentsOf } from '@modules/delivery/tests/factories';
 import deliveryModule from '@modules/delivery/module';
-import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
+import { nudgeOutbox, outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { markDomainEventsWired, resetDomainEvents } from '@kernel/events';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -42,11 +48,19 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 }));
 const mockEnqueueEmail = jest.mocked(enqueueEmail);
 
+jest.mock('@infrastructure/observability/analytics', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/observability/analytics'),
+    emitAnalyticsEvent: jest.fn()
+}));
+const mockEmitAnalytics = jest.mocked(analyticsPort.emitAnalyticsEvent);
+
 setupTestDb();
 
 beforeEach(() => {
     resetDomainEvents();
     deliveryModule.subscribe();
+    ordersModule.subscribe();
     markDomainEventsWired();
 });
 
@@ -609,5 +623,105 @@ describe('the lost parcel arrives after all', () => {
         );
 
         expect(result.success && result.data.trackingCode).toBe('TRK-CORRECT01');
+    });
+});
+
+/** One day, in milliseconds. */
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Cancel the whole open remainder of a fulfillment order the way the buyer's cancellation does,
+ * minus the refund: the doors under test are the settle and what listens to it. `runAct` would
+ * nudge the outbox; this raw transaction has to do it itself.
+ */
+const cancelRemainderOn = async (fulfillmentOrderId: string, orderId: string) => {
+    await withTransaction((session) =>
+        deliveryService.cancelRemainder(fulfillmentOrderId, orderId, session)
+    );
+    nudgeOutbox();
+    await settleOutboxNudges();
+};
+
+/** Cancel the remainder of the order's first fulfillment order. */
+const cancelRemainderOf = async (orderId: string) => {
+    const [origin] = await fulfillmentOrdersOf(orderId);
+    await cancelRemainderOn(String(origin._id), orderId);
+};
+
+/** The stored `order.cancelled` outbox rows of the order. */
+const cancelledRows = (orderId: string) =>
+    outboxEventModel.find({ name: 'order.cancelled', aggregateId: orderId }).lean().exec();
+
+describe('cancelling the remainder after a loss', () => {
+    it('ends cancelled with cause lost, counted as a cancelled order, and no listener moves stock', async () => {
+        const { orderId, productId, shipmentId } = await shippedOrder(2);
+        await reportLost(shipmentId);
+        mockEmitAnalytics.mockClear();
+        const before = await levelOf(productId);
+
+        await cancelRemainderOf(orderId);
+
+        expect(await statusOf(orderId)).toBe(OrderStatus.cancelled);
+        const rows = await cancelledRows(orderId);
+        expect(rows).toHaveLength(1);
+        expect(rows[0].payload).toMatchObject({ cause: 'lost', refund: false });
+        expect(mockEmitAnalytics).toHaveBeenCalledWith(
+            expect.objectContaining({
+                event: 'order_cancelled',
+                properties: { order_id: orderId }
+            })
+        );
+        // No listener of `order.cancelled` touches the shelf for a lost cancel.
+        expect(await levelOf(productId)).toEqual(before);
+    });
+
+    it('ends delivered when a digital line arrived, because part of the contract was performed', async () => {
+        const user = await createUser({ email: 'mixed@example.com' });
+        const physical = await createProduct({ price: 10, onHand: 10 });
+        const digital = await createProduct({
+            price: 5,
+            requiresShipping: false,
+            noWithdrawal: true
+        });
+        const order = await createOrder(user, [toOrderItem(physical, 1), toOrderItem(digital, 1)], {
+            status: OrderStatus.processing
+        });
+        const orderId = String(order._id);
+        await inventoryService.reserveForOrder(orderId, [
+            { productId: String(physical._id), quantity: 1 }
+        ]);
+        await inventoryService.commitForOrder(orderId);
+        const all = await fulfillmentOrdersOf(orderId);
+        const digitalOrder = all.find(({ kind }) => kind === 'digital')!;
+        const physicalOrder = all.find(({ kind }) => kind === 'physical')!;
+        await deliveryService.fulfillFulfillmentOrder(String(digitalOrder._id), asAdmin(), admin);
+        await deliveryService.shipFulfillmentOrder(
+            String(physicalOrder._id),
+            { trackingCode: 'TRK-MIXED001' },
+            asAdmin(),
+            admin
+        );
+        const shipment = await shipmentWith(orderId, 'shipped');
+        await reportLost(String(shipment._id));
+
+        await cancelRemainderOn(String(physicalOrder._id), orderId);
+
+        const settled = await readOrder(orderId);
+        expect(settled?.status).toBe(OrderStatus.delivered);
+        expect(settled?.withdrawUntil).toBeDefined();
+        expect(await cancelledRows(orderId)).toHaveLength(0);
+    });
+
+    it('scrubs the buyer at paidAt plus the undelivered days, not before', async () => {
+        setEnvironment({ NODE_ORDER_PII_DAYS_UNDELIVERED: '100' });
+        const { orderId, user, shipmentId } = await shippedOrder(1);
+        await reportLost(shipmentId);
+        await cancelRemainderOf(orderId);
+        await detachOrderUserId(user.id, new Date());
+
+        await markOrderPaidAt(orderId, new Date(Date.now() - 99 * DAY_MS));
+        await expect(orderService.anonymizeDueOrders()).resolves.toBe(0);
+        await markOrderPaidAt(orderId, new Date(Date.now() - 101 * DAY_MS));
+        await expect(orderService.anonymizeDueOrders()).resolves.toBe(1);
     });
 });

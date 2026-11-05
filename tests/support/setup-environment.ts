@@ -306,3 +306,10 @@ process.env.NODE_PAYMENT_WEBHOOK_SECRET ??= 'test-payment-webhook-secret';
  * testing the deployment check rather than the factor.
  */
 process.env.NODE_SMTP_HOST ??= 'smtp.test.invalid';
+
+/**
+ * Mongoose prints a notice when it loads while a file has jest's mock timers on. Fake timers are
+ * deliberate in the suites that use them, so the notice is not a finding.
+ * https://mongoosejs.com/docs/jest.html
+ */
+process.env.SUPPRESS_JEST_WARNINGS ??= 'true';

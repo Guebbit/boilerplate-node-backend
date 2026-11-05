@@ -18,7 +18,7 @@
             },
             "task-kind": {
                 "contact": "Contact message",
-                "account_review": "Account review",
+                "account_review": "Account under review",
                 "export_failed": "Data export failed"
             },
             "task-category": {

@@ -29,7 +29,6 @@ import {
 } from '@infrastructure/http/response';
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { announceInTransaction } from '@kernel/outbox';
 import { logger } from '@infrastructure/adapters/logger';
 import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
@@ -45,7 +44,7 @@ import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import { OPEN_STATUSES, initialTaskStatus, ownTasksFilter, CONTACT_ROUTE_SET } from './domain';
 import { tasksConfig } from './config';
 import { tasksAuditActions } from './audit';
-import { TASK_OPENED } from './events';
+import { TASK_OPENED, taskFactOf } from './events';
 import { inJurisdiction, jurisdictionScope, mayDelete } from './access';
 import { presentTask, withView } from './presenter';
 import { assigneeNamesOf, viewerOf } from './views';
@@ -113,13 +112,7 @@ const create = (payload: CreateContactTaskRequest, subjectId?: string): Promise<
                     ? []
                     : {
                           name: TASK_OPENED,
-                          payload: {
-                              tenantId: DEPLOYMENT_TENANT_ID,
-                              taskId: String(created._id),
-                              kind: created.kind,
-                              routeSet: created.routeSet,
-                              ...(created.category ? { category: created.category } : {})
-                          },
+                          payload: taskFactOf(created),
                           aggregateId: String(created._id)
                       }
         );

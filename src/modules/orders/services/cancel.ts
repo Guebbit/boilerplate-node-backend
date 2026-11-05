@@ -12,6 +12,7 @@
  */
 
 import { SYSTEM_ACTOR, systemCallerContext } from '@kernel/permissions';
+import type { DomainEventMap } from '@kernel/events';
 import { t } from '@infrastructure/i18n';
 import { OrderStatus } from '@types';
 import type { AuthContext } from '@types';
@@ -229,6 +230,26 @@ const afterCancel = (
     });
 
     return generateSuccess(order, 200);
+};
+
+/**
+ * Count a lost-parcel settlement as a cancelled order. `markUndeliverable` writes inside the
+ * delivery act's transaction, so its analytics event waits for `order.cancelled` instead of
+ * firing before a commit that might still roll back. Every other cause reports from `afterCancel`.
+ *
+ * @param payload - the `order.cancelled` fact; any cause but `lost` is already counted
+ */
+export const analyseLostCancel = ({
+    orderId,
+    cause
+}: DomainEventMap['order.cancelled']): Promise<void> => {
+    if (cause === 'lost')
+        emitAnalyticsEvent({
+            ...buildAnalyticsBase(systemCallerContext('Order')),
+            event: CANCEL_CAUSES.lost.analytics,
+            properties: { order_id: orderId }
+        });
+    return Promise.resolve();
 };
 
 /**

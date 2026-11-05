@@ -104,6 +104,24 @@ describe('createWarningWatcher', () => {
     });
 });
 
+describe('the real process', () => {
+    it('hears a process.emitWarning made in the case, and a declared one passes', () => {
+        expectWarning('raised on purpose');
+
+        process.emitWarning('raised on purpose');
+
+        return new Promise<void>((resolve) => {
+            process.nextTick(resolve);
+        });
+    });
+
+    it('hears a process.emitWarning made synchronously, once the case ends', () => {
+        expectWarning(/sync on purpose/);
+
+        process.emitWarning('sync on purpose');
+    });
+});
+
 describe('expectWarning', () => {
     it('declares a warning on the watcher the setup file runs, so the case that provokes one passes', () => {
         expectWarning('made on purpose');

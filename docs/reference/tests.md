@@ -72,6 +72,15 @@ expectWarning(/connection pool/); // a substring or a pattern; it must fire, or 
 
 The declaration must fire: a stale one fails the case, so it cannot outlive the warning it covered. A case that spies on the console itself stands on top of the watcher and keeps its own control of what it expects. The app's own logger (`winston`) writes to the stream, not to `console`, so a logged warning is not a test warning.
 
+What the guard watches, and does not:
+
+- Each case only, from its `beforeEach` to its `afterEach`. A warning from `beforeAll`/`afterAll` or from module load is not counted.
+- Node's warnings arrive late (one tick), so the guard waits one real tick before and after each case. A warning from a sync case is credited to that case.
+- Jest's `process` is a copy with no listeners; `tests/support/test-environment.ts` forwards the host process's warnings into it.
+- A Node-core deprecation fires once per worker, so which file fails depends on scheduling. Never declare one; fix the caller.
+- The cluster and broker configs run no guard.
+- Why hand-written and not `jest-fail-on-console`: it has no must-fire check and sees the console only, not `process` warnings.
+
 The paired frontend has the same idea for `[Vue warn]`, as a declared fork that is not kept in step.
 
 ## Three numbers, and they are not the same question

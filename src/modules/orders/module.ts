@@ -112,13 +112,15 @@ export default {
         // The buyer's mails, from this module's own facts — see `./services/notify.ts` and
         // `./services/cancel-mail.ts`.
         onDomainEvent(ORDER_CREATED, orderService.mailOrderPlaced);
-        // One handler for the event: the cancel mail, and the shop's own pause after repeated buyer
-        // cancellations (`./services/purchase-hold.ts`, which logs its own failure and never
-        // rejects, so it cannot stall the mail or the order's later events).
+        // One handler for the event: the cancel mail, the analytics count of a lost-parcel
+        // settlement, and the shop's own pause after repeated buyer cancellations
+        // (`./services/purchase-hold.ts`, which logs its own failure and never rejects, so it
+        // cannot stall the mail or the order's later events).
         onDomainEvent(ORDER_CANCELLED, (payload) =>
             Promise.all([
                 orderService.mailOrderCancelled(payload),
-                orderService.considerPurchaseHold(payload)
+                orderService.considerPurchaseHold(payload),
+                orderService.analyseLostCancel(payload)
             ]).then(() => undefined)
         );
     },

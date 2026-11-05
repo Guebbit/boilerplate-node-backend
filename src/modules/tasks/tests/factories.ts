@@ -4,7 +4,7 @@
  * past the domain rules a service enforces (so tests, and only tests, reach it).
  */
 
-import { TaskKind, TaskResolution, TaskSource, TaskStatus } from '@types';
+import { TaskKind, TaskLinkType, TaskResolution, TaskSource, TaskStatus } from '@types';
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 import type { TaskDocument } from '../model';
 import { taskRepository } from '../repository';
@@ -25,6 +25,27 @@ export const createSystemTask = (subjectId?: string): Promise<TaskDocument> =>
         message: 'Export e1 needs a person.',
         work: 'users/u1',
         ...(subjectId === undefined ? {} : { subjectId: toObjectId(subjectId) })
+    });
+
+/**
+ * Persist an open system task pointing at a record, about one account.
+ *
+ * @param link - the record it points at
+ * @param subjectId - the account the task is about
+ * @returns the stored task
+ */
+export const createSystemTaskAbout = (
+    link: { type: TaskLinkType; id: string },
+    subjectId: string
+): Promise<TaskDocument> =>
+    taskRepository.create({
+        source: TaskSource.system,
+        kind: TaskKind.export_failed,
+        routeSet: 'UserErasure',
+        subject: 'A task about a record',
+        message: 'A person must look.',
+        link,
+        subjectId: toObjectId(subjectId)
     });
 
 /**

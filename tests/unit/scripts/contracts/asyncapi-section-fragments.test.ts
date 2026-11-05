@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { parseDocument } from 'yaml';
+import { parseDocument, type Document } from 'yaml';
 import {
     localiseOpenApiReferences,
     sectionFragments,
@@ -44,6 +44,12 @@ const section = () =>
         'components:\n    schemas:\n        Payload:\n            oneOf:\n                - $ref: "#/components/schemas/Own"\n'
     );
 
+/** The bundler's merge, reduced to what ordering needs: the fragment's schemas join the section. */
+const mergeSchemas = (target: Document, _label: string, source: Document): void => {
+    for (const [name, schema] of Object.entries(source.toJS().components.schemas))
+        target.setIn(['components', 'schemas', name], schema);
+};
+
 describe('sections other than webhooks', () => {
     const roots: string[] = [];
 
@@ -82,6 +88,34 @@ describe('sections other than webhooks', () => {
         expect(document.toJS().components.schemas.Payload.oneOf).toEqual([
             { $ref: '#/components/schemas/Own' },
             { $ref: '#/components/schemas/ShopPayload' }
+        ]);
+    });
+
+    it('moves an extended union behind the variants it now references', () => {
+        const document = parseDocument(
+            'components:\n    schemas:\n        Payload:\n            oneOf:\n                - $ref: "#/components/schemas/Own"\n        Own:\n            type: object\n'
+        );
+
+        withSectionFragments('notifications', document, mergeSchemas, modulesRoot(FRAGMENT));
+
+        expect(Object.keys(document.toJS().components.schemas)).toEqual([
+            'Own',
+            'ShopPayload',
+            'Payload'
+        ]);
+    });
+
+    it('stops at a reference cycle instead of looping, keeping every schema once', () => {
+        const document = parseDocument(
+            'components:\n    schemas:\n        Payload:\n            oneOf:\n                - $ref: "#/components/schemas/Own"\n        Own:\n            properties:\n                back:\n                    $ref: "#/components/schemas/Payload"\n'
+        );
+
+        withSectionFragments('notifications', document, mergeSchemas, modulesRoot(FRAGMENT));
+
+        expect(Object.keys(document.toJS().components.schemas).toSorted()).toEqual([
+            'Own',
+            'Payload',
+            'ShopPayload'
         ]);
     });
 
