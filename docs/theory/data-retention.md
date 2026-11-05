@@ -81,7 +81,7 @@ flowchart TD
     B -- no --> N[scrub at once]
     B -- yes --> C{delivered?}
     C -- yes --> D[scrub at conformityUntil + days after guarantee]
-    C -- no --> E{cancelled?}
+    C -- no --> E{canceled?}
     E -- yes --> F[scrub at paidAt + days undelivered]
     E -- no --> G[wait: still open]
     G -. delivered later .-> D
@@ -435,8 +435,8 @@ erase again **immediately, before use**) and a restoration log (ISO/IEC 27701). 
 they are only the fallback for a lost host together with a lost newest snapshot.
 
 **Deletion locks.** The ledger also records `scheduled` (with the promised `purgeAt`, stored so a
-changed grace setting cannot move it) and `cancelled`. After a restore the latest event per account wins:
-`erased` always erases again; otherwise `scheduled` locks the account at the stored date and `cancelled`
+changed grace setting cannot move it) and `canceled`. After a restore the latest event per account wins:
+`erased` always erases again; otherwise `scheduled` locks the account at the stored date and `canceled`
 clears the lock (even a passed one); cancel, then ask again, stays scheduled. So the purge job never erases
 an account its owner kept, and an erasure asked for after the backup is not lost.
 

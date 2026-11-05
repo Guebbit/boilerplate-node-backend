@@ -10,6 +10,7 @@ export {
     SHIPPING_METHODS,
     findShippingMethod,
     priceShipping,
+    quoteMethod,
     methodFitsWeight,
     cheapestStandardShipping
 } from './rates';
@@ -23,7 +24,7 @@ export {
     statusOfLines,
     checkShipLines,
     withShipped,
-    withRemainderCancelled,
+    withRemainderCanceled,
     summarize,
     isShippable,
     isFulfillable,

@@ -6,6 +6,7 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Antibot
+      x-family: Core
       description: The human-check challenge a protected form asks for before it submits.
 
 x-error-codes:

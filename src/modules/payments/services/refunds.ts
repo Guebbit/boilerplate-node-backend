@@ -1,6 +1,6 @@
 /**
  * @module
- * Giving money back — the operator action (`refundPayment`) and the `order.cancelled` listener's
+ * Giving money back — the operator action (`refundPayment`) and the `order.canceled` listener's
  * compensation (`refundForOrder`), both through `performRefund`. Nothing else in this module may
  * move money out.
  *
@@ -39,10 +39,11 @@ import { systemCallerContext } from '@kernel/permissions';
 import {
     fitsCurrency,
     toMinorUnits,
-    toDecimalAmount,
+    toDecimalString,
     addMoney,
     minMoney,
-    subtractMoney
+    subtractMoney,
+    padDecimal
 } from '@domain-primitives/money';
 import { orderService } from '@modules/orders';
 import { holds } from '@kernel/ability';
@@ -81,7 +82,7 @@ import { paymentNotFound, RefundLeftOpenError } from './errors';
 /** What one refund is asked to do. */
 export interface RefundRequest {
     /** A decimal in the payment's currency; absent means everything still refundable. */
-    amount?: number;
+    amount?: string;
     /** Why the money goes back — recorded on the refund. */
     reason: RefundReason;
     /**
@@ -92,7 +93,7 @@ export interface RefundRequest {
     /** The goods this pays back, when it pays for specific ones — see `RefundRecord.lines`. */
     lines?: RefundLine[];
     /** The delivery cost inside the amount, beside `lines` — a decimal. */
-    shipping?: number;
+    shipping?: string;
     /**
      * Take at most what is left instead of refusing when the figure no longer fits. A return's
      * amount is clamped on a read that a racing refund can outdate; the re-read after a missed
@@ -196,7 +197,7 @@ export const recordOwedByHand = (
  *
  * @param payment - the payment, still `succeeded`
  * @param request - what to return; a cancellation takes everything still left
- * @param context - the caller, absent for the `order.cancelled` listener
+ * @param context - the caller, absent for the `order.canceled` listener
  * @returns the payment with the record open, or `null` when nothing was left to open
  */
 const leaveForOperator = (
@@ -241,7 +242,7 @@ const announceOwedByHand = (
                   paymentId: String(payment._id),
                   orderId: String(payment.orderId),
                   refundId: String(refund._id),
-                  amount: refund.amount,
+                  amount: padDecimal(refund.amount, refund.currency),
                   currency: refund.currency
               },
               String(payment.orderId),
@@ -283,7 +284,7 @@ export const openRefund = (
     const refundId = new Types.ObjectId();
     const refund = {
         _id: refundId,
-        amount: toDecimalAmount(amount, currency),
+        amount: toDecimalString(amount, currency),
         currency,
         status: 'pending' as const,
         // Stamped here, not left to mongoose: this exact object is what the caller sends to the
@@ -291,7 +292,7 @@ export const openRefund = (
         createdAt: new Date(),
         reason: request.reason,
         ...(request.returnId ? { returnId: request.returnId } : {}),
-        ...(request.lines ? { lines: request.lines, shipping: request.shipping ?? 0 } : {}),
+        ...(request.lines ? { lines: request.lines, shipping: request.shipping ?? '0' } : {}),
         // One key per RECORD, not per payment: two different partial refunds must not be taken
         // for one by the provider, while a retry of this one must be.
         idempotencyKey: `refund:${String(paymentId)}:${String(refundId)}`,
@@ -308,7 +309,7 @@ export const openRefund = (
             .addRefund(
                 String(paymentId),
                 amountRefunded,
-                toDecimalAmount(newTotal, currency),
+                toDecimalString(newTotal, currency),
                 refund,
                 active
             )
@@ -359,7 +360,7 @@ export const openRefund = (
  *
  * @param payment - the payment the refund is taken from
  * @param refund - the record that just opened
- * @param context - the caller; the `order.cancelled` listener has none and writes no row
+ * @param context - the caller; the `order.canceled` listener has none and writes no row
  */
 const auditRefundRequested = (
     payment: PaymentDocument,
@@ -402,7 +403,7 @@ const keepPending = (
 /**
  * Ask the provider to return one refund's money, and record its answer. A refusal marks the record
  * `failed` and throws {@link RefundLeftOpenError}; the record stays open for the refund sweep, and
- * the caller (the `order.cancelled` listener) logs it instead of rethrowing.
+ * the caller (the `order.canceled` listener) logs it instead of rethrowing.
  *
  * @param payment - the payment (never `manual`, never without a `providerRef`)
  * @param refund - the record to send
@@ -694,7 +695,7 @@ const performCardRefund = (
  *
  * @param orderId - the order whose payment is being returned
  * @param context - present only for a request with a caller (`refundPayment`);
- *  the `order.cancelled` listener (`refundForOrder`) has none
+ *  the `order.canceled` listener (`refundForOrder`) has none
  * @param request - the amount and the reason; omitted, it is everything left, for a cancellation
  * @returns the payment as it now stands — always still `succeeded`, whatever was returned (its
  *   `displayStatus` says how much) — and whether the record was left open for an operator; or
@@ -727,7 +728,7 @@ export const performRefund = (
  */
 const refusalFor = (
     payment: PaymentDocument,
-    body: { amount?: number; currency?: string }
+    body: { amount?: string; currency?: string }
 ): ResponseReject | undefined => {
     const { amount, currency } = body;
     if (currency !== undefined && currency !== payment.currency)
@@ -805,7 +806,7 @@ const refusedRefundAnswer = (
  */
 const refundFoundPayment = (
     payment: PaymentDocument,
-    body: { amount?: number },
+    body: { amount?: string },
     context: CallerContext,
     authContext: AuthContext | undefined
 ): Promise<ResponseSuccess<RefundRequested> | ResponseReject> => {
@@ -850,7 +851,7 @@ export const refundPayment = (
     paymentId: string,
     authContext: AuthContext | undefined,
     context: CallerContext,
-    body: { amount?: number; currency?: string } = {}
+    body: { amount?: string; currency?: string } = {}
 ): Promise<ResponseSuccess<RefundRequested> | ResponseReject> =>
     paymentRepository
         .findByIdScoped(paymentId, callerScope(authContext))
@@ -979,7 +980,7 @@ const canceledPayload = (
     paymentId: String(payment._id),
     orderId: String(payment.orderId),
     refundId: String(refund._id),
-    amount: refund.amount,
+    amount: padDecimal(refund.amount, refund.currency),
     currency: refund.currency
 });
 
@@ -1007,7 +1008,7 @@ const writeCancel = (
             { status: refund.status, failureReason: refund.failureReason },
             {
                 expectedRefunded: payment.amountRefunded,
-                newRefunded: toDecimalAmount(
+                newRefunded: toDecimalString(
                     subtractMoney(
                         toMinorUnits(payment.amountRefunded, payment.currency),
                         toMinorUnits(refund.amount, payment.currency)
@@ -1098,7 +1099,7 @@ export const cancelRefund = (
     });
 
 /**
- * The `order.cancelled` listener's refund: give the money back if any was taken. The event is the
+ * The `order.canceled` listener's refund: give the money back if any was taken. The event is the
  * only promise of it, delivered by the outbox until this resolves.
  *
  * Idempotent: a redelivery, or a cancel of a never-paid order, finds nothing left to return and
@@ -1109,8 +1110,8 @@ export const cancelRefund = (
  *
  * A hand-paid order opens its record and waits for an operator (`leaveForOperator`).
  *
- * @param orderId - the order that was cancelled
- * @internal The `order.cancelled` listener's refund, which has no caller of its own to check: only
+ * @param orderId - the order that was canceled
+ * @internal The `order.canceled` listener's refund, which has no caller of its own to check: only
  *   this module's `subscribe` may run it, so it is not on `paymentService`.
  */
 export const refundForOrder = (orderId: string): Promise<void> =>
@@ -1157,7 +1158,7 @@ export interface OpenedReturnRefund {
 }
 
 /**
- * Record the money owed for goods a customer returned, or for a remainder cancelled before it
+ * Record the money owed for goods a customer returned, or for a remainder canceled before it
  * shipped — `returns`' one door into the refund. It runs INSIDE the return's own transaction, so
  * the return and what it owes commit together or not at all: nothing durable is ever missing.
  *
@@ -1181,9 +1182,9 @@ export const openReturnRefund = (
     orderId: string,
     input: {
         returnId: string;
-        amount: number;
+        amount: string;
         lines: RefundLine[];
-        shipping: number;
+        shipping: string;
         reason?: Extract<RefundReason, 'return' | 'cancellation'>;
     },
     context: CallerContext,

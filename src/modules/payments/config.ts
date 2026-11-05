@@ -213,7 +213,7 @@ export const paymentWebhookSecrets = (): string[] => {
 };
 
 /**
- * Days a bank-transfer payment is kept once it was cancelled, so a late transfer can still be
+ * Days a bank-transfer payment is kept once it was canceled, so a late transfer can still be
  * found by its reference and recorded. A year: banks and buyers are slow, and a reference that
  * stops matching would leave money with no order. Every other abandoned attempt goes after
  * {@link abandonedPaymentRetentionDays}.

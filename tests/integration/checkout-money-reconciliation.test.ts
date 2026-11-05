@@ -29,13 +29,13 @@ const RUN = { seed: 20_261_005, numRuns: PROPERTY_RUNS_WITH_DATABASE, endOnFailu
 
 /** One basket line: a catalogue price (any decimal) and a quantity. */
 interface BasketLine {
-    price: number;
+    price: string;
     quantity: number;
 }
 
 /** The shipping methods the shop offers, with the rule each prices by (`delivery/domain/rates.ts`). */
 const SHIPPING = {
-    standard: { flat: 5, freeAbove: 100 },
+    standard: { flat: 5, freeAbove: '100.00' },
     express: { flat: 15, freeAbove: Infinity },
     pickup: { flat: 0, freeAbove: Infinity }
 } as const;
@@ -43,7 +43,7 @@ const SHIPPING = {
 /** What one basket produced at each of the three doors, as the wire carries it. */
 interface Prices {
     /** `GET /cart`'s `summary`. */
-    cart: { itemsTotal: number; shippingCost: number; totalPrice: number };
+    cart: { itemsTotal: string; shippingCost: string; totalPrice: string };
     /** The order's `totalPrice`. */
     order: number;
     /** The payment intent's `amount`. */
@@ -58,6 +58,20 @@ const newShopper = async (): Promise<Shopper> => {
     const shopper = await authenticateAs();
     await giveAddress(shopper.user.id);
     return shopper;
+};
+
+/**
+ * A decimal price in minor units, half a unit rounding up, read from the digits so no float
+ * (`1.005 * 100` is `100.49999999999999`) can move the oracle off the exact answer.
+ *
+ * @param price - plain decimal text
+ * @param exponent - the currency's decimal places
+ */
+const minorUnitsOf = (price: string, exponent: number): number => {
+    const [whole, fraction = ''] = price.split('.', 2);
+    const kept = Number(`${whole}${fraction.padEnd(exponent, '0').slice(0, exponent)}`);
+    const next = Number(fraction.padEnd(exponent + 1, '0')[exponent]);
+    return next >= 5 ? kept + 1 : kept;
 };
 
 /**
@@ -76,11 +90,11 @@ const expectedMinor = (
 ): number => {
     const scale = 10 ** exponent;
     const linesMinor = lines.reduce(
-        (sum, { price, quantity }) => sum + Math.round(price * scale) * quantity,
+        (sum, { price, quantity }) => sum + minorUnitsOf(price, exponent) * quantity,
         0
     );
     const { flat, freeAbove } = SHIPPING[method];
-    const shipping = linesMinor / scale >= freeAbove ? 0 : flat;
+    const shipping = linesMinor / scale >= Number(freeAbove) ? 0 : flat;
     return linesMinor + shipping * scale;
 };
 
@@ -120,7 +134,7 @@ const priceThroughHttp = async (
     // Each basket leaves an unpaid order, and a shopper may hold only so many open at once
     // (`CART_OPEN_ORDER_LIMIT_REACHED`): cancel it so the next basket can be placed by the same shopper.
     // A shopper's OWN cancels pause their checkout (purchase hold), so a shopper reused across
-    // baskets is cancelled for by someone else.
+    // baskets is canceled for by someone else.
     await api()
         .post(`/orders/${String(checkout.body.id)}/cancel`)
         .set('Authorization', canceller)
@@ -141,6 +155,18 @@ interface Case {
 }
 
 /**
+ * Integer minor units spelled the way the wire spells them: padded to the currency's places
+ * (`1990` at 2 places is `"19.90"`, at 0 places `"1990"`). Digits are moved, never divided.
+ *
+ * @param minor - the amount in minor units
+ * @param exponent - the currency's decimal places
+ */
+const spelled = (minor: number, exponent: number): string => {
+    const digits = String(minor).padStart(exponent + 1, '0');
+    return exponent === 0 ? digits : `${digits.slice(0, -exponent)}.${digits.slice(-exponent)}`;
+};
+
+/**
  * What each door should answer, from the independent oracle above — and the cart's own parts, so
  * a wrong `totalPrice` cannot hide behind a right one.
  */
@@ -149,14 +175,12 @@ const expectedPrices = (
     method: keyof typeof SHIPPING,
     exponent: number
 ) => {
-    const scale = 10 ** exponent;
-    const total = expectedMinor(lines, method, exponent) / scale;
     const shippingMinor =
         expectedMinor(lines, method, exponent) - expectedMinor(lines, 'pickup', exponent);
     return {
-        total,
-        itemsTotal: expectedMinor(lines, 'pickup', exponent) / scale,
-        shipping: shippingMinor / scale
+        total: spelled(expectedMinor(lines, method, exponent), exponent),
+        itemsTotal: spelled(expectedMinor(lines, 'pickup', exponent), exponent),
+        shipping: spelled(shippingMinor, exponent)
     };
 };
 
@@ -171,39 +195,39 @@ const expectReconciled = (prices: Prices, expected: ReturnType<typeof expectedPr
 const EUR_CASES: readonly Case[] = [
     {
         name: 'a price whose float sum with shipping drifts',
-        lines: [{ price: 0.56, quantity: 1 }],
+        lines: [{ price: '0.56', quantity: 1 }],
         method: 'standard'
     },
-    { name: 'tenths added up', lines: [{ price: 0.1, quantity: 3 }], method: 'standard' },
+    { name: 'tenths added up', lines: [{ price: '0.10', quantity: 3 }], method: 'standard' },
     {
         name: 'a price just under the free-shipping line',
-        lines: [{ price: 33.33, quantity: 3 }],
+        lines: [{ price: '33.33', quantity: 3 }],
         method: 'standard'
     },
     {
         name: 'a basket exactly on the free-shipping line',
-        lines: [{ price: 50, quantity: 2 }],
+        lines: [{ price: '50.00', quantity: 2 }],
         method: 'standard'
     },
     {
         name: 'express on an odd-cent basket',
         lines: [
-            { price: 19.99, quantity: 3 },
-            { price: 0.07, quantity: 9 }
+            { price: '19.99', quantity: 3 },
+            { price: '0.07', quantity: 9 }
         ],
         method: 'express'
     },
     {
         name: 'a price with a fraction of a cent',
-        lines: [{ price: 0.005, quantity: 3 }],
+        lines: [{ price: '0.005', quantity: 3 }],
         method: 'pickup'
     },
     {
         name: 'a price with a fraction of a cent, shipped',
-        lines: [{ price: 12.345, quantity: 2 }],
+        lines: [{ price: '12.345', quantity: 2 }],
         method: 'standard'
     },
-    { name: 'a free item', lines: [{ price: 0, quantity: 4 }], method: 'standard' }
+    { name: 'a free item', lines: [{ price: '0.00', quantity: 4 }], method: 'standard' }
 ];
 
 describe('cart view, order and payment intent agree on the amount (EUR)', () => {
@@ -222,8 +246,12 @@ describe('cart view, order and payment intent agree on the amount (EUR)', () => 
                     fc.record({
                         // Whole cents and sub-cent prices both: the factory writes sub-cent prices the API would refuse, and the three views must still agree.
                         price: fc.oneof(
-                            fc.integer({ min: 0, max: 30_000 }).map((cents) => cents / 100),
-                            fc.integer({ min: 0, max: 3_000_000 }).map((tenths) => tenths / 1000)
+                            fc
+                                .integer({ min: 0, max: 30_000 })
+                                .map((cents) => (cents / 100).toFixed(2)),
+                            fc
+                                .integer({ min: 0, max: 3_000_000 })
+                                .map((tenths) => (tenths / 1000).toFixed(3))
                         ),
                         quantity: fc.integer({ min: 1, max: 6 })
                     }),
@@ -245,8 +273,8 @@ describe('cart view, order and payment intent agree on the amount (JPY, no minor
     it('prices a whole-yen basket identically in all three', () =>
         withEnvironmentOverrides({ NODE_DEFAULT_CURRENCY: 'JPY' }, async () => {
             const lines = [
-                { price: 1250, quantity: 2 },
-                { price: 399, quantity: 1 }
+                { price: '1250.00', quantity: 2 },
+                { price: '399.00', quantity: 1 }
             ];
 
             const prices = await priceThroughHttp(await newShopper(), lines, 'standard');
@@ -257,7 +285,7 @@ describe('cart view, order and payment intent agree on the amount (JPY, no minor
 
     it('rounds a fractional yen per unit, the same way in all three', () =>
         withEnvironmentOverrides({ NODE_DEFAULT_CURRENCY: 'JPY' }, async () => {
-            const lines = [{ price: 99.5, quantity: 3 }];
+            const lines = [{ price: '99.50', quantity: 3 }];
 
             const prices = await priceThroughHttp(await newShopper(), lines, 'pickup');
 

@@ -58,7 +58,7 @@ describe('Idempotency-Key — a handler that faulted', () => {
         expect(faulted.status).toBe(500);
 
         const fresh = await send('fault-key-3');
-        expect(fresh.status).toBe(201);
+        expect(fresh.status).toBe(202);
         expect(await taskRepository.count({})).toBe(1);
     });
 });

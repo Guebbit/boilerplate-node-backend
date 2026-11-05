@@ -1,6 +1,6 @@
 /**
  * @module
- * Fulfilment rules — how an order's lines split into fulfillment orders, what remains of each,
+ * Fulfillment rules — how an order's lines split into fulfillment orders, what remains of each,
  * which status follows from its lines, and the summary `orders` carries. Pure, so every case is
  * testable without a database. See `docs/modules/delivery.md#the-two-records`.
  */
@@ -23,7 +23,7 @@ export interface FulfillmentLine {
     title: string;
     quantity: number;
     shippedQuantity: number;
-    cancelledQuantity: number;
+    canceledQuantity: number;
 }
 
 /** A line as the grouping rule reads it off an order's frozen snapshot. */
@@ -40,7 +40,7 @@ export interface GroupableLine {
     /**
      * Frozen at checkout: the line is goods Art. 16 CRD takes the right of withdrawal from (made to
      * order, perishable). Such a line gets a fulfillment order of its own, so the buyer can cancel
-     * the rest without it and the shop's work on it is never cancelled by accident.
+     * the rest without it and the shop's work on it is never canceled by accident.
      */
     noWithdrawal?: boolean;
     /**
@@ -68,11 +68,11 @@ export interface FulfillmentOrderDraft {
 }
 
 /**
- * Units of one line that are neither shipped nor cancelled.
+ * Units of one line that are neither shipped nor canceled.
  * @param line - a fulfillment order's line
  */
 export const remainingOfLine = (line: FulfillmentLine): number =>
-    line.quantity - line.shippedQuantity - line.cancelledQuantity;
+    line.quantity - line.shippedQuantity - line.canceledQuantity;
 
 /**
  * Units left across a fulfillment order's lines.
@@ -89,7 +89,7 @@ const kindOf = (lines: readonly GroupableLine[]): FulfillmentOrderKind =>
     lines.some(({ ships }) => ships) ? FulfillmentOrderKind.physical : FulfillmentOrderKind.digital;
 
 /**
- * One line as a fulfillment order carries it: nothing shipped, nothing cancelled yet.
+ * One line as a fulfillment order carries it: nothing shipped, nothing canceled yet.
  * @param line - the order's line
  */
 const toFulfillmentLine = ({ productId, title, quantity }: GroupableLine): FulfillmentLine => ({
@@ -97,7 +97,7 @@ const toFulfillmentLine = ({ productId, title, quantity }: GroupableLine): Fulfi
     title,
     quantity,
     shippedQuantity: 0,
-    cancelledQuantity: 0
+    canceledQuantity: 0
 });
 
 /** A line, or the part of one, that waits for stock, with what it waits for. */
@@ -224,7 +224,7 @@ export const groupOrderLines = (
 
 /**
  * The status a fulfillment order's lines and hold put it in. Derived, never decided by a caller:
- * nothing remains → `closed` if anything shipped from it, else `cancelled`; a hold wins over the
+ * nothing remains → `closed` if anything shipped from it, else `canceled`; a hold wins over the
  * rest; otherwise `in_progress` once something shipped and `open` before.
  *
  * @param lines - the lines
@@ -235,12 +235,12 @@ export const statusOfLines = (
     held: boolean
 ): FulfillmentOrderStatus => {
     // No lines at all: everything it held moved to another fulfillment order (a lost parcel's
-    // owed units), so nothing was cancelled and nothing is left to do here.
+    // owed units), so nothing was canceled and nothing is left to do here.
     if (lines.length === 0) return FulfillmentOrderStatus.closed;
     if (remainingOf(lines) === 0)
         return lines.some(({ shippedQuantity }) => shippedQuantity > 0)
             ? FulfillmentOrderStatus.closed
-            : FulfillmentOrderStatus.cancelled;
+            : FulfillmentOrderStatus.canceled;
     if (held) return FulfillmentOrderStatus.on_hold;
     return lines.some(({ shippedQuantity }) => shippedQuantity > 0)
         ? FulfillmentOrderStatus.in_progress
@@ -306,7 +306,7 @@ const plainLine = (line: FulfillmentLine): FulfillmentLine => ({
     title: line.title,
     quantity: line.quantity,
     shippedQuantity: line.shippedQuantity,
-    cancelledQuantity: line.cancelledQuantity
+    canceledQuantity: line.canceledQuantity
 });
 
 /**
@@ -329,10 +329,10 @@ export const withShipped = (
  * Cancel everything that remains on a fulfillment order's lines.
  * @param lines - the lines before
  */
-export const withRemainderCancelled = (lines: readonly FulfillmentLine[]): FulfillmentLine[] =>
+export const withRemainderCanceled = (lines: readonly FulfillmentLine[]): FulfillmentLine[] =>
     lines.map((line) => ({
         ...plainLine(line),
-        cancelledQuantity: line.cancelledQuantity + remainingOfLine(line)
+        canceledQuantity: line.canceledQuantity + remainingOfLine(line)
     }));
 
 /**
@@ -377,7 +377,7 @@ export interface FulfillmentReport {
 export const summarize = ({ fulfillmentOrders, shipments }: SummaryInputs): FulfillmentReport => {
     const live = fulfillmentOrders.filter(
         ({ status }) =>
-            status !== FulfillmentOrderStatus.closed && status !== FulfillmentOrderStatus.cancelled
+            status !== FulfillmentOrderStatus.closed && status !== FulfillmentOrderStatus.canceled
     );
     const held = live.filter(({ status }) => status === FulfillmentOrderStatus.on_hold);
     const units = (group: typeof live): number =>

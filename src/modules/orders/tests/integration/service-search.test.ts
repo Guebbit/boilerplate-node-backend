@@ -22,8 +22,8 @@ describe('orderService.search — derived totals', () => {
     it('adds the totalItems computed field (number of distinct product lines)', async () => {
         const user = await createUser();
         const [p1, p2] = await Promise.all([
-            createProduct({ price: 5 }),
-            createProduct({ price: 10 })
+            createProduct({ price: '5.00' }),
+            createProduct({ price: '10.00' })
         ]);
 
         // One order with two product lines
@@ -38,7 +38,7 @@ describe('orderService.search — derived totals', () => {
 
     it('adds the totalQuantity computed field (sum of all quantities)', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
 
         // 4 units of the same product
         await createOrder(user, [toOrderItem(product, 4)]);
@@ -51,21 +51,21 @@ describe('orderService.search — derived totals', () => {
 
     it('adds the totalPrice computed field (sum of price × quantity)', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 15 }); // $15 each
+        const product = await createProduct({ price: '15.00' }); // $15 each
 
         await createOrder(user, [toOrderItem(product, 3)]); // 3 × 15 = $45
 
         const { items } = await orderService.search();
         const [order] = items;
 
-        expect(order.totalPrice).toBe(45);
+        expect(order.totalPrice).toBe('45.00');
     });
 
     it('computes totals correctly for a multi-product order', async () => {
         const user = await createUser();
         const [p1, p2] = await Promise.all([
-            createProduct({ price: 10 }), // 2 × $10 = $20
-            createProduct({ price: 5 }) // 4 × $5  = $20
+            createProduct({ price: '10.00' }), // 2 × $10 = $20
+            createProduct({ price: '5.00' }) // 4 × $5  = $20
         ]);
 
         await createOrder(user, [toOrderItem(p1, 2), toOrderItem(p2, 4)]);
@@ -75,14 +75,14 @@ describe('orderService.search — derived totals', () => {
 
         expect(order.totalItems).toBe(2); // 2 product lines
         expect(order.totalQuantity).toBe(6); // 2 + 4
-        expect(order.totalPrice).toBe(40); // 20 + 20
+        expect(order.totalPrice).toBe('40.00'); // 20 + 20
     });
 });
 
 describe('orderService.search', () => {
     it('returns all orders with default pagination', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
 
         await createOrder(user, [toOrderItem(product, 1)]);
         await createOrder(user, [toOrderItem(product, 2)]);
@@ -96,7 +96,7 @@ describe('orderService.search', () => {
     it('filters by userId', async () => {
         const user1 = await createUser({ email: 'u1@example.com', username: 'u1' });
         const user2 = await createUser({ email: 'u2@example.com', username: 'u2' });
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
 
         await createOrder(user1, [toOrderItem(product, 1)]);
         await createOrder(user2, [toOrderItem(product, 2)]);
@@ -117,7 +117,7 @@ describe('orderService.search', () => {
             email: 'bob@example.com',
             username: 'bob'
         });
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
 
         await createOrder(user1, [toOrderItem(product, 1)]);
         await createOrder(user2, [toOrderItem(product, 2)]);
@@ -129,7 +129,7 @@ describe('orderService.search', () => {
 
     it('filters by email regardless of the query casing', async () => {
         const user = await createUser({ email: 'alice@example.com', username: 'alice' });
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
         await createOrder(user, [toOrderItem(product, 1)]);
 
         const result = await orderService.search({ email: 'ALICE@Example.com' });
@@ -139,7 +139,7 @@ describe('orderService.search', () => {
 
     it('filters by paymentMethod — the admin "awaiting transfer" view', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
 
         await createOrder(user, [toOrderItem(product, 1)], {
             status: 'pending',
@@ -160,7 +160,7 @@ describe('orderService.search', () => {
 
     it('filters by order id', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
 
         const target = await createOrder(user, [toOrderItem(product, 1)]);
         await createOrder(user, [toOrderItem(product, 2)]);
@@ -175,8 +175,8 @@ describe('orderService.search', () => {
     it('filters by productId (embedded product)', async () => {
         const user = await createUser();
         const [p1, p2] = await Promise.all([
-            createProduct({ price: 10 }),
-            createProduct({ price: 20 })
+            createProduct({ price: '10.00' }),
+            createProduct({ price: '20.00' })
         ]);
 
         // order1 contains p1; order2 contains p2
@@ -192,7 +192,7 @@ describe('orderService.search', () => {
 
     it('paginates results correctly', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
 
         for (let i = 0; i < 5; i++) {
             await createOrder(user, [toOrderItem(product, i + 1)]);
@@ -209,7 +209,7 @@ describe('orderService.search', () => {
 
     it('includes computed fields (totalItems, totalQuantity, totalPrice)', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 25 });
+        const product = await createProduct({ price: '25.00' });
 
         await createOrder(user, [toOrderItem(product, 3)]); // 3 × $25 = $75
 
@@ -218,13 +218,13 @@ describe('orderService.search', () => {
 
         expect(order.totalItems).toBe(1);
         expect(order.totalQuantity).toBe(3);
-        expect(order.totalPrice).toBe(75);
+        expect(order.totalPrice).toBe('75.00');
     });
 
     it('accepts a scope filter (e.g. restrict to a specific user)', async () => {
         const user1 = await createUser({ email: 'u1@example.com', username: 'u1' });
         const user2 = await createUser({ email: 'u2@example.com', username: 'u2' });
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
 
         await createOrder(user1, [toOrderItem(product, 1)]);
         await createOrder(user2, [toOrderItem(product, 2)]);
@@ -304,7 +304,7 @@ describe('orderService.search — current (live) image', () => {
 describe('orderService.search — the Awaiting-transfer view', () => {
     it('lists pending bank transfers by nearest payBy, soonest first', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 5 });
+        const product = await createProduct({ price: '5.00' });
         const later = await createOrder(user, [toOrderItem(product, 1)], {
             paymentMethod: 'bank_transfer',
             payBy: '2026-07-20T00:00:00Z'
@@ -339,7 +339,7 @@ describe('orderService.search — the Awaiting-transfer view', () => {
 describe('orderService.findManyByIds', () => {
     it("answers each named order's number and email, and nothing for an unknown id", async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 5 });
+        const product = await createProduct({ price: '5.00' });
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         await createOrder(user, [toOrderItem(product, 1)]);
 
@@ -358,7 +358,7 @@ describe('orderService.findManyByIds', () => {
 /** One order per case, in a fresh user's name. */
 const seed = async (extras: Parameters<typeof createOrder>[2]) => {
     const user = await createUser({ email: `buyer${String(Math.random())}@example.com` });
-    const product = await createProduct({ price: 5 });
+    const product = await createProduct({ price: '5.00' });
     return createOrder(user, [toOrderItem(product, 1)], extras);
 };
 

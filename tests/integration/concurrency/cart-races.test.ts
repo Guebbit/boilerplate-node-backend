@@ -216,7 +216,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
         // while the collection quietly held N orders.
         const { user, bearer } = await authenticateAs();
         await giveAddress(user.id);
-        const product = await createProduct({ price: 10, onHand: RACE_SIZE * 5 });
+        const product = await createProduct({ price: '10.00', onHand: RACE_SIZE * 5 });
 
         await api()
             .post('/cart/items')
@@ -242,7 +242,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
         // is keyed to an order that no longer exists.
         const { user, bearer } = await authenticateAs();
         await giveAddress(user.id);
-        const product = await createProduct({ price: 10, onHand: RACE_SIZE * 5 });
+        const product = await createProduct({ price: '10.00', onHand: RACE_SIZE * 5 });
 
         await api()
             .post('/cart/items')

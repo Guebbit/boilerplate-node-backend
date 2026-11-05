@@ -14,7 +14,7 @@ const line = (productId: string, quantity: number, shipped = quantity): Fulfillm
     title: `Product ${productId}`,
     quantity,
     shippedQuantity: shipped,
-    cancelledQuantity: 0
+    canceledQuantity: 0
 });
 
 /** A physical fulfillment order with the given lines. */

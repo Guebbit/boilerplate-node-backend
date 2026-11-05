@@ -7,7 +7,7 @@
  * but isn't what anyone buys here — worth its own rules in `domain/`, not worth an aggregate.
  *
  * Listens to three `orders` events (all through the outbox): `paid` makes the fulfillment orders,
- * `cancelled` cancels them, and `status_overridden` brings the shipments in step with a status set
+ * `canceled` cancels them, and `status_overridden` brings the shipments in step with a status set
  * by hand. Two more come from siblings: `inventory`'s `backorder_allocated` releases the fulfillment
  * order that waited for the stock, and `products`' `release_date_changed` tells the buyers who
  * already paid that their date moved.
@@ -20,7 +20,7 @@ import type { AppModule, PublicEventTarget } from '@kernel/registry';
 import { onDomainEvent, type DomainEventMap } from '@kernel/events';
 import {
     orderService,
-    ORDER_CANCELLED,
+    ORDER_CANCELED,
     ORDER_REDACTED,
     ORDER_STATUS_CHANGED,
     ORDER_STATUS_OVERRIDDEN
@@ -130,7 +130,7 @@ export default {
         onDomainEvent(ORDER_STATUS_CHANGED, ({ orderId, to }) =>
             to === OrderStatus.paid ? deliveryService.ensureFulfillmentOrders(orderId) : undefined
         );
-        onDomainEvent(ORDER_CANCELLED, ({ orderId }) => deliveryService.cancelAllForOrder(orderId));
+        onDomainEvent(ORDER_CANCELED, ({ orderId }) => deliveryService.cancelAllForOrder(orderId));
         // The order's address was scrubbed (retention): each shipment's copy of it goes too.
         onDomainEvent(ORDER_REDACTED, ({ orderId }) => deliveryService.scrubDestinations(orderId));
         onDomainEvent(ORDER_STATUS_OVERRIDDEN, ({ orderId, to, at }) =>

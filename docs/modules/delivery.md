@@ -33,13 +33,13 @@ flowchart LR
     delivery --> products
     delivery --> shop
     inventory -. "inventory.backorder_allocated" .-> delivery
-    orders -. "order.cancelled" .-> delivery
+    orders -. "order.canceled" .-> delivery
     orders -. "order.redacted" .-> delivery
     orders -. "order.status_changed" .-> delivery
     orders -. "order.status_overridden" .-> delivery
     products -. "product.release_date_changed" .-> delivery
     products -. "product.restock_date_changed" .-> delivery
-    delivery -. "fulfillment_order.cancelled" .-> shop_tasks
+    delivery -. "fulfillment_order.canceled" .-> shop_tasks
     delivery -. "fulfillment_order.delayed" .-> shop_tasks
     delivery -. "fulfillment_order.hold_noticed" .-> shop_tasks
     delivery -. "shipment.lost" .-> shop_tasks
@@ -122,7 +122,7 @@ erDiagram
         id productId
         int quantity
         int shippedQuantity
-        int cancelledQuantity
+        int canceledQuantity
     }
     SHIPMENT {
         int number "unique with orderId"
@@ -135,7 +135,7 @@ erDiagram
     }
 ```
 
-`remaining = quantity − shippedQuantity − cancelledQuantity`, per line, and the server serves it so no
+`remaining = quantity − shippedQuantity − canceledQuantity`, per line, and the server serves it so no
 client counts. Lines are keyed by product id, as a return's lines are. A fulfillment order's status
 is never decided by a caller: it is derived from its lines and its hold on every write
 (`statusOfLines`).
@@ -151,12 +151,12 @@ stateDiagram-v2
     in_progress --> on_hold: staff holds the rest
     in_progress --> closed: nothing remains
     open --> closed: one shipment takes everything
-    open --> cancelled: remainder cancelled, nothing shipped from it
-    on_hold --> cancelled: remainder cancelled
-    in_progress --> closed: remainder cancelled
+    open --> canceled: remainder canceled, nothing shipped from it
+    on_hold --> canceled: remainder canceled
+    in_progress --> closed: remainder canceled
 ```
 
-- `closed` — nothing remains, and something shipped from it. `cancelled` — nothing ever shipped from it.
+- `closed` — nothing remains, and something shipped from it. `canceled` — nothing ever shipped from it.
 - A shipment is born `shipped` and becomes `delivered`, or `lost` when staff report it will not arrive
   ([Lost in transit](#lost-in-transit)); a **digital** fulfilment is born delivered, in the same write
   (Shopify fulfils digital goods without shipping them too).
@@ -373,7 +373,7 @@ reason all live on it, and `orders → delivery` is forbidden, so `orders` could
 | Route                                                  | Answers                                                                                              |
 | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | `GET /delivery/fulfillment-orders`                     | one row per fulfillment order, with its buyer, `paidAt`, `state`, `late`, `delivered`, `slippedDays` |
-| `GET /delivery/fulfillment-orders/summary`             | per product, in units: paid, waiting, allocated, shipped, cancelled, late                            |
+| `GET /delivery/fulfillment-orders/summary`             | per product, in units: paid, waiting, allocated, shipped, canceled, late                             |
 | `GET /delivery/fulfillment-orders/release-date-impact` | orders a release-date move would email, before it is saved (`update:Product` + `display:Order`)      |
 
 Filters on the list: `cause` (`preorder`, `backorder`, or `any` wait that carries an agreed date),
@@ -384,7 +384,7 @@ Filters on the list: `cause` (`preorder`, `backorder`, or `any` wait that carrie
 | `waiting`   | paid and held for stock                                                                        |
 | `allocated` | stock is set aside for it and not all shipped; a staff hold on such goods is still `allocated` |
 | `shipped`   | nothing remains and something shipped; `delivered` says whether every shipment also arrived    |
-| `cancelled` | nothing remains and nothing shipped; `cancelReason` says who: `buyer`, `staff`, `order`        |
+| `canceled`  | nothing remains and nothing shipped; `cancelReason` says who: `buyer`, `staff`, `order`        |
 
 `late` is the Late view: the expected date has passed and units remain, whether still waiting, allocated
 and not shipped, or part shipped. It is where goods on the shelf show, which the daily sweep deliberately
@@ -559,20 +559,20 @@ restocks nothing. What the order then ends as depends on whether anything ever a
 | What arrived                                  | The order ends | Why                                                                                       |
 | --------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------- |
 | something (another parcel, or a digital line) | `delivered`    | part of the contract was performed; the clocks start at the cancel, as for any completion |
-| nothing at all                                | `cancelled`    | nothing was delivered, so `delivered` would be untrue                                     |
+| nothing at all                                | `canceled`     | nothing was delivered, so `delivered` would be untrue                                     |
 
 The second row is our choice, not Shopify's: Shopify leaves such an order open and refunded unless the
 merchant cancels it. We settle it for them, with `settleOrder` asking `orders`' `markUndeliverable`
 (cause `lost`, the system's, `refund: false` because the remainder cancel already refunded). Nothing
 else runs: no withdrawal or guarantee clock, no `delivered` row, no second refund, no second stock
-release, and no mail (the loss and the refund were already mailed). The `cancelled` row is the
-system's. The `order.cancelled` listeners treat `lost` as no purchase-hold count and no refund, and
-`returns`, which owns the transaction, writes the `order.cancelled` audit row (system actor) and
-sends the `order_cancelled` analytics event once the transaction commits, through the callback
+release, and no mail (the loss and the refund were already mailed). The `canceled` row is the
+system's. The `order.canceled` listeners treat `lost` as no purchase-hold count and no refund, and
+`returns`, which owns the transaction, writes the `order.canceled` audit row (system actor) and
+sends the `order_canceled` analytics event once the transaction commits, through the callback
 `settleOrder` hands back, exactly like any other cancel.
 
-The move is its own lifecycle constant (`UNDELIVERABLE_EVENT`), not an actor on `cancelInFulfilment`:
-a `system` actor on `processing → cancelled` would let the three existing system cancels match orders
+The move is its own lifecycle constant (`UNDELIVERABLE_EVENT`), not an actor on `cancelInFulfillment`:
+a `system` actor on `processing → canceled` would let the three existing system cancels match orders
 in fulfilment. The order is retained as "paid, cancelled without delivery" by the PII sweep, not on a
 guarantee clock it never had. A parcel found afterwards answers `DELIVERY_NOT_DELIVERABLE`, and
 `actions.deliver` is false.
@@ -660,7 +660,7 @@ ship goods the ledger never counted out.
 ## Cancelling what has not shipped
 
 A cancel of the whole order is only possible while nothing has shipped; this module hears
-`order.cancelled` and cancels every fulfillment order. Once anything has shipped — or before, while
+`order.canceled` and cancels every fulfillment order. Once anything has shipped — or before, while
 another fulfillment order still has units to send — what remains is cancelled **one fulfillment order
 at a time**, by [`returns`](./returns.md#cancelling-what-has-not-shipped)
 (a Return of `kind: cancellation`) — it moves the money, the stock and the shipping rule, and is the
@@ -682,13 +682,13 @@ Each act writes its rows to the order's [timeline](./orders.md#the-timeline) in 
 | `shipment_lost`        | staff report a shipment lost or damaged                        | the same ids, `reason` code; never the note or the message           |
 | `fulfillment_held`     | staff hold one, or a preorder group is born on hold            | `reason` code; never the note (staff only)                           |
 | `fulfillment_released` | staff, or an allocation of stock, release it (staff only)      | fulfillment order id                                                 |
-| `remainder_cancelled`  | `returns` cancels what had not shipped                         | fulfillment order id                                                 |
+| `remainder_canceled`   | `returns` cancels what had not shipped                         | fulfillment order id                                                 |
 | `release_date_moved`   | a product's date moved and this order's expected date followed | fulfillment order id, `from` and `to` (ISO; an unset side is absent) |
 | `delay_notice_sent`    | the buyer was told: the date moved, or it will be missed       | fulfillment order id, `reason`, `expectedAt`                         |
 
-A whole-order cancel writes no `remainder_cancelled`: the order's own `cancelled` row says it. The
+A whole-order cancel writes no `remainder_canceled`: the order's own `canceled` row says it. The
 shipment row comes first, then the order's own move that it caused (`shipped`, `delivered`). A
-`remainder_cancelled` row, and the `shipped` or `delivered` move the cancel completes, name the
+`remainder_canceled` row, and the `shipped` or `delivered` move the cancel completes, name the
 account that made the cancel: the buyer, or the staff member acting for them.
 
 `release_date_moved` is written by `delivery`, not `orders`: `products` announces the move and
@@ -719,14 +719,14 @@ frontend never re-derives a rule. Every staff door asks the key and nothing else
 `start:Shipment`. `ShipmentActions.update` is the tracking-code edit
 and `markLost` the lost-parcel report.
 
-| Event                                                 | Payload                                                                                               | Public webhook                 |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------ |
-| `shipment.shipped`                                    | `{orderId, shipmentId, fulfillmentOrderId, lines}`                                                    | yes — replaces `order.shipped` |
-| `shipment.delivered`                                  | the same                                                                                              | yes                            |
-| `shipment.lost`                                       | the same, `reason`, and what the buyer is told                                                        | yes — the reason code only     |
-| `fulfillment_order.held` · `.released` · `.cancelled` | `{orderId, fulfillmentOrderId, reason?}`                                                              | no                             |
-| `fulfillment_order.hold_noticed`                      | `{orderId, fulfillmentOrderId, userId?, notice, message?}`                                            | no                             |
-| `fulfillment_order.delayed`                           | the dates (`agreedAt`, the held `promisedAt`), the titles, `shipCountry`, `reason` (`moved` or `due`) | no                             |
+| Event                                                | Payload                                                                                               | Public webhook                 |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `shipment.shipped`                                   | `{orderId, shipmentId, fulfillmentOrderId, lines}`                                                    | yes — replaces `order.shipped` |
+| `shipment.delivered`                                 | the same                                                                                              | yes                            |
+| `shipment.lost`                                      | the same, `reason`, and what the buyer is told                                                        | yes — the reason code only     |
+| `fulfillment_order.held` · `.released` · `.canceled` | `{orderId, fulfillmentOrderId, reason?}`                                                              | no                             |
+| `fulfillment_order.hold_noticed`                     | `{orderId, fulfillmentOrderId, userId?, notice, message?}`                                            | no                             |
+| `fulfillment_order.delayed`                          | the dates (`agreedAt`, the held `promisedAt`), the titles, `shipCountry`, `reason` (`moved` or `due`) | no                             |
 
 All are written through the outbox **in the act's transaction**. An order shipped in two goes fires
 `shipment.shipped` twice, and the order reaching `shipped` is the last of them.

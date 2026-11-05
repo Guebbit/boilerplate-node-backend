@@ -19,7 +19,7 @@ export interface Line {
 
 /** The part of `GET /cart` a checkout needs: the total the screen shows. */
 interface CartSummaryData {
-    summary: { totalPrice: number; currency: string };
+    summary: { totalPrice: string; currency: string };
 }
 
 /** What `POST /cart/checkout` answers with — the created order itself. Only the id is ever read. */
@@ -110,7 +110,7 @@ export const checkout = async (
     // What the cart screen would show right before the press, named back as the contract requires.
     const { summary } = await caller.call<CartSummaryData>('GET', '/cart');
     const expectedTotal = {
-        amount: Math.round(summary.totalPrice * 100),
+        amount: summary.totalPrice,
         currency: summary.currency
     };
     const order = await caller.call<CheckoutData>('POST', '/cart/checkout', {
@@ -203,7 +203,7 @@ export const recordOfflinePayment = (
 export const startProcessing = (owner: Caller, orderId: string): Promise<void> =>
     owner.call('POST', `/orders/${orderId}/process`).then(() => undefined);
 
-/** What the flows read of an order's two fulfilment lists: what can ship and what is out. */
+/** What the flows read of an order's two fulfillment lists: what can ship and what is out. */
 interface FulfillmentData {
     fulfillmentOrders: {
         id: string;
@@ -336,7 +336,7 @@ export const cancelRemainder = (caller: Caller, orderId: string): Promise<string
                 fulfillmentOrderId: open?.id
             });
         })
-        .then((cancelled) => cancelled.id);
+        .then((canceled) => canceled.id);
 
 /**
  * Cancel an order. `refund` is the operator's choice alone — a customer cancelling their own paid

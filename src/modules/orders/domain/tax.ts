@@ -11,7 +11,7 @@ import {
     apportion,
     scaleMoneyByRate,
     subtractMoney,
-    toDecimalAmount,
+    toDecimalString,
     toMinorUnits,
     type Money,
     NO_MONEY
@@ -35,9 +35,9 @@ export interface TaxableLineItem {
  * it, like the invoice email, reads it straight off this breakdown.
  */
 export interface LineTaxBreakdown {
-    taxAmount: number;
-    netAmount: number;
-    grossAmount: number;
+    taxAmount: string;
+    netAmount: string;
+    grossAmount: string;
 }
 
 /**
@@ -48,9 +48,9 @@ export interface LineTaxBreakdown {
 export interface TaxRateSummary {
     /** The decimal rate this row is for (`0.22` for 22%) — never repeated across rows. */
     rate: number;
-    netAmount: number;
-    taxAmount: number;
-    grossAmount: number;
+    netAmount: string;
+    taxAmount: string;
+    grossAmount: string;
 }
 
 /** What `orderTaxBreakdown` reports: one entry per line, plus the order-level sums. */
@@ -61,13 +61,13 @@ export interface OrderTaxBreakdown {
      */
     lines: LineTaxBreakdown[];
     /** Sum of every line's `netAmount` — goods only, shipping's own net sits in {@link shippingNetAmount}. */
-    netTotal: number;
+    netTotal: string;
     /** Sum of every line's `taxAmount` PLUS shipping's apportioned tax — the amount actually remitted. */
-    taxTotal: number;
+    taxTotal: string;
     /** Shipping's own net amount, summed across every line it was apportioned onto. */
-    shippingNetAmount: number;
+    shippingNetAmount: string;
     /** Shipping's own tax amount, summed across every line it was apportioned onto. */
-    shippingTaxAmount: number;
+    shippingTaxAmount: string;
     /**
      * One row per distinct rate charged on this order, sorted ascending. Reconciles exactly:
      * summed `netAmount` is {@link netTotal} + {@link shippingNetAmount}, summed `taxAmount` is
@@ -204,7 +204,7 @@ const allocateLineTax = (
 export const lineTaxFromRateTotals = (
     items: readonly TaxableLineItem[],
     currency: string,
-    goodsTaxByRate: ReadonlyMap<number, number>
+    goodsTaxByRate: ReadonlyMap<number, string>
 ): LineTaxBreakdown[] => {
     const rates = items.map((item) => frozenRate(item));
     const grossByLine = items.map((item) => lineGross(item, currency));
@@ -214,9 +214,9 @@ export const lineTaxFromRateTotals = (
         new Map([...goodsTaxByRate].map(([rate, tax]) => [rate, toMinorUnits(tax, currency)]))
     );
     return grossByLine.map((gross, index) => ({
-        taxAmount: toDecimalAmount(taxes[index], currency),
-        netAmount: toDecimalAmount(subtractMoney(gross, taxes[index]), currency),
-        grossAmount: toDecimalAmount(gross, currency)
+        taxAmount: toDecimalString(taxes[index], currency),
+        netAmount: toDecimalString(subtractMoney(gross, taxes[index]), currency),
+        grossAmount: toDecimalString(gross, currency)
     }));
 };
 
@@ -249,9 +249,9 @@ export const orderTaxBreakdown = ({
     );
 
     const lines = items.map((item, index) => ({
-        taxAmount: toDecimalAmount(lineTaxes[index], currency),
-        netAmount: toDecimalAmount(subtractMoney(grossAmounts[index], lineTaxes[index]), currency),
-        grossAmount: toDecimalAmount(grossAmounts[index], currency)
+        taxAmount: toDecimalString(lineTaxes[index], currency),
+        netAmount: toDecimalString(subtractMoney(grossAmounts[index], lineTaxes[index]), currency),
+        grossAmount: toDecimalString(grossAmounts[index], currency)
     }));
 
     const sortedGroups = [...groups].toSorted(([left], [right]) => left - right);
@@ -261,9 +261,9 @@ export const orderTaxBreakdown = ({
     const netOf = (gross: Money, tax: Money) => subtractMoney(gross, tax);
     const rowOf = (rate: number, net: Money, tax: Money): TaxRateSummary => ({
         rate,
-        netAmount: toDecimalAmount(net, currency),
-        taxAmount: toDecimalAmount(tax, currency),
-        grossAmount: toDecimalAmount(addMoney(net, tax), currency)
+        netAmount: toDecimalString(net, currency),
+        taxAmount: toDecimalString(tax, currency),
+        grossAmount: toDecimalString(addMoney(net, tax), currency)
     });
 
     const taxSummary = sortedGroups.map(([rate, group]) =>
@@ -274,7 +274,11 @@ export const orderTaxBreakdown = ({
         .map(([rate, group]) =>
             rowOf(rate, netOf(group.shippingGross, group.shippingTax), group.shippingTax)
         )
-        .filter((row) => row.netAmount > 0 || row.taxAmount > 0);
+        .filter(
+            (row) =>
+                toMinorUnits(row.netAmount, currency) > NO_MONEY ||
+                toMinorUnits(row.taxAmount, currency) > NO_MONEY
+        );
 
     const shippingNetTotal = subtractMoney(
         sumOf((g) => g.shippingGross),
@@ -287,13 +291,13 @@ export const orderTaxBreakdown = ({
 
     return {
         lines,
-        netTotal: toDecimalAmount(netTotal, currency),
-        taxTotal: toDecimalAmount(
+        netTotal: toDecimalString(netTotal, currency),
+        taxTotal: toDecimalString(
             sumOf((g) => g.tax),
             currency
         ),
-        shippingNetAmount: toDecimalAmount(shippingNetTotal, currency),
-        shippingTaxAmount: toDecimalAmount(
+        shippingNetAmount: toDecimalString(shippingNetTotal, currency),
+        shippingTaxAmount: toDecimalString(
             sumOf((g) => g.shippingTax),
             currency
         ),

@@ -1,11 +1,11 @@
 /**
  * @module
- * The fulfilment summary an order carries, and what is read off it. `orders` cannot import
+ * The fulfillment summary an order carries, and what is read off it. `orders` cannot import
  * `delivery` (the arrow points the other way), so `delivery` reports where the goods stand as one
  * small record, written only through `orderService.recordFulfillmentProgress`, and everything
  * `orders` itself asks about the goods reads that record.
  *
- * Pure — no I/O. See `docs/modules/orders.md#the-fulfilment-summary`.
+ * Pure — no I/O. See `docs/modules/orders.md#the-fulfillment-summary`.
  */
 
 import { OrderStatus } from '@types';
@@ -18,9 +18,9 @@ import { ORDER_STATUS_TRAITS, statusesWhere } from './status-traits';
  * overwrite a newer one.
  */
 export interface FulfillmentSummary {
-    /** At least one shipment exists: the goods have started to leave, so the order is no longer cancellable whole. */
+    /** At least one shipment exists: the goods have started to leave, so the order is no longer cancelable whole. */
     shipped: boolean;
-    /** Units not shipped and not cancelled. */
+    /** Units not shipped and not canceled. */
     remaining: number;
     /** Of {@link remaining}, units in `on_hold` fulfillment orders. */
     onHold: number;
@@ -57,7 +57,7 @@ export const shipsAwaitedStock = (
 
 /**
  * Whether every remaining unit is held back — the order has goods to send and none of them may go.
- * @param summary - the order's fulfilment summary
+ * @param summary - the order's fulfillment summary
  */
 const everyRemainingUnitHeld = (summary: FulfillmentSummary): boolean =>
     !summary.shipped && summary.remaining > 0 && summary.remaining === summary.onHold;
@@ -67,7 +67,7 @@ const everyRemainingUnitHeld = (summary: FulfillmentSummary): boolean =>
  *
  * | # | When | Value |
  * | --- | --- | --- |
- * | 1 | status ignores the summary (`pending`, `shipped`, `delivered`, `cancelled`) | its trait's value |
+ * | 1 | status ignores the summary (`pending`, `shipped`, `delivered`, `canceled`) | its trait's value |
  * | 2 | something shipped, units remain | `partially_fulfilled` |
  * | 3 | nothing shipped, every remaining unit held | `on_hold` |
  * | 4 | otherwise | its trait's value (`processing` is `in_progress`, `paid` is `unfulfilled`) |

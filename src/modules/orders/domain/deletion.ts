@@ -2,7 +2,7 @@
  * @module
  * When an order may be deleted: the two pure questions the delete door and `OrderActions.delete` /
  * `hardDelete` both ask, so the flag and the refusal cannot disagree. An order is a financial
- * record: hiding it is for a finished (cancelled) one, destroying it only for one never paid and
+ * record: hiding it is for a finished (canceled) one, destroying it only for one never paid and
  * never handed money.
  */
 
@@ -19,16 +19,16 @@ export interface DeletionCandidate {
 }
 
 /**
- * Whether a soft delete is allowed: hidden means finished, so only a cancelled order.
+ * Whether a soft delete is allowed: hidden means finished, so only a canceled order.
  * @param order - the order as it is now
  */
 export const softDeletable = (order: DeletionCandidate): boolean =>
-    order.status === OrderStatus.cancelled;
+    order.status === OrderStatus.canceled;
 
 /**
- * Whether a hard delete is allowed: cancelled, never paid and never handed money — a paid order's
+ * Whether a hard delete is allowed: canceled, never paid and never handed money — a paid order's
  * invoice must survive it, and so must the order a late payment and its refund point at.
  * @param order - the order as it is now
  */
 export const hardDeletable = (order: DeletionCandidate): boolean =>
-    !order.paidAt && !order.moneyReceivedAt && order.status === OrderStatus.cancelled;
+    !order.paidAt && !order.moneyReceivedAt && order.status === OrderStatus.canceled;

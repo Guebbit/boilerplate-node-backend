@@ -111,12 +111,12 @@ export const checkRequestedLines = (
 
 /**
  * Whether taking `lines` accounts for the LAST unit of the order: every ordered unit is then either
- * cancelled, back, or in these lines. The rule behind "shipping is refunded by whichever cancel or
+ * canceled, back, or in these lines. The rule behind "shipping is refunded by whichever cancel or
  * return takes the last unit" — counted against ORDERED quantity, so a unit that can never come
  * back (an excluded line) keeps the order from ever being whole, as it always has.
  *
  * @param ordered - the order's lines
- * @param accountedFor - what is already cancelled or back, plus what this act takes
+ * @param accountedFor - what is already canceled or back, plus what this act takes
  */
 export const takesLastUnit = (
     ordered: readonly ProductQuantity[],

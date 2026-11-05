@@ -111,7 +111,7 @@ describe('returnNoticeEmail — closing and the return address', () => {
     it('says what was refunded, formatted for the recipient', () => {
         const { data } = returnNoticeEmail('return-closed', 'en', 'Ada', {
             ...INPUT,
-            refund: { amount: 62.5, currency: 'EUR' }
+            refund: { amount: '62.50', currency: 'EUR' }
         });
 
         expect(data.body).toContain('€62.50');
@@ -121,7 +121,7 @@ describe('returnNoticeEmail — closing and the return address', () => {
     it('formats the amount the way the customer’s language does', () => {
         const { data } = returnNoticeEmail('return-closed', 'it', 'Ada', {
             ...INPUT,
-            refund: { amount: 62.5, currency: 'EUR' }
+            refund: { amount: '62.50', currency: 'EUR' }
         });
 
         expect(data.body).toContain('62,50');

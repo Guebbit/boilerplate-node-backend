@@ -585,23 +585,32 @@ describe('DELETE /users/{id}/purchase-hold', () => {
     });
 });
 
-/*
- * The body-addressed twin of `DELETE /users/{id}`, the explicit hard delete — and the refusals
- * every one of them owes an anonymous caller.
- */
-describe('DELETE /users — the id in the body', () => {
+describe('DELETE /users/{id}', () => {
     it('matches the contract for a soft delete', async () => {
         const { bearer } = await authenticateAs('admin');
-        const target = await createUser({ email: 'body-delete@example.com' });
+        const target = await createUser({ email: 'soft-delete@example.com' });
 
         const response = await api()
-            .delete('/users')
-            .set('Authorization', bearer)
-            .send({ id: String(target._id) });
+            .delete(`/users/${String(target._id)}`)
+            .set('Authorization', bearer);
 
         expect(response.status).toBe(204);
         const stored = await userRepository.findById(String(target._id));
         expect(stored?.deletedAt).toBeInstanceOf(Date);
+    });
+
+    it('refuses a body with 415 rather than reading its `hardDelete`', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser({ email: 'body-flag@example.com' });
+
+        const response = await api()
+            .delete(`/users/${String(target._id)}`)
+            .set('Authorization', bearer)
+            .send({ hardDelete: true });
+
+        expect(response.status).toBe(415);
+        const stored = await userRepository.findById(String(target._id));
+        expect(stored?.deletedAt).toBeFalsy();
     });
 });
 

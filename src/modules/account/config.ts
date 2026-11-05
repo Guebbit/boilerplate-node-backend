@@ -8,7 +8,7 @@
  */
 
 import { defineConfig } from '@infrastructure/config/define';
-import { email, int, text } from '@infrastructure/config/fields';
+import { int, text } from '@infrastructure/config/fields';
 import { frontendLink, FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
 import { DAY_MS, oneCalendarMonthLaterUtc } from '@domain-primitives/time';
 
@@ -43,8 +43,7 @@ export const accountConfig = defineConfig({
         NODE_ACCOUNT_DELETION_GRACE_DAYS: int({ default: 30, min: 1, max: 31 }),
         // 220 days: the default backup keep (6 monthly snapshots, up to ~7 months back) plus a margin.
         NODE_ERASURE_LEDGER_RETENTION_DAYS: int({ default: 220, min: 1 }),
-        NODE_TERMS_VERSION: text({ default: '1' }),
-        NODE_ACCOUNT_SUPPORT_EMAIL: email()
+        NODE_TERMS_VERSION: text({ default: '1' })
     }
 });
 

@@ -186,8 +186,7 @@ export interface BoardFacts extends SweepFacts {
  * @param facts - the fulfillment order
  */
 export const boardStateOf = (facts: BoardFacts): PreorderFulfillmentState => {
-    if (facts.status === FulfillmentOrderStatus.cancelled)
-        return PreorderFulfillmentState.cancelled;
+    if (facts.status === FulfillmentOrderStatus.canceled) return PreorderFulfillmentState.canceled;
     if (facts.status === FulfillmentOrderStatus.closed) return PreorderFulfillmentState.shipped;
 
     const awaitingStock =
@@ -209,5 +208,5 @@ export const isLate = (facts: BoardFacts, now: Date): boolean =>
     facts.expectedAt !== undefined &&
     facts.expectedAt.getTime() < now.getTime() &&
     facts.status !== FulfillmentOrderStatus.closed &&
-    facts.status !== FulfillmentOrderStatus.cancelled &&
+    facts.status !== FulfillmentOrderStatus.canceled &&
     remainingOf(facts.lines) > 0;

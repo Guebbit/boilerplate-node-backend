@@ -34,7 +34,7 @@ import { webhooksJobs } from './jobs';
  */
 const onRegistered = (modules: readonly AppModule[]): void => {
     webhooksService.subscribeToWebhookEvents(resolvePublicEvents(modules));
-    webhooksService.registerWebhookCatalogue(modules.map((appModule) => appModule.name));
+    webhooksService.registerWebhookCatalog(modules.map((appModule) => appModule.name));
     if (!isQueueEnabled())
         logger.warn({
             message:

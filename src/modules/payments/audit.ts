@@ -5,7 +5,7 @@
  * checkout can produce. `PAYMENT_RECORDED_OFFLINE` is admin-only too but keeps the plain
  * `payment.` prefix, since it names a kind of payment event rather than an admin override of one.
  *
- * `refundForOrder` (the refund half of the `order.cancelled` listener) logs a
+ * `refundForOrder` (the refund half of the `order.canceled` listener) logs a
  * real-provider refund rather than auditing it — there is no request behind it, like a sweep —
  * but still audits `PAYMENT_REFUND_OWED_BY_HAND` for a hand-paid refund left
  * for an operator, since that one needs a human to see it.
@@ -40,7 +40,7 @@ export const paymentsAuditActions = {
      * A refund record opened on a hand-paid payment and was left `pending`: the money is
      * cash or a transfer an operator must hand back outside the application, then confirm with
      * `settleRefundByHand`. Written for every way a record opens (a cancel, a late payment on a
-     * cancelled order, an operator's refund, a received return, a buyer's withdrawal); the
+     * canceled order, an operator's refund, a received return, a buyer's withdrawal); the
      * metadata names the record and the money.
      */
     PAYMENT_REFUND_OWED_BY_HAND: 'payment.refund_owed_by_hand',

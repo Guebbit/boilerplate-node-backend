@@ -9,6 +9,7 @@
  */
 import fc from 'fast-check';
 import { PROPERTY_RUNS } from '@tests/knobs';
+import { toMinorUnits } from '@domain-primitives/money';
 import { sumLineItems, orderTotal, type LineItem } from '../../domain/totals';
 
 /** One seed for the file, and one place to change it; the count is `TEST_PROPERTY_RUNS`. */
@@ -24,8 +25,9 @@ const EUR = 'EUR';
  */
 const nullish = () => fc.constantFrom(null, undefined);
 
-/** A catalogue price, cents-precise — `Product.price` is `format: double`, never a whole dollar only. */
-const decimalPrice = () => fc.integer({ min: 0, max: 10_000_000 }).map((cents) => cents / 100);
+/** A catalogue price, cents-precise — `Product.price` is decimal text, never a whole dollar only. */
+const decimalPrice = () =>
+    fc.integer({ min: 0, max: 10_000_000 }).map((cents) => (cents / 100).toFixed(2));
 
 /** A line item as the two callers actually produce one. */
 const lineItem = () =>
@@ -88,7 +90,7 @@ describe('sumLineItems — totality', () => {
 
 describe('sumLineItems — arithmetic invariants', () => {
     it('is zero on every axis for an empty cart', () => {
-        expect(sumLineItems([], EUR)).toEqual({ count: 0, quantity: 0, price: 0 });
+        expect(sumLineItems([], EUR)).toEqual({ count: 0, quantity: 0, price: '0.00' });
     });
 
     it('is order-independent', () => {
@@ -111,7 +113,7 @@ describe('sumLineItems — arithmetic invariants', () => {
                 const { quantity, price } = sumLineItems(items, EUR);
 
                 expect(quantity).toBeGreaterThanOrEqual(0);
-                expect(price).toBeGreaterThanOrEqual(0);
+                expect(Number(price)).toBeGreaterThanOrEqual(0);
             }),
             RUN
         );
@@ -128,8 +130,8 @@ describe('sumLineItems — arithmetic invariants', () => {
 
                 expect(combined.count).toBe(separate.count + other.count);
                 expect(combined.quantity).toBe(separate.quantity + other.quantity);
-                expect(Math.round(combined.price * 100)).toBe(
-                    Math.round(separate.price * 100) + Math.round(other.price * 100)
+                expect(toMinorUnits(combined.price, EUR)).toBe(
+                    toMinorUnits(separate.price, EUR) + toMinorUnits(other.price, EUR)
                 );
             }),
             RUN
@@ -148,7 +150,7 @@ describe('sumLineItems — arithmetic invariants', () => {
                 );
 
                 expect(doubled.quantity).toBe(single.quantity * 2);
-                expect(Math.round(doubled.price * 100)).toBe(Math.round(single.price * 100) * 2);
+                expect(toMinorUnits(doubled.price, EUR)).toBe(toMinorUnits(single.price, EUR) * 2);
             }),
             RUN
         );
@@ -208,8 +210,8 @@ describe('orderTotal', () => {
                 fc.integer({ min: 0, max: 100_000 }),
                 (items, shippingCost) => {
                     expect(
-                        Math.round(orderTotal({ items, shippingCost, currency: EUR }) * 100)
-                    ).toBe(Math.round(sumLineItems(items, EUR).price * 100) + shippingCost * 100);
+                        toMinorUnits(orderTotal({ items, shippingCost, currency: EUR }), EUR)
+                    ).toBe(toMinorUnits(sumLineItems(items, EUR).price, EUR) + shippingCost * 100);
                 }
             ),
             RUN
@@ -234,10 +236,10 @@ describe('orderTotal', () => {
     it("rounds to the currency's OWN minor unit, not always the cent", () => {
         // The same basket, in EUR (2dp), JPY (0dp) and KWD (3dp) — `orderTotal` must round each
         // to its own scale rather than the EUR one every earlier case in this file assumes.
-        const items = [{ quantity: 1, product: { price: 19.9 } }];
+        const items = [{ quantity: 1, product: { price: '19.90' } }];
 
-        expect(orderTotal({ items, shippingCost: 5, currency: 'EUR' })).toBe(24.9);
-        expect(orderTotal({ items, shippingCost: 5, currency: 'JPY' })).toBe(25);
-        expect(orderTotal({ items, shippingCost: 5, currency: 'KWD' })).toBe(24.9);
+        expect(orderTotal({ items, shippingCost: '5.00', currency: 'EUR' })).toBe('24.90');
+        expect(orderTotal({ items, shippingCost: '5.00', currency: 'JPY' })).toBe('25');
+        expect(orderTotal({ items, shippingCost: '5.00', currency: 'KWD' })).toBe('24.900');
     });
 });

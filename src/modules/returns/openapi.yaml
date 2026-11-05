@@ -6,6 +6,7 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Returns
+      x-family: After the sale
       description: Sending goods back — including the EU withdrawal button, which is a return with `reason` `withdrawal`.
 
 x-error-codes:
@@ -17,7 +18,7 @@ x-error-codes:
     RETURN_NOT_CANCELABLE: { status: 409, description: 'The return is not an approved one awaiting goods that never came, so it cannot be canceled.' }
     RETURN_RESTOCK_INVALID: { status: 422, description: 'A restock count names a product that is not on the return, names one twice, or is more than the line holds.' }
     RETURN_NOT_DECIDABLE: { status: 409, description: 'The return has already been decided.' }
-    RETURN_ORDER_NOT_RETURNABLE: { status: 409, description: 'The order is not in a state a return can be opened on — cancelled, or (for a reason other than withdrawal) still in the shop''s hands.' }
+    RETURN_ORDER_NOT_RETURNABLE: { status: 409, description: 'The order is not in a state a return can be opened on — canceled, or (for a reason other than withdrawal) still in the shop''s hands.' }
     RETURN_CANCELLATION_INVALID: { status: 422, description: 'A cancellation names no fulfillment order of this order, or sends `lines` (the remainder is its lines), or a return names a fulfillment order. Also the reason does not fit the caller: the order''s buyer cancels only as a `withdrawal`.' }
     RETURN_STATEMENT_INVALID: { status: 422, description: 'The date or the channel of what the buyer stated is missing where staff must give it (a withdrawal recorded for the buyer), given where it does not belong (by the buyer, or on a reason that is not a withdrawal), in the future, or before the order was made.' }
     RETURN_NOTHING_TO_CANCEL: { status: 409, description: 'The fulfillment order has nothing left to cancel, is not part of this order, or nothing has shipped from the order yet (cancel the whole order instead).' }
@@ -123,7 +124,7 @@ paths:
                 window, judged on `requestedAt`, and its Art. 16 exclusion. It does everything the
                 buyer's own withdrawal does, and the customer is told when they stated it and when the
                 shop recorded it. Shipped goods need `update:Return`; before dispatch the order is
-                cancelled and refunded, which needs `create:Refund` (money out) and `update:Order` (the
+                canceled and refunded, which needs `create:Refund` (money out) and `update:Order` (the
                 cancel); a remainder cancel needs `create:Refund`. Any request carrying `statedVia`
                 asks a fresh session: the record is a legal act, and the check fails closed. The
                 buyer sends neither `requestedAt` nor `statedVia` (422): the server sets them. Sending
@@ -145,7 +146,7 @@ paths:
                             $ref: '#/components/schemas/CreateReturnRequest'
             responses:
                 '201':
-                    description: The return, opened — or, for a withdrawal before dispatch, closed at birth with the order cancelled and refunded
+                    description: The return, opened — or, for a withdrawal before dispatch, closed at birth with the order canceled and refunded
                     headers:
                         Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
                     content:
@@ -174,10 +175,10 @@ paths:
                 staff holding `update:Return` get every reason, since they may open a return or record
                 a withdrawal on a buyer's behalf. `exceptions` lists, for staff, the reasons that are
                 past their deadline now, so a client can label what opening one would waive.
-                `cancellable` lists each fulfillment order that
+                `cancelable` lists each fulfillment order that
                 still has a remainder, with the exact refund cancelling it would owe (the delivery
-                included when it takes the last unit of the order). `cancellable` is empty while
-                nothing has shipped — the whole order is cancelled instead (`Order.actions.cancel`).
+                included when it takes the last unit of the order). `cancelable` is empty while
+                nothing has shipped — the whole order is canceled instead (`Order.actions.cancel`).
                 The caller must own the order, or hold `read:Return`.
             operationId: getReturnOptions
             security:
@@ -513,7 +514,7 @@ components:
             enum: [return, cancellation]
             description: >-
                 What the record is: `return` — goods that left coming back; `cancellation` — the
-                unshipped remainder of one fulfillment order, cancelled and refunded, closed when
+                unshipped remainder of one fulfillment order, canceled and refunded, closed when
                 made.
 
         ReturnLine:
@@ -531,9 +532,7 @@ components:
                     type: string
                     description: The product's title as the order froze it.
                 unitPrice:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: The gross unit price the order froze.
                 restocked:
                     type: integer
@@ -596,7 +595,7 @@ components:
                     description: What the customer wrote. Free text.
                 lines:
                     type: array
-                    description: What is coming back — or, for a `cancellation`, the remainder that was cancelled. Empty on a withdrawal before dispatch — no goods are expected.
+                    description: What is coming back — or, for a `cancellation`, the remainder that was canceled. Empty on a withdrawal before dispatch — no goods are expected.
                     items:
                         $ref: '#/components/schemas/ReturnLine'
                 returnPostage:
@@ -650,16 +649,12 @@ components:
                         closed. `replace` and `repair` close the return with no money moving and hand its
                         units back to the buyer, so they are returnable again.
                 handlingDeduction:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: >-
                         An amount kept back from the refund for handling damage (Art. 14(2)),
                         entered when the goods were received. Absent when nothing was kept.
                 refundAmount:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: What the customer is owed for this return, fixed when the goods were received.
                 closedAt:
                     type: string
@@ -696,7 +691,7 @@ components:
                     $ref: '#/components/schemas/ReturnKind'
                 fulfillmentOrderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
-                    description: Required exactly when `kind` is `cancellation` — the fulfillment order whose remainder is cancelled.
+                    description: Required exactly when `kind` is `cancellation` — the fulfillment order whose remainder is canceled.
                 requestedAt:
                     type: string
                     format: date-time
@@ -742,9 +737,7 @@ components:
                         What the buyer is given. Absent means `refund`. `replace` and `repair` are for a
                         `defective` or `wrong_item` return only (422 `RETURN_REMEDY_INVALID` otherwise).
                 handlingDeduction:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: >-
                         Handling damage to keep back from the refund (Art. 14(2)), a decimal in the
                         return's currency. Absent means none. More than the refund is worth is refused,
@@ -840,11 +833,11 @@ components:
                     type: integer
                     minimum: 1
 
-        CancellableFulfillmentOrder:
+        CancelableFulfillmentOrder:
             type: object
             additionalProperties: false
             required: [fulfillmentOrderId, number, lines, refundAmount, shippingRefund, cancel]
-            description: A fulfillment order with a remainder that can still be cancelled, and what cancelling it would refund.
+            description: A fulfillment order with a remainder that can still be canceled, and what cancelling it would refund.
             properties:
                 fulfillmentOrderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -856,14 +849,10 @@ components:
                     items:
                         $ref: '#/components/schemas/CancelOptionLine'
                 refundAmount:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: What the cancel would refund, in `ReturnOptions.currency` — the lines plus `shippingRefund`.
                 shippingRefund:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: The delivery inside `refundAmount` — non-zero only when this cancel takes the last unit of the order.
                 cancel:
                     type: boolean
@@ -875,7 +864,7 @@ components:
         ReturnOptions:
             type: object
             additionalProperties: false
-            required: [orderId, currency, exceptions, returnable, cancellable]
+            required: [orderId, currency, exceptions, returnable, cancelable]
             properties:
                 orderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -910,10 +899,10 @@ components:
                         is not. Goods excluded from withdrawal (Art. 16) are listed to the buyer only
                         while a `defective` or `wrong_item` reason is open, and to staff always; they
                         carry `withdrawable: false`.
-                cancellable:
+                cancelable:
                     type: array
                     items:
-                        $ref: '#/components/schemas/CancellableFulfillmentOrder'
+                        $ref: '#/components/schemas/CancelableFulfillmentOrder'
 
         ReturnsResponse:
             type: object

@@ -38,7 +38,7 @@ flowchart LR
 
 | What a module declares           | Read by                                                                                   |
 | -------------------------------- | ----------------------------------------------------------------------------------------- |
-| `module.yaml#group`, `summary`   | the docs index and the `/modules/` sidebar (`scripts/docs/module-catalogue.ts`)           |
+| `module.yaml#group`, `summary`   | the docs index and the `/modules/` sidebar (`scripts/docs/module-catalog.ts`)             |
 | `module.yaml#noAudit` (a reason) | `tests/cross-cutting/audit-actions.test.ts` — the reviewed "emits no audit action" answer |
 | `openapi.yaml` (paths and tags)  | the root contract, completed by `scripts/contracts/root-assembly.ts`                      |
 | `probes.ts`                      | the client collections, loaded by directory scan                                          |

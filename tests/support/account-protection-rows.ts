@@ -93,11 +93,6 @@ export const PROTECTION_ROWS: readonly ProtectionRow[] = [
         route: 'users POST /:id/deactivate',
         key: 'ban:User',
         prepare: onUser('post', '/deactivate')
-    },
-    {
-        route: 'users DELETE /',
-        key: 'delete:User',
-        prepare: (owner) => ({ method: 'delete', url: '/users', body: { id: owner.user.id } })
     }
 ];
 

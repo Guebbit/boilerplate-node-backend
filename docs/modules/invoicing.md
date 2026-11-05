@@ -254,6 +254,7 @@ Two rules, both from the law rather than taste, both decided once in `orders/dom
   share of shipping — has its VAT extracted and rounded a single time. It is never the sum of
   per-line rounded amounts: three 0.10 lines at 22% owe `round(0.30 x 0.22/1.22)` = 0.05, where
   rounding each line first would bill 0.06.
+- **Amounts are decimal text.** `grandTotal` of an invoice, a credit note and the export is a string at the currency's places (`"105"` JPY); a credit note's `taxSummary` rows are padded the same way. Rates stay numbers.
 - **The printed unit price is net** (VAT Directive Art. 226(8): "the unit price exclusive of
   VAT"). The frozen `unitPrice` stays what the customer was charged (gross); the document divides
   the rate back out and prints it with two places beyond the currency's own, because a net price is
@@ -283,7 +284,7 @@ VAT can differ from the invoice's by a minor unit in total; every document is se
 
 EN 16931's category codes distinguish a 0%-rated line (`Z`) from an exempt one (`E`) — a
 distinction `products`' `taxClass` enum (`reduced`/`zero`) alone cannot make, since `zero` covers
-both reasons. `products`' `rateType` (`standard`/`zero-rated`/`exempt`) says which, frozen onto the
+both reasons. `products`' `rateType` (`standard`/`zero_rated`/`exempt`) says which, frozen onto the
 order line the same way `taxClass` resolves into `taxRate` — but copied AS IS rather than resolved,
 since there is no numeric form for a reason code to become.
 

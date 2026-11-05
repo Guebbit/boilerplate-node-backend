@@ -6,6 +6,7 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Examples
+      x-family: Example
       description: The example module - the small, complete domain to copy when starting a new one. Safe to delete.
 
 x-error-codes:

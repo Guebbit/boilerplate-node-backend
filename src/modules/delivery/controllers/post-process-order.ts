@@ -1,7 +1,7 @@
 /**
  * @module
  * POST /orders/:id/process
- * Staff reporting that fulfilment has started on a paid order — the one door that moves an order
+ * Staff reporting that fulfillment has started on a paid order — the one door that moves an order
  * `paid → processing`, before any parcel exists to record.
  */
 

@@ -272,10 +272,10 @@ describe('P5 — a customer cancelling while the payment settles', () => {
     /*
      * Each order races its own cancel against its own confirm, several orders at once so the
      * interleavings vary. Which side wins is the database's business; what is asserted is that
-     * the outcome is one a sequential run could also have produced — never a cancelled order
+     * the outcome is one a sequential run could also have produced — never a canceled order
      * that kept the money, and never a paid order whose payment did not succeed.
      */
-    it('never keeps money for a cancelled order, nor marks paid what was not charged', async () => {
+    it('never keeps money for a canceled order, nor marks paid what was not charged', async () => {
         const product = await createProduct({ onHand: RACE_SIZE * 2 });
         const orders = await Promise.all(
             Array.from({ length: RACE_SIZE }, () => orderAwaitingPayment(String(product._id), 1))
@@ -296,9 +296,9 @@ describe('P5 — a customer cancelling while the payment settles', () => {
         for (const { orderId, paymentId } of orders) {
             const order = await orderModel.findById(orderId);
             const payment = await paymentModel.findById(paymentId);
-            if (order?.status === 'cancelled')
+            if (order?.status === 'canceled')
                 // Never charged, or charged and given back — never charged and kept.
-                expect(['cancelled', 'succeeded']).toContain(payment?.status);
+                expect(['canceled', 'succeeded']).toContain(payment?.status);
             else {
                 expect(order?.status).toBe('paid');
                 expect(payment?.status).toBe('succeeded');

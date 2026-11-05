@@ -8,7 +8,7 @@ import {
     apportion,
     fitsCurrency,
     minorUnitExponent,
-    toDecimalAmount,
+    toDecimalString,
     toMinorUnits,
     scaleMoneyByRate,
     type Money
@@ -40,11 +40,11 @@ const moneyCase = z.discriminatedUnion('kind', [
         kind: z.literal('decimal'),
         minor,
         currency: z.string(),
-        decimal: z.number()
+        decimal: z.string()
     }),
     caseBase.extend({
         kind: z.literal('fits'),
-        amount: numeric,
+        amount: z.string(),
         currency: z.string(),
         fits: z.boolean()
     }),
@@ -78,7 +78,7 @@ describeCases('money', moneyCase, (one) => {
             break;
         }
         case 'decimal': {
-            expect(toDecimalAmount(asMoney(one.minor), one.currency)).toBe(one.decimal);
+            expect(toDecimalString(asMoney(one.minor), one.currency)).toBe(one.decimal);
             break;
         }
         case 'fits': {

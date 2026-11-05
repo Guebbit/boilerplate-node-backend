@@ -343,12 +343,20 @@ src/modules/<name>/
                                                the scaffolder starts here: crud.ts + actions.ts + index.ts
   model.ts repository.ts                       IF it owns a collection; every conditional write is a named repository method
   domain/                                      IF a rule is worth a unit test; a 3+-state stored status almost always has one
-  events.ts                                    IF it emits: past tense, emitted AFTER the write, with an id
+  events.ts                                    IF it emits: past tense or a reached-state word, emitted AFTER the write, with an id (naming: asyncapi-workflow)
   audit/analytics/metrics/probes/rate-limits/config/emails.ts   IF there is something to declare
   providers/                                   IF it owns a port to an outside service (an ACL)
   presenter.ts                                 IF it serves HTTP and owns a model — see below
   factories.ts locales/ asyncapi.yaml          IF needed
 ```
+
+A handler file in `controllers/` starts with the HTTP method it serves (`get-`, `post-`, `put-`,
+`patch-`, `delete-`), or with `update-` for a PUT + PATCH group; the subject comes before the verb
+(`post-account-restore.ts`, `post-subscription-enable.ts`). A factory group may share one file
+(`get-stats.ts` holds eight handlers), and a helper that is not a handler (`respond.ts`,
+`send-pdf.ts`) keeps its own name. A read of the whole collection is `get-<xs>.ts` and a read of
+one record is `get-<x>.ts` (`get-orders.ts` / `get-order.ts`): the pair the scaffolder writes.
+Never `get-<x>-item.ts` or `get-<x>-by-id.ts`; the exported handler keeps the operationId's name.
 
 `routes.ts` and `controllers/` say "IF it serves HTTP", not "write them by hand": a controller is a
 short spec against one of the five shared factories in `infrastructure/surfaces/` (list, item,

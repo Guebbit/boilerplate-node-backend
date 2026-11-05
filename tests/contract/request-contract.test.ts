@@ -117,6 +117,7 @@ const QUERY_FIXTURES: Partial<Record<string, QueryFixture>> = {
         request: adminQuery('/delivery/fulfillment-orders/restock-date-impact')
     },
     'GET /webhooks/deliveries': { request: adminQuery('/webhooks/deliveries') },
+    'GET /products': { request: adminQuery('/products') },
     'GET /payments': { request: adminQuery('/payments') },
     'GET /payments/refunds': { request: adminQuery('/payments/refunds') },
     'GET /stats/sales': {
@@ -324,7 +325,7 @@ const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
         productId: (world) => world.productId
     },
     // The generated quantity is the contract's hard ceiling (999); the shop's per-line cap refuses it.
-    updateCartItemById: { quantity: () => 1 },
+    updateCartItemByProductId: { quantity: () => 1 },
     createWishlistItem: { productId: (world) => world.productId },
     createStockAlert: { productId: (world) => world.productId },
     createPayment: { orderId: (world) => world.orderId },
@@ -351,7 +352,7 @@ const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
     // `otp` is optional and only legal for an account with a second factor armed; the generated
     // account has none, so the legal body leaves it out (it is a 422, not a schema refusal).
     reauth: { password: () => PLAIN_PASSWORD, otp: () => undefined },
-    mintApiKey: { permissions: () => ['read:User'] },
+    createApiKey: { permissions: () => ['read:User'] },
     // An event name is legal only if the catalogue lists it, which the schema cannot say: `*` always is.
     createWebhookSubscription: { eventTypes: () => ['*'] },
     replaceWebhookSubscription: { eventTypes: () => ['*'] },

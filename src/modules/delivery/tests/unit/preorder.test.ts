@@ -60,7 +60,7 @@ const line = (productId: string, quantity = 1, shipped = 0) => ({
     title: productId,
     quantity,
     shippedQuantity: shipped,
-    cancelledQuantity: 0
+    canceledQuantity: 0
 });
 
 describe('expectedDateOf', () => {

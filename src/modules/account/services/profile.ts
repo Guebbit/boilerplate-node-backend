@@ -36,7 +36,7 @@ import { ACCOUNT_ANALYTICS_CONSENT_WITHDRAWN } from '../events';
 /**
  * Read the caller's own profile.
  * `findByIdWithPendingEmail`, not `userService.getById`: that read is shared with the admin's
- * `get-user-item.ts` lookup, which has no business seeing a pending change, and the caller's own
+ * `get-user.ts` lookup, which has no business seeing a pending change, and the caller's own
  * client needs it to show "verification pending for …" — `pendingEmail` is otherwise
  * `select: false`. Not a wrapper around an emit inside `getById` either, for a second reason: an
  * unconditional `user_profile_viewed` there would miscount admin lookups as the user's own view.

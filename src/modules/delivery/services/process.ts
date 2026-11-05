@@ -1,6 +1,6 @@
 /**
  * @module
- * Starting fulfilment on a paid order, and the shipping-methods catalogue. Neither is about a
+ * Starting fulfillment on a paid order, and the shipping-methods catalogue. Neither is about a
  * fulfillment order or a shipment, so neither belongs in an act.
  */
 
@@ -16,7 +16,7 @@ import { canProcessOrder, orderService } from '@modules/orders';
 import type { AuthContext, CallerContext, Order, ShippingMethodsResponse } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { deliveryAuditActions } from '../audit';
-import { SHIPPING_METHODS } from '../domain';
+import { SHIPPING_METHODS, quoteMethod } from '../domain';
 import { ensureFulfillmentOrders } from './ensure';
 import { shopCurrency } from '@modules/shop';
 
@@ -32,8 +32,8 @@ import { shopCurrency } from '@modules/shop';
 export const listMethods = (): ResponseSuccess<ShippingMethodsResponse> => {
     const currency = shopCurrency();
     return generateSuccess({
-        // Spread: `SHIPPING_METHODS` itself is `readonly`, and the response type isn't.
-        methods: SHIPPING_METHODS.map((method) => ({ ...method, currency }))
+        // A fresh row each: `SHIPPING_METHODS` itself is `readonly`, and the response type isn't.
+        methods: SHIPPING_METHODS.map((method) => quoteMethod(method, currency))
     });
 };
 
@@ -42,7 +42,7 @@ const notPaid = (): ResponseReject =>
     generateReject(409, [{ code: ERROR_CODES.ORDER_NOT_PAID, message: t('delivery.not-paid') }]);
 
 /**
- * Report that fulfilment has started on a paid order — the `paid → processing` door, before any
+ * Report that fulfillment has started on a paid order — the `paid → processing` door, before any
  * shipment exists to record. Makes the order's fulfillment orders too if the `paid` listener has not
  * yet. Shipping from `paid` makes this move itself, so this door is the optional "mark in
  * progress". No `forced` variant: the admin override (`override:Order`,
@@ -70,7 +70,7 @@ export const processOrder = (
                 if (!moved) return notPaid();
 
                 recordAudit(context, {
-                    action: deliveryAuditActions.ADMIN_ORDER_FULFILMENT_STARTED,
+                    action: deliveryAuditActions.ADMIN_ORDER_FULFILLMENT_STARTED,
                     outcome: 'success',
                     targetType: 'order',
                     targetId: orderId

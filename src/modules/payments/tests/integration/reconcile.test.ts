@@ -37,7 +37,7 @@ afterEach(() => {
 /** An order with an open intent the provider has already charged, and no webhook seen. */
 const chargedAtProvider = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 25, onHand: 10 });
+    const product = await createProduct({ price: '25.00', onHand: 10 });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     const orderId = String(order._id);
     await paymentService.createIntent(orderId, asCustomer(user.id));
@@ -100,7 +100,7 @@ const orderStatusOf = (orderId: string) =>
 /** An order with an intent prepared and nothing attempted: the card was never presented. */
 const unconfirmedIntent = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 25, onHand: 10 });
+    const product = await createProduct({ price: '25.00', onHand: 10 });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     const orderId = String(order._id);
     const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
@@ -166,13 +166,13 @@ describe('cancelling an order whose intent already succeeded at the provider', (
     it('returns the money that landed in the last minutes before the cancel', async () => {
         const { user, orderId } = await chargedAtProvider();
 
-        const cancelled = await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
+        const canceled = await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
 
-        expect(cancelled.success).toBe(true);
-        // `order.cancelled` reaches the listener through the outbox, not inline.
+        expect(canceled.success).toBe(true);
+        // `order.canceled` reaches the listener through the outbox, not inline.
         await settleOutboxNudges();
         const payment = await paymentRepository.findByOrderId(orderId);
         const order = await orderService.getById(orderId);
-        expect([payment?.status, order?.status]).toEqual(['succeeded', 'cancelled']);
+        expect([payment?.status, order?.status]).toEqual(['succeeded', 'canceled']);
     });
 });

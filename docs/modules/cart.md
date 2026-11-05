@@ -91,6 +91,15 @@ Mongo and not Redis, deliberately: Redis here is cache-only, with no persistence
 eviction. A cart in Redis would make concurrent writes race-free for nothing, paid for in
 durability — and would turn one indexed query into a hand-maintained secondary index.
 
+## Why a line has no id
+
+One product is one line, so the product id names the line (`/cart/items/{productId}`,
+`updateCartItemByProductId`, `deleteCartItemByProductId`). With variants or options two lines could
+hold the same product, so each line would get its own id: the address becomes
+`/cart/items/{itemId}` and the operations become `updateCartItemById` / `deleteCartItemById`. What
+that costs then: the model, the contract, the frontend cart store, the guest merge, reorder and the
+wishlist's "move to cart".
+
 ## Stock checked in three places
 
 One rule answers "what can this line do right now", in the cart's domain layer

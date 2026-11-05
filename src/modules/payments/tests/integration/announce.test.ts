@@ -113,7 +113,7 @@ describe('a settlement that dies after charging', () => {
         );
     });
 
-    it('announces nothing when the order was cancelled meanwhile — the refund path owns that', async () => {
+    it('announces nothing when the order was canceled meanwhile — the refund path owns that', async () => {
         const { user, order } = await placedOrder();
         const orderId = String(order._id);
         const intent = await paymentService.createIntent(orderId, asCustomer(user.id));

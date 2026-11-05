@@ -1,7 +1,7 @@
 /**
  * @module
  * The statuses stamped beside an order's own: the money and the return, read from what their
- * owners stamped. The fulfilment one reads the summary `delivery` reports, in `fulfillment.test.ts`.
+ * owners stamped. The fulfillment one reads the summary `delivery` reports, in `fulfillment.test.ts`.
  */
 import { paymentStatusOf, returnStatusOf } from '../../domain';
 

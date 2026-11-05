@@ -419,15 +419,6 @@ describe('readInput', () => {
             expect(readInput(request, declaration).hardDelete).toBe(false);
         });
 
-        it('still leaves a JSON body value alone, so a wrong type reaches the validator', () => {
-            const request = makeRequest({
-                body: { hardDelete: 'not-a-boolean' },
-                contentType: JSON_TYPE
-            });
-
-            expect(readInput(request, declaration).hardDelete).toBe('not-a-boolean');
-        });
-
         it('passes an unrecognisable query value through for the validator to reject', () => {
             const request = makeRequest({ query: { hardDelete: 'maybe' } });
 
@@ -482,8 +473,7 @@ describe('readInput', () => {
                 read(
                     makeRequest({
                         params: { hardDelete: 'false' },
-                        body: { hardDelete: true },
-                        contentType: JSON_TYPE
+                        query: { hardDelete: 'true' }
                     })
                 )
             ).toBe(true);
@@ -494,8 +484,7 @@ describe('readInput', () => {
                 read(
                     makeRequest({
                         params: { hardDelete: 'true' },
-                        body: { hardDelete: false },
-                        contentType: JSON_TYPE
+                        query: { hardDelete: 'false' }
                     })
                 )
             ).toBe(true);
@@ -505,11 +494,20 @@ describe('readInput', () => {
             expect(
                 read(
                     makeRequest({
-                        query: { hardDelete: 'false' },
-                        body: { hardDelete: false },
-                        contentType: JSON_TYPE
+                        params: { hardDelete: 'false' },
+                        query: { hardDelete: 'false' }
                     })
                 )
+            ).toBe(false);
+        });
+
+        it('does not count a body `hardDelete`: a DELETE reads no body', () => {
+            expect(
+                'hardDelete' in
+                    readInput(
+                        makeRequest({ body: { hardDelete: true }, contentType: JSON_TYPE }),
+                        declaration
+                    )
             ).toBe(false);
         });
 
@@ -524,8 +522,7 @@ describe('readInput', () => {
                 read(
                     makeRequest({
                         query: { hardDelete: '' },
-                        body: { hardDelete: true },
-                        contentType: JSON_TYPE
+                        params: { hardDelete: 'true' }
                     })
                 )
             ).toBe(true);
@@ -538,8 +535,7 @@ describe('readInput', () => {
                 read(
                     makeRequest({
                         query: { hardDelete: 'maybe' },
-                        body: { hardDelete: true },
-                        contentType: JSON_TYPE
+                        params: { hardDelete: 'true' }
                     })
                 )
             ).toBe('maybe');

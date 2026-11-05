@@ -34,8 +34,8 @@ import {
 import { upload } from '@infrastructure/http/middlewares/upload';
 import { getAccount } from './controllers/get-account';
 import { replaceAccount, updateAccount } from './controllers/update-account';
-import { cancelPendingEmail } from './controllers/cancel-pending-email';
-import { postPendingEmailResend } from './controllers/post-pending-email-resend';
+import { cancelPendingEmail } from './controllers/delete-email-change';
+import { postPendingEmailResend } from './controllers/post-email-change-resend';
 import { postLogin } from './controllers/post-login';
 import { postSignup } from './controllers/post-signup';
 import { postResetRequest } from './controllers/post-reset-request';

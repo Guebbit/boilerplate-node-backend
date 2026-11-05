@@ -20,12 +20,12 @@ import {
 import { holds } from '@kernel/ability';
 import { callerForSubject } from '@kernel/permissions';
 import { getOrders } from './controllers/get-orders';
-import { createOrder } from './controllers/create-order';
+import { createOrder } from './controllers/post-order';
 import { replaceOrderById, updateOrderById } from './controllers/update-order';
 import { putShippingAddress } from './controllers/put-shipping-address';
 import { deleteOrders } from './controllers/delete-orders';
-import { restoreOrders } from './controllers/restore-orders';
-import { getOrderItem } from './controllers/get-order-item';
+import { restoreOrders } from './controllers/post-order-restore';
+import { getOrderItem } from './controllers/get-order';
 import { getOrdersExport } from './controllers/get-orders-export';
 import { ordersExportLimiter } from './rate-limits';
 import { getOrderTimeline } from './controllers/get-order-timeline';
@@ -84,9 +84,6 @@ router.post(
     invalidateCache(['products']),
     createOrder
 );
-
-// DELETE /orders — admin, id in body
-router.delete('/', requirePermission('delete', 'Order'), deleteOrders);
 
 // POST /orders/:id/cancel — the one order write a customer can make (owner or admin;
 // the service's conditional write carries the caller's scope). An operator's cancel asks a fresh

@@ -10,7 +10,12 @@
 import type { ToObjectOptions } from 'mongoose';
 import { carryVersion } from './versioning';
 import { EDIT_REVISION } from './revision-plugin';
-import { reviveDecimals } from './money-field';
+import {
+    moneyPathsOf,
+    padMoneyPaths,
+    stringifyDecimals,
+    type MoneyWalkableSchema
+} from './money-field';
 
 /** A model's serializer: mutates a plain object into its wire shape and returns it. */
 export type SerializeTransform = (serialized: Record<string, unknown>) => Record<string, unknown>;
@@ -30,6 +35,12 @@ export interface SerializeOptions {
     after?: (serialized: Record<string, unknown>) => void;
     /** Whether `toJSON` includes Mongoose virtuals. Off only where no virtual is wanted. */
     virtuals?: boolean;
+    /**
+     * The currency every stored amount of this model is priced in; its money fields are padded to
+     * that currency's places last. Default: the document's own `currency`. Products pass the live
+     * shop currency, because a product stores none.
+     */
+    currency?: (serialized: Record<string, unknown>) => string | undefined;
 }
 
 /**
@@ -39,7 +50,7 @@ export interface SerializeOptions {
  * `Schema<ProductDocument>` would only accept one of five models — so this asks only for the
  * single `set('toJSON', …)` call the wiring actually uses.
  */
-interface SerializableSchema {
+interface SerializableSchema extends MoneyWalkableSchema {
     set: (key: 'toJSON', value: ToObjectOptions) => unknown;
 }
 
@@ -52,8 +63,9 @@ interface SerializableSchema {
  */
 export const applySerialization = (
     schema: SerializableSchema,
-    { dropId = false, omit = [], after, virtuals = true }: SerializeOptions = {}
+    { dropId = false, omit = [], after, virtuals = true, currency }: SerializeOptions = {}
 ): SerializeTransform => {
+    const moneyPaths = moneyPathsOf(schema);
     /** The wire-shape transform itself — shared by both the `toJSON` path and the lean/aggregate path. */
     const transform: SerializeTransform = (serialized) => {
         if (dropId) delete serialized._id;
@@ -63,8 +75,8 @@ export const applySerialization = (
             delete serialized._id;
         }
         delete serialized.__v;
-        // A stored amount is a Decimal128; the wire (and every reader above this layer) wants a number.
-        reviveDecimals(serialized);
+        // A stored amount is a Decimal128; every reader above this layer wants its decimal text.
+        stringifyDecimals(serialized);
         // The edit counter is the row's version, not part of its wire shape: it rides beside the
         // object (`carryVersion`) so the item and update controllers can still derive the `ETag`.
         carryVersion(serialized, serialized);
@@ -74,6 +86,11 @@ export const applySerialization = (
         for (const key of omit) delete serialized[key];
 
         after?.(serialized);
+
+        // Last, so `after` computes on exact text and nothing it adds escapes the currency's places.
+        const priced = currency ? currency(serialized) : serialized.currency;
+        if (moneyPaths.length > 0 && typeof priced === 'string')
+            padMoneyPaths(serialized, moneyPaths, priced);
 
         return serialized;
     };

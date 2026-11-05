@@ -297,7 +297,7 @@ const refundedOrder = async () => {
     const creditNote = await issueCreditNote({
         orderId,
         refundId: 'refund-2',
-        amount: 1,
+        amount: '1.00',
         full: true
     });
     return { orderId, creditNoteId: String(creditNote?._id), owner };
@@ -407,7 +407,7 @@ describe('GET /orders/{id}/credit-notes/{creditNoteId}', () => {
         const creditNote = await issueCreditNote({
             orderId,
             refundId: 'refund-1',
-            amount: 1,
+            amount: '1.00',
             full: true
         });
         const url = `/orders/${orderId}/credit-notes/${String(creditNote?._id)}`;

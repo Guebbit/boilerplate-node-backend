@@ -44,7 +44,7 @@ const csvOf = (
 /** One order of one buyer, at a time of the test's choosing. */
 const orderOf = async (email: string, status: OrderStatus = OrderStatus.paid, createdAt?: Date) => {
     const user = await createUser({ email, username: email.replaceAll(/\W/g, '') });
-    const product = await createProduct({ price: 10 });
+    const product = await createProduct({ price: '10.00' });
     return createOrder(user, [toOrderItem(product, 2)], {
         status,
         ...(createdAt ? { createdAt } : {})
@@ -76,7 +76,7 @@ describe('the file', () => {
         expect(lines[1]).toContain('newer@example.com');
         expect(lines[0]).toContain('2026-01-01T10:00:00.000Z');
         expect(lines[0]).toContain(',paid,');
-        expect(lines[0]).toContain(',20,EUR,');
+        expect(lines[0]).toContain(',20.00,EUR,');
     });
 
     it('carries no address', async () => {

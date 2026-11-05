@@ -101,7 +101,7 @@ export type RequestSurface = 'search' | 'list' | 'write' | 'create' | 'delete' |
  * query-only (a GET has no body semantics per RFC 9110); `write` reads params before body, for a
  * route that carries an id in its path; `create` is body-only, for a route that never does —
  * declaring `write` there would claim a `params` source no such route offers; `delete` reads
- * params, query, then body, except `hardDelete` which is `anyTrue` and escapes ranking; `path` is
+ * params, then query, except `hardDelete` which is `anyTrue` and escapes ranking; `path` is
  * params-only, for a value that cannot arrive any other way.
  *
  * See: docs/theory/request-input.md
@@ -111,7 +111,7 @@ const SURFACE_SOURCES: Record<RequestSurface, readonly RequestInputSource[]> = {
     list: ['query'],
     write: ['params', 'body'],
     create: ['body'],
-    delete: ['params', 'query', 'body'],
+    delete: ['params', 'query'],
     path: ['params']
 };
 

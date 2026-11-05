@@ -4,6 +4,7 @@
  * root assembler completes (paths and tags reach the root bundle by themselves).
  */
 
+import { TAG_FAMILY_OF_GROUP } from '../contracts/fragments';
 import type { ModuleNames } from './names';
 
 /** Where the shared components live, relative to a module folder. */
@@ -44,12 +45,18 @@ const PATH_ONLY_ERRORS = [
  * The module's `openapi.yaml`: list, create, read, replace, patch and delete, plus the schemas only
  * these paths reference.
  * @param names - the module's spellings
+ * @param group - the module's group, which decides the API-docs family of its tag
  * @returns the YAML text
  */
-export const openapiFragment = (names: ModuleNames): string => `openapi: 3.1.0
+export const openapiFragment = (names: ModuleNames, group: string): string => `openapi: 3.1.0
 info:
     title: ${names.kebab} — module contract
     version: '1.0.0'
+
+tags:
+    - name: ${names.entity}
+      description: ${names.words}
+      x-family: ${TAG_FAMILY_OF_GROUP[group] ?? 'Other'}
 
 paths:
     ${names.basePath}:

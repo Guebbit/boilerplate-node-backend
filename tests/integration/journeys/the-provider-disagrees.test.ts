@@ -50,23 +50,25 @@ const providerRef = (paymentId: string) => `fake_pi_${paymentId}`;
 
 describe('the provider reports the wrong amount', () => {
     it('refuses the settlement, cancels the order and returns what it collected', async () => {
-        const product = await createProduct({ price: 20, onHand: 10 });
+        const product = await createProduct({ price: '20.00', onHand: 10 });
         const productId = String(product._id);
         const { bearer, email } = await newShopper();
         const { bearer: staff } = await authenticateAs('admin');
         const order = await placeOrder(bearer, [{ productId, quantity: 2 }]);
         const intent = await openIntent(bearer, order.id);
-        setFakeReceipt(providerRef(intent.id), { amountReceived: order.totalPrice - 1 });
+        setFakeReceipt(providerRef(intent.id), {
+            amountReceived: String(Number(order.totalPrice) - 1)
+        });
 
         const confirm = await confirmCard(bearer, intent.id);
         await drain();
 
         expect(confirm.status).toBe(409);
-        expect(await orderOf(bearer, order.id)).toMatchObject({ status: 'cancelled' });
+        expect(await orderOf(bearer, order.id)).toMatchObject({ status: 'canceled' });
         const payment = await paymentOf(staff, order.id);
         expect(payment).toMatchObject({
-            amount: order.totalPrice - 1,
-            amountRefunded: order.totalPrice - 1
+            amount: (Number(order.totalPrice) - 1).toFixed(2),
+            amountRefunded: (Number(order.totalPrice) - 1).toFixed(2)
         });
         expect(payment.refunds.map(({ status }) => status)).toEqual(['succeeded']);
         expect(await stockOf(staff, productId)).toEqual({ onHand: 10, reserved: 0 });
@@ -82,7 +84,7 @@ describe('the provider reports the wrong amount', () => {
 describe('the provider refuses a refund', () => {
     it('leaves it failed, then the sweep finishes it with the same key and no drift', async () => {
         freezeDate();
-        const product = await createProduct({ price: 20, onHand: 10 });
+        const product = await createProduct({ price: '20.00', onHand: 10 });
         const productId = String(product._id);
         const { bearer } = await newShopper();
         const { bearer: staff } = await authenticateAs('admin');
@@ -121,7 +123,7 @@ describe('the provider refuses a refund', () => {
 
 describe('the provider settles a payment behind the server’s back', () => {
     it('is reconciled by a sync: paid once, mailed once', async () => {
-        const product = await createProduct({ price: 20, onHand: 10 });
+        const product = await createProduct({ price: '20.00', onHand: 10 });
         const productId = String(product._id);
         const { bearer, email } = await newShopper();
         const { bearer: staff } = await authenticateAs('admin');
@@ -140,7 +142,7 @@ describe('the provider settles a payment behind the server’s back', () => {
 
         expect(synced).toMatchObject({ status: 'succeeded', amount: order.totalPrice });
         expect(await orderOf(bearer, order.id)).toMatchObject({ status: 'paid' });
-        expect(await paymentOf(staff, order.id)).toMatchObject({ amountRefunded: 0 });
+        expect(await paymentOf(staff, order.id)).toMatchObject({ amountRefunded: '0.00' });
         expect(await stockOf(staff, productId)).toEqual({ onHand: 10, reserved: 1 });
         expect(mailsTo(email, 'payments.payment-received')).toHaveLength(1);
     });

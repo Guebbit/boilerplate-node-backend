@@ -28,7 +28,7 @@ describe('productService.create — no translation provider', () => {
     it('writes the fallback language alone', async () => {
         const result = await productService.create(
             productService.zodProductCreateSchema.parse({
-                price: 12.5,
+                price: '12.50',
                 translations: { [FALLBACK]: { title: 'Standing Desk' } }
             }),
             testCallerContext
@@ -41,7 +41,7 @@ describe('productService.create — no translation provider', () => {
     it('refuses a second language with a field-named 422, not a 500', async () => {
         const result = await productService.create(
             productService.zodProductCreateSchema.parse({
-                price: 12.5,
+                price: '12.50',
                 translations: {
                     [FALLBACK]: { title: 'Standing Desk' },
                     it: { title: 'Scrivania' }

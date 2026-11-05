@@ -14,7 +14,7 @@
  */
 import '@tests/contract';
 import {
-    AddAddress201Response,
+    CreateAddress201Response,
     ApproveReturn200Response,
     Checkout201Response,
     ConfirmPayment200Response,
@@ -64,8 +64,8 @@ const salesTotals = async (bearer: string) =>
     ).currencies[0].totals;
 
 it('adds up across money, stock, documents, stats, audit and mail', async () => {
-    const dogFood = await createProduct({ price: 20, onHand: 10 });
-    const toy = await createProduct({ price: 30, onHand: 10 });
+    const dogFood = await createProduct({ price: '20.00', onHand: 10 });
+    const toy = await createProduct({ price: '30.00', onHand: 10 });
     const dogFoodId = String(dogFood._id);
     const toyId = String(toy._id);
     const { bearer: staff } = await authenticateAs('admin');
@@ -94,7 +94,7 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
             zip: '41121',
             country: 'IT'
         }),
-        AddAddress201Response
+        CreateAddress201Response
     );
     await api()
         .post('/cart/items')
@@ -109,7 +109,7 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
         .set('Authorization', shopper)
         .send({ shippingMethodId: 'standard' });
     const order = bodyOf(await checkoutAs(shopper, { addressId: address.id }), Checkout201Response);
-    expect(order).toMatchObject({ totalPrice: 75, shippingCost: 5, status: 'pending' });
+    expect(order).toMatchObject({ totalPrice: '75.00', shippingCost: '5.00', status: 'pending' });
     expect(await stockOf(staff, dogFoodId)).toEqual({ onHand: 10, reserved: 2 });
 
     // Pay by card.
@@ -124,7 +124,7 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
             .send({ paymentMethodRef: 'pm_card_visa' }),
         ConfirmPayment200Response
     );
-    expect(paid).toMatchObject({ status: 'succeeded', amount: 75, amountRefunded: 0 });
+    expect(paid).toMatchObject({ status: 'succeeded', amount: '75.00', amountRefunded: '0.00' });
     await drain();
 
     // Staff start, ship and deliver the whole order.
@@ -175,7 +175,7 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
 
     // Part of a line goes back: the goods only, the shipping stays with the shop.
     const partial = await sendBack([{ productId: dogFoodId, quantity: 1 }]);
-    expect(partial).toMatchObject({ status: 'closed', refundAmount: 20 });
+    expect(partial).toMatchObject({ status: 'closed', refundAmount: '20.00' });
     expect(await stockOf(staff, dogFoodId)).toEqual({ onHand: 9, reserved: 0 });
     expect(await stockOf(staff, toyId)).toEqual({ onHand: 9, reserved: 0 });
     const afterPartial = await salesTotals(staff);
@@ -183,7 +183,7 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
         orders: 1,
         unitsOrdered: 3,
         unitsReversed: 1,
-        refunds: 20
+        refunds: '20.00'
     });
 
     // The last unit goes back: the goods and the shipping.
@@ -191,17 +191,17 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
         { productId: dogFoodId, quantity: 1 },
         { productId: toyId, quantity: 1 }
     ]);
-    expect(last).toMatchObject({ status: 'closed', refundAmount: 55 });
+    expect(last).toMatchObject({ status: 'closed', refundAmount: '55.00' });
     expect(await stockOf(staff, dogFoodId)).toEqual({ onHand: 10, reserved: 0 });
     expect(await stockOf(staff, toyId)).toEqual({ onHand: 10, reserved: 0 });
-    expect(await salesTotals(staff)).toMatchObject({ unitsReversed: 3, refunds: 75 });
+    expect(await salesTotals(staff)).toMatchObject({ unitsReversed: 3, refunds: '75.00' });
 
     // Money: captured minus refunded is nothing kept, and each refund is what its return said.
     const payment = await paymentOf(staff, order.id);
-    expect(payment).toMatchObject({ amount: 75, amountRefunded: 75 });
+    expect(payment).toMatchObject({ amount: '75.00', amountRefunded: '75.00' });
     expect(payment.refunds.map(({ amount, status }) => [amount, status])).toEqual([
-        [20, 'succeeded'],
-        [55, 'succeeded']
+        ['20.00', 'succeeded'],
+        ['55.00', 'succeeded']
     ]);
 
     // Documents: one invoice, and a credit note per refund in the same series, one after the other.
@@ -212,7 +212,7 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
     );
     expect(invoice?.number).toMatch(/^\d{4}-\d{6}$/);
     expect(creditNotes.items.map(({ number }) => number)).toEqual(['2026-000001', '2026-000002']);
-    expect(creditNotes.items.map(({ grandTotal }) => grandTotal)).toEqual([20, 55]);
+    expect(creditNotes.items.map(({ grandTotal }) => grandTotal)).toEqual(['20.00', '55.00']);
     expect(creditNotes.items.map(({ refundId }) => refundId)).toEqual(
         payment.refunds.map(({ id }) => id)
     );
@@ -225,7 +225,7 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
     const timesOf = (action: string) => audit.filter((one) => one === action).length;
     expect(
         [
-            'admin.order.fulfilment_started',
+            'admin.order.fulfillment_started',
             'admin.order.shipped',
             'admin.order.delivered',
             'admin.return.received',
@@ -249,7 +249,7 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
 });
 
 it('records a staff buyer’s refund of their own order as theirs', async () => {
-    const product = await createProduct({ price: 20, onHand: 10 });
+    const product = await createProduct({ price: '20.00', onHand: 10 });
     const { bearer: admin } = await authenticateAs('admin');
     // A moderator holds `create:Refund`, and is a customer of the shop like everyone else.
     const { bearer: moderator } = await authenticateAsRole('moderator');
@@ -263,7 +263,7 @@ it('records a staff buyer’s refund of their own order as theirs', async () => 
             zip: '41121',
             country: 'IT'
         }),
-        AddAddress201Response
+        CreateAddress201Response
     );
     await api()
         .post('/cart/items')
@@ -299,12 +299,12 @@ it('records a staff buyer’s refund of their own order as theirs', async () => 
             .send({}),
         CreateRefund201Response
     );
-    expect(refund).toMatchObject({ amount: 25 });
+    expect(refund).toMatchObject({ amount: '25.00' });
     const refunded = bodyOf(
         await api().get(`/payments/${intent.id}`).set('Authorization', moderator),
         GetPayment200Response
     );
-    expect(refunded).toMatchObject({ amount: 25, amountRefunded: 25 });
+    expect(refunded).toMatchObject({ amount: '25.00', amountRefunded: '25.00' });
 
     // The trail says the order was theirs; a refund of someone else's order carries no such flag.
     const refunds = bodyOf(
@@ -312,5 +312,5 @@ it('records a staff buyer’s refund of their own order as theirs', async () => 
         ListAuditEntries200Response
     ).items.filter(({ action }) => action === 'admin.payment.refunded');
     expect(refunds).toHaveLength(1);
-    expect(refunds[0].metadata).toMatchObject({ amount: 25, ownOrder: true });
+    expect(refunds[0].metadata).toMatchObject({ amount: '25.00', ownOrder: true });
 });

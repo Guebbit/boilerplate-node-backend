@@ -59,7 +59,7 @@ export interface PlaceOrderLine {
  */
 export interface PlaceOrderShipping {
     address?: OrderAddress;
-    method?: { id: string; priceFor: (frozenLines: readonly OrderDocumentItem[]) => number };
+    method?: { id: string; priceFor: (frozenLines: readonly OrderDocumentItem[]) => string };
     /** Stock hold length in minutes; `undefined` defers to `reserveForOrder`'s own default. */
     holdMinutes?: number;
 }

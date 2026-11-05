@@ -15,13 +15,13 @@ import type { OrderDocument } from '@modules/orders';
 import { FulfillmentCancelReason, FulfillmentOrderStatus, ShipmentStatus } from '@types';
 import type { AuthContext, Shipment } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
-import { planRestoration, statusOfLines, withRemainderCancelled, withRestoration } from '../domain';
+import { planRestoration, statusOfLines, withRemainderCanceled, withRestoration } from '../domain';
 import type { LostShipmentFacts, Restoration } from '../domain';
 import { fulfillmentOrderRepository, shipmentRepository } from '../repository';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
 import { refuse } from './act';
 import { viewShipment } from './actions';
-import { announceCancelled } from './announce';
+import { announceCanceled } from './announce';
 
 /**
  * A lost shipment and the fulfillment orders of its order, as the plan reads them.
@@ -103,7 +103,7 @@ const refuseSuperseded = (): never =>
 
 /**
  * Close the fulfillment orders made for the owed units: the parcel is here, so nothing is owed.
- * Cancelled with reason `found` and no refund.
+ * Canceled with reason `found` and no refund.
  * @param ids - the owed fulfillment orders
  * @param orders - every fulfillment order of the order, as the act read them
  * @param session - the act's transaction
@@ -114,7 +114,7 @@ const closeOwed = async (
     session: ClientSession
 ): Promise<void> => {
     for (const owed of orders.filter(({ _id }) => ids.includes(String(_id)))) {
-        const lines = withRemainderCancelled(owed.lines);
+        const lines = withRemainderCanceled(owed.lines);
         const closed = await fulfillmentOrderRepository.claim(
             String(owed._id),
             owed.revision,
@@ -127,7 +127,7 @@ const closeOwed = async (
             session
         );
         if (!closed) return refuseSuperseded();
-        await announceCancelled(closed, session);
+        await announceCanceled(closed, session);
     }
 };
 
@@ -139,7 +139,7 @@ const closeOwed = async (
  * @param at - the arrival instant
  * @param session - the act's transaction
  * @returns the shipment, now `delivered`
- * @throws {ActRefusal} 409 `DELIVERY_LOST_SUPERSEDED` when any unit on it was shipped again or cancelled
+ * @throws {ActRefusal} 409 `DELIVERY_LOST_SUPERSEDED` when any unit on it was shipped again or canceled
  */
 export const restoreLostShipment = async (
     shipment: ShipmentDocument,

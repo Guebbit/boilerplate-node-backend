@@ -9,7 +9,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
-import type { WebhookEventCatalogueEntry, WebhookEventName } from '@types';
+import type { WebhookEventCatalogEntry, WebhookEventName } from '@types';
 import { ALL_EVENTS } from '../domain';
 
 /** `src/modules/`: a module's folder is its registry name (`AppModule.name`). */
@@ -23,15 +23,15 @@ interface AsyncApiChannelsDocument {
     channels?: Record<string, { description?: string }>;
 }
 
-/** Every event of the modules registered at boot; empty until {@link registerWebhookCatalogue}. */
-let catalogue: readonly WebhookEventCatalogueEntry[] = [];
+/** Every event of the modules registered at boot; empty until {@link registerWebhookCatalog}. */
+let catalogue: readonly WebhookEventCatalogEntry[] = [];
 
 /**
  * One module's events, or none when it owns no fragment.
  *
  * @param moduleName - a registered module's name, which is its folder under `src/modules/`
  */
-const eventsOf = (moduleName: string): WebhookEventCatalogueEntry[] => {
+const eventsOf = (moduleName: string): WebhookEventCatalogEntry[] => {
     const file = path.join(MODULES_DIRECTORY, moduleName, FRAGMENT_FILE);
     if (!existsSync(file)) return [];
     // `yaml.parse`: https://eemeli.org/yaml/#parse — a plain object back, no custom tags here.
@@ -50,12 +50,12 @@ const eventsOf = (moduleName: string): WebhookEventCatalogueEntry[] => {
  *
  * @param moduleNames - the registered modules' names, in registration order
  */
-export const registerWebhookCatalogue = (moduleNames: readonly string[]): void => {
+export const registerWebhookCatalog = (moduleNames: readonly string[]): void => {
     catalogue = moduleNames.flatMap((name) => eventsOf(name));
 };
 
 /** Every event a subscription may filter on. */
-export const listWebhookEventCatalogue = (): readonly WebhookEventCatalogueEntry[] => catalogue;
+export const listWebhookEventCatalog = (): readonly WebhookEventCatalogEntry[] => catalogue;
 
 /**
  * The names a subscription may not filter on: anything the catalogue does not list. `*` always

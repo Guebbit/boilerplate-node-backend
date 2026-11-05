@@ -63,7 +63,7 @@ const dataOf = (template: string): Record<string, string> => {
 /** A customer who paid 100.00 by card: one product at 50.00, two units. */
 const paidOrder = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 50, onHand: 10 });
+    const product = await createProduct({ price: '50.00', onHand: 10 });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     // Every `payment.succeeded` listener runs now, so the order needs the hold a real checkout made.
     await inventoryService.reserveForOrder(String(order._id), [
@@ -81,7 +81,7 @@ describe('a refund outside a return mails the buyer', () => {
         const { order, orderId } = await paidOrder();
 
         await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
-            amount: 30
+            amount: '30.00'
         });
         await waitForMails(() => mailsOf('payments.refund-issued').length > 0);
 
@@ -94,7 +94,7 @@ describe('a refund outside a return mails the buyer', () => {
         const { orderId } = await paidOrder();
 
         await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
-            amount: 100
+            amount: '100.00'
         });
         await waitForMails(() => mailsOf('payments.refund-issued').length > 0);
 
@@ -105,11 +105,11 @@ describe('a refund outside a return mails the buyer', () => {
         const { orderId } = await paidOrder();
 
         await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
-            amount: 30
+            amount: '30.00'
         });
         await waitForMails(() => mailsOf('payments.refund-issued').length === 1);
         await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
-            amount: 70
+            amount: '70.00'
         });
         await waitForMails(() => mailsOf('payments.refund-issued').length === 2);
 
@@ -118,14 +118,14 @@ describe('a refund outside a return mails the buyer', () => {
         expect(second).toContain('everything');
     });
 
-    it('follows a paid cancel: the cancelled notice first, then the refund when it lands', async () => {
+    it('follows a paid cancel: the canceled notice first, then the refund when it lands', async () => {
         const { user, orderId } = await paidOrder();
         mockEnqueueEmail.mockClear();
 
         await orderService.cancelOnRequestById(orderId, asCustomer(user.id), {}, testCallerContext);
         await waitForMails(() => mailsOf('payments.refund-issued').length > 0);
 
-        expect(mailsOf('orders.order-cancelled')).toHaveLength(1);
+        expect(mailsOf('orders.order-canceled')).toHaveLength(1);
         expect(mailsOf('payments.refund-issued')).toHaveLength(1);
     });
 });
@@ -135,7 +135,12 @@ const refundedOf = (orderId: string) =>
     paymentRepository.findByOrderId(orderId).then((payment) => payment?.amountRefunded ?? 0);
 
 describe('who may return money for a return', () => {
-    const RETURN = { returnId: '64b64c4f4f4f4f4f4f4f4f4f', amount: 50, lines: [], shipping: 0 };
+    const RETURN = {
+        returnId: '64b64c4f4f4f4f4f4f4f4f4f',
+        amount: '50.00',
+        lines: [],
+        shipping: '0.00'
+    };
 
     it.each([
         ['an anonymous caller', testCallerContext],
@@ -147,7 +152,7 @@ describe('who may return money for a return', () => {
             /may not return money/
         );
 
-        expect(await refundedOf(orderId)).toBe(0);
+        expect(Number(await refundedOf(orderId))).toBe(0);
     });
 
     it('refuses a buyer for a goods return, which only staff receive', async () => {
@@ -197,7 +202,7 @@ describe('a refund that must not mail', () => {
 
         await refundForReturn(
             orderId,
-            { returnId: '64b64c4f4f4f4f4f4f4f4f4f', amount: 50, lines: [], shipping: 0 },
+            { returnId: '64b64c4f4f4f4f4f4f4f4f4f', amount: '50.00', lines: [], shipping: '0.00' },
             callerContextAs('manager')
         );
         await settleOutboxNudges();
@@ -211,7 +216,7 @@ describe('a refund that must not mail', () => {
 
         await expect(
             refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
-                amount: 30
+                amount: '30.00'
             })
         ).resolves.toMatchObject({ success: true, status: 201 });
         await settleOutboxNudges();

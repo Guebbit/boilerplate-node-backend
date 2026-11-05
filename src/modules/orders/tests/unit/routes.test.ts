@@ -31,7 +31,6 @@ describe('order routes — what is mounted', () => {
             'GET /',
             'GET /export',
             'POST /',
-            'DELETE /',
             'POST /:id/cancel',
             'POST /:id/status-override',
             'PUT /:id/shipping-address',
@@ -65,7 +64,6 @@ describe('order routes — authorization', () => {
         'GET /',
         'GET /export',
         'POST /',
-        'DELETE /',
         'POST /:id/cancel',
         'POST /:id/status-override',
         'GET /:id/timeline',
@@ -80,17 +78,12 @@ describe('order routes — authorization', () => {
         expect(guardsOn(router, signature)).toContain('isAuth');
     });
 
-    it.each([
-        'GET /export',
-        'POST /',
-        'DELETE /',
-        'PUT /:id',
-        'PATCH /:id',
-        'DELETE /:id',
-        'DELETE /:id/hard'
-    ])('%s is admin-only', (signature) => {
-        expect(guardsOn(router, signature)).toContain('requirePermissionGuard');
-    });
+    it.each(['GET /export', 'POST /', 'PUT /:id', 'PATCH /:id', 'DELETE /:id', 'DELETE /:id/hard'])(
+        '%s is admin-only',
+        (signature) => {
+            expect(guardsOn(router, signature)).toContain('requirePermissionGuard');
+        }
+    );
 
     it('gates the override door behind its own permission, not the ordinary write one', () => {
         // A distinct key (`override:Order`), so `update:Order` alone never reaches this
@@ -152,6 +145,5 @@ describe('order routes — caching', () => {
     it('reaches the hard delete only through the flag route', () => {
         expect(chainOf(router, 'DELETE /:id/hard')).toContain('routeFlag(hardDelete)');
         expect(chainOf(router, 'DELETE /:id')).not.toContain('routeFlag(hardDelete)');
-        expect(chainOf(router, 'DELETE /')).not.toContain('routeFlag(hardDelete)');
     });
 });

@@ -127,7 +127,7 @@ flowchart LR
 A module records its audit action from `service.ts` or `services/*.ts`, beside the write itself.
 The exceptions are handlers that each argue in place why they have to emit themselves: the two
 `account` ones below, `get-oauth-callback` (only a genuine login owes the row, known once the
-callback has finished), `orders`' `get-order-item` (a staff read of someone else's order,
+callback has finished), `orders`' `get-order` (a staff read of someone else's order,
 `ADMIN_ORDER_VIEWED`) and `payments`' `post-payment-webhook` (an invalid signature, which never
 reaches a service).
 `post-login` keeps the failure and success emits together at the handler because the success one may

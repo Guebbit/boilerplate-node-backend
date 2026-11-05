@@ -214,3 +214,51 @@ rules:
         then:
             field: schema.maxLength
             function: defined
+
+    # --- Machine-read names are US English ---
+    #
+    # AIP-190 ("correct American English") and Zalando #103 ("MUST write APIs using U.S.
+    # English"). Names only: operationIds, schema names, property names, enum values and
+    # error-code keys. Prose (descriptions, summaries) is free.
+    #
+    # An EXPLICIT stem list, never a suffix regex: `-is-` as a suffix would flag `promisedAt`.
+    # Case-insensitive, so `Cancelled`, `CANCELLED` and `cancelled` are one finding.
+    names-in-us-english-operation-ids:
+        description: 'operationIds are spelled in US English (cancelled → canceled, catalogue → catalog, fulfil → fulfill).'
+        severity: error
+        given: '$.paths[*][*].operationId'
+        then:
+            function: pattern
+            functionOptions: &british
+                notMatch: '/cancell(ed|ing|able)|catalogue|fulfil(?!l)|colour|behaviour|licence|(organ|recogn|normal|serial|initial|author|synchron|categor|custom|minim|maxim|optim|sanit|summar|final|util|visual|local|standard)is(e|ed|es|ing|ation)/i'
+    names-in-us-english-schema-names:
+        description: 'Schema names are spelled in US English.'
+        severity: error
+        given: '$.components.schemas'
+        then:
+            field: '@key'
+            function: pattern
+            functionOptions: *british
+    names-in-us-english-properties:
+        description: 'Property names are spelled in US English.'
+        severity: error
+        given: '$..properties'
+        then:
+            field: '@key'
+            function: pattern
+            functionOptions: *british
+    names-in-us-english-enum-values:
+        description: 'Enum values are spelled in US English.'
+        severity: error
+        given: '$..enum[*]'
+        then:
+            function: pattern
+            functionOptions: *british
+    names-in-us-english-error-codes:
+        description: 'Error-code keys are spelled in US English (the keys, not their descriptions).'
+        severity: error
+        given: "$['x-error-codes']"
+        then:
+            field: '@key'
+            function: pattern
+            functionOptions: *british

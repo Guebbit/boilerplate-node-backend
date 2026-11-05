@@ -56,14 +56,14 @@ const idOf = (body: { id?: unknown }): string => String(body.id);
 
 /** A customer's order that has been through the real doors: paid, delivered, part refunded. */
 const paidDeliveredOrder = async (customer: Customer) => {
-    const product = await createProduct({ price: 25, onHand: 20 });
+    const product = await createProduct({ price: '25.00', onHand: 20 });
     const order = await createOrder(customer.user, [toOrderItem(product, 2)]);
     const orderId = String(order._id);
     await payByCard(order, customer.user);
     await settleOutboxNudges();
     await waitForInvoice(orderId);
     await carryOrderTo(orderId, 'delivered');
-    await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: 5 });
+    await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: '5.00' });
     await eventually(() =>
         api()
             .get(`/orders/${orderId}/credit-notes`)
@@ -75,8 +75,8 @@ const paidDeliveredOrder = async (customer: Customer) => {
 
 /** A customer's order, `processing`, whose first product shipped and whose second is the remainder. */
 const partlyShippedOrder = async (customer: Customer) => {
-    const shipped = await createProduct({ price: 20 });
-    const waiting = await createProduct({ price: 5 });
+    const shipped = await createProduct({ price: '20.00' });
+    const waiting = await createProduct({ price: '5.00' });
     const order = await createOrder(
         customer.user,
         [toOrderItem(shipped, 1), toOrderItem(waiting, 2)],
@@ -94,7 +94,7 @@ const partlyShippedOrder = async (customer: Customer) => {
 
 /** A customer's order that reached `delivered` through the shipments, still unpaid, as a return needs. */
 const deliveredOrder = async (customer: Customer) => {
-    const product = await createProduct({ price: 20 });
+    const product = await createProduct({ price: '20.00' });
     const order = await createOrder(customer.user, [toOrderItem(product, 1)], {
         status: OrderStatus.processing
     });
@@ -255,7 +255,7 @@ const shopPathCases = (world: ShopWorld): OwnedCase[] => {
 
 /** A cart with one physical line and `standard` shipping; its total, as the cart shows it. */
 const cartReadyToCheckOut = async (bearer: string) => {
-    const product = await createProduct({ price: 10, onHand: 50 });
+    const product = await createProduct({ price: '10.00', onHand: 50 });
     await api()
         .post('/cart/items')
         .set('Authorization', bearer)

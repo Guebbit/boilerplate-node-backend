@@ -4,10 +4,10 @@
  */
 
 import type { Request, Response } from 'express';
-import { UpdateCartItemByIdBody } from '@api/schemas.zod';
+import { UpdateCartItemByProductIdBody } from '@api/schemas.zod';
 import { cartService } from '../services';
 import { successResponse } from '@infrastructure/http/response';
-import type { CartResponse, UpdateCartItemByIdRequest } from '@types';
+import type { CartResponse, UpdateCartItemByProductIdRequest } from '@types';
 import { callerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
@@ -19,7 +19,7 @@ import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
  * product the storefront wouldn't show, from the same place: `upsertCartItem`.
  */
 export const patchCartItem = (
-    request: Request<{ productId?: string }, unknown, UpdateCartItemByIdRequest>,
+    request: Request<{ productId?: string }, unknown, UpdateCartItemByProductIdRequest>,
     response: Response
 ) => {
     const userId = request.authContext!.id;
@@ -33,7 +33,7 @@ export const patchCartItem = (
     });
     if (!productId) return;
 
-    const body = parseBody(UpdateCartItemByIdBody, request.body, response);
+    const body = parseBody(UpdateCartItemByProductIdBody, request.body, response);
     if (!body) return;
 
     const { quantity } = body;
@@ -45,5 +45,5 @@ export const patchCartItem = (
 
             successResponse<CartResponse>(response, result.data);
         })
-        .catch(catchAs(response, 'updateCartItemById'));
+        .catch(catchAs(response, 'updateCartItemByProductId'));
 };

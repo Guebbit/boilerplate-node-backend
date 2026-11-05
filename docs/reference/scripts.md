@@ -184,7 +184,7 @@ The five libraries underneath them:
 | `scripts/docs/module-descriptor.ts` | One typed reader for a module's `module.yaml`, shared by the graph generator and the test that proves every descriptor is well-formed — a second hand-rolled parse of the same file drifts.                | [Strategic DDD](../theory/strategic-ddd.md)              |
 | `scripts/docs/repo-references.ts`   | Whether a path a comment cites still exists — the machinery `check-references.ts` and the `comment-links` lint rule share, so the two agree on what counts as a real path instead of each growing its own. | [Repository Root](./root.md)                             |
 | `scripts/docs/marker-block.ts`      | The write-or-report logic every doc generator shares for a generated block between `<!-- name:start -->` / `<!-- name:end -->` markers inside a hand-written page.                                         | —                                                        |
-| `scripts/docs/module-catalogue.ts`  | Every module's place in the docs, derived from its `module.yaml#group`: feeds the module index and the `/modules/` sidebar.                                                                                | [Modules](../modules/index.md)                           |
+| `scripts/docs/module-catalog.ts`    | Every module's place in the docs, derived from its `module.yaml#group`: feeds the module index and the `/modules/` sidebar.                                                                                | [Modules](../modules/index.md)                           |
 
 ## Docker — `scripts/docker/`
 

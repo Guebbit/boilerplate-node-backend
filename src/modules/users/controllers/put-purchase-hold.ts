@@ -1,7 +1,6 @@
 /**
  * @module
- * Controllers for `PUT` and `DELETE /users/:id/purchase-hold` — staff pausing checkout for one
- * account, and ending the pause.
+ * Controller for `PUT /users/:id/purchase-hold` — staff pausing checkout for one account.
  *
  * See: docs/modules/users.md#purchase-hold
  */
@@ -43,30 +42,5 @@ export const putPurchaseHold = namedHandler(
                     });
             })
             .catch(catchAs(response, 'setUserPurchaseHold'));
-    }
-);
-
-/**
- * DELETE /users/:id/purchase-hold — end the hold now and restart the cancellation count.
- * `userService.liftPurchaseHold` owns the 404, the 403 for a staff account and the audit row.
- */
-export const deletePurchaseHold = namedHandler(
-    'liftUserPurchaseHold',
-    (request: Request, response: Response) => {
-        const id = requireId(request, response, { notFound: 'users.not-found' });
-        if (!id) return Promise.resolve();
-
-        return userService
-            .liftPurchaseHold(id, callerContextOf(request))
-            .then((result) => {
-                if (refused(response, result)) return;
-
-                return userService
-                    .toUserContract(result.data, callerContextOf(request).caller)
-                    .then((user) => {
-                        successResponse(response, user, 200);
-                    });
-            })
-            .catch(catchAs(response, 'liftUserPurchaseHold'));
     }
 );

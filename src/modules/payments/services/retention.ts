@@ -5,6 +5,7 @@
  */
 
 import type { ClientSession } from 'mongoose';
+import { padDecimal } from '@domain-primitives/money';
 import { logger } from '@infrastructure/adapters/logger';
 import { readAll, MAX_CONFIGURED_PAGE_SIZE } from '@infrastructure/persistence/search';
 import type { Lean } from '@infrastructure/persistence/create-repository';
@@ -58,13 +59,13 @@ export const findOwnPayments = (userId: string): Promise<Lean<PaymentDocument>[]
 const toExportPayment = (payment: Lean<PaymentDocument>): ExportPayment => ({
     id: String(payment._id),
     orderId: String(payment.orderId),
-    amount: payment.amount,
+    amount: padDecimal(payment.amount, payment.currency),
     currency: payment.currency,
-    amountRefunded: payment.amountRefunded,
+    amountRefunded: padDecimal(payment.amountRefunded, payment.currency),
     refunds: payment.refunds.map(
         (refund): Refund => ({
             id: String(refund._id),
-            amount: refund.amount,
+            amount: padDecimal(refund.amount, refund.currency),
             currency: refund.currency,
             status: refund.status,
             reason: refund.reason,

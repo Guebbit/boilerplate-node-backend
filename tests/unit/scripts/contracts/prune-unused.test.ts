@@ -6,6 +6,11 @@ const BUNDLE = `openapi: 3.1.0
 tags:
     - name: Used
     - name: Orphan
+x-tagGroups:
+    - name: Kept
+      tags: [Used, Orphan]
+    - name: Emptied
+      tags: [Orphan]
 security: []
 paths:
     /things:
@@ -47,7 +52,11 @@ components:
 const pruned = () => {
     const document = parseOpenApi(BUNDLE);
     pruneUnused(document);
-    return { tags: document.tags, components: document.components ?? {} };
+    return {
+        tags: document.tags,
+        groups: document['x-tagGroups'],
+        components: document.components ?? {}
+    };
 };
 
 describe('pruneUnused', () => {
@@ -72,5 +81,9 @@ describe('pruneUnused', () => {
 
     it('drops a tag no operation uses', () => {
         expect(pruned().tags).toEqual([{ name: 'Used' }]);
+    });
+
+    it('drops a pruned tag from its family, and a family left with no tag', () => {
+        expect(pruned().groups).toEqual([{ name: 'Kept', tags: ['Used'] }]);
     });
 });

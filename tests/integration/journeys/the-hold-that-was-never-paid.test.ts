@@ -49,9 +49,9 @@ const awaiting = async (staff: string) =>
     ).items.map(({ orderId }) => orderId);
 
 describe('an abandoned 3-D Secure challenge', () => {
-    it('is expired by the sweep: stock back, order cancelled, shopper told', async () => {
+    it('is expired by the sweep: stock back, order canceled, shopper told', async () => {
         freezeDate();
-        const product = await createProduct({ price: 20, onHand: 10 });
+        const product = await createProduct({ price: '20.00', onHand: 10 });
         const productId = String(product._id);
         const { bearer, email } = await newShopper();
         const { user: admin } = await authenticateAs('admin');
@@ -67,7 +67,7 @@ describe('an abandoned 3-D Secure challenge', () => {
 
         const owner = await loginBearer(email);
         const staff = await loginBearer(admin.email);
-        expect(await orderOf(owner, order.id)).toMatchObject({ status: 'cancelled' });
+        expect(await orderOf(owner, order.id)).toMatchObject({ status: 'canceled' });
         expect(await stockOf(staff, productId)).toEqual({ onHand: 10, reserved: 0 });
         expect(await ledgerOf(staff, productId)).toEqual(['expire', 'reserve']);
         expect(mailsTo(email, 'orders.order-card-expired')).toHaveLength(1);
@@ -77,7 +77,7 @@ describe('an abandoned 3-D Secure challenge', () => {
 describe('a bank transfer nobody sent', () => {
     it('is expired after the transfer hold: off the awaiting list, stock back, shopper told', async () => {
         freezeDate();
-        const product = await createProduct({ price: 20, onHand: 10 });
+        const product = await createProduct({ price: '20.00', onHand: 10 });
         const productId = String(product._id);
         const { bearer, email } = await newShopper();
         const { user: admin } = await authenticateAs('admin');
@@ -93,7 +93,7 @@ describe('a bank transfer nobody sent', () => {
 
         const owner = await loginBearer(email);
         const staff = await loginBearer(admin.email);
-        expect(await orderOf(owner, order.id)).toMatchObject({ status: 'cancelled' });
+        expect(await orderOf(owner, order.id)).toMatchObject({ status: 'canceled' });
         expect(await awaiting(staff)).toEqual([]);
         expect(await stockOf(staff, productId)).toEqual({ onHand: 10, reserved: 0 });
         expect(await ledgerOf(staff, productId)).toEqual(['expire', 'reserve']);

@@ -9,7 +9,8 @@
 
 import type { ClientSession } from 'mongoose';
 import { Types } from 'mongoose';
-import { TaskKind, TaskResolution, TaskSource } from '@types';
+import { TaskCategory, TaskKind, TaskResolution, TaskSource } from '@types';
+import { oneCalendarMonthLaterUtc } from '@domain-primitives/time';
 import type {
     CallerContext,
     CreateContactTaskRequest,
@@ -29,6 +30,7 @@ import {
 } from '@infrastructure/http/response';
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import { supportEmail } from '@infrastructure/adapters/config';
 import { announceInTransaction } from '@kernel/outbox';
 import { logger } from '@infrastructure/adapters/logger';
 import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
@@ -56,6 +58,18 @@ import { clearSystemTasks, openSystemTask } from './services/system';
 const contactSlaMs = (): number => tasksConfig().NODE_TASKS_CONTACT_SLA_HOURS * 3_600_000;
 
 /**
+ * When a contact message is due. A privacy request owes an answer within one calendar month
+ * (GDPR Art. 12(3)); every other message waits the configured SLA.
+ *
+ * @param category - what the visitor said the message is about
+ * @param now - when it arrived
+ */
+const contactDueAt = (category: string | undefined, now: Date): Date =>
+    category === TaskCategory.privacy
+        ? oneCalendarMonthLaterUtc(now)
+        : new Date(now.getTime() + contactSlaMs());
+
+/**
  * Record a contact request and announce it as `task.opened` — unless the honeypot caught it.
  *
  * Both halves live here because "a customer asked us something" is one event, not a write plus a
@@ -65,12 +79,12 @@ const contactSlaMs = (): number => tasksConfig().NODE_TASKS_CONTACT_SLA_HOURS * 
  * Honeypot:   `payload.website` is a field a real browser always submits empty and a bot reliably
  *             fills, declared in the contract but never persisted (see `TaskDocument`)
  *             or read back. A non-empty value writes the row as `spam` and announces nothing
- *             — the bot still gets its `201`, so it learns nothing, but nobody's inbox hears
+ *             — the bot still gets its `202`, so it learns nothing, but nobody's inbox hears
  *             about it.
  * Account:    `subjectId` is the signed-in sender's account, so the export and the erasure follow the
  *             task to the person; absent for an anonymous sender.
  * Disposable: a disposable-inbox domain (`checkEmailPolicy`, off by default) is treated the same
- *             way — filed as `spam`, not announced, still a `201`. A visible refusal would
+ *             way — filed as `spam`, not announced, still a `202`. A visible refusal would
  *             tell a spam script exactly which signal caught it.
  */
 const create = (payload: CreateContactTaskRequest, subjectId?: string): Promise<TaskDocument> => {
@@ -103,7 +117,7 @@ const create = (payload: CreateContactTaskRequest, subjectId?: string): Promise<
                         // Spam is closed at birth: it ages from now and never owes work.
                         ...(suspectedSpam
                             ? { closedAt: now, resolution: TaskResolution.spam }
-                            : { dueAt: new Date(now.getTime() + contactSlaMs()) })
+                            : { dueAt: contactDueAt(payload.category, now) })
                     },
                     session
                 ),
@@ -120,26 +134,26 @@ const create = (payload: CreateContactTaskRequest, subjectId?: string): Promise<
 };
 
 /**
- * Mail the contact message to the fallback mailbox, `NODE_CONTACT_NOTIFY_EMAIL`, when nobody who
- * could work it has an address to be told at. The one mail that carries the visitor's own words,
- * because that mailbox is then the whole inbox, and it carries `Reply-To: <the visitor>` so
- * answering it reaches them. A no-op without the mailbox, or for a task that is gone or not a
- * contact message.
+ * Mail the contact message to the main mailbox, `NODE_SUPPORT_EMAIL`, every time. The one mail
+ * that carries the visitor's own words: staff answer it from that mailbox, and it carries
+ * `Reply-To: <the visitor>` so pressing Reply reaches them. A no-op for a task that is gone or
+ * not a contact message.
  *
  * It goes to the operator, not to the sender, so it renders in `NODE_DEFAULT_LOCALE` and takes no
  * `CallerContext`. A failed queue is logged, never raised: the task is already stored.
  *
- * @param taskId - the contact task that found nobody to tell
+ * @param taskId - the contact task
  * @param overdue - word it as the reminder that the message is late, not as a new one
  */
-const mailFallbackMailbox = (taskId: string, overdue = false): Promise<void> => {
-    const mailbox = tasksConfig().NODE_CONTACT_NOTIFY_EMAIL;
-    if (!mailbox) return Promise.resolve();
+const mailMainMailbox = (taskId: string, overdue = false): Promise<void> => {
+    const mailbox = supportEmail();
 
     return taskRepository.findById(taskId).then((task) => {
         if (!task?.email || task.kind !== TaskKind.contact) return;
 
         const mail = contactRequestEmail(getDefaultLocale(), {
+            id: String(task._id),
+            orderNumber: task.orderNumber,
             name: task.name,
             email: task.email,
             subject: task.subject,
@@ -149,17 +163,33 @@ const mailFallbackMailbox = (taskId: string, overdue = false): Promise<void> => 
             overdue
         });
 
+        // The first mail's id is derived from the task, so the reminder can name it as its parent
+        // without anything stored. `<task-<id>@<support domain>>`.
+        const domain = mailbox.slice(mailbox.lastIndexOf('@') + 1);
+        const firstId = `<task-${String(task._id)}@${domain}>`;
+
         return enqueueEmail(
             // `replyTo`: the bare address only (already normalised on create), never a display
             // name: the visitor's free-text name must not reach a header.
-            { to: mailbox, subject: mail.subject, replyTo: task.email },
+            {
+                to: mailbox,
+                subject: mail.subject,
+                text: mail.text,
+                replyTo: task.email,
+                ...(overdue
+                    ? {
+                          messageId: `<task-${String(task._id)}-overdue@${domain}>`,
+                          inReplyTo: firstId
+                      }
+                    : { messageId: firstId })
+            },
             mail.template,
             mail.data
         )
             .then(() => undefined)
             .catch((error: unknown) => {
                 // Stryker disable all
-                logger.error({ message: 'task fallback mailbox email failed', error });
+                logger.error({ message: 'task main mailbox email failed', error });
                 // Stryker restore all
             });
     });
@@ -450,7 +480,7 @@ const eraseOwnTasks = async (
 /** The module's barrel export — used by the controllers in `./controllers`. */
 export const taskService = {
     create,
-    mailFallbackMailbox,
+    mailMainMailbox,
     remindOverdue,
     remindDueSoon,
     openSystemTask,

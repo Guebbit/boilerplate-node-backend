@@ -53,7 +53,7 @@ afterEach(() => resetDomainEvents());
 /** A customer who paid 25.00 and whose invoice has been frozen. */
 const paidAndInvoiced = async (overrides: Parameters<typeof createOrder>[2] = {}) => {
     const user = await createUser();
-    const product = await createProduct({ price: 25 });
+    const product = await createProduct({ price: '25.00' });
     const order = await createOrder(user, [toOrderItem(product, 1)], overrides);
     const orderId = String(order._id);
     const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
@@ -79,7 +79,7 @@ const waitForNotes = async (orderId: string, count: number) => {
 describe('issuing a credit note off PAYMENT_REFUNDED', () => {
     it('freezes a credit note, numbered in its own series, once the refund lands', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 25 });
+        const product = await createProduct({ price: '25.00' });
         const order = await createOrder(user, [toOrderItem(product, 1)]);
 
         const intent = await paymentService.createIntent(String(order._id), asCustomer(user.id));
@@ -142,21 +142,21 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         const { orderId, invoice } = await paidAndInvoiced();
 
         await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
-            amount: 20
+            amount: '20.00'
         });
         await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
-            amount: 5
+            amount: '5.00'
         });
         const notes = await waitForNotes(orderId, 2);
 
-        expect(notes.map((note) => note.grandTotal)).toEqual([20, 5]);
+        expect(notes.map((note) => note.grandTotal)).toEqual(['20.00', '5.00']);
         expect(notes[0].number).not.toBe(notes[1].number);
         expect(notes[0].refundId).not.toBe(notes[1].refundId);
         for (const note of notes) {
             expect(note.invoiceNumber).toBe(invoice.number);
             // Reconciled: net + VAT is the credit note's own gross, to the cent.
-            expect(Math.round((note.netTotal + note.taxTotal) * 100)).toBe(
-                Math.round(note.grandTotal * 100)
+            expect(Math.round((Number(note.netTotal) + Number(note.taxTotal)) * 100)).toBe(
+                Math.round(Number(note.grandTotal) * 100)
             );
         }
     });
@@ -164,14 +164,14 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
     it('is idempotent on the refund — a redelivered event issues nothing twice', async () => {
         const { orderId } = await paidAndInvoiced();
         await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
-            amount: 20
+            amount: '20.00'
         });
         const [note] = await waitForNotes(orderId, 1);
 
         const again = await issueCreditNote({
             orderId,
             refundId: note.refundId,
-            amount: 20,
+            amount: '20.00',
             full: false
         });
 
@@ -188,7 +188,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
             const note = await issueCreditNote({
                 orderId,
                 refundId: 'refund-new-year',
-                amount: 5,
+                amount: '5.00',
                 full: false
             });
 
@@ -210,7 +210,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         const note = await issueCreditNote({
             orderId,
             refundId: 'refund-after-rename',
-            amount: 5,
+            amount: '5.00',
             full: false
         });
 
@@ -222,7 +222,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
     it('burns no number when two writers race to credit one refund', async () => {
         const { orderId } = await paidAndInvoiced();
         const year = yearInZone(new Date(), shopTimezone());
-        const input = { orderId, refundId: 'refund-race', amount: 5, full: false };
+        const input = { orderId, refundId: 'refund-race', amount: '5.00', full: false };
 
         const [first, second] = await Promise.all([issueCreditNote(input), issueCreditNote(input)]);
 
@@ -248,7 +248,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
             issueCreditNote({
                 orderId,
                 refundId: 'refund-fail',
-                amount: 5,
+                amount: '5.00',
                 full: false
             })
         ).rejects.toThrow('disk full');
@@ -262,7 +262,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
     // event is the other case, covered by `credit-note-catch-up.test.ts`.
     it('issues nothing, and burns no number, when an order has no invoice to reverse', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 25 });
+        const product = await createProduct({ price: '25.00' });
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             status: OrderStatus.paid
         });
@@ -272,7 +272,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         const note = await issueCreditNote({
             orderId,
             refundId: 'refund-uninvoiced',
-            amount: 25,
+            amount: '25.00',
             full: true
         });
 

@@ -6,6 +6,7 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Products
+      x-family: Catalogue
       description: The catalogue - browsing, searching and managing products and their images.
 
 x-error-codes:
@@ -55,16 +56,12 @@ paths:
                   in: query
                   required: false
                   schema:
-                      type: number
-                      format: double
-                      minimum: 0
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                 - name: priceMax
                   in: query
                   required: false
                   schema:
-                      type: number
-                      format: double
-                      minimum: 0
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                 - name: title
                   in: query
                   schema:
@@ -142,33 +139,6 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `uploadLimiter` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
-        delete:
-            tags: [Products]
-            summary: Delete product
-            description: Deletes the product identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; a `true` from any source wins, so a `false` sent elsewhere does not cancel it. A soft delete is one-way and safe to repeat — undo it with `POST /products/{id}/restore`.
-            operationId: deleteProduct
-            x-alias-of: deleteProductById
-            security:
-                - bearerAuth: []
-                - apiKeyAuth: []
-            # The flag is readable from the query here too, exactly as it is on the `{id}` form:
-            # one controller serves both, and the flag is read from the path flag, the query and
-            # the body on whichever route it is mounted on. The id is the body's alone here, and the
-            # path's alone on the `{id}` form. Declared rather than merely tolerated.
-            parameters:
-                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/HardDeleteParam'
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/DeleteProductRequest'
-            responses:
-                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
     /products/facets:
         get:
@@ -177,7 +147,7 @@ paths:
             summary: Catalogue facets
             description: >-
                 Every category and tag the PUBLIC catalogue carries, each with how many visible products hold it — what a storefront renders as filter chips. Sorted by count descending, then name. Counts follow the same visibility rule the listing does, so one chip alone never leads to an empty page. Counts are catalogue-wide: they do not follow the filters already chosen.
-            operationId: getCatalogueFacets
+            operationId: getCatalogFacets
             security: []
             responses:
                 '200':
@@ -189,7 +159,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CatalogueFacetsResponse'
+                                $ref: '#/components/schemas/CatalogFacetsResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
 
     /products/{id}:
@@ -325,7 +295,7 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # `uploadLimiter` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
-        # Same as DELETE /products
+        # Same as DELETE /products/{id}
         delete:
             tags: [Products]
             summary: Delete product
@@ -554,7 +524,7 @@ components:
                     type: integer
                     minimum: 1
 
-        CatalogueFacetsResponse:
+        CatalogFacetsResponse:
             type: object
             additionalProperties: false
             required: [categories, tags]
@@ -586,13 +556,9 @@ components:
                     maxItems: 100
                     items: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id' }
                 priceMin:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                 priceMax:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                 category:
                     type: string
                     maxLength: 200
@@ -625,9 +591,7 @@ components:
                 translations:
                     $ref: '#/components/schemas/ProductTranslationsCreate'
                 price:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: Gross — VAT included. Same convention as `Product.price`.
                 taxClass:
                     $ref: '#/components/schemas/TaxClass'
@@ -709,9 +673,7 @@ components:
                     maxLength: 100000
                     description: JSON-encoded `ProductTranslationsWrite`.
                 price:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: Gross — VAT included. Same convention as `Product.price`.
                 taxClass:
                     $ref: '#/components/schemas/TaxClass'
@@ -780,9 +742,7 @@ components:
                 translations:
                     $ref: '#/components/schemas/ProductTranslationsWrite'
                 price:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: Gross — VAT included. Same convention as `Product.price`.
                 # `null` clears the class back to the shop's standard rate. Omitted on a PUT is
                 # the same as `null` — see the operation description.
@@ -851,9 +811,7 @@ components:
                     maxLength: 100000
                     description: JSON-encoded `ProductTranslationsWrite`.
                 price:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: Gross — VAT included. Same convention as `Product.price`.
                 taxClass:
                     type: string
@@ -917,9 +875,7 @@ components:
                 translations:
                     $ref: '#/components/schemas/ProductTranslationsPatch'
                 price:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: Gross — VAT included. Same convention as `Product.price`.
                 # `null` clears the class back to the shop's standard rate. Omitted leaves the
                 # stored value alone.
@@ -994,9 +950,7 @@ components:
                     maxLength: 100000
                     description: JSON-encoded `ProductTranslationsPatch`.
                 price:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: Gross — VAT included. Same convention as `Product.price`.
                 taxClass:
                     type: string
@@ -1051,17 +1005,6 @@ components:
                         maxLength: 50
                         minLength: 1
 
-        DeleteProductRequest:
-            type: object
-            additionalProperties: false
-            required: [id]
-            properties:
-                id:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
-                hardDelete:
-                    type: boolean
-                    default: false
-
         ProductsResponse:
             type: object
             additionalProperties: false
@@ -1097,7 +1040,7 @@ components:
         # than rejected.
         RateType:
             type: string
-            enum: [standard, zero-rated, exempt]
+            enum: [standard, zero_rated, exempt]
             description: >-
                 WHY a product's resolved VAT rate is 0%, when it is — `TaxClass: zero` alone
                 cannot say. Meaningless when the resolved rate isn't 0%.
@@ -1146,9 +1089,7 @@ components:
                 title:
                     type: string
                 price:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: >-
                         Gross — what the customer pays, VAT included. Never net-of-tax: the invoice
                         derives the net amount and the VAT amount FROM this, at whatever rate

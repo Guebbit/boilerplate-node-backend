@@ -90,7 +90,7 @@ flowchart LR
     A["checkout succeeds"] --> B["set aside<br/><i>15 minutes</i>"]
     B -->|"pays in time"| P["paid<br/><i>still set aside, still on the shelf</i>"]
     P -->|"the parcel leaves"| C["sold<br/><i>leaves the shelf</i>"]
-    B -.->|"15 minutes pass"| D["back on the shelf<br/><i>the order is cancelled</i>"]
+    B -.->|"15 minutes pass"| D["back on the shelf<br/><i>the order is canceled</i>"]
     B -.->|"they cancel"| D
 
     classDef act fill:#dbeafe,stroke:#2563eb,color:#111827;

@@ -4,7 +4,7 @@
  * `sk_...` bearer token authenticate a request the way a JWT does.
  *
  * Owns:        the `apikeys` collection, outright — no other module reads or writes it.
- * Listens:    `account.sessions-revoked` — revokes what a person minted when they may be compromised.
+ * Listens:    `account.sessions_revoked` — revokes what a person minted when they may be compromised.
  * Reaches far: registers `kernel/authentication.ts`'s `CredentialResolver` port from its own
  *              `onRegistered` hook, the same "module fills a kernel port" shape
  *              `account/module.ts`'s `registerAuthResolver` already establishes.

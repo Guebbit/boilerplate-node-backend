@@ -42,7 +42,7 @@ interface Resource {
     collection: string;
     /** Seeds a row: the path that writes it, the path that reads it, the caller, and the row's id. */
     seed: () => Promise<{ path: string; readPath: string; bearer: string; id: string }>;
-    /** Brings a seeded row to a state its hard delete accepts (an order must be cancelled). */
+    /** Brings a seeded row to a state its hard delete accepts (an order must be canceled). */
     readyToDelete?: (id: string) => Promise<unknown>;
     /** A body the resource accepts on PATCH; `n` makes two edits differ. */
     edit: (n: number) => Record<string, unknown>;
@@ -90,7 +90,7 @@ const RESOURCES: Resource[] = [
             const id = String(order._id);
             return { path: `/orders/${id}`, readPath: `/orders/${id}`, bearer, id };
         },
-        readyToDelete: (id) => forceOrderStatus(id, 'cancelled'),
+        readyToDelete: (id) => forceOrderStatus(id, 'canceled'),
         edit: (n) => ({ email: `edit-${n.toString()}@example.com` }),
         expected: (n) => `edit-${n.toString()}@example.com`,
         stored: (id) => readOrder(id).then((row) => row?.email)

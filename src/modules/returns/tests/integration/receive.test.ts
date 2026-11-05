@@ -72,15 +72,15 @@ const paidAndDelivered = async (
 ) => {
     customers += 1;
     const user = await createUser({ email: `buyer-${customers}@example.com` });
-    const shirt = await createProduct({ title: 'Shirt', price: 30, onHand: 10 });
+    const shirt = await createProduct({ title: 'Shirt', price: '30.00', onHand: 10 });
     const mug = await createProduct({
         title: 'Mug',
-        price: 10,
+        price: '10.00',
         onHand: 10,
         ...(mugTaxClass ? { taxClass: mugTaxClass } : {})
     });
     const order = await createOrder(user, [toOrderItem(shirt, 2), toOrderItem(mug, 1)], {
-        ...(shipping > 0 ? { shippingMethod, shippingCost: shipping } : {})
+        ...(shipping > 0 ? { shippingMethod, shippingCost: shipping.toFixed(2) } : {})
     });
     const orderId = String(order._id);
     await inventoryService.reserveForOrder(orderId, [
@@ -177,16 +177,16 @@ describe('goods excluded from the right of withdrawal', () => {
     it('reads returned once the withdrawable goods are back, and keeps the delivery charge', async () => {
         customers += 1;
         const user = await createUser({ email: `buyer-${customers}@example.com` });
-        const shirt = await createProduct({ title: 'Shirt', price: 30, onHand: 10 });
+        const shirt = await createProduct({ title: 'Shirt', price: '30.00', onHand: 10 });
         const engraved = await createProduct({
             title: 'Engraved mug',
-            price: 10,
+            price: '10.00',
             onHand: 10,
             noWithdrawal: true
         });
         const order = await createOrder(user, [toOrderItem(shirt, 1), toOrderItem(engraved, 1)], {
             shippingMethod: 'standard',
-            shippingCost: 5
+            shippingCost: '5.00'
         });
         const orderId = String(order._id);
         await inventoryService.reserveForOrder(orderId, [
@@ -208,7 +208,7 @@ describe('goods excluded from the right of withdrawal', () => {
 
         // Only the shirt: the engraved mug cannot be withdrawn, so the order is not wholly returned
         // and the delivery charge stays with the shop.
-        expect(result.success && result.data.refundAmount).toBe(30);
+        expect(result.success && result.data.refundAmount).toBe('30.00');
         const after = await wireOrder(orderId);
         expect(after.returnStatus).toBe('returned');
     });
@@ -227,14 +227,14 @@ describe('receiving a return', () => {
 
         expect(result.success && result.data).toMatchObject({
             status: 'closed',
-            refundAmount: 70
+            refundAmount: '70.00'
         });
         expect(await countersOf(fixture.shirt._id)).toMatchObject({ onHand: 10 });
         expect(await countersOf(fixture.mug._id)).toMatchObject({ onHand: 10 });
         const payment = await paymentOf(fixture.orderId);
         expect(payment.status).toBe('succeeded');
         expect(payment.refunds[0]).toMatchObject({
-            amount: 70,
+            amount: '70.00',
             reason: 'return',
             status: 'succeeded',
             returnId: id
@@ -269,10 +269,10 @@ describe('receiving a return', () => {
 
         const result = await returnService.receiveReturn(id, {}, callerContextAs('admin'));
 
-        expect(result.success && result.data.refundAmount).toBe(10);
+        expect(result.success && result.data.refundAmount).toBe('10.00');
         const payment = await paymentOf(fixture.orderId);
         expect(payment.status).toBe('succeeded');
-        expect(payment.amountRefunded).toBe(10);
+        expect(payment.amountRefunded).toBe('10.00');
         expect(await countersOf(fixture.shirt._id)).toMatchObject({ onHand: 8 });
         expect(await countersOf(fixture.mug._id)).toMatchObject({ onHand: 10 });
     });
@@ -361,7 +361,7 @@ describe('a staff buyer receiving their own return', () => {
             callerContextAs('warehouse', fixture.user.id)
         );
 
-        expect(result.success && result.data.refundAmount).toBeGreaterThan(0);
+        expect(Number(result.success && result.data.refundAmount)).toBeGreaterThan(0);
     });
 });
 
@@ -373,15 +373,15 @@ describe('what the customer gets back', () => {
 
         const result = await returnService.receiveReturn(id, {}, callerContextAs('admin'));
 
-        expect(result.success && result.data.refundAmount).toBe(75);
+        expect(result.success && result.data.refundAmount).toBe('75.00');
     });
 
     it('keeps a paid express upgrade entirely with the shop when standard would have been free', async () => {
         const user = await createUser({ email: 'big-spender@example.com' });
-        const suit = await createProduct({ title: 'Suit', price: 150, onHand: 3 });
+        const suit = await createProduct({ title: 'Suit', price: '150.00', onHand: 3 });
         const order = await createOrder(user, [toOrderItem(suit, 1)], {
             shippingMethod: 'express',
-            shippingCost: 15
+            shippingCost: '15.00'
         });
         const orderId = String(order._id);
         const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
@@ -406,7 +406,7 @@ describe('what the customer gets back', () => {
             callerContextAs('admin')
         );
 
-        expect(result.success && result.data.refundAmount).toBe(150);
+        expect(result.success && result.data.refundAmount).toBe('150.00');
     });
 
     it('refunds the whole delivery when the goods were faulty', async () => {
@@ -415,7 +415,7 @@ describe('what the customer gets back', () => {
 
         const result = await returnService.receiveReturn(id, {}, callerContextAs('admin'));
 
-        expect(result.success && result.data.refundAmount).toBe(85);
+        expect(result.success && result.data.refundAmount).toBe('85.00');
     });
 
     it('refunds no delivery on a partial return', async () => {
@@ -426,7 +426,7 @@ describe('what the customer gets back', () => {
 
         const result = await returnService.receiveReturn(id, {}, callerContextAs('admin'));
 
-        expect(result.success && result.data.refundAmount).toBe(30);
+        expect(result.success && result.data.refundAmount).toBe('30.00');
     });
 
     it('keeps back a handling deduction, and says so', async () => {
@@ -435,13 +435,13 @@ describe('what the customer gets back', () => {
 
         const result = await returnService.receiveReturn(
             id,
-            { handlingDeduction: 12.5 },
+            { handlingDeduction: '12.50' },
             callerContextAs('admin')
         );
 
         expect(result.success && result.data).toMatchObject({
-            handlingDeduction: 12.5,
-            refundAmount: 57.5
+            handlingDeduction: '12.50',
+            refundAmount: '57.50'
         });
     });
 
@@ -451,7 +451,7 @@ describe('what the customer gets back', () => {
 
         const result = await returnService.receiveReturn(
             id,
-            { handlingDeduction: 70.01 },
+            { handlingDeduction: '70.01' },
             callerContextAs('admin')
         );
 
@@ -465,7 +465,7 @@ describe('what the customer gets back', () => {
     it('never refunds more than the payment has left, whatever was refunded on goodwill before', async () => {
         const fixture = await paidAndDelivered();
         await refundOrderPayment(fixture.orderId, asAdmin(), callerContextAs('admin'), {
-            amount: 40
+            amount: '40.00'
         });
         const id = await approvedReturn(fixture);
 
@@ -473,9 +473,9 @@ describe('what the customer gets back', () => {
 
         const payment = await paymentOf(fixture.orderId);
         // 70.00 was paid, 40.00 already went back: the return is owed 70.00 but only 30.00 is left.
-        expect(payment.amountRefunded).toBe(70);
+        expect(payment.amountRefunded).toBe('70.00');
         expect(payment.status).toBe('succeeded');
-        expect(payment.refunds.map((refund) => refund.amount)).toEqual([40, 30]);
+        expect(payment.refunds.map((refund) => refund.amount)).toEqual(['40.00', '30.00']);
         expect(result.success && result.data.status).toBe('closed');
     });
 });
@@ -502,7 +502,7 @@ describe('the credit note a received return issues', () => {
                 taxAmount,
                 grossAmount
             }))
-        ).toEqual([{ rate: 0.1, netAmount: 9.09, taxAmount: 0.91, grossAmount: 10 }]);
+        ).toEqual([{ rate: 0.1, netAmount: '9.09', taxAmount: '0.91', grossAmount: '10.00' }]);
     });
 
     it("keeps the refund's goods off the wire — they are the credit note's input only", async () => {
@@ -544,7 +544,7 @@ describe('what receiving answers and announces', () => {
         const result = await returnService.receiveReturn(id, {}, callerContextAs('admin'));
 
         // One shirt at 30 and the mug at 10; the 5.00 of delivery stays with the shop.
-        expect(result.success && result.data.refundAmount).toBe(40);
+        expect(result.success && result.data.refundAmount).toBe('40.00');
     });
 
     it('closes a return worth nothing without asking the provider for a refund', async () => {
@@ -554,11 +554,14 @@ describe('what receiving answers and announces', () => {
 
         const result = await returnService.receiveReturn(
             id,
-            { handlingDeduction: 70 },
+            { handlingDeduction: '70.00' },
             callerContextAs('admin')
         );
 
-        expect(result.success && result.data).toMatchObject({ status: 'closed', refundAmount: 0 });
+        expect(result.success && result.data).toMatchObject({
+            status: 'closed',
+            refundAmount: '0.00'
+        });
         expect(refund).not.toHaveBeenCalled();
     });
 
@@ -618,7 +621,11 @@ describe('the order timeline of a return', () => {
             ['return_closed', 'admin-2']
         ]);
         expect(rows[0].data).toEqual({ returnId: id, reason: 'defective' });
-        expect(rows[3].data).toMatchObject({ returnId: id, refundAmount: 70, currency: 'EUR' });
+        expect(rows[3].data).toMatchObject({
+            returnId: id,
+            refundAmount: '70.00',
+            currency: 'EUR'
+        });
         expect(JSON.stringify(rows)).not.toContain('555-0100');
     });
 

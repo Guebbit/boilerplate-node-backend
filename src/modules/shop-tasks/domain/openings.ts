@@ -78,7 +78,7 @@ export const refundOwedOpening = (
  *
  * @param payment - the payment and its order
  * @param payment.paymentId - the payment
- * @param payment.orderId - the order that was cancelled
+ * @param payment.orderId - the order that was canceled
  * @param dueAt - when it is overdue
  */
 export const amountMismatchOpening = (
@@ -89,7 +89,7 @@ export const amountMismatchOpening = (
     routeSet: 'AuditDisplay',
     link: { type: TaskLinkType.payment, id: payment.paymentId },
     subject: 'Payment amount mismatch',
-    message: `The provider reported a success for order ${payment.orderId} that is not payment ${payment.paymentId}. The order was cancelled and the money is being returned. Find out why, then close this.`,
+    message: `The provider reported a success for order ${payment.orderId} that is not payment ${payment.paymentId}. The order was canceled and the money is being returned. Find out why, then close this.`,
     dueAt
 });
 

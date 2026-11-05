@@ -9,7 +9,7 @@ import { findShippingMethod } from './rates';
 
 /** The facts of a shipment the question reads. */
 export interface TrackingFacts {
-    /** `physical` for a parcel; a digital fulfilment never had a carrier. */
+    /** `physical` for a parcel; a digital fulfillment never had a carrier. */
     kind: FulfillmentOrderKind;
     status: ShipmentStatus;
     trackingCode?: string | undefined;

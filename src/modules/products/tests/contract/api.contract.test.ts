@@ -206,9 +206,9 @@ const titlesOf = (response: { body: { items: { title: string }[] } }) =>
 
 describe('sort — GET /products?sort= and POST /products/search { sort }', () => {
     beforeEach(async () => {
-        await createProduct({ title: 'banana', price: 5 });
-        await createProduct({ title: 'Apple', price: 9 });
-        await createProduct({ title: 'cherry', price: 5 });
+        await createProduct({ title: 'banana', price: '5.00' });
+        await createProduct({ title: 'Apple', price: '9.00' });
+        await createProduct({ title: 'cherry', price: '5.00' });
     });
 
     it('orders by one field, descending with a "-" prefix', async () => {
@@ -384,17 +384,13 @@ describe('DELETE /products/{id}', () => {
      * because it rode the higher-precedence transport.
      */
     describe('hardDelete stated twice', () => {
-        it.each([
-            ['query false, body true', 'false', true],
-            ['query true, body false', 'true', false]
-        ])('hard-deletes for %s', async (_case, query, body) => {
+        it('hard-deletes when the path says hard and the query says false', async () => {
             const { bearer } = await authenticateAs('admin');
             const product = await createProduct();
 
             const response = await api()
-                .delete(`/products?hardDelete=${query}`)
-                .set('Authorization', bearer)
-                .send({ id: String(product._id), hardDelete: body });
+                .delete(`/products/${String(product._id)}/hard?hardDelete=false`)
+                .set('Authorization', bearer);
 
             expect(response.status).toBe(204);
             expect(await stored(String(product._id))).toBeNull();
@@ -406,9 +402,8 @@ describe('DELETE /products/{id}', () => {
             const product = await createProduct();
 
             const response = await api()
-                .delete(`/products?hardDelete=maybe`)
-                .set('Authorization', bearer)
-                .send({ id: String(product._id), hardDelete: true });
+                .delete(`/products/${String(product._id)}/hard?hardDelete=maybe`)
+                .set('Authorization', bearer);
 
             expect(response.status).toBe(422);
             expect(await stored(String(product._id))).not.toBeNull();
@@ -556,48 +551,26 @@ describe('GET /products?deleted= — for a caller who may not see deleted rows',
     });
 });
 
-/** The body-addressed twin of `DELETE /products/{id}`. */
-describe('DELETE /products — the id in the body', () => {
+describe('DELETE /products/{id}', () => {
     it('matches the contract for a soft delete', async () => {
         const { bearer } = await authenticateAs('admin');
         const product = await createProduct();
 
         const response = await api()
-            .delete('/products')
-            .set('Authorization', bearer)
-            .send({ id: String(product._id) });
+            .delete(`/products/${String(product._id)}`)
+            .set('Authorization', bearer);
 
         expect(response.status).toBe(204);
         const stored = await productRepository.findById(String(product._id));
         expect(stored?.deletedAt).toBeInstanceOf(Date);
     });
 
-    it('reads the id from the body alone, whatever the query says', async () => {
-        const { bearer } = await authenticateAs('admin');
-        const decoy = await createProduct();
-        const target = await createProduct();
-
-        const response = await api()
-            .delete(`/products?id=${String(decoy._id)}`)
-            .set('Authorization', bearer)
-            .send({ id: String(target._id) });
-
-        expect(response.status).toBe(204);
-        const [hit, spared] = await Promise.all([
-            productRepository.findById(String(target._id)),
-            productRepository.findById(String(decoy._id))
-        ]);
-        expect(hit?.deletedAt).toBeInstanceOf(Date);
-        expect(spared?.deletedAt).toBeFalsy();
-    });
-
     it('matches the error contract for an id nobody holds', async () => {
         const { bearer } = await authenticateAs('admin');
 
         const response = await api()
-            .delete('/products')
-            .set('Authorization', bearer)
-            .send({ id: '65dc8a99604c307b702b5ccc' });
+            .delete('/products/65dc8a99604c307b702b5ccc')
+            .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
     });

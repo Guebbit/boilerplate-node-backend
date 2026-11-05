@@ -618,8 +618,8 @@ export const routesFile = (names: ModuleNames): string => `/**
 import { Router } from 'express';
 import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
 import { privateNoCache } from '@infrastructure/http/middlewares/cache';
-import { get${names.plural} } from './controllers/get-${names.kebab}';
-import { get${names.entity} } from './controllers/get-${names.kebab}-item';
+import { get${names.plural} } from './controllers/get-${names.pluralKebab}';
+import { get${names.entity} } from './controllers/get-${names.entityKebab}';
 import { post${names.entity} } from './controllers/post-${names.kebab}';
 import { replace${names.entity}, update${names.entity} } from './controllers/update-${names.kebab}';
 import { delete${names.entity} } from './controllers/delete-${names.kebab}';

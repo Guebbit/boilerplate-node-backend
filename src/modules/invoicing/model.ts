@@ -35,7 +35,7 @@ export interface InvoiceLine {
     title: string;
     quantity: number;
     /** Gross (VAT-inclusive) unit price, exactly as `OrderLineProduct.price` freezes it. */
-    unitPrice: number;
+    unitPrice: string;
     /** The decimal VAT rate this line was actually charged — `0.22` for 22%. */
     taxRate: number;
     /**
@@ -93,17 +93,17 @@ export interface FrozenTaxDocument {
     seller: InvoiceSeller;
     lines: InvoiceLine[];
     /** The shipping cost frozen at checkout — absent exactly when the order's own field is. */
-    shippingCost?: number;
-    netTotal: number;
-    taxTotal: number;
-    shippingNetAmount: number;
-    shippingTaxAmount: number;
+    shippingCost?: string;
+    netTotal: string;
+    taxTotal: string;
+    shippingNetAmount: string;
+    shippingTaxAmount: string;
     /** One row per distinct VAT rate — BR-CO-17: sums back to `netTotal`/`taxTotal` exactly. */
     taxSummary: OrderTaxSummaryRow[];
     /** Shipping's own slice of `taxSummary`, broken out per rate — see `orders/domain/tax.ts`. */
     shippingByRate: OrderTaxSummaryRow[];
     /** Every line's gross plus shipping — the amount actually paid. */
-    grandTotal: number;
+    grandTotal: string;
 }
 
 /** One issued invoice. */
@@ -211,7 +211,7 @@ const invoiceSchema = new Schema<InvoiceDocument, InvoiceModel>(frozenTaxDocumen
 });
 
 /**
- * Money is stored as Decimal128 and a lean read hands numbers back — see `@infrastructure/persistence/money-field`.
+ * Money is stored as Decimal128 and a lean read hands decimal text back — see `@infrastructure/persistence/money-field`.
  */
 invoiceSchema.plugin(moneyPlugin);
 
@@ -238,7 +238,7 @@ const creditNoteSchema = new Schema<CreditNoteDocument, CreditNoteModel>(
 );
 
 /**
- * Money is stored as Decimal128 and a lean read hands numbers back — see `@infrastructure/persistence/money-field`.
+ * Money is stored as Decimal128 and a lean read hands decimal text back — see `@infrastructure/persistence/money-field`.
  */
 creditNoteSchema.plugin(moneyPlugin);
 

@@ -23,7 +23,7 @@ import {
     NO_MONEY,
     scaleMoney,
     subtractMoney,
-    toDecimalAmount,
+    toDecimalString,
     toMinorUnits,
     type Money
 } from '@domain-primitives/money';
@@ -34,23 +34,23 @@ export interface RefundInputs {
     currency: string;
     reason: ReturnReason;
     /** The returned lines, with the gross unit price the order froze. */
-    lines: readonly { quantity: number; unitPrice: number }[];
-    /** Whether this return takes the last unit of the order: every other unit is already cancelled or back. */
+    lines: readonly { quantity: number; unitPrice: string }[];
+    /** Whether this return takes the last unit of the order: every other unit is already canceled or back. */
     takesLastUnit: boolean;
     /** The delivery still owed back: what the customer paid, less what earlier refunds returned. */
-    shippingPaid: number;
+    shippingPaid: string;
     /** What the shop's cheapest standard delivery would have cost on this order. */
-    cheapestStandardShipping: number;
+    cheapestStandardShipping: string;
     /** What staff keep back for handling damage (Art. 14(2)). */
-    handlingDeduction: number;
+    handlingDeduction: string;
 }
 
 /** The breakdown, in decimals for the wire and the ledger. */
 export interface RefundBreakdown {
-    goods: number;
-    shipping: number;
-    deduction: number;
-    total: number;
+    goods: string;
+    shipping: string;
+    deduction: string;
+    total: string;
 }
 
 /** The verdict: a breakdown, or why the deduction cannot stand. */
@@ -64,7 +64,7 @@ export type RefundVerdict =
  * @param currency - the ISO-4217 code the prices are in
  */
 const goodsOf = (
-    lines: readonly { quantity: number; unitPrice: number }[],
+    lines: readonly { quantity: number; unitPrice: string }[],
     currency: string
 ): Money =>
     addMoney(
@@ -102,7 +102,7 @@ export const refundAmountFor = (inputs: RefundInputs): RefundVerdict => {
     const deduction = toMinorUnits(handlingDeduction, currency);
     if (deduction > addMoney(goods, shipping)) return { ok: false, reason: 'deduction-too-high' };
 
-    const decimal = (amount: Money): number => toDecimalAmount(amount, currency);
+    const decimal = (amount: Money): string => toDecimalString(amount, currency);
     return {
         ok: true,
         breakdown: {
@@ -117,16 +117,16 @@ export const refundAmountFor = (inputs: RefundInputs): RefundVerdict => {
 /** What a remainder cancel needs from the order and its other returns. */
 export interface CancellationInputs {
     currency: string;
-    /** The cancelled lines, with the gross unit price the order froze. */
-    lines: readonly { quantity: number; unitPrice: number }[];
+    /** The canceled lines, with the gross unit price the order froze. */
+    lines: readonly { quantity: number; unitPrice: string }[];
     /** Whether this cancel takes the last unit of the order. */
     takesLastUnit: boolean;
     /** The delivery still owed back: what the customer paid, less what earlier refunds returned. */
-    shippingPaid: number;
+    shippingPaid: string;
 }
 
 /**
- * What cancelling a fulfillment order's remainder refunds: the cancelled lines, plus ALL the
+ * What cancelling a fulfillment order's remainder refunds: the canceled lines, plus ALL the
  * delivery still owed when this cancel takes the last unit (as a cancel before dispatch always
  * refunds it — no goods were delivered for it, so Art. 13(2)'s cheapest-standard cap, which
  * exists for delivery that happened, has nothing to apply to). No handling deduction: nothing came
@@ -140,11 +140,11 @@ export const cancellationRefundFor = (inputs: CancellationInputs): RefundBreakdo
     const goods = goodsOf(lines, currency);
     const shipping = inputs.takesLastUnit ? toMinorUnits(inputs.shippingPaid, currency) : NO_MONEY;
 
-    const decimal = (amount: Money): number => toDecimalAmount(amount, currency);
+    const decimal = (amount: Money): string => toDecimalString(amount, currency);
     return {
         goods: decimal(goods),
         shipping: decimal(shipping),
-        deduction: 0,
+        deduction: decimal(NO_MONEY),
         total: decimal(addMoney(goods, shipping))
     };
 };
@@ -159,13 +159,13 @@ export const cancellationRefundFor = (inputs: CancellationInputs): RefundBreakdo
  */
 export const shippingStillOwed = (
     currency: string,
-    shippingPaid: number,
-    alreadyRefunded: number
-): number => {
+    shippingPaid: string,
+    alreadyRefunded: string
+): string => {
     const owed = subtractMoney(
         toMinorUnits(shippingPaid, currency),
         toMinorUnits(alreadyRefunded, currency)
     );
     // `as`: Math.max returns a bare number; both operands are Money, so the larger one is too.
-    return toDecimalAmount(Math.max(owed, NO_MONEY) as Money, currency);
+    return toDecimalString(Math.max(owed, NO_MONEY) as Money, currency);
 };

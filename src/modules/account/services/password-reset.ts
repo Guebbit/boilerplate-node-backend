@@ -36,7 +36,7 @@ const markResetCompleted = (user: UserDocument): void => {
 
 /**
  * What follows a finished reset: on success, the audit row and the confirmation mail (the
- * `account.sessions-revoked` event already left with the password write). `resetWith` is the one
+ * `account.sessions_revoked` event already left with the password write). `resetWith` is the one
  * caller.
  *
  * @param result - what writing the password answered

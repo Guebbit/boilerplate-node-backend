@@ -57,7 +57,7 @@ const paymentStatusOf = (orderId: string) => paymentOf(orderId).then((payment) =
 /** The status of an order, read back. */
 const orderStatusOf = (orderId: string) => readOrder(orderId).then((order) => order?.status);
 
-/** An order cancelled because its hold ran out, the way the reservation sweep cancels it. */
+/** An order canceled because its hold ran out, the way the reservation sweep cancels it. */
 const lapse = async (orderId: string) => {
     await orderService.expireReservationById(orderId);
     await settleOutboxNudges();
@@ -65,13 +65,13 @@ const lapse = async (orderId: string) => {
 
 describe('opening the transfer payment', () => {
     it('opens a waiting, hand-recorded payment for the order total, with the reference and the deadline', async () => {
-        const { order, payment, reference } = await transferOrder({ price: 20 });
+        const { order, payment, reference } = await transferOrder({ price: '20.00' });
 
         expect(payment).toMatchObject({
             status: 'requires_action',
             method: 'bank_transfer',
             provider: 'manual',
-            amount: 20,
+            amount: '20.00',
             currency: order.currency,
             transferReference: reference
         });
@@ -226,7 +226,7 @@ describe('a transfer nobody sent', () => {
 
         await lapse(String(order._id));
 
-        expect(await paymentStatusOf(String(order._id))).toBe('cancelled');
+        expect(await paymentStatusOf(String(order._id))).toBe('canceled');
         // `orders` stays quiet for a transfer: the deadline is the payment's, so is the notice.
         expect(templatesSent()).toEqual(['payments.transfer-expired']);
     });
@@ -244,14 +244,14 @@ describe('a transfer nobody sent', () => {
         );
         await settleOutboxNudges();
 
-        expect(await paymentStatusOf(String(order._id))).toBe('cancelled');
-        expect(templatesSent()).toEqual(['orders.order-cancelled']);
+        expect(await paymentStatusOf(String(order._id))).toBe('canceled');
+        expect(templatesSent()).toEqual(['orders.order-canceled']);
     });
 });
 
-describe('a transfer that lands after its order was cancelled', () => {
+describe('a transfer that lands after its order was canceled', () => {
     it('is still matched by its reference, recorded onto the closed payment, and owed straight back', async () => {
-        const { order, reference } = await transferOrder({ price: 20 });
+        const { order, reference } = await transferOrder({ price: '20.00' });
         await lapse(String(order._id));
         const audited: AuditEntry[] = [];
         registerAuditSink((entry) => audited.push(entry));
@@ -272,7 +272,7 @@ describe('a transfer that lands after its order was cancelled', () => {
         // The money is real: it is recorded, not refused, and the answer is the payment itself.
         expect(recorded.success).toBe(true);
         const payment = await paymentOf(String(order._id));
-        expect(payment).toMatchObject({ status: 'succeeded', amountRefunded: 20 });
+        expect(payment).toMatchObject({ status: 'succeeded', amountRefunded: '20.00' });
         // A hand-paid refund is returned by an operator off-system: the record stays open.
         expect(payment?.refunds).toHaveLength(1);
         expect(payment?.refunds[0].status).not.toBe('succeeded');
@@ -281,18 +281,18 @@ describe('a transfer that lands after its order was cancelled', () => {
         expect(owed).toHaveLength(1);
         expect(owed[0].metadata).toMatchObject({
             refundId: String(payment?.refunds[0]._id),
-            amount: 20,
+            amount: '20.00',
             reason: 'late_payment'
         });
         expect(owed[0].actorUserId).toBeDefined();
         // The order is not revived and nothing was committed to a shelf.
-        expect(await orderStatusOf(String(order._id))).toBe('cancelled');
+        expect(await orderStatusOf(String(order._id))).toBe('canceled');
     });
 
-    it('is refused when the order was cancelled but no transfer payment was ever opened for it', async () => {
+    it('is refused when the order was canceled but no transfer payment was ever opened for it', async () => {
         const user = await createUser();
         const order = await createOrder(user, [toOrderItem(await createProduct(), 1)], {
-            status: OrderStatus.cancelled
+            status: OrderStatus.canceled
         });
 
         const recorded = await paymentService.recordOfflinePayment(

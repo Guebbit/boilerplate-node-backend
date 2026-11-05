@@ -24,7 +24,7 @@ import { create, recordCreated, updateById } from './crud';
 import { removeById, restoreById } from './remove';
 import { placeOrder } from './place';
 import { mailOrderPlaced, mailBuyer, mailBuyerOfOrder } from './notify';
-import { mailOrderCancelled } from './cancel-mail';
+import { mailOrderCanceled } from './cancel-mail';
 import { considerPurchaseHold } from './purchase-hold';
 import { detachUserId, eraseUserOrders, startOrderPiiClock, anonymizeDueOrders } from './retention';
 import { callerScope, cancelScope, actorOf, ownerScope, ownLiveScope } from './scope';
@@ -45,7 +45,7 @@ import {
     markReopened,
     markReshipped,
     markDelivered,
-    markFulfilmentComplete,
+    markFulfillmentComplete,
     markUndeliverable,
     markPaymentStatus,
     markReturnStatus,
@@ -121,7 +121,7 @@ export const orderService = {
     create,
     placeOrder,
     mailOrderPlaced,
-    mailOrderCancelled,
+    mailOrderCanceled,
     considerPurchaseHold,
     mailBuyer,
     mailBuyerOfOrder,
@@ -145,7 +145,7 @@ export const orderService = {
     markReshipped,
     extendGuarantee,
     markDelivered,
-    markFulfilmentComplete,
+    markFulfillmentComplete,
     markUndeliverable,
     markPaymentStatus,
     markReturnStatus,

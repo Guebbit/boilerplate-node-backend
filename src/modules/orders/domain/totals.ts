@@ -10,7 +10,7 @@
 import {
     addMoney,
     scaleMoney,
-    toDecimalAmount,
+    toDecimalString,
     toMinorUnits,
     wholeCount,
     type Money,
@@ -31,7 +31,7 @@ export interface LineItemTotals {
     /** Sum of `quantity` across every line, as whole units. */
     quantity: number;
     /** Sum of `product.price × quantity` across every line, as a decimal amount. */
-    price: number;
+    price: string;
 }
 
 /**
@@ -48,7 +48,7 @@ export const lineGross = (item: LineItem, currency: string): Money =>
  * product failed to populate contributes nothing rather than turning the total into `NaN`.
  * @param items - the priced lines
  * @param currency - the ISO-4217 code these lines are priced in — decides the rounding scale
- * @returns line count, total quantity, and the total as a decimal amount
+ * @returns line count, total quantity, and the total as decimal text
  */
 export const sumLineItems = (items: readonly LineItem[], currency: string): LineItemTotals => {
     let quantity = 0;
@@ -61,7 +61,7 @@ export const sumLineItems = (items: readonly LineItem[], currency: string): Line
     }
 
     // `count` is lines as given; `quantity` is units. A dropped line still counts as a line.
-    return { count: items.length, quantity, price: toDecimalAmount(price, currency) };
+    return { count: items.length, quantity, price: toDecimalString(price, currency) };
 };
 
 /** An order, as far as its grand total is concerned. */
@@ -84,10 +84,10 @@ export interface OrderTotalInput {
  * owns composition — the order, its payment intent, and its confirmation email must all agree on
  * this number, so none of them sums it independently.
  * @param order - the order's lines, its frozen shipping cost, and the currency both are priced in
- * @returns the grand total as the decimal amount the contract publishes
+ * @returns the grand total as the decimal text the contract publishes
  */
-export const orderTotal = ({ items, shippingCost, currency }: OrderTotalInput): number =>
-    toDecimalAmount(
+export const orderTotal = ({ items, shippingCost, currency }: OrderTotalInput): string =>
+    toDecimalString(
         addMoney(
             toMinorUnits(sumLineItems(items, currency).price, currency),
             toMinorUnits(shippingCost, currency)

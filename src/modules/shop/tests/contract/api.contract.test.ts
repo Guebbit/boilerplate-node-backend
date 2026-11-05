@@ -20,9 +20,10 @@ describe('GET /shop', () => {
             city: 'Milano',
             zip: '20100',
             country: 'IT',
-            email: 'shop@example.com',
+            email: 'support@example.com',
             phone: '+39 02 1234567',
             currency: 'EUR',
+            minorUnits: 2,
             shipToCountries: ['IT'],
             returnAddress: {
                 name: 'Guebbit Demo Shop Srl',
@@ -50,6 +51,8 @@ describe('GET /shop', () => {
 
                 expect(response.body).toMatchObject({
                     currency: 'JPY',
+                    // JPY has no minor unit: a price input in this shop takes whole yen.
+                    minorUnits: 0,
                     shipToCountries: ['IT', 'FR'],
                     vatNumber: 'IT12345678901',
                     returnPostagePayer: 'shop'

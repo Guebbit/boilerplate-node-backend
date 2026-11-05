@@ -69,6 +69,15 @@ components:
             maxLength: 3
             pattern: '^[A-Z]{3}$'
             description: ISO 4217 alphabetic currency code, upper case (e.g. `EUR`)
+        # The OpenAPI `DecimalAmount` / `NonNegativeDecimalAmount` scalars, copied for the same reason as `Id`.
+        DecimalAmount:
+            type: string
+            pattern: '^-?\d+(\.\d+)?$'
+            description: A money amount as a plain decimal string at the places of its currency (`"19.90"` EUR, `"1000"` JPY, `"1.500"` KWD).
+        NonNegativeDecimalAmount:
+            type: string
+            pattern: '^\d+(\.\d+)?$'
+            description: A non-negative money amount as a plain decimal string at the places of its currency (`"19.90"` EUR, `"1000"` JPY, `"1.500"` KWD).
         WebhookHeaders:
             type: object
             description: >-

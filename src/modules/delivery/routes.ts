@@ -1,7 +1,7 @@
 /**
  * @module
  * Route table for delivery. Guards are chosen per route: the methods list is pre-purchase
- * information and stays public, the fulfilment read needs a caller to scope ownership to, and every
+ * information and stays public, the fulfillment read needs a caller to scope ownership to, and every
  * write door is staff's — the same key that updates a shipment, for the write. See:
  * docs/modules/delivery.md
  */
@@ -28,7 +28,7 @@ import {
     getPreorderSummary
 } from './controllers/get-preorder-fulfillment-orders';
 
-/** Express router for delivery operations (methods, fulfilment reads, cutting and delivering shipments, holds). */
+/** Express router for delivery operations (methods, fulfillment reads, cutting and delivering shipments, holds). */
 export const router = Router();
 
 // GET /delivery/methods — public: what shipping costs is pre-purchase information

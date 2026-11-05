@@ -3,7 +3,7 @@
  * A payment holds one provider intent, and the browser is only ever handed a secret for it.
  *
  * `createIntent` resumes the stored intent (the reference is passed to `prepare`), and refuses an
- * adapter that opened a second one instead: the stray is cancelled, the row keeps the first, and
+ * adapter that opened a second one instead: the stray is canceled, the row keeps the first, and
  * the answer is 409. Otherwise the customer would pay an intent no row names, and the webhook
  * would arrive for a reference nobody holds.
  */
@@ -27,7 +27,7 @@ afterEach(() => {
 /** A priced order for a fresh customer, ready to be paid. */
 const anOrder = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 25 });
+    const product = await createProduct({ price: '25.00' });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     return { user, orderId: String(order._id) };
 };
@@ -47,7 +47,7 @@ describe('a second ask for the same payment', () => {
         expect(prepare.mock.calls[1]?.[2]).toBe(stored?.providerRef);
     });
 
-    it('is refused when the provider opened a different intent, which is cancelled', async () => {
+    it('is refused when the provider opened a different intent, which is canceled', async () => {
         const { user, orderId } = await anOrder();
         let opened = 0;
         jest.spyOn(fakePaymentProvider, 'prepare').mockImplementation(() => {

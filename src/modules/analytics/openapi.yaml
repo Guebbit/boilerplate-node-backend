@@ -6,6 +6,7 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Analytics
+      x-family: Core
       description: Browsing events a browser reports, relayed only after the visitor agreed to be measured.
 
 paths:

@@ -165,7 +165,7 @@ const mayPay = (
     authContext?: AuthContext
 ): boolean => {
     // Confirmable, and the order can still get to `paid`. Both halves, because a retryable decline
-    // on an order that has since been cancelled is not a payment anyone may complete.
+    // on an order that has since been canceled is not a payment anyone may complete.
     const payable =
         CONFIRMABLE_PAYMENT_STATUSES.includes(payment.status) ||
         // A transfer is taken over with a card through the intent, which needs a provider.

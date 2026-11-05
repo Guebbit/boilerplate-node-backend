@@ -42,7 +42,7 @@ export const createProduct = (
     } = readInput(request, {
         surface: 'create',
         booleans: ['active', 'purchasable', 'allowBackorder', 'requiresShipping', 'noWithdrawal'],
-        numbers: ['price', 'weight'],
+        numbers: ['weight'],
         stringArrays: ['categories', 'tags'],
         jsonFields: ['translations']
     });

@@ -49,7 +49,7 @@ note is issued. Nothing is sent before you press it.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
-    A["order cancelled<br/>or goods returned"] --> B["refund opens<br/><i>and waits</i>"]
+    A["order canceled<br/>or goods returned"] --> B["refund opens<br/><i>and waits</i>"]
     B --> C["you pay the money back<br/><i>bank or till</i>"]
     C --> D["you press<br/>Mark returned"]
     D --> E["buyer emailed,<br/>credit note issued"]
@@ -265,7 +265,7 @@ refund (see [A refund owed by hand](#refund-owed-by-hand)).
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
-    A["return received<br/><i>goods back on the shelf</i>"] --> B["refund cancelled<br/>or paid elsewhere"]
+    A["return received<br/><i>goods back on the shelf</i>"] --> B["refund canceled<br/>or paid elsewhere"]
     B --> C["you press<br/>Close return"]
     C --> D["return closed,<br/>nothing else changes"]
 
@@ -366,8 +366,8 @@ If the buyer still wants the goods, they order again. A cancelled order is never
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
-    A["transfer arrives<br/><i>order already cancelled</i>"] --> B["you record it"]
-    B --> C["order stays cancelled,<br/>refund opens"]
+    A["transfer arrives<br/><i>order already canceled</i>"] --> B["you record it"]
+    B --> C["order stays canceled,<br/>refund opens"]
     C --> D["you send the money back"]
     D --> E["you press<br/>Mark returned"]
 

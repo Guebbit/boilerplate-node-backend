@@ -81,7 +81,7 @@ describe('the operator’s audit read — what it withholds', () => {
     it('withholds everything a shop’s customers did and an admin did to them', async () => {
         await seed([
             ['order.created', 'success'],
-            ['order.cancelled', 'success'],
+            ['order.canceled', 'success'],
             ['payment.confirmed', 'success'],
             ['admin.product.updated', 'success'],
             ['admin.user.banned', 'success'],

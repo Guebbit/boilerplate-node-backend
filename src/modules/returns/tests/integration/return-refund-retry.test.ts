@@ -37,7 +37,7 @@ afterEach(() => {
 /** A paid, delivered order and a withdrawal on it, ready to receive. */
 const withdrawnOrder = async () => {
     const user = await createUser({ email: 'refund-retry@example.com' });
-    const shirt = await createProduct({ title: 'Shirt', price: 30, onHand: 10 });
+    const shirt = await createProduct({ title: 'Shirt', price: '30.00', onHand: 10 });
     const order = await createOrder(user, [toOrderItem(shirt, 2)]);
     const orderId = String(order._id);
     await inventoryService.reserveForOrder(orderId, [

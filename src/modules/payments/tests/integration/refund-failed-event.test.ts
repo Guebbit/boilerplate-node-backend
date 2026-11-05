@@ -35,7 +35,7 @@ afterEach(() => {
 /** A paid order, and a lever that makes its refunds fail with the reason it is given. */
 const paidOrder = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 50 });
+    const product = await createProduct({ price: '50.00' });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     await payByCard(order, user);
     await settleOutboxNudges();
@@ -60,13 +60,13 @@ describe('payment.refund_failed', () => {
         const { orderId, failWith } = await paidOrder();
         failWith('declined');
 
-        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: 30 });
+        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: '30.00' });
         await settleOutboxNudges();
 
         expect(await failedEvents()).toEqual([
             expect.objectContaining({
                 orderId,
-                amount: 30,
+                amount: '30.00',
                 currency: 'EUR',
                 failureReason: 'declined',
                 final: true
@@ -78,7 +78,9 @@ describe('payment.refund_failed', () => {
         withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { orderId, failWith } = await paidOrder();
             failWith('provider_unavailable');
-            await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: 30 });
+            await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
+                amount: '30.00'
+            });
 
             await paymentService.retryOpenRefunds();
             await settleOutboxNudges();

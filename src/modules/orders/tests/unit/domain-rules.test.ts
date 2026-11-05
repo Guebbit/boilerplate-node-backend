@@ -14,7 +14,7 @@ import {
 } from '../../domain/rules';
 
 /** A line whose product resolved. */
-const line = (quantity = 1): OrderLineCandidate => ({ quantity, product: { price: 10 } });
+const line = (quantity = 1): OrderLineCandidate => ({ quantity, product: { price: '10.00' } });
 
 describe('checkOrderLines', () => {
     it('refuses an empty set, naming the reason', () => {

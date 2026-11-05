@@ -108,14 +108,14 @@ channels:
         messages:
             OrderPaidEvent:
                 $ref: '#/components/messages/OrderPaidEvent'
-    order.cancelled:
-        address: order.cancelled
-        description: An order was cancelled.
+    order.canceled:
+        address: order.canceled
+        description: An order was canceled.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
         messages:
-            OrderCancelledEvent:
-                $ref: '#/components/messages/OrderCancelledEvent'
+            OrderCanceledEvent:
+                $ref: '#/components/messages/OrderCanceledEvent'
     order.redacted:
         address: order.redacted
         description: An order's personal data was scrubbed.
@@ -358,15 +358,15 @@ operations:
             Derived from `order.status_changed` (`to: 'paid'`) rather than its own domain event — see `orders/events.ts`: "listeners filter on `to`; the event doesn't know who cares."
         messages:
             - $ref: '#/channels/order.paid/messages/OrderPaidEvent'
-    webhookOrderCancelled:
+    webhookOrderCanceled:
         action: send
         channel:
-            $ref: '#/channels/order.cancelled'
+            $ref: '#/channels/order.canceled'
         summary: A cancel went through; stock is back on the shelf, except for `cause` lost.
         description: >-
-            The `order.cancelled` domain event, without its refund policy: whether the cancel owes the buyer money back is for `payments`, and a subscriber learns that money actually moved from `payment.refunded`. `cause` says why. A `lost` parcel's units are not restocked: they were never on the shelf to come back to. See `orders/events.ts`.
+            The `order.canceled` domain event, without its refund policy: whether the cancel owes the buyer money back is for `payments`, and a subscriber learns that money actually moved from `payment.refunded`. `cause` says why. A `lost` parcel's units are not restocked: they were never on the shelf to come back to. See `orders/events.ts`.
         messages:
-            - $ref: '#/channels/order.cancelled/messages/OrderCancelledEvent'
+            - $ref: '#/channels/order.canceled/messages/OrderCanceledEvent'
     webhookOrderRedacted:
         action: send
         channel:
@@ -391,7 +391,7 @@ operations:
             $ref: '#/channels/shipment.delivered'
         summary: A shipment was marked delivered.
         description: >-
-            One-to-one with the `shipment.delivered` domain event — see `delivery/services/deliver.ts`. A digital fulfilment fires it too, right after `shipment.shipped`.
+            One-to-one with the `shipment.delivered` domain event — see `delivery/services/deliver.ts`. A digital fulfillment fires it too, right after `shipment.shipped`.
         messages:
             - $ref: '#/channels/shipment.delivered/messages/ShipmentDeliveredEvent'
     webhookShipmentLost:
@@ -471,7 +471,7 @@ operations:
             $ref: '#/channels/return.requested'
         summary: A return was opened — a withdrawal or a request.
         description: >-
-            One-to-one with the `return.requested` domain event — see `returns/services/create.ts`. A withdrawal before dispatch fires it too, followed at once by `return.closed`: the return is born closed, and `order.cancelled` says the order was cancelled.
+            One-to-one with the `return.requested` domain event — see `returns/services/create.ts`. A withdrawal before dispatch fires it too, followed at once by `return.closed`: the return is born closed, and `order.canceled` says the order was canceled.
         messages:
             - $ref: '#/channels/return.requested/messages/ReturnRequestedEvent'
     webhookReturnReceived:
@@ -646,13 +646,13 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/OrderPaidEnvelope'
-        OrderCancelledEvent:
-            name: OrderCancelledEvent
-            title: Order cancelled
+        OrderCanceledEvent:
+            name: OrderCanceledEvent
+            title: Order canceled
             headers:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
-                $ref: '#/components/schemas/OrderCancelledEnvelope'
+                $ref: '#/components/schemas/OrderCanceledEnvelope'
         OrderRedactedEvent:
             name: OrderRedactedEvent
             title: Order redacted
@@ -885,6 +885,15 @@ components:
             maxLength: 3
             pattern: '^[A-Z]{3}$'
             description: ISO 4217 alphabetic currency code, upper case (e.g. `EUR`)
+        # The OpenAPI `DecimalAmount` / `NonNegativeDecimalAmount` scalars, copied for the same reason as `Id`.
+        DecimalAmount:
+            type: string
+            pattern: '^-?\d+(\.\d+)?$'
+            description: A money amount as a plain decimal string at the places of its currency (`"19.90"` EUR, `"1000"` JPY, `"1.500"` KWD).
+        NonNegativeDecimalAmount:
+            type: string
+            pattern: '^\d+(\.\d+)?$'
+            description: A non-negative money amount as a plain decimal string at the places of its currency (`"19.90"` EUR, `"1000"` JPY, `"1.500"` KWD).
         WebhookHeaders:
             type: object
             description: >-
@@ -952,7 +961,7 @@ components:
                 data:
                     $ref: '#/components/schemas/OrderIdPayload'
             additionalProperties: false
-        OrderCancelledPayload:
+        OrderCanceledPayload:
             type: object
             required:
                 - orderId
@@ -962,7 +971,7 @@ components:
                     $ref: '#/components/schemas/Id'
                 cause:
                     title: OrderCancelCause
-                    description: Why the order was cancelled.
+                    description: Why the order was canceled.
                     type: string
                     enum:
                         - customer
@@ -973,7 +982,7 @@ components:
                         - payment_mismatch
                         - lost
             additionalProperties: false
-        OrderCancelledEnvelope:
+        OrderCanceledEnvelope:
             type: object
             required:
                 - type
@@ -981,15 +990,15 @@ components:
                 - data
             properties:
                 type:
-                    title: OrderCancelledEventType
+                    title: OrderCanceledEventType
                     type: string
                     enum:
-                        - order.cancelled
+                        - order.canceled
                 timestamp:
                     type: string
                     format: date-time
                 data:
-                    $ref: '#/components/schemas/OrderCancelledPayload'
+                    $ref: '#/components/schemas/OrderCanceledPayload'
             additionalProperties: false
         OrderRedactedEnvelope:
             type: object
@@ -1160,9 +1169,8 @@ components:
                     description: >-
                         The refund record this delivery is about. A payment can be refunded in parts, so one payment can raise this event more than once.
                 amount:
-                    type: number
-                    minimum: 0
-                    description: This refund's amount, two decimal places — the payment's own `amount` for a full refund.
+                    $ref: '#/components/schemas/NonNegativeDecimalAmount'
+                    description: This refund's amount — the payment's own `amount` for a full refund.
                 currency:
                     $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
@@ -1202,9 +1210,8 @@ components:
                 refundId:
                     $ref: '#/components/schemas/Id'
                 amount:
-                    type: number
-                    minimum: 0
-                    description: This refund's amount, two decimal places.
+                    $ref: '#/components/schemas/NonNegativeDecimalAmount'
+                    description: This refund's amount.
                 currency:
                     $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
@@ -1229,9 +1236,8 @@ components:
                 refundId:
                     $ref: '#/components/schemas/Id'
                 amount:
-                    type: number
-                    minimum: 0
-                    description: This refund's amount, two decimal places.
+                    $ref: '#/components/schemas/NonNegativeDecimalAmount'
+                    description: This refund's amount.
                 currency:
                     $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
@@ -1306,9 +1312,8 @@ components:
                 reason:
                     $ref: '#/components/schemas/DisputeReason'
                 amount:
-                    type: number
-                    minimum: 0
-                    description: The disputed amount, two decimal places.
+                    $ref: '#/components/schemas/NonNegativeDecimalAmount'
+                    description: The disputed amount.
                 currency:
                     $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
@@ -1518,9 +1523,8 @@ components:
                 orderId:
                     $ref: '#/components/schemas/Id'
                 refundAmount:
-                    type: number
-                    minimum: 0
-                    description: What went back to the customer for this return, two decimal places.
+                    $ref: '#/components/schemas/NonNegativeDecimalAmount'
+                    description: What went back to the customer for this return.
                 currency:
                     $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
@@ -3006,6 +3010,16 @@ components:
                             format: email
                             description: >-
                                 Bare address replies go to, set as the `Reply-To` header. The producer has already validated it; `From` stays the configured sender either way.
+                        messageId:
+                            type: string
+                            pattern: '^<[^<>\s@]+@[^<>\s@]+>$'
+                            description: >-
+                                The `Message-ID` header, angle brackets included. A producer sets one when a later mail must thread under this one; left out, the transport makes its own. The pattern keeps a header-breaking character out of it.
+                        inReplyTo:
+                            type: string
+                            pattern: '^<[^<>\s@]+@[^<>\s@]+>$'
+                            description: >-
+                                The `Message-ID` of the mail this one answers, set as `In-Reply-To` and `References` so a mail client files it in the same thread.
                         attachments:
                             type: array
                             description: >-

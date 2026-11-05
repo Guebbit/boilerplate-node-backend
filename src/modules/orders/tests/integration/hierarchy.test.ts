@@ -18,7 +18,7 @@ import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/test
 import { orderService } from '@modules/orders/services';
 import { OrderStatus } from '@types';
 import { outboxEventModel } from '@kernel/outbox';
-import { ORDER_CANCELLED } from '../../events';
+import { ORDER_CANCELED } from '../../events';
 import { orderRepository } from '../../repository';
 import { cancelForErasureById } from '../../services/cancel';
 
@@ -76,7 +76,7 @@ describe('cancelOnRequestById — the write’s own scope', () => {
         expect(result.success).toBe(false);
         expect(await statusOf(String(order._id))).toBe(OrderStatus.paid);
         // The refund rides the cancel's own outbox row: a refused cancel writes none.
-        expect(await outboxEventModel.countDocuments({ name: ORDER_CANCELLED })).toBe(0);
+        expect(await outboxEventModel.countDocuments({ name: ORDER_CANCELED })).toBe(0);
     });
 
     it('still lets a customer cancel their own order', async () => {
@@ -248,8 +248,8 @@ describe('no rank on an order', () => {
         const order = await orderOf('admin');
         const id = String(order._id);
         const moderator = callerContextAs('moderator', STAFF_ID);
-        // Only a cancelled order can be hidden.
-        await forceOrderStatus(id, 'cancelled');
+        // Only a canceled order can be hidden.
+        await forceOrderStatus(id, 'canceled');
 
         const results = [
             await orderService.updateById(id, { email: 'taken@over.test' }, moderator),
@@ -295,7 +295,7 @@ describe('no rank on an order', () => {
 
         const cancelRow = auditSpy.mock.calls
             .map(([event]) => event)
-            .find(({ action }) => action === 'order.cancelled');
+            .find(({ action }) => action === 'order.canceled');
         expect(cancelRow?.metadata).toMatchObject({ cause: expect.any(String) });
         expect(cancelRow?.metadata?.ownOrder).toBe(own ? true : undefined);
     });

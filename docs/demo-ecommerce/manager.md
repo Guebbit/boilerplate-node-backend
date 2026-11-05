@@ -24,7 +24,7 @@ flowchart LR
     PA -->|"🧑‍💼 you mark it in progress<br/>(optional: shipping does it)"| PR["being prepared"]
     PR -->|"📦 warehouse records<br/>the last parcel's handover"| SH["shipped"]
     SH -->|"📦 warehouse records<br/>the parcel's arrival"| DE["delivered"]
-    P -.->|"customer cancels,<br/>or 15 min passed"| CA["cancelled"]
+    P -.->|"customer cancels,<br/>or 15 min passed"| CA["canceled"]
     PA -.->|"🧑‍💼 you cancel it"| CA
     CA -.->|"money goes back<br/>unless you say otherwise"| RF["payment shows<br/>refunded<br/><i>(a payment status, not an order status)</i>"]
 

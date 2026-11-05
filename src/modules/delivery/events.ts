@@ -49,7 +49,7 @@ export interface ShipmentLostPayload extends ShipmentEventPayload {
 /** The payload of `shipment.shipped`: the shared one, plus what the buyer's mail says. */
 export interface ShipmentShippedPayload extends ShipmentEventPayload {
     /**
-     * Units still to come in later shipments. Absent for a digital fulfilment, which is born
+     * Units still to come in later shipments. Absent for a digital fulfillment, which is born
      * delivered: its arrival mail is the only one the buyer gets. Internal — the webhook omits it.
      */
     remainingUnits?: number;
@@ -104,7 +104,7 @@ declare module '@kernel/events' {
          */
         'shipment.shipped': ShipmentShippedPayload;
 
-        /** A shipment arrived. A digital fulfilment fires it right after `shipment.shipped`. */
+        /** A shipment arrived. A digital fulfillment fires it right after `shipment.shipped`. */
         'shipment.delivered': ShipmentEventPayload;
 
         /**
@@ -127,8 +127,8 @@ declare module '@kernel/events' {
         /** A hold ended and the fulfillment order may ship. */
         'fulfillment_order.released': { orderId: string; fulfillmentOrderId: string };
 
-        /** A fulfillment order's remainder was cancelled, or its order was. */
-        'fulfillment_order.cancelled': { orderId: string; fulfillmentOrderId: string };
+        /** A fulfillment order's remainder was canceled, or its order was. */
+        'fulfillment_order.canceled': { orderId: string; fulfillmentOrderId: string };
 
         /**
          * A waiting preorder's buyer was told its date moved or will be missed (PRODUCT_STATES P5). Written
@@ -158,8 +158,8 @@ export const FULFILLMENT_ORDER_HOLD_NOTICED = 'fulfillment_order.hold_noticed';
 /** See `DomainEventMap['fulfillment_order.released']` above. */
 export const FULFILLMENT_ORDER_RELEASED = 'fulfillment_order.released';
 
-/** See `DomainEventMap['fulfillment_order.cancelled']` above. */
-export const FULFILLMENT_ORDER_CANCELLED = 'fulfillment_order.cancelled';
+/** See `DomainEventMap['fulfillment_order.canceled']` above. */
+export const FULFILLMENT_ORDER_CANCELED = 'fulfillment_order.canceled';
 
 /** See `DomainEventMap['fulfillment_order.delayed']` above. */
 export const FULFILLMENT_ORDER_DELAYED = 'fulfillment_order.delayed';

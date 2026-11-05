@@ -1,7 +1,7 @@
 /**
  * @module
  * The doors `orders` offers so that no other module drives an order's stock hold: giving a
- * cancelled remainder back (`releaseStock`), keeping an open hold alive (`extendHold`), and the
+ * canceled remainder back (`releaseStock`), keeping an open hold alive (`extendHold`), and the
  * card-confirm pre-check (`isPayableNow`). Real Mongo throughout.
  */
 

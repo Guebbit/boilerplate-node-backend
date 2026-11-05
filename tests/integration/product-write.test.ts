@@ -42,7 +42,7 @@ describe('productService.create', () => {
 
         const result = await productService.create(
             productService.zodProductCreateSchema.parse({
-                price: 24.9,
+                price: '24.90',
                 translations: {
                     en: { title: 'Memory Foam Bed', description: 'Extra support' },
                     it: { title: 'Cuccia in memory foam' }
@@ -65,7 +65,7 @@ describe('productService.create', () => {
 
         const result = await productService.create(
             productService.zodProductCreateSchema.parse({
-                price: 10,
+                price: '10.00',
                 translations: { en: { title: 'Valid title' }, xx: { title: 'Unregistered' } }
             }),
             testCallerContext
@@ -144,7 +144,7 @@ describe('productService.updateById', () => {
     });
 
     it('leaves translations alone entirely when the PATCH carries none', async () => {
-        const product = await createProduct({ title: 'Bed', price: 10 });
+        const product = await createProduct({ title: 'Bed', price: '10.00' });
         const id = String(product._id);
         await translationRepository.upsertEntityLocale(
             'product',
@@ -156,7 +156,7 @@ describe('productService.updateById', () => {
             undefined
         );
 
-        const result = await productService.updateById(id, { price: 25 }, testCallerContext);
+        const result = await productService.updateById(id, { price: '25.00' }, testCallerContext);
 
         expect(result.success).toBe(true);
         const rows = await translationRepository.findEntityTranslations('product', id);

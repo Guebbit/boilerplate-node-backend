@@ -14,7 +14,7 @@ import {
     CreateReturn201Response,
     DeliverShipment200Response,
     ListOrderFulfillmentOrders200Response,
-    MintApiKey201Response,
+    CreateApiKey201Response,
     ShipFulfillmentOrder201Response,
     CreateWebhookSubscription201Response
 } from '@api/schemas.zod';
@@ -42,7 +42,7 @@ const inAWeek = () => new Date(Date.now() + 7 * 86_400_000).toISOString();
 it('delivers every event once, signed, in causal order', async () => {
     const endpoint = await startWebhookReceiver();
     receiver = endpoint;
-    const dogFood = await createProduct({ price: 20, onHand: 10 });
+    const dogFood = await createProduct({ price: '20.00', onHand: 10 });
     const dogFoodId = String(dogFood._id);
     const { bearer: admin } = await authenticateAs('admin');
 
@@ -56,7 +56,7 @@ it('delivers every event once, signed, in causal order', async () => {
                 permissions: ['create:WebhookSubscription', 'read:WebhookSubscription'],
                 expiresAt: inAWeek()
             }),
-        MintApiKey201Response
+        CreateApiKey201Response
     );
     const key = `Bearer ${minted.secret}`;
     const { secret } = bodyOf(
@@ -120,7 +120,7 @@ it('delivers every event once, signed, in causal order', async () => {
     await api().post(`/returns/${returned.id}/receive`).set('Authorization', admin).expect(200);
     steps.push(await arrivals());
 
-    // Order B is placed, then cancelled before it is paid.
+    // Order B is placed, then canceled before it is paid.
     const second = await placeOrder(bearer, [{ productId: dogFoodId, quantity: 1 }]);
     steps.push(await arrivals());
     await api()
@@ -140,7 +140,7 @@ it('delivers every event once, signed, in causal order', async () => {
         ['return.requested'],
         ['payment.refunded', 'return.closed', 'return.received'],
         ['order.created'],
-        ['order.cancelled']
+        ['order.canceled']
     ]);
     const everything = endpoint.received([secret]);
     expect(everything.every(({ signed }) => signed)).toBe(true);
@@ -173,7 +173,7 @@ const adminWithKey = async (n: number) => {
                 permissions: ['read:WebhookSubscription'],
                 expiresAt: inAWeek()
             }),
-        MintApiKey201Response
+        CreateApiKey201Response
     );
 
     return { user, key: `Bearer ${minted.secret}` };

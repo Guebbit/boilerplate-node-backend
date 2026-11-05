@@ -20,7 +20,7 @@ describe('orderRepository', () => {
     describe('create', () => {
         it('inserts an order and returns the Mongoose document', async () => {
             const user = await createUser();
-            const product = await createProduct({ price: 15 });
+            const product = await createProduct({ price: '15.00' });
             const order = await createOrder(user, [toOrderItem(product, 2)]);
 
             expect(order._id).toBeDefined();
@@ -41,7 +41,7 @@ describe('orderRepository', () => {
             const user = await createUser();
             const product = await createProduct({
                 title: 'Snapshot Test',
-                price: 29.99
+                price: '29.99'
             });
             const order = await createOrder(user, [toOrderItem(product, 1)]);
 
@@ -49,7 +49,7 @@ describe('orderRepository', () => {
             // frozen snapshot, so no cast is needed to read its plain fields.
             const snapshot = order.items[0].product;
             expect(snapshot.title).toBe('Snapshot Test');
-            expect(snapshot.price).toBe(29.99);
+            expect(snapshot.price).toBe('29.99');
         });
 
         it('supports multiple products in a single order', async () => {
@@ -106,7 +106,7 @@ describe('orderRepository', () => {
 
         it('adds computed fields with $addFields', async () => {
             const user = await createUser();
-            const product = await createProduct({ price: 10 });
+            const product = await createProduct({ price: '10.00' });
             await createOrder(user, [toOrderItem(product, 4)]);
 
             // Manually compute totalPrice the same way the Order service does

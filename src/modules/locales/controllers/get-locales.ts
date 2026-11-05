@@ -26,7 +26,7 @@ export const getLocales = (request: Request, response: Response) =>
             localeService.readStanding(request.caller)
         )
         .then((capabilities) => successResponse<LocaleCapabilities>(response, capabilities))
-        .catch(catchAs(response, 'getLocales'));
+        .catch(catchAs(response, 'listLocales'));
 
 /**
  * GET /locales/:locale

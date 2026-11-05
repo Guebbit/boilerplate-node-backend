@@ -134,7 +134,7 @@ describe('GET /orders', () => {
 
         expect(order.totalItems).toBe(1);
         expect(order.totalQuantity).toBe(2);
-        expect(order.totalPrice).toBeGreaterThan(0);
+        expect(Number(order.totalPrice)).toBeGreaterThan(0);
         expect(order).not.toHaveProperty('total');
     });
 });
@@ -167,7 +167,7 @@ describe('GET /orders/{id}', () => {
     /*
      * One case per role: both run the identical query, but `requireId` is what keeps a malformed
      * id at 404 rather than the 422 `databaseErrorInterpreter` would otherwise give a `BSONError`
-     * — see `get-order-item.ts`. Both roles need their own case, or a regression that skips the
+     * — see `get-order.ts`. Both roles need their own case, or a regression that skips the
      * check on either route has nothing to catch it.
      */
     it.each([['admin'], ['user']] as const)(
@@ -192,7 +192,7 @@ describe('POST /orders/{id}/cancel', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.status).toBe('cancelled');
+        expect(response.body.status).toBe('canceled');
     });
 
     it("lets an unrestricted caller cancel someone else's pending order", async () => {
@@ -205,7 +205,7 @@ describe('POST /orders/{id}/cancel', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.status).toBe('cancelled');
+        expect(response.body.status).toBe('canceled');
     });
 
     it('lets an operator cancel an equal’s order, holding the key is the whole rule', async () => {
@@ -218,7 +218,7 @@ describe('POST /orders/{id}/cancel', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.status).toBe('cancelled');
+        expect(response.body.status).toBe('canceled');
     });
 
     // An operator's cancel can refund or keep a paid order's money, so it asks a fresh session; the
@@ -238,7 +238,7 @@ describe('POST /orders/{id}/cancel', () => {
         expect(response.status).toBe(401);
         expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
         const stored = await orderRepository.findById(String(order._id));
-        expect(stored?.status).not.toBe('cancelled');
+        expect(stored?.status).not.toBe('canceled');
     });
 
     it('never prompts the buyer cancelling their own order on a stale session', async () => {
@@ -277,7 +277,7 @@ describe('POST /orders/{id}/cancel', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(409);
-        expect(response.body.errors[0].code).toBe('ORDER_NOT_CANCELLABLE');
+        expect(response.body.errors[0].code).toBe('ORDER_NOT_CANCELABLE');
     });
 
     it('a second cancel is a 409, not a double write', async () => {
@@ -342,7 +342,7 @@ describe('POST /orders/{id}/status-override', () => {
 describe('POST /orders/{id}/restore', () => {
     it('brings a soft-deleted order back, matching the contract', async () => {
         const { bearer } = await authenticateAs('admin');
-        const order = await seedOrderFor(await createUser(), OrderStatus.cancelled);
+        const order = await seedOrderFor(await createUser(), OrderStatus.canceled);
         await api()
             .delete(`/orders/${String(order._id)}`)
             .set('Authorization', bearer);
@@ -369,10 +369,10 @@ describe('POST /orders/{id}/restore', () => {
 
     it('is offered by `actions.restore` on the list row of a hidden order, and only there', async () => {
         const { bearer } = await authenticateAs('admin');
-        const hidden = await seedOrderFor(await createUser(), OrderStatus.cancelled);
+        const hidden = await seedOrderFor(await createUser(), OrderStatus.canceled);
         const live = await seedOrderFor(
             await createUser({ email: 'live@example.com' }),
-            OrderStatus.cancelled
+            OrderStatus.canceled
         );
         await api()
             .delete(`/orders/${String(hidden._id)}`)
@@ -515,24 +515,23 @@ describe('PATCH /orders/{id}', () => {
     });
 });
 
-describe('DELETE /orders and DELETE /orders/{id}/hard', () => {
-    it('matches the contract for a soft delete with the id in the body', async () => {
+describe('DELETE /orders/{id} and DELETE /orders/{id}/hard', () => {
+    it('matches the contract for a soft delete', async () => {
         const { bearer, user } = await authenticateAs('admin');
-        const order = await seedOrderFor(user, OrderStatus.cancelled);
+        const order = await seedOrderFor(user, OrderStatus.canceled);
 
         const response = await api()
-            .delete('/orders')
-            .set('Authorization', bearer)
-            .send({ id: String(order._id) });
+            .delete(`/orders/${String(order._id)}`)
+            .set('Authorization', bearer);
 
         expect(response.status).toBe(204);
         const stored = await orderRepository.findById(String(order._id));
         expect(stored?.deletedAt).toBeInstanceOf(Date);
     });
 
-    it('matches the contract for a hard delete of a cancelled order, and the row is gone', async () => {
+    it('matches the contract for a hard delete of a canceled order, and the row is gone', async () => {
         const { bearer, user } = await authenticateAs('admin');
-        const order = await seedOrderFor(user, OrderStatus.cancelled);
+        const order = await seedOrderFor(user, OrderStatus.canceled);
 
         const response = await api()
             .delete(`/orders/${String(order._id)}/hard`)
@@ -542,7 +541,7 @@ describe('DELETE /orders and DELETE /orders/{id}/hard', () => {
         await expect(orderRepository.findById(String(order._id))).resolves.toBeNull();
     });
 
-    it('refuses a hard delete of an open order with 409 ORDER_NOT_CANCELLED, and keeps it', async () => {
+    it('refuses a hard delete of an open order with 409 ORDER_NOT_CANCELED, and keeps it', async () => {
         const { bearer, user } = await authenticateAs('admin');
         const order = await seedOrderFor(user);
 
@@ -551,7 +550,7 @@ describe('DELETE /orders and DELETE /orders/{id}/hard', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(409);
-        expect(response.body.errors[0].code).toBe('ORDER_NOT_CANCELLED');
+        expect(response.body.errors[0].code).toBe('ORDER_NOT_CANCELED');
         await expect(orderRepository.findById(String(order._id))).resolves.not.toBeNull();
     });
 

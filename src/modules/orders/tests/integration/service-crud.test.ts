@@ -68,8 +68,8 @@ afterEach(() => {
 /** Creates an order through the service, returning the persisted document. */
 const seedOrder = async () => {
     const user = await createUser({ email: 'buyer@example.com' });
-    const keyboard = await createProduct({ title: 'Keyboard', price: 25 });
-    const mouse = await createProduct({ title: 'Mouse', price: 10 });
+    const keyboard = await createProduct({ title: 'Keyboard', price: '25.00' });
+    const mouse = await createProduct({ title: 'Mouse', price: '10.00' });
 
     const result = await orderService.create(
         String(user._id),
@@ -85,11 +85,11 @@ const seedOrder = async () => {
 };
 
 /** {@link seedOrder}'s order after a cancel, read back the way `removeById` reads it. */
-const seedCancelledOrder = async () => {
+const seedCanceledOrder = async () => {
     const seeded = await seedOrder();
-    const cancelled = await forceOrderStatus(String(seeded.order._id), 'cancelled');
-    if (!cancelled) throw new Error('order vanished');
-    return { ...seeded, order: cancelled };
+    const canceled = await forceOrderStatus(String(seeded.order._id), 'canceled');
+    if (!canceled) throw new Error('order vanished');
+    return { ...seeded, order: canceled };
 };
 
 /** Creates an order of `quantities.length` lines, one fresh well-stocked product each. */
@@ -111,7 +111,7 @@ const createWithLines = async (quantities: number[]) => {
 describe('create', () => {
     it('creates an order and answers 201', async () => {
         const user = await createUser();
-        const product = await createProduct({ title: 'Keyboard', price: 25 });
+        const product = await createProduct({ title: 'Keyboard', price: '25.00' });
 
         const result = await orderService.create(
             String(user._id),
@@ -130,7 +130,7 @@ describe('create', () => {
     it('raises an order for a customer, an equal and oneself', async () => {
         const peer = await createUser({ email: 'peer@example.com' }, 'admin');
         const me = await createUser({ email: 'me@example.com' }, 'admin');
-        const product = await createProduct({ title: 'Keyboard', price: 25 });
+        const product = await createProduct({ title: 'Keyboard', price: '25.00' });
         const items = [{ productId: String(product._id), quantity: 1 }];
 
         const forPeer = await orderService.create(
@@ -157,7 +157,12 @@ describe('create', () => {
         ['off sale', { purchasable: false }]
     ])('sells a %s product by hand, and holds its stock', async (_name, flags) => {
         const user = await createUser();
-        const product = await createProduct({ title: 'Mouse', price: 10, onHand: 5, ...flags });
+        const product = await createProduct({
+            title: 'Mouse',
+            price: '10.00',
+            onHand: 5,
+            ...flags
+        });
 
         const result = await orderService.create(
             String(user._id),
@@ -174,10 +179,10 @@ describe('create', () => {
     // A removed product is the one thing a hand-raised order still refuses, every one named.
     it('refuses a soft-deleted product with 409 ORDER_PRODUCT_UNAVAILABLE, and writes nothing', async () => {
         const user = await createUser();
-        const fine = await createProduct({ title: 'Keyboard', price: 25, onHand: 5 });
+        const fine = await createProduct({ title: 'Keyboard', price: '25.00', onHand: 5 });
         const removed = await createProduct({
             title: 'Mouse',
-            price: 10,
+            price: '10.00',
             onHand: 5,
             deletedAt: new Date()
         });
@@ -209,7 +214,12 @@ describe('create', () => {
         ['soft-deleted', { deletedAt: new Date() }]
     ])('answers 404 for a %s product to a caller without display:Product', async (_name, flags) => {
         const user = await createUser();
-        const product = await createProduct({ title: 'Mouse', price: 10, onHand: 5, ...flags });
+        const product = await createProduct({
+            title: 'Mouse',
+            price: '10.00',
+            onHand: 5,
+            ...flags
+        });
 
         const result = await orderService.create(
             String(user._id),
@@ -227,7 +237,7 @@ describe('create', () => {
         const user = await createUser();
         const product = await createProduct({
             title: 'Mouse',
-            price: 10,
+            price: '10.00',
             onHand: 5,
             purchasable: false
         });
@@ -247,7 +257,7 @@ describe('create', () => {
     it('skips the open-order cap that guards checkout', () =>
         withEnvironmentOverrides({ NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT: '1' }, async () => {
             const user = await createUser();
-            const product = await createProduct({ price: 25 });
+            const product = await createProduct({ price: '25.00' });
             const items = [{ productId: String(product._id), quantity: 1 }];
 
             const first = await orderService.create(
@@ -273,7 +283,7 @@ describe('create', () => {
         freezeDate(Date.UTC(2026, 5, 15, 12));
 
         const user = await createUser();
-        const product = await createProduct({ title: 'Keyboard', price: 25 });
+        const product = await createProduct({ title: 'Keyboard', price: '25.00' });
 
         const first = asSuccess(
             await orderService.create(
@@ -305,7 +315,7 @@ describe('create', () => {
     it('freezes the shop currency at creation, unaffected by a later config change', () =>
         withEnvironmentOverrides({ NODE_DEFAULT_CURRENCY: 'GBP' }, async () => {
             const user = await createUser();
-            const product = await createProduct({ title: 'Keyboard', price: 25 });
+            const product = await createProduct({ title: 'Keyboard', price: '25.00' });
 
             const order = asSuccess(
                 await orderService.create(
@@ -333,7 +343,7 @@ describe('create', () => {
         // Not a bare reference: title and price live on the order itself.
         expect(line).toBeDefined();
         expect((line!.product as { title: string }).title).toBe('Keyboard');
-        expect((line!.product as { price: number }).price).toBe(25);
+        expect((line!.product as { price: string }).price).toBe('25.00');
         expect(line!.quantity).toBe(2);
     });
 
@@ -342,7 +352,7 @@ describe('create', () => {
         // orders silently restate themselves at today's prices.
         const { order, keyboard } = await seedOrder();
 
-        keyboard.price = 999;
+        keyboard.price = '999.00';
         await saveProduct(keyboard);
 
         const reloaded = await orderRepository.findById(String(order._id));
@@ -350,7 +360,7 @@ describe('create', () => {
             (item) => String((item.product as { _id: unknown })._id) === String(keyboard._id)
         );
 
-        expect((line!.product as { price: number }).price).toBe(25);
+        expect((line!.product as { price: string }).price).toBe('25.00');
     });
 
     it('preserves one line per requested item', async () => {
@@ -441,7 +451,7 @@ describe('create', () => {
     });
 
     it('answers 404 for a buyer that does not exist, and writes no order or order number', async () => {
-        const product = await createProduct({ price: 25 });
+        const product = await createProduct({ price: '25.00' });
         const createSpy = jest.spyOn(orderRepository, 'create');
         const counterSpy = jest.spyOn(orderRepository, 'incrementOrderNumberCounter');
 
@@ -460,7 +470,7 @@ describe('create', () => {
 
     it('places no order for someone unchecked when the buyer lookup fails', async () => {
         const user = await createUser({ email: 'buyer@example.com' });
-        const product = await createProduct({ title: 'Keyboard', price: 25 });
+        const product = await createProduct({ title: 'Keyboard', price: '25.00' });
         jest.spyOn(userService, 'getById').mockRejectedValue(new Error('lookup unavailable'));
 
         await expect(
@@ -625,11 +635,15 @@ describe('getById', () => {
         const unscoped = await orderService.getById(String(order._id));
 
         // 2 lines, 3 units, 2×25 + 1×10 = 60.
-        expect(scoped?.toJSON()).toMatchObject({ totalItems: 2, totalQuantity: 3, totalPrice: 60 });
+        expect(scoped?.toJSON()).toMatchObject({
+            totalItems: 2,
+            totalQuantity: 3,
+            totalPrice: '60.00'
+        });
         expect(unscoped?.toJSON()).toMatchObject({
             totalItems: 2,
             totalQuantity: 3,
-            totalPrice: 60
+            totalPrice: '60.00'
         });
     });
 });
@@ -673,8 +687,8 @@ describe('update', () => {
 });
 
 describe('remove — the hard path', () => {
-    it('deletes a cancelled order that was never paid', async () => {
-        const { order } = await seedCancelledOrder();
+    it('deletes a canceled order that was never paid', async () => {
+        const { order } = await seedCanceledOrder();
 
         const result = await remove(order, true);
 
@@ -683,7 +697,7 @@ describe('remove — the hard path', () => {
     });
 
     it.each(['pending', 'paid', 'shipped', 'delivered'])(
-        'refuses a %s order with 409 ORDER_NOT_CANCELLED and keeps it',
+        'refuses a %s order with 409 ORDER_NOT_CANCELED and keeps it',
         async (status) => {
             const { order } = await seedOrder();
             const open = await forceOrderStatus(String(order._id), status);
@@ -691,7 +705,7 @@ describe('remove — the hard path', () => {
             const result = await remove(open!, true);
 
             expect(asReject(result).status).toBe(409);
-            expect(asReject(result).errors[0].code).toBe('ORDER_NOT_CANCELLED');
+            expect(asReject(result).errors[0].code).toBe('ORDER_NOT_CANCELED');
             await expect(orderRepository.count({})).resolves.toBe(1);
         }
     );
@@ -702,7 +716,7 @@ describe('remove — the hard path', () => {
      * ever soft-deleted.
      */
     it('refuses a hard delete once the order has been paid (and therefore invoiced)', async () => {
-        const { order } = await seedCancelledOrder();
+        const { order } = await seedCanceledOrder();
         order.paidAt = new Date();
         await orderRepository.save(order);
 
@@ -714,7 +728,7 @@ describe('remove — the hard path', () => {
         await expect(orderRepository.count({})).resolves.toBe(1);
     });
 
-    it('refuses a soft delete on a paid order too: an open order is cancelled first', async () => {
+    it('refuses a soft delete on a paid order too: an open order is canceled first', async () => {
         const { order } = await seedOrder();
         order.paidAt = new Date();
         await orderRepository.save(order);
@@ -722,7 +736,7 @@ describe('remove — the hard path', () => {
         const result = await remove(order, false);
 
         expect(asReject(result).status).toBe(409);
-        expect(asReject(result).errors[0].code).toBe('ORDER_NOT_CANCELLED');
+        expect(asReject(result).errors[0].code).toBe('ORDER_NOT_CANCELED');
         const stored = await orderRepository.findById(String(order._id));
         expect(stored!.deletedAt).toBeUndefined();
     });
@@ -756,7 +770,7 @@ describe('updateById', () => {
 
 describe('remove', () => {
     it('soft-deletes by default, keeping the row', async () => {
-        const { order } = await seedCancelledOrder();
+        const { order } = await seedCanceledOrder();
 
         const result = await remove(order);
 
@@ -770,7 +784,7 @@ describe('remove', () => {
 
     it('leaves an already soft-deleted order deleted when the delete is repeated', async () => {
         // DELETE must be safe to retry: a second one never brings the order back.
-        const { order } = await seedCancelledOrder();
+        const { order } = await seedCanceledOrder();
 
         await remove(order);
         await remove(order);
@@ -788,7 +802,7 @@ describe('remove', () => {
             const result = await remove(order);
 
             expect(asReject(result).status).toBe(409);
-            expect(asReject(result).errors[0].code).toBe('ORDER_NOT_CANCELLED');
+            expect(asReject(result).errors[0].code).toBe('ORDER_NOT_CANCELED');
             const stored = await orderRepository.findById(String(order._id));
             expect(stored!.deletedAt).toBeUndefined();
         }
@@ -797,7 +811,7 @@ describe('remove', () => {
 
 describe('restoreById', () => {
     it('restores a soft-deleted order', async () => {
-        const { order } = await seedCancelledOrder();
+        const { order } = await seedCanceledOrder();
         await remove(order);
 
         const result = await orderService.restoreById(String(order._id));
@@ -820,7 +834,7 @@ describe('restoreById', () => {
 
 describe('removeById', () => {
     it('soft-deletes an existing order by default', async () => {
-        const { order } = await seedCancelledOrder();
+        const { order } = await seedCanceledOrder();
 
         const result = await orderService.removeById(String(order._id));
 
@@ -830,8 +844,8 @@ describe('removeById', () => {
         expect(stored!.deletedAt).toBeInstanceOf(Date);
     });
 
-    it('hard-deletes an existing cancelled order when asked', async () => {
-        const { order } = await seedCancelledOrder();
+    it('hard-deletes an existing canceled order when asked', async () => {
+        const { order } = await seedCanceledOrder();
 
         const result = await orderService.removeById(String(order._id), true);
 
@@ -879,7 +893,7 @@ describe('getForCaller', () => {
 
 describe('callerScope hides soft-deleted orders', () => {
     it('excludes a soft-deleted order from its own owner, but not from an admin', async () => {
-        const { order } = await seedCancelledOrder();
+        const { order } = await seedCanceledOrder();
         const userId = String(order.userId);
 
         await orderService.removeById(String(order._id));

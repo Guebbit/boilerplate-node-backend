@@ -161,7 +161,7 @@ describe('staffNoticeEmail', () => {
             const mail = staffNoticeEmail(locale, body, staffLinkOf(body));
             const words = translator(locale);
 
-            expect(mail.subject).toContain(words('notifications.staff-mail.task-category.privacy'));
+            expect(mail.subject).toContain(words('tasks.task-category.privacy'));
             expect(mail.data.link).toContain('/tasks/t1');
         }
     );
@@ -175,9 +175,7 @@ describe('staffNoticeEmail', () => {
             } as const;
             const mail = staffNoticeEmail(locale, body, staffLinkOf(body));
 
-            expect(mail.subject).toContain(
-                translator(locale)('notifications.staff-mail.task-category.none')
-            );
+            expect(mail.subject).toContain(translator(locale)('tasks.task-category.none'));
         }
     );
 
@@ -185,9 +183,7 @@ describe('staffNoticeEmail', () => {
         for (const locale of ['en', 'it']) {
             const words = translator(locale);
             for (const kind of Object.values(TaskKind))
-                expect(words(`notifications.staff-mail.task-kind.${kind}`)).not.toContain(
-                    'notifications.staff-mail'
-                );
+                expect(words(`tasks.task-kind.${kind}`)).not.toContain('notifications.staff-mail');
         }
     });
 });

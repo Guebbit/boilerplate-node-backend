@@ -56,7 +56,7 @@ const at = (minutes: number): string => when(minutes).toISOString();
 /** A card payment of 100.00 (one product at 50.00, two units), by a buyer with a unique address. */
 const paidOrder = async () => {
     const user = await createUser({ email: `buyer-${String(buyers++)}@example.com` });
-    const product = await createProduct({ price: 50 });
+    const product = await createProduct({ price: '50.00' });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     await payByCard(order, user);
     await settleOutboxNudges();
@@ -72,7 +72,7 @@ const report = (over: Partial<ProviderDisputeState> = {}): ProviderDisputeState 
     kind: 'chargeback',
     status: 'needs_response',
     reason: 'fraudulent',
-    amount: 100,
+    amount: '100.00',
     currency: 'EUR',
     fundsWithdrawn: true,
     evidenceDueBy: at(7 * 24 * 60),
@@ -92,7 +92,7 @@ const staffView = (orderId: string) =>
 const events = (name: string) => outboxEventModel.countDocuments({ name });
 
 /** The operator asking to refund `amount` of the order's payment. */
-const refund = (orderId: string, amount?: number) =>
+const refund = (orderId: string, amount?: string) =>
     refundOrderPayment(
         orderId,
         asAdmin(),
@@ -113,7 +113,7 @@ describe('a dispute is reported', () => {
                 disputeRef: 'dp_1',
                 kind: 'chargeback',
                 status: 'needs_response',
-                amount: 100,
+                amount: '100.00',
                 fundsWithdrawn: true,
                 openedAt: when(0),
                 evidenceDueBy: when(7 * 24 * 60)
@@ -216,7 +216,7 @@ describe('the refund door while a dispute stands', () => {
         const { orderId, providerRef } = await paidOrder();
         await deliver(providerRef);
 
-        const asked = await refund(orderId, 10);
+        const asked = await refund(orderId, '10.00');
 
         expect(asReject(asked).status).toBe(409);
         expect(asReject(asked).errors[0].code).toBe('PAYMENT_DISPUTED');
@@ -230,7 +230,7 @@ describe('the refund door while a dispute stands', () => {
         const { orderId, providerRef } = await paidOrder();
         await deliver(providerRef, { kind: 'inquiry', fundsWithdrawn: false });
 
-        const asked = await refund(orderId, 10);
+        const asked = await refund(orderId, '10.00');
 
         const view = await staffView(orderId);
         expect(asked.success).toBe(true);
@@ -239,10 +239,10 @@ describe('the refund door while a dispute stands', () => {
 
     it('takes a lost chargeback off what is left: more than the rest is a 422', async () => {
         const { orderId, providerRef } = await paidOrder();
-        await deliver(providerRef, { status: 'lost', amount: 70, observedAt: at(5) });
+        await deliver(providerRef, { status: 'lost', amount: '70.00', observedAt: at(5) });
 
-        const tooMuch = await refund(orderId, 40);
-        const fits = await refund(orderId, 30);
+        const tooMuch = await refund(orderId, '40.00');
+        const fits = await refund(orderId, '30.00');
 
         expect(asReject(tooMuch).status).toBe(422);
         expect(asReject(tooMuch).errors[0].code).toBe('PAYMENT_REFUND_EXCEEDS_REMAINING');
@@ -257,7 +257,7 @@ describe('a refund the chargeback blocks', () => {
             await deliver(providerRef);
             const send = jest.spyOn(fakePaymentProvider, 'refund').mockClear();
 
-            // The order is cancelled: the listener tries to give the money back.
+            // The order is canceled: the listener tries to give the money back.
             await refundForOrder(orderId).catch(() => undefined);
             await paymentService.retryOpenRefunds();
 
@@ -319,9 +319,9 @@ describe('a refund the chargeback blocks', () => {
 describe('the dispute on the staff reads', () => {
     it('shows a dispute waiting on the shop with its deadline and what was already refunded', async () => {
         const { orderId, providerRef } = await paidOrder();
-        await refund(orderId, 30);
+        await refund(orderId, '30.00');
 
-        await deliver(providerRef, { amount: 70 });
+        await deliver(providerRef, { amount: '70.00' });
 
         const attention = await paymentService.listAttention();
         expect(attention.items).toEqual([
@@ -329,10 +329,10 @@ describe('the dispute on the staff reads', () => {
                 kind: 'dispute_needs_response',
                 disputeId: 'dp_1',
                 orderId,
-                amount: 70,
+                amount: '70.00',
                 since: at(0),
                 dueBy: at(7 * 24 * 60),
-                alreadyRefunded: 30
+                alreadyRefunded: '30.00'
             })
         ]);
         expect(attention.items[0].refundId).toBeUndefined();

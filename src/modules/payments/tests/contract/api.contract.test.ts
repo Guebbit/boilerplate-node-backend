@@ -42,7 +42,7 @@ const DECLINE_METHOD = 'pm_card_declined';
 /** Logs a customer in with one pending order, returning both. */
 const authenticateWithOrder = async () => {
     const { user, bearer } = await authenticateAs('user');
-    const product = await createProduct({ price: 10 });
+    const product = await createProduct({ price: '10.00' });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     return { bearer, order };
 };
@@ -99,7 +99,7 @@ const disputeEvent = (providerRef: string, over: Record<string, unknown> = {}) =
         kind: 'chargeback',
         status: 'needs_response',
         reason: 'product_not_received',
-        amount: 20,
+        amount: '20.00',
         currency: 'EUR',
         fundsWithdrawn: true,
         evidenceDueBy: '2026-10-20T10:00:00.000Z',
@@ -173,7 +173,7 @@ describe('POST /payments', () => {
             .send({ orderId: String(order._id) });
 
         expect(response.status).toBe(201);
-        expect(response.body.amount).toBe(20);
+        expect(response.body.amount).toBe('20.00');
         expect(response.body.status).toBe('requires_confirmation');
         // The answer is what the payment form keeps: it must say the next step is `pay`.
         expect(response.body.actions).toEqual({
@@ -718,7 +718,7 @@ describe('POST /payments/{id}/refunds', () => {
         // A refund never moves `status`, so the money is read from the fields that do move.
         const payment = await paymentRepository.findById(paymentId);
         expect(payment!.refunds).toHaveLength(0);
-        expect(payment!.amountRefunded).toBe(0);
+        expect(Number(payment!.amountRefunded)).toBe(0);
     });
 });
 
@@ -735,6 +735,24 @@ describe('POST /payments/{id}/refunds — the operator', () => {
 
         expect(response.status).toBe(422);
         expect(JSON.stringify(response.body.errors)).toContain('currency');
+        expect((await paymentRepository.findById(paymentId))!.refunds).toHaveLength(0);
+    });
+
+    it.each([
+        ['a JSON number', 1],
+        ['more places than EUR has', '0.005']
+    ])('refuses a refund amount that is %s with a 422 naming `amount`', async (_label, amount) => {
+        const { paymentId } = await paidOrder();
+        const { bearer: adminBearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .post(`/payments/${paymentId}/refunds`)
+            .set('Authorization', adminBearer)
+            .set('Idempotency-Key', freshKey())
+            .send({ amount });
+
+        expect(response.status).toBe(422);
+        expect(JSON.stringify(response.body.errors)).toContain('amount');
         expect((await paymentRepository.findById(paymentId))!.refunds).toHaveLength(0);
     });
 
@@ -774,7 +792,7 @@ describe('POST /payments/{id}/refunds — the operator', () => {
         const { bearer: adminBearer } = await authenticateAs('admin');
         const stored = await paymentRepository.findById(paymentId);
         setFakeRefundFailure(String(stored?.providerRef), 'declined');
-        const half = (stored?.amount ?? 0) / 2;
+        const half = (Number(stored?.amount ?? 0) / 2).toFixed(2);
         const key = freshKey();
 
         const response = await api()
@@ -815,14 +833,14 @@ describe('POST /payments/{id}/refunds — the operator', () => {
             .post(`/payments/${paymentId}/refunds`)
             .set('Authorization', adminBearer)
             .set('Idempotency-Key', freshKey())
-            .send({ amount: (stored?.amount ?? 0) / 2 });
+            .send({ amount: (Number(stored?.amount ?? 0) / 2).toFixed(2) });
         setFakeRefundFailure(String(stored?.providerRef), undefined);
 
         const second = await api()
             .post(`/payments/${paymentId}/refunds`)
             .set('Authorization', adminBearer)
             .set('Idempotency-Key', freshKey())
-            .send({ amount: (stored?.amount ?? 0) / 4 });
+            .send({ amount: (Number(stored?.amount ?? 0) / 4).toFixed(2) });
 
         expect(second.status).toBe(201);
         expect(second.body).toMatchObject({ status: 'succeeded' });
@@ -881,7 +899,7 @@ describe('POST /payments/{id}/refunds — the operator', () => {
         expect(response.body.errors[0].code).toBe('IDEMPOTENCY_KEY_REQUIRED');
         const payment = await paymentRepository.findById(paymentId);
         expect(payment!.refunds).toHaveLength(0);
-        expect(payment!.amountRefunded).toBe(0);
+        expect(Number(payment!.amountRefunded)).toBe(0);
     });
 
     it('replays the first answer for the same key instead of refunding twice', async () => {
@@ -893,7 +911,7 @@ describe('POST /payments/{id}/refunds — the operator', () => {
                 .post(`/payments/${paymentId}/refunds`)
                 .set('Authorization', adminBearer)
                 .set('Idempotency-Key', key)
-                .send({ amount: 5 });
+                .send({ amount: '5.00' });
 
         const first = await refund();
         const second = await refund();
@@ -903,7 +921,7 @@ describe('POST /payments/{id}/refunds — the operator', () => {
         expect(second.headers['idempotent-replay']).toBe('true');
         const payment = await paymentRepository.findById(paymentId);
         expect(payment!.refunds).toHaveLength(1);
-        expect(payment!.amountRefunded).toBe(5);
+        expect(payment!.amountRefunded).toBe('5.00');
     });
 });
 
@@ -1089,7 +1107,7 @@ describe('POST /payments/{id}/refunds/{refundId}/cancel', () => {
         });
         expect(reread.body.displayStatus).toBe('succeeded');
         const payment = await paymentRepository.findById(paymentId);
-        expect(payment!.amountRefunded).toBe(0);
+        expect(Number(payment!.amountRefunded)).toBe(0);
     });
 
     it('answers 409 PAYMENT_REFUND_NOT_OPEN to a second cancel', async () => {
@@ -1115,7 +1133,7 @@ describe('POST /payments/{id}/refunds/{refundId}/cancel', () => {
             .post(`/payments/${paymentId}/refunds`)
             .set('Authorization', adminBearer)
             .set('Idempotency-Key', freshKey())
-            .send({ amount: 5 });
+            .send({ amount: '5.00' });
 
         const response = await api()
             .post(`/payments/${paymentId}/refunds/${String(refunded.body.id)}/cancel`)
@@ -1423,7 +1441,7 @@ describe('the staff Payments page', () => {
         const response = await api()
             .post('/payments/search')
             .set('Authorization', adminBearer)
-            .send({ displayStatus: 'succeeded', amountMin: 1 });
+            .send({ displayStatus: 'succeeded', amountMin: '1.00' });
 
         expect(response.status).toBe(200);
         expect(response.body.items).toHaveLength(1);

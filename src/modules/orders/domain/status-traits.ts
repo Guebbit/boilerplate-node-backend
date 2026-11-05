@@ -34,7 +34,7 @@ export interface OrderStatusTraits {
 }
 
 /**
- * The traits of every status. `withdrawable` is "contract concluded, not cancelled" — `pending`
+ * The traits of every status. `withdrawable` is "contract concluded, not canceled" — `pending`
  * counts, because the buyer's right does not wait for their own payment (CRD Art. 9).
  */
 export const ORDER_STATUS_TRAITS = {
@@ -68,7 +68,7 @@ export const ORDER_STATUS_TRAITS = {
         withdrawable: true,
         fulfillment: { value: 'fulfilled', followsSummary: false }
     },
-    cancelled: {
+    canceled: {
         stockCommitted: false,
         beforeDispatch: false,
         withdrawable: false,

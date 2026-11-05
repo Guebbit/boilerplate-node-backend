@@ -27,7 +27,7 @@ import { checkShipLines, isShippable } from '../domain';
 import {
     auditUnearnedStart,
     isOpenForShipment,
-    mayStartFulfilment,
+    mayStartFulfillment,
     refuseUnearnedStart
 } from './ship-gate';
 import type { ProductQuantity } from '../domain';
@@ -37,7 +37,7 @@ import { readWithOrder, refuse, runAct } from './act';
 import { viewShipment } from './actions';
 import { announceShipped } from './announce';
 import { cutShipment } from './cut';
-import { reportProgress, settleOrder, startFulfilment } from './progress';
+import { reportProgress, settleOrder, startFulfillment } from './progress';
 
 /** What staff sends to ship. */
 export interface ShipInput {
@@ -56,14 +56,14 @@ interface Shipped {
 
 /**
  * Whether the order is in a state a shipment may leave from: `processing`, or `paid` for a caller
- * who may start it. A `cancelled` or `pending` order is not shippable at all — a different refusal,
- * because the remedy differs (nothing to do, versus start fulfilment).
+ * who may start it. A `canceled` or `pending` order is not shippable at all — a different refusal,
+ * because the remedy differs (nothing to do, versus start fulfillment).
  * @param status - the order's status
  * @param mayStart - whether the caller holds `start:Shipment`
  * @throws {ActRefusal} 409 for a closed or unpaid order, 403 for a `paid` one the caller may not start
  */
 const gateOrder = (status: OrderStatus, mayStart: boolean): void => {
-    if (status === OrderStatus.cancelled || status === OrderStatus.pending)
+    if (status === OrderStatus.canceled || status === OrderStatus.pending)
         refuse(409, ERROR_CODES.DELIVERY_NOT_SHIPPABLE, 'delivery.not-shippable');
     refuseUnearnedStart(status, mayStart);
     if (!isOpenForShipment(status, mayStart))
@@ -124,7 +124,7 @@ const shipAct = async (
     );
     // The first shipment from `paid` makes the `start` move itself, in this transaction.
     const actor = context.caller.id;
-    await startFulfilment(order, session, actor);
+    await startFulfillment(order, session, actor);
 
     const progress = await reportProgress(orderId, session);
     await settleOrder(
@@ -173,7 +173,7 @@ export const shipFulfillmentOrder = (
     context: CallerContext
 ): Promise<ResponseSuccess<Shipment> | ResponseReject> => {
     // Decided before the transaction opens: a retried transaction must not change the verdict.
-    const mayStart = mayStartFulfilment(context);
+    const mayStart = mayStartFulfillment(context);
 
     return runAct((session) => shipAct(fulfillmentOrderId, input, context, mayStart, session)).then(
         (result) => {

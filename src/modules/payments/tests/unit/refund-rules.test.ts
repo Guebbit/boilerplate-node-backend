@@ -18,7 +18,7 @@ import {
 /** A 100.00 payment with no refunds, on the given provider. */
 const paymentOn = (provider: string) => ({
     provider,
-    amount: 100,
+    amount: '100.00',
     currency: 'EUR',
     refunds: []
 });
@@ -29,7 +29,7 @@ const refundIn = (facts: {
     failureReason?: RefundFailureReason;
     reversedAt?: Date;
     providerRefundRef?: string;
-}) => ({ amount: 30, currency: 'EUR', ...facts });
+}) => ({ amount: '30.00', currency: 'EUR', ...facts });
 
 describe('isOpenRefund', () => {
     it.each([
@@ -99,7 +99,7 @@ describe('a refund the provider took back', () => {
 });
 
 describe('exceedsRemaining', () => {
-    const settled = { ...refundIn({ status: RefundStatus.succeeded }), amount: 80 };
+    const settled = { ...refundIn({ status: RefundStatus.succeeded }), amount: '80.00' };
 
     it('holds an unsent refund that no longer fits what the provider already gave back', () => {
         const payment = { ...paymentOn('stripe'), refunds: [settled] };
@@ -142,7 +142,7 @@ describe('refundDueBy', () => {
 });
 
 /** A chargeback of `amount` (100.00 unless said) in the given state. */
-const chargeback = (status: DisputeStatus, amount = 100) => ({
+const chargeback = (status: DisputeStatus, amount = '100.00') => ({
     kind: DisputeKind.chargeback,
     status,
     amount,
@@ -153,7 +153,7 @@ const chargeback = (status: DisputeStatus, amount = 100) => ({
 const inquiry = (status: DisputeStatus) => ({
     kind: DisputeKind.inquiry,
     status,
-    amount: 100,
+    amount: '100.00',
     currency: 'EUR'
 });
 
@@ -180,12 +180,18 @@ describe('the dispute rules', () => {
     it('takes only lost or accepted chargebacks off what can be refunded', () => {
         const taken = (disputes: ReturnType<typeof chargeback>[]) =>
             lostToChargebacks({ disputes }, 'EUR');
-        expect(taken([chargeback(DisputeStatus.lost, 40)])).toBe(4000);
+        expect(taken([chargeback(DisputeStatus.lost, '40.00')])).toBe(4000);
         expect(
-            taken([chargeback(DisputeStatus.accepted, 40), chargeback(DisputeStatus.lost, 10)])
+            taken([
+                chargeback(DisputeStatus.accepted, '40.00'),
+                chargeback(DisputeStatus.lost, '10.00')
+            ])
         ).toBe(5000);
         expect(
-            taken([chargeback(DisputeStatus.won, 40), chargeback(DisputeStatus.needs_response)])
+            taken([
+                chargeback(DisputeStatus.won, '40.00'),
+                chargeback(DisputeStatus.needs_response)
+            ])
         ).toBe(0);
         expect(lostToChargebacks({ disputes: [{ ...inquiry(DisputeStatus.lost) }] }, 'EUR')).toBe(
             0
@@ -206,12 +212,12 @@ describe('the dispute rules', () => {
         });
 
         it('is settled by hand once a lost chargeback covers it (the bank paid the buyer)', () => {
-            const lost = { ...card, disputes: [chargeback(DisputeStatus.lost, 30)] };
+            const lost = { ...card, disputes: [chargeback(DisputeStatus.lost, '30.00')] };
             expect(mayBeSettledByHand(lost, refused)).toBe(true);
         });
 
         it('is not settled by hand when the lost chargeback is smaller than the refund', () => {
-            const lost = { ...card, disputes: [chargeback(DisputeStatus.lost, 29.99)] };
+            const lost = { ...card, disputes: [chargeback(DisputeStatus.lost, '29.99')] };
             expect(mayBeSettledByHand(lost, refused)).toBe(false);
         });
 

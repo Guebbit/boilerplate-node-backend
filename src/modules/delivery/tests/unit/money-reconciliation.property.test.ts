@@ -8,6 +8,7 @@
  * shared property, see docs/tools/property-testing.md. Seeded, so a counterexample reproduces.
  */
 import fc from 'fast-check';
+import { toMinorUnits } from '@domain-primitives/money';
 import { sumLineItems, orderTotal } from '@modules/orders';
 import { findShippingMethod, priceShipping } from '../../domain';
 
@@ -17,8 +18,9 @@ const RUN = { seed: 20_260_902, numRuns: 300, endOnFailure: true } as const;
 /** This shop's own currency for the composition — a currency's OWN rounding is `money.property.test.ts`'s job. */
 const EUR = 'EUR';
 
-/** A catalogue price, cents-precise — `Product.price` is `format: double`, never a whole dollar only. */
-const decimalPrice = () => fc.integer({ min: 0, max: 10_000_000 }).map((cents) => cents / 100);
+/** A catalogue price, cents-precise — `Product.price` is decimal text, never a whole dollar only. */
+const decimalPrice = () =>
+    fc.integer({ min: 0, max: 10_000_000 }).map((cents) => (cents / 100).toFixed(2));
 
 /** One order line: a quantity and the embedded product row `orderTotal` reads its price from. */
 const lineItem = () =>
@@ -39,11 +41,11 @@ describe('order total + shipping — reconciliation', () => {
                 shippingMethod(),
                 (items, method) => {
                     const linesTotal = sumLineItems(items, EUR).price;
-                    const shippingCost = priceShipping(method, linesTotal);
+                    const shippingCost = priceShipping(method, linesTotal, EUR);
                     const total = orderTotal({ items, shippingCost, currency: EUR });
 
-                    expect(Math.round(total * 100)).toBe(
-                        Math.round(linesTotal * 100) + Math.round(shippingCost * 100)
+                    expect(toMinorUnits(total, EUR)).toBe(
+                        toMinorUnits(linesTotal, EUR) + toMinorUnits(shippingCost, EUR)
                     );
                 }
             ),
@@ -62,7 +64,7 @@ describe('order total + shipping — reconciliation', () => {
                 expect(
                     orderTotal({
                         items,
-                        shippingCost: priceShipping(pickup, linesTotal),
+                        shippingCost: priceShipping(pickup, linesTotal, EUR),
                         currency: EUR
                     })
                 ).toBe(linesTotal);

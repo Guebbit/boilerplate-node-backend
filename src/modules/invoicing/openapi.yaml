@@ -6,6 +6,7 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Invoicing
+      x-family: Buying
       description: The frozen invoice and credit-note PDFs — issued at payment and at refund, never before.
 
 x-error-codes:
@@ -165,9 +166,7 @@ components:
                     allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     description: ISO-4217 currency code (e.g. EUR)
                 grandTotal:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: The gross amount this credit note reverses.
                 refundId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -200,6 +199,4 @@ components:
                 currency:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode'
                 grandTotal:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'

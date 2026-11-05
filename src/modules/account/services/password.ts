@@ -89,7 +89,7 @@ type PasswordCause = Extract<RevocationCause, 'password-change' | 'password-rese
  *   refused password must not leave a half-applied change on the document, and the only place
  *   that can be guaranteed is here, next to the `save`.
  * @param cause - which password event this is; a cause that announces also writes
- *   `account.sessions-revoked` through the outbox, in the write's own transaction
+ *   `account.sessions_revoked` through the outbox, in the write's own transaction
  * @internal Writes a new password with no check of the current one; only `passwordChangeWithCurrent` and the reset flow may reach it.
  */
 export const passwordChange = (
@@ -133,7 +133,7 @@ const passwordAndEpochWrite =
  * password itself — shape, match, breach — and must not run the breach lookup a second time.
  *
  * One transaction holds the new password, the session epoch and, when the cause announces, the
- * `account.sessions-revoked` outbox row: the credential cannot change while old sessions stay live,
+ * `account.sessions_revoked` outbox row: the credential cannot change while old sessions stay live,
  * and the event exists exactly when the change does. The purge that follows is housekeeping
  * (the epoch already refuses every old token), so `revokeFor` logs its failure, not a 500.
  *

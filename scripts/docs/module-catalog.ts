@@ -7,7 +7,7 @@
  * group by `module.yaml#group` (foundation first, then the demo shop), so a new module appears in
  * the right place by declaring its group and a summary, and nothing else.
  *
- * Pure apart from {@link readCatalogue}, the one disk read, so a test can drive the rest with a
+ * Pure apart from {@link readCatalog}, the one disk read, so a test can drive the rest with a
  * virtual module list.
  *
  * See: docs/modules/index.md, docs/theory/strategic-ddd.md#4a-foundation-and-shop
@@ -18,7 +18,7 @@ import path from 'node:path';
 import { readAllModuleDescriptors, type ModuleDescriptor } from './module-descriptor';
 
 /** A deeper page of one module's own, e.g. `cart-checkout.md` under `cart`. */
-export interface CataloguePage {
+export interface CatalogPage {
     /** The page's file stem, which is also its URL under `/modules/`. */
     stem: string;
     /** What the sidebar calls it: the page's own first heading. */
@@ -26,13 +26,13 @@ export interface CataloguePage {
 }
 
 /** One module, as the docs list it. */
-export interface CatalogueEntry {
+export interface CatalogEntry {
     name: string;
     group: ModuleDescriptor['group'];
     subdomain: ModuleDescriptor['subdomain'];
     summary: string;
     /** Deeper pages, named `<module>-<topic>.md`, in file order. */
-    pages: CataloguePage[];
+    pages: CatalogPage[];
 }
 
 /** The groups in the order the docs present them, with what each heading says. */
@@ -69,7 +69,7 @@ const TEMPLATE_SECTION = 'theory/modules.md#the-module-template';
  * group the section that explains it.
  * @param entry - the module
  */
-const pageLinkOf = (entry: CatalogueEntry): string =>
+const pageLinkOf = (entry: CatalogEntry): string =>
     entry.group === 'example' ? `../${TEMPLATE_SECTION}` : `./${entry.name}.md`;
 
 /** First `# ` heading of a Markdown file, falling back to the file stem. */
@@ -86,7 +86,7 @@ const titleOf = (file: string, fallback: string): string =>
  * @param pagesRoot - the `docs/modules` directory
  * @returns one entry per module, alphabetical
  */
-export const readCatalogue = (modulesRoot: string, pagesRoot: string): CatalogueEntry[] => {
+export const readCatalog = (modulesRoot: string, pagesRoot: string): CatalogEntry[] => {
     const descriptors = readAllModuleDescriptors(modulesRoot);
     const names = new Set(Object.keys(descriptors));
     const stems = existsSync(pagesRoot)
@@ -109,15 +109,15 @@ export const readCatalogue = (modulesRoot: string, pagesRoot: string): Catalogue
 
 /** The entries of one group, alphabetical. */
 const inGroup = (
-    entries: readonly CatalogueEntry[],
+    entries: readonly CatalogEntry[],
     group: ModuleDescriptor['group']
-): CatalogueEntry[] =>
+): CatalogEntry[] =>
     entries
         .filter((entry) => entry.group === group)
         .toSorted((a, b) => a.name.localeCompare(b.name));
 
 /** One module as a bullet: link, summary, and its deeper pages. */
-const bullet = (entry: CatalogueEntry): string => {
+const bullet = (entry: CatalogEntry): string => {
     const deeper =
         entry.pages.length > 0
             ? ` Deeper: ${entry.pages.map((page) => `[${page.title}](./${page.stem}.md)`).join(', ')}.`
@@ -131,7 +131,7 @@ const bullet = (entry: CatalogueEntry): string => {
  * @param entries - the whole catalogue
  * @returns Markdown, no surrounding markers
  */
-export const renderModuleList = (entries: readonly CatalogueEntry[]): string =>
+export const renderModuleList = (entries: readonly CatalogEntry[]): string =>
     GROUPS.flatMap(({ group, heading, blurb }) => {
         const members = inGroup(entries, group);
         if (members.length === 0) return [];
@@ -159,7 +159,7 @@ export interface SidebarSection {
  * pages per item.
  * @param entries - the whole catalogue
  */
-export const moduleSidebar = (entries: readonly CatalogueEntry[]): SidebarSection[] => [
+export const moduleSidebar = (entries: readonly CatalogEntry[]): SidebarSection[] => [
     { text: 'Overview', items: [{ text: 'The whole map', link: '/modules/' }] },
     ...GROUPS.flatMap(({ group, heading }) => {
         const members = inGroup(entries, group);

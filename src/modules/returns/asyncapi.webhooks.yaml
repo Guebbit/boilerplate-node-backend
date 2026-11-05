@@ -43,7 +43,7 @@ operations:
         description: >-
             One-to-one with the `return.requested` domain event — see `returns/services/create.ts`.
             A withdrawal before dispatch fires it too, followed at once by `return.closed`: the
-            return is born closed, and `order.cancelled` says the order was cancelled.
+            return is born closed, and `order.canceled` says the order was canceled.
         messages:
             - $ref: '#/channels/return.requested/messages/ReturnRequestedEvent'
     webhookReturnReceived:
@@ -137,9 +137,8 @@ components:
                 orderId:
                     $ref: '#/components/schemas/Id'
                 refundAmount:
-                    type: number
-                    minimum: 0
-                    description: What went back to the customer for this return, two decimal places.
+                    $ref: '#/components/schemas/NonNegativeDecimalAmount'
+                    description: What went back to the customer for this return.
                 currency:
                     $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.

@@ -1,7 +1,7 @@
 /**
  * @module
- * Taking fulfillment orders out of play without shipping them: the remainder of one cancelled by
- * `returns` (the buyer's partial withdrawal, or staff's), and every one of an order's cancelled with
+ * Taking fulfillment orders out of play without shipping them: the remainder of one canceled by
+ * `returns` (the buyer's partial withdrawal, or staff's), and every one of an order's canceled with
  * the order itself. `delivery` marks the lines — the money, the stock and the Return record belong
  * to `returns`, which is the only module that already reaches all of them, so it drives this door
  * inside its own transaction.
@@ -13,10 +13,10 @@ import type { ClientSession } from 'mongoose';
 import { orderService } from '@modules/orders';
 import { FulfillmentCancelReason, FulfillmentHoldReason, FulfillmentOrderStatus } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
-import { remainderLines, statusOfLines, withRemainderCancelled } from '../domain';
+import { remainderLines, statusOfLines, withRemainderCanceled } from '../domain';
 import type { ProductQuantity } from '../domain';
 import { fulfillmentOrderRepository } from '../repository';
-import { announceCancelled, recordRemainderCancelled } from './announce';
+import { announceCanceled, recordRemainderCanceled } from './announce';
 import { refuse, runAct } from './act';
 import { reportProgress, settleOrder } from './progress';
 
@@ -24,25 +24,25 @@ import { reportProgress, settleOrder } from './progress';
 export type RemainderCancel =
     | {
           ok: true;
-          /** What was cancelled, per product. */
+          /** What was canceled, per product. */
           lines: ProductQuantity[];
           /**
-           * The fulfillment order was held for stock: what was cancelled is a claim on the preorder
+           * The fulfillment order was held for stock: what was canceled is a claim on the preorder
            * allowance, not units on the shelf, and `inventory` gives back the right one.
            */
           waitingForStock: boolean;
           /**
-           * Present when the settlement cancelled the order (every parcel lost). The caller calls
+           * Present when the settlement canceled the order (every parcel lost). The caller calls
            * it after ITS transaction commits: it writes the audit row and the analytics event.
            */
-          reportCancelled?: () => void;
+          reportCanceled?: () => void;
       }
     | {
           ok: false;
           /**
            * `not-found`: no such fulfillment order on this order. `nothing-shipped`: nothing has
            * left the order and no other fulfillment order has units, so the whole order is
-           * cancelled instead. `nothing-to-cancel`: no
+           * canceled instead. `nothing-to-cancel`: no
            * remainder is left on it.
            */
           reason: 'not-found' | 'nothing-shipped' | 'nothing-to-cancel';
@@ -51,21 +51,21 @@ export type RemainderCancel =
 /**
  * Cancel what has not shipped yet on one fulfillment order, inside the CALLER's transaction. With
  * nothing shipped it only goes while another fulfillment order still has units; the last live one
- * is the whole order, which is cancelled as an order. Every
+ * is the whole order, which is canceled as an order. Every
  * refusal is decided before the first write and answered as `ok: false`; a failure after the first
  * write throws, aborting the caller's whole transaction — returning there would commit a claim
  * with nothing around it.
  *
- * The lines become `cancelledQuantity`, the status follows (`closed` when something shipped from it,
- * `cancelled` when nothing ever did), the order's summary is recomputed, and the order moves when
- * that completes it: the remainder cancelled after every shipment had already arrived makes the
+ * The lines become `canceledQuantity`, the status follows (`closed` when something shipped from it,
+ * `canceled` when nothing ever did), the order's summary is recomputed, and the order moves when
+ * that completes it: the remainder canceled after every shipment had already arrived makes the
  * order `shipped` and `delivered` in this one transaction, its withdrawal clock counted from now
  * (the later of the last delivery and this cancel — the order only became complete here).
  *
- * @param fulfillmentOrderId - the fulfillment order whose remainder is cancelled
+ * @param fulfillmentOrderId - the fulfillment order whose remainder is canceled
  * @param orderId - the order the caller says it belongs to
  * @param session - the caller's transaction
- * @param reason - who cancelled it, stored on the fulfillment order
+ * @param reason - who canceled it, stored on the fulfillment order
  * @param actor - the account that made the cancel (the buyer or a staff member), for the order's
  *   timeline rows; absent when the system did
  * @throws {ActRefusal} when the fulfillment order or the order moved after the first write
@@ -103,23 +103,22 @@ export const cancelRemainder = async (
         fulfillmentOrder.status === FulfillmentOrderStatus.on_hold &&
         fulfillmentOrder.holdReason === FulfillmentHoldReason.awaiting_stock;
 
-    const cancelledLines = withRemainderCancelled(fulfillmentOrder.lines);
-    const cancelled = await fulfillmentOrderRepository.claim(
+    const canceledLines = withRemainderCanceled(fulfillmentOrder.lines);
+    const canceled = await fulfillmentOrderRepository.claim(
         fulfillmentOrderId,
         fulfillmentOrder.revision,
         {
-            lines: cancelledLines,
-            status: statusOfLines(cancelledLines, false),
+            lines: canceledLines,
+            status: statusOfLines(canceledLines, false),
             cancelReason: reason,
             unset: ['holdReason', 'holdNote']
         },
         session
     );
-    if (!cancelled)
-        return refuse(409, ERROR_CODES.DELIVERY_NOT_SHIPPABLE, 'delivery.not-shippable');
+    if (!canceled) return refuse(409, ERROR_CODES.DELIVERY_NOT_SHIPPABLE, 'delivery.not-shippable');
 
     const progress = await reportProgress(orderId, session);
-    const reportCancelled = await settleOrder(
+    const reportCanceled = await settleOrder(
         orderId,
         progress.order.status,
         progress.summary,
@@ -127,27 +126,27 @@ export const cancelRemainder = async (
         session,
         actor
     );
-    await recordRemainderCancelled(cancelled, session, actor);
-    await announceCancelled(cancelled, session);
-    return { ok: true, lines, waitingForStock, ...(reportCancelled && { reportCancelled }) };
+    await recordRemainderCanceled(canceled, session, actor);
+    await announceCanceled(canceled, session);
+    return { ok: true, lines, waitingForStock, ...(reportCanceled && { reportCanceled }) };
 };
 
 /**
- * Cancel every fulfillment order of an order that was cancelled. `ORDER_CANCELLED`'s listener: an
- * order is only cancellable while nothing has shipped, so every fulfillment order still holds its
- * whole quantity and ends `cancelled`. Idempotent — one already closed or cancelled is left alone,
+ * Cancel every fulfillment order of an order that was canceled. `ORDER_CANCELED`'s listener: an
+ * order is only cancelable while nothing has shipped, so every fulfillment order still holds its
+ * whole quantity and ends `canceled`. Idempotent — one already closed or canceled is left alone,
  * so a redelivered event writes nothing.
  *
- * @param orderId - the order that was cancelled
+ * @param orderId - the order that was canceled
  */
 export const cancelAllForOrder = (orderId: string): Promise<void> =>
     runAct(async (session) => {
         const all = await fulfillmentOrderRepository.findByOrderId(orderId, session);
         // One after another: a transaction's session does not take parallel operations.
         for (const fulfillmentOrder of all) {
-            if (fulfillmentOrder.status === 'closed' || fulfillmentOrder.status === 'cancelled')
+            if (fulfillmentOrder.status === 'closed' || fulfillmentOrder.status === 'canceled')
                 continue;
-            const lines = withRemainderCancelled(fulfillmentOrder.lines);
+            const lines = withRemainderCanceled(fulfillmentOrder.lines);
             const claimed = await fulfillmentOrderRepository.claim(
                 String(fulfillmentOrder._id),
                 fulfillmentOrder.revision,
@@ -159,6 +158,6 @@ export const cancelAllForOrder = (orderId: string): Promise<void> =>
                 },
                 session
             );
-            if (claimed) await announceCancelled(claimed, session);
+            if (claimed) await announceCanceled(claimed, session);
         }
     }).then(() => undefined);

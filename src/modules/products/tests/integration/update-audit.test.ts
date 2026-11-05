@@ -34,20 +34,20 @@ describe('productService.updateById — the audit row of a money edit', () => {
     it('carries from and to for each of price, taxClass and rateType that moved', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const product = await createProduct({
-            price: 10,
+            price: '10.00',
             taxClass: 'reduced',
             rateType: 'standard'
         });
 
         await productService.updateById(
             String(product._id),
-            { price: 4.5, taxClass: 'zero', rateType: 'exempt' },
+            { price: '4.50', taxClass: 'zero', rateType: 'exempt' },
             callerContextAs('admin')
         );
 
         expect(updatedRowMetadata(auditSpy)).toEqual({
             changes: {
-                price: { from: 10, to: 4.5 },
+                price: { from: '10.00', to: '4.50' },
                 taxClass: { from: 'reduced', to: 'zero' },
                 rateType: { from: 'standard', to: 'exempt' }
             }
@@ -56,7 +56,7 @@ describe('productService.updateById — the audit row of a money edit', () => {
 
     it('leaves out the side of a field that was unset or is cleared', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
-        const product = await createProduct({ price: 10, taxClass: 'reduced' });
+        const product = await createProduct({ price: '10.00', taxClass: 'reduced' });
 
         await productService.updateById(
             String(product._id),
@@ -75,7 +75,7 @@ describe('productService.updateById — the audit row of a money edit', () => {
     it('carries from and to for the rights, shipping and publishing fields too', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const product = await createProduct({
-            price: 10,
+            price: '10.00',
             active: true,
             purchasable: true,
             requiresShipping: true,
@@ -137,11 +137,11 @@ describe('productService.updateById — the audit row of a money edit', () => {
 
     it('names only what moved: a price or a scalar sent unchanged writes no changes, and a rename is a name only', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
 
         await productService.updateById(
             String(product._id),
-            { price: 10, active: true, translations: { en: { title: 'Renamed' } } },
+            { price: '10.00', active: true, translations: { en: { title: 'Renamed' } } },
             callerContextAs('admin')
         );
 

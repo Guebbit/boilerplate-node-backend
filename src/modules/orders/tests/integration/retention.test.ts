@@ -128,9 +128,9 @@ describe('orders — the claim window decides when a paid order loses its buyer'
         expect(order.piiClockStartedAt).toBeUndefined();
     });
 
-    it('scrubs a never-paid order even once cancelled', async () => {
+    it('scrubs a never-paid order even once canceled', async () => {
         const { scrubbed } = await eraseAndSweep(() => Promise.resolve(), {
-            status: OrderStatus.cancelled
+            status: OrderStatus.canceled
         });
 
         expect(scrubbed).toBe(1);
@@ -170,12 +170,12 @@ describe('orders — the claim window decides when a paid order loses its buyer'
         await expect(orderService.anonymizeDueOrders()).resolves.toBe(1);
     });
 
-    it('uses paidAt plus the undelivered days for a paid order cancelled without delivery', async () => {
+    it('uses paidAt plus the undelivered days for a paid order canceled without delivery', async () => {
         setEnvironment({ NODE_ORDER_PII_DAYS_UNDELIVERED: '100' });
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)], {
-            status: OrderStatus.cancelled
+            status: OrderStatus.canceled
         });
         await markOrderPaidAt(String(order._id), new Date(Date.now() - 99 * DAY));
         await eraseAsScheduled(user);

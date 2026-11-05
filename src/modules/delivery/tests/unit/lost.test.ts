@@ -15,7 +15,7 @@ import {
 } from '../../domain';
 import type { FulfillmentLine, LostShipmentFacts, RestorableFulfillmentOrder } from '../../domain';
 
-/** A line with nothing shipped or cancelled, unless stated. */
+/** A line with nothing shipped or canceled, unless stated. */
 const line = (
     productId: string,
     quantity: number,
@@ -25,7 +25,7 @@ const line = (
     title: `Product ${productId}`,
     quantity,
     shippedQuantity: 0,
-    cancelledQuantity: 0,
+    canceledQuantity: 0,
     ...fields
 });
 
@@ -64,7 +64,7 @@ describe('withLoss', () => {
         ]);
     });
 
-    it('drops a line whose every unit is now owed elsewhere, and the order then reads closed, not cancelled', () => {
+    it('drops a line whose every unit is now owed elsewhere, and the order then reads closed, not canceled', () => {
         const lines = withLoss(
             [line('a', 2, { shippedQuantity: 2 })],
             [{ productId: 'a', quantity: 2 }],
@@ -107,7 +107,7 @@ describe('planRestoration', () => {
         });
     });
 
-    it('allows it when the owed units are all still unshipped and uncancelled', () => {
+    it('allows it when the owed units are all still unshipped and uncanceled', () => {
         const plan = planRestoration(shipment(['a', 3]), [
             origin([line('a', 1)]),
             owedOrder([line('a', 2)])
@@ -136,13 +136,13 @@ describe('planRestoration', () => {
         ).toBeUndefined();
     });
 
-    it('refuses once the remainder was cancelled', () => {
+    it('refuses once the remainder was canceled', () => {
         expect(
-            planRestoration(shipment(['a', 2]), [origin([line('a', 2, { cancelledQuantity: 2 })])])
+            planRestoration(shipment(['a', 2]), [origin([line('a', 2, { canceledQuantity: 2 })])])
         ).toBeUndefined();
     });
 
-    it('refuses when any owed unit was shipped or cancelled', () => {
+    it('refuses when any owed unit was shipped or canceled', () => {
         const base = origin([line('a', 1)]);
 
         expect(
@@ -154,7 +154,7 @@ describe('planRestoration', () => {
         expect(
             planRestoration(shipment(['a', 3]), [
                 base,
-                owedOrder([line('a', 2, { cancelledQuantity: 2 })])
+                owedOrder([line('a', 2, { canceledQuantity: 2 })])
             ])
         ).toBeUndefined();
     });

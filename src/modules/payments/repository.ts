@@ -10,7 +10,7 @@ import { updateStatusIfIn as conditionalStatus } from '@infrastructure/persisten
 import type { ClientSession, PipelineStage, Types } from 'mongoose';
 import { paymentModel, applyPaymentTransform } from './model';
 import { PaymentStatus, PaymentMethod, RefundStatus } from '@types';
-import { reviveDecimals } from '@infrastructure/persistence/money-field';
+import { stringifyDecimals } from '@infrastructure/persistence/money-field';
 import type { ReportWindow } from '@infrastructure/persistence/report';
 import { RefundFailureReason, type RefundReason } from '@types';
 import { paymentProviderRegistry } from './providers/registry';
@@ -218,7 +218,7 @@ const REFUND_ROW_PROJECTION: PipelineStage = {
  */
 const aggregateRefundRows = (pipeline: PipelineStage[]): Promise<RefundRow[]> =>
     aggregatePayments<RefundRow>(pipeline).then((rows) => {
-        for (const row of rows) reviveDecimals(row);
+        for (const row of rows) stringifyDecimals(row);
         return rows;
     });
 
@@ -230,10 +230,10 @@ const aggregateRefundRows = (pipeline: PipelineStage[]): Promise<RefundRow[]> =>
 const OPEN_TRANSFER_ROW = { status: 'requires_action', provider: MANUAL_PROVIDER };
 
 /**
- * The row of a bank transfer whose order was cancelled before the money came. Only an operator
+ * The row of a bank transfer whose order was canceled before the money came. Only an operator
  * recording a late transfer takes it over; a card never does.
  */
-const CANCELLED_TRANSFER_ROW = { status: 'cancelled', transferReference: { $exists: true } };
+const CANCELED_TRANSFER_ROW = { status: 'canceled', transferReference: { $exists: true } };
 
 /** What an upsert answers: the row, and whether this call inserted it rather than refreshing one. */
 export interface UpsertedPayment {
@@ -326,13 +326,13 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     upsertIntent: (
         orderId: string,
         userId: string | undefined,
-        data: { amount: number; currency: string; provider: string }
+        data: { amount: string; currency: string; provider: string }
     ) => Promise<UpsertedPayment | null>;
     upsertOffline: (
         orderId: string,
         userId: string | undefined,
         data: {
-            amount: number;
+            amount: string;
             currency: string;
             method: PaymentMethod;
             reference?: string;
@@ -343,7 +343,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         orderId: string,
         userId: string | undefined,
         data: {
-            amount: number;
+            amount: string;
             currency: string;
             transferReference: string;
             payBy: Date;
@@ -360,8 +360,8 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     ) => Promise<PaymentDocument | null>;
     addRefund: (
         paymentId: string,
-        expectedRefunded: number,
-        newRefunded: number,
+        expectedRefunded: string,
+        newRefunded: string,
         refund: Omit<
             RefundRecord,
             'createdAt' | 'providerRefundRef' | 'failureReason' | 'settledAt' | 'nextAttemptAt'
@@ -370,8 +370,8 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     ) => Promise<PaymentDocument | null>;
     importRefund: (
         paymentId: string,
-        expectedRefunded: number,
-        newRefunded: number,
+        expectedRefunded: string,
+        newRefunded: string,
         refund: RefundRecord,
         session?: ClientSession
     ) => Promise<PaymentDocument | null>;
@@ -409,7 +409,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         paymentId: string,
         refundId: string,
         observed: { status: RefundStatus; failureReason?: RefundFailureReason },
-        amounts: { expectedRefunded: number; newRefunded: number },
+        amounts: { expectedRefunded: string; newRefunded: string },
         session?: ClientSession
     ) => Promise<PaymentDocument | null>;
     searchStaff: (
@@ -510,7 +510,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * amount and resets to `requires_confirmation`, but ONLY from a state where nobody has paid —
      * the `$in` guard enforces that the same way the order's own status machine does.
      *
-     * Past confirmation (`succeeded`, `cancelled`) the filter misses and the upsert collides with
+     * Past confirmation (`succeeded`, `canceled`) the filter misses and the upsert collides with
      * the unique index instead: that duplicate key IS the answer "this order's money already
      * moved", surfaced as `null` rather than an exception.
      */
@@ -547,9 +547,9 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                 providerRef: undefined,
                 cardLast4: undefined
             },
-            // The open transfer row is the very payment being recorded; a cancelled one is a
-            // transfer that arrived after its order was cancelled (the settlement owes it back).
-            [OPEN_TRANSFER_ROW, CANCELLED_TRANSFER_ROW]
+            // The open transfer row is the very payment being recorded; a canceled one is a
+            // transfer that arrived after its order was canceled (the settlement owes it back).
+            [OPEN_TRANSFER_ROW, CANCELED_TRANSFER_ROW]
         ),
 
     /**

@@ -235,7 +235,7 @@ is older than `NODE_HOLD_NOTE_RETENTION_DAYS` (default 365), on the same terms a
 only matches one still holding a note, and the wipe does not move `updatedAt`. Why a year:
 [Data Retention](../theory/data-retention.md#free-text-on-holds).
 
-A cancel's refund has no sweep of its own. The `order.cancelled` row the cancel writes carries the
+A cancel's refund has no sweep of its own. The `order.canceled` row the cancel writes carries the
 `refund` it owes, the outbox relay (`sweep:outbox`) delivers it until `payments` has opened the
 refund record, and from then on `sweep:payment-effects` finishes the record. See
 [the outbox](../tools/outbox.md#limits-on-purpose).

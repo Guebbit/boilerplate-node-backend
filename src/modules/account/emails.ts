@@ -7,14 +7,10 @@
  * subject and render context together.
  */
 
+import { supportEmail } from '@infrastructure/adapters/config';
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { getDefaultLocale, translator } from '@infrastructure/i18n';
-import {
-    accountConfig,
-    accountExportLink,
-    accountFrontendLink,
-    type AccountLinkKind
-} from './config';
+import { accountExportLink, accountFrontendLink, type AccountLinkKind } from './config';
 import type { CallerContext } from '@types';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 
@@ -60,7 +56,7 @@ export const greetableName = (
  *   `account.email.<flow>.*` copy keys; `locale`: the recipient's language; `name`: the display
  *   name for the greeting, or `''` (see {@link greetableName}); `body`: the flow's own copy slots,
  *   from the translator bound to `locale`; `security`: a notice about the account's own security,
- *   whose footer names the support address when `NODE_ACCOUNT_SUPPORT_EMAIL` is set
+ *   whose footer names the support address (`NODE_SUPPORT_EMAIL`)
  */
 const accountMail = ({
     template,
@@ -79,7 +75,7 @@ const accountMail = ({
 }): EmailContent => {
     const t = translator(locale);
     const copy = `account.email.${template.slice('account.'.length)}`;
-    const support = security ? accountConfig().NODE_ACCOUNT_SUPPORT_EMAIL : undefined;
+    const support = security ? supportEmail() : undefined;
     return {
         template,
         subject: t(`${copy}.subject`),
@@ -431,10 +427,10 @@ export const deletionScheduledEmail = (
 };
 
 /**
- * Account restored: the deletion was cancelled. The staff variant adds one line, so an owner who
+ * Account restored: the deletion was canceled. The staff variant adds one line, so an owner who
  * never asked staff for this knows to delete the account again.
  *
- * @param byStaff - whether staff, not the owner, cancelled the deletion
+ * @param byStaff - whether staff, not the owner, canceled the deletion
  */
 export const accountRestoredEmail = (
     locale: string,

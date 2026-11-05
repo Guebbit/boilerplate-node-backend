@@ -1,6 +1,6 @@
 /**
  * `read-capped-body` — a third party's answer read up to a cap, never past it: text and JSON under
- * the cap come back whole, one over it is refused (and its stream cancelled, not drained), and a
+ * the cap come back whole, one over it is refused (and its stream canceled, not drained), and a
  * body that is not what it claims reads as an error, not as empty.
  */
 import { readCappedJson, readCappedText } from '@infrastructure/http/read-capped-body';
@@ -42,7 +42,7 @@ describe('readCappedText', () => {
         );
 
         await expect(readCappedText(response, 25)).rejects.toThrow(/longer than 25 bytes/);
-        // Cancelled at the cap: nowhere near the fifty chunks an unbounded read would have drawn.
+        // Canceled at the cap: nowhere near the fifty chunks an unbounded read would have drawn.
         expect(pulled).toBeLessThan(10);
     });
 

@@ -35,23 +35,23 @@ const subscribe = (eventTypes: string[], enabled: boolean) =>
         secrets: [mintRingSecret().entry]
     });
 
-/** Wire the fan-out for `user.setup-requested`, then announce one account's setup. */
+/** Wire the fan-out for `user.setup_requested`, then announce one account's setup. */
 const announceSetup = () => {
     subscribeToWebhookEvents({
-        'user.setup-requested': {
+        'user.setup_requested': {
             toPublicEvent: ({ userId }: { userId: string }) => ({
-                eventType: 'user.setup-requested',
+                eventType: 'user.setup_requested',
                 data: { userId }
             })
         }
     });
-    return emitDomainEvent('user.setup-requested', { userId: 'user_1' });
+    return emitDomainEvent('user.setup_requested', { userId: 'user_1' });
 };
 
 describe('webhook fan-out', () => {
     it('delivers only to the enabled subscription whose filter matches', async () => {
-        const matching = await subscribe(['user.setup-requested'], true);
-        await subscribe(['user.setup-requested'], false);
+        const matching = await subscribe(['user.setup_requested'], true);
+        await subscribe(['user.setup_requested'], false);
         await subscribe(['payment.succeeded'], true);
 
         await announceSetup();
@@ -61,7 +61,7 @@ describe('webhook fan-out', () => {
     });
 
     it('gives every subscription the same eventId for one event', async () => {
-        await subscribe(['user.setup-requested'], true);
+        await subscribe(['user.setup_requested'], true);
         await subscribe(['*'], true);
 
         await announceSetup();

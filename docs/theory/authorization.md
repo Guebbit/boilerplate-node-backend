@@ -263,7 +263,7 @@ order exactly as on anyone's.
 
 What the system adds is a record, not a refusal. The audit rows of the steps that move money out or
 in — `payment.recorded_offline`, `admin.payment.refund_requested` and `admin.payment.refunded`
-(which also cover a return's refund and a remainder cancel), `order.cancelled`, and a return's
+(which also cover a return's refund and a remainder cancel), `order.canceled`, and a return's
 approval and receipt — carry `ownOrder: true` when the caller is the buyer (`ownOrderFlag` in
 `@modules/access`). The request row is written when a refund's record opens, before the provider is
 asked: a provider that refuses leaves the record to the sweep, which has no caller, so without that

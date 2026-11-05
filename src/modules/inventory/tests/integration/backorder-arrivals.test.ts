@@ -1,7 +1,7 @@
 /**
  * @module
  * Every write that makes a unit sellable serves the paid buyers waiting for stock first, in its
- * own transaction: a stocktake that finds units, a returned parcel, an expired or cancelled hold,
+ * own transaction: a stocktake that finds units, a returned parcel, an expired or canceled hold,
  * a remainder cancel. Not only a receipt.
  *
  * See: docs/modules/inventory-reservations.md#preorders
@@ -104,7 +104,7 @@ describe('a unit that becomes sellable', () => {
         });
     });
 
-    it('goes to the paid buyer waiting when an unpaid order is cancelled', async () => {
+    it('goes to the paid buyer waiting when an unpaid order is canceled', async () => {
         const { productId, holder, waiting } = await soldOutWithAPaidBuyerWaiting(1);
 
         await inventoryService.releaseForOrder(holder);
@@ -117,7 +117,7 @@ describe('a unit that becomes sellable', () => {
         });
     });
 
-    it('goes to the paid buyer waiting when a paid order is cancelled', async () => {
+    it('goes to the paid buyer waiting when a paid order is canceled', async () => {
         const { productId, holder, waiting } = await soldOutWithAPaidBuyerWaiting(1);
         await inventoryService.commitForOrder(holder);
 
@@ -133,7 +133,7 @@ describe('a unit that becomes sellable', () => {
         });
     });
 
-    it('goes to the paid buyer waiting when the rest of a shipment is cancelled', async () => {
+    it('goes to the paid buyer waiting when the rest of a shipment is canceled', async () => {
         const { productId, holder, waiting } = await soldOutWithAPaidBuyerWaiting(2);
         await inventoryService.commitForOrder(holder);
 

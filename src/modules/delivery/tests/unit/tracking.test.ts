@@ -24,7 +24,7 @@ describe('isAwaitingTracking', () => {
         ['an unknown method', waiting, 'teleport'],
         ['a code already set', { ...waiting, trackingCode: 'TRK-1' }, 'express'],
         ['a delivered parcel', { ...waiting, status: ShipmentStatus.delivered }, 'express'],
-        ['a digital fulfilment', { ...waiting, kind: FulfillmentOrderKind.digital }, 'express']
+        ['a digital fulfillment', { ...waiting, kind: FulfillmentOrderKind.digital }, 'express']
     ])('is false for %s', (_name, facts, method) => {
         expect(isAwaitingTracking(facts, method)).toBe(false);
     });

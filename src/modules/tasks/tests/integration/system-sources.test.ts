@@ -40,7 +40,7 @@ const nextEventId = () => `event-${String(++eventCounter)}`;
 beforeEach(() => {
     mockEnqueueEmail.mockReset();
     mockEnqueueEmail.mockResolvedValue(undefined);
-    setEnvironment({ NODE_CONTACT_NOTIFY_EMAIL: 'desk@example.com' });
+    setEnvironment({ NODE_SUPPORT_EMAIL: 'desk@example.com' });
     resetDomainEvents();
     registerModules(enabledModules);
 });

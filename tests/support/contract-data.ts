@@ -120,6 +120,8 @@ interface ZodDef {
     innerType?: ZodType;
     valueType?: ZodType;
     format?: string;
+    /** `stringFormat('decimal', /re/)` keeps its regex here, not in `checks`. */
+    pattern?: RegExp;
     checks?: { _zod: { def: ZodCheckDef } }[];
     entries?: Record<string, unknown>;
     values?: unknown[];
@@ -130,7 +132,11 @@ interface ZodDef {
 const defOf = (schema: ZodType): ZodDef => asStub<{ _zod: { def: ZodDef } }>(schema)._zod.def;
 
 /** The checks (min length, pattern, ...) attached to a schema, unwrapped from Zod's wrapper. */
-const checksOf = (def: ZodDef): ZodCheckDef[] => (def.checks ?? []).map((check) => check._zod.def);
+const checksOf = (def: ZodDef): ZodCheckDef[] => [
+    ...(def.checks ?? []).map((check) => check._zod.def),
+    // A custom string format (money as text) carries its pattern on the schema itself.
+    ...(def.pattern ? [{ check: 'string_format', pattern: def.pattern }] : [])
+];
 
 /**
  * Whether the field may be omitted from a payload entirely.

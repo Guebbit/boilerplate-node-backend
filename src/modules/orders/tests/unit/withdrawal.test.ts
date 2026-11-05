@@ -123,8 +123,8 @@ describe('canWithdraw', () => {
         expect(canWithdraw({ status }, NOW)).toBe(true);
     });
 
-    it('is never offered on a cancelled order', () => {
-        expect(canWithdraw({ status: OrderStatus.cancelled }, NOW)).toBe(false);
+    it('is never offered on a canceled order', () => {
+        expect(canWithdraw({ status: OrderStatus.canceled }, NOW)).toBe(false);
     });
 
     it('is offered while the window is open, and on its last instant', () => {
@@ -161,7 +161,7 @@ describe('isBeforeDispatch', () => {
         }
     );
 
-    it.each([OrderStatus.shipped, OrderStatus.delivered, OrderStatus.cancelled])(
+    it.each([OrderStatus.shipped, OrderStatus.delivered, OrderStatus.canceled])(
         'reads %s as past the shop’s hands',
         (status) => {
             expect(isBeforeDispatch({ status })).toBe(false);
@@ -195,7 +195,7 @@ describe('canCorrectAddress', () => {
         ['every unit has left', OrderStatus.processing, { shipped: true, remaining: 0 }],
         ['the order is shipped', OrderStatus.shipped, { shipped: true, remaining: 0 }],
         ['the order is delivered', OrderStatus.delivered, undefined],
-        ['the order is cancelled', OrderStatus.cancelled, undefined]
+        ['the order is canceled', OrderStatus.canceled, undefined]
     ])('is closed when %s', (_name, status, fulfillment) => {
         expect(canCorrectAddress({ status, fulfillment, shippingAddress: address })).toBe(false);
     });
@@ -234,9 +234,9 @@ describe('withdrawalRefusalOf', () => {
         expect(withdrawalRefusalOf({ status: OrderStatus.paid }, NOW)).toBeUndefined();
     });
 
-    it('has no reason on a cancelled order: there is no button to explain', () => {
+    it('has no reason on a canceled order: there is no button to explain', () => {
         expect(
-            withdrawalRefusalOf({ status: OrderStatus.cancelled, items: [excluded] }, NOW)
+            withdrawalRefusalOf({ status: OrderStatus.canceled, items: [excluded] }, NOW)
         ).toBeUndefined();
     });
 
@@ -280,7 +280,7 @@ describe('withdrawalRefusalOf', () => {
     it('agrees with canWithdraw on every case above', () => {
         const cases = [
             { status: OrderStatus.paid },
-            { status: OrderStatus.cancelled },
+            { status: OrderStatus.canceled },
             { status: OrderStatus.paid, items: [excluded] },
             { status: OrderStatus.paid, items: [excluded, ordinary] },
             { status: OrderStatus.delivered, withdrawUntil: new Date(NOW.getTime() - 1) },
@@ -289,7 +289,7 @@ describe('withdrawalRefusalOf', () => {
 
         for (const order of cases)
             expect(canWithdraw(order, NOW)).toBe(
-                order.status !== OrderStatus.cancelled &&
+                order.status !== OrderStatus.canceled &&
                     withdrawalRefusalOf(order, NOW) === undefined
             );
     });

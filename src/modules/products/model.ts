@@ -203,7 +203,7 @@ const refineDateWithinYear = (
  * @param price - the price in the body; absent (a PATCH leaving it alone) always passes
  * @param context - the Zod context to report into
  */
-const refinePricePlaces = (price: number | undefined, context: z.RefinementCtx): void => {
+const refinePricePlaces = (price: string | undefined, context: z.RefinementCtx): void => {
     if (price === undefined) return;
     const currency = shopCurrency();
     if (!fitsCurrency(price, currency))
@@ -222,7 +222,7 @@ interface RefinableProduct {
     translations?: Record<string, unknown>;
     releaseDate?: string | null;
     restockDate?: string | null;
-    price?: number;
+    price?: string;
 }
 
 /**
@@ -456,7 +456,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
 );
 
 /**
- * Money is stored as Decimal128 and a lean read hands numbers back — see `@infrastructure/persistence/money-field`.
+ * Money is stored as Decimal128 and a lean read hands decimal text back — see `@infrastructure/persistence/money-field`.
  */
 productSchema.plugin(moneyPlugin);
 
@@ -522,7 +522,9 @@ export const applyProductTransform = applySerialization(productSchema, {
     // contract — see the schema field's own comment. `additionalProperties: false` makes a leaked
     // `pendingImageKey` fail response validation rather than just look untidy.
     omit: ['pendingImageKey'],
-    after: applyProductAvailability
+    after: applyProductAvailability,
+    // A product stores no currency: its price is in the shop's live one.
+    currency: shopCurrency
 });
 
 /**

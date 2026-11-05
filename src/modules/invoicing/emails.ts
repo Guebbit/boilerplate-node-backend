@@ -9,7 +9,12 @@
 
 import type { TFunction } from 'i18next';
 import { translator } from '@infrastructure/i18n';
-import { minorUnitExponent } from '@domain-primitives/money';
+import {
+    minorUnitExponent,
+    subtractMoney,
+    toDecimalString,
+    toMinorUnits
+} from '@domain-primitives/money';
 import { lineTaxFromRateTotals } from '@modules/orders';
 import type { EInvoicingDocument } from './providers';
 import type { InvoiceLine } from './model';
@@ -152,39 +157,42 @@ const buildVatBlock = (
     // BR-CO-17: each rate's VAT was rounded ONCE, on the rate's whole taxable total, and frozen in
     // `taxSummary`. A line's own share is that rate's GOODS VAT (summary minus its shipping slice)
     // spread over the rate's lines, so the printed lines add up to the frozen totals exactly.
+    const { currency } = document;
     const shippingTaxAt = new Map(document.shippingByRate.map((row) => [row.rate, row.taxAmount]));
     const goodsTaxByRate = new Map(
         document.taxSummary.map((row) => [
             row.rate,
-            row.taxAmount - (shippingTaxAt.get(row.rate) ?? 0)
+            toDecimalString(
+                subtractMoney(
+                    toMinorUnits(row.taxAmount, currency),
+                    toMinorUnits(shippingTaxAt.get(row.rate) ?? 0, currency)
+                ),
+                currency
+            )
         ])
     );
-    const perLine = lineTaxFromRateTotals(
-        asTaxItems(document.lines),
-        document.currency,
-        goodsTaxByRate
-    );
+    const perLine = lineTaxFromRateTotals(asTaxItems(document.lines), currency, goodsTaxByRate);
 
     const rows: DocumentVatRow[] = document.lines.map((line, index) => ({
         description: line.title,
         quantity: line.quantity,
-        unitPrice: unitNetMoney.format(line.unitPrice / (1 + line.taxRate)),
-        netAmount: money.format(perLine[index].netAmount),
+        unitPrice: unitNetMoney.format(Number(line.unitPrice) / (1 + line.taxRate)),
+        netAmount: money.format(Number(perLine[index].netAmount)),
         taxRateLabel: percent.format(line.taxRate),
         categoryCode: taxCategoryCode(line.taxRate, line.rateType),
-        taxAmount: money.format(perLine[index].taxAmount),
-        grossAmount: money.format(perLine[index].grossAmount)
+        taxAmount: money.format(Number(perLine[index].taxAmount)),
+        grossAmount: money.format(Number(perLine[index].grossAmount))
     }));
 
     const summaryRowOf = (
-        row: { rate: number; netAmount: number; taxAmount: number; grossAmount: number },
+        row: { rate: number; netAmount: string; taxAmount: string; grossAmount: string },
         description: string
     ): DocumentTaxSummaryRow => ({
         description,
-        netAmount: money.format(row.netAmount),
+        netAmount: money.format(Number(row.netAmount)),
         taxRateLabel: percent.format(row.rate),
-        taxAmount: money.format(row.taxAmount),
-        grossAmount: money.format(row.grossAmount)
+        taxAmount: money.format(Number(row.taxAmount)),
+        grossAmount: money.format(Number(row.grossAmount))
     });
 
     const { seller, shippingByRate, taxSummary, netTotal, taxTotal, grandTotal } = document;
@@ -230,11 +238,11 @@ const buildVatBlock = (
             )
         ),
         netTotalLabel: t('invoicing.document.vat.net-total'),
-        netTotal: money.format(netTotal),
+        netTotal: money.format(Number(netTotal)),
         taxTotalLabel: t('invoicing.document.vat.tax-total'),
-        taxTotal: money.format(taxTotal),
+        taxTotal: money.format(Number(taxTotal)),
         grandTotalLabel: t('invoicing.document.vat.grand-total'),
-        grandTotal: money.format(grandTotal),
+        grandTotal: money.format(Number(grandTotal)),
         supplier: {
             legalName: seller.legalName,
             vatNumberLine: seller.vatNumber

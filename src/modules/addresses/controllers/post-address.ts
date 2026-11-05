@@ -5,9 +5,9 @@
  */
 
 import type { Request, Response } from 'express';
-import { AddAddressBody } from '@api/schemas.zod';
+import { CreateAddressBody } from '@api/schemas.zod';
 import { createdResponse } from '@infrastructure/http/response';
-import type { Address, AddressInput } from '@types';
+import type { Address, CreateAddressRequest } from '@types';
 import { addressService } from '../service';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
@@ -18,13 +18,13 @@ import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
  * (see its docblock and `service.ts`).
  */
 export const postAddress = (
-    request: Request<unknown, unknown, AddressInput>,
+    request: Request<unknown, unknown, CreateAddressRequest>,
     response: Response
 ) => {
     /* Auth context is guaranteed by isAuth middleware */
     const { id } = request.authContext!;
 
-    const body = parseBody(AddAddressBody, request.body, response);
+    const body = parseBody(CreateAddressBody, request.body, response);
     if (!body) return;
 
     return addressService

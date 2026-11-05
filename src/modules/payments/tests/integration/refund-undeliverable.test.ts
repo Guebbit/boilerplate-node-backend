@@ -57,7 +57,7 @@ const settle = () => eventually(() => settleOutboxNudges().then(() => true));
 /** A customer who paid 100.00 by card, and a lever that makes the provider refuse refunds. */
 const paidOrder = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 50, onHand: 10 });
+    const product = await createProduct({ price: '50.00', onHand: 10 });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     await inventoryService.reserveForOrder(String(order._id), [
         { productId: String(product._id), quantity: 2 }
@@ -77,7 +77,7 @@ const paidOrder = async () => {
 };
 
 /** Operator refund of `amount`. */
-const refund = (orderId: string, amount: number) =>
+const refund = (orderId: string, amount: string) =>
     refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount });
 
 describe('a refund the provider refused for good', () => {
@@ -85,7 +85,7 @@ describe('a refund the provider refused for good', () => {
         const { user, orderId, refuseWith } = await paidOrder();
         refuseWith('lost_or_stolen_card');
 
-        await refund(orderId, 30);
+        await refund(orderId, '30.00');
         await settle();
 
         expect(mailsOf('payments.refund-undeliverable')).toHaveLength(1);
@@ -103,7 +103,7 @@ describe('a refund the provider refused for good', () => {
         withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { orderId, refuseWith } = await paidOrder();
             refuseWith('provider_unavailable');
-            await refund(orderId, 30);
+            await refund(orderId, '30.00');
             await settle();
             expect(mailsOf('payments.refund-undeliverable')).toHaveLength(0);
 
@@ -121,7 +121,7 @@ describe('a refund the provider refused for good', () => {
 
         await refundForReturn(
             orderId,
-            { returnId: '64b64c4f4f4f4f4f4f4f4f4f', amount: 50, lines: [], shipping: 0 },
+            { returnId: '64b64c4f4f4f4f4f4f4f4f4f', amount: '50.00', lines: [], shipping: '0.00' },
             callerContextAs('manager')
         );
         await settle();
@@ -132,7 +132,7 @@ describe('a refund the provider refused for good', () => {
     it('is cleared by a hand settle, which sends the success mail instead', async () => {
         const { user, orderId, refuseWith } = await paidOrder();
         refuseWith('declined');
-        await refund(orderId, 30);
+        await refund(orderId, '30.00');
         const payment = await paymentRepository.findByOrderId(orderId);
 
         await paymentService.settleRefundByHand(
@@ -156,7 +156,7 @@ describe.each(['provider_unavailable', 'unknown', 'insufficient_funds'] as const
             const { user, orderId, refuseWith } = await paidOrder();
             refuseWith(reason);
 
-            await refund(orderId, 30);
+            await refund(orderId, '30.00');
             await settle();
 
             expect(mailsOf('payments.refund-undeliverable')).toHaveLength(0);
@@ -169,7 +169,7 @@ describe.each(['provider_unavailable', 'unknown', 'insufficient_funds'] as const
 describe('a settled refund the bank sent back', () => {
     it('mails the buyer once with the same template', async () => {
         const { orderId, providerRef } = await paidOrder();
-        await refund(orderId, 30);
+        await refund(orderId, '30.00');
         await settle();
         const payment = await paymentRepository.findByOrderId(orderId);
         const refundRef = refundRefOfRecord(String(payment?.refunds[0]._id)) ?? '';

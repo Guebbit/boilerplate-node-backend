@@ -1,7 +1,7 @@
 /**
  * @module
  * The shop's pause on a buyer's checkout after repeated cancellations, taken from the
- * `order.cancelled` fact: only the buyer's own cancels count, the hold lands once, staff are told
+ * `order.canceled` fact: only the buyer's own cancels count, the hold lands once, staff are told
  * once, and a staff lift restarts the count (`docs/modules/orders.md#the-purchase-hold`).
  */
 
@@ -25,7 +25,7 @@ import { withEnvironmentOverrides } from '@tests/environment';
 import { OrderStatus } from '@types';
 import { DAY_MS } from '@domain-primitives/time';
 import { orderService } from '../../services';
-import { ORDER_CANCELLED, ORDER_PURCHASE_HOLD_PLACED } from '../../events';
+import { ORDER_CANCELED, ORDER_PURCHASE_HOLD_PLACED } from '../../events';
 import ordersModule from '../../module';
 import { orderRepository } from '../../repository';
 import { logger } from '@infrastructure/adapters/logger';
@@ -54,7 +54,7 @@ afterEach(() => {
     jest.restoreAllMocks();
 });
 
-/** A pending order of the buyer's, cancelled by the buyer; resolves to its id. */
+/** A pending order of the buyer's, canceled by the buyer; resolves to its id. */
 const cancelOneAsBuyer = async (buyer: Awaited<ReturnType<typeof createUser>>) => {
     const product = await createProduct();
     const order = await createOrder(buyer, [toOrderItem(product, 1)]);
@@ -64,7 +64,7 @@ const cancelOneAsBuyer = async (buyer: Awaited<ReturnType<typeof createUser>>) =
 };
 
 /**
- * A PAID order of the buyer's, cancelled by the buyer: a statutory withdrawal that money reached.
+ * A PAID order of the buyer's, canceled by the buyer: a statutory withdrawal that money reached.
  * Resolves to its id.
  */
 const cancelOnePaidAsBuyer = async (buyer: Awaited<ReturnType<typeof createUser>>) => {
@@ -100,8 +100,8 @@ const letOneExpire = async (buyer: Awaited<ReturnType<typeof createUser>>) => {
 const flaggedAt = (id: string) =>
     userRepository.findById(id).then((user) => user?.purchaseHoldFlaggedAt);
 
-/** What the `order.cancelled` row says for a buyer cancel, as the relay would deliver it. */
-const buyerCancelled = (orderId: string) => ({ orderId, refund: true, cause: 'customer' }) as const;
+/** What the `order.canceled` row says for a buyer cancel, as the relay would deliver it. */
+const buyerCanceled = (orderId: string) => ({ orderId, refund: true, cause: 'customer' }) as const;
 
 /** The `order.purchase_hold_placed` facts emitted so far: what `notifications` turns into a work notice. */
 const placedFacts: DomainEventMap['order.purchase_hold_placed'][] = [];
@@ -117,7 +117,7 @@ describe('considerPurchaseHold', () => {
         const buyer = await createUser();
 
         for (let n = 0; n < 2; n += 1)
-            await orderService.considerPurchaseHold(buyerCancelled(await cancelOneAsBuyer(buyer)));
+            await orderService.considerPurchaseHold(buyerCanceled(await cancelOneAsBuyer(buyer)));
 
         await expect(holdOf(buyer.id)).resolves.toBeUndefined();
         expect(staffNotices()).toHaveLength(0);
@@ -127,7 +127,7 @@ describe('considerPurchaseHold', () => {
         const buyer = await createUser();
 
         for (let n = 0; n < 3; n += 1)
-            await orderService.considerPurchaseHold(buyerCancelled(await cancelOneAsBuyer(buyer)));
+            await orderService.considerPurchaseHold(buyerCanceled(await cancelOneAsBuyer(buyer)));
 
         const hold = await holdOf(buyer.id);
         expect(hold).toMatchObject({ reason: 'repeated_cancellations' });
@@ -141,7 +141,7 @@ describe('considerPurchaseHold', () => {
         const third = await cancelOneAsBuyer(buyer);
 
         for (const id of [...ids, third, third])
-            await orderService.considerPurchaseHold(buyerCancelled(id));
+            await orderService.considerPurchaseHold(buyerCanceled(id));
 
         expect(staffNotices()).toHaveLength(1);
     });
@@ -182,12 +182,12 @@ describe('considerPurchaseHold', () => {
     it('restarts the count after a staff lift, so the same cancels never hold twice', async () => {
         const buyer = await createUser();
         for (let n = 0; n < 3; n += 1)
-            await orderService.considerPurchaseHold(buyerCancelled(await cancelOneAsBuyer(buyer)));
+            await orderService.considerPurchaseHold(buyerCanceled(await cancelOneAsBuyer(buyer)));
         await userService.liftPurchaseHold(buyer.id, callerContextAs('admin'));
         placedFacts.length = 0;
 
         // One more cancel after the review is one, not four.
-        await orderService.considerPurchaseHold(buyerCancelled(await cancelOneAsBuyer(buyer)));
+        await orderService.considerPurchaseHold(buyerCanceled(await cancelOneAsBuyer(buyer)));
 
         await expect(holdOf(buyer.id)).resolves.toBeUndefined();
         expect(staffNotices()).toHaveLength(0);
@@ -199,7 +199,7 @@ describe('considerPurchaseHold', () => {
 
             for (let n = 0; n < 2; n += 1)
                 await orderService.considerPurchaseHold(
-                    buyerCancelled(await cancelOneAsBuyer(buyer))
+                    buyerCanceled(await cancelOneAsBuyer(buyer))
                 );
 
             await expect(holdOf(buyer.id)).resolves.toMatchObject({
@@ -212,7 +212,7 @@ describe('considerPurchaseHold', () => {
         const buyer = await createUser();
 
         for (let n = 0; n < 3; n += 1)
-            await orderService.considerPurchaseHold(buyerCancelled(await cancelOneAsBuyer(buyer)));
+            await orderService.considerPurchaseHold(buyerCanceled(await cancelOneAsBuyer(buyer)));
 
         const hold = await holdOf(buyer.id);
         expect(staffNotices()).toEqual([
@@ -224,15 +224,14 @@ describe('considerPurchaseHold', () => {
         ]);
     });
 
-    it('is wired to order.cancelled by the module', async () => {
+    it('is wired to order.canceled by the module', async () => {
         registerModules([ordersModule]);
         const buyer = await createUser();
         const ids = [await cancelOneAsBuyer(buyer), await cancelOneAsBuyer(buyer)];
         const third = await cancelOneAsBuyer(buyer);
         await settleOutboxNudges();
 
-        for (const id of [...ids, third])
-            await emitDomainEvent(ORDER_CANCELLED, buyerCancelled(id));
+        for (const id of [...ids, third]) await emitDomainEvent(ORDER_CANCELED, buyerCanceled(id));
 
         await expect(holdOf(buyer.id)).resolves.toMatchObject({ reason: 'repeated_cancellations' });
     });
@@ -242,7 +241,7 @@ describe('considerPurchaseHold', () => {
         jest.spyOn(orderRepository, 'findById').mockRejectedValueOnce(new Error('db down'));
 
         await expect(
-            orderService.considerPurchaseHold(buyerCancelled('000000000000000000000000'))
+            orderService.considerPurchaseHold(buyerCanceled('000000000000000000000000'))
         ).resolves.toBeUndefined();
 
         expect(logged).toHaveBeenCalledWith(
@@ -291,7 +290,7 @@ describe('the pause counts what bots do', () => {
 
     it('counts both doors together', async () => {
         const buyer = await createUser();
-        await orderService.considerPurchaseHold(buyerCancelled(await cancelOneAsBuyer(buyer)));
+        await orderService.considerPurchaseHold(buyerCanceled(await cancelOneAsBuyer(buyer)));
         await orderService.considerPurchaseHold({
             orderId: await withdrawOneUnpaid(buyer),
             refund: true,
@@ -310,7 +309,7 @@ describe('the pause counts what bots do', () => {
         const buyer = await createUser();
 
         for (let n = 0; n < 3; n += 1)
-            await orderService.considerPurchaseHold(buyerCancelled(await cancelOneAsBuyer(buyer)));
+            await orderService.considerPurchaseHold(buyerCanceled(await cancelOneAsBuyer(buyer)));
 
         await expect(flaggedAt(buyer.id)).resolves.toBeInstanceOf(Date);
     });
@@ -324,7 +323,7 @@ describe('the pause never lasts longer than 7 days', () => {
 
             for (let n = 0; n < 3; n += 1)
                 await orderService.considerPurchaseHold(
-                    buyerCancelled(await cancelOneAsBuyer(buyer))
+                    buyerCanceled(await cancelOneAsBuyer(buyer))
                 );
 
             const hold = await holdOf(buyer.id);
@@ -340,7 +339,7 @@ describe('paid cancellations only flag the account', () => {
 
         for (let n = 0; n < 3; n += 1)
             await orderService.considerPurchaseHold(
-                buyerCancelled(await cancelOnePaidAsBuyer(buyer))
+                buyerCanceled(await cancelOnePaidAsBuyer(buyer))
             );
 
         await expect(holdOf(buyer.id)).resolves.toBeUndefined();
@@ -354,7 +353,7 @@ describe('paid cancellations only flag the account', () => {
 
         for (let n = 0; n < 2; n += 1)
             await orderService.considerPurchaseHold(
-                buyerCancelled(await cancelOnePaidAsBuyer(buyer))
+                buyerCanceled(await cancelOnePaidAsBuyer(buyer))
             );
 
         await expect(flaggedAt(buyer.id)).resolves.toBeUndefined();
@@ -384,10 +383,10 @@ describe('paid cancellations only flag the account', () => {
 
     it('does not mix with the unpaid count: two unpaid and two paid pause and flag nothing', async () => {
         const buyer = await createUser();
-        await orderService.considerPurchaseHold(buyerCancelled(await cancelOneAsBuyer(buyer)));
-        await orderService.considerPurchaseHold(buyerCancelled(await cancelOneAsBuyer(buyer)));
-        await orderService.considerPurchaseHold(buyerCancelled(await cancelOnePaidAsBuyer(buyer)));
-        await orderService.considerPurchaseHold(buyerCancelled(await cancelOnePaidAsBuyer(buyer)));
+        await orderService.considerPurchaseHold(buyerCanceled(await cancelOneAsBuyer(buyer)));
+        await orderService.considerPurchaseHold(buyerCanceled(await cancelOneAsBuyer(buyer)));
+        await orderService.considerPurchaseHold(buyerCanceled(await cancelOnePaidAsBuyer(buyer)));
+        await orderService.considerPurchaseHold(buyerCanceled(await cancelOnePaidAsBuyer(buyer)));
 
         await expect(holdOf(buyer.id)).resolves.toBeUndefined();
         await expect(flaggedAt(buyer.id)).resolves.toBeUndefined();
@@ -397,11 +396,11 @@ describe('paid cancellations only flag the account', () => {
         const buyer = await createUser();
         for (let n = 0; n < 3; n += 1)
             await orderService.considerPurchaseHold(
-                buyerCancelled(await cancelOnePaidAsBuyer(buyer))
+                buyerCanceled(await cancelOnePaidAsBuyer(buyer))
             );
         await userService.liftPurchaseHold(buyer.id, callerContextAs('admin'));
 
-        await orderService.considerPurchaseHold(buyerCancelled(await cancelOnePaidAsBuyer(buyer)));
+        await orderService.considerPurchaseHold(buyerCanceled(await cancelOnePaidAsBuyer(buyer)));
 
         await expect(flaggedAt(buyer.id)).resolves.toBeUndefined();
         expect(staffNotices()).toHaveLength(0);

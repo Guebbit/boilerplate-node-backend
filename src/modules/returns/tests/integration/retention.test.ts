@@ -31,7 +31,7 @@ let customers = 0;
 const returnAged = async (ageDays: number) => {
     customers += 1;
     const user = await createUser({ email: `reaper-${customers}@example.com` });
-    const product = await createProduct({ title: 'Shirt', price: 30 });
+    const product = await createProduct({ title: 'Shirt', price: '30.00' });
     const order = await createOrder(user, [toOrderItem(product, 1)], {
         status: OrderStatus.delivered
     });
@@ -45,7 +45,7 @@ const returnAged = async (ageDays: number) => {
         declineReason: 'no_defect_found',
         declineMessage: 'Looks worn',
         decidedAt: new Date('2026-01-02T00:00:00.000Z'),
-        lines: [{ productId: product._id, quantity: 1, title: 'Shirt', unitPrice: 30 }],
+        lines: [{ productId: product._id, quantity: 1, title: 'Shirt', unitPrice: '30.00' }],
         returnPostage: 'consumer'
     });
     const updatedAt = new Date(Date.now() - ageDays * DAY_MS);
@@ -77,7 +77,7 @@ describe('scrubReturnText', () => {
             status: 'declined',
             reason: 'defective',
             currency: 'EUR',
-            lines: [expect.objectContaining({ quantity: 1, unitPrice: 30 })]
+            lines: [expect.objectContaining({ quantity: 1, unitPrice: '30.00' })]
         });
         expect(row?.decidedAt).toEqual(new Date('2026-01-02T00:00:00.000Z'));
         expect(row?.updatedAt).toEqual(updatedAt);

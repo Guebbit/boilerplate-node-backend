@@ -89,7 +89,7 @@ const PRODUCT_TYPES: ProductType[] = [
         blurb: 'a stable, easy-to-clean feeding solution',
         basePrice: 15,
         weight: 400,
-        tax: { taxClass: 'zero', rateType: 'zero-rated' },
+        tax: { taxClass: 'zero', rateType: 'zero_rated' },
         it: {
             name: 'Ciotola per Alimenti',
             blurb: "una soluzione per l'alimentazione stabile e facile da pulire"
@@ -202,7 +202,7 @@ interface FillerCopy {
 export interface FillerProduct {
     title: string;
     description: string;
-    price: number;
+    price: string;
     /**
      * What the opening receipt brings in, NOT a seeded column — `./products` writes every row at
      * `onHand: 0` and `scenarios/flows/shop-history.ts` puts this on the shelf through
@@ -248,7 +248,10 @@ const GRID_PRODUCTS: FillerProduct[] = ANIMALS.flatMap((animal, animalIndex) =>
             return {
                 title: en.title,
                 description: en.description,
-                price: Math.round(type.basePrice * tier.priceMultiplier) + animalIndex * 2,
+                price: (
+                    Math.round(type.basePrice * tier.priceMultiplier) +
+                    animalIndex * 2
+                ).toFixed(2),
                 openingStock: Math.max(5, 60 - tierIndex * 15 - typeIndex * 3 + animalIndex * 2),
                 categories: [animal.slug],
                 tags: [type.slug, tier.slug],
@@ -276,7 +279,7 @@ const DIGITAL_GUIDES: FillerProduct[] = [
 
     return {
         ...en,
-        price: 9,
+        price: '9.00',
         openingStock: 100,
         categories: [slug],
         tags: ['digital', 'guide'],

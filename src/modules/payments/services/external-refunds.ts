@@ -14,7 +14,7 @@ import { Types, type ClientSession } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
 import { RefundStatus } from '@types';
 import { announceInTransaction } from '@kernel/outbox';
-import { addMoney, toDecimalAmount, toMinorUnits } from '@domain-primitives/money';
+import { addMoney, toDecimalString, toMinorUnits } from '@domain-primitives/money';
 import { orderService } from '@modules/orders';
 import { paymentProviderRegistry } from '../providers/registry';
 import type { ProviderRefund } from '../providers';
@@ -79,7 +79,7 @@ const writeImport = (
         .importRefund(
             String(payment._id),
             payment.amountRefunded,
-            toDecimalAmount(
+            toDecimalString(
                 addMoney(
                     toMinorUnits(payment.amountRefunded, payment.currency),
                     toMinorUnits(record.amount, payment.currency)

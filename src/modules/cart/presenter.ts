@@ -5,7 +5,6 @@
  * them, including the flags a client would otherwise re-derive (`canIncrease`, `checkoutable`).
  */
 
-import { toMinorUnits } from '@domain-primitives/money';
 import type { CartResponse, CartShipping, LineAvailability } from '@types';
 import { isBuyable } from './domain';
 
@@ -25,10 +24,10 @@ export interface CartFacts {
     /** Distinct lines, total units and the items' gross total, as `sumLineItems` counts them. */
     count: number;
     quantity: number;
-    itemsTotal: number;
-    shippingCost: number;
-    /** Items plus shipping, as a decimal. */
-    totalPrice: number;
+    itemsTotal: string;
+    shippingCost: string;
+    /** Items plus shipping, as decimal text. */
+    totalPrice: string;
     currency: string;
     shipping: CartShipping;
     /** The shop's per-line ceiling, `cartLineMax()`. */
@@ -64,9 +63,7 @@ export const presentCart = ({
         itemsTotal,
         shippingCost,
         totalPrice,
-        currency,
-        // The same conversion checkout compares against, so echoing it can never mismatch.
-        expectedTotal: { amount: toMinorUnits(totalPrice, currency), currency }
+        currency
     },
     shipping,
     checkoutable: lines.length > 0 && lines.every(({ availability }) => isBuyable(availability))

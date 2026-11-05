@@ -10,8 +10,8 @@
  * @param lines - the document's lines, each with its gross unit price and the rate it was charged at
  */
 export const asTaxItems = (
-    lines: readonly { quantity: number; unitPrice: number; taxRate: number }[]
-): { quantity: number; product: { price: number; taxRate: number } }[] =>
+    lines: readonly { quantity: number; unitPrice: string; taxRate: number }[]
+): { quantity: number; product: { price: string; taxRate: number } }[] =>
     lines.map((line) => ({
         quantity: line.quantity,
         product: { price: line.unitPrice, taxRate: line.taxRate }

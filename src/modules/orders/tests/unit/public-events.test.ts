@@ -10,7 +10,7 @@ import { parse } from 'yaml';
 import { MODULES_ROOT } from '@tests/paths';
 import ordersModule from '../../module';
 import { CANCEL_CAUSES } from '../../services/cancel';
-import { ORDER_CANCELLED, ORDER_CREATED, ORDER_REDACTED, ORDER_STATUS_CHANGED } from '../../events';
+import { ORDER_CANCELED, ORDER_CREATED, ORDER_REDACTED, ORDER_STATUS_CHANGED } from '../../events';
 
 // `as never`: the slot takes `never` so one registry can hold every module's projections.
 describe('the orders module’s public events', () => {
@@ -36,9 +36,9 @@ describe('the orders module’s public events', () => {
     // Whether a cancel owes money back is a policy for `payments`: "owed" is not "paid back", and
     // a subscriber hears `payment.refunded` when money actually moved.
     it.each([true, false])(
-        'tells subscribers an order was cancelled without the refund policy (refund: %s)',
+        'tells subscribers an order was canceled without the refund policy (refund: %s)',
         (refund) => {
-            const target = ordersModule.publicEvents[ORDER_CANCELLED];
+            const target = ordersModule.publicEvents[ORDER_CANCELED];
 
             const projected = target.toPublicEvent({
                 orderId: 'o1',
@@ -47,7 +47,7 @@ describe('the orders module’s public events', () => {
             } as never);
 
             expect(projected).toEqual({
-                eventType: 'order.cancelled',
+                eventType: 'order.canceled',
                 data: { orderId: 'o1', cause: 'operator' }
             });
             expect(projected?.data).not.toHaveProperty('refund');
@@ -56,11 +56,11 @@ describe('the orders module’s public events', () => {
 
     // A lost parcel is the cause whose summary differs: its units were never restocked.
     it('names a lost parcel as the cause, so a subscriber does not assume the stock came back', () => {
-        const target = ordersModule.publicEvents[ORDER_CANCELLED];
+        const target = ordersModule.publicEvents[ORDER_CANCELED];
 
         expect(
             target.toPublicEvent({ orderId: 'o1', refund: false, cause: 'lost' } as never)
-        ).toEqual({ eventType: 'order.cancelled', data: { orderId: 'o1', cause: 'lost' } });
+        ).toEqual({ eventType: 'order.canceled', data: { orderId: 'o1', cause: 'lost' } });
     });
 
     // The AsyncAPI enum is a copy of the code's list: no contract file can import it.
@@ -69,11 +69,11 @@ describe('the orders module’s public events', () => {
             readFileSync(path.join(MODULES_ROOT, 'orders', 'asyncapi.webhooks.yaml'), 'utf8')
         ) as {
             components: {
-                schemas: { OrderCancelledPayload: { properties: { cause: { enum: string[] } } } };
+                schemas: { OrderCanceledPayload: { properties: { cause: { enum: string[] } } } };
             };
         };
 
-        expect(contract.components.schemas.OrderCancelledPayload.properties.cause.enum).toEqual(
+        expect(contract.components.schemas.OrderCanceledPayload.properties.cause.enum).toEqual(
             Object.keys(CANCEL_CAUSES)
         );
     });

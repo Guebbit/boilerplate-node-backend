@@ -197,7 +197,7 @@ describe('POST /__test/jobs/:name', () => {
 const attemptRefund = (providerRef: string) =>
     fakePaymentProvider.refund(
         providerRef,
-        { amount: 100, currency: 'eur' },
+        { amount: '100.00', currency: 'eur' },
         { idempotencyKey: 'lever-test', refundId: 'lever-record', createdAt: new Date() }
     );
 
@@ -240,7 +240,9 @@ describe('POST /__test/payments/refund-failure', () => {
 describe('POST /__test/payments/dispute', () => {
     it('opens a chargeback for the whole payment, then moves the same dispute along', async () => {
         const user = await createUser();
-        const order = await createOrder(user, [toOrderItem(await createProduct({ price: 25 }), 2)]);
+        const order = await createOrder(user, [
+            toOrderItem(await createProduct({ price: '25.00' }), 2)
+        ]);
         await payByCard(order, user);
 
         const opened = await request(testApp())
@@ -257,7 +259,7 @@ describe('POST /__test/payments/dispute', () => {
             disputeRef: 'dp_demo',
             kind: 'chargeback',
             status: 'lost',
-            amount: 50,
+            amount: '50.00',
             currency: payment?.currency
         });
     });

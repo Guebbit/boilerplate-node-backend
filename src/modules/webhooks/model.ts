@@ -170,10 +170,10 @@ export const webhookSubscriptionModel = model<
 /**
  * One event's delivery to one subscription, updated in place across retries. `status` is
  * `WebhookDeliveryStatus`, generated from `openapi.yaml`'s schema of the same name (`@types`); the
- * states it moves through, in order, are `pending` → `in-flight` → `succeeded`/`exhausted`. See
+ * states it moves through, in order, are `pending` → `in_flight` → `succeeded`/`exhausted`. See
  * `./domain/backoff` for the retry ladder between attempts.
  *
- * `in-flight` is a LEASED claim — `repository.ts`'s `claimPending`/`claimForReplay` make it, with
+ * `in_flight` is a LEASED claim — `repository.ts`'s `claimPending`/`claimForReplay` make it, with
  * `leaseToken`/`leaseExpiresAt` stamped in the same write, before a worker or a replay actually
  * calls the endpoint. It exists so the sweep (which only publishes, never claims) and a worker
  * racing the same due row cannot both deliver it — never a state a caller sets directly. A failed
@@ -196,7 +196,7 @@ export interface WebhookDeliveryDocument extends Document {
     nextAttemptAt?: Date;
     /**
      * A visibility-timeout lease, the way SQS does it — set together, `undefined` on a row that
-     * has never been claimed. While `status` is `in-flight` and `leaseExpiresAt` is still in the
+     * has never been claimed. While `status` is `in_flight` and `leaseExpiresAt` is still in the
      * future, this delivery is somebody's exclusive claim: `applyOutcome` writes only while its
      * caller's token still matches, and neither `claimPending` nor `claimForReplay` will hand the
      * row to anyone else. Once the lease expires, both treat the row as claimable again — the
@@ -296,7 +296,7 @@ webhookDeliverySchema.index({ status: 1, createdAt: -1 });
 // `sweep:webhook-retries`.
 webhookDeliverySchema.index({ status: 1, nextAttemptAt: 1 });
 
-// The same read's other half: a STRANDED in-flight row whose lease already expired.
+// The same read's other half: a STRANDED in_flight row whose lease already expired.
 webhookDeliverySchema.index({ status: 1, leaseExpiresAt: 1 });
 
 /*

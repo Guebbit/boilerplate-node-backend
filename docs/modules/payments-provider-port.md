@@ -70,7 +70,7 @@ flowchart TD
 | `refund(providerRef, charge, { idempotencyKey, refundId, createdAt })` | Idempotent on the key (`refund:{paymentId}:{refundId}`, one per refund record) — a real PSP refunds once per key, so a retry cannot return the money twice. Beyond the provider's key window the adapter stays idempotent itself, see [a key the provider forgot](#a-key-the-provider-forgot). Answers `{refundRef, status}`: `pending` for a refund accepted but not settled. Refusals are classified, see [reading a refusal](#reading-a-refusal). |
 | `retrieveRefund(refundRef)`                                            | A refund's own status: `pending`, `succeeded` or `failed` (+ the closed `failureReason`, + our record id as `refundId` from `metadata.refund_record`). Stripe `canceled` maps to `failed`, `requires_action` to `pending`. The sweep re-reads any record holding a refund id with it, and a webhook naming a refund is settled from it: see [the provider's refund status](./payments.md#when-the-bank-sends-a-refund-back).                         |
 | `listRefunds(providerRef)`                                             | Every refund of the intent: ours (carrying our record id as `refundId`) and any made in the provider's dashboard, as `{refundRef, status, amount, currency, createdAt}` (a decimal; the adapter converts minor units). Called on a refund event; an unknown one that succeeded is imported, see [refunds made outside the app](./payments.md#refunds-made-outside-the-app). Stripe: `refunds.list({payment_intent})`                                 |
-| `cancel(providerRef, { reason })`                                      | Closes an intent that has not succeeded yet — an abandoned card flow, or money recorded another way instead. **Idempotent**: an already-cancelled intent answers success. Throws `PaymentInFlightError` when the intent already succeeded or is still mid-flight — there is money to refund instead, not an intent left to cancel.                                                                                                                   |
+| `cancel(providerRef, { reason })`                                      | Closes an intent that has not succeeded yet — an abandoned card flow, or money recorded another way instead. **Idempotent**: an already-canceled intent answers success. Throws `PaymentInFlightError` when the intent already succeeded or is still mid-flight — there is money to refund instead, not an intent left to cancel.                                                                                                                    |
 | `parseWebhook(rawBody, headers)`                                       | Verifies the delivery and translates the provider's own event shape into this module's. Takes the **unparsed** body — a signature covers exact bytes. Parses after the signature and before any lookup, against the contract's schema.                                                                                                                                                                                                               |
 
 ::: warning A typo'd env value fails loudly
@@ -117,7 +117,7 @@ is the only status that settles nothing in either direction, and an intent the s
 
 `cancel` refuses once a reference has settled to `succeeded` — the only rest state a `confirm` on
 this stub ever writes down, since it settles eagerly rather than staying `processing` at rest. A
-second `cancel` of an already-cancelled reference is success, not a repeat refusal, matching a real
+second `cancel` of an already-canceled reference is success, not a repeat refusal, matching a real
 provider's own idempotent behaviour there.
 
 ::: tip Every call is logged, and that is the point
@@ -170,17 +170,17 @@ fills the report from the answer instead of from the body. Return it as `Provide
 bank blocks because of a dispute (Stripe `charge_disputed`, `refund_disputed_payment`) is thrown as
 `disputed`.
 
-| Field                | Meaning                                                                                     |
-| -------------------- | ------------------------------------------------------------------------------------------- |
-| `disputeRef`         | the provider's dispute id; one per payment                                                  |
-| `kind`               | `inquiry` (information asked, no money taken) or `chargeback` (money taken back)            |
-| `status`             | `needs_response`, `under_review`, `won`, `lost`, `accepted`, `closed`                       |
-| `reason`             | Stripe's closed list (`fraudulent`, `product_not_received`, ...); map your provider onto it |
-| `amount`, `currency` | decimal, in the payment's currency; a report in another currency is dropped                 |
-| `evidenceDueBy`      | the evidence deadline, when the provider gives one                                          |
-| `fundsWithdrawn`     | whether the bank has taken the money out of the shop's balance                              |
-| `observedAt`         | the provider's own event time: every write is conditional on it being newer                 |
-| `dashboardUrl`       | where staff answer it                                                                       |
+| Field                | Meaning                                                                                      |
+| -------------------- | -------------------------------------------------------------------------------------------- |
+| `disputeRef`         | the provider's dispute id; one per payment                                                   |
+| `kind`               | `inquiry` (information asked, no money taken) or `chargeback` (money taken back)             |
+| `status`             | `needs_response`, `under_review`, `won`, `lost`, `accepted`, `closed`                        |
+| `reason`             | Stripe's closed list (`fraudulent`, `product_not_received`, ...); map your provider onto it  |
+| `amount`, `currency` | decimal text, in the payment's currency (`"19.90"`); a report in another currency is dropped |
+| `evidenceDueBy`      | the evidence deadline, when the provider gives one                                           |
+| `fundsWithdrawn`     | whether the bank has taken the money out of the shop's balance                               |
+| `observedAt`         | the provider's own event time: every write is conditional on it being newer                  |
+| `dashboardUrl`       | where staff answer it                                                                        |
 
 Send every report you get, repeated and out of order: the application keeps only the newest per
 `disputeRef`. Dates are ISO strings, as the contract's schema parses them. Behaviour:

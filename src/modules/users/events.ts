@@ -18,7 +18,7 @@ declare module '@kernel/events' {
          * An admin created a user with no password and asked one queued up instead — see
          * `userService.create`. `account` owns tokens and outbound email, so it is the subscriber.
          */
-        'user.setup-requested': { userId: string };
+        'user.setup_requested': { userId: string };
         /**
          * An admin banned an account (`active: true` → `false`), committed with the save that ended
          * its sessions. `account` owns the one-time links, so it is the subscriber that purges them.
@@ -27,10 +27,10 @@ declare module '@kernel/events' {
         /**
          * Staff restored an account its owner had scheduled for erasure, committed with the write
          * that cleared the schedule. `account` owns the restore link and the mail, so it is the
-         * subscriber that drops the link and tells the owner. `cancelledAt` (ISO) is when it
+         * subscriber that drops the link and tells the owner. `canceledAt` (ISO) is when it
          * happened, not when the handler runs: the erasure ledger dates its row by it.
          */
-        'user.deletion-cancelled': { userId: string; cancelledAt: string };
+        'user.deletion_canceled': { userId: string; canceledAt: string };
         /**
          * An account was hard-deleted, committed in the erasure transaction itself, so it exists
          * exactly when the erasure did. `users` is its own subscriber: it asks the analytics
@@ -58,14 +58,14 @@ declare module '@kernel/events' {
     }
 }
 
-/** See `DomainEventMap['user.setup-requested']` above. */
-export const USER_SETUP_REQUESTED = 'user.setup-requested';
+/** See `DomainEventMap['user.setup_requested']` above. */
+export const USER_SETUP_REQUESTED = 'user.setup_requested';
 
 /** See `DomainEventMap['user.deactivated']` above. */
 export const USER_DEACTIVATED = 'user.deactivated';
 
-/** See `DomainEventMap['user.deletion-cancelled']` above. */
-export const USER_DELETION_CANCELLED = 'user.deletion-cancelled';
+/** See `DomainEventMap['user.deletion_canceled']` above. */
+export const USER_DELETION_CANCELED = 'user.deletion_canceled';
 
 /** See `DomainEventMap['user.erased']` above. */
 export const USER_ERASED = 'user.erased';

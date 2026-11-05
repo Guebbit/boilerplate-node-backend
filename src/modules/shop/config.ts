@@ -36,7 +36,8 @@ export const shopConfig = defineConfig({
         NODE_SHOP_STREET: text({ required: { minLength: 1 } }),
         NODE_SHOP_CITY: text({ required: { minLength: 1 } }),
         NODE_SHOP_ZIP: text({ required: { minLength: 1 } }),
-        NODE_SHOP_EMAIL: email({ required: { minLength: 1 } }),
+        // The legal-notice address; unset means the support address (`NODE_SUPPORT_EMAIL`).
+        NODE_LEGAL_EMAIL: email(),
         NODE_SHOP_PHONE: text({ required: { minLength: 1 } }),
         NODE_RETURN_ADDRESS_NAME: text(),
         NODE_RETURN_ADDRESS_STREET: text(),

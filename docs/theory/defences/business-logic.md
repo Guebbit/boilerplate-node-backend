@@ -11,8 +11,9 @@ them. A rule stated twice is a rule that will disagree with itself.
 ## Arithmetic and money
 
 The single decision under every row here: **money is a branded integer count of minor units**, and
-the only conversion back to decimals happens on the way out. At rest it is a `Decimal128`, never a
-double.
+the only conversion back to decimals happens on the way out, as a decimal string padded to the
+currency's places (`"19.90"`, JPY `"1000"`). At rest it is a `Decimal128`, never a double, and a
+JSON number in a request is refused, so no float enters or leaves.
 
 | Attack                            | How it works                                                | This boilerplate                                                                                                                                                                                                                                                                                                          |
 | --------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -81,21 +81,21 @@ export const recordSchedule = (
 ): Promise<void> => writeRow(userId, 'scheduled', requestedAt, { purgeAt, session });
 
 /**
- * Note that a scheduled deletion was cancelled, so a restored snapshot that still shows the
+ * Note that a scheduled deletion was canceled, so a restored snapshot that still shows the
  * account as scheduled is unlocked instead of purged.
  *
  * Joins the cancel's transaction where there is one (the owner's link and sign-in). A staff
  * cancel reaches here from the outbox handler, which retries a rejection until it lands.
  *
  * @param userId - the restored account
- * @param cancelledAt - when it was cancelled, not when this runs
+ * @param canceledAt - when it was canceled, not when this runs
  * @param session - the cancel's transaction, when there is one
  */
 export const recordCancellation = (
     userId: string,
-    cancelledAt: Date,
+    canceledAt: Date,
     session?: ClientSession
-): Promise<void> => writeRow(userId, 'cancelled', cancelledAt, { session });
+): Promise<void> => writeRow(userId, 'canceled', canceledAt, { session });
 
 /** What `ops:reapply-erasures` was asked, besides the time. */
 export interface ReapplyOptions {
@@ -124,7 +124,7 @@ type ReapplyBucket =
  * - `erased`:      the restore had brought it back; now erased again.
  * - `alreadyGone`: the restored database does not hold it (the snapshot predates it, or it is already erased).
  * - `rescheduled`: locked again at the stored `purgeAt` (the owner asked after the snapshot).
- * - `unscheduled`: unlocked (the owner cancelled after the snapshot).
+ * - `unscheduled`: unlocked (the owner canceled after the snapshot).
  * - `unchanged`:   its lock already matched the ledger.
  * - `failed`:      the write threw; a rerun retries it.
  */
@@ -149,7 +149,7 @@ const groupByUser = (rows: readonly ErasureLedgerRow[]): Map<string, RowsByKind>
 
 /**
  * Bring one account back to what the ledger says. `erased` beats everything; otherwise the later
- * of `scheduled` and `cancelled` wins (cancel, then ask again, stays scheduled).
+ * of `scheduled` and `canceled` wins (cancel, then ask again, stays scheduled).
  *
  * @param userId - the account
  * @param rows - its ledger rows since the snapshot
@@ -165,9 +165,9 @@ const reapplyOne = (
             .eraseAgain(userId, rows.erased.at, context)
             .then((result) => (result === null ? 'alreadyGone' : 'erased'));
 
-    const { scheduled, cancelled } = rows;
+    const { scheduled, canceled } = rows;
     const schedule =
-        scheduled?.purgeAt && (!cancelled || scheduled.at > cancelled.at)
+        scheduled?.purgeAt && (!canceled || scheduled.at > canceled.at)
             ? { requestedAt: scheduled.at, purgeAt: scheduled.purgeAt }
             : null;
     return userService.restoreDeletionState(userId, schedule, context).then((changed) => {

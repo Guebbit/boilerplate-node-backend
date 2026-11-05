@@ -63,7 +63,7 @@ const approvedReturn = async (
 ) => {
     customers += 1;
     const user = await createUser({ email: `remedy-${customers}@example.com` });
-    const shirt = await createProduct({ title: 'Shirt', price: 30, onHand });
+    const shirt = await createProduct({ title: 'Shirt', price: '30.00', onHand });
     const order = await createOrder(user, [toOrderItem(shirt, 2)]);
     const orderId = String(order._id);
     await inventoryService.reserveForOrder(orderId, [
@@ -123,7 +123,7 @@ describe('asking for a remedy', () => {
     it('refuses a preferred remedy on a withdrawal, which is always a refund', async () => {
         customers += 1;
         const user = await createUser({ email: `remedy-w-${customers}@example.com` });
-        const shirt = await createProduct({ price: 30, onHand: 5 });
+        const shirt = await createProduct({ price: '30.00', onHand: 5 });
         const order = await createOrder(user, [toOrderItem(shirt, 1)]);
         await carryOrderTo(String(order._id), 'delivered');
 
@@ -153,9 +153,9 @@ describe('receiving with a replacement', () => {
         expect(result.success && result.data).toMatchObject({
             status: 'closed',
             remedy: 'replace',
-            refundAmount: 0
+            refundAmount: expect.stringMatching(/^0(\.0+)?$/)
         });
-        expect(await refundedOf(opened.orderId)).toBe(0);
+        expect(Number(await refundedOf(opened.orderId))).toBe(0);
         const after = await readOrder(opened.orderId);
         expect(after?.status).toBe(OrderStatus.processing);
         // The same fulfillment order is open again, and nothing new was made for it.
@@ -263,9 +263,9 @@ describe('receiving with a repair', () => {
         expect(result.success && result.data).toMatchObject({
             status: 'closed',
             remedy: 'repair',
-            refundAmount: 0
+            refundAmount: expect.stringMatching(/^0(\.0+)?$/)
         });
-        expect(await refundedOf(opened.orderId)).toBe(0);
+        expect(Number(await refundedOf(opened.orderId))).toBe(0);
         const after = await readOrder(opened.orderId);
         expect(after!.conformityUntil!.getUTCFullYear()).toBe(before.getUTCFullYear() + 1);
         expect(after!.conformityUntil!.getUTCMonth()).toBe(before.getUTCMonth());
@@ -298,7 +298,7 @@ describe('receiving with a repair', () => {
 
         expect(order?.returnStatus).toBeUndefined();
         const timeline = await timelineOf(opened.orderId, 'return_closed');
-        expect(timeline[0]?.data).toMatchObject({ remedy: 'repair', refundAmount: 0 });
+        expect(timeline[0]?.data).toMatchObject({ remedy: 'repair', refundAmount: '0.00' });
     });
 });
 
@@ -319,7 +319,7 @@ describe('what the ladder refuses', () => {
 
         const result = await returnService.receiveReturn(
             opened.id,
-            { handlingDeduction: 5 },
+            { handlingDeduction: '5.00' },
             admin
         );
 
@@ -338,7 +338,7 @@ describe('what the ladder refuses', () => {
         expect([stored?.status, stored?.remedy, stored?.refundAmount]).toEqual([
             'closed',
             'refund',
-            60
+            '60.00'
         ]);
     });
 });

@@ -4,30 +4,30 @@
  */
 import { declaredWebhookEvents } from '@tests/webhook-events';
 import {
-    listWebhookEventCatalogue,
-    registerWebhookCatalogue,
+    listWebhookEventCatalog,
+    registerWebhookCatalog,
     unknownEventTypes
-} from '../../services/catalogue';
+} from '../../services/catalog';
 
 /** The names the catalogue currently lists. */
 const listedNames = (): string[] =>
-    listWebhookEventCatalogue()
+    listWebhookEventCatalog()
         .map((event) => event.name)
         .toSorted();
 
-describe('registerWebhookCatalogue', () => {
+describe('registerWebhookCatalog', () => {
     afterEach(() => {
-        registerWebhookCatalogue([]);
+        registerWebhookCatalog([]);
     });
 
     it('lists nothing before any module is registered', () => {
-        registerWebhookCatalogue([]);
+        registerWebhookCatalog([]);
 
         expect(listedNames()).toEqual([]);
     });
 
     it('lists only the events of the modules it is given', () => {
-        registerWebhookCatalogue(['payments']);
+        registerWebhookCatalog(['payments']);
 
         expect(listedNames()).toEqual(declaredWebhookEvents(['payments']));
         expect(listedNames().length).toBeGreaterThan(0);
@@ -35,29 +35,27 @@ describe('registerWebhookCatalogue', () => {
     });
 
     it('skips a registered module that owns no fragment', () => {
-        registerWebhookCatalogue(['webhooks', 'orders']);
+        registerWebhookCatalog(['webhooks', 'orders']);
 
         expect(listedNames()).toEqual(declaredWebhookEvents(['orders']));
     });
 
     it('carries each channel description through', () => {
-        registerWebhookCatalogue(['orders']);
+        registerWebhookCatalog(['orders']);
 
-        expect(listWebhookEventCatalogue().find((event) => event.name === 'order.created')).toEqual(
-            {
-                name: 'order.created',
-                description: 'A new order was placed.'
-            }
-        );
+        expect(listWebhookEventCatalog().find((event) => event.name === 'order.created')).toEqual({
+            name: 'order.created',
+            description: 'A new order was placed.'
+        });
     });
 });
 
 describe('unknownEventTypes', () => {
     beforeEach(() => {
-        registerWebhookCatalogue(['orders']);
+        registerWebhookCatalog(['orders']);
     });
     afterEach(() => {
-        registerWebhookCatalogue([]);
+        registerWebhookCatalog([]);
     });
 
     it('is empty for listed names and for the wildcard', () => {

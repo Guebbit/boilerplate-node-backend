@@ -46,7 +46,7 @@ const plain = (line: FulfillmentLine): FulfillmentLine => ({
     title: line.title,
     quantity: line.quantity,
     shippedQuantity: line.shippedQuantity,
-    cancelledQuantity: line.cancelledQuantity
+    canceledQuantity: line.canceledQuantity
 });
 
 /**
@@ -94,15 +94,15 @@ export const withLoss = (
 /**
  * Whether a lost shipment may be recorded as arrived, and what that puts back. All or nothing: it
  * is allowed exactly when every unit it carried is still open, so restoring it can never make
- * shipped + cancelled exceed what was bought.
+ * shipped + canceled exceed what was bought.
  *
  * - the owed units (on the fulfillment orders made for this loss) are all still unshipped and
- *   uncancelled;
+ *   uncanceled;
  * - the rest (the part the shelf covered) is still open on the origin fulfillment order.
  *
  * @param shipment - the lost shipment
  * @param orders - every fulfillment order of the order
- * @returns the restoration, or `undefined` when something was shipped again or cancelled
+ * @returns the restoration, or `undefined` when something was shipped again or canceled
  */
 export const planRestoration = (
     shipment: LostShipmentFacts,
@@ -169,7 +169,7 @@ export const withRestoration = (
             title,
             quantity: owed,
             shippedQuantity: quantity,
-            cancelledQuantity: 0
+            canceledQuantity: 0
         }));
     return [...updated, ...dropped];
 };

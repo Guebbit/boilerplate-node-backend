@@ -184,13 +184,13 @@ describe('a reprice between the catalogue read and the order write', () => {
         // basket would not. A mix (new price, old shipping decision) would total 30, or 125.
         const user = await createUser();
         await giveAddress(user.id);
-        const product = await createProduct({ price: 40, onHand: 10 });
+        const product = await createProduct({ price: '40.00', onHand: 10 });
         await cartService.addItemById(user.id, String(product._id), 3);
         await cartRepository.setShippingMethod(user.id, 'standard');
         writeDuringJoin(async () => {
             const stored = await readProduct(String(product._id));
             if (!stored) throw new Error('product vanished');
-            stored.price = 10;
+            stored.price = '10.00';
             await saveProduct(stored);
         });
 
@@ -199,8 +199,8 @@ describe('a reprice between the catalogue read and the order write', () => {
         const intent = await paymentService.createIntent(String(placed?._id), asCustomer(user.id));
 
         expect(result.success).toBe(true);
-        expect(placed?.items[0]?.product.price).toBe(40);
-        expect(placed?.shippingCost).toBe(0);
-        expect(intent.success && intent.data?.amount).toBe(120);
+        expect(placed?.items[0]?.product.price).toBe('40.00');
+        expect(placed?.shippingCost).toBe('0.00');
+        expect(intent.success && intent.data?.amount).toBe('120.00');
     });
 });

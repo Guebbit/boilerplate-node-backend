@@ -16,9 +16,9 @@ setupTestDb();
 
 describe('the cart total is the amount the order and the intent will carry', () => {
     it.each([
-        { price: 0.56, quantity: 1, total: 5.56 },
-        { price: 0.69, quantity: 1, total: 5.69 },
-        { price: 1.06, quantity: 1, total: 6.06 }
+        { price: '0.56', quantity: 1, total: '5.56' },
+        { price: '0.69', quantity: 1, total: '5.69' },
+        { price: '1.06', quantity: 1, total: '6.06' }
     ])('a $price basket on standard shipping totals $total', async ({ price, quantity, total }) => {
         const { user, bearer } = await authenticateAs();
         await giveAddress(user.id);

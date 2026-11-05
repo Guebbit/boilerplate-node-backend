@@ -17,14 +17,14 @@ const DOCUMENT: EInvoicingDocument = {
     locale: 'en',
     orderNumber: '2026-000007',
     seller: {},
-    lines: [{ title: 'Widget', quantity: 5, unitPrice: 19.99, taxRate: 0.22 }],
-    netTotal: 81.93,
-    taxTotal: 18.02,
-    shippingNetAmount: 0,
-    shippingTaxAmount: 0,
-    taxSummary: [{ rate: 0.22, netAmount: 81.93, taxAmount: 18.02, grossAmount: 99.95 }],
+    lines: [{ title: 'Widget', quantity: 5, unitPrice: '19.99', taxRate: 0.22 }],
+    netTotal: '81.93',
+    taxTotal: '18.02',
+    shippingNetAmount: '0.00',
+    shippingTaxAmount: '0.00',
+    taxSummary: [{ rate: 0.22, netAmount: '81.93', taxAmount: '18.02', grossAmount: '99.95' }],
     shippingByRate: [],
-    grandTotal: 99.95
+    grandTotal: '99.95'
 };
 
 describe('buildDocumentView', () => {
@@ -56,7 +56,7 @@ describe('buildDocumentView', () => {
         const collidingTitle = 'invoicing.document.title';
         const document: EInvoicingDocument = {
             ...DOCUMENT,
-            lines: [{ title: collidingTitle, quantity: 1, unitPrice: 1, taxRate: 0.22 }]
+            lines: [{ title: collidingTitle, quantity: 1, unitPrice: '1.00', taxRate: 0.22 }]
         };
 
         const rowsOf = (locale: string) =>
@@ -168,8 +168,8 @@ describe('buildDocumentView — the VAT block', () => {
         const document: EInvoicingDocument = {
             ...DOCUMENT,
             shippingByRate: [
-                { rate: 0.22, netAmount: 4.1, taxAmount: 0.9, grossAmount: 5 },
-                { rate: 0.1, netAmount: 2.73, taxAmount: 0.27, grossAmount: 3 }
+                { rate: 0.22, netAmount: '4.10', taxAmount: '0.90', grossAmount: '5.00' },
+                { rate: 0.1, netAmount: '2.73', taxAmount: '0.27', grossAmount: '3.00' }
             ]
         };
         const vat = buildDocumentView('en', document).vat as {
@@ -210,9 +210,9 @@ describe('taxCategoryCode — EN 16931 category, C4', () => {
         expect(taxCategoryCode(0.1, 'exempt')).toBe('S');
     });
 
-    it('is Z for a 0% rate with no rateType, or an explicit zero-rated', () => {
+    it('is Z for a 0% rate with no rateType, or an explicit zero_rated', () => {
         expect(taxCategoryCode(0, undefined)).toBe('Z');
-        expect(taxCategoryCode(0, 'zero-rated')).toBe('Z');
+        expect(taxCategoryCode(0, 'zero_rated')).toBe('Z');
     });
 
     it('is E for a 0% rate marked exempt', () => {
@@ -228,14 +228,14 @@ describe('buildDocumentView — the VAT table’s category column, C4', () => {
                 {
                     title: 'Zero-rated widget',
                     quantity: 1,
-                    unitPrice: 10,
+                    unitPrice: '10.00',
                     taxRate: 0,
-                    rateType: 'zero-rated'
+                    rateType: 'zero_rated'
                 },
                 {
                     title: 'Exempt widget',
                     quantity: 1,
-                    unitPrice: 10,
+                    unitPrice: '10.00',
                     taxRate: 0,
                     rateType: 'exempt'
                 }
@@ -263,21 +263,21 @@ describe('buildDocumentView — net unit price and once-per-rate VAT, worked exa
     const MIXED: EInvoicingDocument = {
         ...DOCUMENT,
         lines: [
-            { title: 'Widget', quantity: 2, unitPrice: 19.9, taxRate: 0.22 },
-            { title: 'Gadget', quantity: 3, unitPrice: 5.5, taxRate: 0.1 }
+            { title: 'Widget', quantity: 2, unitPrice: '19.90', taxRate: 0.22 },
+            { title: 'Gadget', quantity: 3, unitPrice: '5.50', taxRate: 0.1 }
         ],
-        shippingNetAmount: 5.09,
-        shippingTaxAmount: 0.91,
-        netTotal: 47.61,
-        taxTotal: 9.6,
-        grandTotal: 62.3,
+        shippingNetAmount: '5.09',
+        shippingTaxAmount: '0.91',
+        netTotal: '47.61',
+        taxTotal: '9.60',
+        grandTotal: '62.30',
         taxSummary: [
-            { rate: 0.1, netAmount: 16.59, taxAmount: 1.66, grossAmount: 18.25 },
-            { rate: 0.22, netAmount: 36.11, taxAmount: 7.94, grossAmount: 44.05 }
+            { rate: 0.1, netAmount: '16.59', taxAmount: '1.66', grossAmount: '18.25' },
+            { rate: 0.22, netAmount: '36.11', taxAmount: '7.94', grossAmount: '44.05' }
         ],
         shippingByRate: [
-            { rate: 0.1, netAmount: 1.6, taxAmount: 0.15, grossAmount: 1.75 },
-            { rate: 0.22, netAmount: 3.49, taxAmount: 0.76, grossAmount: 4.25 }
+            { rate: 0.1, netAmount: '1.60', taxAmount: '0.15', grossAmount: '1.75' },
+            { rate: 0.22, netAmount: '3.49', taxAmount: '0.76', grossAmount: '4.25' }
         ]
     };
 
@@ -319,8 +319,10 @@ describe('buildDocumentView — net unit price and once-per-rate VAT, worked exa
         const vat = buildDocumentView('en', {
             ...DOCUMENT,
             currency: 'JPY',
-            lines: [{ title: 'Widget', quantity: 1, unitPrice: 108, taxRate: 0.08 }],
-            taxSummary: [{ rate: 0.08, netAmount: 100, taxAmount: 8, grossAmount: 108 }]
+            lines: [{ title: 'Widget', quantity: 1, unitPrice: '108.00', taxRate: 0.08 }],
+            taxSummary: [
+                { rate: 0.08, netAmount: '100.00', taxAmount: '8.00', grossAmount: '108.00' }
+            ]
         }).vat as { rows: { unitPrice: string }[] };
 
         expect(vat.rows[0].unitPrice).toBe('¥100');

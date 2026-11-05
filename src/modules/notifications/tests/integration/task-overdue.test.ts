@@ -33,7 +33,7 @@ setupTestDb();
 beforeEach(() => {
     mockEnqueueEmail.mockReset();
     mockEnqueueEmail.mockResolvedValue(undefined);
-    setEnvironment({ NODE_CONTACT_NOTIFY_EMAIL: 'desk@example.com' });
+    setEnvironment({ NODE_SUPPORT_EMAIL: 'desk@example.com' });
     resetDomainEvents();
     registerModules(enabledModules);
 });
@@ -69,8 +69,8 @@ const overdueMails = () =>
             envelope.subject?.startsWith('Overdue') === true
     );
 
-/** Fallback-mailbox mails queued so far, with their subjects. */
-const fallbackMails = () =>
+/** Support-mailbox mails queued so far, with their subjects. */
+const mailboxMails = () =>
     mockEnqueueEmail.mock.calls.filter(([, template]) => template === 'tasks.contact');
 
 /** A contact message, overdue. */
@@ -89,7 +89,7 @@ const overdueContact = async () => {
 };
 
 describe('an overdue contact task', () => {
-    it('tells the people who work contact tasks, once, by bell and by mail', async () => {
+    it('rings the bell of the people who work contact tasks once, and mails the support mailbox the one reminder', async () => {
         const support = await staff('support', 'support@example.com');
         const manager = await staff('manager', 'manager@example.com');
         const task = await overdueContact();
@@ -103,7 +103,14 @@ describe('an overdue contact task', () => {
             { audience: 'staff', params: { taskId: String(task._id), kind: 'contact' } }
         ]);
         await expect(overdueBellOf('manager', manager.id)).resolves.toEqual([]);
-        expect(overdueMails().map(([envelope]) => envelope.to)).toEqual(['support@example.com']);
+        expect(overdueMails()).toHaveLength(0);
+        const [[envelope, , data]] = mailboxMails();
+        expect(envelope).toMatchObject({
+            to: 'desk@example.com',
+            replyTo: 'ada@example.com',
+            subject: expect.stringContaining(`[#${String(task._id).slice(-8)}]`)
+        });
+        expect(data).toMatchObject({ title: expect.stringContaining('still unanswered') });
     });
 
     it('does not repeat when the event itself is delivered twice', async () => {
@@ -120,7 +127,7 @@ describe('an overdue contact task', () => {
         await notificationsService.onTaskOverdue(fact);
 
         await expect(overdueBellOf('support', support.id)).resolves.toHaveLength(1);
-        expect(overdueMails()).toHaveLength(1);
+        expect(overdueMails()).toHaveLength(0);
     });
 
     it('says nothing for a task closed before the sweep', async () => {
@@ -143,7 +150,7 @@ describe('an overdue contact task', () => {
         await settleOutboxNudges();
 
         expect(overdueMails()).toHaveLength(0);
-        const [[envelope, , data]] = fallbackMails();
+        const [[envelope, , data]] = mailboxMails();
         expect(envelope).toMatchObject({ to: 'desk@example.com', replyTo: 'ada@example.com' });
         expect(envelope.subject).toMatch(/^Overdue contact request/);
         expect(data).toMatchObject({ message: 'Please call me.' });
@@ -168,7 +175,7 @@ describe('an overdue system task', () => {
         expect(overdueMails().map(([envelope]) => envelope.to)).toEqual(['mod@example.com']);
     });
 
-    it('goes nowhere when nobody holds the set, like the opener: no fallback mailbox', async () => {
+    it('goes nowhere when nobody holds the set, like the opener: no main mailbox', async () => {
         const task = await createSystemTask();
         await backdateDue(String(task._id));
         mockEnqueueEmail.mockClear();

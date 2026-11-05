@@ -248,6 +248,13 @@ tags:
     - name: System
       description: Public system endpoints (ping, liveness).
 
+# The API-docs families. Only the seed is written here: `contracts:bundle` appends every other
+# tag under the family its declaring module names (`x-family` on the tag).
+x-tagGroups:
+    - name: Core
+      tags:
+          - System
+
 # If set, by default all operation requires an authentication
 # security:
 #    - bearerAuth: []
@@ -410,7 +417,8 @@ components:
             required: false
             schema:
                 type: boolean
-            description: Permanently remove the record instead of soft-deleting it. Where the same operation also accepts the flag in its path or body, a `true` from any of them wins.
+                default: false
+            description: Permanently remove the record instead of soft-deleting it. Where the same operation also accepts the flag in its path, a `true` from either wins.
 
         # Path ID parameters (for resource lookup)
         IdPathParam:
@@ -746,6 +754,28 @@ components:
             maxLength: 3
             pattern: '^[A-Z]{3}$'
             description: ISO 4217 alphabetic currency code, upper case (e.g. `EUR`)
+        # Money on the wire: text at the currency's own ISO 4217 places ("19.90" EUR, "1000" JPY,
+        # "1.500" KWD). Exact in every language; two equal amounts are equal strings. Rates stay numbers.
+        DecimalAmount:
+            type: string
+            format: decimal
+            pattern: '^-?\d+(\.\d+)?$'
+            maxLength: 32
+            examples: ['19.90']
+            description: >-
+                A money amount as a plain decimal string at the places of the currency it is priced
+                in (`"19.90"` for EUR, `"1000"` for JPY, `"1.500"` for KWD). May be negative where
+                the field says it is a signed figure.
+        # The same amount where a negative value makes no sense; a string cannot carry `minimum`.
+        NonNegativeDecimalAmount:
+            type: string
+            format: decimal
+            pattern: '^\d+(\.\d+)?$'
+            maxLength: 32
+            examples: ['19.90']
+            description: >-
+                A non-negative money amount as a plain decimal string at the places of the
+                currency it is priced in (`"19.90"` for EUR, `"1000"` for JPY, `"1.500"` for KWD).
         Email:
             type: string
             maxLength: 254
@@ -1038,7 +1068,7 @@ components:
         Config:
             type: object
             additionalProperties: false
-            required: [session, oauthProviders, antibot]
+            required: [session, oauthProviders, antibot, supportEmail]
             properties:
                 session:
                     $ref: '../../src/modules/account/openapi.yaml#/components/schemas/SessionConfig'
@@ -1048,6 +1078,10 @@ components:
                     description: Registry names this deployment holds OAuth credentials for, e.g. `["google", "github"]`. Empty when none are configured.
                 antibot:
                     $ref: '../../src/modules/antibot/openapi.yaml#/components/schemas/AntibotConfig'
+                supportEmail:
+                    type: string
+                    format: email
+                    description: The one customer-facing support address (`NODE_SUPPORT_EMAIL`). The contact form's mail goes there and customers' replies come back to it; show it as "write to us at".
 
         # What `GET /account` answers: the account as its holder sees it, plus what a client needs
         # to render from it without a second call. A separate schema, not optional members on
@@ -1547,7 +1581,7 @@ paths:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1orders~1{id}~1payments'
 
     # ---------- delivery's doors under an order ---------- (`POST /orders/{id}/process` and the two
-    # fulfilment lists: the order's URL, delivery's module and key; mounted through a second entry in
+    # fulfillment lists: the order's URL, delivery's module and key; mounted through a second entry in
     # delivery's `mounts`)
     /orders/{id}/process:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1orders~1{id}~1process'

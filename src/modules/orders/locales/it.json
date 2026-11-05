@@ -2,7 +2,7 @@
     "orders": {
         "not-found": "L'ordine richiesto non è stato trovato",
         "cancel": {
-            "not-cancellable": "Questo ordine non può più essere annullato."
+            "not-cancelable": "Questo ordine non può più essere annullato."
         },
         "address": {
             "locked": "Su questo ordine non resta nulla da spedire, o non ha un indirizzo di spedizione, quindi non può essere reindirizzato.",
@@ -17,7 +17,7 @@
         },
         "invoiced": "Questo ordine ha una fattura emessa e non può più essere eliminato definitivamente.",
         "has-money-history": "Questo ordine ha pagamenti registrati e non può più essere eliminato definitivamente.",
-        "not-cancelled": "Annulla questo ordine prima di eliminarlo definitivamente.",
+        "not-canceled": "Annulla questo ordine prima di eliminarlo definitivamente.",
         "email-confirm": {
             "subject": "Ordine ricevuto — in attesa di pagamento",
             "meta-title": "Ordine ricevuto",
@@ -65,7 +65,7 @@
             "greeting": "Ciao!",
             "body": "Non abbiamo ricevuto il tuo pagamento in tempo, quindi questo ordine è stato annullato e i suoi articoli sono stati rilasciati."
         },
-        "email-cancelled": {
+        "email-canceled": {
             "subject": "Il tuo ordine è stato annullato",
             "meta-title": "Ordine annullato",
             "greeting": "Ciao, {{name}}!",

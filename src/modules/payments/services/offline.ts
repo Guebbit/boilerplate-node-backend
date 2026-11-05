@@ -64,11 +64,11 @@ export const recordOfflinePayment = async (
     const order = await orderService.getById(orderId);
     if (!order) return orderNotFound();
     const existing = await paymentRepository.findByOrderId(orderId);
-    // A transfer that lands after its order was cancelled: the cancel closed the transfer payment
-    // (`cancelled`, reference kept), the money is real, and the order can no longer take it. It is
+    // A transfer that lands after its order was canceled: the cancel closed the transfer payment
+    // (`canceled`, reference kept), the money is real, and the order can no longer take it. It is
     // recorded onto that payment and owed straight back, instead of refused and left unrecorded.
     const lateTransfer =
-        existing?.status === 'cancelled' &&
+        existing?.status === 'canceled' &&
         existing.transferReference !== undefined &&
         !isPayable(order.status);
     // Asked of the order lifecycle rather than compared against a literal here, so this

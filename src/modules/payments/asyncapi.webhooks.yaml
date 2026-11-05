@@ -226,9 +226,8 @@ components:
                         The refund record this delivery is about. A payment can be refunded in
                         parts, so one payment can raise this event more than once.
                 amount:
-                    type: number
-                    minimum: 0
-                    description: This refund's amount, two decimal places — the payment's own `amount` for a full refund.
+                    $ref: '#/components/schemas/NonNegativeDecimalAmount'
+                    description: This refund's amount — the payment's own `amount` for a full refund.
                 currency:
                     $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
@@ -250,9 +249,8 @@ components:
                 refundId:
                     $ref: '#/components/schemas/Id'
                 amount:
-                    type: number
-                    minimum: 0
-                    description: This refund's amount, two decimal places.
+                    $ref: '#/components/schemas/NonNegativeDecimalAmount'
+                    description: This refund's amount.
                 currency:
                     $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
@@ -277,9 +275,8 @@ components:
                 refundId:
                     $ref: '#/components/schemas/Id'
                 amount:
-                    type: number
-                    minimum: 0
-                    description: This refund's amount, two decimal places.
+                    $ref: '#/components/schemas/NonNegativeDecimalAmount'
+                    description: This refund's amount.
                 currency:
                     $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.
@@ -318,9 +315,8 @@ components:
                 reason:
                     $ref: './openapi.yaml#/components/schemas/DisputeReason'
                 amount:
-                    type: number
-                    minimum: 0
-                    description: The disputed amount, two decimal places.
+                    $ref: '#/components/schemas/NonNegativeDecimalAmount'
+                    description: The disputed amount.
                 currency:
                     $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.

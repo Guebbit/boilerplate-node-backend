@@ -1,12 +1,12 @@
 /**
  * @module
- * The doors `delivery` writes through, inside its own transaction, when a fulfilment act changes
+ * The doors `delivery` writes through, inside its own transaction, when a fulfillment act changes
  * where an order's goods stand. `orders` is the only writer of its own fields, so `delivery`
  * reports — the summary, a forced step's history row, the units leaving the shelf — and this file
  * decides whether each still applies. Every door takes the act's session: the shipment, the
  * summary, the status move and the events commit together or not at all.
  *
- * See `docs/modules/orders.md#the-fulfilment-summary`.
+ * See `docs/modules/orders.md#the-fulfillment-summary`.
  */
 
 import type { ClientSession } from 'mongoose';
@@ -90,12 +90,12 @@ export const releaseTopUp = (
 ): Promise<boolean> => inventoryService.releaseTopUpForOrder(orderId, lines, session);
 
 /**
- * Give some of an order's held units back, in the caller's transaction: a cancelled remainder
+ * Give some of an order's held units back, in the caller's transaction: a canceled remainder
  * that was never shipped. The mirror of {@link shipStock} — `orders` is the only module that
  * drives an order's hold, so `returns` asks here instead of reaching `inventory` for it.
  *
- * @param orderId - the order whose remainder is cancelled
- * @param lines - the cancelled units; a `backorder` line gives back a preorder allowance
+ * @param orderId - the order whose remainder is canceled
+ * @param lines - the canceled units; a `backorder` line gives back a preorder allowance
  * @param session - the cancel's transaction
  * @returns whether an open hold was there to take from
  */

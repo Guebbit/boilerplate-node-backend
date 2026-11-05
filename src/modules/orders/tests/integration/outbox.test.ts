@@ -23,7 +23,7 @@ import { callerContextAs, asCustomer } from '@tests/callers';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { orderService } from '../../services';
 import { overrideStatus } from '../../services/override';
-import { ORDER_CANCELLED, ORDER_CREATED, ORDER_STATUS_CHANGED } from '../../events';
+import { ORDER_CANCELED, ORDER_CREATED, ORDER_STATUS_CHANGED } from '../../events';
 import { OrderStatus } from '@types';
 
 setupTestDb();
@@ -76,7 +76,7 @@ describe('a status move reported to orders', () => {
     });
 
     it('writes no event for a move that lost its race', async () => {
-        const order = await seedOrder(OrderStatus.cancelled);
+        const order = await seedOrder(OrderStatus.canceled);
 
         expect(await orderService.markPaid(String(order._id))).toBeNull();
         await settleOutboxNudges();
@@ -94,17 +94,17 @@ describe('a status move reported to orders', () => {
             (id: string) => orderService.markDelivered(id, new Date())
         ],
         [
-            'markFulfilmentComplete',
+            'markFulfillmentComplete',
             OrderStatus.processing,
             (id: string) =>
                 withTransaction((session) =>
-                    orderService.markFulfilmentComplete(id, new Date(), session)
+                    orderService.markFulfillmentComplete(id, new Date(), session)
                 )
         ]
     ])(
         '%s leaves the order where it was when its event cannot be written',
         async (name, from, move) => {
-            const order = await (name === 'markFulfilmentComplete'
+            const order = await (name === 'markFulfillmentComplete'
                 ? seedDigitalOrder(from)
                 : seedOrder(from));
             failNextOutboxWrite();
@@ -173,13 +173,13 @@ describe('placing an order', () => {
 });
 
 describe('cancelling an order', () => {
-    it('writes order.cancelled with the cancel, carrying whether a refund is owed', async () => {
+    it('writes order.canceled with the cancel, carrying whether a refund is owed', async () => {
         const { user, order } = await pendingOrderOfBuyer();
 
         await orderService.cancelOnRequestById(String(order._id), asCustomer(user.id));
         await settleOutboxNudges();
 
-        const rows = await rowsNamed(ORDER_CANCELLED);
+        const rows = await rowsNamed(ORDER_CANCELED);
         expect(rows).toHaveLength(1);
         expect(rows[0].payload).toEqual({
             orderId: String(order._id),

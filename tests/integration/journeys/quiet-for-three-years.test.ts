@@ -50,7 +50,7 @@ const NOTHING = { minimised: 0, warned: 0, softDeleted: 0, hardDeleted: 0 };
 
 it('lets go in stages, with a way back until the last', async () => {
     freezeDate();
-    const product = await createProduct({ price: 20, onHand: 10 });
+    const product = await createProduct({ price: '20.00', onHand: 10 });
     const productId = String(product._id);
     const { user: admin } = await authenticateAs('admin');
     const minimisedThenBack = await newShopper();

@@ -64,15 +64,15 @@ does: a unique `(subscriptionId, eventId)` index turns a redelivered fan-out int
 | `payment.refunded`                                             | `src/modules/payments/services/{refund-settlement,external-refunds}.ts` |
 | `payment.refund_failed`                                        | `src/modules/payments/services/refund-settlement.ts`                    |
 | `order.created`, `order.status_changed`                        | `src/modules/orders/services/{place,status,override}.ts`                |
-| `order.cancelled`                                              | `src/modules/orders/services/{cancel,status}.ts`                        |
+| `order.canceled`                                               | `src/modules/orders/services/{cancel,status}.ts`                        |
 | `order.redacted`                                               | `src/modules/orders/repository.ts` (the retention scrub)                |
 | `inventory.reservation_expired`                                | `src/modules/inventory/services/sweep.ts`                               |
 | `product.created`                                              | `src/modules/products/services/crud.ts`                                 |
 | `product.deleted`                                              | `src/modules/products/services/remove.ts`                               |
-| `account.sessions-revoked`                                     | `src/modules/account/services/{revocation,profile}.ts`                  |
-| `user.setup-requested`                                         | `src/modules/users/services/create.ts`                                  |
+| `account.sessions_revoked`                                     | `src/modules/account/services/{revocation,profile}.ts`                  |
+| `user.setup_requested`                                         | `src/modules/users/services/create.ts`                                  |
 | `user.deactivated`                                             | `src/modules/users/services/activation.ts`                              |
-| `user.deletion-cancelled`                                      | `src/modules/users/services/remove.ts`                                  |
+| `user.deletion_canceled`                                       | `src/modules/users/services/remove.ts`                                  |
 | `user.erased`                                                  | `src/modules/users/services/remove.ts`                                  |
 | `example.published`                                            | `src/modules/example/services/transition.ts`                            |
 | `return.requested`                                             | `src/modules/returns/services/create.ts`                                |
@@ -92,7 +92,7 @@ does: a unique `(subscriptionId, eventId)` index turns a redelivered fan-out int
 | `payment.dispute_opened`, `payment.dispute_updated`            | `src/modules/payments/services/disputes.ts`                             |
 | `payment.amount_mismatch`                                      | `src/modules/payments/services/settlement.ts`                           |
 | `account.analytics_consent_withdrawn`                          | `src/modules/account/services/profile.ts`                               |
-| `account.authenticator-removed`                                | `src/modules/account/services/two-factor-enrollment.ts`                 |
+| `account.authenticator_removed`                                | `src/modules/account/services/two-factor-enrollment.ts`                 |
 | `account.export_ready`, `account.export_failed`                | `src/modules/account/services/export-job.ts`                            |
 | `stock_alert.sent`                                             | `src/modules/stock-alerts/service.ts`                                   |
 | `task.opened`                                                  | `src/modules/tasks/{service,services/system}.ts`                        |
@@ -198,12 +198,12 @@ a crash between the commit and the send no longer loses the mail. The rules that
 - **A failed mail never fails the act.** The listener logs and swallows, and the buyer-mail
   lookup is `orders`' `mailBuyerOfOrder`. `enqueueEmail` itself never rejects, so the outbox covers
   the crash window, not a failed send.
-- **The event names the cause, not the mail.** `order.cancelled` carries a `cause`, and the
+- **The event names the cause, not the mail.** `order.canceled` carries a `cause`, and the
   listener picks the mail from the cause table in `orders/services/cancel.ts`.
 - **Not every mail is a customer's.** Account links (reset, verification, deletion) answer a
   request the user is waiting on and are sent by the request.
 - **Staff are told by a listener too.** `notifications` turns `task.*` events into notices and the
-  fallback-mailbox mail, see [notifications](../modules/notifications.md).
+  main-mailbox mail (`NODE_SUPPORT_EMAIL`), see [notifications](../modules/notifications.md).
 
 ## Poison events
 
@@ -247,7 +247,7 @@ mark rows published with nobody listening.
 - **Same-process consumers.** The relay dispatches on the in-process bus. A consumer in another
   service needs a queue in front, as `webhooks` has — see [RabbitMQ](./rabbitmq.md).
 - **A refund has no marker of its own.** A cancel's refund is the `refund` flag on the
-  `order.cancelled` row. `payments` opens a refund record from it; a rejection before the record
+  `order.canceled` row. `payments` opens a refund record from it; a rejection before the record
   exists makes the relay deliver the row again, and once it exists the record is the durable
   intent (the refund sweep finishes it with the same idempotency key), so a provider refusal is
   logged and the row is answered. A row that fails every attempt is parked `dead` and

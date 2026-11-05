@@ -42,7 +42,7 @@ afterEach(() => {
 /** A cash payment of 100.00 on a fresh order (two units at 50.00). */
 const cashOrder = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 50 });
+    const product = await createProduct({ price: '50.00' });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     const orderId = String(order._id);
     await paymentService.recordOfflinePayment(
@@ -72,14 +72,14 @@ describe('the operator refunding a cash payment', () => {
         const { orderId } = await cashOrder();
 
         const refunded = await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
-            amount: 30
+            amount: '30.00'
         });
 
         expect(refunded.success).toBe(true);
         const payment = await paymentOf(orderId);
         expect(payment.refunds[0].settledByHand).toBeUndefined();
         expect(payment.refunds).toHaveLength(1);
-        expect(payment.refunds[0]).toMatchObject({ amount: 30, status: 'pending' });
+        expect(payment.refunds[0]).toMatchObject({ amount: '30.00', status: 'pending' });
         await settleOutboxNudges();
         expect(await outboxEventModel.countDocuments({ name: PAYMENT_REFUNDED })).toBe(0);
         // Owed by hand, once, naming the record and written under the operator who asked.
@@ -87,7 +87,11 @@ describe('the operator refunding a cash payment', () => {
         expect(owedRows()[0]).toMatchObject({
             targetType: 'order',
             targetId: orderId,
-            metadata: { refundId: String(payment.refunds[0]._id), amount: 30, reason: 'goodwill' }
+            metadata: {
+                refundId: String(payment.refunds[0]._id),
+                amount: '30.00',
+                reason: 'goodwill'
+            }
         });
         // The same fact is announced for `tasks`, in the transaction that opened the record.
         const [announced] = await outboxEventModel
@@ -98,7 +102,7 @@ describe('the operator refunding a cash payment', () => {
             paymentId: String(payment._id),
             orderId,
             refundId: String(payment.refunds[0]._id),
-            amount: 30,
+            amount: '30.00',
             currency: payment.currency
         });
     });
@@ -113,7 +117,7 @@ describe('the cancel listener on a cash payment', () => {
 
         const payment = await paymentOf(orderId);
         expect(payment.refunds).toHaveLength(1);
-        expect(payment.refunds[0]).toMatchObject({ amount: 100, reason: 'cancellation' });
+        expect(payment.refunds[0]).toMatchObject({ amount: '100.00', reason: 'cancellation' });
         expect(owedRows()).toHaveLength(1);
         expect(await outboxEventModel.countDocuments({ name: PAYMENT_REFUND_OWED_BY_HAND })).toBe(
             1
@@ -125,15 +129,15 @@ describe('the cancel listener on a cash payment', () => {
     it('still opens the rest when an operator refund of part of it is already waiting', async () => {
         const { orderId } = await cashOrder();
         await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
-            amount: 30
+            amount: '30.00'
         });
 
         await refundForOrder(orderId);
 
         const payment = await paymentOf(orderId);
         expect(payment.refunds.map((refund) => [refund.amount, refund.reason])).toEqual([
-            [30, 'goodwill'],
-            [70, 'cancellation']
+            ['30.00', 'goodwill'],
+            ['70.00', 'cancellation']
         ]);
         expect(owedRows()).toHaveLength(2);
     });
@@ -143,10 +147,10 @@ describe('settleRefundByHand', () => {
     it('settles one named record: the event, the audit row and the flags all follow', async () => {
         const { orderId } = await cashOrder();
         await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
-            amount: 30
+            amount: '30.00'
         });
         await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
-            amount: 20
+            amount: '20.00'
         });
         const open = await paymentOf(orderId);
         const [first, second] = open.refunds.map((refund) => String(refund._id));
@@ -163,7 +167,7 @@ describe('settleRefundByHand', () => {
         await settleOutboxNudges();
         const events = await outboxEventModel.find({ name: PAYMENT_REFUNDED }).lean();
         expect(events).toHaveLength(1);
-        expect(events[0].payload).toMatchObject({ orderId, refundId: second, amount: 20 });
+        expect(events[0].payload).toMatchObject({ orderId, refundId: second, amount: '20.00' });
         expect(audited.map(({ action }) => action)).toContain(
             'admin.payment.refund_settled_by_hand'
         );
@@ -189,7 +193,7 @@ describe('settleRefundByHand', () => {
 
     it('answers PAYMENT_REFUND_IN_FLIGHT to a card refund the provider left unclear: the sweep owns it', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 50 });
+        const product = await createProduct({ price: '50.00' });
         const order = await createOrder(user, [toOrderItem(product, 2)]);
         await payByCard(order, user);
         jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));

@@ -21,9 +21,9 @@ application; between them they write nine ledger reasons (`reserve`, `ship`, `re
 flowchart LR
     N["no hold"] -->|"reserveForOrder<br/><i>checkout · admin create</i>"| H["held<br/><i>reserved +n</i>"]
     H -->|"commitForOrder<br/><i>payment confirmed</i>"| C["committed<br/><i>no counter moves</i>"]
-    H -->|"releaseForOrder<br/><i>order cancelled</i>"| R["released<br/><i>reserved −n</i>"]
+    H -->|"releaseForOrder<br/><i>order canceled</i>"| R["released<br/><i>reserved −n</i>"]
     H -->|"releaseForOrder<br/><i>the sweep</i>"| R
-    C -->|"releaseCommittedForOrder<br/><i>a PAID order cancelled before dispatch</i>"| R
+    C -->|"releaseCommittedForOrder<br/><i>a PAID order canceled before dispatch</i>"| R
     C -->|"shipForOrder<br/><i>the parcel leaves</i>"| S["shipped<br/><i>onHand −n · reserved −n</i>"]
 
     classDef open fill:#fef3c7,stroke:#d97706,color:#111827;

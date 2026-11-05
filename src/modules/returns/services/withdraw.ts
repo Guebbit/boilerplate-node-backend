@@ -9,6 +9,7 @@
  * See: docs/modules/returns.md#the-withdrawal-button
  */
 
+import { padDecimal } from '@domain-primitives/money';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { nudgeOutbox } from '@kernel/outbox';
 import { callerForSubject } from '@kernel/permissions';
@@ -45,7 +46,8 @@ import {
  * nobody paid for owes nothing — the cancel releases its hold and that is all.
  * @param order - the order being withdrawn from
  */
-const refundOwedOn = (order: OrderDocument): number => (order.paidAt ? orderTotal(order) : 0);
+const refundOwedOn = (order: OrderDocument): string =>
+    order.paidAt ? orderTotal(order) : padDecimal('0', order.currency);
 
 /**
  * Write the record of a withdrawal the cancel already settled: closed at birth, no lines (nothing
@@ -99,7 +101,7 @@ const writeWithdrawalRecord = (
 
 /**
  * A withdrawal from an order the shop has started on, when some of it is goods Art. 16 excludes
- * (made to order): the eligible shipment groups are cancelled, one `kind: cancellation` return
+ * (made to order): the eligible shipment groups are canceled, one `kind: cancellation` return
  * each, and the made-to-order group stays — the shop's work on it is not the buyer's to cancel
  * (S4 of the Q-W2 decision). The order itself stays `processing`.
  *
@@ -167,7 +169,7 @@ const missingKeyOf = (authContext: AuthContext): string | undefined => {
  * goods came back.
  *
  * Once the shop has started on an order that holds made-to-order goods (`processing`), only the
- * eligible shipment groups are cancelled instead: see {@link withdrawEligibleGroups}.
+ * eligible shipment groups are canceled instead: see {@link withdrawEligibleGroups}.
  *
  * A shipment can land between the read that said "before dispatch" and the cancel; the cancel then
  * refuses, and the withdrawal is opened again on what the order now is — a return, never a full
@@ -204,12 +206,12 @@ export const withdrawBeforeDispatch = (
     const cancelling = byStaff
         ? orderService.withdrawOnBuyersBehalfById(orderId, authContext, context)
         : orderService.withdrawById(orderId, authContext, context);
-    return cancelling.then((cancelled) => {
-        if (!cancelled.success)
+    return cancelling.then((canceled) => {
+        if (!canceled.success)
             // Not `ownOrder`: a staff member reads the order's new state through the same door
             // that let them in, so the race falls back to a return for them too.
             return openableOrder(input.orderId, authContext).then((fresh) =>
-                fresh && !isBeforeDispatch(fresh.order) ? openAsReturn() : cancelled
+                fresh && !isBeforeDispatch(fresh.order) ? openAsReturn() : canceled
             );
 
         return writeWithdrawalRecord(order, opener, context).then(opened);

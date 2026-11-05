@@ -101,9 +101,9 @@ describe('GET /cart', () => {
         expect(response.body.checkoutable).toBe(true);
     });
 
-    it('echoes the total in the minor units checkout compares against', async () => {
+    it('prints the total as decimal text with its currency: what checkout names back as expectedTotal', async () => {
         const { bearer } = await authenticateAs('user');
-        const product = await createProduct({ price: 25.5 });
+        const product = await createProduct({ price: '25.50' });
         await api()
             .post('/cart/items')
             .set('Authorization', bearer)
@@ -111,10 +111,8 @@ describe('GET /cart', () => {
 
         const response = await api().get('/cart').set('Authorization', bearer);
 
-        expect(response.body.summary.expectedTotal).toEqual({
-            amount: 5100,
-            currency: response.body.summary.currency
-        });
+        expect(response.body.summary).toMatchObject({ totalPrice: '51.00', currency: 'EUR' });
+        expect(response.body.summary).not.toHaveProperty('expectedTotal');
     });
 });
 
@@ -578,7 +576,7 @@ describe('PUT /cart/shipping-method', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.shipping.selected).toBe('standard');
-        expect(response.body.summary.shippingCost).toBeGreaterThanOrEqual(0);
+        expect(Number(response.body.summary.shippingCost)).toBeGreaterThanOrEqual(0);
     });
 
     it('matches the contract when clearing the choice with null', async () => {

@@ -10,7 +10,7 @@
  * because the door writes. The withdrawal is also swept over the kinds of order that differ in what
  * it takes: ordinary, mixed with a made-to-order line, and made only of made-to-order goods.
  *
- * Known edge, not swept: a mixed `processing` order whose eligible groups are already cancelled
+ * Known edge, not swept: a mixed `processing` order whose eligible groups are already canceled
  * keeps its button (the order's lines are frozen) and a second withdrawal answers 409
  * `RETURN_NOTHING_TO_CANCEL`. See docs/modules/returns.md#goods-with-no-right-of-withdrawal.
  */
@@ -41,7 +41,7 @@ const STATUSES = [
     OrderStatus.processing,
     OrderStatus.shipped,
     OrderStatus.delivered,
-    OrderStatus.cancelled
+    OrderStatus.canceled
 ] as const;
 
 /** What an order is made of, for the withdrawal sweep. */
@@ -78,10 +78,10 @@ const orderIn = async (
     status: OrderStatus,
     kind: OrderKind = 'ordinary'
 ): Promise<string> => {
-    const ordinary = await createProduct({ title: `Shirt ${Math.random()}`, price: 30 });
+    const ordinary = await createProduct({ title: `Shirt ${Math.random()}`, price: '30.00' });
     const bespoke = await createProduct({
         title: `Engraved mug ${Math.random()}`,
-        price: 10,
+        price: '10.00',
         noWithdrawal: true
     });
     const items = {
@@ -269,11 +269,11 @@ describe('the button and its door agree', () => {
         const { owner, buyer, callers } = await signedIn();
         const bespokeOnly = await orderIn(owner, OrderStatus.paid, 'bespoke-only');
         const ordinary = await orderIn(owner, OrderStatus.paid);
-        await forceOrderStatus(ordinary, OrderStatus.cancelled);
+        await forceOrderStatus(ordinary, OrderStatus.canceled);
 
         const reasons = {
             buyerBespoke: await whyBlocked(buyer, bespokeOnly),
-            buyerCancelled: await whyBlocked(buyer, ordinary),
+            buyerCanceled: await whyBlocked(buyer, ordinary),
             staffBespoke: await Promise.all(
                 callers.filter((one) => one !== buyer).map((one) => whyBlocked(one, bespokeOnly))
             )
@@ -281,7 +281,7 @@ describe('the button and its door agree', () => {
 
         expect(reasons).toEqual({
             buyerBespoke: 'all_excluded',
-            buyerCancelled: undefined,
+            buyerCanceled: undefined,
             staffBespoke: [undefined, undefined, undefined, undefined]
         });
     });

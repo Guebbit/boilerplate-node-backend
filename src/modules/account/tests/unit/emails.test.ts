@@ -165,7 +165,7 @@ describe('account emails — the copy', () => {
         expect(italian.subject).not.toBe(english.subject);
     });
 
-    it('shares one footer across every account email', () => {
+    it('shares one footer across every account email, bar the security notices that name support', () => {
         // `email.footer` is a shared key deliberately: six footers that drift are six places to
         // update when the company address changes.
         const footers = [
@@ -173,8 +173,12 @@ describe('account emails — the copy', () => {
             ...CONFIRM_EMAILS.map(([, build]) => build('en', NAME).data.footer)
         ];
 
-        expect(new Set(footers).size).toBe(1);
-        expect(footers[0]).not.toBe('');
+        const plain = footers.filter(
+            (footer) => !String(footer).includes(String(process.env.NODE_SUPPORT_EMAIL))
+        );
+
+        expect(new Set(plain).size).toBe(1);
+        expect(plain[0]).not.toBe('');
     });
 });
 
@@ -385,20 +389,14 @@ describe('account emails — the support address in a security notice', () => {
     const SUPPORT = 'help@example.com';
 
     it('names the configured address in every security notice, in both languages', () => {
-        setEnvironment({ NODE_ACCOUNT_SUPPORT_EMAIL: SUPPORT });
+        setEnvironment({ NODE_SUPPORT_EMAIL: SUPPORT });
 
         for (const data of securityNotices()) expect(data.footer).toContain(SUPPORT);
         expect(passwordChangedEmail('it', NAME).data.footer).toContain(SUPPORT);
     });
 
-    it('keeps the plain footer when none is configured', () => {
-        setEnvironment({ NODE_ACCOUNT_SUPPORT_EMAIL: undefined });
-
-        for (const data of securityNotices()) expect(data.footer).toBe('Sent by our team.');
-    });
-
     it('leaves a mail that is not a security notice on the plain footer', () => {
-        setEnvironment({ NODE_ACCOUNT_SUPPORT_EMAIL: SUPPORT });
+        setEnvironment({ NODE_SUPPORT_EMAIL: SUPPORT });
 
         expect(verifyRequestEmail('en', NAME, TOKEN).data.footer).toBe('Sent by our team.');
     });

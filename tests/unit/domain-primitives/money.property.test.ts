@@ -19,7 +19,7 @@ import {
     scaleMoney,
     scaleMoneyByRate,
     subtractMoney,
-    toDecimalAmount,
+    toDecimalString,
     toMinorUnits,
     wholeCount,
     type Money
@@ -75,13 +75,13 @@ describe('toMinorUnits — totality', () => {
     });
 });
 
-describe('toMinorUnits ↔ toDecimalAmount', () => {
+describe('toMinorUnits ↔ toDecimalString', () => {
     it('round-trips a realistic price to the cent', () => {
         fc.assert(
             fc.property(realisticPrice(), (price) => {
-                const returned = toDecimalAmount(toMinorUnits(price, EUR), EUR);
+                const returned = toDecimalString(toMinorUnits(price, EUR), EUR);
 
-                expect(Math.abs(returned - price)).toBeLessThanOrEqual(0.005 + 1e-9);
+                expect(Math.abs(Number(returned) - price)).toBeLessThanOrEqual(0.005 + 1e-9);
             }),
             RUN
         );
@@ -91,9 +91,9 @@ describe('toMinorUnits ↔ toDecimalAmount', () => {
         // Drift here reaches the wire as a price no invoice can add up.
         fc.assert(
             fc.property(anything(), (value) => {
-                const returned = toDecimalAmount(toMinorUnits(value, EUR), EUR);
+                const returned = toDecimalString(toMinorUnits(value, EUR), EUR);
 
-                expect(Math.abs(Math.round(returned * 100) - returned * 100)).toBeLessThan(1e-6);
+                expect(returned).toMatch(/^-?\d+\.\d{2}$/);
             }),
             RUN
         );
@@ -102,19 +102,19 @@ describe('toMinorUnits ↔ toDecimalAmount', () => {
     it('is idempotent through a round trip', () => {
         fc.assert(
             fc.property(realisticPrice(), (price) => {
-                const once = toDecimalAmount(toMinorUnits(price, EUR), EUR);
+                const once = toDecimalString(toMinorUnits(price, EUR), EUR);
 
-                expect(toDecimalAmount(toMinorUnits(once, EUR), EUR)).toBe(once);
+                expect(toDecimalString(toMinorUnits(once, EUR), EUR)).toBe(once);
             }),
             RUN
         );
     });
 });
 
-describe("toMinorUnits/toDecimalAmount — each currency's own minor-unit exponent", () => {
+describe("toMinorUnits/toDecimalString — each currency's own minor-unit exponent", () => {
     it('scales by 1 for a 0-decimal currency (JPY) — the yen IS its own minor unit', () => {
         expect(toMinorUnits(1234, 'JPY')).toBe(1234);
-        expect(toDecimalAmount(toMinorUnits(1234, 'JPY'), 'JPY')).toBe(1234);
+        expect(toDecimalString(toMinorUnits(1234, 'JPY'), 'JPY')).toBe('1234');
     });
 
     it('rounds a fractional JPY amount to the nearest whole yen, never a fraction of one', () => {
@@ -124,7 +124,7 @@ describe("toMinorUnits/toDecimalAmount — each currency's own minor-unit expone
 
     it('scales by 1000 for a 3-decimal currency (KWD) — the fils, not the cent', () => {
         expect(toMinorUnits(19.9, 'KWD')).toBe(19_900);
-        expect(toDecimalAmount(asMoney(19_900), 'KWD')).toBe(19.9);
+        expect(toDecimalString(asMoney(19_900), 'KWD')).toBe('19.900');
     });
 
     it('never confuses two currencies with different exponents for the same minor-unit count', () => {
@@ -132,9 +132,9 @@ describe("toMinorUnits/toDecimalAmount — each currency's own minor-unit expone
         // different decimal amount depending on which currency it was counted in.
         const raw = asMoney(1990);
 
-        expect(toDecimalAmount(raw, 'EUR')).toBe(19.9);
-        expect(toDecimalAmount(raw, 'JPY')).toBe(1990);
-        expect(toDecimalAmount(raw, 'KWD')).toBe(1.99);
+        expect(toDecimalString(raw, 'EUR')).toBe('19.90');
+        expect(toDecimalString(raw, 'JPY')).toBe('1990');
+        expect(toDecimalString(raw, 'KWD')).toBe('1.990');
     });
 
     it('caches the resolved exponent — a second call for the same currency agrees with the first', () => {
@@ -162,7 +162,7 @@ describe("toMinorUnits/toDecimalAmount — each currency's own minor-unit expone
     ])('follows ISO 4217 for %s (%i places), not the CLDR display digits', (code, places) => {
         // `Intl` answers 0 for all six; the pinned table is what keeps a HUF shop's fillér.
         expect(toMinorUnits(1.5, code)).toBe(1.5 * 10 ** places);
-        expect(toDecimalAmount(asMoney(10 ** places), code)).toBe(1);
+        expect(toDecimalString(asMoney(10 ** places), code)).toBe(`1.${'0'.repeat(places)}`);
     });
 
     it.each([
@@ -200,25 +200,25 @@ describe('toMinorUnits — decimal text', () => {
 
 describe('fitsCurrency', () => {
     it('accepts an amount with no more places than the currency has', () => {
-        expect(fitsCurrency(19.99, 'EUR')).toBe(true);
-        expect(fitsCurrency(20, 'EUR')).toBe(true);
-        expect(fitsCurrency(100, 'JPY')).toBe(true);
-        expect(fitsCurrency(1.999, 'KWD')).toBe(true);
+        expect(fitsCurrency('19.99', 'EUR')).toBe(true);
+        expect(fitsCurrency('20', 'EUR')).toBe(true);
+        expect(fitsCurrency('100', 'JPY')).toBe(true);
+        expect(fitsCurrency('1.999', 'KWD')).toBe(true);
     });
 
     it('refuses extra places and non-finite amounts', () => {
-        expect(fitsCurrency(19.999, 'EUR')).toBe(false);
-        expect(fitsCurrency(1.005, 'EUR')).toBe(false);
-        expect(fitsCurrency(100.5, 'JPY')).toBe(false);
-        expect(fitsCurrency(1.9999, 'KWD')).toBe(false);
-        expect(fitsCurrency(NaN, 'EUR')).toBe(false);
-        expect(fitsCurrency(Infinity, 'EUR')).toBe(false);
+        expect(fitsCurrency('19.999', 'EUR')).toBe(false);
+        expect(fitsCurrency('1.005', 'EUR')).toBe(false);
+        expect(fitsCurrency('100.5', 'JPY')).toBe(false);
+        expect(fitsCurrency('1.9999', 'KWD')).toBe(false);
+        expect(fitsCurrency('NaN', 'EUR')).toBe(false);
+        expect(fitsCurrency('Infinity', 'EUR')).toBe(false);
     });
 
     it('accepts every amount that came out of minor units', () => {
         fc.assert(
             fc.property(fc.integer({ min: 0, max: 100_000_000 }), (minor) => {
-                expect(fitsCurrency(toDecimalAmount(asMoney(minor), EUR), EUR)).toBe(true);
+                expect(fitsCurrency(toDecimalString(asMoney(minor), EUR), EUR)).toBe(true);
             }),
             RUN
         );

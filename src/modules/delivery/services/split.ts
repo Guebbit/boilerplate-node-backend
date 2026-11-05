@@ -49,7 +49,7 @@ const withoutAllocated = (
                 title: line.title,
                 quantity: line.quantity - (moved.get(line.productId) ?? 0),
                 shippedQuantity: line.shippedQuantity,
-                cancelledQuantity: line.cancelledQuantity
+                canceledQuantity: line.canceledQuantity
             }))
             // A line whose every unit moved has nothing left to wait for (a line holds at least one).
             .filter((line) => line.quantity > 0)
@@ -57,7 +57,7 @@ const withoutAllocated = (
 };
 
 /**
- * The units that arrived, as the new fulfillment order's lines: nothing shipped, nothing cancelled.
+ * The units that arrived, as the new fulfillment order's lines: nothing shipped, nothing canceled.
  * @param held - the held order
  * @param allocated - the units that arrived
  */
@@ -70,7 +70,7 @@ const allocatedLines = (
         title: held.lines.find((line) => line.productId === productId)?.title ?? '',
         quantity,
         shippedQuantity: 0,
-        cancelledQuantity: 0
+        canceledQuantity: 0
     }));
 
 /**
@@ -159,7 +159,7 @@ const splitAct = async (
  * @param fulfillmentOrderId - the fulfillment order held for stock
  * @param allocated - the units that arrived, per product; never more than remains of each
  * @returns the split, or `undefined` when nothing could be released — the fulfillment order is
- *   gone, its order was cancelled, it is not held for stock, or the allocation asks for more than
+ *   gone, its order was canceled, it is not held for stock, or the allocation asks for more than
  *   remains
  */
 export const splitForAllocation = (
@@ -170,8 +170,8 @@ export const splitForAllocation = (
         if (!found) return undefined;
 
         return orderService.getById(String(found.orderId)).then((order) => {
-            // A cancelled order has nothing left to release.
-            if (!order || order.status === 'cancelled') return undefined;
+            // A canceled order has nothing left to release.
+            if (!order || order.status === 'canceled') return undefined;
             return runAct((session) => splitAct(fulfillmentOrderId, allocated, session)).then(
                 (result) => (result.refused ? undefined : result.value)
             );

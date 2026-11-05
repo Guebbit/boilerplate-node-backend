@@ -1,6 +1,6 @@
 /**
  * @module
- * A cancel's refund rides the `order.cancelled` outbox row, nothing else. The row is written with
+ * A cancel's refund rides the `order.canceled` outbox row, nothing else. The row is written with
  * the cancel; `payments` opens its refund record when the relay delivers it; a redelivery refunds
  * nothing twice and re-sends no webhook (`webhooks` dedupes on the event id); a provider that
  * refuses leaves the record open for the refund sweep. Cross-module by nature — orders, payments
@@ -37,7 +37,7 @@ afterEach(() => {
 /** One order, paid by card — the fixture this whole suite cancels and retries. */
 const paidOrder = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 20 });
+    const product = await createProduct({ price: '20.00' });
     const created = await orderService.create(
         user.id,
         user.email,
@@ -52,13 +52,13 @@ const paidOrder = async () => {
     return { user, order };
 };
 
-/** The one `order.cancelled` row a cancel of this order wrote. */
-const cancelledRows = (orderId: string) =>
-    outboxEventModel.find({ name: 'order.cancelled', aggregateId: orderId }).lean().exec();
+/** The one `order.canceled` row a cancel of this order wrote. */
+const canceledRows = (orderId: string) =>
+    outboxEventModel.find({ name: 'order.canceled', aggregateId: orderId }).lean().exec();
 
-/** Webhook deliveries made for `order.cancelled`, whoever subscribed. */
-const cancelledDeliveries = () =>
-    webhookDeliveryRepository.findAll({ tenant: TEST_TENANT_ID, eventType: 'order.cancelled' });
+/** Webhook deliveries made for `order.canceled`, whoever subscribed. */
+const canceledDeliveries = () =>
+    webhookDeliveryRepository.findAll({ tenant: TEST_TENANT_ID, eventType: 'order.canceled' });
 
 /** A subscriber to everything, so a second delivery would show. */
 const subscribeToEverything = () =>
@@ -77,12 +77,12 @@ it('writes one outbox row with the cancel, and the refund lands once the relay h
 
     await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
 
-    expect(await cancelledRows(orderId)).toHaveLength(1);
+    expect(await canceledRows(orderId)).toHaveLength(1);
     await settleOutboxNudges();
     const payment = await paymentRepository.findByOrderId(orderId);
     expect(payment!.refunds).toHaveLength(1);
-    expect(payment!.refunds[0]).toMatchObject({ amount: 20, status: 'succeeded' });
-    const [row] = await cancelledRows(orderId);
+    expect(payment!.refunds[0]).toMatchObject({ amount: '20.00', status: 'succeeded' });
+    const [row] = await canceledRows(orderId);
     expect(row).toMatchObject({ status: 'published' });
 });
 
@@ -94,7 +94,7 @@ it('refunds nothing twice and sends no second webhook when the row is delivered 
 
     await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
     await settleOutboxNudges();
-    const [delivered] = await cancelledRows(orderId);
+    const [delivered] = await canceledRows(orderId);
 
     // A crash after the consumers returned but before the row was marked published, in effect.
     await outboxEventModel.updateOne(
@@ -105,7 +105,7 @@ it('refunds nothing twice and sends no second webhook when the row is delivered 
 
     expect(refundSpy).toHaveBeenCalledTimes(1);
     expect((await paymentRepository.findByOrderId(orderId))!.refunds).toHaveLength(1);
-    expect(await cancelledDeliveries()).toHaveLength(1);
+    expect(await canceledDeliveries()).toHaveLength(1);
 });
 
 it('leaves a refund the provider refused open for the sweep, and answers the event', () =>
@@ -123,7 +123,7 @@ it('leaves a refund the provider refused open for the sweep, and answers the eve
         const stuck = await paymentRepository.findByOrderId(orderId);
         expect(stuck!.refunds[0]).toMatchObject({ status: 'failed' });
         // The record is the promise now, so the event is delivered and not retried.
-        const [row] = await cancelledRows(orderId);
+        const [row] = await canceledRows(orderId);
         expect(row).toMatchObject({
             status: 'published',
             attempts: 0
@@ -133,5 +133,5 @@ it('leaves a refund the provider refused open for the sweep, and answers the eve
         expect((await paymentRepository.findByOrderId(orderId))!.refunds[0]).toMatchObject({
             status: 'succeeded'
         });
-        expect(await cancelledDeliveries()).toHaveLength(1);
+        expect(await canceledDeliveries()).toHaveLength(1);
     }));

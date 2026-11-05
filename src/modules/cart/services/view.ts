@@ -9,6 +9,7 @@
  * cart, never a 404.
  */
 
+import { NO_MONEY, toDecimalString } from '@domain-primitives/money';
 import { orderTotal, sumLineItems } from '@modules/orders';
 import { inventoryService, type StockPosition } from '@modules/inventory';
 import { productService } from '@modules/products';
@@ -86,7 +87,7 @@ export const shippingPriceFor = (
     method: StaticShippingMethod,
     lines: Parameters<typeof sumLineItems>[0],
     currency: string
-): number => priceShipping(method, sumLineItems(lines, currency).price);
+): string => priceShipping(method, sumLineItems(lines, currency).price, currency);
 
 /**
  * What this basket needs from shipping, and every method that currently fits it, each priced
@@ -143,7 +144,9 @@ const buildView = (
     const joined = lines.filter((line) => isJoined(line));
     const { required, options } = shippingOptionsFor(joined);
     const selected = effectiveShippingChoice(cart?.shippingMethodId, options);
-    const shippingCost = options.find((option) => option.id === selected)?.price ?? 0;
+    const shippingCost =
+        options.find((option) => option.id === selected)?.price ??
+        toDecimalString(NO_MONEY, currency);
     return presentCart({
         lines: lines.map(({ productId, quantity: lineQuantity, product }) => ({
             productId,

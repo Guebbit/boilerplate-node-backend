@@ -45,7 +45,7 @@ let buyers = 0;
 const twoUnitOrder = async () => {
     buyers += 1;
     const user = await createUser({ email: `buyer-${buyers}@example.com` });
-    const product = await createProduct({ price: 10 });
+    const product = await createProduct({ price: '10.00' });
     const order = await createOrder(user, [toOrderItem(product, 2)], {
         status: OrderStatus.processing,
         shippingAddress: FIRST
@@ -97,7 +97,7 @@ describe('a shipment keeps where it went', () => {
         expect([first.number, second.number]).toEqual([1, 2]);
     });
 
-    it('stores none for a digital fulfilment, and none for an order that ships nowhere', async () => {
+    it('stores none for a digital fulfillment, and none for an order that ships nowhere', async () => {
         const digital = await seedDigitalOrder(OrderStatus.processing, new Date());
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(digital._id));
         await deliveryService.fulfillFulfillmentOrder(
@@ -107,7 +107,7 @@ describe('a shipment keeps where it went', () => {
         );
         const pickup = await createOrder(
             await createUser({ email: 'pickup@example.com' }),
-            [toOrderItem(await createProduct({ price: 10 }), 1)],
+            [toOrderItem(await createProduct({ price: '10.00' }), 1)],
             { status: OrderStatus.processing }
         );
         const [pickupFo] = await fulfillmentOrdersOf(String(pickup._id));

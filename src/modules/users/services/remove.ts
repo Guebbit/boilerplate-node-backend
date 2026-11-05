@@ -24,7 +24,7 @@ import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
 import { personalDataErasers } from '../erasure-registry';
 import { usersAuditActions } from '../audit';
-import { USER_DELETION_CANCELLED, USER_ERASED } from '../events';
+import { USER_DELETION_CANCELED, USER_ERASED } from '../events';
 import { markSessionsEnded } from './credentials';
 import { personalDataSubjectOf } from './personal-data-subject';
 
@@ -172,7 +172,7 @@ export const remove = (
 /**
  * Cancel a deletion the account's owner asked for, if its grace has not run out. The clear is
  * conditional on `purgeAt > now`, the mirror of the purge's claim, so it can never both match;
- * `user.deletion-cancelled` commits with it, and `account` drops the restore link and tells the
+ * `user.deletion_canceled` commits with it, and `account` drops the restore link and tells the
  * owner.
  *
  * @param user - the loaded account, soft-deleted by its owner
@@ -195,8 +195,8 @@ const restoreScheduled = (
                 .restoreScheduledDeletion(user.id, now, session)
                 .then((restored) => (restored ? user.id : null)),
         (id) => ({
-            name: USER_DELETION_CANCELLED,
-            payload: { userId: id, cancelledAt: now.toISOString() },
+            name: USER_DELETION_CANCELED,
+            payload: { userId: id, canceledAt: now.toISOString() },
             aggregateId: id
         })
     ).then((id) => {

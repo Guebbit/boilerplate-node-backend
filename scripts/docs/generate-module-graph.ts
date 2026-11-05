@@ -32,7 +32,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { readAllModuleDescriptors, type ModuleDescriptor } from './module-descriptor';
 import { applyMarkerBlocks } from './marker-block';
-import { readCatalogue, renderModuleList } from './module-catalogue';
+import { readCatalog, renderModuleList } from './module-catalog';
 import { MODULES_ROOT, REPO_ROOT as ROOT } from '../modules-on-disk';
 import { hasFlag } from '../cli';
 import { failScript } from '../fail-script';
@@ -324,7 +324,7 @@ const targets = (): Target[] => {
             file: PAGE,
             start: LIST_START,
             end: LIST_END,
-            body: renderModuleList(readCatalogue(MODULES_ROOT, path.dirname(PAGE)))
+            body: renderModuleList(readCatalog(MODULES_ROOT, path.dirname(PAGE)))
         },
         ...Object.keys(SUBDOMAIN)
             .toSorted()

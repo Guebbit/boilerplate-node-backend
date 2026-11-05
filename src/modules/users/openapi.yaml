@@ -17,6 +17,7 @@ x-error-codes:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Users
+      x-family: Core
       description: Administration of user accounts and their roles.
 
 # This module's section of the account data export (`POST /account/export`): the bundler adds it
@@ -134,32 +135,6 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `uploadLimiter` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
-        delete:
-            tags: [Users]
-            summary: Delete user
-            description: Deletes the user identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; a `true` from any source wins, so a `false` sent elsewhere does not cancel it. A soft delete is one-way and safe to repeat — undo it with `POST /users/{id}/restore`.
-            operationId: deleteUser
-            x-alias-of: deleteUserById
-            security:
-                - bearerAuth: []
-            # The flag is readable from the query here too, exactly as it is on the `{id}` form:
-            # one controller serves both, and the flag is read from the path flag, the query and
-            # the body on whichever route it is mounted on. The id is the body's alone here, and the
-            # path's alone on the `{id}` form. Declared rather than merely tolerated.
-            parameters:
-                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/HardDeleteParam'
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/DeleteUserRequest'
-            responses:
-                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
     /users/{id}:
         # Bundler: adds the `If-Match` parameter and 412 to the writes listed, and `ETag` to the 200s.
@@ -257,7 +232,7 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # `uploadLimiter` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
-        # Same as DELETE /users
+        # Same as DELETE /users/{id}
         delete:
             tags: [Users]
             summary: Delete user
@@ -779,17 +754,6 @@ components:
                     type: string
                     maxLength: 2048
                     minLength: 1
-
-        DeleteUserRequest:
-            type: object
-            additionalProperties: false
-            required: [id]
-            properties:
-                id:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
-                hardDelete:
-                    type: boolean
-                    default: false
 
         UsersResponse:
             type: object

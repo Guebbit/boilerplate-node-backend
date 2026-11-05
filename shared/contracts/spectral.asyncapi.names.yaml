@@ -1,0 +1,56 @@
+# Machine-read names in the BUNDLED async contract are US English — `npm run lint:asyncapi:names`.
+#
+# The twin of the `names-in-us-english-*` rules in `spectral.yaml` (AIP-190, Zalando #103). It has
+# no `extends` on purpose: the parser's own rules already run in `lint:asyncapi`, and this file
+# only asks about spelling. Channels, messages, operations, schemas, properties and enum values;
+# prose is free.
+
+rules:
+    names-in-us-english-channels:
+        description: 'Channel names and addresses are spelled in US English.'
+        severity: error
+        given: '$.channels'
+        then:
+            field: '@key'
+            function: pattern
+            functionOptions: &british
+                notMatch: '/cancell(ed|ing|able)|catalogue|fulfil(?!l)|colour|behaviour|licence|(organ|recogn|normal|serial|initial|author|synchron|categor|custom|minim|maxim|optim|sanit|summar|final|util|visual|local|standard)is(e|ed|es|ing|ation)/i'
+    names-in-us-english-messages:
+        description: 'Message names are spelled in US English.'
+        severity: error
+        given: ['$.channels[*].messages', '$.components.messages']
+        then:
+            field: '@key'
+            function: pattern
+            functionOptions: *british
+    names-in-us-english-operations:
+        description: 'Operation names are spelled in US English.'
+        severity: error
+        given: '$.operations'
+        then:
+            field: '@key'
+            function: pattern
+            functionOptions: *british
+    names-in-us-english-schemas:
+        description: 'Schema names are spelled in US English.'
+        severity: error
+        given: '$.components.schemas'
+        then:
+            field: '@key'
+            function: pattern
+            functionOptions: *british
+    names-in-us-english-properties:
+        description: 'Property names are spelled in US English.'
+        severity: error
+        given: '$..properties'
+        then:
+            field: '@key'
+            function: pattern
+            functionOptions: *british
+    names-in-us-english-enum-values:
+        description: 'Enum values are spelled in US English.'
+        severity: error
+        given: '$..enum[*]'
+        then:
+            function: pattern
+            functionOptions: *british

@@ -1,11 +1,11 @@
 import {
     moduleSidebar,
     renderModuleList,
-    type CatalogueEntry
-} from '../../../../scripts/docs/module-catalogue';
+    type CatalogEntry
+} from '../../../../scripts/docs/module-catalog';
 
 /** A catalogue entry with the fields a test does not care about filled in. */
-const entry = (over: Partial<CatalogueEntry> & Pick<CatalogueEntry, 'name'>): CatalogueEntry => ({
+const entry = (over: Partial<CatalogEntry> & Pick<CatalogEntry, 'name'>): CatalogEntry => ({
     group: 'foundation',
     subdomain: 'generic',
     summary: `${over.name} summary.`,
@@ -13,7 +13,7 @@ const entry = (over: Partial<CatalogueEntry> & Pick<CatalogueEntry, 'name'>): Ca
     ...over
 });
 
-const CATALOGUE: CatalogueEntry[] = [
+const CATALOGUE: CatalogEntry[] = [
     entry({ name: 'orders', group: 'shop' }),
     entry({ name: 'feedback' }),
     entry({

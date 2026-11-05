@@ -15,17 +15,17 @@ const base: RefundInputs = {
     currency: 'EUR',
     reason: 'withdrawal',
     lines: [
-        { quantity: 2, unitPrice: 30 },
-        { quantity: 1, unitPrice: 10 }
+        { quantity: 2, unitPrice: '30.00' },
+        { quantity: 1, unitPrice: '10.00' }
     ],
     takesLastUnit: true,
-    shippingPaid: 15,
-    cheapestStandardShipping: 5,
-    handlingDeduction: 0
+    shippingPaid: '15.00',
+    cheapestStandardShipping: '5.00',
+    handlingDeduction: '0.00'
 };
 
 /** The refund's total, or a loud failure. */
-const totalOf = (inputs: RefundInputs): number => {
+const totalOf = (inputs: RefundInputs): string => {
     const verdict = refundAmountFor(inputs);
     if (!verdict.ok) throw new Error('expected a refund');
     return verdict.breakdown.total;
@@ -33,7 +33,7 @@ const totalOf = (inputs: RefundInputs): number => {
 
 describe('refundAmountFor — the goods', () => {
     it('is the returned lines at the price the order froze', () => {
-        expect(totalOf({ ...base, takesLastUnit: false, shippingPaid: 0 })).toBe(70);
+        expect(totalOf({ ...base, takesLastUnit: false, shippingPaid: '0.00' })).toBe('70.00');
     });
 
     it('is exact — 0.10 three times is 0.30, not 0.30000000000000004', () => {
@@ -41,9 +41,9 @@ describe('refundAmountFor — the goods', () => {
             totalOf({
                 ...base,
                 takesLastUnit: false,
-                lines: [{ quantity: 3, unitPrice: 0.1 }]
+                lines: [{ quantity: 3, unitPrice: '0.10' }]
             })
-        ).toBe(0.3);
+        ).toBe('0.30');
     });
 });
 
@@ -51,25 +51,25 @@ describe('refundAmountFor — the delivery (Art. 13(2))', () => {
     it('refunds none on a return that is not the last unit — delivery is never refunded twice', () => {
         const verdict = refundAmountFor({ ...base, takesLastUnit: false });
 
-        expect(verdict.ok && verdict.breakdown.shipping).toBe(0);
+        expect(verdict.ok && verdict.breakdown.shipping).toBe('0.00');
     });
 
     it('caps a withdrawal at the cheapest standard delivery — the express surcharge stays with the shop', () => {
         const verdict = refundAmountFor(base);
 
-        expect(verdict.ok && verdict.breakdown.shipping).toBe(5);
+        expect(verdict.ok && verdict.breakdown.shipping).toBe('5.00');
     });
 
     it('refunds all of it when it cost less than the standard delivery', () => {
-        const verdict = refundAmountFor({ ...base, shippingPaid: 3 });
+        const verdict = refundAmountFor({ ...base, shippingPaid: '3.00' });
 
-        expect(verdict.ok && verdict.breakdown.shipping).toBe(3);
+        expect(verdict.ok && verdict.breakdown.shipping).toBe('3.00');
     });
 
     it('refunds nothing when standard would have been free', () => {
-        const verdict = refundAmountFor({ ...base, cheapestStandardShipping: 0 });
+        const verdict = refundAmountFor({ ...base, cheapestStandardShipping: '0.00' });
 
-        expect(verdict.ok && verdict.breakdown.shipping).toBe(0);
+        expect(verdict.ok && verdict.breakdown.shipping).toBe('0.00');
     });
 
     it.each(['defective', 'wrong_item'] as const)(
@@ -77,30 +77,30 @@ describe('refundAmountFor — the delivery (Art. 13(2))', () => {
         (reason) => {
             const verdict = refundAmountFor({ ...base, reason });
 
-            expect(verdict.ok && verdict.breakdown.shipping).toBe(15);
+            expect(verdict.ok && verdict.breakdown.shipping).toBe('15.00');
         }
     );
 
     it('adds up: goods + delivery', () => {
-        expect(totalOf(base)).toBe(75);
+        expect(totalOf(base)).toBe('75.00');
     });
 });
 
 describe('refundAmountFor — the handling deduction (Art. 14(2))', () => {
     it('is taken off the total and reported', () => {
-        const verdict = refundAmountFor({ ...base, handlingDeduction: 12.5 });
+        const verdict = refundAmountFor({ ...base, handlingDeduction: '12.50' });
 
         expect(verdict.ok && verdict.breakdown).toEqual({
-            goods: 70,
-            shipping: 5,
-            deduction: 12.5,
-            total: 62.5
+            goods: '70.00',
+            shipping: '5.00',
+            deduction: '12.50',
+            total: '62.50'
         });
     });
 
     it('may eat the whole refund, but not more', () => {
-        expect(totalOf({ ...base, handlingDeduction: 75 })).toBe(0);
-        expect(refundAmountFor({ ...base, handlingDeduction: 75.01 })).toEqual({
+        expect(totalOf({ ...base, handlingDeduction: '75.00' })).toBe('0.00');
+        expect(refundAmountFor({ ...base, handlingDeduction: '75.01' })).toEqual({
             ok: false,
             reason: 'deduction-too-high'
         });
@@ -114,34 +114,34 @@ describe('refundAmountFor — currencies without a hundredth', () => {
                 ...base,
                 currency: 'JPY',
                 takesLastUnit: false,
-                lines: [{ quantity: 2, unitPrice: 1200 }]
+                lines: [{ quantity: 2, unitPrice: '1200.00' }]
             })
-        ).toBe(2400);
+        ).toBe('2400');
     });
 });
 
 describe('refundAmountFor — the delivery still owed', () => {
     it('caps what a return refunds at what earlier refunds left unreturned', () => {
         // 15.00 paid, 12.00 already refunded by an earlier cancel: only 3.00 is left to give back.
-        const owed = shippingStillOwed('EUR', 15, 12);
+        const owed = shippingStillOwed('EUR', '15.00', '12.00');
 
         const verdict = refundAmountFor({ ...base, shippingPaid: owed });
 
-        expect(owed).toBe(3);
-        expect(verdict.ok && verdict.breakdown.shipping).toBe(3);
+        expect(owed).toBe('3.00');
+        expect(verdict.ok && verdict.breakdown.shipping).toBe('3.00');
     });
 });
 
 describe('shippingStillOwed', () => {
     it('is what was paid, less what was already refunded', () => {
-        expect(shippingStillOwed('EUR', 15, 0)).toBe(15);
-        expect(shippingStillOwed('EUR', 15, 5)).toBe(10);
+        expect(shippingStillOwed('EUR', '15.00', '0.00')).toBe('15.00');
+        expect(shippingStillOwed('EUR', '15.00', '5.00')).toBe('10.00');
     });
 
     it('never goes below zero, and is exact in minor units', () => {
-        expect(shippingStillOwed('EUR', 15, 15)).toBe(0);
-        expect(shippingStillOwed('EUR', 15, 20)).toBe(0);
-        expect(shippingStillOwed('EUR', 0.3, 0.1 + 0.1)).toBe(0.1);
+        expect(shippingStillOwed('EUR', '15.00', '15.00')).toBe('0.00');
+        expect(shippingStillOwed('EUR', '15.00', '20.00')).toBe('0.00');
+        expect(shippingStillOwed('EUR', '0.30', '0.20')).toBe('0.10');
     });
 });
 
@@ -149,34 +149,34 @@ describe('cancellationRefundFor', () => {
     const cancel = {
         currency: 'EUR',
         lines: [
-            { quantity: 2, unitPrice: 30 },
-            { quantity: 1, unitPrice: 10 }
+            { quantity: 2, unitPrice: '30.00' },
+            { quantity: 1, unitPrice: '10.00' }
         ],
         takesLastUnit: false,
-        shippingPaid: 15
+        shippingPaid: '15.00'
     };
 
-    it('is the cancelled lines alone when other units remain', () => {
+    it('is the canceled lines alone when other units remain', () => {
         expect(cancellationRefundFor(cancel)).toEqual({
-            goods: 70,
-            shipping: 0,
-            deduction: 0,
-            total: 70
+            goods: '70.00',
+            shipping: '0.00',
+            deduction: '0.00',
+            total: '70.00'
         });
     });
 
     it('adds ALL the delivery still owed on the cancel that takes the last unit — no cap, no goods were delivered for it', () => {
         expect(cancellationRefundFor({ ...cancel, takesLastUnit: true })).toEqual({
-            goods: 70,
-            shipping: 15,
-            deduction: 0,
-            total: 85
+            goods: '70.00',
+            shipping: '15.00',
+            deduction: '0.00',
+            total: '85.00'
         });
     });
 
     it('is exact — 0.10 three times is 0.30', () => {
         expect(
-            cancellationRefundFor({ ...cancel, lines: [{ quantity: 3, unitPrice: 0.1 }] }).total
-        ).toBe(0.3);
+            cancellationRefundFor({ ...cancel, lines: [{ quantity: 3, unitPrice: '0.10' }] }).total
+        ).toBe('0.30');
     });
 });

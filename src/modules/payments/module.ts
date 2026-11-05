@@ -2,7 +2,7 @@
  * @module
  * Payments: an order's money, behind a provider port (`./providers`), so the generic part of
  * taking money can be bought rather than built. Depends on orders (a payment freezes an order's
- * total, and a refunding `ORDER_CANCELLED` opens the refund — see `docs/modules/payments.md`)
+ * total, and a refunding `ORDER_CANCELED` opens the refund — see `docs/modules/payments.md`)
  * Detaches an erased account through its own `personalData.erase` hook — the payment survives account erasure, same as the order it paid for.
  *
  * See: docs/modules/payments.md
@@ -11,7 +11,7 @@
 import path from 'node:path';
 import type { AppModule, PublicEventTarget } from '@kernel/registry';
 import { onDomainEvent, type DomainEventMap } from '@kernel/events';
-import { ORDER_CANCELLED, ORDER_CREATED } from '@modules/orders';
+import { ORDER_CANCELED, ORDER_CREATED } from '@modules/orders';
 import { router } from './routes';
 import { orderRouter } from './order-routes';
 import { paymentService } from './services';
@@ -138,11 +138,11 @@ export default {
         }
     ],
     subscribe: () => {
-        // `ORDER_CANCELLED` is both halves of what a cancel leaves with `payments`: a card intent
+        // `ORDER_CANCELED` is both halves of what a cancel leaves with `payments`: a card intent
         // nobody finished, still open at the provider (closed best-effort, never rethrown), and —
         // when `refund` says so — the money already taken. The refund is the durable half: its
         // event is an outbox row, and a rejection here makes the relay deliver it again.
-        onDomainEvent(ORDER_CANCELLED, ({ orderId, refund, cause }) =>
+        onDomainEvent(ORDER_CANCELED, ({ orderId, refund, cause }) =>
             cancelOpenIntentForOrder(orderId, cause === 'reservation_expired').then(() =>
                 refund ? refundForOrder(orderId) : undefined
             )
@@ -162,7 +162,7 @@ export default {
     templates: path.join(__dirname, 'templates'),
     /**
      * One refunded payment, reached the way a shop reaches one: an order paid by card, then
-     * cancelled by an operator, with this module's own `order.cancelled` listener returning the
+     * canceled by an operator, with this module's own `order.canceled` listener returning the
      * money. Named so the admin's refunded-payment screen has a row to open.
      *
      * The id behind it is the ORDER's: `GET /orders/{id}/payments` reads a payment by its order, so the

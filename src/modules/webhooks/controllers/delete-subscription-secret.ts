@@ -18,7 +18,7 @@ import { viewSubscription } from '../services/actions';
  * id the ring doesn't carry; 422s a removal that would leave the ring empty (a subscription with
  * no secret can never sign a delivery).
  */
-export const removeWebhookSubscriptionSecret = (
+export const deleteWebhookSubscriptionSecret = (
     request: Request<{ id: string; secretId: string }>,
     response: Response
 ) => {
@@ -35,5 +35,5 @@ export const removeWebhookSubscriptionSecret = (
                 viewSubscription(result.data, context.caller)
             );
         })
-        .catch(catchAs(response, 'removeWebhookSubscriptionSecret'));
+        .catch(catchAs(response, 'deleteWebhookSubscriptionSecret'));
 };

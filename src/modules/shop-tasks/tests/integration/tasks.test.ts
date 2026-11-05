@@ -48,7 +48,7 @@ const nextEventId = () => `event-${String(++eventCounter)}`;
 beforeEach(() => {
     mockEnqueueEmail.mockReset();
     mockEnqueueEmail.mockResolvedValue(undefined);
-    setEnvironment({ NODE_CONTACT_NOTIFY_EMAIL: 'desk@example.com', NODE_SHOP_COUNTRY: 'IT' });
+    setEnvironment({ NODE_SUPPORT_EMAIL: 'desk@example.com', NODE_SHOP_COUNTRY: 'IT' });
     resetDomainEvents();
     registerModules(enabledModules);
 });
@@ -72,7 +72,7 @@ const REFUND = {
     paymentId: PAYMENT,
     orderId: ORDER,
     refundId: 'ref1',
-    amount: 10,
+    amount: '10.00',
     currency: 'EUR'
 };
 const REVERSAL: DomainEventMap['payment.refund_reversed'] = {
@@ -86,7 +86,7 @@ const DISPUTE: DomainEventMap['payment.dispute_opened'] = {
     kind: 'chargeback',
     status: 'needs_response',
     reason: 'fraudulent',
-    amount: 10,
+    amount: '10.00',
     currency: 'EUR',
     fundsWithdrawn: true,
     evidenceDueBy: '2031-01-10T00:00:00.000Z'
@@ -316,7 +316,7 @@ describe('what closes a task', () => {
             () => emitDomainEvent('payment.dispute_updated', { ...DISPUTE, status: 'lost' })
         ],
         [
-            'order.cancelled',
+            'order.canceled',
             () =>
                 emitDomainEvent(
                     'inventory.hold_orphaned',
@@ -324,7 +324,7 @@ describe('what closes a task', () => {
                     { eventId: nextEventId() }
                 ),
             () =>
-                emitDomainEvent('order.cancelled', {
+                emitDomainEvent('order.canceled', {
                     orderId: ORDER,
                     refund: true,
                     cause: 'operator'
@@ -358,10 +358,10 @@ describe('what closes a task', () => {
                 })
         ],
         [
-            'fulfillment_order.cancelled',
+            'fulfillment_order.canceled',
             () => emitDomainEvent('fulfillment_order.delayed', DELAY, { eventId: nextEventId() }),
             () =>
-                emitDomainEvent('fulfillment_order.cancelled', {
+                emitDomainEvent('fulfillment_order.canceled', {
                     orderId: ORDER,
                     fulfillmentOrderId: 'fo1'
                 })
@@ -384,7 +384,7 @@ describe('what closes a task', () => {
             { eventId: nextEventId() }
         );
         await emitDomainEvent('payment.refunded', { ...REFUND, full: true });
-        await emitDomainEvent('order.cancelled', {
+        await emitDomainEvent('order.canceled', {
             orderId: ORDER,
             refund: true,
             cause: 'operator'
@@ -506,7 +506,7 @@ describe('who is told, and where the alert takes them', () => {
             ]);
     });
 
-    it('never reaches the contact fallback mailbox, even with nobody to tell', async () => {
+    it('never reaches the contact main mailbox, even with nobody to tell', async () => {
         await emitDomainEvent('payment.dispute_opened', DISPUTE, { eventId: nextEventId() });
         await settleOutboxNudges();
 

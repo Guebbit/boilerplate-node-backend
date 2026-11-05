@@ -12,6 +12,7 @@
  */
 
 import type { ClientSession } from 'mongoose';
+import { padDecimal } from '@domain-primitives/money';
 import { logger } from '@infrastructure/adapters/logger';
 import { announceInTransaction } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
@@ -87,7 +88,7 @@ const payloadOf = (payment: PaymentDocument, record: DisputeRecord): DisputeEven
     kind: record.kind,
     status: record.status,
     reason: record.reason,
-    amount: record.amount,
+    amount: padDecimal(record.amount, record.currency),
     currency: record.currency,
     fundsWithdrawn: record.fundsWithdrawn,
     ...(record.evidenceDueBy ? { evidenceDueBy: record.evidenceDueBy.toISOString() } : {})
@@ -118,7 +119,7 @@ const appendRows = async (
                     kind: record.kind,
                     status: record.status,
                     reason: record.reason,
-                    amount: record.amount,
+                    amount: padDecimal(record.amount, record.currency),
                     currency: record.currency
                 }
             },

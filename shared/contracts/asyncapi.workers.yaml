@@ -142,6 +142,20 @@ components:
                                 Bare address replies go to, set as the `Reply-To` header. The
                                 producer has already validated it; `From` stays the configured
                                 sender either way.
+                        messageId:
+                            type: string
+                            pattern: '^<[^<>\s@]+@[^<>\s@]+>$'
+                            description: >-
+                                The `Message-ID` header, angle brackets included. A producer sets
+                                one when a later mail must thread under this one; left out, the
+                                transport makes its own. The pattern keeps a header-breaking
+                                character out of it.
+                        inReplyTo:
+                            type: string
+                            pattern: '^<[^<>\s@]+@[^<>\s@]+>$'
+                            description: >-
+                                The `Message-ID` of the mail this one answers, set as `In-Reply-To`
+                                and `References` so a mail client files it in the same thread.
                         attachments:
                             type: array
                             description: >-

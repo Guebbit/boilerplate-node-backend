@@ -24,24 +24,22 @@
             }
         }
     },
-    "notifications": {
-        "staff-mail": {
-            "task-kind": {
-                "manual_refund_owed": "Refund owed by hand",
-                "refund_refused": "Refund refused",
-                "amount_mismatch": "Payment amount mismatch",
-                "dispute": "Payment dispute",
-                "refund_reversed": "Refund sent back by the bank",
-                "dispute_awaiting_bank": "Dispute: waiting for the bank",
-                "paid_without_hold": "Paid order without a stock hold",
-                "consent_due": "Buyer consent to the delay due"
-            },
-            "task-category": {
-                "order": "Order",
-                "cancellation": "Cancellation",
-                "return": "Return",
-                "payment": "Payment"
-            }
+    "tasks": {
+        "task-kind": {
+            "manual_refund_owed": "Refund owed by hand",
+            "refund_refused": "Refund refused",
+            "amount_mismatch": "Payment amount mismatch",
+            "dispute": "Payment dispute",
+            "refund_reversed": "Refund sent back by the bank",
+            "dispute_awaiting_bank": "Dispute: waiting for the bank",
+            "paid_without_hold": "Paid order without a stock hold",
+            "consent_due": "Buyer consent to the delay due"
+        },
+        "task-category": {
+            "order": "Order",
+            "cancellation": "Cancellation",
+            "return": "Return",
+            "payment": "Payment"
         }
     }
 }

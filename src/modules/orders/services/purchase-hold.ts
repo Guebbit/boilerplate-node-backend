@@ -1,6 +1,6 @@
 /**
  * @module
- * The shop's own answer to repeated cancellations, taken from the `order.cancelled` fact. `orders`
+ * The shop's own answer to repeated cancellations, taken from the `order.canceled` fact. `orders`
  * owns the count (the timeline rows); `users` owns the hold and the review flag it lands on. Every
  * cancel is still processed normally: the rule only closes the NEXT checkout or flags the account,
  * and staff are told when a pause is taken (`order.purchase_hold_placed`) so a person steps in
@@ -50,7 +50,7 @@ interface Findings {
 const findingsFor = (userId: string, now: Date): Promise<Findings> =>
     Promise.all([
         userService.purchaseHoldCountingSince(userId),
-        orderRepository.findCancelledIdsOf(userId)
+        orderRepository.findCanceledIdsOf(userId)
     ])
         .then(([countingSince, { paid, unpaid }]) =>
             Promise.all([
@@ -115,12 +115,12 @@ const actOn = (userId: string, findings: Findings): Promise<void> => {
  * so the next cancel finds the same cancels and acts then, while a rejection here would hold back
  * the order's later events (the refund mail).
  *
- * @param payload - the `order.cancelled` fact
+ * @param payload - the `order.canceled` fact
  */
 export const considerPurchaseHold = ({
     orderId,
     cause
-}: DomainEventMap['order.cancelled']): Promise<void> => {
+}: DomainEventMap['order.canceled']): Promise<void> => {
     if (!COUNTED_CAUSES.has(cause)) return Promise.resolve();
 
     return orderRepository

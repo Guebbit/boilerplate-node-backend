@@ -10,6 +10,10 @@ const ROOT = `openapi: 3.1.0
 tags:
     - name: Alpha
       description: keeps its description
+x-tagGroups:
+    - name: Core
+      tags:
+          - Alpha
 paths:
     /:
         get:
@@ -40,7 +44,11 @@ const assembled = (fragments: ModuleFragment[]) =>
     parseYaml(assembleRoot(ROOT, fragments)) as {
         tags: { name: string; description?: string }[];
         paths: Record<string, Record<string, unknown>>;
+        'x-tagGroups': { name: string; tags: string[] }[];
     };
+
+const groupsOf = (fragments: ModuleFragment[]) =>
+    assembled(fragments)['x-tagGroups'].map(({ name, tags }) => [name, tags]);
 
 describe('assembleRoot', () => {
     it('leaves a root that already matches its fragments as it was', () => {
@@ -118,5 +126,59 @@ describe('assembleRoot', () => {
         };
 
         expect(assembled([declaresOnly]).tags.map(({ name }) => name)).toContain('Widgets');
+    });
+
+    describe('tag families', () => {
+        it('keeps the root seed and files a declared tag under the family it names', () => {
+            const widgetsFragment: ModuleFragment = {
+                section: 'widgets',
+                paths: ['/widgets'],
+                tags: ['Widgets'],
+                declaredTags: [{ name: 'Widgets', 'x-family': 'Catalogue' }],
+                group: 'shop'
+            };
+
+            expect(groupsOf([widgetsFragment])).toEqual([
+                ['Core', ['Alpha']],
+                ['Catalogue', ['Widgets']]
+            ]);
+        });
+
+        it('falls back to the module group when a tag names no family', () => {
+            const unnamed: ModuleFragment = {
+                section: 'widgets',
+                paths: ['/widgets'],
+                tags: ['Widgets'],
+                declaredTags: [{ name: 'Widgets' }],
+                group: 'shop'
+            };
+
+            expect(groupsOf([unnamed])).toEqual([
+                ['Core', ['Alpha']],
+                ['Shop', ['Widgets']]
+            ]);
+        });
+
+        it('gives a borrowed tag the family of the module that declares it, in one group only', () => {
+            const owner: ModuleFragment = {
+                section: 'widgets',
+                paths: ['/widgets'],
+                tags: ['Widgets'],
+                declaredTags: [{ name: 'Widgets', 'x-family': 'Catalogue' }],
+                group: 'shop'
+            };
+            const borrower: ModuleFragment = {
+                section: 'gadgets',
+                paths: ['/gadgets'],
+                tags: ['Widgets'],
+                declaredTags: [],
+                group: 'foundation'
+            };
+
+            expect(groupsOf([borrower, owner])).toEqual([
+                ['Core', ['Alpha']],
+                ['Catalogue', ['Widgets']]
+            ]);
+        });
     });
 });

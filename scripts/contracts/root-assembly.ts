@@ -13,10 +13,21 @@
  * See: docs/theory/module-lifecycle.md#3-the-fragments-and-their-section-entries
  */
 
-import { isMap, isScalar, isSeq, parseDocument, type Document, type YAMLMap } from 'yaml';
+import {
+    isMap,
+    isScalar,
+    isSeq,
+    parseDocument,
+    type Document,
+    type YAMLMap,
+    type YAMLSeq
+} from 'yaml';
 import { orderSections } from './section-order';
 import { modulesWith } from '../modules-on-disk';
-import { readModuleFragment, type DeclaredTag } from './fragments';
+import { readFileSync, existsSync } from 'node:fs';
+import path from 'node:path';
+import { parse as parseYaml } from 'yaml';
+import { readModuleFragment, TAG_FAMILY_OF_GROUP, type DeclaredTag } from './fragments';
 
 /** What one module's `openapi.yaml` declares that the root has to know about. */
 export interface ModuleFragment {
@@ -28,6 +39,8 @@ export interface ModuleFragment {
     tags: readonly string[];
     /** The tags the fragment declares itself, with their description: the module's own say on what each is. */
     declaredTags?: readonly DeclaredTag[];
+    /** The module's `group` (`module.yaml`): the family of any of its tags that names none. */
+    group?: string;
 }
 
 /** A `$ref` into a module fragment's path item — what the root's `paths` holds per module path. */
@@ -113,6 +126,67 @@ const appendMissingTags = (document: Document, fragments: readonly ModuleFragmen
         document.addIn(['tags'], document.createNode(described.get(name) ?? { name }));
 };
 
+/** The family of a tag that neither names one nor belongs to a module with a known group. */
+const FALLBACK_FAMILY = 'Other';
+
+/**
+ * Which family each tag is listed under: the module that DECLARES a tag decides (the first one to
+ * do so), else the first module whose operations use it. A borrowed tag therefore never lands in
+ * two groups.
+ */
+const familyOfEachTag = (fragments: readonly ModuleFragment[]): Map<string, string> => {
+    const families = new Map<string, string>();
+    const fallbackOf = (fragment: ModuleFragment): string =>
+        TAG_FAMILY_OF_GROUP[fragment.group ?? ''] ?? FALLBACK_FAMILY;
+    for (const fragment of fragments)
+        for (const tag of fragment.declaredTags ?? [])
+            if (!families.has(tag.name))
+                families.set(tag.name, tag['x-family'] ?? fallbackOf(fragment));
+    for (const fragment of fragments)
+        for (const name of fragment.tags)
+            if (!families.has(name)) families.set(name, fallbackOf(fragment));
+
+    return families;
+};
+
+/**
+ * Lists every tag in exactly one `x-tagGroups` family, so a docs renderer (Redoc, Scalar) shows
+ * families instead of one flat list. The root seeds the first group (`Core`, with `System`); the
+ * rest are appended in the order their families are first met. A tag already in a group stays.
+ * https://redocly.com/docs/api-reference-docs/specification-extensions/x-tag-groups
+ */
+const appendTagGroups = (document: Document, fragments: readonly ModuleFragment[]): void => {
+    const existing = document.get('x-tagGroups');
+    const groups = isSeq(existing)
+        ? existing
+        : (document.set('x-tagGroups', document.createNode([])), document.get('x-tagGroups'));
+    if (!isSeq(groups)) return;
+
+    const placed = new Set<string>();
+    const tagsOf = new Map<string, YAMLSeq>();
+    for (const group of groups.items) {
+        if (!isMap(group)) continue;
+        const name = group.get('name');
+        const tags = group.get('tags');
+        if (typeof name !== 'string' || !isSeq(tags)) continue;
+        tagsOf.set(name, tags);
+        for (const tag of tags.items) if (isScalar(tag)) placed.add(String(tag.value));
+    }
+
+    for (const [tag, family] of familyOfEachTag(fragments)) {
+        if (placed.has(tag)) continue;
+        let tags = tagsOf.get(family);
+        if (!tags) {
+            groups.add(document.createNode({ name: family, tags: [] }));
+            const added = groups.items.at(-1);
+            tags = isMap(added) ? (added.get('tags') as YAMLSeq) : undefined;
+            if (!tags) continue;
+            tagsOf.set(family, tags);
+        }
+        tags.add(document.createNode(tag));
+    }
+};
+
 /**
  * The root document with its module path index and tag list made to match the fragments.
  *
@@ -135,8 +209,19 @@ export const assembleRoot = (rootText: string, fragments: readonly ModuleFragmen
     const kept = pruneStaleReferences(paths, fragments);
     appendMissingPaths(document, paths, fragments, kept);
     appendMissingTags(document, fragments);
+    appendTagGroups(document, fragments);
 
     return document.toString({ lineWidth: 0, indent: 4 });
+};
+
+/** The `group:` a module's `module.yaml` declares, when it has one. */
+const groupOf = (modulesRoot: string, section: string): string | undefined => {
+    const file = path.join(modulesRoot, section, 'module.yaml');
+    if (!existsSync(file)) return undefined;
+    // `yaml`'s loader; the `as` narrows its `any` to the one key read here.
+    const group = (parseYaml(readFileSync(file, 'utf8')) as { group?: unknown } | null)?.group;
+
+    return typeof group === 'string' ? group : undefined;
 };
 
 /**
@@ -162,7 +247,8 @@ export const readModuleFragments = (
             section,
             paths: Object.keys(parsed.paths ?? {}),
             tags: [...new Set(operations.flatMap((operation) => operation?.tags ?? []))],
-            declaredTags: parsed.tags ?? []
+            declaredTags: parsed.tags ?? [],
+            group: groupOf(modulesRoot, section)
         };
     });
 };

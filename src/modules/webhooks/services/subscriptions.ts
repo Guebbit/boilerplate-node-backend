@@ -35,7 +35,7 @@ import { resolveSafeOutboundTarget, SsrfRefusedError } from '@infrastructure/ada
 import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { ERROR_CODES } from '@api/error-codes';
 import { webhooksAuditActions } from '../audit';
-import { unknownEventTypes } from './catalogue';
+import { unknownEventTypes } from './catalog';
 import { standingOn, viewSubscription, withSubscriptionActions } from './actions';
 
 /** A subscription alongside whichever plaintext secrets this call just minted — shown once. */

@@ -253,7 +253,7 @@ flowchart LR
   hold the rule once enrolled; anyone else gets the plain refusal.
 - **The `abilities` on `GET /account` carry `secondFactorRequired`**, so a client shows an "enrol to use
   your staff tools" prompt instead of a staff menu the server will refuse.
-- **Taking the app away revokes the keys the staff member minted** (`account.authenticator-removed`,
+- **Taking the app away revokes the keys the staff member minted** (`account.authenticator_removed`,
   announced from the same removal; `api-keys` revokes). A key also never holds more than its minter
   does now: a minter with no app lends it no staff rule. API keys themselves still carry no second
   factor, by design.

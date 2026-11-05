@@ -28,7 +28,7 @@ import { privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { returnsWriteLimiter } from './rate-limits';
 import { postReturn } from './controllers/post-return';
 import { getReturns } from './controllers/get-returns';
-import { getReturnById } from './controllers/get-return-by-id';
+import { getReturnById } from './controllers/get-return';
 import { getReturnOptions } from './controllers/get-return-options';
 import { postReturnApprove, postReturnDecline } from './controllers/post-return-decision';
 import { postReturnReceive } from './controllers/post-return-receive';

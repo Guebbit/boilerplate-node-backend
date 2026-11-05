@@ -19,7 +19,7 @@ describe('ORDER_STATUS_TRAITS', () => {
         [OrderStatus.processing, true, true, true],
         [OrderStatus.shipped, true, false, true],
         [OrderStatus.delivered, true, false, true],
-        [OrderStatus.cancelled, false, false, false]
+        [OrderStatus.canceled, false, false, false]
     ])('%s', (status, stockCommitted, beforeDispatch, withdrawable) => {
         expect(ORDER_STATUS_TRAITS[status]).toMatchObject({
             stockCommitted,

@@ -296,7 +296,7 @@ describe.each(MODES)('revocation causes in %s mode', (mode) => {
             const kept = await tokenTypesOf(userId);
             expect(kept.includes('verify')).toBe(!row.pending);
             const announced = await outboxEventModel
-                .find({ name: 'account.sessions-revoked' })
+                .find({ name: 'account.sessions_revoked' })
                 .lean();
             expect(announced.map(({ payload }) => payload)).toEqual(
                 row.announce ? [{ userId, reason: cause }] : []

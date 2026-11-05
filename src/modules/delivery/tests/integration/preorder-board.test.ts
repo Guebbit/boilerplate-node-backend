@@ -76,9 +76,9 @@ const everyState = async () => {
     const allocated = await placed(1, 30, 'allocated@example.com');
     const shipped = await placed(1, 30, 'shipped@example.com');
     const delivered = await placed(1, 30, 'delivered@example.com');
-    const cancelled = await placed(1, 30, 'cancelled@example.com');
+    const canceled = await placed(1, 30, 'canceled@example.com');
     const held = await placed(1, 30, 'held@example.com');
-    return { waiting, allocated, shipped, delivered, cancelled, held };
+    return { waiting, allocated, shipped, delivered, canceled, held };
 };
 
 describe('every state filter returns exactly the rows that are in that state', () => {
@@ -93,7 +93,7 @@ describe('every state filter returns exactly the rows that are in that state', (
         await forceOrderStatus(orders.delivered.orderId, OrderStatus.processing);
         await shipEverything(orders.delivered.orderId, { trackingCode: 'TRK-BOARD02' });
         await deliverEverything(orders.delivered.orderId);
-        await deliveryService.cancelAllForOrder(orders.cancelled.orderId);
+        await deliveryService.cancelAllForOrder(orders.canceled.orderId);
         const [heldFo] = await fulfillmentOrdersOf(orders.held.orderId);
         await deliveryService.holdFulfillmentOrder(
             String(heldFo._id),
@@ -103,7 +103,7 @@ describe('every state filter returns exactly the rows that are in that state', (
         );
 
         const everyone = await board();
-        const states = ['waiting', 'allocated', 'shipped', 'cancelled'] as const;
+        const states = ['waiting', 'allocated', 'shipped', 'canceled'] as const;
 
         expect(everyone).toHaveLength(6);
         for (const state of states) {
@@ -190,9 +190,9 @@ describe('the product summary', () => {
         const { items } = await deliveryService.summarizePreorders({}, asAdmin());
 
         const mine = items.find(({ productId }) => productId === first.productIds[0]);
-        expect(mine).toMatchObject({ paid: 3, allocated: 2, waiting: 1, shipped: 0, cancelled: 0 });
+        expect(mine).toMatchObject({ paid: 3, allocated: 2, waiting: 1, shipped: 0, canceled: 0 });
         for (const row of items)
-            expect(row.waiting + row.allocated + row.shipped + row.cancelled).toBe(row.paid);
+            expect(row.waiting + row.allocated + row.shipped + row.canceled).toBe(row.paid);
     });
 
     it('counts the late units as a subset of the waiting ones', async () => {

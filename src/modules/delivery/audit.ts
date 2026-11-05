@@ -5,7 +5,7 @@
  */
 
 /**
- * The doors staff writes through: starting fulfilment, cutting a shipment, recording an arrival,
+ * The doors staff writes through: starting fulfillment, cutting a shipment, recording an arrival,
  * fulfilling a digital fulfillment order, correcting a tracking code, reporting a parcel lost, and holding or releasing a
  * fulfillment order.
  *
@@ -18,7 +18,7 @@
  * - delivered: `wasLost` when the shipment had been reported lost and turned up.
  */
 export const deliveryAuditActions = {
-    ADMIN_ORDER_FULFILMENT_STARTED: 'admin.order.fulfilment_started',
+    ADMIN_ORDER_FULFILLMENT_STARTED: 'admin.order.fulfillment_started',
     ADMIN_ORDER_SHIPPED: 'admin.order.shipped',
     ADMIN_ORDER_DELIVERED: 'admin.order.delivered',
     ADMIN_ORDER_FULFILLED: 'admin.order.fulfilled',

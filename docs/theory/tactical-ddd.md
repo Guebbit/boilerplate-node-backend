@@ -51,8 +51,8 @@ The **set** of statuses is not its business. `OrderStatus` is generated from `op
 is the **edges** between them, and the **actor** each edge belongs to.
 
 The table is keyed by **event**, not by status: `pay`, `process`, `ship`, `deliver`,
-`fulfilmentComplete` (the digital `processing -> delivered` edge, also a remainder cancel that
-completes the order), `expire`, `cancel` and `cancelInFulfilment`. Each entry carries its `from`
+`fulfillmentComplete` (the digital `processing -> delivered` edge, also a remainder cancel that
+completes the order), `expire`, `cancel` and `cancelInFulfillment`. Each entry carries its `from`
 set, its `to` and its actors, so a service names the event and the conditional write is handed the
 event's own `from` — nothing is derived from a neighbouring column.
 
@@ -67,17 +67,17 @@ stateDiagram-v2
     direction LR
     [*] --> pending
     pending --> paid: system
-    pending --> cancelled: customer, admin
-    pending --> cancelled: system (reservation expiry)
-    pending --> cancelled: withdrawal
+    pending --> canceled: customer, admin
+    pending --> canceled: system (reservation expiry)
+    pending --> canceled: withdrawal
     paid --> processing: system
-    paid --> cancelled: customer, admin, withdrawal
+    paid --> canceled: customer, admin, withdrawal
     processing --> shipped: system
-    processing --> cancelled: admin, withdrawal
+    processing --> canceled: admin, withdrawal
     shipped --> delivered: system
-    processing --> delivered: system (digital fulfilment)
+    processing --> delivered: system (digital fulfillment)
     delivered --> [*]
-    cancelled --> [*]
+    canceled --> [*]
 ```
 
 Three absences are load-bearing:
@@ -134,7 +134,7 @@ sequenceDiagram
     L-->>D: shipped email queued
 ```
 
-`delivery` never assigns `order.status` itself — `markShipped`/`markDelivered`/`markFulfilmentComplete`
+`delivery` never assigns `order.status` itself — `markShipped`/`markDelivered`/`markFulfillmentComplete`
 (`services/status.ts`) are the ordinary doors, each taking the act's own session so the move commits with
 the shipment. A second door, `overrideStatus`, moves the status alone and
 announces it, so `delivery` keeps its records in step — see
@@ -158,10 +158,10 @@ refund on delivered goods:
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 25, 'rankSpacing': 35}}}%%
 flowchart TD
-    A["a status written by assignment<br/>delivered → pending"] --> B["order is back in the<br/>customer's cancellable set"]
+    A["a status written by assignment<br/>delivered → pending"] --> B["order is back in the<br/>customer's cancelable set"]
     B --> C["customer clicks cancel"]
     C --> D["afterCancel runs"]
-    D --> E2["order.cancelled<br/>{ refund: true } delivered"]
+    D --> E2["order.canceled<br/>{ refund: true } delivered"]
     E2 --> E["payments refunds a<br/>succeeded payment"]
     D --> F["inventory release<br/>claims 'held' — no match"]
     E --> G["💸 real money returned on<br/>goods already delivered"]
@@ -183,7 +183,7 @@ lifecycle edge of its own, they all ask.
 
 | Call site                                                                               | Question asked                                                                                                                                  |
 | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `orders/services/cancel.ts` — the cancel doors                                          | `statusesLeadingTo(cancelled, cause.by)`                                                                                                        |
+| `orders/services/cancel.ts` — the cancel doors                                          | `statusesLeadingTo(canceled, cause.by)`                                                                                                         |
 | `orders/services/status.ts` — `markPaid`/`markProcessing`/`markShipped`/`markDelivered` | the named event's own `from` and `to` (`ORDER_EVENTS.ship`, ...), read off the table rather than restated as a literal                          |
 | `payments/services/intent.ts`/`offline.ts`/`settlement.ts`/`view.ts`                    | `isPayable(status)` — asks `orders` the one question every payment door needs, never the table directly (see "One function, three doors" below) |
 | `delivery/services/*`, `returns/services/{cancel-right,withdraw}.ts`                    | `canProcessOrder`, `canShip`, `canRecordArrival`, `isAwaitingGoods`, `hasShopStarted`                                                           |
@@ -204,14 +204,14 @@ window between an email save and a status move to guard against — impossible b
 rather than guarded.
 
 `POST /orders/{id}/cancel` is the one path that runs a cancellation, for a customer and an operator
-alike: the hold is released and `ORDER_CANCELLED` is announced, in the cancel's own transaction,
+alike: the hold is released and `ORDER_CANCELED` is announced, in the cancel's own transaction,
 carrying `refund` — and when one is due `payments` opens the refund from that same event. A plain field write could
-never do that — a paid order set to `cancelled` by assignment would end with the customer's money
+never do that — a paid order set to `canceled` by assignment would end with the customer's money
 kept and the stock held until the sweep.
 
 `shipped`/`delivered` are never a field an admin assigns either — they follow a parcel event
 `delivery` records, through `markShipped`/`markDelivered` (see "Who writes the status" above).
-`paid → processing` follows a fulfilment-start fact the same way, through `markProcessing`.
+`paid → processing` follows a fulfillment-start fact the same way, through `markProcessing`.
 The admin override (`POST /orders/{id}/status-override`) is the door for a mis-scanned parcel or a
 manual correction. `items`/`userId` are not in
 `UpdateOrderByIdRequest` at all either — they stay `POST /orders` (create)-only. Rewriting a
@@ -243,7 +243,7 @@ flowchart LR
     class T pure;
 ```
 
-A refusal to a move the table does not have answers **409**: `ORDER_NOT_CANCELLABLE` from
+A refusal to a move the table does not have answers **409**: `ORDER_NOT_CANCELABLE` from
 a cancel door with no further detail, `ORDER_OVERRIDE_NOT_ALLOWED` from `overrideStatus` carrying
 `details: { from, to }`. Neither lists which moves ARE still open — a client wanting that reads
 `Order.actions` on the order instead: the flags (`cancel`, `override`, …) name the doors open to the caller. Every guard runs before any field
@@ -254,7 +254,7 @@ is assigned, so a refused request is never a partial write.
 A cancellation has consequences — the stock comes back, and usually the money does too. Who decides
 which, and where that decision lives, is a separate question from which moves are legal.
 
-`order.cancelled` carries a `refund` flag rather than the listener inferring one, and that flag is
+`order.canceled` carries a `refund` flag rather than the listener inferring one, and that flag is
 the whole promise: it is written to the outbox in the cancel's own transaction, `payments` opens a
 refund record from it, and the relay delivers the event again until that has happened. Once the
 record exists it is the durable intent (the refund sweep finishes it, forever, with the same
@@ -272,7 +272,7 @@ flowchart TD
     F --> W["conditional status write"]
     O --> W
     W --> R["inventory release<br/><i>always</i>"]
-    R --> E["emit order.cancelled<br/>{ orderId, refund }<br/><i>the fact, once</i>"]
+    R --> E["emit order.canceled<br/>{ orderId, refund }<br/><i>the fact, once</i>"]
     E --> P{"refund?"}
     P -->|true| M["payments opens the refund<br/>record and asks the provider"]
     P -->|false| N["money left alone"]
@@ -284,8 +284,8 @@ flowchart TD
 Three things this shape buys. A customer cannot waive their own refund, because `paid` is
 cancellable precisely on the promise that the money comes back — the flag is overwritten, not
 trusted. An operator can cancel without refunding, which is the replacement-going-out case. And
-`order.cancelled` fires either way, so the record of what happened does not depend on what was
-compensated; suppressing it for the no-refund case would make `order.cancelled` mean "cancelled and
+`order.canceled` fires either way, so the record of what happened does not depend on what was
+compensated; suppressing it for the no-refund case would make `order.canceled` mean "cancelled and
 refunded", which is not what it says.
 
 Returning money on its own is a separate route, `POST /payments/{id}/refunds`, because it
@@ -297,11 +297,11 @@ reaching back for a refund would close a cycle `npm run check` refuses.
 
 The three effects have one owner: the cancel doors move the status, releases the hold and announces the
 refund policy, and no caller can reach the state while skipping the consequences — `update` refuses a
-plain move to `cancelled` for exactly that reason. What the conditional write buys is that **at most
+plain move to `canceled` for exactly that reason. What the conditional write buys is that **at most
 one caller runs the sequence**; a double-click and the reservation sweep cannot both proceed.
 
-The status move, the stock coming back and the `order.cancelled` outbox row are one transaction
-(`moveToCancelled`), so a crash cannot leave a cancelled order holding stock or a cancel nobody
+The status move, the stock coming back and the `order.canceled` outbox row are one transaction
+(`moveToCanceled`), so a crash cannot leave a cancelled order holding stock or a cancel nobody
 heard of. What runs after the commit is the catalogue's stock cache, which is a mirror and cannot
 roll back; the next stock write refreshes it.
 
@@ -415,13 +415,13 @@ changed is the arithmetic _between_ the boundaries.
 flowchart LR
     IN["product.price<br/>shippingCost<br/><i>decimal, unknown</i>"] -->|toMinorUnits| M["Money<br/><i>integer cents</i>"]
     M -->|addMoney / scaleMoney| M
-    M -->|toDecimalAmount| OUT["totalPrice<br/><i>decimal, contract</i>"]
+    M -->|toDecimalString| OUT["totalPrice<br/><i>decimal, contract</i>"]
 
     classDef exact fill:#dcfce7,stroke:#16a34a,color:#111827,stroke-width:2px;
     class M exact;
 ```
 
-One function in (`toMinorUnits`) and one out (`toDecimalAmount`), both taking the currency they
+One function in (`toMinorUnits`) and one out (`toDecimalString`), both taking the currency they
 convert for. Every intermediate is an integer, so the sum is exact and
 order-independent — no accumulator can round differently depending on the sequence it saw the lines
 in. The rounding rule exists once, in this file.
@@ -439,8 +439,8 @@ needs no conversion. Nothing above the persistence layer sees one.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
 flowchart LR
-    W["number<br/><i>19.99</i>"] -->|"cast by the schema"| D[("Decimal128<br/><i>stored</i>")]
-    D -->|"path getter · lean hook · serializer"| R["number<br/><i>19.99, the wire</i>"]
+    W["decimal string<br/><i>"19.99"</i>"] -->|"cast by the schema"| D[("Decimal128<br/><i>stored</i>")]
+    D -->|"path getter · lean hook · serializer"| R["string at the currency's scale<br/><i>"19.99", the wire</i>"]
     D -->|"$sum"| S["Decimal128<br/><i>exact sum</i>"]
     S -->|"toMinorUnits, read as text"| M["Money<br/><i>integer cents</i>"]
 
@@ -452,10 +452,11 @@ flowchart LR
   model declares a money field, and `moneyPlugin` is what a lean read needs. Decimal128 has no `min`,
   so `nonNegative` is a validator.
 - **Reading a sum.** `toMinorUnits` takes the `Decimal128` of a `$sum` as text and moves the digits;
-  it never multiplies a float. A `number` is still multiplied and rounded, for the wire's side.
-- **Not every aggregation is revived.** A lean read and `toJSON` hand back numbers. An aggregation's
+  it never multiplies a float. A `number` is still multiplied and rounded, for the callers that hold one.
+- **On the wire.** Every amount is a decimal string padded to its currency's ISO 4217 places (`"19.90"` EUR, `"1000"` JPY, `"1.500"` KWD), so two equal amounts are equal strings. `Decimal128` drops trailing zeros and `$inc`/`$sum` lose the scale, so `applySerialization` pads every money path last, from the schema's `moneyPath` list, with the document's own currency (products use the live shop currency). `toDecimalString` moves digits, never divides. A JSON number is refused with 422; more places than the currency has is refused with 422; rates (`taxRate`) stay numbers.
+- **Not every aggregation is revived.** A lean read and `toJSON` hand back decimal text. An aggregation's
   output is whatever its pipeline shaped, so a pipeline that returns stored money row by row
-  (`payments/repository.ts#aggregateRefundRows`) revives it with `reviveDecimals`.
+  (`payments/repository.ts#aggregateRefundRows`) revives it with `stringifyDecimals`; the serializer pads it on the way out.
 
 ### Which decimals a currency has
 
@@ -473,7 +474,7 @@ because that cannot vary by currency, so it is a refinement beside each schema.
 A class would give the domain layer an object identity to maintain, a `toJSON` every serialization
 path must know about, and a shape Mongoose would try to store. A branded number is **the same
 integer at runtime** and a distinct type at compile time — which is the whole benefit:
-`toDecimalAmount` is the only way back to a plain `number`, so an amount cannot be summed with a raw
+`toDecimalString` is the only way back to a plain `number`, so an amount cannot be summed with a raw
 price by accident or written to a document without passing the boundary that rounds it.
 
 ### Totality is checked at every step, not at the end
@@ -564,7 +565,7 @@ and `domain/credit-shares.ts` read it from there.
 ### Currency is an argument, not part of the type
 
 A currency's minor unit is not always a hundredth (JPY has none, KWD has three), so
-`toMinorUnits(value, currency)` and `toDecimalAmount(amount, currency)` take the code they convert
+`toMinorUnits(value, currency)` and `toDecimalString(amount, currency)` take the code they convert
 for, and `orderTotal` takes the order's own `currency`. The `Money` brand itself carries no
 currency, so `addMoney` cannot refuse a mismatch: the shop is single-currency per deployment
 (`NODE_DEFAULT_CURRENCY`), and a tag on the type would have one possible value.

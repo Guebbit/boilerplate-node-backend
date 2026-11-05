@@ -10,7 +10,7 @@ describe('matchesEventFilter', () => {
     });
 
     it('does not match a name absent from the filter', () => {
-        expect(matchesEventFilter('order.cancelled', ['order.paid', 'order.shipped'])).toBe(false);
+        expect(matchesEventFilter('order.canceled', ['order.paid', 'order.shipped'])).toBe(false);
     });
 
     it('matches everything once the wildcard is present', () => {

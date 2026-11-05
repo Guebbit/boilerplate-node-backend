@@ -28,14 +28,14 @@ describe('Idempotency-Key — POST /tasks', () => {
             .set('Idempotency-Key', 'replay-key-1')
             .send(PAYLOAD);
 
-        expect(first.status).toBe(201);
+        expect(first.status).toBe(202);
 
         const second = await api()
             .post('/tasks')
             .set('Idempotency-Key', 'replay-key-1')
             .send(PAYLOAD);
 
-        expect(second.status).toBe(201);
+        expect(second.status).toBe(202);
         expect(second.headers['idempotent-replay']).toBe('true');
         expect(second.body).toEqual(first.body);
 
@@ -76,12 +76,12 @@ describe('Idempotency-Key — POST /tasks', () => {
     it('answers 409 while a request with the same key is still in flight', async () => {
         await api().post('/tasks').set('Idempotency-Key', 'in-flight-key-1').send(PAYLOAD);
 
-        // The first request already finished (state 'done'). Forcing it back to 'in-flight'
+        // The first request already finished (state 'done'). Forcing it back to 'in_flight'
         // simulates a second request racing the first rather than following it — the one branch
         // an end-to-end HTTP test cannot otherwise reach without two real concurrent sockets.
         await idempotencyRecordModel.updateOne(
             { key: 'in-flight-key-1' },
-            { $set: { state: 'in-flight' } }
+            { $set: { state: 'in_flight' } }
         );
 
         const response = await api()
@@ -106,7 +106,7 @@ describe('Idempotency-Key — POST /tasks', () => {
     it('runs normally, with no ledger row at all, when no key is sent', async () => {
         const response = await api().post('/tasks').send(PAYLOAD);
 
-        expect(response.status).toBe(201);
+        expect(response.status).toBe(202);
         expect(await idempotencyRecordModel.countDocuments({})).toBe(0);
     });
 });

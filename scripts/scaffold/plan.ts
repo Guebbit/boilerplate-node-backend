@@ -51,11 +51,11 @@ const runtimeFiles = (names: ModuleNames, options: ScaffoldOptions): PlannedFile
         { path: `${root}/routes.ts`, content: code.routesFile(names) },
         { path: `${root}/factories.ts`, content: code.factoriesFile(names) },
         {
-            path: `${root}/controllers/get-${names.kebab}.ts`,
+            path: `${root}/controllers/get-${names.pluralKebab}.ts`,
             content: code.getController(names)
         },
         {
-            path: `${root}/controllers/get-${names.kebab}-item.ts`,
+            path: `${root}/controllers/get-${names.entityKebab}.ts`,
             content: code.getItemController(names)
         },
         {
@@ -113,7 +113,7 @@ const auditFiles = (names: ModuleNames): PlannedFile[] => {
 const declarationFiles = (names: ModuleNames, options: ScaffoldOptions): PlannedFile[] => {
     const root = `src/modules/${names.kebab}`;
     return [
-        { path: `${root}/openapi.yaml`, content: openapiFragment(names) },
+        { path: `${root}/openapi.yaml`, content: openapiFragment(names, options.group) },
         { path: `${root}/authorization.yaml`, content: code.authorizationYaml(names) },
         ...(options.audit ? auditFiles(names) : [])
     ];

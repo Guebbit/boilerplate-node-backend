@@ -3,7 +3,7 @@
  * The `shop` scenario's order book, written by driving the application rather than by inserting
  * rows: every order below was placed at `POST /cart/checkout`, paid at `POST /payments/…`,
  * shipped through the lifecycle and — where the story calls for it — declined, refunded,
- * cancelled or deleted through the endpoint a person would use.
+ * canceled or deleted through the endpoint a person would use.
  *
  * What that buys, and what nothing written by hand can claim: the payments, stock movements,
  * reservations, shipments, audit entries and analytics events behind these orders are the real
@@ -208,7 +208,7 @@ const plannedDemand = (): Map<string, number> => {
     // The three `current`-image demo rows below, each bought alone once and again inside
     // `order.mixedImageStates` — two units apiece.
     for (const index of [121, 122, 123]) add({ productId: fillerProductId(index), quantity: 2 });
-    // The two products `order.remainderCancelled` buys one of each of.
+    // The two products `order.remainderCanceled` buys one of each of.
     for (const index of [124, 125]) add({ productId: fillerProductId(index), quantity: 2 });
     // The filler line of `order.deliveredTwoLines`.
     add({ productId: fillerProductId(TWO_LINES_FILLER_INDEX), quantity: 1 });
@@ -262,11 +262,11 @@ const signInCustomerBase = (baseUrl: string): Promise<Map<string, Caller>> =>
  * Runs after every order — an operator edits a shop that already has customers, and an audit row
  * dated before the orders it sits among would read as a shop edited before it opened.
  */
-const driveCatalogueEdits = async (owner: Caller): Promise<void> => {
+const driveCatalogEdits = async (owner: Caller): Promise<void> => {
     await owner.call('PATCH', `/products/${SEED_PRODUCT_IDS.dogFoodStandard}`, {
         // A price change is the edit an operator makes most, and the one an audit reader most
         // wants to see a trail for.
-        price: 71
+        price: '71.00'
     });
 
     // Each module that owns a piece of the story contributes its own edit (`shop-modules.ts`'s
@@ -485,12 +485,12 @@ export const driveShopHistory = async (
     await submitCard(customer, challengedPayment, CARD.challenge);
     await syncPayment(customer, challengedPayment);
 
-    // Cancelled by the customer before paying — the stock comes back.
-    subjects['order.cancelled'] = dated(await checkout(customer, DOG_FOOD(2)));
-    await cancelOrder(customer, subjects['order.cancelled']);
+    // Canceled by the customer before paying — the stock comes back.
+    subjects['order.canceled'] = dated(await checkout(customer, DOG_FOOD(2)));
+    await cancelOrder(customer, subjects['order.canceled']);
 
     /*
-     * Paid, then cancelled by the operator: `payments` hears `ORDER_CANCELLED` and returns it.
+     * Paid, then canceled by the operator: `payments` hears `ORDER_CANCELED` and returns it.
      * The subject is the ORDER's id, not the payment's, because `GET /orders/{id}/payments`
      * is the only way to read a payment back — a payment id would name a row nothing can fetch.
      */
@@ -503,7 +503,7 @@ export const driveShopHistory = async (
      * wrongly allow and an admin-owned row could never catch.
      */
     subjects['order.softDeleted'] = dated(await checkoutAndPay(customer, DOG_FOOD(1)));
-    // Only a cancelled order can be hidden: cancel it (which refunds it), then hide it.
+    // Only a canceled order can be hidden: cancel it (which refunds it), then hide it.
     await cancelOrder(owner, subjects['order.softDeleted']);
     await softDeleteOrder(owner, subjects['order.softDeleted']);
 
@@ -546,16 +546,16 @@ export const driveShopHistory = async (
     await startProcessing(owner, subjects['order.onHold']);
     await holdOrder(owner, subjects['order.onHold'], 'high_risk');
 
-    // Two products, one shipped, and the buyer cancelled the other: shipped and refunded in part.
-    subjects['order.remainderCancelled'] = dated(
+    // Two products, one shipped, and the buyer canceled the other: shipped and refunded in part.
+    subjects['order.remainderCanceled'] = dated(
         await checkoutAndPay(customer, [
             { productId: fillerProductId(124), quantity: 1 },
             { productId: fillerProductId(125), quantity: 1 }
         ])
     );
-    await startProcessing(owner, subjects['order.remainderCancelled']);
-    await shipPart(owner, subjects['order.remainderCancelled'], fillerProductId(124), 1);
-    await cancelRemainder(customer, subjects['order.remainderCancelled']);
+    await startProcessing(owner, subjects['order.remainderCanceled']);
+    await shipPart(owner, subjects['order.remainderCanceled'], fillerProductId(124), 1);
+    await cancelRemainder(customer, subjects['order.remainderCanceled']);
 
     /*
      * An order line resolves its picture LIVE against the catalogue product it still names,
@@ -625,7 +625,7 @@ export const driveShopHistory = async (
         for (const line of lines) await shopper.call('POST', '/cart/items', line);
     }
 
-    await driveCatalogueEdits(owner);
+    await driveCatalogEdits(owner);
 
     /*
      * Everyone signs out, then the owner bans `marcus` and signs out himself. The ORDER is the

@@ -478,8 +478,8 @@ const findInSession = (id: string, session: ClientSession): Promise<OrderDocumen
     orderModel.findById(toObjectId(id)).session(session).exec();
 
 /**
- * Write the fulfilment summary `delivery` computed, but only while the order can still be
- * fulfilled: not `pending`, not `cancelled`. `delivered` is allowed: an admin override forward to
+ * Write the fulfillment summary `delivery` computed, but only while the order can still be
+ * fulfilled: not `pending`, not `canceled`. `delivered` is allowed: an admin override forward to
  * `delivered` is brought in step by `delivery` AFTER the status landed. The condition rides in the filter, so a shipment
  * racing a cancel cannot both win — whichever write commits second matches nothing (or conflicts
  * and is retried against the other's result).
@@ -556,16 +556,16 @@ const findOpenUnpaidIdsOf = (userId: string, session?: ClientSession): Promise<s
         .then((orders) => orders.map((order) => String(order._id)));
 
 /**
- * The ids of every order this account has cancelled, split by whether money ever reached it — the
+ * The ids of every order this account has canceled, split by whether money ever reached it — the
  * narrow read the purchase-hold count starts from, followed by the timeline for when each was
- * cancelled and why. A never-paid order carries no `paidAt`, and a cancel does not clear one.
+ * canceled and why. A never-paid order carries no `paidAt`, and a cancel does not clear one.
  *
  * @param userId - the account
  * @returns the order ids: `unpaid` were never paid for, `paid` were
  */
-const findCancelledIdsOf = (userId: string): Promise<{ paid: string[]; unpaid: string[] }> =>
+const findCanceledIdsOf = (userId: string): Promise<{ paid: string[]; unpaid: string[] }> =>
     orderModel
-        .find({ userId: toObjectId(userId), status: OrderStatus.cancelled }, { _id: 1, paidAt: 1 })
+        .find({ userId: toObjectId(userId), status: OrderStatus.canceled }, { _id: 1, paidAt: 1 })
         .exec()
         .then((orders) => ({
             paid: orders.filter((order) => order.paidAt).map((order) => String(order._id)),
@@ -591,7 +591,7 @@ export interface PiiClaimWindow {
  * | --------------------------------------- | ------------------------------------ |
  * | never paid                              | at once                              |
  * | delivered (`conformityUntil` set)       | `conformityUntil` + guarantee days   |
- * | paid, `cancelled` without delivery      | `paidAt` + undelivered days          |
+ * | paid, `canceled` without delivery      | `paidAt` + undelivered days          |
  * | paid and still open                     | never (it is still to be fulfilled)  |
  *
  * @param cutoff - the sweep's instant
@@ -621,7 +621,7 @@ const piiDueFilter = (cutoff: Date, window: PiiClaimWindow): QueryFilter<OrderDo
         },
         {
             conformityUntil: { $exists: false },
-            status: OrderStatus.cancelled,
+            status: OrderStatus.canceled,
             $expr: {
                 $lte: [
                     {
@@ -783,7 +783,7 @@ const incrementOrderNumberCounter = (year: number): Promise<number> =>
     incrementYearlyCounter(orderNumberCounterModel, year);
 
 /**
- * Permanently remove an order that is cancelled, was never paid and holds no late money, as one
+ * Permanently remove an order that is canceled, was never paid and holds no late money, as one
  * conditional write: the delete's own filter carries all three, so a settlement or a status move
  * that landed after the caller read the document stops it (Optimistic Offline Lock). Checked
  * against the request's `If-Match` like `deleteOne`.
@@ -791,7 +791,7 @@ const incrementOrderNumberCounter = (year: number): Promise<number> =>
  * @param document - the order, as the caller read it
  * @returns `false` when nothing was removed: the order moved on meanwhile, or is already gone
  */
-const deleteCancelledUnpaid = (document: OrderDocument): Promise<boolean> => {
+const deleteCanceledUnpaid = (document: OrderDocument): Promise<boolean> => {
     let deleted = false;
 
     return checkedDelete(document, () => {
@@ -803,7 +803,7 @@ const deleteCancelledUnpaid = (document: OrderDocument): Promise<boolean> => {
         Object.assign(document, {
             $where: {
                 ...(document.$where as object),
-                status: OrderStatus.cancelled,
+                status: OrderStatus.canceled,
                 paidAt: null,
                 moneyReceivedAt: null
             }
@@ -839,7 +839,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         id: string,
         scope?: Record<string, unknown>
     ) => Promise<OrderDocument | undefined>;
-    deleteCancelledUnpaid: (document: OrderDocument) => Promise<boolean>;
+    deleteCanceledUnpaid: (document: OrderDocument) => Promise<boolean>;
     markMoneyReceived: (id: string, session?: ClientSession) => Promise<void>;
     ownerScope: (userId: string) => Record<string, unknown>;
     updateStatusIfIn: (
@@ -885,7 +885,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     ) => Promise<OrderDocument | null>;
     findManyReferences: (ids: readonly string[]) => Promise<OrderReference[]>;
     findOpenUnpaidIdsOf: (userId: string, session?: ClientSession) => Promise<string[]>;
-    findCancelledIdsOf: (userId: string) => Promise<{ paid: string[]; unpaid: string[] }>;
+    findCanceledIdsOf: (userId: string) => Promise<{ paid: string[]; unpaid: string[] }>;
     detachUserId: (userId: string, session?: ClientSession) => Promise<number>;
     startPiiClock: (userId: string) => Promise<number>;
     scrubDueForAnonymization: (cutoff: Date, window: PiiClaimWindow) => Promise<number>;
@@ -899,7 +899,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     countMatching,
     streamMatching,
     findByIdScoped,
-    deleteCancelledUnpaid,
+    deleteCanceledUnpaid,
     markMoneyReceived,
     ownerScope,
     updateStatusIfIn,
@@ -913,7 +913,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     writeFulfillment,
     findManyReferences,
     findOpenUnpaidIdsOf,
-    findCancelledIdsOf,
+    findCanceledIdsOf,
     detachUserId,
     startPiiClock,
     scrubDueForAnonymization,
@@ -972,14 +972,14 @@ export const orderEventRepository: AppendOnlyLedger<
             .exec(),
 
     /**
-     * When each of these orders was cancelled by the buyer, after `after` when given — the rows the
+     * When each of these orders was canceled by the buyer, after `after` when given — the rows the
      * purchase hold counts. The buyer cancels through two doors that are one legal act: the cancel
      * button (`customer`) and a withdrawal through returns before dispatch (`withdrawal`). A cancel
      * by staff or by the system is a different `by`; the one system cause counted on request is a
      * reservation that ran out unpaid, which the row names in `data.cause` because `by: system` is
      * shared with an erasure and a payment mismatch.
      *
-     * @param orderIds - the buyer's cancelled orders
+     * @param orderIds - the buyer's canceled orders
      * @param after - rows at or before this instant were already answered by an earlier hold or review
      * @param countExpiredReservations - whether an order whose reservation ran out counts too
      */
@@ -987,7 +987,7 @@ export const orderEventRepository: AppendOnlyLedger<
         orderEventModel
             .find({
                 orderId: { $in: orderIds.map((id) => toObjectId(id)) },
-                type: 'cancelled',
+                type: 'canceled',
                 $or: [
                     { 'data.by': { $in: ['customer', 'withdrawal'] } },
                     ...(countExpiredReservations ? [{ 'data.cause': 'reservation_expired' }] : [])

@@ -95,7 +95,7 @@ is the amount with VAT taken out.
 | Customers                | accounts that paid in the period; new = first paid order falls in it                     | `orders`, by `userId`                          |
 | Pipeline                 | transfers awaiting money (count, amount, nearest `payBy`), paid orders not shipped       | `orders`, a snapshot                           |
 
-Money is grouped by currency and never converted. One deployment has one currency
+Money is grouped by currency and never converted. Every figure leaves as a decimal string at that currency's places (`toDecimalString`), computed averages included; only the rates stay numbers. One deployment has one currency
 (`NODE_DEFAULT_CURRENCY`), so a second group appears only after a config change. Money is stored as
 Decimal128, so Mongo's plain `$sum` is exact; one conversion to minor units per currency follows in
 code (`domain-primitives/money.ts#toMinorUnits`, reading the sum as text). See

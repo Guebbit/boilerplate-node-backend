@@ -299,9 +299,9 @@ keep knobs; raise it with them). Raise `BACKUP_KEEP_MONTHLY` and the ledger must
 oldest snapshot brings back an account the ledger has forgotten.
 
 **Deletion locks follow the ledger too.** Besides `erased`, the ledger records `scheduled` (with the
-`purgeAt` the owner was promised, stored and never recomputed) and `cancelled`. For each account the command
+`purgeAt` the owner was promised, stored and never recomputed) and `canceled`. For each account the command
 applies the latest event since `--since`: `erased` always wins; otherwise a later `scheduled` locks the account
-at the stored date (and ends its sessions), a later `cancelled` clears the lock even if `purgeAt` has passed,
+at the stored date (and ends its sessions), a later `canceled` clears the lock even if `purgeAt` has passed,
 and cancel-then-ask-again stays scheduled. The log prints the counts and then the ids of every account in each outcome (`erased`, `alreadyGone`, `rescheduled`, `unscheduled`, `unchanged`, `failed`): the restored audit log lost the rows written after the snapshot, so these ids are the record.
 No manual check is needed before starting the stack.
 

@@ -25,7 +25,7 @@ import {
     WebhookRejected
 } from '@modules/payments/providers';
 
-const charge = { amount: 1000, currency: 'eur' };
+const charge = { amount: '1000.00', currency: 'eur' };
 const metadata = { orderId: 'order-1', paymentId: 'payment-1' };
 
 describe('fakePaymentProvider.prepare', () => {
@@ -152,7 +152,7 @@ describe('fakePaymentProvider.refund and the settled outcome', () => {
         await fakePaymentProvider.confirm('fake_pi_refunded', FAKE_SUCCESS_METHOD);
         await fakePaymentProvider.refund(
             'fake_pi_refunded',
-            { amount: 250, currency: 'eur' },
+            { amount: '250.00', currency: 'eur' },
             keyed('partial')
         );
 
@@ -238,7 +238,7 @@ describe('fakePaymentProvider.cancel', () => {
         ).resolves.toBeUndefined();
     });
 
-    it('lets a declined attempt be cancelled — nothing at the provider is still moving', async () => {
+    it('lets a declined attempt be canceled — nothing at the provider is still moving', async () => {
         await fakePaymentProvider.confirm('fake_pi_declined_cancel', FAKE_DECLINE_METHOD);
 
         await expect(
@@ -310,7 +310,7 @@ describe('fakePaymentProvider — disputes', () => {
         kind: 'chargeback',
         status: 'needs_response',
         reason: 'fraudulent',
-        amount: 50,
+        amount: '50.00',
         currency: 'EUR',
         fundsWithdrawn: true,
         observedAt: '2026-10-01T10:00:00.000Z'
@@ -336,7 +336,7 @@ describe('fakePaymentProvider — disputes', () => {
 /** Prepares an intent for 50.00 EUR on payment `pay_<suffix>`, and returns its reference. */
 const prepared = async (suffix: string) => {
     const { providerRef } = await fakePaymentProvider.prepare(
-        { amount: 50, currency: 'EUR' },
+        { amount: '50.00', currency: 'EUR' },
         { orderId: `order_${suffix}`, paymentId: `pay_${suffix}` }
     );
     return providerRef;
@@ -351,27 +351,31 @@ describe('fakePaymentProvider — what a success reports it collected', () => {
         ).resolves.toEqual(
             expect.objectContaining({
                 status: 'succeeded',
-                amountReceived: 50,
+                amountReceived: '50.00',
                 currency: 'EUR',
                 paymentId: 'pay_a'
             })
         );
         await expect(fakePaymentProvider.retrieve(providerRef)).resolves.toEqual(
-            expect.objectContaining({ amountReceived: 50, currency: 'EUR', paymentId: 'pay_a' })
+            expect.objectContaining({
+                amountReceived: '50.00',
+                currency: 'EUR',
+                paymentId: 'pay_a'
+            })
         );
     });
 
     it('reports a receipt override on both confirm and retrieve, keeping the other fields', async () => {
         const providerRef = await prepared('b');
-        setFakeReceipt(providerRef, { amountReceived: 1 });
+        setFakeReceipt(providerRef, { amountReceived: '1.00' });
 
         await expect(
             fakePaymentProvider.confirm(providerRef, FAKE_SUCCESS_METHOD)
         ).resolves.toEqual(
-            expect.objectContaining({ amountReceived: 1, currency: 'EUR', paymentId: 'pay_b' })
+            expect.objectContaining({ amountReceived: '1.00', currency: 'EUR', paymentId: 'pay_b' })
         );
         await expect(fakePaymentProvider.retrieve(providerRef)).resolves.toEqual(
-            expect.objectContaining({ amountReceived: 1, currency: 'EUR', paymentId: 'pay_b' })
+            expect.objectContaining({ amountReceived: '1.00', currency: 'EUR', paymentId: 'pay_b' })
         );
     });
 

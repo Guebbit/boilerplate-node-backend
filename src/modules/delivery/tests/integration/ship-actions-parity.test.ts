@@ -28,7 +28,7 @@ const STATUSES = [
     OrderStatus.pending,
     OrderStatus.paid,
     OrderStatus.processing,
-    OrderStatus.cancelled
+    OrderStatus.canceled
 ] as const;
 
 /** Whether a response is the door opening. */
@@ -45,13 +45,16 @@ describe('the ship action and the ship door agree', () => {
 
         for (const status of STATUSES)
             for (const { role, staff } of signedIn) {
-                const product = await createProduct({ title: `Shirt ${Math.random()}`, price: 30 });
+                const product = await createProduct({
+                    title: `Shirt ${Math.random()}`,
+                    price: '30.00'
+                });
                 const order = await createOrder(owner.user, [toOrderItem(product, 1)], {
                     status: OrderStatus.paid
                 });
                 const orderId = String(order._id);
                 // A paid order has the fulfillment orders its payment made; the status under test
-                // is then forced onto it, so even `pending` and `cancelled` carry one.
+                // is then forced onto it, so even `pending` and `canceled` carry one.
                 const [fulfillmentOrder] = await fulfillmentOrdersOf(orderId);
                 if (status !== OrderStatus.paid) await forceOrderStatus(orderId, status);
                 const view = await api()

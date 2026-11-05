@@ -75,6 +75,9 @@ export const CART_LINE_HARD_MAX = 999;
  * `_id: false` — a cart line is addressed by its product, never by itself, and `CartItem` is
  * `additionalProperties: false`, so a generated subdocument id would be a contract violation
  * waiting to be serialized.
+ *
+ * A line gets its own id only when a product can fill two lines (variants or options); then
+ * `/cart/items/{itemId}` and the `…ById` names.
  */
 const cartItemSchema = new Schema(
     {

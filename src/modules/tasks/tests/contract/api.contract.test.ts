@@ -11,6 +11,7 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { MISSING_ID } from '@tests/ids';
+import { findAllTasks } from '../factories';
 
 setupTestDb();
 
@@ -21,39 +22,43 @@ const CONTACT_PAYLOAD = {
     message: 'The checkout button does nothing on mobile.'
 };
 
-/** Creates a task through the public endpoint and returns its id. */
+/** Creates a task through the public endpoint and returns its id (read from storage: a 202 has no body). */
 const createContactTask = async () => {
     const response = await api().post('/tasks').send(CONTACT_PAYLOAD);
 
-    if (response.status !== 201)
+    if (response.status !== 202)
         throw new Error(
             `tasks setup failed: POST /tasks returned ${response.status} — ` +
                 JSON.stringify(response.body)
         );
 
-    return response.body.id as string;
+    const stored = await findAllTasks();
+    return String(stored.at(-1)?._id);
 };
 
 describe('POST /tasks', () => {
     it('matches the contract for a valid submission', async () => {
         const response = await api().post('/tasks').send(CONTACT_PAYLOAD);
 
-        expect(response.status).toBe(201);
+        expect(response.status).toBe(202);
+        expect(response.text).toBe('');
+        expect(response.headers).not.toHaveProperty('location');
     });
 
     it('starts a new request in the `new` status', async () => {
-        const response = await api().post('/tasks').send(CONTACT_PAYLOAD);
+        await api().post('/tasks').send(CONTACT_PAYLOAD);
 
-        expect(response.body.status).toBe('new');
+        const [stored] = await findAllTasks();
+        expect(stored?.status).toBe('new');
     });
 
-    it('keeps the category and order number a visitor chose, and echoes them back', async () => {
+    it('keeps the category and order number a visitor chose', async () => {
         const response = await api()
             .post('/tasks')
             .send({ ...CONTACT_PAYLOAD, category: 'privacy', orderNumber: 'ORD-9' });
 
-        expect(response.status).toBe(201);
-        expect(response.body).toMatchObject({ category: 'privacy', orderNumber: 'ORD-9' });
+        expect(response.status).toBe(202);
+        expect(await findAllTasks()).toMatchObject([{ category: 'privacy', orderNumber: 'ORD-9' }]);
     });
 
     it('422s a category outside the list', async () => {
@@ -68,7 +73,7 @@ describe('POST /tasks', () => {
         const { name: _name, ...withoutName } = CONTACT_PAYLOAD;
         const response = await api().post('/tasks').send(withoutName);
 
-        expect(response.status).toBe(201);
+        expect(response.status).toBe(202);
     });
 
     it('matches the error contract for a malformed email', async () => {
@@ -132,8 +137,9 @@ describe('POST /tasks — the contract bounds the form restates nothing of', () 
             .post('/tasks')
             .send({ ...CONTACT_PAYLOAD, subject: '  Broken checkout  ' });
 
-        expect(response.status).toBe(201);
-        expect(response.body.subject).toBe('Broken checkout');
+        expect(response.status).toBe(202);
+        const [stored] = await findAllTasks();
+        expect(stored?.subject).toBe('Broken checkout');
     });
 });
 
@@ -457,15 +463,15 @@ describe('GET /tasks/summary and the queue filters', () => {
 });
 
 describe('POST /tasks — honeypot', () => {
-    it('writes suspected spam as status "spam", answers 201 either way, and drops the field', async () => {
+    it('writes suspected spam as status "spam", answers 202 either way, and drops the field', async () => {
         const { bearer } = await authenticateAs('admin');
         const response = await api()
             .post('/tasks')
             .send({ ...CONTACT_PAYLOAD, website: 'https://spammer.example' });
 
-        // The bot must learn nothing from the response — same 201 a real submission gets.
-        expect(response.status).toBe(201);
-        expect(response.body).not.toHaveProperty('website');
+        // The bot must learn nothing from the response — same 202 a real submission gets.
+        expect(response.status).toBe(202);
+        expect(response.text).toBe('');
 
         const listed = await api().get('/tasks').set('Authorization', bearer);
         expect(listed.body.items[0].status).toBe('spam');

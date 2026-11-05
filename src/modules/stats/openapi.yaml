@@ -6,6 +6,7 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Stats
+      x-family: Running the shop
       description: Sales numbers for the staff dashboard, read on demand from the modules that own them.
 
 paths:
@@ -161,7 +162,7 @@ paths:
             tags: [Stats]
             summary: Operations rates (staff)
             description: >-
-                Cancellation rate as a cohort (orders placed in the period that ended cancelled,
+                Cancellation rate as a cohort (orders placed in the period that ended canceled,
                 including an order whose every parcel was lost and refunded), return rate (units returned ÷ units ordered, Shopify's `returned_quantity_rate`)
                 and refund rate (credit notes ÷ invoices, VAT included). Needs `read:Stats`.
             operationId: getOperationsStats
@@ -292,45 +293,31 @@ components:
                     type: integer
                     description: '`unitsOrdered` minus `unitsReversed`.'
                 grossSales:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: Goods net of VAT on invoices issued in the period, before shipping, discounts and reversals.
                 discounts:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: Always 0 until a discount exists.
                 reversals:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: The goods part (net of VAT) of credit notes issued in the period.
                 netSales:
-                    type: number
-                    format: double
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/DecimalAmount'
                     description: '`grossSales` minus `discounts` minus `reversals`.'
                 shipping:
-                    type: number
-                    format: double
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/DecimalAmount'
                     description: Shipping net of VAT charged minus refunded. Exact for full refunds only, since a partial credit note folds its shipping into goods.
                 taxes:
-                    type: number
-                    format: double
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/DecimalAmount'
                     description: VAT charged minus VAT refunded.
                 totalSales:
-                    type: number
-                    format: double
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/DecimalAmount'
                     description: '`netSales` plus `shipping` plus `taxes`.'
                 refunds:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: Credit notes issued in the period, VAT included.
                 averageOrderValue:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: (`grossSales` minus `discounts`) divided by `orders`; 0 with no orders.
 
         SalesBucket:
@@ -390,8 +377,7 @@ components:
                 unitsReversed: { type: integer, minimum: 0 }
                 netUnits: { type: integer }
                 netSales:
-                    type: number
-                    format: double
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/DecimalAmount'
                     description: Net of VAT, from the frozen line price and rate.
 
         ProductStats:
@@ -444,7 +430,8 @@ components:
                 category: { type: string }
                 currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
                 unitsOrdered: { type: integer, minimum: 0 }
-                netSales: { type: number, format: double }
+                netSales:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/DecimalAmount'
 
         CategoryStats:
             type: object
@@ -471,7 +458,8 @@ components:
                 provider: { type: string }
                 currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
                 payments: { type: integer, minimum: 0 }
-                amount: { type: number, format: double, minimum: 0 }
+                amount:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
 
         PaymentMix:
             type: object
@@ -499,11 +487,11 @@ components:
                 cancellation:
                     type: object
                     additionalProperties: false
-                    required: [placed, cancelled, rate]
-                    description: A cohort, meaning orders placed in the period that ended cancelled (a lost-and-refunded order among them), not cancellations dated by when they happened.
+                    required: [placed, canceled, rate]
+                    description: A cohort, meaning orders placed in the period that ended canceled (a lost-and-refunded order among them), not cancellations dated by when they happened.
                     properties:
                         placed: { type: integer, minimum: 0 }
-                        cancelled: { type: integer, minimum: 0 }
+                        canceled: { type: integer, minimum: 0 }
                         rate: { type: number, format: double, minimum: 0, maximum: 1 }
                 returns:
                     type: object
@@ -521,8 +509,12 @@ components:
                         required: [currency, invoiced, credited, rate]
                         properties:
                             currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
-                            invoiced: { type: number, format: double, description: 'Invoices issued in the period, VAT included.', minimum: 0 }
-                            credited: { type: number, format: double, description: 'Credit notes issued in the period, VAT included.', minimum: 0 }
+                            invoiced:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
+                                description: 'Invoices issued in the period, VAT included.'
+                            credited:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
+                                description: 'Credit notes issued in the period, VAT included.'
                             rate: { type: number, format: double, minimum: 0 }
 
         CustomerStats:
@@ -553,7 +545,8 @@ components:
                         properties:
                             currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
                             count: { type: integer, minimum: 0 }
-                            amount: { type: number, format: double, minimum: 0 }
+                            amount:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                             nearestPayBy: { type: string, format: date-time }
                 paidNotShipped:
                     type: integer

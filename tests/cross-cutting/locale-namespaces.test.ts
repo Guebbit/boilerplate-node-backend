@@ -51,10 +51,7 @@ const moduleKeys = (): Map<string, string[]> => {
  * belong to whoever adds them (`shop-tasks`), so the PREFIX is co-owned while each KEY is still
  * claimed by exactly one module (the test above this one).
  */
-const CO_OWNED_NAMESPACES = [
-    'notifications.staff-mail.task-kind.',
-    'notifications.staff-mail.task-category.'
-];
+const CO_OWNED_NAMESPACES = ['tasks.task-kind.', 'tasks.task-category.'];
 
 describe('locale namespaces across modules', () => {
     it('finds dictionaries in every module that ships copy', () => {

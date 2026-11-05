@@ -151,8 +151,8 @@ flowchart LR
     CO["checkout · admin order create"] -->|reserveForOrder| H["held<br/><i>reserved+</i>"]
     H -->|"commitForOrder<br/><i>payment confirmed</i>"| P["paid<br/><i>no counter moves</i>"]
     P -->|"shipForOrder<br/><i>the parcel leaves</i>"| S["shipped<br/><i>onHand− reserved−</i>"]
-    P -->|"releaseCommittedForOrder<br/><i>cancelled before dispatch</i>"| B
-    H -->|"releaseForOrder<br/><i>order cancelled</i>"| B["back on the shelf<br/><i>reserved−</i>"]
+    P -->|"releaseCommittedForOrder<br/><i>canceled before dispatch</i>"| B
+    H -->|"releaseForOrder<br/><i>order canceled</i>"| B["back on the shelf<br/><i>reserved−</i>"]
     H -. "the sweep · hold timed out" .-> B
     B -. "inventory.reservation_expired" .-> OR["orders<br/><i>cancels the order</i>"]
     RC["admin receipt<br/><i>supplier delivery</i>"] -->|onHand+| L

@@ -6,6 +6,7 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Webhooks
+      x-family: Core
       description: Outbound webhook subscriptions, the delivery log, replay, and the public event catalogue.
 
 x-error-codes:
@@ -297,7 +298,7 @@ paths:
                 The other half of a rotation, once every consumer has switched. Refuses to empty
                 the ring — a subscription with no secret can never sign a delivery. The remove twin
                 of `POST .../secrets`.
-            operationId: removeWebhookSubscriptionSecret
+            operationId: deleteWebhookSubscriptionSecret
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -425,7 +426,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/WebhookEventCatalogueResponse'
+                                $ref: '#/components/schemas/WebhookEventCatalogResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
 
@@ -504,7 +505,7 @@ components:
         WebhookSubscriptionActions:
             type: object
             additionalProperties: false
-            required: [update, delete, enable, disable, createSecret, removeSecret]
+            required: [update, delete, enable, disable, createSecret, deleteSecret]
             properties:
                 update:
                     type: boolean
@@ -521,7 +522,7 @@ components:
                 createSecret:
                     type: boolean
                     description: Whether `POST /webhooks/subscriptions/{id}/secrets` would be accepted.
-                removeSecret:
+                deleteSecret:
                     type: boolean
                     description: Whether `DELETE /webhooks/subscriptions/{id}/secrets/{secretId}` would be accepted — false while the ring holds a single secret.
 
@@ -591,7 +592,7 @@ components:
 
         WebhookDeliveryStatus:
             type: string
-            enum: [pending, in-flight, succeeded, exhausted]
+            enum: [pending, in_flight, succeeded, exhausted]
 
         WebhookDelivery:
             type: object
@@ -656,7 +657,7 @@ components:
             maxLength: 100
             description: One event name from `GET /webhooks/events`, or `*` for every event.
 
-        WebhookEventCatalogueEntry:
+        WebhookEventCatalogEntry:
             type: object
             additionalProperties: false
             required: [name]
@@ -756,7 +757,7 @@ components:
                 meta:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
 
-        WebhookEventCatalogueResponse:
+        WebhookEventCatalogResponse:
             type: object
             additionalProperties: false
             required: [items]
@@ -764,5 +765,5 @@ components:
                 items:
                     type: array
                     items:
-                        $ref: '#/components/schemas/WebhookEventCatalogueEntry'
+                        $ref: '#/components/schemas/WebhookEventCatalogEntry'
 

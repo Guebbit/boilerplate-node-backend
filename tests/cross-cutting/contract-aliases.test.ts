@@ -1,8 +1,8 @@
 /**
  * Which spelling of an operation should a caller reach for?
  *
- * Several operations in this contract are the same intent written twice — `DELETE /users`,
- * `DELETE /users/{id}` and `DELETE /users/{id}/hard` delete one user three ways; `GET /products`
+ * Several operations in this contract are the same intent written twice — `DELETE /users/{id}`
+ * and `DELETE /users/{id}/hard` delete one user two ways; `GET /products`
  * and `POST /products/search` ask one question over two transports. That is deliberate, and
  * `docs/theory/request-input.md` argues why. What it left unsaid is which one is *the* one.
  *

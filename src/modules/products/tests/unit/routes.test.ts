@@ -38,7 +38,6 @@ describe('product routes — what is mounted', () => {
             'POST /search',
             'GET /',
             'POST /',
-            'DELETE /',
             'GET /facets',
             'GET /:id',
             'PUT /:id',
@@ -77,14 +76,7 @@ describe('product routes — the product page and its stock count', () => {
 
 describe('product routes — authorization', () => {
     /** Everything that changes catalogue state, */
-    const GUARDED = [
-        'POST /',
-        'DELETE /',
-        'PUT /:id',
-        'PATCH /:id',
-        'DELETE /:id',
-        'DELETE /:id/hard'
-    ];
+    const GUARDED = ['POST /', 'PUT /:id', 'PATCH /:id', 'DELETE /:id', 'DELETE /:id/hard'];
 
     it.each(GUARDED)('%s requires an authenticated admin', (signature) => {
         const row = routeTable(router).find(
@@ -170,7 +162,7 @@ describe('product routes — caching', () => {
         });
     });
 
-    it.each(['POST /', 'DELETE /', 'PUT /:id', 'PATCH /:id', 'DELETE /:id', 'DELETE /:id/hard'])(
+    it.each(['POST /', 'PUT /:id', 'PATCH /:id', 'DELETE /:id', 'DELETE /:id/hard'])(
         '%s invalidates the catalogue tag it just changed',
         (signature) => {
             // The tag has to be the one the readers above set. Asserting the literal rather than
@@ -201,6 +193,5 @@ describe('product routes — uploads and flags', () => {
         // flag moved onto the plain route, a normal delete would become unrecoverable.
         expect(chainOf(router, 'DELETE /:id/hard')).toContain('routeFlag(hardDelete)');
         expect(chainOf(router, 'DELETE /:id')).not.toContain('routeFlag(hardDelete)');
-        expect(chainOf(router, 'DELETE /')).not.toContain('routeFlag(hardDelete)');
     });
 });

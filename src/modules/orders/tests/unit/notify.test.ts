@@ -21,8 +21,8 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 const orderFixture = (overrides: Partial<OrderDocument> = {}): OrderDocument =>
     asStub<OrderDocument>({
         _id: 'order-1',
-        items: [{ product: { title: 'A product', price: 10 }, quantity: 1 }],
-        shippingCost: 0,
+        items: [{ product: { title: 'A product', price: '10.00' }, quantity: 1 }],
+        shippingCost: '0.00',
         currency: 'EUR',
         paymentMethod: 'card',
         ...overrides

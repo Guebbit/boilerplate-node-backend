@@ -379,11 +379,11 @@ export const shipLinesForOrder = (
 
 /**
  * Give SOME of an order's units back — the unshipped remainder of one fulfillment order,
- * cancelled. `reserved` drops by the cancelled quantity, the units stay on the shelf and become
+ * canceled. `reserved` drops by the canceled quantity, the units stay on the shelf and become
  * sellable; the hold keeps the rest and ends `released` once it is empty.
  *
  * @param orderId - the order whose units are given back
- * @param lines - the cancelled remainder
+ * @param lines - the canceled remainder
  * @param session - the cancel's transaction; see {@link refreshStockCacheForOrder}
  * @returns whether an open hold was there to take from
  */
@@ -430,7 +430,7 @@ export const releaseForOrder = async (
 ): Promise<boolean> => claimAndApply(orderId, 'held', 'released', reason, session);
 
 /**
- * Give a PAID, not yet shipped order's claim back — the customer cancelled after payment, so the
+ * Give a PAID, not yet shipped order's claim back — the customer canceled after payment, so the
  * hold is `committed` and `releaseForOrder` never matches it. The same arithmetic as a release
  * (`reserved` down, the units still on the shelf become sellable); no stock left the building.
  *

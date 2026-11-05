@@ -2,7 +2,7 @@
  * @module
  * Every way an account's sessions end, as one table with no I/O: what each cause does and what it
  * tells subscribers. `services/revocation.ts` reads it to act; the type of the reasons an
- * `account.sessions-revoked` event can carry is derived from it, so no list is restated.
+ * `account.sessions_revoked` event can carry is derived from it, so no list is restated.
  *
  * See: docs/modules/account-sessions.md#revocation
  */
@@ -13,7 +13,7 @@
  * - `epoch`:      `with-write` — the credential's own write moves the session epoch;
  *                 `own` — `revokeFor` moves it, in its own transaction.
  * - `pending`:    also purge the one-time links and challenges issued under the old credential.
- * - `announce`:   tell `account.sessions-revoked` subscribers (`api-keys` revokes what was minted).
+ * - `announce`:   tell `account.sessions_revoked` subscribers (`api-keys` revokes what was minted).
  * - `callerKeeps`: the acting caller is re-minted in the same response.
  * - `modes`:      the session modes it applies to; refresh-token reuse only exists in `jwt`.
  */
@@ -98,13 +98,13 @@ export const REVOCATION = {
 /** One way sessions end — a key of {@link REVOCATION}. */
 export type RevocationCause = keyof typeof REVOCATION;
 
-/** The causes that announce `account.sessions-revoked` — the ones a subscriber treats as a compromise. */
+/** The causes that announce `account.sessions_revoked` — the ones a subscriber treats as a compromise. */
 export type SessionsRevokedReason = {
     [Cause in RevocationCause]: (typeof REVOCATION)[Cause]['announce'] extends true ? Cause : never;
 }[RevocationCause];
 
 /**
- * Whether a cause announces `account.sessions-revoked`, narrowing it to a reason.
+ * Whether a cause announces `account.sessions_revoked`, narrowing it to a reason.
  *
  * @param cause - the cause under test
  */

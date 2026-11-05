@@ -13,9 +13,9 @@ import { subscribeToWebhookEvents } from './publish';
 import { sweepDueWebhookDeliveries } from './sweep';
 import { reencryptWebhookSecrets } from './reencrypt';
 import { processDeliveryJob } from './attempt';
-import { listWebhookEventCatalogue, registerWebhookCatalogue } from './catalogue';
+import { listWebhookEventCatalog, registerWebhookCatalog } from './catalog';
 
-export type { WebhookEventCatalogueEntry } from '@types';
+export type { WebhookEventCatalogEntry } from '@types';
 export type { SubscriptionWithMintedSecrets, SubscriptionListFilters } from './subscriptions';
 export type { DeliveryListFilters } from './deliveries';
 
@@ -38,6 +38,6 @@ export const webhooksService = {
     sweepDueWebhookDeliveries,
     reencryptWebhookSecrets,
     processDeliveryJob,
-    listWebhookEventCatalogue,
-    registerWebhookCatalogue
+    listWebhookEventCatalog,
+    registerWebhookCatalog
 };

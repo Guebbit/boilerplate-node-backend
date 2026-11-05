@@ -1,13 +1,13 @@
 /**
  * @module
  * Money — an amount as a whole number of minor units. The contract publishes decimal
- * `number`/`double`; arithmetic between the boundaries runs in integers so a total stays exact
+ * strings at the currency's places; arithmetic between the boundaries runs in integers so a total stays exact
  * and order-independent. `Money` is a brand, not a class — same integer at runtime, distinct type
- * at compile time — so `toDecimalAmount` is the only way back out.
+ * at compile time — so `toDecimalString` is the only way back out.
  *
  * A currency's minor unit is NOT always a hundredth: JPY/KRW have none (the yen IS its own minor
  * unit), KWD/BHD have a thousandth (the fils). The exponents are ISO 4217's, pinned below.
- * {@link toMinorUnits}/{@link toDecimalAmount} both take the currency they're converting FOR, so a caller pricing a JPY order never multiplies by
+ * {@link toMinorUnits}/{@link toDecimalString} both take the currency they're converting FOR, so a caller pricing a JPY order never multiplies by
  * 100 where it should multiply by 1 — see Fowler's Money pattern, or Stripe's own "zero-decimal
  * currencies" table for the same rule under a different name.
  *
@@ -30,7 +30,8 @@ const asMoney = (value: number): Money =>
 /**
  * ISO 4217 minor-unit exponents, pinned in-repo. A currency's exponent decides how a stored
  * amount is read, so it must not follow a runtime's display table: `Intl` (CLDR) answers 0 for
- * HUF, IDR, COP, PKR, LBP and IQD, where ISO 4217 says 2, 2, 2, 2, 2 and 3.
+ * at least AFN ALL COP HUF IDR IQD IRR KPW LAK LBP MGA MMK PKR SOS SYP YER, where ISO 4217 says 2
+ * (3 for IQD).
  * https://www.six-group.com/en/products-services/financial-information/data-standards.html
  *
  * Exponent 2 is the rule; the other three lists are the exceptions. Codes are listed under the
@@ -104,42 +105,69 @@ export const toMinorUnits = (value: unknown, currency: string): Money => {
 };
 
 /**
- * Return an amount as the decimal `number` the contract publishes.
+ * Spell an amount as the wire does: plain decimal text at exactly the currency's places —
+ * `"19.90"` EUR, `"1000"` JPY, `"1.500"` KWD. The digits are moved, never divided, so no float
+ * is involved and two equal amounts are equal strings.
  * @param amount - the amount in minor units
- * @param currency - the ISO-4217 code `amount` is priced in — decides the scale factor
- * @returns the same amount as a decimal, at most `currency`'s own number of places
+ * @param currency - the ISO-4217 code `amount` is priced in — decides the places
+ * @returns the amount as padded decimal text, with a leading `-` when negative
  */
-export const toDecimalAmount = (amount: Money, currency: string): number =>
-    amount / 10 ** minorUnitExponent(currency);
+export const toDecimalString = (amount: Money, currency: string): string => {
+    const exponent = minorUnitExponent(currency);
+    // BigInt spells an integer double in full: `String(1e21)` would switch to exponent notation.
+    const digits = BigInt(Math.abs(amount))
+        .toString()
+        .padStart(exponent + 1, '0');
+    const whole = digits.slice(0, digits.length - exponent);
+    const text = exponent === 0 ? whole : `${whole}.${digits.slice(digits.length - exponent)}`;
+    return amount < 0 ? `-${text}` : text;
+};
+
+/**
+ * Re-spell any amount at exactly the currency's places: `"19.9"` or `19.9` become `"19.90"`, a
+ * stored `Decimal128` that lost its trailing zeros gets them back. Past the places it rounds.
+ * @param value - an amount as text or number (anything else reads as nothing)
+ * @param currency - the ISO-4217 code the amount is priced in
+ * @returns the amount as padded decimal text
+ */
+export const padDecimal = (value: unknown, currency: string): string =>
+    toDecimalString(toMinorUnits(value, currency), currency);
 
 /**
  * An amount spelled the way a locale writes money, with the places taken from the pinned ISO 4217
  * table rather than the runtime's own CLDR data, so a mail and the ledger agree on the scale.
  * https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat
  * @param locale - the reader's language
- * @param amount - a decimal in `currency`
+ * @param amount - a decimal amount as text (or a number) in `currency`
  * @param currency - an ISO-4217 code
  * @returns the formatted string, e.g. `€19.99`
  */
-export const formatMoney = (locale: string, amount: number, currency: string): string => {
+export const formatMoney = (locale: string, amount: string | number, currency: string): string => {
     const digits = minorUnitExponent(currency);
+    // `format` reads a numeric string exactly, with no float in between; the lib typings only
+    // admit `number | bigint` here, hence the one cast.
     return new Intl.NumberFormat(locale, {
         style: 'currency',
         currency,
         minimumFractionDigits: digits,
         maximumFractionDigits: digits
-    }).format(amount);
+    }).format(amount as number);
 };
 
 /**
- * Whether a decimal amount has no more places than the currency's minor unit — 19.99 EUR does,
- * 19.999 EUR and 100.5 JPY do not. The check that keeps what is stored equal to what is charged.
- * @param amount - a decimal amount
+ * Whether a decimal amount has no more places than the currency's minor unit: `"19.99"` EUR does,
+ * `"19.999"` EUR and `"100.5"` JPY do not. Trailing zeros past the unit do not count (`"19.990"` is
+ * 19.99). The check that keeps what is stored equal to what is charged.
+ * @param amount - a decimal amount as plain text
  * @param currency - the ISO-4217 code `amount` is priced in
- * @returns true when `amount` survives a trip through minor units unchanged
+ * @returns true when `amount` is plain decimal text with no value past the currency's places
  */
-export const fitsCurrency = (amount: number, currency: string): boolean =>
-    Number.isFinite(amount) && toDecimalAmount(toMinorUnits(amount, currency), currency) === amount;
+export const fitsCurrency = (amount: string, currency: string): boolean => {
+    const match = PLAIN_DECIMAL.exec(amount);
+    if (!match) return false;
+    const fraction = match.at(3) ?? ''; // group 3 is absent for a whole number
+    return fraction.slice(minorUnitExponent(currency)).replaceAll('0', '') === '';
+};
 
 /**
  * Add amounts with exact integer addition — no floating-point drift.

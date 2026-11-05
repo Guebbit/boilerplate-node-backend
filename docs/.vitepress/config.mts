@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitepress';
 import { fileURLToPath } from 'node:url';
 import { withMermaid } from 'vitepress-plugin-mermaid';
-import { moduleSidebar, readCatalogue } from '../../scripts/docs/module-catalogue';
+import { moduleSidebar, readCatalog } from '../../scripts/docs/module-catalog';
 
 export default withMermaid(
     defineConfig({
@@ -141,9 +141,9 @@ export default withMermaid(
                     }
                 ],
                 // Generated from each module's `module.yaml` and the pages beside the index —
-                // see ../../scripts/docs/module-catalogue.ts. Nothing to edit when a module is added.
+                // see ../../scripts/docs/module-catalog.ts. Nothing to edit when a module is added.
                 '/modules/': moduleSidebar(
-                    readCatalogue(
+                    readCatalog(
                         fileURLToPath(new URL('../../src/modules', import.meta.url)),
                         fileURLToPath(new URL('../modules', import.meta.url))
                     )

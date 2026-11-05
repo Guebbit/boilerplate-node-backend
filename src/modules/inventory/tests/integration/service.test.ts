@@ -114,7 +114,7 @@ describe('reserveForOrder', () => {
         ]);
 
         // A reserve and its undo, both on the row — hiding the reversal would make the ledger
-        // unreconcilable: "nothing happened" and "two things cancelled out" are different facts,
+        // unreconcilable: "nothing happened" and "two things canceled out" are different facts,
         // and only the second explains a gap in a stock take.
         const rows = await inventoryService.listMovements({ productId: String(plenty._id) });
         expect(rows.items.map((row) => row.reason)).toEqual([
@@ -778,7 +778,7 @@ describe('shipForOrder', () => {
         ]);
         await inventoryService.commitForOrder(orderId);
         auditSpy.mockClear();
-        // One unit shipped in a partial shipment, the other two cancelled as the remainder.
+        // One unit shipped in a partial shipment, the other two canceled as the remainder.
         await withTransaction(async (session) => {
             await inventoryService.shipLinesForOrder(
                 orderId,
@@ -864,12 +864,12 @@ describe('releaseForOrder', () => {
 
     it('records which story it was', async () => {
         const product = await createProduct({ onHand: 10 });
-        const cancelled = anOrderId();
+        const canceled = anOrderId();
         const abandoned = anOrderId();
-        await inventoryService.reserveForOrder(cancelled, [
+        await inventoryService.reserveForOrder(canceled, [
             { productId: String(product._id), quantity: 1 }
         ]);
-        await inventoryService.releaseForOrder(cancelled);
+        await inventoryService.releaseForOrder(canceled);
         await inventoryService.reserveForOrder(abandoned, [
             { productId: String(product._id), quantity: 1 }
         ]);

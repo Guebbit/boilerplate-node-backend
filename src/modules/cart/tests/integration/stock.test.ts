@@ -361,7 +361,7 @@ describe('the admin order create holds units like checkout', () => {
 });
 
 describe('cancel releases the hold', () => {
-    it('a cancelled unpaid order gives its units back', async () => {
+    it('a canceled unpaid order gives its units back', async () => {
         const user = await createUser();
         await giveAddress(user.id);
         const product = await createProduct({ onHand: 10 });
@@ -371,9 +371,9 @@ describe('cancel releases the hold', () => {
         expect(await countersOf(product._id)).toMatchObject({ reserved: 4, available: 6 });
 
         const orderId = String(checkout.success && checkout.data?._id);
-        const cancelled = await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
+        const canceled = await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
 
-        expect(cancelled.success).toBe(true);
+        expect(canceled.success).toBe(true);
         expect(await countersOf(product._id)).toEqual({
             onHand: 10,
             reserved: 0,
@@ -416,9 +416,9 @@ describe('cancel releases the hold', () => {
 
         expect(await countersOf(bought._id)).toMatchObject({ onHand: 10, reserved: 0 });
         expect(await countersOf(untouched._id)).toMatchObject({ onHand: 5, reserved: 0 });
-        // The order really is cancelled, not merely refunded on the shelf.
+        // The order really is canceled, not merely refunded on the shelf.
         const stored = await readOrder(orderId);
-        expect(stored?.status).toBe('cancelled');
+        expect(stored?.status).toBe('canceled');
     });
 
     it('a customer cancel racing the expiry sweep releases the hold exactly once', async () =>
@@ -445,7 +445,7 @@ describe('cancel releases the hold', () => {
             ]);
 
             const stored = await readOrder(orderId);
-            expect(stored?.status).toBe('cancelled');
+            expect(stored?.status).toBe('canceled');
             // Not 14 (double release) and not 4 (never released) — exactly the held 4 back.
             expect(await countersOf(product._id)).toEqual({
                 onHand: 10,
@@ -483,7 +483,7 @@ describe('the expiry sweep', () => {
              * subscription is wired.
              */
             const stored = await readOrder(orderId);
-            expect(stored?.status).toBe('cancelled');
+            expect(stored?.status).toBe('canceled');
         }));
 
     it('undoes the release when its announcement cannot be written, so the next sweep finishes the job', async () =>
@@ -507,8 +507,8 @@ describe('the expiry sweep', () => {
 
             await expect(inventoryService.runReservationSweep()).resolves.toBe(1);
             await settleOutboxNudges();
-            const cancelled = await readOrder(orderId);
-            expect(cancelled?.status).toBe('cancelled');
+            const canceled = await readOrder(orderId);
+            expect(canceled?.status).toBe('canceled');
             expect(await countersOf(product._id)).toMatchObject({ onHand: 10, reserved: 0 });
         }));
 

@@ -224,8 +224,8 @@ in code (`orders`' `canOverrideTo`, the digital-only rule).
 
 **`domain-primitives/money.ts` is the case for a value type in a codebase that is not otherwise doing
 tactical DDD.** A `Money` is a branded integer count of minor units, so every total is computed in
-whole cents and converted back to a decimal exactly once, at the boundary. `openapi.yaml` still
-types these `number`/`double` and no response shape moves; what moves is that no site outside this
+whole cents and converted back to a decimal exactly once, at the boundary. `openapi.yaml` types every amount
+as a decimal string (`DecimalAmount`, padded to the currency's places) and keeps `number` only for rates; no site outside this
 file holds a rounding rule of its own. It lives in `src/domain-primitives/` because many modules do money
 arithmetic, and a domain folder may import that tier — the one thing outside itself it may reach, since
 the tier imports only npm and `@types`.

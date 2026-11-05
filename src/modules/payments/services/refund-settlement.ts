@@ -12,7 +12,7 @@ import { RefundFailureReason, RefundStatus, type CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { DomainEventMap } from '@kernel/events';
 import { announceInTransaction } from '@kernel/outbox';
-import { toMinorUnits, subtractMoney, type Money } from '@domain-primitives/money';
+import { padDecimal, toMinorUnits, subtractMoney, type Money } from '@domain-primitives/money';
 import { orderService } from '@modules/orders';
 import { ownOrderFlag } from '@modules/access';
 import { paymentsAuditActions } from '../audit';
@@ -53,7 +53,7 @@ export const refundRow = (
     refund: Pick<RefundRecord, '_id' | 'amount' | 'currency' | 'reason'>
 ): Record<string, string | number> => ({
     refundId: String(refund._id),
-    amount: refund.amount,
+    amount: padDecimal(refund.amount, refund.currency),
     currency: refund.currency,
     reason: refund.reason
 });
@@ -128,11 +128,11 @@ export const refundedPayload = (
         ? {
               goods: {
                   lines: refund.lines.map(({ productId, quantity }) => ({ productId, quantity })),
-                  shipping: refund.shipping ?? 0
+                  shipping: padDecimal(refund.shipping ?? '0', refund.currency)
               }
           }
         : {}),
-    amount: refund.amount,
+    amount: padDecimal(refund.amount, refund.currency),
     currency: refund.currency,
     full:
         toMinorUnits(refund.amount, refund.currency) ===
@@ -247,7 +247,7 @@ const failedPayload = (
     paymentId: String(payment._id),
     orderId: String(payment.orderId),
     refundId: String(refund._id),
-    amount: refund.amount,
+    amount: padDecimal(refund.amount, refund.currency),
     currency: refund.currency,
     failureReason,
     final
@@ -402,7 +402,7 @@ export const reverseRefund = (
                           paymentId: String(final._id),
                           orderId: String(final.orderId),
                           refundId: String(refund._id),
-                          amount: refund.amount,
+                          amount: padDecimal(refund.amount, refund.currency),
                           currency: refund.currency,
                           failureReason: reason
                       },

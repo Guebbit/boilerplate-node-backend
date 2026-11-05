@@ -10,7 +10,7 @@
 
 import { announceInTransaction, announceWithin, type OutboxAnnouncements } from '@kernel/outbox';
 import { inventoryService } from '@modules/inventory';
-import { ORDER_CANCELLED, ORDER_STATUS_CHANGED } from '../events';
+import { ORDER_CANCELED, ORDER_STATUS_CHANGED } from '../events';
 import { OrderStatus } from '@types';
 import type { ClientSession } from 'mongoose';
 import type { OrderDocument } from '../model';
@@ -106,7 +106,7 @@ const markSystemMove = (
  * `ORDER_STATUS_CHANGED` event emitted below to issue the order's invoice — see
  * `docs/modules/invoicing.md`.
  *
- * Paid means stock committed: the order's own rule, as cancelled means stock released. The hold's
+ * Paid means stock committed: the order's own rule, as canceled means stock released. The hold's
  * `held → committed` claim therefore lands in the same transaction as the status move.
  *
  * Money can land after the hold was released (the window closed, the cancel not yet run). The
@@ -143,7 +143,7 @@ export const markPaid = (
     return announceMove(
         session,
         (active) =>
-            // An order that can no longer be paid (the sweep already cancelled it) takes no units
+            // An order that can no longer be paid (the sweep already canceled it) takes no units
             // back: the retake would reserve them and the cancel release them again, two ledger
             // rows for nothing. Only a payable order retakes.
             orderRepository.findInSession(orderId, active).then((current) => {
@@ -151,7 +151,7 @@ export const markPaid = (
                 // Money that lands after the hold was released takes its units again FIRST.
                 // Short, the order is not written `paid`: `null` sends the payment down the
                 // refund path, and the late cancel ends the order. Retaken but the order was
-                // lost to a racing move meanwhile, the units go back: a cancelled order never
+                // lost to a racing move meanwhile, the units go back: a canceled order never
                 // keeps stock.
                 return inventoryService.retakeReleasedForOrder(orderId, active).then((retake) => {
                     if (retake === 'short') return null;
@@ -172,15 +172,15 @@ export const markPaid = (
 };
 
 /**
- * Report that fulfilment started on a paid order. `delivery`'s own door for this move —
+ * Report that fulfillment started on a paid order. `delivery`'s own door for this move —
  * `POST /orders/{id}/process` — is the one caller; the admin override
  * (`orders/services/override.ts`'s `overrideStatus`) reaches `processing` too, but does not call
  * this function — `applyOverride` writes that move itself.
- * @param orderId - the order fulfilment started on
+ * @param orderId - the order fulfillment started on
  * @param session - the caller's transaction, when this move belongs to one (a first
  *   shipment makes it implicitly); absent, the move opens its own
  * @param actor - the staff member who started it, for the timeline
- * @returns the order as it now stands, or `null` if it was not awaiting fulfilment
+ * @returns the order as it now stands, or `null` if it was not awaiting fulfillment
  */
 export const markProcessing = (
     orderId: string,
@@ -290,10 +290,10 @@ export const markDelivered = (
 
 /**
  * Report that the order became complete in one act: every unit is accounted for and every
- * shipment has arrived. Two acts do that — a digital fulfilment, and a remainder cancel that
+ * shipment has arrived. Two acts do that — a digital fulfillment, and a remainder cancel that
  * lands after every shipment was delivered — and each makes both moves at once, in one write:
  * `processing -> shipped -> delivered` (a digital-only order has no `shipped` step, so it announces
- * the one `fulfilmentComplete` move).
+ * the one `fulfillmentComplete` move).
  *
  * The clock starts at `at` for goods — the later of the last delivery and the cancellation, since
  * the order only became complete then — and at payment for digital content (Art. 9(2)(c)).
@@ -303,20 +303,20 @@ export const markDelivered = (
  * @param actor - the staff member whose act completed it, for the timeline
  * @returns the order as it now stands, or `null` if it was not `processing`
  */
-export const markFulfilmentComplete = (
+export const markFulfillmentComplete = (
     orderId: string,
     at: Date,
     session: ClientSession,
     actor?: string | null
 ): Promise<OrderDocument | null> =>
     orderRepository.findInSession(orderId, session).then((order) => {
-        const { from } = ORDER_EVENTS.fulfilmentComplete;
+        const { from } = ORDER_EVENTS.fulfillmentComplete;
         // The table's tuples are literal types; widened so `includes` accepts any status.
         if (!order || !(from as readonly OrderStatus[]).includes(order.status)) return null;
 
         const clock = deliveryClockFor(order, at, withdrawalPeriodDays());
         const events: readonly OrderEventName[] = isDigitalOnlyOrder(order.items)
-            ? ['fulfilmentComplete']
+            ? ['fulfillmentComplete']
             : ['ship', 'deliver'];
         return announceWithin(
             session,
@@ -335,23 +335,23 @@ export const markFulfilmentComplete = (
     });
 
 /**
- * Settle an order whose every parcel was lost and whose remainder was cancelled and refunded:
- * nothing ever arrived, so it ends `cancelled` with cause `lost` — not `delivered`, which would
+ * Settle an order whose every parcel was lost and whose remainder was canceled and refunded:
+ * nothing ever arrived, so it ends `canceled` with cause `lost` — not `delivered`, which would
  * start a withdrawal and a guarantee clock for goods the buyer never had.
  *
  * Not `cancel()`'s path: that one forces a refund, and the remainder cancel already made it,
  * so this writes `refund: false` itself. No clocks, no `shipped`/`delivered` rows, and the
- * `cancelled` row is the system's (no account behind it). The stock is already back.
+ * `canceled` row is the system's (no account behind it). The stock is already back.
  * @param orderId - the order to settle
  * @param session - the act's transaction; the settlement commits with the cancel or not at all
  * @returns `null` if the order was not `processing`; else the order as it now stands plus
- *   `reportCancelled`, which the owner of the transaction calls AFTER its commit: the audit row and
+ *   `reportCanceled`, which the owner of the transaction calls AFTER its commit: the audit row and
  *   the analytics event, as the system actor, like every other cancel
  */
 export const markUndeliverable = (
     orderId: string,
     session: ClientSession
-): Promise<{ order: OrderDocument; reportCancelled: () => void } | null> =>
+): Promise<{ order: OrderDocument; reportCanceled: () => void } | null> =>
     announceWithin(
         session,
         withTimeline(
@@ -364,13 +364,13 @@ export const markUndeliverable = (
                 ),
             () => [
                 {
-                    type: 'cancelled',
+                    type: 'canceled',
                     data: { by: CANCEL_CAUSES.lost.by, cause: 'lost', refund: false }
                 }
             ]
         ),
         () => ({
-            name: ORDER_CANCELLED,
+            name: ORDER_CANCELED,
             payload: { orderId, refund: false, cause: 'lost' },
             aggregateId: orderId
         })
@@ -378,7 +378,7 @@ export const markUndeliverable = (
         order
             ? {
                   order,
-                  reportCancelled: () => {
+                  reportCanceled: () => {
                       void afterCancel(order, 'lost', false);
                   }
               }

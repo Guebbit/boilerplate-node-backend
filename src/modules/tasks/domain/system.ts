@@ -56,7 +56,7 @@ export const accountReviewOpening = (userId: string, now: Date): SystemOpening =
     link: { type: TaskLinkType.user, id: userId },
     subjectId: userId,
     subject: 'Account flagged for review',
-    message: `Account ${userId} cancelled paid orders over the limit. Review it: place a purchase hold, or lift the flag.`,
+    message: `Account ${userId} canceled paid orders over the limit. Review it: place a purchase hold, or lift the flag.`,
     dueAt: new Date(now.getTime() + REVIEW_WINDOW_MS)
 });
 

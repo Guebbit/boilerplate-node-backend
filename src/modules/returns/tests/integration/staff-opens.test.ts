@@ -86,10 +86,10 @@ const buyerWithOrder = async ({
 }: Wanted = {}) => {
     customers += 1;
     const user = await createUser({ email: `staff-opens-${customers}@example.com` });
-    const shirt = await createProduct({ title: 'Shirt', price: 30, onHand: 10 });
+    const shirt = await createProduct({ title: 'Shirt', price: '30.00', onHand: 10 });
     const mug = await createProduct({
         title: 'Mug',
-        price: 10,
+        price: '10.00',
         onHand: 10,
         ...(excluded ? { noWithdrawal: true } : {})
     });
@@ -455,16 +455,16 @@ describe('staff recording a withdrawal the buyer stated outside the shop', () =>
             status: 'closed',
             statedVia: 'phone',
             openedBy: 'staff',
-            refundAmount: 40
+            refundAmount: '40.00'
         });
         expect(outcome.success && outcome.data.requestedAt.getTime()).toBe(stated.getTime());
         const order = await readOrder(orderId);
-        expect(order?.status).toBe(OrderStatus.cancelled);
+        expect(order?.status).toBe(OrderStatus.canceled);
         await settleOutboxNudges();
         const payment = await paymentService.getForOrder(orderId, asModerator());
-        expect(payment.success && payment.data.amountRefunded).toBe(40);
-        const cancelled = await timelineOf(orderId, 'cancelled');
-        expect(cancelled[0]).toMatchObject({
+        expect(payment.success && payment.data.amountRefunded).toBe('40.00');
+        const canceled = await timelineOf(orderId, 'canceled');
+        expect(canceled[0]).toMatchObject({
             actor: 'test-moderator',
             data: { cause: 'withdrawal' }
         });

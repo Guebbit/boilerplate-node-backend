@@ -33,7 +33,7 @@ export type CancelRefusal = 'window-closed' | 'excluded' | 'no-key';
  *
  * @param order - the order
  * @param authContext - the caller
- * @param remainder - the lines of the fulfillment order being cancelled
+ * @param remainder - the lines of the fulfillment order being canceled
  * @param statedAt - when the buyer stated the withdrawal: set by staff recording one, absent for
  *   the buyer (now) and for staff cancelling for their own reasons (no withdrawal to judge)
  */

@@ -44,7 +44,7 @@ export const readCappedBytes = async (
  * Read a response body as text, refusing one longer than `maxBytes`.
  *
  * @param response - the answer to read
- * @param maxBytes - the most bytes to accept; the stream is cancelled the moment it passes this
+ * @param maxBytes - the most bytes to accept; the stream is canceled the moment it passes this
  * @returns the body as UTF-8 text
  * @throws {Error} when the body is longer than `maxBytes`
  */

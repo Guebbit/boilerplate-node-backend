@@ -226,28 +226,28 @@ export const customerCounts = ({
         }));
 
 /**
- * Orders placed in the window, and how many of those ended cancelled: a cohort, since there is no
+ * Orders placed in the window, and how many of those ended canceled: a cohort, since there is no
  * cancel date to bucket by.
  * @param window - the half-open window
  */
 export const cancellationCohort = ({
     from,
     to
-}: ReportWindow): Promise<{ placed: number; cancelled: number }> =>
+}: ReportWindow): Promise<{ placed: number; canceled: number }> =>
     orderRepository
-        .aggregate<{ placed: number; cancelled: number }>([
+        .aggregate<{ placed: number; canceled: number }>([
             { $match: { createdAt: { $gte: from, $lt: to }, deletedAt: null } },
             {
                 $group: {
                     _id: null,
                     placed: { $sum: 1 },
-                    cancelled: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } }
+                    canceled: { $sum: { $cond: [{ $eq: ['$status', 'canceled'] }, 1, 0] } }
                 }
             }
         ])
         .then((rows) => ({
             placed: rows.at(0)?.placed ?? 0,
-            cancelled: rows.at(0)?.cancelled ?? 0
+            canceled: rows.at(0)?.canceled ?? 0
         }));
 
 /** Bank transfers still owed, in one currency. */

@@ -2,7 +2,7 @@
  * @module
  * Erasing an account cancels its never-paid orders — through the reservation sweep's own path, so
  * the stock hold goes back — and only AFTER the erasure committed. A paid order is the invoice and
- * is only detached, never cancelled. Driven through `userService.remove` with the real module
+ * is only detached, never canceled. Driven through `userService.remove` with the real module
  * wiring: a direct call to the hook would pass even if `orders/module.ts` stopped registering it.
  */
 import { setupTestDb } from '@tests/setup-test-db';
@@ -72,7 +72,7 @@ describe('orders — erasing an account cancels its never-paid orders', () => {
 
         await eraseAsScheduled(user);
 
-        expect((await readOrder(String(order._id)))!.status).toBe(OrderStatus.cancelled);
+        expect((await readOrder(String(order._id)))!.status).toBe(OrderStatus.canceled);
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 0, available: 10 });
     });
 
@@ -111,8 +111,8 @@ describe('orders — erasing an account cancels its never-paid orders', () => {
 
         await eraseAsScheduled(user);
 
-        expect((await readOrder(String(first.order._id)))!.status).toBe(OrderStatus.cancelled);
-        expect((await readOrder(String(second.order._id)))!.status).toBe(OrderStatus.cancelled);
+        expect((await readOrder(String(first.order._id)))!.status).toBe(OrderStatus.canceled);
+        expect((await readOrder(String(second.order._id)))!.status).toBe(OrderStatus.canceled);
         expect(await countersOf(first.product._id)).toMatchObject({ reserved: 0 });
         expect(await countersOf(second.product._id)).toMatchObject({ reserved: 0 });
     });
@@ -134,7 +134,7 @@ describe('orders — erasing an account cancels its never-paid orders', () => {
         await eraseAsScheduled(user);
 
         expect(analyticsSpy).toHaveBeenCalledWith(
-            expect.objectContaining({ event: ordersAnalyticsEvents.ORDER_CANCELLED })
+            expect.objectContaining({ event: ordersAnalyticsEvents.ORDER_CANCELED })
         );
         expect(analyticsSpy).not.toHaveBeenCalledWith(
             expect.objectContaining({ event: ordersAnalyticsEvents.ORDER_RESERVATION_EXPIRED })
@@ -156,15 +156,15 @@ describe('orders — erasing an account cancels its never-paid orders', () => {
         expect(reloaded!.userId).toBeUndefined();
     });
 
-    it('leaves an already-cancelled order alone', async () => {
+    it('leaves an already-canceled order alone', async () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
-        await forceOrderStatus(String(order._id), OrderStatus.cancelled);
+        await forceOrderStatus(String(order._id), OrderStatus.canceled);
 
         await eraseAsScheduled(user);
 
-        expect((await readOrder(String(order._id)))!.status).toBe(OrderStatus.cancelled);
+        expect((await readOrder(String(order._id)))!.status).toBe(OrderStatus.canceled);
     });
 
     it("does not touch another account's pending order", async () => {

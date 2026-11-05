@@ -69,6 +69,8 @@ setting made `orders` more of a hub. Every commerce platform models the shop apa
 `shopCurrency`, `shipToCountries`, `returnAddress`, `returnPostagePayer`) ask the config slice on
 every call, so a test varies a setting per case and a deployment corrects one with a restart.
 
+**`GET /shop` publishes `minorUnits`**, the places of the shop currency (2 EUR, 0 JPY, 3 KWD). Amounts travel as decimal strings that carry their own scale, so the one client that has to know it up front is a price input that starts empty (`ProductCreate`); no ISO table lives in the client.
+
 **The seller is public on purpose.** The Consumer Rights Directive (Art. 6(1)) wants the trader's
 identity, address, phone and email before the contract, and the e-Commerce Directive (Art. 5) wants
 the VAT number. `GET /shop` is where a visitor, and the Terms page, read them. Not published: the
@@ -92,7 +94,8 @@ These settings are deploy-time env on purpose: a correction is a restart, not an
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | `NODE_SHOP_LEGAL_NAME`, `_STREET`, `_CITY`, `_ZIP`   | The seller's name and address (required)                                           |
 | `NODE_SHOP_COUNTRY`                                  | The country VAT is charged in (required)                                           |
-| `NODE_SHOP_EMAIL`, `NODE_SHOP_PHONE`                 | How a customer reaches the shop (required)                                         |
+| `NODE_LEGAL_EMAIL`                                   | The legal-notice address; unset means `NODE_SUPPORT_EMAIL` (`GET /shop` `email`)   |
+| `NODE_SHOP_PHONE`                                    | How a customer reaches the shop (required)                                         |
 | `NODE_SHOP_VAT_NUMBER`                               | VAT identification number; absent below the registration threshold                 |
 | `NODE_SHOP_TRADE_REGISTER`, `_REGISTRATION_NUMBER`   | The commercial register and the seller's number in it; absent for a seller in none |
 | `NODE_SHOP_TIMEZONE`                                 | The IANA zone whose calendar numbering series and reports follow                   |

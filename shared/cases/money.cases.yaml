@@ -8,8 +8,8 @@
 #                  path; anything else (exponent form, `.5`, padding) is read as a number.
 #   minor-number   a number -> minor units: `round(value * 10^exponent)`, half toward +infinity.
 #                  Non-finite input and negative zero both come out as 0.
-#   decimal        minor units -> the decimal the API publishes.
-#   fits           whether a decimal has no more places than the currency's minor unit.
+#   decimal        minor units -> the decimal TEXT the API publishes, padded to the currency's places.
+#   fits           whether decimal text has no more places than the currency's minor unit.
 #   apportion      split `total` over `weights`; floor every share, then the leftover goes to the
 #                  largest weight (the first one on a tie). All-zero weights give all zeros.
 #   scale-by-rate  `round(amount * rate)`, half toward +infinity (so -252.5 is -252).
@@ -22,6 +22,8 @@ cases:
     - { name: BHD has three, kind: exponent, currency: BHD, exponent: 3 }
     - { name: IQD has three where CLDR says none, kind: exponent, currency: IQD, exponent: 3 }
     - { name: CLF has four, kind: exponent, currency: CLF, exponent: 4 }
+    - { name: MGA has two where CLDR says none, kind: exponent, currency: MGA, exponent: 2 }
+    - { name: MRU has two, kind: exponent, currency: MRU, exponent: 2 }
     - { name: HUF has two where CLDR says none, kind: exponent, currency: HUF, exponent: 2 }
     - { name: IDR has two where CLDR says none, kind: exponent, currency: IDR, exponent: 2 }
     - { name: an unlisted code gets two, kind: exponent, currency: XXX, exponent: 2 }
@@ -217,39 +219,45 @@ cases:
           kind: decimal,
           minor: 1999,
           currency: EUR,
-          decimal: 19.99
+          decimal: '19.99'
       }
-    - { name: JPY stays whole, kind: decimal, minor: 1999, currency: JPY, decimal: 1999 }
+    - { name: JPY stays whole, kind: decimal, minor: 1999, currency: JPY, decimal: '1999' }
     - {
           name: KWD divides by a thousand,
           kind: decimal,
           minor: 1234567,
           currency: KWD,
-          decimal: 1234.567
+          decimal: '1234.567'
       }
     - {
           name: CLF divides by ten thousand,
           kind: decimal,
           minor: 10001,
           currency: CLF,
-          decimal: 1.0001
+          decimal: '1.0001'
       }
     - {
           name: a negative amount keeps its sign,
           kind: decimal,
           minor: -1999,
           currency: EUR,
-          decimal: -19.99
+          decimal: '-19.99'
       }
-    - { name: zero is zero, kind: decimal, minor: 0, currency: EUR, decimal: 0 }
-    - { name: two places fit EUR, kind: fits, amount: 19.99, currency: EUR, fits: true }
-    - { name: three places do not fit EUR, kind: fits, amount: 19.999, currency: EUR, fits: false }
-    - { name: a whole amount fits JPY, kind: fits, amount: 100, currency: JPY, fits: true }
-    - { name: a half yen does not fit JPY, kind: fits, amount: 100.5, currency: JPY, fits: false }
-    - { name: three places fit KWD, kind: fits, amount: 1234.567, currency: KWD, fits: true }
-    - { name: four places fit CLF, kind: fits, amount: 1.0001, currency: CLF, fits: true }
-    - { name: NaN never fits, kind: fits, amount: NaN, currency: EUR, fits: false }
-    - { name: infinity never fits, kind: fits, amount: Infinity, currency: EUR, fits: false }
+    - { name: zero is zero, kind: decimal, minor: 0, currency: EUR, decimal: '0.00' }
+    - { name: two places fit EUR, kind: fits, amount: '19.99', currency: EUR, fits: true }
+    - {
+          name: three places do not fit EUR,
+          kind: fits,
+          amount: '19.999',
+          currency: EUR,
+          fits: false
+      }
+    - { name: a whole amount fits JPY, kind: fits, amount: '100', currency: JPY, fits: true }
+    - { name: a half yen does not fit JPY, kind: fits, amount: '100.5', currency: JPY, fits: false }
+    - { name: three places fit KWD, kind: fits, amount: '1234.567', currency: KWD, fits: true }
+    - { name: four places fit CLF, kind: fits, amount: '1.0001', currency: CLF, fits: true }
+    - { name: NaN never fits, kind: fits, amount: 'NaN', currency: EUR, fits: false }
+    - { name: infinity never fits, kind: fits, amount: 'Infinity', currency: EUR, fits: false }
     - {
           name: the leftover unit goes to the first of equal weights,
           kind: apportion,

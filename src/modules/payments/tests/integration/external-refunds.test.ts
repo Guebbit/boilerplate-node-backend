@@ -53,7 +53,7 @@ afterEach(() => {
 /** A customer who paid 100.00 by card. */
 const paidOrder = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 50, onHand: 10 });
+    const product = await createProduct({ price: '50.00', onHand: 10 });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     await inventoryService.reserveForOrder(String(order._id), [
         { productId: String(product._id), quantity: 2 }
@@ -94,10 +94,10 @@ const refundedEvents = () => outboxEventModel.countDocuments({ name: PAYMENT_REF
 const overtaken = async () => {
     const { orderId, providerRef } = await paidOrder();
     setFakeRefundFailure(providerRef, 'provider_unavailable');
-    await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: 50 });
+    await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: '50.00' });
     setFakeRefundFailure(providerRef, undefined);
     const refundRef = addFakeExternalRefund(providerRef, {
-        amount: 80,
+        amount: '80.00',
         currency: 'EUR',
         status: 'succeeded'
     });
@@ -109,7 +109,7 @@ describe('a refund made in the dashboard', () => {
     it('is imported once: a settled external record, the stamp, the event and the buyer mail', async () => {
         const { orderId, providerRef } = await paidOrder();
         const refundRef = addFakeExternalRefund(providerRef, {
-            amount: 30,
+            amount: '30.00',
             currency: 'EUR',
             status: 'succeeded',
             createdAt: new Date('2026-03-01T10:00:00.000Z')
@@ -123,12 +123,12 @@ describe('a refund made in the dashboard', () => {
         expect(payment.refunds[0]).toMatchObject({
             status: 'succeeded',
             reason: 'external',
-            amount: 30,
+            amount: '30.00',
             providerRefundRef: refundRef,
             idempotencyKey: `import:${refundRef}`
         });
         expect(payment.refunds[0].settledAt?.toISOString()).toBe('2026-03-01T10:00:00.000Z');
-        expect(payment.amountRefunded).toBe(30);
+        expect(payment.amountRefunded).toBe('30.00');
         expect(await stampOf(orderId)).toBe('partially_refunded');
         await eventually(() => settleOutboxNudges().then(() => true));
         expect(await refundedEvents()).toBe(1);
@@ -145,17 +145,24 @@ describe('a refund made in the dashboard', () => {
     it('imports two partial dashboard refunds, and offers only what is left', async () => {
         const { orderId, providerRef } = await paidOrder();
         const first = addFakeExternalRefund(providerRef, {
-            amount: 30,
+            amount: '30.00',
             currency: 'EUR',
             status: 'succeeded'
         });
-        addFakeExternalRefund(providerRef, { amount: 20, currency: 'EUR', status: 'succeeded' });
+        addFakeExternalRefund(providerRef, {
+            amount: '20.00',
+            currency: 'EUR',
+            status: 'succeeded'
+        });
 
         await deliver(providerRef, first);
 
         const payment = await paymentOf(orderId);
-        expect(payment.refunds.map((refund) => refund.amount).toSorted()).toEqual([20, 30]);
-        expect(payment.amountRefunded).toBe(50);
+        expect(payment.refunds.map((refund) => refund.amount).toSorted()).toEqual([
+            '20.00',
+            '30.00'
+        ]);
+        expect(payment.amountRefunded).toBe('50.00');
         const view = await paymentService.getForOrder(orderId, asAdmin());
         expect(view.data?.displayStatus).toBe('partially_refunded');
     });
@@ -163,7 +170,7 @@ describe('a refund made in the dashboard', () => {
     it('skips a pending one, then imports it once it has succeeded', async () => {
         const { orderId, providerRef } = await paidOrder();
         const refundRef = addFakeExternalRefund(providerRef, {
-            amount: 30,
+            amount: '30.00',
             currency: 'EUR',
             status: 'pending'
         });
@@ -180,11 +187,15 @@ describe('a refund made in the dashboard', () => {
     it('skips a failed one and one in another currency', async () => {
         const { orderId, providerRef } = await paidOrder();
         const failed = addFakeExternalRefund(providerRef, {
-            amount: 30,
+            amount: '30.00',
             currency: 'EUR',
             status: 'failed'
         });
-        addFakeExternalRefund(providerRef, { amount: 30, currency: 'USD', status: 'succeeded' });
+        addFakeExternalRefund(providerRef, {
+            amount: '30.00',
+            currency: 'USD',
+            status: 'succeeded'
+        });
 
         await deliver(providerRef, failed);
 
@@ -194,7 +205,7 @@ describe('a refund made in the dashboard', () => {
     it('records one that is bigger than what was paid: the money moved', async () => {
         const { orderId, providerRef } = await paidOrder();
         const refundRef = addFakeExternalRefund(providerRef, {
-            amount: 130,
+            amount: '130.00',
             currency: 'EUR',
             status: 'succeeded'
         });
@@ -202,7 +213,7 @@ describe('a refund made in the dashboard', () => {
         await deliver(providerRef, refundRef);
 
         const payment = await paymentOf(orderId);
-        expect(payment.amountRefunded).toBe(130);
+        expect(payment.amountRefunded).toBe('130.00');
         expect(await stampOf(orderId)).toBe('refunded');
     });
 });
@@ -210,7 +221,7 @@ describe('a refund made in the dashboard', () => {
 describe('a refund that is ours', () => {
     it('is matched by the record id the provider echoes, never imported', async () => {
         const { orderId, providerRef } = await paidOrder();
-        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: 30 });
+        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: '30.00' });
         const payment = await paymentOf(orderId);
         const refundRef = refundRefOfRecord(String(payment.refunds[0]._id)) ?? '';
 
@@ -223,7 +234,9 @@ describe('a refund that is ours', () => {
         withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { orderId, providerRef } = await paidOrder();
             setFakeRefundTimeout(providerRef, true);
-            await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: 30 });
+            await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
+                amount: '30.00'
+            });
             const failed = await paymentOf(orderId);
             expect(failed.refunds[0]).toMatchObject({
                 status: 'failed',
@@ -253,8 +266,8 @@ describe('an open refund of ours an outside refund left no room for', () => {
                 expect.objectContaining({
                     kind: 'refund_exceeds_remaining',
                     orderId,
-                    amount: 50,
-                    exceedsBy: 30
+                    amount: '50.00',
+                    exceedsBy: '30.00'
                 })
             ]);
             const payment = await paymentOf(orderId);
@@ -270,7 +283,7 @@ describe('an open refund of ours an outside refund left no room for', () => {
                 callerContextAs('admin')
             );
             expect(canceled.success).toBe(true);
-            expect(await refundedOf(orderId)).toBe(80);
+            expect(await refundedOf(orderId)).toBe('80.00');
             await expect(paymentService.listAttention()).resolves.toEqual({ items: [] });
         }));
 });

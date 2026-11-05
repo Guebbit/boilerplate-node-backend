@@ -44,7 +44,7 @@ let customers = 0;
 const orderIn = async (status: OrderStatus) => {
     customers += 1;
     const user = await createUser({ email: `outbox-${customers}@example.com` });
-    const shirt = await createProduct({ title: 'Shirt', price: 30 });
+    const shirt = await createProduct({ title: 'Shirt', price: '30.00' });
     const carried = status === OrderStatus.shipped || status === OrderStatus.delivered;
     const order = await createOrder(user, [toOrderItem(shirt, 2)], {
         status: carried ? OrderStatus.processing : status

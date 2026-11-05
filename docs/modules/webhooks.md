@@ -20,7 +20,7 @@ instead of polling "anything new?" on a timer.
 flowchart LR
     E["an order is paid"] --> S["this backend"]
     S -->|"signed POST, seconds later"| U["the subscriber's URL"]
-    U --> R["they react:<br/>notify · fulfil · reconcile"]
+    U --> R["they react:<br/>notify · fulfill · reconcile"]
 
     classDef here fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef out fill:#dcfce7,stroke:#16a34a,color:#111827;
@@ -38,7 +38,7 @@ data: {orderId} }`; Slack requires a `text`/`blocks` body, so pointing a subscri
   delivery names the order (`data.orderId`), and their warehouse looks it up and starts packing
   without waiting on a nightly export.
 - **A reconciliation endpoint that reverses failed or cancelled orders in near-real-time.**
-  `payment.failed` and `order.cancelled` reach a small endpoint of your own — a publicly reachable
+  `payment.failed` and `order.canceled` reach a small endpoint of your own — a publicly reachable
   HTTPS one, whatever it does internally, since [the SSRF guard](../theory/defences/ssrf.md)
   refuses a private address — rather than a batch job noticing hours later.
 
@@ -100,7 +100,7 @@ Three things read the same files, so they cannot drift apart:
 
 - `asyncapi.public.yaml`, the contract a subscriber reads.
 - `GET /webhooks/events`, which lists the events of the modules that are **registered**
-  (`services/catalogue.ts`, built in `onRegistered`).
+  (`services/catalog.ts`, built in `onRegistered`).
 - The subscribe check: `POST`, `PUT` and `PATCH` on a subscription answer 422 on an `eventTypes`
   name the catalogue does not list. `*` stays valid. A typo would otherwise be accepted and never
   fire; Stripe (`enabled_events`) and Shopify (topics) refuse the same way.
@@ -121,7 +121,7 @@ flowchart LR
     PUB --> MATCH{"matching<br/>subscriptions?"}
     MATCH -->|none| DROP["nothing"]
     MATCH -->|n| Q["worker.webhook.deliver<br/>one message per subscription"]
-    Q --> CLAIM{"claim the lease?<br/>pending, or a stranded<br/>expired in-flight row"}
+    Q --> CLAIM{"claim the lease?<br/>pending, or a stranded<br/>expired in_flight row"}
     CLAIM -->|no, live lease held| ACK["ack — nothing to do"]
     CLAIM -->|yes| W["webhooks' own<br/>consumer (module.ts)"]
     W --> HTTP["signed POST<br/>SSRF-checked, timed out"]
@@ -138,7 +138,7 @@ flowchart LR
 relay is at-least-once, so the subscriber can see one event twice. It keeps the outbox row's id as
 the delivery's `eventId`, and a unique `(subscriptionId, eventId)` index makes the second arrival a
 no-op. A failed fan-out throws, so the relay retries it; subscriptions that already have their row
-are skipped. Every event announced inside a transaction travels this way: `order.created`, `order.cancelled`, the payment settle and decline events, and `return.requested`, `return.received` and `return.closed`. `user.erased`, `user.updated` and `order.redacted` ride the transaction of the write they announce the same way.
+are skipped. Every event announced inside a transaction travels this way: `order.created`, `order.canceled`, the payment settle and decline events, and `return.requested`, `return.received` and `return.closed`. `user.erased`, `user.updated` and `order.redacted` ride the transaction of the write they announce the same way.
 
 The queued message itself carries only `{ deliveryId }` — a Claim Check, not a copy of the
 delivery. The row is the payload's only source of truth once the consumer claims it, which is what
@@ -190,13 +190,13 @@ A first attempt then waits for the next sweep, up to a minute, instead of going 
 **The sweep publishes; only a claim delivers — a visibility-timeout lease, the way SQS does it.**
 The sweep does NOT claim a row before publishing it: publishing is safe to do more than once (the
 claim below is what actually decides who sends), and a sweep that claimed first would move the row to
-`in-flight` before the worker's own claim ran, so every retry past the first attempt would be
+`in_flight` before the worker's own claim ran, so every retry past the first attempt would be
 silently acknowledged without ever being sent. So:
 
 - `webhookDeliveryRepository.claimPending` (worker/queue path) and `claimForReplay` (admin replay)
-  are the only two places a row becomes `in-flight` — each stamps a `leaseToken` and a
+  are the only two places a row becomes `in_flight` — each stamps a `leaseToken` and a
   `leaseExpiresAt` well above the 10s delivery timeout, in the same atomic `findOneAndUpdate`.
-- `claimPending` matches `pending`, or an `in-flight` row whose lease has already expired — the
+- `claimPending` matches `pending`, or an `in_flight` row whose lease has already expired — the
   crash-recovery path for a worker that took the row and never finished. `claimForReplay` matches
   anything NOT under a live lease, including a terminal `succeeded`/`exhausted` row, since replay's
   whole point is re-sending one of those.
@@ -293,7 +293,7 @@ Subscriptions, the secret ring and the delivery log all have an admin screen in 
 endpoints. "Usable via any HTTP client" is true too (nothing here requires the UI). See that repo's `docs/modules/webhooks.md` for the client side, including why
 `createSecret`'s response never gets cached client-side.
 
-Delivery payloads carry ids, amounts and the return `reason` code, never a return's free text
+Delivery payloads carry ids, amounts (decimal strings at the currency's own places, `"19.90"` EUR, `"1000"` JPY, like every API amount) and the return `reason` code, never a return's free text
 (`note`, `declineMessage`). Delivery rows are kept `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` (30) days.
 
 ## Not wanted? Remove the module

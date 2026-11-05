@@ -1,6 +1,6 @@
 /**
  * @module
- * The fulfilment rules, pure: how an order's lines split into fulfillment orders, what remains of
+ * The fulfillment rules, pure: how an order's lines split into fulfillment orders, what remains of
  * each, which status follows from its lines and its hold, which lines a shipment may carry, the
  * summary `orders` is handed, and which doors a fulfillment order offers.
  */
@@ -17,12 +17,12 @@ import {
     remainingOfLine,
     statusOfLines,
     summarize,
-    withRemainderCancelled,
+    withRemainderCanceled,
     withShipped
 } from '../../domain';
 import type { FulfillmentLine, GroupableLine } from '../../domain';
 
-/** A line with nothing shipped or cancelled, unless stated. */
+/** A line with nothing shipped or canceled, unless stated. */
 const line = (
     productId: string,
     quantity: number,
@@ -32,7 +32,7 @@ const line = (
     title: `Product ${productId}`,
     quantity,
     shippedQuantity: 0,
-    cancelledQuantity: 0,
+    canceledQuantity: 0,
     ...fields
 });
 
@@ -264,8 +264,8 @@ describe('groupOrderLines', () => {
 });
 
 describe('remaining', () => {
-    it('is quantity less what shipped and what was cancelled, per line and across lines', () => {
-        const lines = [line('a', 5, { shippedQuantity: 2, cancelledQuantity: 1 }), line('b', 3)];
+    it('is quantity less what shipped and what was canceled, per line and across lines', () => {
+        const lines = [line('a', 5, { shippedQuantity: 2, canceledQuantity: 1 }), line('b', 3)];
 
         expect(remainingOfLine(lines[0])).toBe(2);
         expect(remainingOf(lines)).toBe(5);
@@ -293,16 +293,16 @@ describe('statusOfLines', () => {
         ['a hold, part shipped', [line('a', 2, { shippedQuantity: 1 })], true, 'on_hold'],
         ['everything shipped', [line('a', 2, { shippedQuantity: 2 })], false, 'closed'],
         [
-            'shipped and the rest cancelled',
-            [line('a', 3, { shippedQuantity: 1, cancelledQuantity: 2 })],
+            'shipped and the rest canceled',
+            [line('a', 3, { shippedQuantity: 1, canceledQuantity: 2 })],
             false,
             'closed'
         ],
         [
-            'everything cancelled, nothing ever shipped',
-            [line('a', 2, { cancelledQuantity: 2 })],
+            'everything canceled, nothing ever shipped',
+            [line('a', 2, { canceledQuantity: 2 })],
             false,
-            'cancelled'
+            'canceled'
         ],
         [
             'a hold on a fulfillment order with nothing remaining is no hold',
@@ -364,16 +364,16 @@ describe('checkShipLines', () => {
     });
 });
 
-describe('withShipped and withRemainderCancelled', () => {
+describe('withShipped and withRemainderCanceled', () => {
     it('add what shipped, and cancel exactly what remains, without touching the other lines', () => {
         const before = [line('a', 3, { shippedQuantity: 1 }), line('b', 2)];
 
         const shipped = withShipped(before, [{ productId: 'a', quantity: 2 }]);
-        const cancelled = withRemainderCancelled(before);
+        const canceled = withRemainderCanceled(before);
 
         expect(shipped.map(({ shippedQuantity }) => shippedQuantity)).toEqual([3, 0]);
-        expect(cancelled.map(({ cancelledQuantity }) => cancelledQuantity)).toEqual([2, 2]);
-        expect(remainingOf(cancelled)).toBe(0);
+        expect(canceled.map(({ canceledQuantity }) => canceledQuantity)).toEqual([2, 2]);
+        expect(remainingOf(canceled)).toBe(0);
         // Pure: the lines it was handed are as they were.
         expect(before.map(({ shippedQuantity }) => shippedQuantity)).toEqual([1, 0]);
     });
@@ -392,7 +392,7 @@ describe('withShipped and withRemainderCancelled', () => {
             get shippedQuantity() {
                 return 1;
             },
-            get cancelledQuantity() {
+            get canceledQuantity() {
                 return 0;
             }
         }) as FulfillmentLine;
@@ -404,7 +404,7 @@ describe('withShipped and withRemainderCancelled', () => {
             title: 'Product a',
             quantity: 3,
             shippedQuantity: 2,
-            cancelledQuantity: 0
+            canceledQuantity: 0
         });
     });
 });
@@ -425,14 +425,14 @@ describe('summarize', () => {
         });
     });
 
-    it('counts held units apart from the units held for stock, and leaves closed and cancelled orders out', () => {
+    it('counts held units apart from the units held for stock, and leaves closed and canceled orders out', () => {
         const summary = summarize({
             fulfillmentOrders: [
                 { status: 'open', lines: [line('a', 2)] },
                 { status: 'on_hold', holdReason: 'high_risk', lines: [line('b', 1)] },
                 { status: 'on_hold', holdReason: 'awaiting_stock', lines: [line('c', 4)] },
                 { status: 'closed', lines: [line('d', 1, { shippedQuantity: 1 })] },
-                { status: 'cancelled', lines: [line('e', 9, { cancelledQuantity: 9 })] }
+                { status: 'canceled', lines: [line('e', 9, { canceledQuantity: 9 })] }
             ],
             shipments: []
         });
@@ -478,7 +478,7 @@ describe('what a fulfillment order offers', () => {
         expect(isShippable({ ...open, lines: [line('a', 1, { shippedQuantity: 1 })] })).toBe(false);
     });
 
-    it('fulfils a digital one that is open with units left — the mirror of ship', () => {
+    it('fulfills a digital one that is open with units left — the mirror of ship', () => {
         expect(isFulfillable({ ...open, kind: 'digital' })).toBe(true);
         expect(isFulfillable(open)).toBe(false);
         expect(isFulfillable({ ...open, kind: 'digital', status: 'closed' })).toBe(false);
@@ -490,8 +490,8 @@ describe('what a fulfillment order offers', () => {
         expect(
             isHoldable({
                 ...open,
-                status: 'cancelled',
-                lines: [line('a', 1, { cancelledQuantity: 1 })]
+                status: 'canceled',
+                lines: [line('a', 1, { canceledQuantity: 1 })]
             })
         ).toBe(false);
     });

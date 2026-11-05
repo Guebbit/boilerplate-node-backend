@@ -48,7 +48,7 @@ interface Changed {
 }
 
 /**
- * Whether the order is still being worked: a hold or release on a delivered or cancelled order is
+ * Whether the order is still being worked: a hold or release on a delivered or canceled order is
  * meaningless.
  * @param order - the order
  */

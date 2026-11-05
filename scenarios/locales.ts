@@ -235,7 +235,7 @@ const seedLocalesCollection = async (): Promise<SeedOutcome[]> => {
 /**
  * The one demo-history step this module contributes: an operator overriding a dictionary entry
  * that already has a deployed translation, so the audit trail shows a wording edit alongside the
- * price edit `flows/shop-history.ts`'s own `driveCatalogueEdits` makes. Declared here, wired into
+ * price edit `flows/shop-history.ts`'s own `driveCatalogEdits` makes. Declared here, wired into
  * `shopModules.locales.driveHistoryEdit` (`./shop-modules`), and CALLED from there rather than
  * hardcoded into the flow — deleting this module removes the step along with everything else it
  * owns, instead of leaving a dangling `/locales` call for the flow to 404 on.

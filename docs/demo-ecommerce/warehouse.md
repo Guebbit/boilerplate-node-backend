@@ -104,7 +104,7 @@ flowchart LR
     A["the sweep runs"] --> B{"any holds<br/>older than<br/>the hold window?"}
     B -->|no| C["nothing to do"]
     B -->|yes| D["goods back on the shelf"]
-    D --> E["the order is cancelled"]
+    D --> E["the order is canceled"]
     D --> F["the diary records it"]
 
     classDef act fill:#dbeafe,stroke:#2563eb,color:#111827;

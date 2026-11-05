@@ -197,7 +197,7 @@ describe('a replacement or a repair', () => {
                     status: 'closed',
                     remedy: 'replace',
                     lines: [{ productId: id('a'), quantity: 2 }],
-                    shippingRefund: 4
+                    shippingRefund: '4.00'
                 },
                 {
                     kind: 'return',
@@ -210,7 +210,7 @@ describe('a replacement or a repair', () => {
         );
 
         expect(accounts.accountedFor).toEqual([{ productId: 'b', quantity: 1 }]);
-        expect(accounts.shippingRefunded).toBe(0);
+        expect(accounts.shippingRefunded).toBe('0.00');
     });
 });
 
@@ -271,7 +271,7 @@ describe('accountsOf', () => {
                     kind: 'cancellation',
                     status: 'closed',
                     lines: [{ productId: id('a'), quantity: 1 }],
-                    shippingRefund: 4
+                    shippingRefund: '4.00'
                 },
                 {
                     kind: 'return',
@@ -302,29 +302,29 @@ describe('accountsOf', () => {
     it('sums the delivery already refunded, from the ones that settled', () => {
         const accounts = accountsOf(
             [
-                { kind: 'cancellation', status: 'closed', lines: [], shippingRefund: 4 },
-                { kind: 'return', status: 'closed', lines: [], shippingRefund: 1.5 },
-                { kind: 'return', status: 'requested', lines: [], shippingRefund: 99 }
+                { kind: 'cancellation', status: 'closed', lines: [], shippingRefund: '4.00' },
+                { kind: 'return', status: 'closed', lines: [], shippingRefund: '1.50' },
+                { kind: 'return', status: 'requested', lines: [], shippingRefund: '99.00' }
             ],
             'EUR'
         );
 
-        expect(accounts.shippingRefunded).toBe(5.5);
+        expect(accounts.shippingRefunded).toBe('5.50');
     });
 
     it('sums in minor units, so thirds of a cent cannot drift', () => {
-        const refunds = [0.1, 0.2].map((shippingRefund) => ({
+        const refunds = ['0.10', '0.20'].map((shippingRefund) => ({
             kind: 'return' as const,
             status: 'closed' as const,
             lines: [],
             shippingRefund
         }));
 
-        expect(accountsOf(refunds, 'EUR').shippingRefunded).toBe(0.3);
+        expect(accountsOf(refunds, 'EUR').shippingRefunded).toBe('0.30');
     });
 
     it('is empty for an order with no returns', () => {
-        expect(accountsOf([], 'EUR')).toEqual({ accountedFor: [], shippingRefunded: 0 });
+        expect(accountsOf([], 'EUR')).toEqual({ accountedFor: [], shippingRefunded: '0.00' });
     });
 
     it('treats the settled statuses as received and closed', () => {

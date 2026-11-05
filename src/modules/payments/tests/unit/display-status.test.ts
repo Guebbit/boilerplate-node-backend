@@ -18,7 +18,7 @@ describe('displayStatusOf', () => {
     // A staff-voided refund is `failed` but closed for good: it must not read as an open one.
     const canceled = [{ status: RefundStatus.failed, failureReason: RefundFailureReason.canceled }];
 
-    const base = { amount: 50, amountRefunded: 0, currency: 'EUR' };
+    const base = { amount: '50.00', amountRefunded: '0.00', currency: 'EUR' };
 
     it.each<
         [
@@ -41,20 +41,27 @@ describe('displayStatusOf', () => {
         ['succeeded', [...canceled, ...settled], 50, PaymentDisplayStatus.refunded],
         ['succeeded', [...settled, ...open], 50, PaymentDisplayStatus.refund_pending],
         ['declined', [], 0, PaymentDisplayStatus.failed],
-        ['cancelled', [], 0, PaymentDisplayStatus.cancelled]
+        ['canceled', [], 0, PaymentDisplayStatus.canceled]
     ])(
         'reads %s with refunds %j and %d refunded as %s',
         (status, refunds, amountRefunded, expected) => {
-            expect(displayStatusOf({ ...base, status, refunds, amountRefunded })).toBe(expected);
+            expect(
+                displayStatusOf({
+                    ...base,
+                    status,
+                    refunds,
+                    amountRefunded: String(amountRefunded)
+                })
+            ).toBe(expected);
         }
     );
 
-    it('compares the amounts in minor units, so a float sum still reads refunded', () => {
+    it('compares the amounts in minor units, so an unpadded text still reads refunded', () => {
         expect(
             displayStatusOf({
                 ...base,
-                amount: 0.3,
-                amountRefunded: 0.1 + 0.2,
+                amount: '0.30',
+                amountRefunded: '0.3',
                 status: 'succeeded',
                 refunds: settled
             })

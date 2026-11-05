@@ -1,7 +1,7 @@
 /**
  * @module
  * The buyer's mails are sent from this module's listeners on `order.created` and
- * `order.cancelled` (`docs/tools/outbox.md#customer-mail`): the event alone is enough to send,
+ * `order.canceled` (`docs/tools/outbox.md#customer-mail`): the event alone is enough to send,
  * the cause on the cancel picks the mail, a mail that fails never fails the act, and every cancel
  * door names its cause on the row it writes.
  */
@@ -18,7 +18,7 @@ import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { logger } from '@infrastructure/adapters/logger';
 import { orderService } from '../../services';
-import { ORDER_CANCELLED, ORDER_CREATED } from '../../events';
+import { ORDER_CANCELED, ORDER_CREATED } from '../../events';
 import type { CancelCause } from '../../services/cancel';
 import ordersModule from '../../module';
 import { cancelForErasureById } from '../../services/cancel';
@@ -86,10 +86,10 @@ describe('order.created sends the placed-order mail', () => {
     });
 });
 
-describe('order.cancelled sends the mail its cause picks', () => {
+describe('order.canceled sends the mail its cause picks', () => {
     it.each<[CancelCause, 'card' | 'bank_transfer', string[]]>([
-        ['customer', 'card', ['orders.order-cancelled']],
-        ['operator', 'bank_transfer', ['orders.order-cancelled']],
+        ['customer', 'card', ['orders.order-canceled']],
+        ['operator', 'bank_transfer', ['orders.order-canceled']],
         ['reservation_expired', 'card', ['orders.order-card-expired']],
         // A transfer nobody sent is answered by `payments`.
         ['reservation_expired', 'bank_transfer', []],
@@ -99,7 +99,7 @@ describe('order.cancelled sends the mail its cause picks', () => {
     ])('cause %s on a %s order sends %j', async (cause, paymentMethod, expected) => {
         const { orderId } = await seedOrder(paymentMethod);
 
-        await emitDomainEvent(ORDER_CANCELLED, { orderId, refund: true, cause });
+        await emitDomainEvent(ORDER_CANCELED, { orderId, refund: true, cause });
 
         expect(templates()).toEqual(expected);
     });
@@ -112,7 +112,7 @@ describe('order.cancelled sends the mail its cause picks', () => {
         });
 
         await expect(
-            orderService.mailOrderCancelled({ orderId, refund: true, cause: 'customer' })
+            orderService.mailOrderCanceled({ orderId, refund: true, cause: 'customer' })
         ).resolves.toBeUndefined();
     });
 
@@ -132,7 +132,7 @@ describe('order.cancelled sends the mail its cause picks', () => {
         await settleOutboxNudges();
 
         expect(result.success).toBe(true);
-        expect(await outboxEventModel.countDocuments({ name: ORDER_CANCELLED })).toBe(1);
+        expect(await outboxEventModel.countDocuments({ name: ORDER_CANCELED })).toBe(1);
     });
 });
 
@@ -149,7 +149,7 @@ describe('every cancel door names its cause on the row it writes', () => {
 
         await cancel(orderId, user.id);
 
-        const [row] = await outboxEventModel.find({ name: ORDER_CANCELLED }).lean();
+        const [row] = await outboxEventModel.find({ name: ORDER_CANCELED }).lean();
         expect(row.payload).toMatchObject({ orderId, cause });
     });
 });

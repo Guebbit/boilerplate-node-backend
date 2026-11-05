@@ -973,7 +973,7 @@ const bindConsumer = <TPayload>(
                 // `consume` registers the callback and returns a consumerTag (unused here, since
                 // the consumer lives for the channel's lifetime — see `replayConsumers`).
                 ch.consume(queue, (incoming) => {
-                    // `null` is delivered when the consumer is cancelled broker-side (queue
+                    // `null` is delivered when the consumer is canceled broker-side (queue
                     // deleted, channel closing) — nothing to ack.
                     if (!incoming) return;
 

@@ -36,7 +36,7 @@ export interface ReturnLine {
     /** The product's title as the order froze it. */
     title: string;
     /** The gross unit price the order froze — what a refund of this line is computed from. */
-    unitPrice: number;
+    unitPrice: string;
     /** How many of {@link quantity} went back on sale at receipt. Absent until the goods are received. */
     restocked?: number;
 }
@@ -50,9 +50,9 @@ export interface ReturnDocument extends Document {
     currency: string;
     status: ReturnStatus;
     reason: ReturnReason;
-    /** `return` — goods that left coming back; `cancellation` — an unshipped remainder, cancelled. */
+    /** `return` — goods that left coming back; `cancellation` — an unshipped remainder, canceled. */
     kind: ReturnKind;
-    /** The fulfillment order whose remainder a `cancellation` cancelled. Absent on a `return`. */
+    /** The fulfillment order whose remainder a `cancellation` canceled. Absent on a `return`. */
     fulfillmentOrderId?: Types.ObjectId;
     /** What the customer wrote. Free text — never trusted, never rendered as HTML. */
     note?: string;
@@ -89,15 +89,15 @@ export interface ReturnDocument extends Document {
      * An amount staff kept back for handling that lowered the goods' value (Art. 14(2)) — entered
      * when the goods were received. Decimal, in the return's currency.
      */
-    handlingDeduction?: number;
+    handlingDeduction?: string;
     /** What the customer is owed for this return, decided when the goods were received. */
-    refundAmount?: number;
+    refundAmount?: string;
     /**
      * The delivery inside {@link refundAmount}: non-zero on the one return or cancellation that took
      * the last unit of the order. Internal — what keeps shipping from being refunded twice. Never on
      * the wire (see `applyReturnTransform`).
      */
-    shippingRefund?: number;
+    shippingRefund?: string;
     /** When the money went back and the return was finished. */
     closedAt?: Date;
     /** When staff canceled an approved return whose goods never came. */
@@ -175,7 +175,7 @@ export const returnSchema = new Schema<ReturnDocument>(
 );
 
 /**
- * Money is stored as Decimal128 and a lean read hands numbers back — see `@infrastructure/persistence/money-field`.
+ * Money is stored as Decimal128 and a lean read hands decimal text back — see `@infrastructure/persistence/money-field`.
  */
 returnSchema.plugin(moneyPlugin);
 

@@ -74,7 +74,7 @@ export const createOwedFulfillmentOrder = async (
         title: origin.titleOf(productId),
         quantity,
         shippedQuantity: 0,
-        cancelledQuantity: 0
+        canceledQuantity: 0
     }));
     return fulfillmentOrderRepository.create(
         {

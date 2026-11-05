@@ -571,16 +571,16 @@ describe('replay', () => {
 });
 
 describe('the delivery lease', () => {
-    it('reclaims a stranded in-flight row once its lease has expired', async () => {
+    it('reclaims a stranded in_flight row once its lease has expired', async () => {
         const server = await startHttpsTestServer((response) => response.writeHead(200).end('ok'));
         const subscription = await createSubscription(`${server.url}/hook`);
         const job = await createPendingDelivery(subscription);
 
-        // A worker that claimed the row and then crashed mid-attempt: `in-flight`, a lease already
+        // A worker that claimed the row and then crashed mid-attempt: `in_flight`, a lease already
         // in the past, and a token nothing still holds.
         const stranded = await webhookDeliveryRepository.findById(job.deliveryId);
         if (!stranded) throw new Error('unreachable — asserted above');
-        stranded.status = 'in-flight';
+        stranded.status = 'in_flight';
         stranded.leaseToken = 'a-dead-workers-token';
         stranded.leaseExpiresAt = new Date(Date.now() - 1000);
         await webhookDeliveryRepository.save(stranded);
@@ -618,7 +618,7 @@ describe('the delivery lease', () => {
         expect(result.status).toBe(404);
 
         // The claim never happened: still `pending`, no lease taken — a claim-then-404 would have
-        // left it `in-flight` under a lease nobody is left to finish, stranded until the sweep's
+        // left it `in_flight` under a lease nobody is left to finish, stranded until the sweep's
         // stranded-lease read reclaims it as `exhausted` 60s later.
         const untouched = await webhookDeliveryRepository.findById(job.deliveryId);
         expect(untouched?.status).toBe('pending');
@@ -629,7 +629,7 @@ describe('the delivery lease', () => {
         const subscription = await createSubscription('https://example.invalid/hook');
         const job = await createPendingDelivery(subscription);
 
-        // A live worker's claim, never completed — the row is still `in-flight` under a fresh
+        // A live worker's claim, never completed — the row is still `in_flight` under a fresh
         // lease when the replay below runs.
         const claimed = await webhookDeliveryRepository.claimPending(job.deliveryId);
         expect(claimed).not.toBeNull();
@@ -661,7 +661,7 @@ describe('the delivery lease', () => {
 
         expect(dropped).toBeNull();
         const stored = await webhookDeliveryRepository.findById(job.deliveryId);
-        expect(stored?.status).toBe('in-flight');
+        expect(stored?.status).toBe('in_flight');
         expect(stored?.leaseToken).toBe('a-newer-claims-token');
     });
 });

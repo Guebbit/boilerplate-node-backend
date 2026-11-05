@@ -9,7 +9,7 @@
  *   mailed (`./withdraw`). One refund path; the record is the dated proof of the withdrawal.
  * - Once something has shipped there is something to send back: a return is written open, with
  *   the lines and quantities coming back (never more than shipped and not already returned), and
- *   staff see it. What has NOT shipped is cancelled one fulfillment order at a time
+ *   staff see it. What has NOT shipped is canceled one fulfillment order at a time
  *   (`./cancel-remainder`, `kind: cancellation`).
  *
  * The buyer opens it. Staff holding `update:Return` open it on the buyer's behalf — the phone call

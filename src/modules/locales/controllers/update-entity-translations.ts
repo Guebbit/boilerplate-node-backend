@@ -3,7 +3,7 @@
  * `PUT` and `PATCH /locales/translations/:entityType/:id` — thin HTTP adapters over
  * `localeService.replaceEntityTranslations`/`updateEntityTranslations`. PUT replaces (a stored
  * locale the body doesn't name is deleted), PATCH merges (an absent locale is left alone) — the
- * same replace/merge split `write-locale-entries.ts` already uses for its own bulk import pair.
+ * same replace/merge split `update-locale-entries.ts` already uses for its own bulk import pair.
  */
 
 import type { Request, Response } from 'express';

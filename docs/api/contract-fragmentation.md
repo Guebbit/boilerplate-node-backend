@@ -150,43 +150,23 @@ repeated here — `grep -c operationId: openapi.yaml` reads the true total, and
 `tests/cross-cutting/contract-bundles.test.ts` is what actually keeps a fragment honest about which
 paths it owns:
 
-| Module          | `basePath`       | OpenAPI tag(s)         |
-| --------------- | ----------------- | ---------------------- |
-| `account`       | `/account`        | `Auth` + `Account`     |
-| `addresses`     | `/account`        | `Account` (a subset — see below) |
-| `orders`        | `/orders`         | `Orders`                |
-| `invoicing`     | `/orders`         | `Invoicing` (a subset — see below) |
-| `users`         | `/users`          | `Users`                  |
-| `products`      | `/products`       | `Products`               |
-| `cart`          | `/cart`           | `Cart`                    |
-| `wishlist`      | `/wishlist`       | `Wishlist`                 |
-| `payments`      | `/payments`       | `Payments`                  |
-| `delivery`      | `/delivery`       | `Delivery`                   |
-| `inventory`     | `/inventory`      | `Inventory`                   |
-| `observability` | `/observability`  | `Observability`                |
-| `tasks`      | `/tasks`       | `Task`                         |
-| `locales`       | `/locales`        | `Locales`                          |
-| `webhooks`      | `/webhooks`       | `Webhooks`                          |
-| `returns`       | `/returns`        | `Returns`                           |
-| `notifications` | `/notifications`  | `Notifications`                     |
-| `example`       | `/examples`       | `Examples`                          |
-| `api-keys`      | `/api-keys`       | `ApiKeys`                             |
-| `antibot`       | `/antibot`        | `Antibot`                               |
-| `analytics`     | `/analytics`      | `Analytics`                             |
-| `shop`          | `/shop`           | `Shop`                                  |
-| `sitemap`       | `/sitemap`        | `Sitemap`                               |
-| `stats`         | `/stats`          | `Stats`                                 |
-| `stock-alerts`  | `/stock-alerts`   | `StockAlerts`                           |
-| `audit-logs`    | `/audit`          | `Audit`                                   |
-| `access`        | —                  | —                                          |
+The module's `module.yaml` and its `openapi.yaml` say which paths and tags it has; no table here
+repeats them, because a table of them goes stale the day a module lands. `access` is the one module
+with no HTTP surface: its `openapi.yaml` is components only (`paths: {}`).
 
-**The rows that are not a clean split are the interesting ones**, and whoever does the work will
-hit them first:
+Tags are free: an operation may carry several, and a tag need not belong to one module. What a tag
+is listed under in the API docs comes from `x-family` on the module's own `tags:` entry: the
+bundler generates `x-tagGroups` from it (`Core`, `Catalogue`, `Buying`, `After the sale`, `Running
+the shop`, `Example`). The module that declares a tag first decides its family, so a borrowed tag
+lands in one group only; a tag with no `x-family` falls back to its module's `group` in
+`module.yaml` (`foundation` is `Core`, `shop` is `Shop`, `example` is `Example`).
+
+**Where a split is not clean**, whoever does the work will hit it first:
 
 - **`GET /` — the health probe — belongs to no module.** It is the application shell answering for
   itself. It goes in a `shared` or `root` fragment alongside `components:`, not into a module.
-- **`account` and `addresses` share a `basePath` and a tag.** Both mount at `/account`, and address
-  operations are tagged `Account` too — fragmenting by `basePath` still splits them correctly,
+- **`account` and `addresses` share a `basePath`.** Both mount at `/account`, and address
+  operations carry the `Account` tag too — fragmenting by `basePath` still splits them correctly,
   since `addresses`' own paths (`/account/addresses*`) never overlap `account`'s.
 - **`orders` and `invoicing` share a `basePath`, but NOT a tag.** Both mount at `/orders`;
   `invoicing`'s two paths (`/orders/{id}/invoice`, `/orders/{id}/credit-notes`) are tagged

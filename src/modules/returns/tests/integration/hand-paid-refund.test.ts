@@ -54,8 +54,8 @@ let customers = 0;
 const paidInCash = async () => {
     customers += 1;
     const user = await createUser({ email: `hand-${customers}@example.com` });
-    const shirt = await createProduct({ title: 'Shirt', price: 30, onHand: 10 });
-    const mug = await createProduct({ title: 'Mug', price: 10, onHand: 10 });
+    const shirt = await createProduct({ title: 'Shirt', price: '30.00', onHand: 10 });
+    const mug = await createProduct({ title: 'Mug', price: '10.00', onHand: 10 });
     const order = await createOrder(user, [toOrderItem(shirt, 2), toOrderItem(mug, 1)]);
     const orderId = String(order._id);
     await inventoryService.reserveForOrder(orderId, [

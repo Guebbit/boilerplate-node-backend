@@ -80,8 +80,8 @@ let customers = 0;
 const orderIn = async (status: OrderStatus) => {
     customers += 1;
     const user = await createUser({ email: `customer-${customers}@example.com` });
-    const shirt = await createProduct({ title: 'Shirt', price: 30 });
-    const mug = await createProduct({ title: 'Mug', price: 10 });
+    const shirt = await createProduct({ title: 'Shirt', price: '30.00' });
+    const mug = await createProduct({ title: 'Mug', price: '10.00' });
     const carried = status === OrderStatus.shipped || status === OrderStatus.delivered;
     const order = await createOrder(user, [toOrderItem(shirt, 2), toOrderItem(mug, 1)], {
         status: carried ? OrderStatus.processing : status
@@ -122,7 +122,7 @@ describe('a withdrawal before dispatch', () => {
             expect(outcome.success).toBe(true);
             await settleOutboxNudges();
             const stored = await readOrder(orderId);
-            expect(stored?.status).toBe(OrderStatus.cancelled);
+            expect(stored?.status).toBe(OrderStatus.canceled);
             const [written, ...others] = await returnRepository.findByOrderId(orderId);
             expect(others).toHaveLength(0);
             expect(written).toMatchObject({ status: 'closed', reason: 'withdrawal', lines: [] });
@@ -151,9 +151,9 @@ describe('a withdrawal before dispatch', () => {
 
         const [onUnpaid] = await returnRepository.findByOrderId(unpaid.orderId);
         const [onPaid] = await returnRepository.findByOrderId(paid.orderId);
-        expect(onUnpaid?.refundAmount).toBe(0);
+        expect(onUnpaid?.refundAmount).toBe('0.00');
         // Two shirts at 30 and a mug at 10.
-        expect(onPaid?.refundAmount).toBe(70);
+        expect(onPaid?.refundAmount).toBe('70.00');
     });
 
     it('announces the return opened and finished, once each', async () => {
@@ -186,7 +186,7 @@ describe('a withdrawal before dispatch', () => {
         expect(stored?.toJSON().returnStatus).toBe('none');
     });
 
-    it('cannot be made twice: the cancelled order is not returnable', async () => {
+    it('cannot be made twice: the canceled order is not returnable', async () => {
         const { user, orderId } = await orderIn(OrderStatus.paid);
         await returnService.createReturn(
             { orderId, reason: 'withdrawal' },
@@ -270,10 +270,10 @@ describe('a withdrawal before dispatch', () => {
 const orderWithExcluded = async (carriedTo: 'delivered' | null = 'delivered') => {
     customers += 1;
     const user = await createUser({ email: `customer-${customers}@example.com` });
-    const shirt = await createProduct({ title: 'Shirt', price: 30 });
+    const shirt = await createProduct({ title: 'Shirt', price: '30.00' });
     const engraved = await createProduct({
         title: 'Engraved mug',
-        price: 10,
+        price: '10.00',
         noWithdrawal: true
     });
     const order = await createOrder(user, [toOrderItem(shirt, 1), toOrderItem(engraved, 1)], {
@@ -290,7 +290,11 @@ const orderWithExcluded = async (carriedTo: 'delivered' | null = 'delivered') =>
 const onlyExcludedOrder = async () => {
     customers += 1;
     const user = await createUser({ email: `customer-${customers}@example.com` });
-    const engraved = await createProduct({ title: 'Engraved mug', price: 10, noWithdrawal: true });
+    const engraved = await createProduct({
+        title: 'Engraved mug',
+        price: '10.00',
+        noWithdrawal: true
+    });
     const order = await createOrder(user, [toOrderItem(engraved, 1)], {
         status: OrderStatus.paid
     });
@@ -404,8 +408,8 @@ describe('a return on goods that have shipped', () => {
                     unitPrice
                 }))
             ).toEqual([
-                { productId: String(shirt._id), quantity: 2, title: 'Shirt', unitPrice: 30 },
-                { productId: String(mug._id), quantity: 1, title: 'Mug', unitPrice: 10 }
+                { productId: String(shirt._id), quantity: 2, title: 'Shirt', unitPrice: '30.00' },
+                { productId: String(mug._id), quantity: 1, title: 'Mug', unitPrice: '10.00' }
             ]);
             expect(events).toEqual([
                 {
@@ -680,8 +684,8 @@ describe('a return on goods that have shipped', () => {
         });
     });
 
-    it('refuses a cancelled order', async () => {
-        const { user, orderId } = await orderIn(OrderStatus.cancelled);
+    it('refuses a canceled order', async () => {
+        const { user, orderId } = await orderIn(OrderStatus.canceled);
 
         const outcome = await returnService.createReturn(
             { orderId, reason: 'withdrawal' },
@@ -1201,7 +1205,7 @@ describe('what a new return leaves behind', () => {
         expect(mailData(1).address).toEqual(expect.stringContaining('Send the goods to:'));
     });
 
-    it('answers a withdrawal before dispatch with the cancel refusal untouched when the order cannot be cancelled', async () => {
+    it('answers a withdrawal before dispatch with the cancel refusal untouched when the order cannot be canceled', async () => {
         const { user, orderId } = await orderIn(OrderStatus.paid);
         jest.spyOn(orderService, 'withdrawById').mockResolvedValue(
             asStub<Awaited<ReturnType<typeof orderService.withdrawById>>>({

@@ -260,7 +260,7 @@ describe('"this wasn\'t me" ends the sessions before it touches the address', ()
         await api().post('/account/email-change/undo').send({ token: 'undo-me' });
         await settleOutboxNudges();
 
-        const rows = await outboxEventModel.find({ name: 'account.sessions-revoked' }).lean();
+        const rows = await outboxEventModel.find({ name: 'account.sessions_revoked' }).lean();
         expect(rows.map((row) => row.payload)).toEqual([
             { userId: user.id, reason: 'email-change-undo' }
         ]);

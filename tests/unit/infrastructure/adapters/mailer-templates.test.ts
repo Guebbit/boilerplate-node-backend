@@ -40,7 +40,7 @@ import { examplePublishedEmail } from '@modules/example';
 import {
     orderConfirmEmail,
     cardHoldExpiredEmail,
-    orderCancelledEmail
+    orderCanceledEmail
 } from '@modules/orders/emails';
 import {
     paymentReceivedEmail,
@@ -136,8 +136,8 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         'Ada',
         {
             items: [
-                { quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } },
-                { quantity: 1, product: { title: 'A whole ham', price: 42 } }
+                { quantity: 2, product: { title: 'Boiled sweets', price: '3.50' } },
+                { quantity: 1, product: { title: 'A whole ham', price: '42.00' } }
             ],
             currency: 'EUR'
         },
@@ -147,7 +147,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         locale,
         'Ada',
         {
-            items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }],
+            items: [{ quantity: 2, product: { title: 'Boiled sweets', price: '3.50' } }],
             currency: 'EUR'
         },
         { beneficiary: 'Guebbit Shop', iban: 'DE89370400440532013000', reference: 'an-order-id' },
@@ -158,24 +158,24 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         locale,
         'Ada',
         {
-            items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }],
+            items: [{ quantity: 2, product: { title: 'Boiled sweets', price: '3.50' } }],
             currency: 'EUR'
         },
         'an-order-id'
     ),
     'payments.transfer-expired': transferExpiredEmail(locale, {
-        items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }],
+        items: [{ quantity: 2, product: { title: 'Boiled sweets', price: '3.50' } }],
         currency: 'EUR'
     }),
     'orders.order-card-expired': cardHoldExpiredEmail(locale, {
-        items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }],
+        items: [{ quantity: 2, product: { title: 'Boiled sweets', price: '3.50' } }],
         currency: 'EUR'
     }),
-    'orders.order-cancelled': orderCancelledEmail(
+    'orders.order-canceled': orderCanceledEmail(
         locale,
         'Ada',
         {
-            items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }],
+            items: [{ quantity: 2, product: { title: 'Boiled sweets', price: '3.50' } }],
             currency: 'EUR',
             paidAt: new Date('2026-09-19T12:00:00.000Z')
         },
@@ -195,14 +195,14 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         locale,
         'Ada',
         '2026-000041',
-        { amount: 7, currency: 'EUR' },
+        { amount: '7.00', currency: 'EUR' },
         true
     ),
     'payments.refund-undeliverable': refundUndeliverableEmail(
         locale,
         'Ada',
         '2026-000041',
-        { amount: 7, currency: 'EUR' },
+        { amount: '7.00', currency: 'EUR' },
         'shop@example.com',
         'an-order-id'
     ),
@@ -258,6 +258,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     ]),
     'example.published': examplePublishedEmail(locale, 'Ada', 'A title'),
     'tasks.contact': contactRequestEmail(locale, {
+        id: '6ad69a48f753b902e5b98dfe',
         name: 'Ada',
         email: 'ada@example.com',
         subject: 'A subject',
@@ -272,11 +273,11 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
  * as they are for most real mails. Only a builder with an optional input has an entry.
  */
 const minimalContentFor = (locale: string): Record<string, EmailContent> => ({
-    'orders.order-cancelled': orderCancelledEmail(
+    'orders.order-canceled': orderCanceledEmail(
         locale,
         'Ada',
         {
-            items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }],
+            items: [{ quantity: 2, product: { title: 'Boiled sweets', price: '3.50' } }],
             currency: 'EUR'
         },
         '2026-000041',
@@ -430,14 +431,16 @@ describe('email templates render in every supported locale', () => {
                 locale,
                 orderNumber: '2026-000007',
                 seller: {},
-                lines: [{ title: 'A product', quantity: 2, unitPrice: 10, taxRate: 0.22 }],
-                netTotal: 16.39,
-                taxTotal: 3.61,
-                shippingNetAmount: 0,
-                shippingTaxAmount: 0,
-                taxSummary: [{ rate: 0.22, netAmount: 16.39, taxAmount: 3.61, grossAmount: 20 }],
+                lines: [{ title: 'A product', quantity: 2, unitPrice: '10.00', taxRate: 0.22 }],
+                netTotal: '16.39',
+                taxTotal: '3.61',
+                shippingNetAmount: '0.00',
+                shippingTaxAmount: '0.00',
+                taxSummary: [
+                    { rate: 0.22, netAmount: '16.39', taxAmount: '3.61', grossAmount: '20.00' }
+                ],
                 shippingByRate: [],
-                grandTotal: 20
+                grandTotal: '20.00'
             }),
             { root: process.cwd() }
         );

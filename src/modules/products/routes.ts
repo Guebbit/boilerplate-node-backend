@@ -17,12 +17,12 @@ import {
     searchProductsKeyValues,
     searchProductsOrderedParameters
 } from './controllers/get-products';
-import { createProduct } from './controllers/create-product';
+import { createProduct } from './controllers/post-product';
 import { replaceProduct, updateProduct } from './controllers/update-product';
 import { deleteProducts } from './controllers/delete-products';
-import { restoreProducts } from './controllers/restore-products';
-import { getProductItem } from './controllers/get-product-item';
-import { getCatalogueFacets } from './controllers/get-catalogue-facets';
+import { restoreProducts } from './controllers/post-product-restore';
+import { getProductItem } from './controllers/get-product';
+import { getCatalogFacets } from './controllers/get-catalog-facets';
 import { invalidateCache, searchCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 import { hasAnonymousReadScope } from '@kernel/access/query';
@@ -96,15 +96,6 @@ router.post(
     createProduct
 );
 
-// DELETE /products — admin only, id in body
-router.delete(
-    '/',
-    isAuthOrCredential,
-    requirePermission('delete', 'Product'),
-    invalidateCache(['products']),
-    deleteProducts
-);
-
 // GET /products/facets — the filter chips; a static segment, so declared before /:id
 // for the same readability rule the create route follows. `() => true`, not `cacheScopeKey`:
 // `productService.facets()` scopes to active rows UNCONDITIONALLY (see its own comment) — it
@@ -113,7 +104,7 @@ router.delete(
 router.get(
     '/facets',
     setCache(3600, { tags: ['products'], keyParameters: [], scopeKey: () => true }),
-    getCatalogueFacets
+    getCatalogFacets
 );
 
 // GET /products/:id — public; a holder of `read:Translation` also gets every language
