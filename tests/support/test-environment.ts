@@ -11,6 +11,9 @@
  * Cost:  35–80 MB retained per file. Jest's workers hide it (`workerIdleMemoryLimit` recycles
  *        them); Stryker forces `runInBand`, so its dry run grew until the heap limit killed it.
  *
+ * Also:  forwards Node's `'warning'` events into the file, because jest's `process` is a copy with
+ *        its own empty listener list (`jest-util` `createProcessObject`) and hears none of them.
+ *
  * See: docs/tools/mutation-testing.md#one-process-per-dry-run
  */
 
@@ -225,6 +228,13 @@ export default class TestEnvironment extends NodeEnvironment {
     private previousObservers: Set<PerformanceObserver> | undefined;
 
     /**
+     * Passes each host-process warning on to the file's own `process`, where the warning guard listens.
+     */
+    private readonly forwardWarning = (warning: Error): void => {
+        this.global.process.emit('warning', warning);
+    };
+
+    /**
      * Installs the tracking wrappers on the file's globals, before any module of the file loads.
      *
      * @param config - jest's resolved configuration for this file
@@ -258,6 +268,7 @@ export default class TestEnvironment extends NodeEnvironment {
         await super.setup();
         this.previousObservers = observerRegistry.current;
         observerRegistry.current = this.observers;
+        process.on('warning', this.forwardWarning);
     }
 
     /**
@@ -273,6 +284,7 @@ export default class TestEnvironment extends NodeEnvironment {
      * See: docs/tools/mutation-testing.md#collect-after-each-file
      */
     override async teardown(): Promise<void> {
+        process.off('warning', this.forwardWarning);
         for (const timer of this.pending) clearTimeout(timer);
         this.pending.clear();
         for (const observer of this.observers) observer.disconnect();

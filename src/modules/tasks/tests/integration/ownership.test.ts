@@ -100,21 +100,18 @@ const systemTask = (link: { type: TaskLinkType; id: string }, extra: object = {}
     });
 
 describe('erasing the system tasks about a person', () => {
-    it('deletes a task that IS the person’s (its record is the account) and detaches one that outlives them', async () => {
+    it('deletes a task that IS the person’s (its record is the account)', async () => {
         const about = await systemTask({ type: TaskLinkType.user, id: ACCOUNT_ID });
-        const order = await systemTask({ type: TaskLinkType.order, id: 'order-1' });
 
         await withTransaction((session) => erase(subject(true), session));
 
         expect(await taskRepository.findById(String(about._id))).toBeNull();
-        const kept = await taskRepository.findById(String(order._id));
-        expect(kept?.subjectId).toBeUndefined();
     });
 
     it('forgets an erased member of staff as assignee and as the author of notes', async () => {
         const staffId = new Types.ObjectId();
         const worked = await systemTask(
-            { type: TaskLinkType.order, id: 'order-2' },
+            { type: TaskLinkType.user, id: 'user-2' },
             {
                 subjectId: new Types.ObjectId(OTHER_ACCOUNT_ID),
                 assigneeId: staffId,

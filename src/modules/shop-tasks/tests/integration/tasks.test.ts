@@ -17,6 +17,7 @@ import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { emitDomainEvent, resetDomainEvents } from '@kernel/events';
 import type { DomainEventMap } from '@kernel/events';
 import { callerInScope } from '@kernel/permissions';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { registerModules } from '@kernel/registry';
 import { notificationsService } from '@modules/notifications';
 import { findAllTasks } from '@modules/tasks/tests/factories';
@@ -419,6 +420,7 @@ describe('who is told, and where the alert takes them', () => {
         const support = await staff('support', 'support@example.com');
 
         await emitDomainEvent('payment.refund_owed_by_hand', REFUND, { eventId: nextEventId() });
+        await settleOutboxNudges();
 
         expect(linksMailedTo('mod@example.com')).toEqual([
             expect.stringMatching(/\/en\/sales\/payments\?tab=attention$/)
@@ -437,6 +439,7 @@ describe('who is told, and where the alert takes them', () => {
             { orderId: ORDER },
             { eventId: nextEventId() }
         );
+        await settleOutboxNudges();
 
         expect(linksMailedTo('warehouse@example.com')).toEqual([
             expect.stringMatching(new RegExp(`/en/orders/${ORDER}$`))
@@ -452,6 +455,7 @@ describe('who is told, and where the alert takes them', () => {
             { paymentId: PAYMENT, orderId: ORDER },
             { eventId: nextEventId() }
         );
+        await settleOutboxNudges();
 
         expect(linksMailedTo('admin@example.com')).toEqual([
             expect.stringMatching(new RegExp(`/en/orders/${ORDER}$`))
@@ -465,6 +469,7 @@ describe('who is told, and where the alert takes them', () => {
         await staff('moderator', 'mod@example.com');
 
         await emitDomainEvent('fulfillment_order.delayed', DELAY, { eventId: nextEventId() });
+        await settleOutboxNudges();
 
         for (const address of ['manager@example.com', 'mod@example.com'])
             expect(linksMailedTo(address)).toEqual([
@@ -474,6 +479,7 @@ describe('who is told, and where the alert takes them', () => {
 
     it('never reaches the contact fallback mailbox, even with nobody to tell', async () => {
         await emitDomainEvent('payment.dispute_opened', DISPUTE, { eventId: nextEventId() });
+        await settleOutboxNudges();
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });

@@ -148,8 +148,8 @@ describe('reopen', () => {
 
 describe('openKeyOf', () => {
     it('is kind, link type and link id', () => {
-        expect(openKeyOf('consent_due', { type: 'fulfillment_order', id: 'f9' })).toBe(
-            'consent_due:fulfillment_order:f9'
+        expect(openKeyOf('export_failed', { type: 'export', id: 'e9' })).toBe(
+            'export_failed:export:e9'
         );
     });
 });
