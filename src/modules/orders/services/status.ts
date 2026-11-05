@@ -375,7 +375,14 @@ export const markUndeliverable = (
             aggregateId: orderId
         })
     ).then((order) =>
-        order ? { order, reportCancelled: () => void afterCancel(order, 'lost', false) } : null
+        order
+            ? {
+                  order,
+                  reportCancelled: () => {
+                      void afterCancel(order, 'lost', false);
+                  }
+              }
+            : null
     );
 
 /**

@@ -35,7 +35,7 @@ export type RemainderCancel =
            * Present when the settlement cancelled the order (every parcel lost). The caller calls
            * it after ITS transaction commits: it writes the audit row and the analytics event.
            */
-          afterCommit?: () => void;
+          reportCancelled?: () => void;
       }
     | {
           ok: false;
@@ -119,7 +119,7 @@ export const cancelRemainder = async (
         return refuse(409, ERROR_CODES.DELIVERY_NOT_SHIPPABLE, 'delivery.not-shippable');
 
     const progress = await reportProgress(orderId, session);
-    const afterCommit = await settleOrder(
+    const reportCancelled = await settleOrder(
         orderId,
         progress.order.status,
         progress.summary,
@@ -129,7 +129,7 @@ export const cancelRemainder = async (
     );
     await recordRemainderCancelled(cancelled, session, actor);
     await announceCancelled(cancelled, session);
-    return { ok: true, lines, waitingForStock, ...(afterCommit && { afterCommit }) };
+    return { ok: true, lines, waitingForStock, ...(reportCancelled && { reportCancelled }) };
 };
 
 /**
