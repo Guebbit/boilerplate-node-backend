@@ -82,6 +82,26 @@ describe('withFilledEnums', () => {
         );
     });
 
+    it('refuses the own-name case on an inline enum: only a whole component schema has a name of its own', () => {
+        const document = asStub<OpenApiDocument>({
+            openapi: '3.1.0',
+            components: {
+                schemas: {
+                    Foo: {
+                        type: 'object',
+                        properties: {
+                            kind: { type: 'string', enum: ['blue'], 'x-enum-from': 'kind' }
+                        }
+                    }
+                }
+            }
+        });
+
+        expect(() => withFilledEnums(document, SOURCES)).toThrow(
+            /names no known source \(kind\) and is not this schema's own name/
+        );
+    });
+
     it('leaves a document with no placeholder as it was', () => {
         const plain = asStub<OpenApiDocument>({
             openapi: '3.1.0',
