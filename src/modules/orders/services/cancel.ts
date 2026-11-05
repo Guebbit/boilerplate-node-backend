@@ -12,7 +12,6 @@
  */
 
 import { SYSTEM_ACTOR, systemCallerContext } from '@kernel/permissions';
-import type { DomainEventMap } from '@kernel/events';
 import { t } from '@infrastructure/i18n';
 import { OrderStatus } from '@types';
 import type { AuthContext } from '@types';
@@ -178,8 +177,8 @@ export const CANCEL_CAUSES = {
         analytics: ordersAnalyticsEvents.ORDER_CANCELLED,
         refundIsChoice: false
     },
-    // Written by `markUndeliverable`, not by `cancel()`: the remainder cancel already refunded, so
-    // this cause carries `refund: false` and `refundIsChoice` does not apply.
+    // Written by `markUndeliverable`, not by `cancel()`: the remainder cancel (returns' transaction)
+    // already refunded, so this cause carries `refund: false` and `refundIsChoice` does not apply.
     lost: {
         by: 'system',
         mail: 'none',
@@ -199,7 +198,7 @@ export const CANCEL_CAUSES = {
  * @param context - the caller's context; absent for a system-initiated cancel, which is still
  *   audited as the system actor rather than skipped
  */
-const afterCancel = (
+export const afterCancel = (
     order: OrderDocument,
     cause: CancelCause,
     refund: boolean,
@@ -230,26 +229,6 @@ const afterCancel = (
     });
 
     return generateSuccess(order, 200);
-};
-
-/**
- * Count a lost-parcel settlement as a cancelled order. `markUndeliverable` writes inside the
- * delivery act's transaction, so its analytics event waits for `order.cancelled` instead of
- * firing before a commit that might still roll back. Every other cause reports from `afterCancel`.
- *
- * @param payload - the `order.cancelled` fact; any cause but `lost` is already counted
- */
-export const analyseLostCancel = ({
-    orderId,
-    cause
-}: DomainEventMap['order.cancelled']): Promise<void> => {
-    if (cause === 'lost')
-        emitAnalyticsEvent({
-            ...buildAnalyticsBase(systemCallerContext('Order')),
-            event: CANCEL_CAUSES.lost.analytics,
-            properties: { order_id: orderId }
-        });
-    return Promise.resolve();
 };
 
 /**

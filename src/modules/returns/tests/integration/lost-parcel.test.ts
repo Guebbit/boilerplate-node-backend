@@ -31,6 +31,20 @@ import paymentsModule from '@modules/payments/module';
 import { paymentService } from '@modules/payments';
 import returnsModule from '../../module';
 import { returnService } from '../../services';
+import { observePort } from '@tests/ports';
+import { nudgeOutbox, outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
+import * as auditPort from '@infrastructure/observability/audit';
+import * as analyticsPort from '@infrastructure/observability/analytics';
+
+/* Replaced, not spied on: see `tests/support/ports.ts`. */
+jest.mock('@infrastructure/observability/audit', () =>
+    jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
+);
+jest.mock('@infrastructure/observability/analytics', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/observability/analytics'),
+    emitAnalyticsEvent: jest.fn()
+}));
 
 setupTestDb();
 
@@ -185,6 +199,39 @@ describe('settling an order whose every parcel was lost and refunded', () => {
             onHand: 8,
             reserved: 0,
             available: 8
+        });
+    });
+
+    it('reports the cancel once, as the system: one analytics event and one audit row, however often the outbox relays it', async () => {
+        const parcel = await shippedParcel();
+        await lose(parcel);
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
+
+        await cancelRemainder(parcel);
+        await settleOutboxNudges();
+        // A relay retry re-runs every `order.cancelled` listener; the count must not follow it.
+        await outboxEventModel.updateMany(
+            { name: 'order.cancelled', aggregateId: parcel.orderId },
+            { $set: { status: 'pending', nextAttemptAt: new Date(0) }, $unset: { publishedAt: 1 } }
+        );
+        nudgeOutbox();
+        await settleOutboxNudges();
+
+        const counted = analyticsSpy.mock.calls.filter(
+            ([event]) =>
+                event.event === 'order_cancelled' && event.properties?.order_id === parcel.orderId
+        );
+        expect(counted).toHaveLength(1);
+        const audited = auditSpy.mock.calls.filter(
+            ([entry]) => entry.action === 'order.cancelled' && entry.targetId === parcel.orderId
+        );
+        expect(audited).toHaveLength(1);
+        expect(audited[0][0]).toMatchObject({
+            outcome: 'success',
+            actorRole: 'system',
+            actorUserId: 'system',
+            metadata: { cause: 'lost', refund: false }
         });
     });
 

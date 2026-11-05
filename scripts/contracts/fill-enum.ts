@@ -44,6 +44,13 @@ const isStringList = (value: unknown): value is string[] =>
     Array.isArray(value) && value.every((item) => typeof item === 'string');
 
 /**
+ * Whether `name` is the own name of the whole component schema at `where`: an inline enum
+ * (`…/Foo/properties/kind`) has no schema name of its own, so it never qualifies.
+ */
+const isOwnName = (name: unknown, where: string): boolean =>
+    /^#\/components\/schemas\/[^/]+$/.test(where) && name === where.split('/').at(-1);
+
+/**
  * The enum one placeholder asks for.
  *
  * @param node - the schema node carrying `x-enum-from`
@@ -63,8 +70,9 @@ const enumFor = (node: Placeholder, sources: EnumSources, where: string): string
             `[openapi] ${where}: x-enum-from names no known source (${String(name)}); known: ${Object.keys(sources).join(', ')}.`
         );
     // Written values make the marker mean "append what extenders supply". An unknown source is then
-    // only legitimate as the schema's own name, with no extender; anything else is a typo.
-    if (!known && written !== undefined && name !== where.split('/').at(-1))
+    // only legitimate as a whole component schema's own name, with no extender; anything else
+    // (a typo, or an inline property that merely shares the name) is refused.
+    if (!known && written !== undefined && !isOwnName(name, where))
         throw new Error(
             `[openapi] ${where}: x-enum-from names no known source (${String(name)}) and is not this schema's own name.`
         );

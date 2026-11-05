@@ -32,7 +32,7 @@ import {
     type StampedReturnStatus
 } from '../domain';
 import { withdrawalPeriodDays } from '../config';
-import { CANCEL_CAUSES } from './cancel';
+import { CANCEL_CAUSES, afterCancel } from './cancel';
 
 /**
  * The timeline row each system move leaves; `reopen` and `reship` leave none, the loss or the
@@ -344,12 +344,14 @@ export const markFulfilmentComplete = (
  * `cancelled` row is the system's (no account behind it). The stock is already back.
  * @param orderId - the order to settle
  * @param session - the act's transaction; the settlement commits with the cancel or not at all
- * @returns the order as it now stands, or `null` if it was not `processing`
+ * @returns `null` if the order was not `processing`; else the order as it now stands plus
+ *   `reportCancelled`, which the owner of the transaction calls AFTER its commit: the audit row and
+ *   the analytics event, as the system actor, like every other cancel
  */
 export const markUndeliverable = (
     orderId: string,
     session: ClientSession
-): Promise<OrderDocument | null> =>
+): Promise<{ order: OrderDocument; reportCancelled: () => void } | null> =>
     announceWithin(
         session,
         withTimeline(
@@ -372,6 +374,8 @@ export const markUndeliverable = (
             payload: { orderId, refund: false, cause: 'lost' },
             aggregateId: orderId
         })
+    ).then((order) =>
+        order ? { order, reportCancelled: () => void afterCancel(order, 'lost', false) } : null
     );
 
 /**
