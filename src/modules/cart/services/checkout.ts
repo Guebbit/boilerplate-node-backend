@@ -341,7 +341,9 @@ const totalNow = (
     shippingMethod: StaticShippingMethod | undefined
 ): ExpectedTotal => {
     const currency = shopCurrency();
-    const shippingCost = shippingMethod ? shippingPriceFor(shippingMethod, joined, currency) : undefined;
+    const shippingCost = shippingMethod
+        ? shippingPriceFor(shippingMethod, joined, currency)
+        : undefined;
     return { amount: orderTotal({ items: joined, shippingCost, currency }), currency };
 };
 

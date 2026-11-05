@@ -260,7 +260,9 @@ const claimAndRestock = (
                     remedy,
                     refundAmount: verdict.breakdown.total,
                     shippingRefund: verdict.breakdown.shipping,
-                    ...(toMinorUnits(handlingDeduction, returned.currency) > NO_MONEY ? { handlingDeduction } : {}),
+                    ...(toMinorUnits(handlingDeduction, returned.currency) > NO_MONEY
+                        ? { handlingDeduction }
+                        : {}),
                     ...stampRestocked(restocked)
                 },
                 session
@@ -364,7 +366,10 @@ const receiveFor = (
     // Checked before anything is written: a count that cannot stand never half-receives a return.
     if (remedy !== ReturnRemedy.refund && !isGuaranteeReason(returned.reason))
         return Promise.resolve(badRemedyFor());
-    if (isGuaranteeReason(returned.reason) && toMinorUnits(input.handlingDeduction ?? '0', returned.currency) > NO_MONEY)
+    if (
+        isGuaranteeReason(returned.reason) &&
+        toMinorUnits(input.handlingDeduction ?? '0', returned.currency) > NO_MONEY
+    )
         return Promise.resolve(deductionOnGuarantee());
     const restock = resolveRestock(wireLines(returned.lines), input.lines);
     if (!restock.ok) return Promise.resolve(badRestock(restock));

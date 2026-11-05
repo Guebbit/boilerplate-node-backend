@@ -146,7 +146,10 @@ describe('a pending record', () => {
     it('lets only one of two claims through', async () => {
         const { orderId } = await paidOrder();
         jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
-        await expect(refund(orderId, '30.00')).resolves.toMatchObject({ success: true, status: 201 });
+        await expect(refund(orderId, '30.00')).resolves.toMatchObject({
+            success: true,
+            status: 201
+        });
         const stored = await paymentOf(orderId);
         const refundId = String(stored.refunds[0]._id);
         const window = { now: new Date(), staleBefore: new Date(0) };
@@ -163,7 +166,10 @@ describe('a pending record', () => {
     it('cannot be failed by an attempt that a newer claim superseded', async () => {
         const { orderId } = await paidOrder();
         jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
-        await expect(refund(orderId, '30.00')).resolves.toMatchObject({ success: true, status: 201 });
+        await expect(refund(orderId, '30.00')).resolves.toMatchObject({
+            success: true,
+            status: 201
+        });
         const stored = await paymentOf(orderId);
         const refundId = String(stored.refunds[0]._id);
         const oldAttempt = new Date(0);

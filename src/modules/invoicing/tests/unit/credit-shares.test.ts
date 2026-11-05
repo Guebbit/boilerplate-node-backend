@@ -55,7 +55,8 @@ describe('creditShares', () => {
         };
 
         expect(creditShares(mixed, '10.00', 'Refund').map((line) => line.unitPrice)).toEqual([
-            '2.92', '7.08'
+            '2.92',
+            '7.08'
         ]);
     });
 });
@@ -116,7 +117,9 @@ describe('creditShares — a refund for specific goods', () => {
             shipping: '0.00'
         });
 
-        expect(lines).toEqual([{ title: 'Refund', quantity: 1, unitPrice: '55.00', taxRate: 0.22 }]);
+        expect(lines).toEqual([
+            { title: 'Refund', quantity: 1, unitPrice: '55.00', taxRate: 0.22 }
+        ]);
     });
 
     it('falls back to every rate when no returned line is on the invoice', () => {

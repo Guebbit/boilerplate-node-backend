@@ -89,7 +89,7 @@ describe('POST /products', () => {
         expect(response.status).toBe(422);
     });
 
-    it('answers a price at the currency\'s places, whatever spelling it was sent in', async () => {
+    it("answers a price at the currency's places, whatever spelling it was sent in", async () => {
         const { bearer } = await authenticateAsRole('editor');
 
         const response = await api()

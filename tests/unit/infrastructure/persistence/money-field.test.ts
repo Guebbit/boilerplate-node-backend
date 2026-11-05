@@ -3,7 +3,11 @@
  * text, however deep it sits. The database half is the integration test of the same name.
  */
 import { Types } from 'mongoose';
-import { decimalToString, padMoneyPaths, stringifyDecimals } from '@infrastructure/persistence/money-field';
+import {
+    decimalToString,
+    padMoneyPaths,
+    stringifyDecimals
+} from '@infrastructure/persistence/money-field';
 
 describe('decimalToString', () => {
     it('reads a Decimal128 by its text', () => {
@@ -60,7 +64,7 @@ describe('padMoneyPaths', () => {
         ['JPY', '1000', '1000'],
         ['JPY', '1000.00', '1000'],
         ['KWD', '1.5', '1.500']
-    ])('spells %s %s at the currency\'s own places as %s', (currency, stored, expected) => {
+    ])("spells %s %s at the currency's own places as %s", (currency, stored, expected) => {
         const row = { total: stored, items: [{ price: stored }, { price: stored }], note: stored };
 
         padMoneyPaths(row, ['total', 'items.price'], currency);

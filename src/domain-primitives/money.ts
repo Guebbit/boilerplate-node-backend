@@ -115,7 +115,9 @@ export const toMinorUnits = (value: unknown, currency: string): Money => {
 export const toDecimalString = (amount: Money, currency: string): string => {
     const exponent = minorUnitExponent(currency);
     // BigInt spells an integer double in full: `String(1e21)` would switch to exponent notation.
-    const digits = BigInt(Math.abs(amount)).toString().padStart(exponent + 1, '0');
+    const digits = BigInt(Math.abs(amount))
+        .toString()
+        .padStart(exponent + 1, '0');
     const whole = digits.slice(0, digits.length - exponent);
     const text = exponent === 0 ? whole : `${whole}.${digits.slice(digits.length - exponent)}`;
     return amount < 0 ? `-${text}` : text;
@@ -163,7 +165,8 @@ export const formatMoney = (locale: string, amount: string | number, currency: s
 export const fitsCurrency = (amount: string, currency: string): boolean => {
     const match = PLAIN_DECIMAL.exec(amount);
     if (!match) return false;
-    return (match[3] ?? '').slice(minorUnitExponent(currency)).replaceAll('0', '') === '';
+    const fraction = match.at(3) ?? ''; // group 3 is absent for a whole number
+    return fraction.slice(minorUnitExponent(currency)).replaceAll('0', '') === '';
 };
 
 /**

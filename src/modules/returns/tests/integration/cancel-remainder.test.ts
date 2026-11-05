@@ -206,7 +206,9 @@ describe('the buyer cancelling what has not shipped', () => {
             cancellation.lines.map(({ productId, quantity }) => [String(productId), quantity])
         ).toEqual([[String(fixture.mug._id), 1]]);
         expect(cancellation.refundAmount).toBe('10.00');
-        expect(await refundsOf(fixture.orderId)).toEqual([{ reason: 'cancellation', amount: '10.00' }]);
+        expect(await refundsOf(fixture.orderId)).toEqual([
+            { reason: 'cancellation', amount: '10.00' }
+        ]);
         // The mug goes back on sale; the shirts that left stay out of the shelf's count.
         expect(await countersOf(fixture.mug._id)).toEqual({
             onHand: 10,
@@ -511,7 +513,9 @@ describe('cancelling one fulfillment order before anything ships', () => {
         // Two shirts at 30.00; the delivery stays with the order, which still has the mug to send.
         expect(cancellation).toMatchObject({ status: 'closed', kind: 'cancellation' });
         expect(cancellation.refundAmount).toBe('60.00');
-        expect(await refundsOf(fixture.orderId)).toEqual([{ reason: 'cancellation', amount: '60.00' }]);
+        expect(await refundsOf(fixture.orderId)).toEqual([
+            { reason: 'cancellation', amount: '60.00' }
+        ]);
         const stored = await readOrder(fixture.orderId);
         expect(stored?.status).toBe(OrderStatus.processing);
         expect(await countersOf(fixture.shirt._id)).toMatchObject({ reserved: 0, available: 10 });
@@ -578,7 +582,9 @@ describe('withdrawing from an order that holds made-to-order goods', () => {
         expect(outcome.success).toBe(true);
         const stored = await readOrder(fixture.orderId);
         expect(stored?.status).toBe(OrderStatus.processing);
-        expect(await refundsOf(fixture.orderId)).toEqual([{ reason: 'cancellation', amount: '60.00' }]);
+        expect(await refundsOf(fixture.orderId)).toEqual([
+            { reason: 'cancellation', amount: '60.00' }
+        ]);
         const groups = await fulfillmentOrdersOf(fixture.orderId);
         expect(groups.map(({ status }) => status)).toEqual(['canceled', 'open']);
     });
@@ -654,7 +660,9 @@ describe('staff cancelling what has not shipped', () => {
             status: 'closed',
             refundAmount: '10.00'
         });
-        expect(await refundsOf(fixture.orderId)).toEqual([{ reason: 'cancellation', amount: '10.00' }]);
+        expect(await refundsOf(fixture.orderId)).toEqual([
+            { reason: 'cancellation', amount: '10.00' }
+        ]);
     });
 
     it('acknowledges the buyer’s cancel but sends no returns notice for staff’s', async () => {
@@ -858,7 +866,9 @@ describe('staff cancelling what has not shipped', () => {
         const cancellation = created(await staffCancels(fixture, 'moderator'));
 
         expect(cancellation).toMatchObject({ kind: 'cancellation', status: 'closed' });
-        expect(await refundsOf(fixture.orderId)).toEqual([{ reason: 'cancellation', amount: '10.00' }]);
+        expect(await refundsOf(fixture.orderId)).toEqual([
+            { reason: 'cancellation', amount: '10.00' }
+        ]);
     });
 });
 

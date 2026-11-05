@@ -134,7 +134,10 @@ describe('a refund', () => {
             new PaymentProviderError('insufficient_funds', 'raw provider text')
         );
 
-        await expect(refund(orderId, '30.00')).resolves.toMatchObject({ success: true, status: 201 });
+        await expect(refund(orderId, '30.00')).resolves.toMatchObject({
+            success: true,
+            status: 201
+        });
 
         const rows = await timelineOf(orderId, 'refund');
         expect(rows.map(({ type }) => type)).toEqual(['refund_issued', 'refund_failed']);
@@ -175,7 +178,10 @@ describe('a refund', () => {
     it('hides the failed attempt from the buyer and shows it to staff', async () => {
         const { user, orderId } = await paidOrder();
         jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
-        await expect(refund(orderId, '30.00')).resolves.toMatchObject({ success: true, status: 201 });
+        await expect(refund(orderId, '30.00')).resolves.toMatchObject({
+            success: true,
+            status: 201
+        });
 
         const buyer = await orderService.readTimeline(orderId, asCustomer(user.id));
         const staff = await orderService.readTimeline(orderId, asAdmin());

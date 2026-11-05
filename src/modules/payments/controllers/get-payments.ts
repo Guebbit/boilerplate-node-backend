@@ -15,7 +15,6 @@ import {
 import { createSearchController } from '@infrastructure/surfaces/create-search-controller';
 import { paymentService } from '../services';
 
-
 /**
  * The generated body schema with the transport coercions a query string needs: `page`, `pageSize`,
  * the two amounts and `disputed` arrive as text.

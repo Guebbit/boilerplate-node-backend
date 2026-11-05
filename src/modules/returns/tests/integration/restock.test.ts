@@ -127,7 +127,10 @@ describe('receiving with a restock count', () => {
         );
 
         // Restocking is about the goods, not the money: the same 70.00 goes back.
-        expect(result.success && result.data).toMatchObject({ status: 'closed', refundAmount: '70.00' });
+        expect(result.success && result.data).toMatchObject({
+            status: 'closed',
+            refundAmount: '70.00'
+        });
         expect(await countersOf(shirt._id)).toMatchObject({ onHand: 8 });
         const movements = await inventoryService.listMovements({
             productId: String(shirt._id)

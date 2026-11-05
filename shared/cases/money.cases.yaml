@@ -245,7 +245,13 @@ cases:
       }
     - { name: zero is zero, kind: decimal, minor: 0, currency: EUR, decimal: '0.00' }
     - { name: two places fit EUR, kind: fits, amount: '19.99', currency: EUR, fits: true }
-    - { name: three places do not fit EUR, kind: fits, amount: '19.999', currency: EUR, fits: false }
+    - {
+          name: three places do not fit EUR,
+          kind: fits,
+          amount: '19.999',
+          currency: EUR,
+          fits: false
+      }
     - { name: a whole amount fits JPY, kind: fits, amount: '100', currency: JPY, fits: true }
     - { name: a half yen does not fit JPY, kind: fits, amount: '100.5', currency: JPY, fits: false }
     - { name: three places fit KWD, kind: fits, amount: '1234.567', currency: KWD, fits: true }

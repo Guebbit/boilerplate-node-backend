@@ -760,6 +760,7 @@ components:
             type: string
             format: decimal
             pattern: '^-?\d+(\.\d+)?$'
+            maxLength: 32
             examples: ['19.90']
             description: >-
                 A money amount as a plain decimal string at the places of the currency it is priced
@@ -770,6 +771,7 @@ components:
             type: string
             format: decimal
             pattern: '^\d+(\.\d+)?$'
+            maxLength: 32
             examples: ['19.90']
             description: >-
                 A non-negative money amount as a plain decimal string at the places of the

@@ -153,7 +153,7 @@ language is kept per context rather than shared.
 | **Status**       | Where an order is in its lifecycle. A closed set from the contract, moving along the edges `domain/lifecycle.ts` declares — every guard in this module, and the ones its siblings ask through `orders`, read that one table.       |
 | **Cancellation** | A status change that releases the order’s held units and triggers a refund. Legal from the statuses the lifecycle table gives the actor — `pending` and `paid` for a customer, `processing` as well for staff.                     |
 | **Expiry**       | A cancellation the shop initiates because the order’s hold on its units ran out before payment did. Arrives as `inventory.reservation_expired`.                                                                                    |
-| **Total**        | Line price × quantity, summed in minor units and returned as a decimal string at the currency's own places (`"19.90"`). Computed, never stored as truth.                                                                                                                           |
+| **Total**        | Line price × quantity, summed in minor units and returned as a decimal string at the currency's own places (`"19.90"`). Computed, never stored as truth.                                                                           |
 | **Override**     | A staff correction of the status outside the ordinary lifecycle table, always with a reason and always recorded on the order — see `delivery`'s own entry for the two shapes it takes. Never reaches `paid`, never moves backward. |
 
 ## `payments`

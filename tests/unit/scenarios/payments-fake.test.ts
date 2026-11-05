@@ -357,7 +357,11 @@ describe('fakePaymentProvider — what a success reports it collected', () => {
             })
         );
         await expect(fakePaymentProvider.retrieve(providerRef)).resolves.toEqual(
-            expect.objectContaining({ amountReceived: '50.00', currency: 'EUR', paymentId: 'pay_a' })
+            expect.objectContaining({
+                amountReceived: '50.00',
+                currency: 'EUR',
+                paymentId: 'pay_a'
+            })
         );
     });
 

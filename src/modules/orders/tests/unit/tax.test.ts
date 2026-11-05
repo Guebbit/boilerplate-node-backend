@@ -39,7 +39,9 @@ describe('orderTaxBreakdown — a fully-VAT order', () => {
         // The exact figures a known float-imprecise multiply must still land on — see money.ts.
         const breakdown = orderTaxBreakdown({ items: [line(19.9, 1, 0.22)], currency: 'EUR' });
 
-        expect(breakdown.lines).toEqual([{ taxAmount: '3.59', netAmount: '16.31', grossAmount: '19.90' }]);
+        expect(breakdown.lines).toEqual([
+            { taxAmount: '3.59', netAmount: '16.31', grossAmount: '19.90' }
+        ]);
     });
 
     it('taxes the LINE total (price × quantity), not the unit price alone', () => {
@@ -48,13 +50,19 @@ describe('orderTaxBreakdown — a fully-VAT order', () => {
         // not per unit), so this is a hand-checked value rather than "double the single-unit tax".
         const breakdown = orderTaxBreakdown({ items: [line(10, 2, 0.2)], currency: 'EUR' });
 
-        expect(breakdown.lines[0]).toEqual({ taxAmount: '3.33', netAmount: '16.67', grossAmount: '20.00' });
+        expect(breakdown.lines[0]).toEqual({
+            taxAmount: '3.33',
+            netAmount: '16.67',
+            grossAmount: '20.00'
+        });
     });
 
     it('charges nothing at a zero rate', () => {
         const breakdown = orderTaxBreakdown({ items: [line(50, 1, 0)], currency: 'EUR' });
 
-        expect(breakdown.lines).toEqual([{ taxAmount: '0.00', netAmount: '50.00', grossAmount: '50.00' }]);
+        expect(breakdown.lines).toEqual([
+            { taxAmount: '0.00', netAmount: '50.00', grossAmount: '50.00' }
+        ]);
     });
 
     it('sums net and tax across every line for the order-level totals', () => {
@@ -82,7 +90,9 @@ describe('orderTaxBreakdown — a fully-VAT order', () => {
             const gross = Number(item.product?.price) * Number(item.quantity);
             const { netAmount, taxAmount } = breakdown.lines[index];
 
-            expect(Math.round((Number(netAmount) + Number(taxAmount)) * 100)).toBe(Math.round(gross * 100));
+            expect(Math.round((Number(netAmount) + Number(taxAmount)) * 100)).toBe(
+                Math.round(gross * 100)
+            );
         }
     });
 
@@ -108,7 +118,10 @@ describe('orderTaxBreakdown — shipping, apportioned pro-rata by line value', (
             currency: 'EUR'
         });
 
-        expect(Number(withShipping.taxTotal)).toBeCloseTo(Number(withoutShipping.taxTotal) + 0.9, 6);
+        expect(Number(withShipping.taxTotal)).toBeCloseTo(
+            Number(withoutShipping.taxTotal) + 0.9,
+            6
+        );
     });
 
     it("never changes a line's own taxAmount/netAmount — shipping's tax is a total-only addition", () => {
@@ -181,7 +194,10 @@ describe('orderTaxBreakdown — shipping, apportioned pro-rata by line value', (
 
         expect(breakdown.lines[0]).toEqual(physicalAlone.lines[0]);
         expect(breakdown.lines[1]).toEqual(digitalAlone.lines[0]);
-        expect(Number(breakdown.taxTotal)).toBeCloseTo(Number(physicalAlone.taxTotal) + Number(digitalAlone.taxTotal), 6);
+        expect(Number(breakdown.taxTotal)).toBeCloseTo(
+            Number(physicalAlone.taxTotal) + Number(digitalAlone.taxTotal),
+            6
+        );
     });
 
     it('apportions nothing at all onto a digital-only order — there is no line to carry it', () => {
@@ -248,9 +264,11 @@ describe('orderTaxBreakdown — shippingNetAmount/shippingTaxAmount', () => {
             currency: 'EUR'
         });
 
-        expect(Math.round((Number(breakdown.shippingNetAmount) + Number(breakdown.shippingTaxAmount)) * 100)).toBe(
-            750
-        );
+        expect(
+            Math.round(
+                (Number(breakdown.shippingNetAmount) + Number(breakdown.shippingTaxAmount)) * 100
+            )
+        ).toBe(750);
     });
 });
 
@@ -339,7 +357,10 @@ describe('orderTaxBreakdown — taxSummary, one row per distinct rate', () => {
                 (sum, item) => sum + Number(item.product?.price) * Number(item.quantity),
                 0
             ) + shippingCost;
-        const summedGross = breakdown.taxSummary.reduce((sum, row) => sum + Number(row.grossAmount), 0);
+        const summedGross = breakdown.taxSummary.reduce(
+            (sum, row) => sum + Number(row.grossAmount),
+            0
+        );
 
         expect(Math.round(summedGross * 100)).toBe(Math.round(totalPrice * 100));
     });
@@ -459,10 +480,11 @@ describe('orderTaxBreakdown — VAT rounded once per rate (EN 16931 BR-CO-17), w
         expect(breakdown.shippingTaxAmount).toBe('0.91');
         expect(breakdown.taxTotal).toBe('9.60');
         // Reconciles to what was charged: 39.80 + 16.50 + 6.00.
-        expect(Number(breakdown.netTotal) + Number(breakdown.shippingNetAmount) + Number(breakdown.taxTotal)).toBeCloseTo(
-            62.3,
-            6
-        );
+        expect(
+            Number(breakdown.netTotal) +
+                Number(breakdown.shippingNetAmount) +
+                Number(breakdown.taxTotal)
+        ).toBeCloseTo(62.3, 6);
     });
 
     it('a zero-rated line carries no VAT and shares no rate with a taxed one', () => {

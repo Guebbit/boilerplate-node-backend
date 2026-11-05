@@ -25,17 +25,21 @@ describe('webhookEventNames', () => {
     });
 });
 
-describe('the money in a webhook payload', () => {
-    /** Every payload schema of the public bundle with its properties, however it is named. */
-    const payloads = (): [string, Record<string, Record<string, unknown>>][] => {
-        const bundle = parseYaml(readFileSync(path.join(REPO_ROOT, 'asyncapi.public.yaml'), 'utf8')) as {
-            components: { schemas: Record<string, { properties?: Record<string, Record<string, unknown>> }> };
+/** Every payload schema of the public bundle with its properties, however it is named. */
+const payloads = (): [string, Record<string, Record<string, unknown>>][] => {
+    const bundle = parseYaml(
+        readFileSync(path.join(REPO_ROOT, 'asyncapi.public.yaml'), 'utf8')
+    ) as {
+        components: {
+            schemas: Record<string, { properties?: Record<string, Record<string, unknown>> }>;
         };
-        return Object.entries(bundle.components.schemas)
-            .filter(([name]) => name.endsWith('Payload'))
-            .map(([name, schema]) => [name, schema.properties ?? {}]);
     };
+    return Object.entries(bundle.components.schemas)
+        .filter(([name]) => name.endsWith('Payload'))
+        .map(([name, schema]) => [name, schema.properties ?? {}]);
+};
 
+describe('the money in a webhook payload', () => {
     it('travels as a decimal string, never a number', () => {
         const money = payloads().flatMap(([name, properties]) =>
             Object.entries(properties)

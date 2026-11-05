@@ -123,5 +123,8 @@ export const cheapestStandardShipping = (itemsTotal: string, currency: string): 
     const prices = SHIPPING_METHODS.filter(({ requiresAddress }) => requiresAddress).map((method) =>
         priceShippingMoney(method, itemsTotal, currency)
     );
-    return toDecimalString(prices.length > 0 ? (Math.min(...prices) as Money) : toMinorUnits(0, currency), currency);
+    return toDecimalString(
+        prices.length > 0 ? (Math.min(...prices) as Money) : toMinorUnits(0, currency),
+        currency
+    );
 };

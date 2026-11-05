@@ -57,7 +57,10 @@ const claimClosed = (
                               actor,
                               data: {
                                   returnId: id,
-                                  refundAmount: padDecimal(closed.refundAmount ?? '0', closed.currency),
+                                  refundAmount: padDecimal(
+                                      closed.refundAmount ?? '0',
+                                      closed.currency
+                                  ),
                                   currency: closed.currency,
                                   ...(closed.remedy ? { remedy: closed.remedy } : {})
                               }

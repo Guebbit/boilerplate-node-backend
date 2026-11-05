@@ -45,7 +45,14 @@ describe('displayStatusOf', () => {
     ])(
         'reads %s with refunds %j and %d refunded as %s',
         (status, refunds, amountRefunded, expected) => {
-            expect(displayStatusOf({ ...base, status, refunds, amountRefunded: String(amountRefunded) })).toBe(expected);
+            expect(
+                displayStatusOf({
+                    ...base,
+                    status,
+                    refunds,
+                    amountRefunded: String(amountRefunded)
+                })
+            ).toBe(expected);
         }
     );
 

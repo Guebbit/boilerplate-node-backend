@@ -558,7 +558,10 @@ describe('what receiving answers and announces', () => {
             callerContextAs('admin')
         );
 
-        expect(result.success && result.data).toMatchObject({ status: 'closed', refundAmount: '0.00' });
+        expect(result.success && result.data).toMatchObject({
+            status: 'closed',
+            refundAmount: '0.00'
+        });
         expect(refund).not.toHaveBeenCalled();
     });
 
@@ -618,7 +621,11 @@ describe('the order timeline of a return', () => {
             ['return_closed', 'admin-2']
         ]);
         expect(rows[0].data).toEqual({ returnId: id, reason: 'defective' });
-        expect(rows[3].data).toMatchObject({ returnId: id, refundAmount: '70.00', currency: 'EUR' });
+        expect(rows[3].data).toMatchObject({
+            returnId: id,
+            refundAmount: '70.00',
+            currency: 'EUR'
+        });
         expect(JSON.stringify(rows)).not.toContain('555-0100');
     });
 

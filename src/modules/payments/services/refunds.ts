@@ -42,7 +42,9 @@ import {
     toDecimalString,
     addMoney,
     minMoney,
-    subtractMoney, padDecimal } from '@domain-primitives/money';
+    subtractMoney,
+    padDecimal
+} from '@domain-primitives/money';
 import { orderService } from '@modules/orders';
 import { holds } from '@kernel/ability';
 import { auditForbidden } from '@infrastructure/observability/forbidden';

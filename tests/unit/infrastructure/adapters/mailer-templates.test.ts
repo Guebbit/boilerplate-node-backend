@@ -436,7 +436,9 @@ describe('email templates render in every supported locale', () => {
                 taxTotal: '3.61',
                 shippingNetAmount: '0.00',
                 shippingTaxAmount: '0.00',
-                taxSummary: [{ rate: 0.22, netAmount: '16.39', taxAmount: '3.61', grossAmount: '20.00' }],
+                taxSummary: [
+                    { rate: 0.22, netAmount: '16.39', taxAmount: '3.61', grossAmount: '20.00' }
+                ],
                 shippingByRate: [],
                 grandTotal: '20.00'
             }),

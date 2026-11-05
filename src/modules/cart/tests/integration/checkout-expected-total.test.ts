@@ -122,7 +122,9 @@ describe('POST /cart/checkout and the total the buyer was shown', () => {
     it('accepts the named total however it is spelled: "20" and "20.00" are the same minor units', async () => {
         const { bearer } = await shopperWith('10.00');
 
-        const response = await checkoutAs(bearer, { expectedTotal: { amount: '20', currency: 'EUR' } });
+        const response = await checkoutAs(bearer, {
+            expectedTotal: { amount: '20', currency: 'EUR' }
+        });
 
         expect(response.status).toBe(201);
     });

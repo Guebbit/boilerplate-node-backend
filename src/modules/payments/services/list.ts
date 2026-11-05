@@ -30,7 +30,13 @@ import {
     parseReference,
     refundDueBy
 } from '../domain';
-import { addMoney, NO_MONEY, padDecimal, toDecimalString, toMinorUnits } from '@domain-primitives/money';
+import {
+    addMoney,
+    NO_MONEY,
+    padDecimal,
+    toDecimalString,
+    toMinorUnits
+} from '@domain-primitives/money';
 import { DisputeStatus } from '@types';
 import type { PaymentDocument, RefundRecord } from '../model';
 import { paymentRepository, type RefundFilters, type RefundRow } from '../repository';
@@ -236,7 +242,9 @@ const disputeRows = (payments: PaymentDocument[]): PaymentAttentionItem[] =>
                     ...(dispute.evidenceDueBy
                         ? { dueBy: dispute.evidenceDueBy.toISOString() }
                         : {}),
-                    ...(toMinorUnits(refunded, payment.currency) > NO_MONEY ? { alreadyRefunded: refunded } : {})
+                    ...(toMinorUnits(refunded, payment.currency) > NO_MONEY
+                        ? { alreadyRefunded: refunded }
+                        : {})
                 };
             })
     );

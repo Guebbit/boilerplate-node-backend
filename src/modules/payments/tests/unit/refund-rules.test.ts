@@ -182,10 +182,16 @@ describe('the dispute rules', () => {
             lostToChargebacks({ disputes }, 'EUR');
         expect(taken([chargeback(DisputeStatus.lost, '40.00')])).toBe(4000);
         expect(
-            taken([chargeback(DisputeStatus.accepted, '40.00'), chargeback(DisputeStatus.lost, '10.00')])
+            taken([
+                chargeback(DisputeStatus.accepted, '40.00'),
+                chargeback(DisputeStatus.lost, '10.00')
+            ])
         ).toBe(5000);
         expect(
-            taken([chargeback(DisputeStatus.won, '40.00'), chargeback(DisputeStatus.needs_response)])
+            taken([
+                chargeback(DisputeStatus.won, '40.00'),
+                chargeback(DisputeStatus.needs_response)
+            ])
         ).toBe(0);
         expect(lostToChargebacks({ disputes: [{ ...inquiry(DisputeStatus.lost) }] }, 'EUR')).toBe(
             0

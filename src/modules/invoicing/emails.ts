@@ -171,11 +171,7 @@ const buildVatBlock = (
             )
         ])
     );
-    const perLine = lineTaxFromRateTotals(
-        asTaxItems(document.lines),
-        document.currency,
-        goodsTaxByRate
-    );
+    const perLine = lineTaxFromRateTotals(asTaxItems(document.lines), currency, goodsTaxByRate);
 
     const rows: DocumentVatRow[] = document.lines.map((line, index) => ({
         description: line.title,

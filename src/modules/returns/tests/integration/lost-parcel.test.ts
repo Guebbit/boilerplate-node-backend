@@ -144,7 +144,9 @@ describe('cancelling what a lost parcel carried', () => {
         );
 
         expect(canceled.success && canceled.data.refundAmount).toBe('75.00');
-        expect(await refundsOf(parcel.orderId)).toEqual([{ reason: 'cancellation', amount: '75.00' }]);
+        expect(await refundsOf(parcel.orderId)).toEqual([
+            { reason: 'cancellation', amount: '75.00' }
+        ]);
         expect(await countersOf(parcel.shirt._id)).toEqual({
             onHand: 8,
             reserved: 0,
@@ -191,7 +193,9 @@ describe('settling an order whose every parcel was lost and refunded', () => {
         expect(canceledRows).toHaveLength(1);
         expect(canceledRows[0].actor).toBeUndefined();
         expect(canceledRows[0].data).toMatchObject({ by: 'system', cause: 'lost', refund: false });
-        expect(await refundsOf(parcel.orderId)).toEqual([{ reason: 'cancellation', amount: '75.00' }]);
+        expect(await refundsOf(parcel.orderId)).toEqual([
+            { reason: 'cancellation', amount: '75.00' }
+        ]);
         expect(await reservationRepository.findByOrderId(parcel.orderId)).toMatchObject({
             status: 'released'
         });

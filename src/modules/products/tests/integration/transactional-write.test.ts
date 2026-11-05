@@ -113,7 +113,11 @@ describe('productService.create after its commit', () => {
 
 describe('productService.updateById is one transaction', () => {
     it('keeps the old row when the translation write fails', async () => {
-        const product = await createProduct({ title: 'Standing Desk', price: '10.00', active: true });
+        const product = await createProduct({
+            title: 'Standing Desk',
+            price: '10.00',
+            active: true
+        });
         write.mockRejectedValueOnce(new Error('translation store down'));
 
         await expect(

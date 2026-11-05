@@ -78,7 +78,9 @@ describe('payment.refund_failed', () => {
         withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { orderId, failWith } = await paidOrder();
             failWith('provider_unavailable');
-            await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: '30.00' });
+            await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
+                amount: '30.00'
+            });
 
             await paymentService.retryOpenRefunds();
             await settleOutboxNudges();

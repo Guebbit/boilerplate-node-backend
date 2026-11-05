@@ -407,7 +407,10 @@ describe('listAttention', () => {
     );
 
     it('leaves a refund still inside the threshold alone', async () => {
-        await seedPayment({ amountRefunded: '10.00', refunds: [refundRecord({ status: 'pending' })] });
+        await seedPayment({
+            amountRefunded: '10.00',
+            refunds: [refundRecord({ status: 'pending' })]
+        });
 
         expect(await attentionRows()).toEqual([]);
     });

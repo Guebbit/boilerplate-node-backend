@@ -96,7 +96,7 @@ const isWritableAmount =
     (nonNegative: boolean) =>
     (stored: unknown): boolean => {
         const text = decimalToString(stored);
-        const amount = text === undefined ? Number.NaN : Number(text);
+        const amount = text === undefined ? NaN : Number(text);
         return Number.isFinite(amount) && (!nonNegative || amount >= 0);
     };
 
@@ -164,7 +164,9 @@ export interface MoneyWalkableSchema {
  * @param value - an embedded schema type's `schema`, or anything
  */
 const isWalkableSchema = (value: unknown): value is MoneyWalkableSchema =>
-    typeof value === 'object' && value !== null && typeof Reflect.get(value, 'eachPath') === 'function';
+    typeof value === 'object' &&
+    value !== null &&
+    typeof Reflect.get(value, 'eachPath') === 'function';
 
 /**
  * The dotted path of every {@link moneyPath} field a schema declares, embedded schemas included
@@ -177,8 +179,10 @@ const isWalkableSchema = (value: unknown): value is MoneyWalkableSchema =>
 export const moneyPathsOf = (schema: MoneyWalkableSchema, prefix = ''): string[] => {
     const found: string[] = [];
     schema.eachPath((path, type) => {
-        if (Reflect.get(Object(type.options), 'money') === true) found.push(prefix + path);
-        if (isWalkableSchema(type.schema)) found.push(...moneyPathsOf(type.schema, `${prefix}${path}.`));
+        // Narrowing cast: mongoose types `options` as unknown, but it is always an object.
+        if ((type.options as Record<string, unknown>).money === true) found.push(prefix + path);
+        if (isWalkableSchema(type.schema))
+            found.push(...moneyPathsOf(type.schema, `${prefix}${path}.`));
     });
     return found;
 };
@@ -190,9 +194,7 @@ export const moneyPathsOf = (schema: MoneyWalkableSchema, prefix = ''): string[]
  * @param currency - the ISO-4217 code the amount is priced in
  */
 const padAmount = (value: unknown, currency: string): unknown =>
-    typeof value === 'string' || typeof value === 'number'
-        ? padDecimal(value, currency)
-        : value;
+    typeof value === 'string' || typeof value === 'number' ? padDecimal(value, currency) : value;
 
 /**
  * Pad every amount at the given paths to the currency's own places, in place. This is the one place

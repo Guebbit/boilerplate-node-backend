@@ -579,7 +579,12 @@ describe('the payment.refunded announcement', () => {
         expect(rows[0]).toMatchObject({
             aggregateId: orderId,
             status: 'published',
-            payload: { orderId, refundId: String(payment.refunds[0]._id), amount: '30.00', full: false }
+            payload: {
+                orderId,
+                refundId: String(payment.refunds[0]._id),
+                amount: '30.00',
+                full: false
+            }
         });
     });
 

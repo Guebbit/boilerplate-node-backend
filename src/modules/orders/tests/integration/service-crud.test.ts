@@ -157,7 +157,12 @@ describe('create', () => {
         ['off sale', { purchasable: false }]
     ])('sells a %s product by hand, and holds its stock', async (_name, flags) => {
         const user = await createUser();
-        const product = await createProduct({ title: 'Mouse', price: '10.00', onHand: 5, ...flags });
+        const product = await createProduct({
+            title: 'Mouse',
+            price: '10.00',
+            onHand: 5,
+            ...flags
+        });
 
         const result = await orderService.create(
             String(user._id),
@@ -209,7 +214,12 @@ describe('create', () => {
         ['soft-deleted', { deletedAt: new Date() }]
     ])('answers 404 for a %s product to a caller without display:Product', async (_name, flags) => {
         const user = await createUser();
-        const product = await createProduct({ title: 'Mouse', price: '10.00', onHand: 5, ...flags });
+        const product = await createProduct({
+            title: 'Mouse',
+            price: '10.00',
+            onHand: 5,
+            ...flags
+        });
 
         const result = await orderService.create(
             String(user._id),
@@ -625,7 +635,11 @@ describe('getById', () => {
         const unscoped = await orderService.getById(String(order._id));
 
         // 2 lines, 3 units, 2×25 + 1×10 = 60.
-        expect(scoped?.toJSON()).toMatchObject({ totalItems: 2, totalQuantity: 3, totalPrice: '60.00' });
+        expect(scoped?.toJSON()).toMatchObject({
+            totalItems: 2,
+            totalQuantity: 3,
+            totalPrice: '60.00'
+        });
         expect(unscoped?.toJSON()).toMatchObject({
             totalItems: 2,
             totalQuantity: 3,

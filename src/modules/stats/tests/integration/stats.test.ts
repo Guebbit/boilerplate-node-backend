@@ -273,7 +273,11 @@ describe('getSalesStats', () => {
         const stats = await statsService.getSalesStats(periodOf('2026-05-01', '2026-05-03'));
 
         expect(stats.currencies).toHaveLength(1);
-        expect(stats.currencies[0].totals).toMatchObject({ orders: 0, netSales: '0.00', totalSales: '0.00' });
+        expect(stats.currencies[0].totals).toMatchObject({
+            orders: 0,
+            netSales: '0.00',
+            totalSales: '0.00'
+        });
         expect(stats.currencies[0].buckets).toHaveLength(3);
     });
 });

@@ -248,7 +248,10 @@ const GRID_PRODUCTS: FillerProduct[] = ANIMALS.flatMap((animal, animalIndex) =>
             return {
                 title: en.title,
                 description: en.description,
-                price: (Math.round(type.basePrice * tier.priceMultiplier) + animalIndex * 2).toFixed(2),
+                price: (
+                    Math.round(type.basePrice * tier.priceMultiplier) +
+                    animalIndex * 2
+                ).toFixed(2),
                 openingStock: Math.max(5, 60 - tierIndex * 15 - typeIndex * 3 + animalIndex * 2),
                 categories: [animal.slug],
                 tags: [type.slug, tier.slug],

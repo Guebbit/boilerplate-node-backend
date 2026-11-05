@@ -92,13 +92,25 @@ describe('methodFitsWeight', () => {
         // in-line, not `SHIPPING_METHODS`, so this rule stays covered either way.
         expect(
             methodFitsWeight(
-                { id: 'heavy', price: '0.00', tracked: false, requiresAddress: true, minWeight: 1000 },
+                {
+                    id: 'heavy',
+                    price: '0.00',
+                    tracked: false,
+                    requiresAddress: true,
+                    minWeight: 1000
+                },
                 999
             )
         ).toBe(false);
         expect(
             methodFitsWeight(
-                { id: 'heavy', price: '0.00', tracked: false, requiresAddress: true, minWeight: 1000 },
+                {
+                    id: 'heavy',
+                    price: '0.00',
+                    tracked: false,
+                    requiresAddress: true,
+                    minWeight: 1000
+                },
                 1000
             )
         ).toBe(true);
@@ -109,7 +121,8 @@ describe('SHIPPING_METHODS', () => {
     it('gives every method a non-negative price', () => {
         // The table this shop quotes from is committed data, not user input — this is the canary
         // for a typo that would otherwise only surface as a wrong number at checkout.
-        for (const method of SHIPPING_METHODS) expect(Number(method.price)).toBeGreaterThanOrEqual(0);
+        for (const method of SHIPPING_METHODS)
+            expect(Number(method.price)).toBeGreaterThanOrEqual(0);
     });
 
     it('gives every method a real boolean tracked flag', () => {

@@ -1522,7 +1522,11 @@ describe('recordOfflinePayment', () => {
         await settleOutboxNudges();
 
         const payment = await paymentRepository.findByOrderId(orderId);
-        expect(payment).toMatchObject({ amount: '105.00', provider: 'manual', status: 'succeeded' });
+        expect(payment).toMatchObject({
+            amount: '105.00',
+            provider: 'manual',
+            status: 'succeeded'
+        });
         for (const name of [PAYMENT_SUCCEEDED, ORDER_STATUS_CHANGED])
             expect(await outboxEventModel.countDocuments({ name, aggregateId: orderId })).toBe(1);
     });

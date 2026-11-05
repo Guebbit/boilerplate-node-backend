@@ -209,9 +209,9 @@ describe('orderTotal', () => {
                 fc.array(lineItem(), { maxLength: 20 }),
                 fc.integer({ min: 0, max: 100_000 }),
                 (items, shippingCost) => {
-                    expect(toMinorUnits(orderTotal({ items, shippingCost, currency: EUR }), EUR)).toBe(
-                        toMinorUnits(sumLineItems(items, EUR).price, EUR) + shippingCost * 100
-                    );
+                    expect(
+                        toMinorUnits(orderTotal({ items, shippingCost, currency: EUR }), EUR)
+                    ).toBe(toMinorUnits(sumLineItems(items, EUR).price, EUR) + shippingCost * 100);
                 }
             ),
             RUN

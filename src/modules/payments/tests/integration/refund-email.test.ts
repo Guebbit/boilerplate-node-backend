@@ -135,7 +135,12 @@ const refundedOf = (orderId: string) =>
     paymentRepository.findByOrderId(orderId).then((payment) => payment?.amountRefunded ?? 0);
 
 describe('who may return money for a return', () => {
-    const RETURN = { returnId: '64b64c4f4f4f4f4f4f4f4f4f', amount: '50.00', lines: [], shipping: '0.00' };
+    const RETURN = {
+        returnId: '64b64c4f4f4f4f4f4f4f4f4f',
+        amount: '50.00',
+        lines: [],
+        shipping: '0.00'
+    };
 
     it.each([
         ['an anonymous caller', testCallerContext],

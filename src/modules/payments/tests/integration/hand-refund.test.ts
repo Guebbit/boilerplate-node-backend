@@ -87,7 +87,11 @@ describe('the operator refunding a cash payment', () => {
         expect(owedRows()[0]).toMatchObject({
             targetType: 'order',
             targetId: orderId,
-            metadata: { refundId: String(payment.refunds[0]._id), amount: '30.00', reason: 'goodwill' }
+            metadata: {
+                refundId: String(payment.refunds[0]._id),
+                amount: '30.00',
+                reason: 'goodwill'
+            }
         });
         // The same fact is announced for `tasks`, in the transaction that opened the record.
         const [announced] = await outboxEventModel

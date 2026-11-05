@@ -144,7 +144,9 @@ const buildView = (
     const joined = lines.filter((line) => isJoined(line));
     const { required, options } = shippingOptionsFor(joined);
     const selected = effectiveShippingChoice(cart?.shippingMethodId, options);
-    const shippingCost = options.find((option) => option.id === selected)?.price ?? toDecimalString(NO_MONEY, currency);
+    const shippingCost =
+        options.find((option) => option.id === selected)?.price ??
+        toDecimalString(NO_MONEY, currency);
     return presentCart({
         lines: lines.map(({ productId, quantity: lineQuantity, product }) => ({
             productId,

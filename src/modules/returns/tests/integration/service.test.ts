@@ -290,7 +290,11 @@ const orderWithExcluded = async (carriedTo: 'delivered' | null = 'delivered') =>
 const onlyExcludedOrder = async () => {
     customers += 1;
     const user = await createUser({ email: `customer-${customers}@example.com` });
-    const engraved = await createProduct({ title: 'Engraved mug', price: '10.00', noWithdrawal: true });
+    const engraved = await createProduct({
+        title: 'Engraved mug',
+        price: '10.00',
+        noWithdrawal: true
+    });
     const order = await createOrder(user, [toOrderItem(engraved, 1)], {
         status: OrderStatus.paid
     });

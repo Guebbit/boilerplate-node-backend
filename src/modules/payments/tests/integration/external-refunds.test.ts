@@ -149,12 +149,19 @@ describe('a refund made in the dashboard', () => {
             currency: 'EUR',
             status: 'succeeded'
         });
-        addFakeExternalRefund(providerRef, { amount: '20.00', currency: 'EUR', status: 'succeeded' });
+        addFakeExternalRefund(providerRef, {
+            amount: '20.00',
+            currency: 'EUR',
+            status: 'succeeded'
+        });
 
         await deliver(providerRef, first);
 
         const payment = await paymentOf(orderId);
-        expect(payment.refunds.map((refund) => refund.amount).toSorted()).toEqual(['20.00', '30.00']);
+        expect(payment.refunds.map((refund) => refund.amount).toSorted()).toEqual([
+            '20.00',
+            '30.00'
+        ]);
         expect(payment.amountRefunded).toBe('50.00');
         const view = await paymentService.getForOrder(orderId, asAdmin());
         expect(view.data?.displayStatus).toBe('partially_refunded');
@@ -184,7 +191,11 @@ describe('a refund made in the dashboard', () => {
             currency: 'EUR',
             status: 'failed'
         });
-        addFakeExternalRefund(providerRef, { amount: '30.00', currency: 'USD', status: 'succeeded' });
+        addFakeExternalRefund(providerRef, {
+            amount: '30.00',
+            currency: 'USD',
+            status: 'succeeded'
+        });
 
         await deliver(providerRef, failed);
 
@@ -223,7 +234,9 @@ describe('a refund that is ours', () => {
         withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { orderId, providerRef } = await paidOrder();
             setFakeRefundTimeout(providerRef, true);
-            await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: '30.00' });
+            await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
+                amount: '30.00'
+            });
             const failed = await paymentOf(orderId);
             expect(failed.refunds[0]).toMatchObject({
                 status: 'failed',

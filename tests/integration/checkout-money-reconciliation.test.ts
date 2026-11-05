@@ -68,7 +68,7 @@ const newShopper = async (): Promise<Shopper> => {
  * @param exponent - the currency's decimal places
  */
 const minorUnitsOf = (price: string, exponent: number): number => {
-    const [whole, fraction = ''] = price.split('.');
+    const [whole, fraction = ''] = price.split('.', 2);
     const kept = Number(`${whole}${fraction.padEnd(exponent, '0').slice(0, exponent)}`);
     const next = Number(fraction.padEnd(exponent + 1, '0')[exponent]);
     return next >= 5 ? kept + 1 : kept;
@@ -163,9 +163,7 @@ interface Case {
  */
 const spelled = (minor: number, exponent: number): string => {
     const digits = String(minor).padStart(exponent + 1, '0');
-    return exponent === 0
-        ? digits
-        : `${digits.slice(0, -exponent)}.${digits.slice(-exponent)}`;
+    return exponent === 0 ? digits : `${digits.slice(0, -exponent)}.${digits.slice(-exponent)}`;
 };
 
 /**
@@ -248,8 +246,12 @@ describe('cart view, order and payment intent agree on the amount (EUR)', () => 
                     fc.record({
                         // Whole cents and sub-cent prices both: the factory writes sub-cent prices the API would refuse, and the three views must still agree.
                         price: fc.oneof(
-                            fc.integer({ min: 0, max: 30_000 }).map((cents) => (cents / 100).toFixed(2)),
-                            fc.integer({ min: 0, max: 3_000_000 }).map((tenths) => (tenths / 1000).toFixed(3))
+                            fc
+                                .integer({ min: 0, max: 30_000 })
+                                .map((cents) => (cents / 100).toFixed(2)),
+                            fc
+                                .integer({ min: 0, max: 3_000_000 })
+                                .map((tenths) => (tenths / 1000).toFixed(3))
                         ),
                         quantity: fc.integer({ min: 1, max: 6 })
                     }),

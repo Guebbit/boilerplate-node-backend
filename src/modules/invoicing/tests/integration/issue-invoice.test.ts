@@ -130,7 +130,10 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         expect(invoice.taxSummary).toHaveLength(1);
         const [row] = invoice.taxSummary;
         expect([row.rate, row.netAmount, row.taxAmount, row.grossAmount]).toEqual([
-            0.22, '0.25', '0.05', '0.30'
+            0.22,
+            '0.25',
+            '0.05',
+            '0.30'
         ]);
         expect(invoice.taxTotal).toBe('0.05');
         expect(invoice.grandTotal).toBe('0.30');
@@ -146,7 +149,11 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
             taxClass: 'zero',
             rateType: 'zero_rated'
         });
-        const exempt = await createProduct({ price: '20.00', taxClass: 'zero', rateType: 'exempt' });
+        const exempt = await createProduct({
+            price: '20.00',
+            taxClass: 'zero',
+            rateType: 'exempt'
+        });
         const order = await createOrder(user, [toOrderItem(zeroRated, 1), toOrderItem(exempt, 1)]);
 
         await orderService.markPaid(String(order._id));

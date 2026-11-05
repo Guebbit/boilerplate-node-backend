@@ -170,17 +170,17 @@ fills the report from the answer instead of from the body. Return it as `Provide
 bank blocks because of a dispute (Stripe `charge_disputed`, `refund_disputed_payment`) is thrown as
 `disputed`.
 
-| Field                | Meaning                                                                                     |
-| -------------------- | ------------------------------------------------------------------------------------------- |
-| `disputeRef`         | the provider's dispute id; one per payment                                                  |
-| `kind`               | `inquiry` (information asked, no money taken) or `chargeback` (money taken back)            |
-| `status`             | `needs_response`, `under_review`, `won`, `lost`, `accepted`, `closed`                       |
-| `reason`             | Stripe's closed list (`fraudulent`, `product_not_received`, ...); map your provider onto it |
+| Field                | Meaning                                                                                      |
+| -------------------- | -------------------------------------------------------------------------------------------- |
+| `disputeRef`         | the provider's dispute id; one per payment                                                   |
+| `kind`               | `inquiry` (information asked, no money taken) or `chargeback` (money taken back)             |
+| `status`             | `needs_response`, `under_review`, `won`, `lost`, `accepted`, `closed`                        |
+| `reason`             | Stripe's closed list (`fraudulent`, `product_not_received`, ...); map your provider onto it  |
 | `amount`, `currency` | decimal text, in the payment's currency (`"19.90"`); a report in another currency is dropped |
-| `evidenceDueBy`      | the evidence deadline, when the provider gives one                                          |
-| `fundsWithdrawn`     | whether the bank has taken the money out of the shop's balance                              |
-| `observedAt`         | the provider's own event time: every write is conditional on it being newer                 |
-| `dashboardUrl`       | where staff answer it                                                                       |
+| `evidenceDueBy`      | the evidence deadline, when the provider gives one                                           |
+| `fundsWithdrawn`     | whether the bank has taken the money out of the shop's balance                               |
+| `observedAt`         | the provider's own event time: every write is conditional on it being newer                  |
+| `dashboardUrl`       | where staff answer it                                                                        |
 
 Send every report you get, repeated and out of order: the application keeps only the newest per
 `disputeRef`. Dates are ISO strings, as the contract's schema parses them. Behaviour:

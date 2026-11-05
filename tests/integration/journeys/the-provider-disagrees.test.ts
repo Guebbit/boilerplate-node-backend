@@ -56,7 +56,9 @@ describe('the provider reports the wrong amount', () => {
         const { bearer: staff } = await authenticateAs('admin');
         const order = await placeOrder(bearer, [{ productId, quantity: 2 }]);
         const intent = await openIntent(bearer, order.id);
-        setFakeReceipt(providerRef(intent.id), { amountReceived: String(Number(order.totalPrice) - 1) });
+        setFakeReceipt(providerRef(intent.id), {
+            amountReceived: String(Number(order.totalPrice) - 1)
+        });
 
         const confirm = await confirmCard(bearer, intent.id);
         await drain();

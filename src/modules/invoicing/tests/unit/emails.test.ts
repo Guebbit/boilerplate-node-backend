@@ -320,7 +320,9 @@ describe('buildDocumentView — net unit price and once-per-rate VAT, worked exa
             ...DOCUMENT,
             currency: 'JPY',
             lines: [{ title: 'Widget', quantity: 1, unitPrice: '108.00', taxRate: 0.08 }],
-            taxSummary: [{ rate: 0.08, netAmount: '100.00', taxAmount: '8.00', grossAmount: '108.00' }]
+            taxSummary: [
+                { rate: 0.08, netAmount: '100.00', taxAmount: '8.00', grossAmount: '108.00' }
+            ]
         }).vat as { rows: { unitPrice: string }[] };
 
         expect(vat.rows[0].unitPrice).toBe('¥100');

@@ -19,7 +19,8 @@ import {
 const RUN = { seed: 20_260_902, numRuns: PROPERTY_RUNS, endOnFailure: true } as const;
 
 /** Any basket value a rate could be asked for — finite and non-negative, nothing else assumed. */
-const itemsTotal = () => fc.integer({ min: 0, max: 1e8 }).map((cents) => toDecimalString(cents as Money, 'EUR'));
+const itemsTotal = () =>
+    fc.integer({ min: 0, max: 1e8 }).map((cents) => toDecimalString(cents as Money, 'EUR'));
 
 describe('priceShipping — totality', () => {
     it('never produces NaN or a negative charge, for any items total', () => {
@@ -38,7 +39,9 @@ describe('priceShipping — totality', () => {
         // The only two answers are the flat rate or free — never a third number.
         fc.assert(
             fc.property(fc.constantFrom(...SHIPPING_METHODS), itemsTotal(), (method, total) => {
-                expect(Number(priceShipping(method, total, 'EUR'))).toBeLessThanOrEqual(Number(method.price));
+                expect(Number(priceShipping(method, total, 'EUR'))).toBeLessThanOrEqual(
+                    Number(method.price)
+                );
             }),
             RUN
         );
@@ -48,34 +51,36 @@ describe('priceShipping — totality', () => {
 describe('priceShipping — the free-shipping threshold', () => {
     it('is free at and above the threshold, for a method that has one', () => {
         fc.assert(
-            fc.property(
-                fc.integer({ min: 0, max: 1e6 }),
-                (aboveBy) => {
-                    const standard = findShippingMethod('standard')!;
-                    const threshold = toMinorUnits(standard.freeAbove!, 'EUR');
+            fc.property(fc.integer({ min: 0, max: 1e6 }), (aboveBy) => {
+                const standard = findShippingMethod('standard')!;
+                const threshold = toMinorUnits(standard.freeAbove!, 'EUR');
 
-                    expect(
-                        priceShipping(standard, toDecimalString((threshold + aboveBy) as Money, 'EUR'), 'EUR')
-                    ).toBe('0.00');
-                }
-            ),
+                expect(
+                    priceShipping(
+                        standard,
+                        toDecimalString((threshold + aboveBy) as Money, 'EUR'),
+                        'EUR'
+                    )
+                ).toBe('0.00');
+            }),
             RUN
         );
     });
 
     it('charges the flat rate anywhere strictly below the threshold', () => {
         fc.assert(
-            fc.property(
-                fc.integer({ min: 1, max: 1e4 }),
-                (belowBy) => {
-                    const standard = findShippingMethod('standard')!;
-                    const threshold = toMinorUnits(standard.freeAbove!, 'EUR');
+            fc.property(fc.integer({ min: 1, max: 1e4 }), (belowBy) => {
+                const standard = findShippingMethod('standard')!;
+                const threshold = toMinorUnits(standard.freeAbove!, 'EUR');
 
-                    expect(
-                        priceShipping(standard, toDecimalString((threshold - belowBy) as Money, 'EUR'), 'EUR')
-                    ).toBe(standard.price);
-                }
-            ),
+                expect(
+                    priceShipping(
+                        standard,
+                        toDecimalString((threshold - belowBy) as Money, 'EUR'),
+                        'EUR'
+                    )
+                ).toBe(standard.price);
+            }),
             RUN
         );
     });
