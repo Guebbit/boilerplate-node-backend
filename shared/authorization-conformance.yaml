@@ -81,14 +81,11 @@ admin-permissions: &admin_permissions
     - create:ApiKey
     - delete:ApiKey
     - assign:Role
-    - update:Cart
     - checkout:Cart
     - read:Example
     - create:Example
     - update:Example
     - delete:Example
-    - read:Notification
-    - delete:Notification
     - display:Example
     - admin:Example
 
@@ -112,8 +109,6 @@ moderator-permissions: &moderator_permissions
     - create:Example
     - update:Example
     - delete:Example
-    - read:Notification
-    - delete:Notification
 
 cases:
     # =============================================================================================
@@ -830,7 +825,7 @@ cases:
 
     # =============================================================================================
     # What a moderator does NOT do to an order, and who shops. Deleting or placing an order is shop
-    # operations (manager and admin), not moderation; and staff and administrators own no basket.
+    # operations (manager and admin), not moderation; and who spends.
     # =============================================================================================
 
     - name: a moderator may update an order
@@ -854,22 +849,8 @@ cases:
       resource: { tenantId: shop_1 }
       expect: deny
 
-    - name: a customer may use a basket
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [update:Cart, checkout:Cart] }
-      action: update
-      subject: Cart
-      resource: { tenantId: shop_1 }
-      expect: allow
-
     # Staff are customers too: the audience's rules are unioned with the role's, so what a staff
-    # member holds on top is only the staff rules. The caller below is a verified manager.
-    - name: an administrator may use a basket, every signed-in account being a customer first
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: *admin_permissions }
-      action: update
-      subject: Cart
-      resource: { tenantId: shop_1 }
-      expect: allow
-
+    # member holds on top is only the staff rules. The caller below is an administrator.
     - name: an administrator may check out
       caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: *admin_permissions }
       action: checkout
@@ -878,14 +859,14 @@ cases:
       expect: allow
 
     - name: a verified manager may check out, beside the staff rules the role adds
-      caller: { id: usr_2, scope: tenant, tenantId: shop_1, permissions: [update:Cart, checkout:Cart, read:Order, display:Order] }
+      caller: { id: usr_2, scope: tenant, tenantId: shop_1, permissions: [checkout:Cart, read:Order, display:Order] }
       action: checkout
       subject: Cart
       resource: { tenantId: shop_1 }
       expect: allow
 
-    - name: an account whose address is unproven may use a basket but may not check out
-      caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [update:Cart, read:Order] }
+    - name: an account whose address is unproven may not check out
+      caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [read:Order] }
       action: checkout
       subject: Cart
       resource: { tenantId: shop_1 }
@@ -899,7 +880,7 @@ cases:
       expect: allow
 
     - name: a customer cannot change an account, the users rules not being in their audience
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [update:Cart, checkout:Cart, read:Order, read:Payment] }
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [checkout:Cart, read:Order, read:Payment] }
       action: update
       subject: User
       resource: { tenantId: shop_1 }
@@ -974,16 +955,3 @@ cases:
       resource: { tenantId: shop_1, userId: null, deletedAt: null }
       expect: deny
 
-    - name: a signed-in account reads its own notification
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [read:Notification, delete:Notification] }
-      action: read
-      subject: Notification
-      resource: { tenantId: shop_1, userId: usr_1 }
-      expect: allow
-
-    - name: a signed-in account cannot delete someone else's notification
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [read:Notification, delete:Notification] }
-      action: delete
-      subject: Notification
-      resource: { tenantId: shop_1, userId: usr_2 }
-      expect: deny

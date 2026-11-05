@@ -181,9 +181,9 @@ account has no authenticator app armed, so an account that holds `admin` and no 
 that can enrol. See
 [Staff need an authenticator app](../modules/account-two-factor.md#staff-need-an-authenticator-app).
 
-Every door into a basket asks the rule: the cart routes, a reorder and a wishlist's move into the
-cart ask `update:Cart`; placing an order and the card steps ask `checkout:Cart`, which
-answers an unproven address with `EMAIL_NOT_VERIFIED` ("confirm your email") instead of a bare
+Using a basket needs no rule: every signed-in account shops, staff included, so the cart routes,
+a reorder and a wishlist's move into the cart ask only for a signed-in session. Placing an order
+and the card steps ask `checkout:Cart`, which answers an unproven address with `EMAIL_NOT_VERIFIED` ("confirm your email") instead of a bare
 permissions error. An order's `actions.pay` is offered only to a caller who holds the checkout rule.
 
 ## Protecting people
@@ -300,14 +300,14 @@ evaluator answers it (`own` where a condition pins the rule to the caller's own 
 freshly proved session is demanded, and whether an API key can be minted with it).
 `npm run regenerate` rewrites them; `npm run check` fails the build on drift.
 
-| Module                                                       | Module                                               | Module                                                              |
-| ------------------------------------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------- |
-| [products](../modules/products.md#who-can-do-what)           | [cart](../modules/cart.md#who-can-do-what)           | [orders](../modules/orders.md#who-can-do-what)                      |
-| [payments](../modules/payments.md#who-can-do-what)           | [inventory](../modules/inventory.md#who-can-do-what) | [delivery](../modules/delivery.md#who-can-do-what)                  |
-| [returns](../modules/returns.md#who-can-do-what)             | [tasks](../modules/tasks.md#who-can-do-what)         | [locales](../modules/locales.md#who-can-do-what) (and translations) |
-| [users](../modules/users.md#who-can-do-what)                 | [access](../modules/access.md#who-can-do-what)       | [audit-logs](../modules/audit-logs.md#who-can-do-what)              |
-| [webhooks](../modules/webhooks.md#who-can-do-what)           | [api-keys](../modules/api-keys.md#who-can-do-what)   | [observability](../modules/observability.md#who-can-do-what)        |
-| [notifications](../modules/notifications.md#who-can-do-what) | [stats](../modules/stats.md#who-can-do-what)         | [the role matrix](../demo-ecommerce/index.md)                       |
+| Module                                             | Module                                               | Module                                                              |
+| -------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------- |
+| [products](../modules/products.md#who-can-do-what) | [cart](../modules/cart.md#who-can-do-what)           | [orders](../modules/orders.md#who-can-do-what)                      |
+| [payments](../modules/payments.md#who-can-do-what) | [inventory](../modules/inventory.md#who-can-do-what) | [delivery](../modules/delivery.md#who-can-do-what)                  |
+| [returns](../modules/returns.md#who-can-do-what)   | [tasks](../modules/tasks.md#who-can-do-what)         | [locales](../modules/locales.md#who-can-do-what) (and translations) |
+| [users](../modules/users.md#who-can-do-what)       | [access](../modules/access.md#who-can-do-what)       | [audit-logs](../modules/audit-logs.md#who-can-do-what)              |
+| [webhooks](../modules/webhooks.md#who-can-do-what) | [api-keys](../modules/api-keys.md#who-can-do-what)   | [observability](../modules/observability.md#who-can-do-what)        |
+| [stats](../modules/stats.md#who-can-do-what)       | [the role matrix](../demo-ecommerce/index.md)        |                                                                     |
 
 ## Where it lives
 

@@ -200,9 +200,10 @@ taste: every guard on the route asks for a tenant-scoped rule with no owner cond
 it reaches reads `request.authContext`.
 Both halves are asserted, both by `tests/cross-cutting/authenticated-controllers.test.ts`: it
 reads Express's own resolved chain per route, refusing an `authContext!` read behind anything but
-`isAuth` and a non-`.any.` `requirePermission` key behind `isAuthOrCredential`. A controller that
-starts reading `authContext`, or a write that starts checking a `.self.` key, behind the
-credential guard fails the suite rather than production.
+`isAuth` and a `requirePermission` rule with an owner condition behind `isAuthOrCredential` (a
+rule pinned to the caller's own rows, such as `read:Order`, rather than a staff one like
+`display:Order`). A controller that starts reading `authContext`, or a write that starts checking an
+own-rows rule, behind the credential guard fails the suite rather than production.
 `tests/cross-cutting/api-key-authentication.test.ts` covers the other mount rule instead — that no
 module mounts BOTH identity guards — driving a real credential over the real chain.
 
@@ -217,7 +218,7 @@ Two exclusions are decisions, not consequences, and each says so at its mount:
 
 - **`api-keys` itself.** It reads no `authContext` and would qualify mechanically. A credential
   that can mint credentials is one that never has to be rotated, so minting stays a human act.
-- **`orders`.** Its `orders.any.*` routes would qualify, but the same router carries the
+- **`orders`.** Its staff routes (`display:Order`, `update:Order`) would qualify, but the same router carries the
   customer's own `/:id`, `/:id/cancel` and `/:id/invoice`. Opening it up means splitting the
   router first.
 
@@ -744,6 +745,11 @@ issues an `HttpOnly` refresh cookie at login. So `requirePermissionViaCookie` ta
 action and subject every other guard takes and verifies that cookie exactly as `POST /account/refresh`
 does — signature **and** presence on the user document — so a revoked or
 logged-out token is rejected, not merely an expired one.
+
+A stream of the caller's own data (`GET /notifications/stream`) asks no rule, only a signed-in
+account, so it mounts `requireSessionViaCookie`: the same cookie check, no rule. Its 30-second
+re-check, `stillSignedInViaCookie`, ends the stream on revocation or a ban just as the rule version
+does.
 
 ::: danger Not a query-string token
 The obvious alternative is `?token=…`. URLs land in access logs, proxy logs, browser history and

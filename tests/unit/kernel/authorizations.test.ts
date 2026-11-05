@@ -25,7 +25,9 @@ import {
     isAuthOrCredential,
     requirePermission,
     requirePermissionViaCookie,
+    requireSessionViaCookie,
     stillHoldsRuleViaCookie,
+    stillSignedInViaCookie,
     requireFreshAuth,
     requireFreshAuthWhen
 } from '@kernel/middlewares/authorizations';
@@ -1260,6 +1262,93 @@ describe('stillHoldsRuleViaCookie', () => {
             stillHoldsRuleViaCookie(request, ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)
         ).resolves.toBe(true);
         expect(mockedVerifyRefreshToken).toHaveBeenCalledTimes(1);
+    });
+});
+
+/**
+ * `requireSessionViaCookie` / `stillSignedInViaCookie` — the cookie guard for a caller's own data
+ * (the notification bell): a signed-in account is enough, no rule is asked, and the stream still
+ * ends the moment the session is revoked.
+ */
+describe('requireSessionViaCookie', () => {
+    it('answers 401 without a session cookie', () => {
+        const response = makeResponseStub();
+        const next = jest.fn();
+
+        requireSessionViaCookie()(makeCookieRequest(), response, asStub<NextFunction>(next));
+
+        expect(response.status).toHaveBeenCalledWith(401);
+        expect(next).not.toHaveBeenCalled();
+    });
+
+    it('admits a customer holding none of the staff rules, and sets the caller the stream filters by', async () => {
+        const customer = asCustomer('user-1');
+        mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: customer });
+        const request = makeCookieRequest('cookie.jwt');
+
+        const next = await runUntilNext(requireSessionViaCookie(), request, makeResponseStub());
+
+        expect(next).toHaveBeenCalledTimes(1);
+        expect(request.authContext).toEqual(customer);
+        expect(request.caller).toEqual(callerInScope(customer, 'tenant'));
+        expect(request.sessionRecheck).toBeDefined();
+    });
+
+    it('answers 401 when the cookie resolves to nobody', async () => {
+        mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: undefined });
+        const response = makeResponseStub();
+        const next = jest.fn();
+
+        requireSessionViaCookie()(
+            makeCookieRequest('cookie.jwt'),
+            response,
+            asStub<NextFunction>(next)
+        );
+        await new Promise((resolve) => setImmediate(resolve));
+
+        expect(response.status).toHaveBeenCalledWith(401);
+        expect(next).not.toHaveBeenCalled();
+    });
+
+    it('answers 401 when the session was revoked', async () => {
+        mockedVerifyRefreshToken.mockResolvedValueOnce({ miss: 'revoked' });
+        const response = makeResponseStub();
+
+        requireSessionViaCookie()(
+            makeCookieRequest('cookie.jwt'),
+            response,
+            asStub<NextFunction>(jest.fn())
+        );
+        await new Promise((resolve) => setImmediate(resolve));
+
+        expect(response.status).toHaveBeenCalledWith(401);
+    });
+});
+
+describe('stillSignedInViaCookie', () => {
+    it('resolves true while the session names a user', async () => {
+        recheckFamily.mockResolvedValueOnce({ ok: asCustomer('user-1') });
+
+        await expect(stillSignedInViaCookie(admittedRequest())).resolves.toBe(true);
+    });
+
+    it('resolves false once the session family is revoked', async () => {
+        recheckFamily.mockResolvedValueOnce({ miss: 'revoked' });
+
+        await expect(stillSignedInViaCookie(admittedRequest())).resolves.toBe(false);
+    });
+
+    it('resolves false when the session no longer names anyone', async () => {
+        recheckFamily.mockResolvedValueOnce({ ok: undefined });
+
+        await expect(stillSignedInViaCookie(admittedRequest())).resolves.toBe(false);
+    });
+
+    it('fails closed when the recheck throws, and for a request the guard never admitted', async () => {
+        recheckFamily.mockRejectedValueOnce(new Error('mongo is down'));
+
+        await expect(stillSignedInViaCookie(admittedRequest())).resolves.toBe(false);
+        await expect(stillSignedInViaCookie(makeCookieRequest('cookie.jwt'))).resolves.toBe(false);
     });
 });
 

@@ -2,13 +2,12 @@
  * @module
  * The cart route table.
  *
- * A cart is somebody's, so the whole router is authenticated and needs `update:Cart`, which
- * every signed-in account holds. `POST /checkout` is the one route that also invalidates the
+ * A cart is somebody's, so the whole router needs only a signed-in account. `POST /checkout` is the one route that also invalidates the
  * `products` response cache — the endpoints it serves read differently once a checkout has
  * spent stock — and requires a FRESH session holding
  * `checkout:Cart` on top of `isAuth` (`requireFreshAuth`,
- * `requirePermission('checkout', 'Cart')`): it is where this app's money actually moves. The
- * two keys are the only ones this module declares — see `shared/authorization-keys.yaml`.
+ * `requirePermission('checkout', 'Cart')`): it is where this app's money actually moves. That
+ * is the only key this module declares — see `shared/authorization-keys.yaml`.
  * A line is written through the parent's `/items` collection (docs/api/write-methods.md#a-line-is-written-through-its-parent):
  * 200 + the whole cart, no `Location`, no read of a line.
  */
@@ -37,9 +36,9 @@ import { checkoutLimiter, mergeLimiter } from './rate-limits';
 /** Express router for cart operations (add, update, remove items; checkout). */
 export const router = Router();
 
-// All cart routes require authentication. `update:Cart` comes with every signed-in account,
-// staff included, so a basket is always the caller's own.
-router.use(getAuth, isAuth, requirePermission('update', 'Cart'));
+// All cart routes require authentication. Every signed-in account shops, staff included, so a
+// basket is always the caller's own and no rule gates the router.
+router.use(getAuth, isAuth);
 
 // GET /cart/summary
 router.get('/summary', getCartSummary);

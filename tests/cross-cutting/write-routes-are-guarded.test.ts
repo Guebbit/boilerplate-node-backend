@@ -240,6 +240,50 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "removing a product from the caller's own wishlist"
     },
+    'cart POST /merge': {
+        requiresAuth: true,
+        reason: "folding a guest basket into the caller's own basket"
+    },
+    'cart POST /reorder': {
+        requiresAuth: true,
+        reason: "copying a past order into the caller's own basket"
+    },
+    'cart POST /items': {
+        requiresAuth: true,
+        reason: "adding a product to the caller's own basket"
+    },
+    'cart DELETE /items': {
+        requiresAuth: true,
+        reason: "emptying the caller's own basket"
+    },
+    'cart PUT /shipping-method': {
+        requiresAuth: true,
+        reason: "choosing a shipping method for the caller's own basket"
+    },
+    'cart PATCH /items/:productId': {
+        requiresAuth: true,
+        reason: "changing a line of the caller's own basket"
+    },
+    'cart DELETE /items/:productId': {
+        requiresAuth: true,
+        reason: "removing a line from the caller's own basket"
+    },
+    'wishlist POST /items/:productId/move-to-cart': {
+        requiresAuth: true,
+        reason: "moving a saved product into the caller's own basket"
+    },
+    'notifications POST /read-all': {
+        requiresAuth: true,
+        reason: "marking the caller's own notifications read"
+    },
+    'notifications DELETE /': {
+        requiresAuth: true,
+        reason: "emptying the caller's own inbox"
+    },
+    'notifications DELETE /:id': {
+        requiresAuth: true,
+        reason: "deleting one of the caller's own notifications; the service answers 404 for anyone else's"
+    },
     'stock-alerts POST /': {
         requiresAuth: true,
         reason: "asking to be told when a product is back, on the caller's own account"

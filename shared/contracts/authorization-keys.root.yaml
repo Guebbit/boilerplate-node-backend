@@ -168,9 +168,9 @@ stepUp:
 # Modules absent from this list have no rules, and that is deliberate rather than an omission:
 # `wishlist` and `account` are *your own things*. What you may do with them follows from being
 # signed in, not from a role, and giving them rules would invite a role that grants access to
-# someone else's basket. `cart` is nearly the same — its exceptions are `update:Cart` and
-# `checkout:Cart` below: whether the account shops at all, and a fact about the ACCOUNT (has this
-# address been proven?) rather than about the basket's contents, which stay ruleless.
+# someone else's basket. `cart` is nearly the same — its one exception is `checkout:Cart`
+# below, a fact about the ACCOUNT (has this address been proven?) rather than about the basket's
+# contents, which stay ruleless.
 
 # %AUTHORIZATION_RULES%
 

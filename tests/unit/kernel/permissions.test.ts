@@ -290,7 +290,6 @@ describe('audience roles', () => {
     it('lets only a proven address spend a basket', () => {
         expect(callerAs('customer').permissions).toContain('checkout:Cart');
         expect(callerAs('unverified').permissions).not.toContain('checkout:Cart');
-        expect(callerAs('unverified').permissions).toContain('update:Cart');
     });
 
     it('leaves authoring examples to staff, never to a shopper', () => {

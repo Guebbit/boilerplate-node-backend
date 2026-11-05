@@ -200,8 +200,8 @@ describe('POST /cart/items', () => {
 });
 
 /**
- * Everyone signed in shops: `update:Cart` comes with the audience, so a staff member fills a
- * basket like any customer, verified or not.
+ * Everyone signed in shops: no rule gates the basket, so a staff member fills one like any
+ * customer, verified or not.
  */
 describe('POST /cart/items — who may shop', () => {
     it.each([

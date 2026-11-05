@@ -27,13 +27,13 @@ describe('wishlist routes', () => {
         expect(guardsOn(router, signature)).toContain('isAuth');
     });
 
-    it('is admin-free by design, and asks a key only where a basket is written', () => {
+    it('is admin-free by design, and asks no key anywhere', () => {
         // There is no operator view of someone else's wishlist. If one appears, this fails and
-        // the addition gets looked at. The one key is the shopper's, on the move into a basket.
+        // the addition gets looked at. The move into a basket asks nothing either: every account shops.
         const keyGuarded = routeSignatures(router).filter((signature) =>
             guardsOn(router, signature).includes('requirePermissionGuard')
         );
 
-        expect(keyGuarded).toEqual(['POST /items/:productId/move-to-cart']);
+        expect(keyGuarded).toEqual([]);
     });
 });

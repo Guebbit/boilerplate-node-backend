@@ -634,14 +634,30 @@ export const requirePermission = <TSubject extends PermissionSubject>(
 };
 
 /**
+ * Turns what a session cookie resolved to into the signed-in user, auditing nothing.
+ *
+ * Throws when the credential is refused (forged, expired, revoked), and leaves that distinct from
+ * "resolved to nobody" on purpose: the callers below disagree about what a refusal should mean
+ * (401 to a connecting client; fail-closed to an already-open stream that cannot be told apart
+ * from a revoked one), so only they may decide.
+ *
+ * @param request - only for the audit trail of a miss; never re-authenticated from it
+ * @param resolution - what the session cookie resolved to
+ * @returns the resolved user, or `undefined` when the cookie resolved to nobody
+ * @throws {Error} when the credential itself was refused
+ */
+const sessionUserOf = (request: Request, resolution: Resolution<AuthContext | undefined>) => {
+    if ('miss' in resolution) {
+        noteMiss(request, 'session', resolution.miss);
+        throw new Error(`Session cookie refused: ${resolution.miss}`);
+    }
+    return resolution.ok;
+};
+
+/**
  * Judges a resolved cookie against a rule, auditing a refusal exactly as {@link requirePermissionViaCookie}
  * answers one — shared by that connect-time guard and by {@link stillHoldsRuleViaCookie}'s periodic
  * recheck of an already-open stream, so the two can never disagree about who holds the rule.
- *
- * Throws when the credential is refused (forged, expired, revoked), and leaves that distinct from
- * "resolved to nobody, or resolved but lacks the rule" on purpose: the two callers below disagree
- * about what a refusal should mean (401 to a connecting client; fail-closed to an already-open
- * stream that cannot be told apart from a revoked one), so only they may decide.
  *
  * @param request - only for the audit trail; never re-authenticated from it
  * @param resolution - what the session cookie resolved to
@@ -656,11 +672,7 @@ const judgeRuleHolder = <TSubject extends PermissionSubject>(
     action: ActionOn<TSubject>,
     subject: TSubject
 ) => {
-    if ('miss' in resolution) {
-        noteMiss(request, 'session', resolution.miss);
-        throw new Error(`Session cookie refused: ${resolution.miss}`);
-    }
-    const user = resolution.ok;
+    const user = sessionUserOf(request, resolution);
     const allowed = user !== undefined && holds(callerForSubject(user, subject), action, subject);
 
     if (!allowed) {
@@ -673,6 +685,56 @@ const judgeRuleHolder = <TSubject extends PermissionSubject>(
 
     return allowed ? user : undefined;
 };
+
+/**
+ * The cookie guard both {@link requirePermissionViaCookie} and {@link requireSessionViaCookie}
+ * are: read the session cookie, resolve it, let `judge` admit or refuse the user, and leave the
+ * caller and the stream's recheck on the request.
+ *
+ * @param name - the middleware's function name; the route-table tests read it back to tell the two guards apart
+ * @param judge - returns the admitted user, or `undefined` to answer 403; may throw to answer 401
+ * @returns an Express middleware
+ */
+const cookieGuard = (
+    name: string,
+    judge: (
+        request: Request,
+        resolution: Resolution<AuthContext | undefined>
+    ) => AuthContext | undefined
+) =>
+    // Sets the function's `name` (a plain property is read-only):
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/defineProperty
+    Object.defineProperty(
+        function cookieSessionGuard(request: Request, response: Response, next: NextFunction) {
+            const sessionToken = readSessionCookie(request);
+
+            // No cookie is 401 (who are you); a valid cookie without the key is 403 (not you).
+            if (!sessionToken) {
+                refuseUnauthenticated(request, response, cookieUnauthorizedErrors());
+                return;
+            }
+
+            watchCookie(sessionToken)
+                .then((watch) => {
+                    const user = judge(request, 'miss' in watch ? watch : { ok: watch.ok.context });
+                    if (!user || 'miss' in watch) {
+                        rejectResponse(response, 403, [t('generic.error-forbidden')]);
+                        return;
+                    }
+
+                    request.authContext = user;
+                    // Staff notices filter by the caller's CURRENT sets, so the tenant caller is always set.
+                    request.caller = callerInScope(user, 'tenant');
+                    request.sessionRecheck = watch.ok.recheck;
+                    next();
+                })
+                .catch(() => {
+                    refuseUnauthenticated(request, response, cookieUnauthorizedErrors());
+                });
+        },
+        'name',
+        { value: name }
+    );
 
 /**
  * {@link requirePermission} for endpoints a BROWSER opens without being able to set a header —
@@ -695,43 +757,28 @@ export const requirePermissionViaCookie = <TSubject extends PermissionSubject>(
 ) => {
     assertDeclared(action, subject);
 
-    // Named for the same reason as `requirePermissionGuard` above.
-    return function requirePermissionViaCookieGuard(
-        request: Request,
-        response: Response,
-        next: NextFunction
-    ) {
-        const sessionToken = readSessionCookie(request);
-
-        // No cookie is 401 (who are you); a valid cookie without the key is 403 (not you).
-        if (!sessionToken) {
-            refuseUnauthenticated(request, response, cookieUnauthorizedErrors());
-            return;
-        }
-
-        watchCookie(sessionToken)
-            .then((watch) => {
-                const user = judgeRuleHolder(
-                    request,
-                    'miss' in watch ? watch : { ok: watch.ok.context },
-                    action,
-                    subject
-                );
-                if (!user || 'miss' in watch) {
-                    rejectResponse(response, 403, [t('generic.error-forbidden')]);
-                    return;
-                }
-
-                request.authContext = user;
-                request.caller = callerInScope(user, 'tenant');
-                request.sessionRecheck = watch.ok.recheck;
-                next();
-            })
-            .catch(() => {
-                refuseUnauthenticated(request, response, cookieUnauthorizedErrors());
-            });
-    };
+    return cookieGuard('requirePermissionViaCookieGuard', (request, resolution) =>
+        judgeRuleHolder(request, resolution, action, subject)
+    );
 };
+
+/**
+ * {@link isAuth} for a stream a BROWSER opens without being able to set a header: signed in is
+ * enough, no rule is asked. For a caller's own data (the notification bell) that no signed-in
+ * account can lack. Sets the same request state as {@link requirePermissionViaCookie}.
+ *
+ * A cookie that resolves to nobody answers 401, not 403: there is no rule to lack.
+ *
+ * @returns an Express middleware
+ */
+export const requireSessionViaCookie = () =>
+    cookieGuard('requireSessionViaCookieGuard', (request, resolution) => {
+        const user = sessionUserOf(request, resolution);
+        if (!user) {
+            throw new Error('Session cookie resolved to nobody');
+        }
+        return user;
+    });
 
 /**
  * {@link requirePermissionViaCookie}'s check, re-run outside the request lifecycle — for the
@@ -756,6 +803,19 @@ export const stillHoldsRuleViaCookie = <TSubject extends PermissionSubject>(
     Promise.resolve()
         .then(() => request.sessionRecheck?.() ?? { miss: 'revoked' as const })
         .then((resolution) => judgeRuleHolder(request, resolution, action, subject) !== undefined)
+        .catch(() => false);
+
+/**
+ * {@link stillHoldsRuleViaCookie} for a stream behind {@link requireSessionViaCookie}: still true
+ * while the session family is live and resolves to a user. Ends the stream on revocation or ban.
+ *
+ * @param request - the request that opened the stream, carrying the guard's recheck
+ * @returns whether the session is still signed in
+ */
+export const stillSignedInViaCookie = (request: Request): Promise<boolean> =>
+    Promise.resolve()
+        .then(() => request.sessionRecheck?.() ?? { miss: 'revoked' as const })
+        .then((resolution) => sessionUserOf(request, resolution) !== undefined)
         .catch(() => false);
 
 /** What {@link requireFreshAuth} may additionally demand, beyond how recently. */

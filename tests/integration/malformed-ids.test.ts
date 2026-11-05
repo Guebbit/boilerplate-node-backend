@@ -12,7 +12,7 @@
  * run — and a route whose controller forgot the check answers 422 or 500 here instead of 404.
  *
  * Callers are admin, so a refusal is the controller's own and never a permission gate; the shopping
- * routes are the one exception, since an administrator holds no basket key and a customer does.
+ * routes are the one exception: they are sent as a customer, whose basket the suite builds.
  */
 import fc from 'fast-check';
 import { api, authenticateAs } from '@tests/http';

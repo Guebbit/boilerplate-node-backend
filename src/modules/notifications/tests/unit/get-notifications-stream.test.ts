@@ -4,28 +4,28 @@
  * the streamer. The recheck matters most: it is the one place a revoked caller does not lose
  * access on their next request, since there is no next request until it ends the stream. The
  * refusal branch is the fail-closed answer for a request that somehow reached the handler without
- * what `requirePermissionViaCookie` sets.
+ * what `requireSessionViaCookie` sets.
  */
 
 import type { Request, Response } from 'express';
 import { asStub } from '@tests/stub';
 import { getNotificationsStream } from '@modules/notifications/controllers/get-notifications-stream';
 import { notificationsService } from '@modules/notifications/services';
-import { stillHoldsRuleViaCookie } from '@kernel/middlewares/authorizations';
+import { stillSignedInViaCookie } from '@kernel/middlewares/authorizations';
 
 jest.mock('@modules/notifications/services', () => ({
     __esModule: true,
     notificationsService: { stream: jest.fn() }
 }));
 
-// Only `stillHoldsRuleViaCookie` is replaced — the module's other guards are untouched here.
+// Only `stillSignedInViaCookie` is replaced — the module's other guards are untouched here.
 jest.mock('@kernel/middlewares/authorizations', () => ({
     ...jest.requireActual('@kernel/middlewares/authorizations'),
     __esModule: true,
-    stillHoldsRuleViaCookie: jest.fn()
+    stillSignedInViaCookie: jest.fn()
 }));
 
-/** What `requirePermissionViaCookie` leaves on a request it admitted. */
+/** What `requireSessionViaCookie` leaves on a request it admitted. */
 const admittedRequest = () =>
     asStub<Request>({ sessionRecheck: jest.fn(), authContext: { id: 'user-1' } });
 
@@ -63,7 +63,7 @@ describe('GET /notifications/stream', () => {
 
     it('wires the recheck to the rule and the request the stream connected with', async () => {
         const request = admittedRequest();
-        jest.mocked(stillHoldsRuleViaCookie).mockResolvedValueOnce(true);
+        jest.mocked(stillSignedInViaCookie).mockResolvedValueOnce(true);
 
         getNotificationsStream(request, makeResponse().response);
         const call = jest.mocked(notificationsService.stream).mock.calls[0] as [
@@ -73,7 +73,7 @@ describe('GET /notifications/stream', () => {
         ];
         await call[2]();
 
-        expect(stillHoldsRuleViaCookie).toHaveBeenCalledWith(request, 'read', 'Notification');
+        expect(stillSignedInViaCookie).toHaveBeenCalledWith(request);
     });
 
     it.each([

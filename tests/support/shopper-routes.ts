@@ -2,18 +2,16 @@
  * The routes only a shopper may call, and the role that reaches them.
  *
  * The spec-walking suites send as an administrator so that a refusal is the controller's own and
- * never a permission gate. The basket, the wishlist's move into it and the card steps of a payment
- * are the exception: they act on the caller's own basket and order, so they are sent as a
- * customer, whose basket the suite builds.
+ * never a permission gate. The basket and the card steps of a payment are the exception: they act
+ * on the caller's own basket and order, so they are sent as a customer, whose basket the suite
+ * builds.
  */
 import type { Operation } from './spec-walk';
 
 /**
- * The basket, the wishlist's move into it, the card steps of a payment (intent, confirm, sync),
- * and enrolling a second factor — an armed administrator would be asked for a code first.
+ * The basket, the card steps of a payment (intent, confirm, sync), and enrolling a second factor — an armed administrator would be asked for a code first.
  */
-const SHOPPER_ROUTE =
-    /^\/(cart|account\/2fa|wishlist\/\{productId\}\/move-to-cart|payments\/(\{id\}\/(confirm|sync)|intent))/;
+const SHOPPER_ROUTE = /^\/(cart|account\/2fa|payments\/(\{id\}\/(confirm|sync)|intent))/;
 
 /**
  * The seeded role that reaches an operation's controller.

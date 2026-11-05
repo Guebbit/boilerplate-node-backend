@@ -34,10 +34,10 @@ interface SpecDocument {
     paths: Record<string, Record<string, { security?: Requirement[] }>>;
 }
 
-/** The guard each credential scheme of the spec is checked by. */
-const GUARD_OF_SCHEME = {
-    cookieAuth: 'requirePermissionViaCookieGuard',
-    metricsBearer: 'isMetricsScraper'
+/** The guards each credential scheme of the spec is checked by: any one of them will do. */
+const GUARDS_OF_SCHEME = {
+    cookieAuth: ['requirePermissionViaCookieGuard', 'requireSessionViaCookieGuard'],
+    metricsBearer: ['isMetricsScraper']
 } as const;
 
 /** The two schemes a session or an API key travels under: both are checked by an identity guard. */
@@ -123,8 +123,8 @@ describe('the route table and the contract agree on who must be signed in', () =
 
             expect(identityGuardIndex(route.guards) >= 0).toBe(needsIdentity);
 
-            for (const [scheme, guard] of Object.entries(GUARD_OF_SCHEME))
-                expect(route.guards.includes(guard)).toBe(
+            for (const [scheme, guards] of Object.entries(GUARDS_OF_SCHEME))
+                expect(guards.some((guard) => route.guards.includes(guard))).toBe(
                     !access?.optional && access?.schemes.has(scheme) === true && !needsIdentity
                 );
         }

@@ -168,9 +168,9 @@ stepUp:
 # Modules absent from this list have no rules, and that is deliberate rather than an omission:
 # `wishlist` and `account` are *your own things*. What you may do with them follows from being
 # signed in, not from a role, and giving them rules would invite a role that grants access to
-# someone else's basket. `cart` is nearly the same — its exceptions are `update:Cart` and
-# `checkout:Cart` below: whether the account shops at all, and a fact about the ACCOUNT (has this
-# address been proven?) rather than about the basket's contents, which stay ruleless.
+# someone else's basket. `cart` is nearly the same — its one exception is `checkout:Cart`
+# below, a fact about the ACCOUNT (has this address been proven?) rather than about the basket's
+# contents, which stay ruleless.
 rules:
     # -- products ------------------------------------------------------------------------------
     - action: read
@@ -206,17 +206,11 @@ rules:
     # A basket is your own thing, so `cart` otherwise declares no rules. This exception is not
     # about the basket's CONTENTS (still ruleless: add, remove, set quantity) but about spending
     # it, which is a fact about the ACCOUNT — an unproven address must not be able to place an
-    # order — and a fact about the account belongs on a rule, not a route mount. `update:Cart` is the coarser fact: whether this account shops at all, and
-    # every signed-in account does, staff included (the audience roles in
-    # `shared/authorization-roles.yaml`).
+    # order — and a fact about the account belongs on a rule, not a route mount. Using a basket
+    # at all is no rule: every signed-in account does, staff included.
     # `checkout`, not `create` on `Order`: `create:Order` already means "raise an
     # order on someone else's behalf", and reusing it here would be the identical CASL tuple,
     # indistinguishable once packed for the browser. Docs: docs/theory/authorization.md.
-    - action: update
-      subject: Cart
-      module: cart
-      scope: tenant
-      description: Use a basket at all — add to it, change it, reorder into it. Held by every signed-in account.
     - action: checkout
       subject: Cart
       module: cart
@@ -605,28 +599,6 @@ rules:
       credential: false
       description: Edit or remove any example, whoever owns it.
 
-    # -- notifications -------------------------------------------------------------------------
-    # Own rows only: an inbox is somebody's own, and no role reads or clears another person's. The
-    # service filters every query by the caller's id, so there is no staff door to declare.
-    # Held by every role that is a signed-in account — a staff member is a person with an inbox
-    # too, even though staff own no basket.
-    - action: read
-      subject: Notification
-      module: notifications
-      scope: tenant
-      credential: false
-      description: Read the caller's own notifications, follow them live, and mark them read.
-      conditions:
-          userId: $caller.id
-    - action: delete
-      subject: Notification
-      module: notifications
-      scope: tenant
-      credential: false
-      description: Delete the caller's own notifications, one or all at once.
-      conditions:
-          userId: $caller.id
-
     # -- stats ---------------------------------------------------------------------------------
     - action: read
       subject: Stats
@@ -657,11 +629,6 @@ sets:
           - update:Product
           - delete:Product
 
-    - name: CartShopping
-      module: cart
-      description: Use a basket at all.
-      rules:
-          - update:Cart
     - name: CartCheckout
       module: cart
       description: Spend the basket, which places an order and starts paying.
@@ -898,13 +865,6 @@ sets:
       rules:
           - display:Example
           - admin:Example
-
-    - name: NotificationOwn
-      module: notifications
-      description: Read and clear one's own notifications.
-      rules:
-          - read:Notification
-          - delete:Notification
 
     - name: StatsDisplay
       module: stats

@@ -290,8 +290,6 @@ audience:
             - LocaleStorefront
             - OrderOwn
             - PaymentOwn
-            - CartShopping
-            - NotificationOwn
 
     # A session whose address is proven.
     customer:
@@ -299,13 +297,11 @@ audience:
         description: >-
             Someone buying things, and every signed-in account whose address is proven, staff
             included. Their own wishlist, addresses and account follow from being signed in and need
-            no rule; what is listed is what they may read of the SHOP and the two sets that let them
-            use a basket and spend it.
+            no rule; what is listed is what they may read of the SHOP and the set that lets them
+            spend a basket.
         sets:
             - ProductStorefront
             - LocaleStorefront
             - OrderOwn
             - PaymentOwn
-            - CartShopping
             - CartCheckout
-            - NotificationOwn

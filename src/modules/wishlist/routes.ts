@@ -7,7 +7,7 @@
  */
 
 import { Router } from 'express';
-import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
+import { getAuth, isAuth } from '@kernel/middlewares/authorizations';
 import { getWishlist } from './controllers/get-wishlist';
 import { postWishlistItems } from './controllers/post-wishlist-items';
 import { deleteWishlistItem } from './controllers/delete-wishlist-item';
@@ -26,8 +26,8 @@ router.get('/', getWishlist);
 router.post('/items', postWishlistItems);
 
 // POST /wishlist/items/:productId/move-to-cart
-// `update:Cart`: the move writes the caller's own basket.
-router.post('/items/:productId/move-to-cart', requirePermission('update', 'Cart'), postMoveToCart);
+// The move writes the caller's own basket, which needs no rule beyond being signed in.
+router.post('/items/:productId/move-to-cart', postMoveToCart);
 
 // DELETE /wishlist/items/:productId — remove one saved product
 router.delete('/items/:productId', deleteWishlistItem);

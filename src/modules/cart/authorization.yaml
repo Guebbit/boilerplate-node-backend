@@ -3,17 +3,11 @@ rules:
     # A basket is your own thing, so `cart` otherwise declares no rules. This exception is not
     # about the basket's CONTENTS (still ruleless: add, remove, set quantity) but about spending
     # it, which is a fact about the ACCOUNT — an unproven address must not be able to place an
-    # order — and a fact about the account belongs on a rule, not a route mount. `update:Cart` is the coarser fact: whether this account shops at all, and
-    # every signed-in account does, staff included (the audience roles in
-    # `shared/authorization-roles.yaml`).
+    # order — and a fact about the account belongs on a rule, not a route mount. Using a basket
+    # at all is no rule: every signed-in account does, staff included.
     # `checkout`, not `create` on `Order`: `create:Order` already means "raise an
     # order on someone else's behalf", and reusing it here would be the identical CASL tuple,
     # indistinguishable once packed for the browser. Docs: docs/theory/authorization.md.
-    - action: update
-      subject: Cart
-      module: cart
-      scope: tenant
-      description: Use a basket at all — add to it, change it, reorder into it. Held by every signed-in account.
     - action: checkout
       subject: Cart
       module: cart
@@ -25,11 +19,6 @@ rules:
       deniedCode: EMAIL_NOT_VERIFIED
 
 sets:
-    - name: CartShopping
-      module: cart
-      description: Use a basket at all.
-      rules:
-          - update:Cart
     - name: CartCheckout
       module: cart
       description: Spend the basket, which places an order and starts paying.

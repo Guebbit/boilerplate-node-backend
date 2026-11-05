@@ -7,7 +7,7 @@
  */
 
 import type { Request, Response } from 'express';
-import { stillHoldsRuleViaCookie } from '@kernel/middlewares/authorizations';
+import { stillSignedInViaCookie } from '@kernel/middlewares/authorizations';
 import { t } from '@infrastructure/i18n';
 import { rejectResponse } from '@infrastructure/http/response';
 import { notificationsService } from '../services';
@@ -19,7 +19,7 @@ import { notificationsService } from '../services';
  * and re-checked every 30 seconds for as long as the stream stays open.
  */
 export const getNotificationsStream = (request: Request, response: Response) => {
-    // Both set by `requirePermissionViaCookie`, which this route is mounted behind. Read without
+    // Both set by `requireSessionViaCookie`, which this route is mounted behind. Read without
     // `!` because this route is deliberately not behind `isAuth` (that guard wants a bearer
     // token), so the "controllers behind isAuth" check forbids asserting them; absent means fail
     // closed.
@@ -31,7 +31,5 @@ export const getNotificationsStream = (request: Request, response: Response) => 
         return;
     }
 
-    notificationsService.stream(response, user.id, () =>
-        stillHoldsRuleViaCookie(request, 'read', 'Notification')
-    );
+    notificationsService.stream(response, user.id, () => stillSignedInViaCookie(request));
 };

@@ -1,7 +1,7 @@
 /**
  * @module
- * The cart route table. Every route is authenticated at the router level and needs
- * `update:Cart` (shoppers only: staff and administrators own no basket); `/checkout` also
+ * The cart route table. Every route is authenticated at the router level and needs no rule
+ * (every signed-in account shops); `/checkout` alone also
  * needs `checkout:Cart`, since an unproven address must not be able to spend, see
  * `shared/authorization-keys.yaml`. A line is written under `/items`, so no root parameter route
  * competes with a literal segment.
@@ -44,13 +44,14 @@ describe('cart routes — authorization', () => {
     });
 });
 
-describe('cart routes — who shops', () => {
-    // The key is mounted once, router-wide, so a route added later inherits it instead of having
-    // to remember it.
-    it.each(ALL)('%s needs the shopper key, and only after a session is proven', (signature) => {
-        const guards = guardsOn(router, signature);
+describe('cart routes — who spends', () => {
+    it('asks a rule of the checkout alone, and only after a session is proven', () => {
+        const ruled = ALL.filter((signature) =>
+            guardsOn(router, signature).includes('requirePermissionGuard')
+        );
+        const guards = guardsOn(router, 'POST /checkout');
 
-        expect(guards).toContain('requirePermissionGuard');
+        expect(ruled).toEqual(['POST /checkout']);
         expect(guards.indexOf('isAuth')).toBeLessThan(guards.indexOf('requirePermissionGuard'));
     });
 });
