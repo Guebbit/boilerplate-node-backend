@@ -193,7 +193,7 @@ paths:
                   description: Only those still waiting for stock whose expected date falls within this many days.
             responses:
                 '200':
-                    description: A page of fulfillment orders, the earliest expected first (a queue, so no `sort`)
+                    description: A page of fulfillment orders, the earliest expected first; allocation order is `paidAt` (a queue, so no `sort`)
                     content:
                         application/json:
                             schema:

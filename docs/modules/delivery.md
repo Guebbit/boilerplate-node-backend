@@ -180,6 +180,8 @@ its lines. "One day" is the shop's calendar day (`NODE_SHOP_TIMEZONE`): staff ty
 wall clock, so two instants UTC splits can still be the same day. The emails print those dates in the
 same zone, so the day staff typed is the day the buyer reads. A product line that carries neither flag simply lands in #1.
 
+The split is decided at payment; the cart shows each line's date and a notice on any basket with a later line.
+
 ### Holds
 
 | Reason                                               | Set by            | Released by                                                                                                                        |
