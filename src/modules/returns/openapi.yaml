@@ -6,6 +6,7 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Returns
+      x-family: After the sale
       description: Sending goods back — including the EU withdrawal button, which is a return with `reason` `withdrawal`.
 
 x-error-codes:

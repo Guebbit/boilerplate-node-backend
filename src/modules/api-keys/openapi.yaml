@@ -6,6 +6,7 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: ApiKeys
+      x-family: Core
       description: Machine-to-machine credentials — list, mint, revoke.
 
 # This module's section of the account data export (`POST /account/export`): the bundler

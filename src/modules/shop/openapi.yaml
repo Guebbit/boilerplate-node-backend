@@ -6,6 +6,7 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Shop
+      x-family: Running the shop
       description: The shop itself — who it is, where it ships, and what it trades in.
 
 paths:

@@ -6,6 +6,7 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: StockAlerts
+      x-family: Catalogue
       description: Requests to be told once when a product the caller cannot order can be again.
 
 x-error-codes:

@@ -6,6 +6,7 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Observability
+      x-family: Core
       description: Operational observability endpoints (metrics, health, audit, events). Protected endpoints require admin role.
 
 paths:

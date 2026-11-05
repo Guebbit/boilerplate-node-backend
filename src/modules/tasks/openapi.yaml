@@ -6,6 +6,7 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Tasks
+      x-family: Core
       description: Situations someone must take and close — what visitors tell the shop, and what the system opens for staff.
 
 # The error codes this module answers, with the status each is sent with.

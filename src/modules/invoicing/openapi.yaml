@@ -6,6 +6,7 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Invoicing
+      x-family: Buying
       description: The frozen invoice and credit-note PDFs — issued at payment and at refund, never before.
 
 x-error-codes:

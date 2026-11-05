@@ -6,8 +6,10 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Auth
+      x-family: Core
       description: Sign up, log in, refresh and end a session, and recover or verify an account by email.
     - name: Account
+      x-family: Core
       description: The signed-in user's own account - profile, credentials, two-factor, data export and deletion.
 
 x-error-codes:

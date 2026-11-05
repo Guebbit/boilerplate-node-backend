@@ -6,6 +6,7 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Cart
+      x-family: Buying
       description: The signed-in user's cart, and turning it into an order.
 
 x-error-codes:

@@ -16,7 +16,19 @@ import { parse as parseYaml } from 'yaml';
 export interface DeclaredTag {
     name: string;
     description?: string;
+    /** The API-docs family the tag is listed under (`x-tagGroups`); absent means its module's group. */
+    'x-family'?: string;
 }
+
+/**
+ * The API-docs family a module's tags fall under when a tag names none: by the module's `group`
+ * in its `module.yaml`. Also what the scaffolder writes into a new module's own tags.
+ */
+export const TAG_FAMILY_OF_GROUP: Readonly<Record<string, string>> = {
+    foundation: 'Core',
+    shop: 'Shop',
+    example: 'Example'
+};
 
 /** One export section a module declares for `POST /account/export`. */
 export interface DeclaredSection {

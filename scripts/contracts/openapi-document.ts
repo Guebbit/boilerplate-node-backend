@@ -46,6 +46,7 @@ interface RootExtensions {
     'x-app-level-headers'?: unknown;
     'x-image-upload-types'?: unknown;
     'x-error-codes'?: Record<string, ErrorCodeEntry>;
+    'x-tagGroups'?: { name: string; tags: string[] }[];
 }
 
 /** An OpenAPI 3.1 document, with the vendor keys the bundler steps read and write. */

@@ -62,7 +62,9 @@ const collect = (node: unknown, found: Findings, key = ''): void => {
     if (!isObject(node)) return;
 
     for (const [name, value] of Object.entries(node))
-        if (name === '$ref' && typeof value === 'string' && value.startsWith(COMPONENT_PREFIX))
+        // The families list tags without using them: counting it would keep every tag alive.
+        if (name === 'x-tagGroups') continue;
+        else if (name === '$ref' && typeof value === 'string' && value.startsWith(COMPONENT_PREFIX))
             found.refs.add(value);
         else collect(value, found, name);
 };
@@ -106,4 +108,10 @@ export const pruneUnused: Step = (document) => {
         }
 
     if (document.tags) document.tags = document.tags.filter(({ name }) => found.tags.has(name));
+
+    // A family whose tags were all pruned goes with them: a docs renderer lists none of it.
+    if (document['x-tagGroups'])
+        document['x-tagGroups'] = document['x-tagGroups']
+            .map((group) => ({ ...group, tags: group.tags.filter((tag) => found.tags.has(tag)) }))
+            .filter((group) => group.tags.length > 0);
 };

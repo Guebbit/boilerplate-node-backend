@@ -6,6 +6,7 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Sitemap
+      x-family: Catalogue
       description: The shop's pages and products as sitemap files, for search engines.
 
 paths:

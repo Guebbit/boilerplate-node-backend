@@ -20,6 +20,7 @@ x-error-codes:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Locales
+      x-family: Core
       description: Supported languages, and the translations a deployment serves for its API messages, client screens and entities.
 
 # ── Two tiers, and they never merge ──────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Delivery
+      x-family: After the sale
       description: Fulfilling an order — the fulfillment orders it splits into, and the shipments that leave.
 
 x-error-codes:

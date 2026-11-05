@@ -17,6 +17,7 @@ x-error-codes:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Users
+      x-family: Core
       description: Administration of user accounts and their roles.
 
 # This module's section of the account data export (`POST /account/export`): the bundler adds it

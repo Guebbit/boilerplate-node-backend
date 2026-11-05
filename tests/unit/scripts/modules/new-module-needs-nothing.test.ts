@@ -83,12 +83,14 @@ describe('a module folder alone is enough', () => {
         const completed = parseYaml(assembleRoot(root, readModuleFragments(modulesRoot(), []))) as {
             tags: { name: string }[];
             paths: Record<string, unknown>;
+            'x-tagGroups': unknown;
         };
 
         expect(Object.keys(completed.paths)).toEqual(
             expect.arrayContaining(['/widgets', '/widgets/{id}'])
         );
         expect(completed.tags.map(({ name }) => name)).toContain('Widgets');
+        expect(JSON.stringify(completed['x-tagGroups'])).toContain('Widgets');
         expect(existsSync(path.join(modulesRoot(), '..', '..', 'shared'))).toBe(false);
     });
 

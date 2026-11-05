@@ -113,7 +113,7 @@ const auditFiles = (names: ModuleNames): PlannedFile[] => {
 const declarationFiles = (names: ModuleNames, options: ScaffoldOptions): PlannedFile[] => {
     const root = `src/modules/${names.kebab}`;
     return [
-        { path: `${root}/openapi.yaml`, content: openapiFragment(names) },
+        { path: `${root}/openapi.yaml`, content: openapiFragment(names, options.group) },
         { path: `${root}/authorization.yaml`, content: code.authorizationYaml(names) },
         ...(options.audit ? auditFiles(names) : [])
     ];

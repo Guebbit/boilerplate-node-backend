@@ -6,6 +6,7 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Webhooks
+      x-family: Core
       description: Outbound webhook subscriptions, the delivery log, replay, and the public event catalogue.
 
 x-error-codes:

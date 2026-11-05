@@ -6,6 +6,7 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Orders
+      x-family: Buying
       description: Placing, reading and managing orders and their lifecycle.
 
 x-error-codes:

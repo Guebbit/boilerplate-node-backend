@@ -14,8 +14,9 @@ extends:
     - './spectral.yaml'
 
 rules:
-    # The tag list lives in the root. An operation tagged `Products` is correct; a module that
-    # redeclared `tags:` would be a second place the documentation grouping is decided.
+    # The tag list is completed in the root from what every module declares in its own `tags:`
+    # (with its `x-family`); an operation tagged `Products` is correct without the fragment
+    # carrying the root's list.
     operation-tag-defined: off
 
     # `bearerAuth` is declared once, in the root's `components.securitySchemes`.

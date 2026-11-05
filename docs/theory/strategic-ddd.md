@@ -202,6 +202,9 @@ lands and nothing points back at it; it is not a claim that the label is enforce
 
 ## 4a. Foundation and shop — an enforced fact, not a naming convention {#4a-foundation-and-shop}
 
+The API docs' "Core" family is the platform (every `group: foundation` module), NOT the DDD core
+subdomain: products, orders and cart are the core subdomain here and sit under "Catalogue" and "Buying".
+
 Subdomain distillation (§4) asks "how much modelling effort does this deserve". A second, separate
 question asks "does this module ship with every deployment, or is it the demo shop's own worked
 example" — `module.yaml#group`, `foundation | shop | example`.

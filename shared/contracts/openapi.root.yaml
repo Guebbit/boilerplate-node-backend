@@ -248,6 +248,13 @@ tags:
     - name: System
       description: Public system endpoints (ping, liveness).
 
+# The API-docs families. Only the seed is written here: `contracts:bundle` appends every other
+# tag under the family its declaring module names (`x-family` on the tag).
+x-tagGroups:
+    - name: Core
+      tags:
+          - System
+
 # If set, by default all operation requires an authentication
 # security:
 #    - bearerAuth: []
