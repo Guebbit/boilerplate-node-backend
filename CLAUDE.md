@@ -401,6 +401,8 @@ Conventional Commits, enforced by commitlint on the `commit-msg` hook
   or changes, run by file. That is the permanent commit gate. Run `npm run complete` before merging a lane
   and once on main after; CI on push is authoritative.
 - Default: commit normally and let the hook run its light gate. Nothing more is required.
+- A new test the hook does not run (a Cypress journey, a live e2e) is run before the commit when the
+  stack can run it; otherwise right after, and the report says which.
 - **NEVER** use `--no-verify` unless a `complete` (regular or `:fix`) has been run right before, on
   the current tree, and finished with success (all green). Running it is not required to commit;
   it is only the price of skipping the hook. Targeted checks (eslint on a few files, one jest
