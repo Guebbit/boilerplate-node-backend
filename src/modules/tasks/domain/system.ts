@@ -40,6 +40,8 @@ export interface SystemOpening {
     message: string;
     /** When it is overdue. */
     dueAt: Date;
+    /** Set for a task that waits on someone else for weeks: no "due soon" reminder is sent. */
+    noDueSoon?: true;
 }
 
 /**

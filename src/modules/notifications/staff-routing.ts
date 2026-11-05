@@ -46,7 +46,7 @@ export type StaffNoticeBody = Extract<NotificationBody, { code: `${string}.staff
 /** A work notice code this module owns: the ones that ship with every project. */
 type FoundationStaffCode = Extract<NotificationCode, `notifications.staff.${string}`>;
 
-/** The five work notices every project has, and their routing. A code missing here does not compile. */
+/** The six work notices every project has, and their routing. A code missing here does not compile. */
 export const STAFF_ROUTES = {
     // Fix the endpoint and re-enable it: worth a look, not worth waking anyone.
     'notifications.staff.webhook-disabled': {
@@ -67,6 +67,13 @@ export const STAFF_ROUTES = {
         sets: 'per-notice',
         email: 'now',
         severity: NotificationSeverity.warning
+    },
+    // The same people, once, three days before the due date: a deadline that costs money or a legal
+    // clock when missed. Info, since nothing is late yet.
+    'notifications.staff.task-due-soon': {
+        sets: 'per-notice',
+        email: 'now',
+        severity: NotificationSeverity.info
     },
     // Told to the one person it was given to: the bell is enough, they are already working.
     'notifications.staff.task-assigned': {
@@ -129,7 +136,8 @@ export const staffLinkOf = (
             };
         }
         case 'notifications.staff.task-opened':
-        case 'notifications.staff.task-overdue': {
+        case 'notifications.staff.task-overdue':
+        case 'notifications.staff.task-due-soon': {
             return taskLink(body.params);
         }
         case 'notifications.staff.task-assigned': {

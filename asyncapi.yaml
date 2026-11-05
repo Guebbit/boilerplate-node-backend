@@ -1834,6 +1834,46 @@ components:
                     type: string
                     format: date-time
             additionalProperties: false
+        NotificationStaffTaskDueSoonPayload:
+            title: NotificationStaffTaskDueSoonPayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - notifications.staff.task-due-soon
+                params:
+                    $ref: '#/components/schemas/TaskOpenedParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
         NotificationStaffTaskAssignedPayload:
             title: NotificationStaffTaskAssignedPayload
             type: object
@@ -2845,6 +2885,7 @@ components:
                 - $ref: '#/components/schemas/NotificationStaffWebhookDisabledPayload'
                 - $ref: '#/components/schemas/NotificationStaffTaskOpenedPayload'
                 - $ref: '#/components/schemas/NotificationStaffTaskOverduePayload'
+                - $ref: '#/components/schemas/NotificationStaffTaskDueSoonPayload'
                 - $ref: '#/components/schemas/NotificationStaffTaskAssignedPayload'
                 - $ref: '#/components/schemas/NotificationStaffOutboxDeadPayload'
                 - $ref: '#/components/schemas/NotificationStaffPurchaseHoldPlacedPayload'

@@ -49,7 +49,7 @@ import { inJurisdiction, jurisdictionScope, mayDelete } from './access';
 import { presentTask, withView } from './presenter';
 import { assigneeNamesOf, viewerOf } from './views';
 import { workflow } from './services/workflow';
-import { remindOverdue } from './services/overdue';
+import { remindDueSoon, remindOverdue } from './services/overdue';
 import { clearSystemTasks, openSystemTask } from './services/system';
 
 /** How long a contact message may wait before it is overdue, in milliseconds. */
@@ -452,6 +452,7 @@ export const taskService = {
     create,
     mailFallbackMailbox,
     remindOverdue,
+    remindDueSoon,
     openSystemTask,
     clearSystemTasks,
     search,

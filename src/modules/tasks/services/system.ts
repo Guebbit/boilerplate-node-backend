@@ -56,6 +56,7 @@ export const openSystemTask = (opening: SystemOpening, meta: DomainEventMeta): P
                         subject: opening.subject,
                         message: opening.message,
                         dueAt: opening.dueAt,
+                        ...(opening.noDueSoon ? { noDueSoon: opening.noDueSoon } : {}),
                         eventId: meta.eventId,
                         now
                     },

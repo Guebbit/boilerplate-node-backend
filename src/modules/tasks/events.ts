@@ -1,7 +1,7 @@
 /**
  * @module
  * Domain events this module emits, added by augmenting the kernel's payload map — see
- * `modules/orders/events.ts` for why augmentation rather than a central list. All three are internal:
+ * `modules/orders/events.ts` for why augmentation rather than a central list. All four are internal:
  * no AsyncAPI channel and no webhook carries them. `notifications` turns them into the staff's
  * work notices, so a task is never alerted twice (once from its producer event, once from here).
  */
@@ -45,6 +45,22 @@ declare module '@kernel/events' {
             work?: string;
         };
 
+        /**
+         * An open task is within three days of its due date and was claimed by the same sweep:
+         * said once per task, never again. Same shape and same audience as `task.opened`.
+         */
+        'task.due_soon': {
+            tenantId: string;
+            taskId: string;
+            kind: string;
+            /** The permission set that works it; its holders are who hear of it. */
+            routeSet: string;
+            /** A contact task's category, when the visitor chose one. */
+            category?: string;
+            /** The staff screen that does the work, when the opener named one: see `TaskDocument.work`. */
+            work?: string;
+        };
+
         /** Someone gave a task to a colleague (taking your own task does not emit this). */
         'task.assigned': {
             tenantId: string;
@@ -59,7 +75,7 @@ declare module '@kernel/events' {
     }
 }
 
-/** The facts `task.opened` and `task.overdue` carry about a task: one shape, built in one place. */
+/** The facts `task.opened`, `task.overdue` and `task.due_soon` carry about a task: one shape, built in one place. */
 export const taskFactOf = (
     task: Pick<TaskDocument, '_id' | 'kind' | 'routeSet' | 'category' | 'work'>
 ): DomainEventMap['task.opened'] => ({
@@ -76,6 +92,9 @@ export const TASK_OPENED = 'task.opened';
 
 /** See `DomainEventMap['task.overdue']` above. */
 export const TASK_OVERDUE = 'task.overdue';
+
+/** See `DomainEventMap['task.due_soon']` above. */
+export const TASK_DUE_SOON = 'task.due_soon';
 
 /** See `DomainEventMap['task.assigned']` above. */
 export const TASK_ASSIGNED = 'task.assigned';

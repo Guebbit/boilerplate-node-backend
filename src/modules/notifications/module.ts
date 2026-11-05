@@ -17,7 +17,7 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { OUTBOX_EVENT_DEAD } from '@kernel/outbox';
-import { TASK_ASSIGNED, TASK_OPENED, TASK_OVERDUE } from '@modules/tasks';
+import { TASK_ASSIGNED, TASK_DUE_SOON, TASK_OPENED, TASK_OVERDUE } from '@modules/tasks';
 import { WEBHOOK_SUBSCRIPTION_AUTO_DISABLED } from '@modules/webhooks';
 import { notificationsConfig } from './config';
 import { router } from './routes';
@@ -50,6 +50,7 @@ export default {
         onDomainEvent(OUTBOX_EVENT_DEAD, notificationsService.onOutboxEventDead);
         onDomainEvent(TASK_OPENED, notificationsService.onTaskOpened);
         onDomainEvent(TASK_OVERDUE, notificationsService.onTaskOverdue);
+        onDomainEvent(TASK_DUE_SOON, notificationsService.onTaskDueSoon);
         onDomainEvent(TASK_ASSIGNED, notificationsService.onTaskAssigned);
     },
     locales: path.join(__dirname, 'locales'),

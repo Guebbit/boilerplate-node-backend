@@ -17,7 +17,7 @@ import {
 } from '@infrastructure/persistence/create-repository';
 import { TaskKind, TaskLinkType, TaskSource, TaskStatus } from '@types';
 import type { StoredTask } from './presenter';
-import { OPEN_STATUSES, type OwnTasksFilter, type TaskPatch } from './domain';
+import { DUE_SOON_MS, OPEN_STATUSES, type OwnTasksFilter, type TaskPatch } from './domain';
 
 /**
  * `status`, `category`, `kind` and `source` are deliberately absent from the search spec: each is
@@ -55,6 +55,12 @@ export interface TaskRepository extends Repository<TaskDocument, StoredTask> {
      * nothing is left to claim.
      */
     claimOverdue: (now: Date, session?: ClientSession) => Promise<TaskDocument | null>;
+    /**
+     * Claim ONE open task due within `DUE_SOON_MS` that was never reminded and had longer than
+     * that to live when it opened: stamp `dueSoonNotifiedAt` and return it. A contact message and
+     * a task that opted out are never claimed. `null`: nothing is left to claim.
+     */
+    claimDueSoon: (now: Date, session?: ClientSession) => Promise<TaskDocument | null>;
     /** Whether a system event already opened or touched a task (a redelivery). */
     sawEvent: (eventId: string) => Promise<boolean>;
     /** Insert a system task. Rejects with a duplicate-key error when its dedup key is open. */
@@ -87,6 +93,7 @@ export interface NewSystemTask {
     subject: string;
     message: string;
     dueAt: Date;
+    noDueSoon?: true | undefined;
     eventId?: string | undefined;
     now: Date;
 }
@@ -181,6 +188,25 @@ export const taskRepository: TaskRepository = {
             )
             .exec(),
 
+    claimDueSoon: (now, session) =>
+        // Mongo: `$expr` compares two fields of the same document, here the task's whole life.
+        // https://www.mongodb.com/docs/manual/reference/operator/query/expr/
+        taskModel
+            .findOneAndUpdate(
+                {
+                    status: { $in: OPEN_STATUSES },
+                    kind: { $ne: TaskKind.contact },
+                    noDueSoon: { $exists: false },
+                    dueAt: { $gt: now, $lte: new Date(now.getTime() + DUE_SOON_MS) },
+                    $expr: { $gt: [{ $subtract: ['$dueAt', '$createdAt'] }, DUE_SOON_MS] },
+                    dueSoonNotifiedAt: { $exists: false }
+                },
+                { $set: { dueSoonNotifiedAt: now } },
+                // Nearest deadline first, as the overdue claim does.
+                { returnDocument: 'after', sort: { dueAt: 1 }, session }
+            )
+            .exec(),
+
     sawEvent: (eventId) =>
         taskModel
             .exists({ eventIds: eventId })
@@ -200,6 +226,7 @@ export const taskRepository: TaskRepository = {
                 subject: opening.subject,
                 message: opening.message,
                 dueAt: opening.dueAt,
+                ...(opening.noDueSoon ? { noDueSoon: true } : {}),
                 lastSeenAt: opening.now,
                 ...(opening.eventId ? { eventIds: [opening.eventId] } : {})
             },

@@ -34,6 +34,10 @@ const BODIES = {
         code: 'notifications.staff.task-overdue',
         params: { taskId: 't1', kind: 'contact', category: 'privacy' }
     },
+    'notifications.staff.task-due-soon': {
+        code: 'notifications.staff.task-due-soon',
+        params: { taskId: 't1', kind: 'export_failed' }
+    },
     'notifications.staff.task-assigned': {
         code: 'notifications.staff.task-assigned',
         params: { taskId: 't1', kind: 'export_failed' }
@@ -64,6 +68,13 @@ describe('STAFF_ROUTES', () => {
     it('mails only where someone must act soon: a task, not a disabled webhook', () => {
         expect(STAFF_ROUTES['notifications.staff.task-opened'].email).toBe('now');
         expect(STAFF_ROUTES['notifications.staff.webhook-disabled'].email).toBe('none');
+    });
+
+    it('mails a due-soon task now, to the same per-notice sets as the opener', () => {
+        expect(STAFF_ROUTES['notifications.staff.task-due-soon']).toMatchObject({
+            sets: STAFF_ROUTES['notifications.staff.task-opened'].sets,
+            email: 'now'
+        });
     });
 
     it('mails an overdue task now, to the same per-notice sets as the opener', () => {

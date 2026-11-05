@@ -16,6 +16,12 @@
                 "title": "Un task è in ritardo",
                 "summary": "Un task di cui si occupa il tuo ruolo ha superato la scadenza ed è ancora aperto: {{what}}. Aprilo per vedere i dettagli e prenderlo in carico."
             },
+            "task-due-soon": {
+                "subject": "In scadenza: {{what}}",
+                "meta-title": "Task in scadenza",
+                "title": "Un task scade tra tre giorni",
+                "summary": "Un task di cui si occupa il tuo ruolo scade entro tre giorni ed è ancora aperto: {{what}}. Aprilo per vedere i dettagli e prenderlo in carico."
+            },
             "task-kind": {
                 "contact": "Messaggio di contatto",
                 "account_review": "Account in verifica",

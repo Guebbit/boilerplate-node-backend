@@ -11,6 +11,7 @@ import {
     onWebhookSubscriptionAutoDisabled,
     onTaskOpened,
     onTaskOverdue,
+    onTaskDueSoon,
     onTaskAssigned,
     onOutboxEventDead
 } from './subscribers';
@@ -37,6 +38,7 @@ export const notificationsService = {
     onWebhookSubscriptionAutoDisabled,
     onTaskOpened,
     onTaskOverdue,
+    onTaskDueSoon,
     onTaskAssigned,
     onOutboxEventDead
 };

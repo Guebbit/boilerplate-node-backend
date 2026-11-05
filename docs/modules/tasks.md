@@ -33,6 +33,7 @@ flowchart LR
     users -. "user.review_cleared" .-> tasks
     users -. "user.review_flagged" .-> tasks
     tasks -. "task.assigned" .-> notifications
+    tasks -. "task.due_soon" .-> notifications
     tasks -. "task.opened" .-> notifications
     tasks -. "task.overdue" .-> notifications
 
@@ -172,20 +173,22 @@ carries the words and the time, never the author.
 
 A task never mails anyone itself. A new one (spam excluded) is announced as `task.opened`
 `{ taskId, kind, routeSet, category? }`, handing one to a colleague as `task.assigned`
-(taking your own announces nothing), and an open one that passes its due date as `task.overdue`
-(same payload as `task.opened`, see [the overdue reminder](#the-overdue-reminder)).
-[`notifications`](./notifications.md#work-notices-for-staff) hears all three and does the telling,
+(taking your own announces nothing), an open one three days from its due date as `task.due_soon`
+and one that passes it as `task.overdue` (both with the payload of `task.opened`, see
+[the reminders](#the-overdue-reminder)).
+[`notifications`](./notifications.md#work-notices-for-staff) hears all four and does the telling,
 so a situation is one task kind or one notice code, never both.
 
-All three go through the [transactional outbox](../tools/outbox.md): the event row is written in
-the same transaction as the change it announces (the insert, the assignment, the overdue claim),
+All four go through the [transactional outbox](../tools/outbox.md): the event row is written in
+the same transaction as the change it announces (the insert, the assignment, the due-soon and overdue claims),
 so a crash or a failing listener cannot lose a notice. Delivery is at-least-once, and the receiver
-dedupes (`task-opened:<id>`, `task-overdue:<id>`, `task-assigned:<id>:<assignedAt>`). The
+dedupes (`task-opened:<id>`, `task-due-soon:<id>`, `task-overdue:<id>`, `task-assigned:<id>:<assignedAt>`). The
 `aggregateId` is the task id, so a task's events arrive in order. Contact spam writes no row.
 
 | Event           | Told                                                                                          | Mail                                                                                                                                                       |
 | --------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `task.opened`   | everyone who works the kind (a contact message: `TaskManagement`, not the read-only managers) | a fixed phrase, the kind (a contact message also its category) and a link to the task. Never the visitor's name, address, subject, message or order number |
+| `task.due_soon` | the same people as `task.opened`, once, never for a contact message                           | the same phrase, kind and link as the opener's, worded as a reminder that the deadline is three days away                                                  |
 | `task.overdue`  | the same people as `task.opened`, once                                                        | the same phrase, kind and link as the opener's, worded as a reminder                                                                                       |
 | `task.assigned` | the assignee only                                                                             | none (the bell)                                                                                                                                            |
 
@@ -199,16 +202,36 @@ overdue reminder reaches it by the same rule, worded as `Overdue contact request
 ### The overdue reminder
 
 An open task (`new` or `in_progress`) past its `dueAt` is announced once as `task.overdue`, by
-the daily job `sweep:tasks-overdue` (06:40 UTC, ten minutes after the staff digest). The sweep
-lives here, not in the shop's openers, because every kind has the same clock.
+the daily job `sweep:tasks-overdue` (06:40 UTC, ten minutes after the staff digest). The same
+sweep announces once, three days ahead, an open task about to fall due as `task.due_soon`. The
+sweep lives here, not in the shop's openers, because every kind has the same clock.
+
+```mermaid
+flowchart LR
+    O["task.opened"] -->|"dueAt - 3 days"| S["task.due_soon<br/>(once)"]
+    S -->|"dueAt passes"| V["task.overdue<br/>(once)"]
+    O -.->|"opened with 3 days or less to live,<br/>a contact message, or opted out"| V
+    S --> N["notifications: the opener's sets,<br/>bell + mail"]
+    V --> N
+```
 
 ```mermaid
 flowchart LR
     J["sweep:tasks-overdue"] --> C{"claim: open, past dueAt,<br/>no overdueNotifiedAt"}
     C -->|stamp overdueNotifiedAt + outbox row, one transaction| E["task.overdue"]
+    J --> D{"claim: open, due within 3 days,<br/>no dueSoonNotifiedAt"}
+    D -->|stamp dueSoonNotifiedAt + outbox row, one transaction| F["task.due_soon"]
     C -->|none left| Z["done"]
     E --> N["notifications: the opener's sets,<br/>bell + mail"]
+    F --> N
 ```
+
+- **Who gets a due-soon reminder.** Only a task whose whole life (`dueAt` minus `createdAt`) was
+  longer than `DUE_SOON_MS` (3 days, a constant in `domain/lifecycle.ts`, no env var) and that is
+  still ahead of its deadline: one opened already past due, or with a short life, goes straight to
+  overdue. A contact message never gets one (its single reminder is the overdue one, to the
+  support address), nor does a task whose opener set `noDueSoon` (a wait on someone else). The
+  stamp is `dueSoonNotifiedAt`, internal like `overdueNotifiedAt`; a later overdue is still sent.
 
 - **Once, never again.** The claim and the stamp (`overdueNotifiedAt`, internal, not on the wire)
   are one transaction with the `task.overdue` outbox row, so overlapping sweeps cannot claim a task

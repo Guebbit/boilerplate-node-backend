@@ -29,6 +29,7 @@ flowchart LR
     notifications --> users
     notifications --> webhooks
     tasks -. "task.assigned" .-> notifications
+    tasks -. "task.due_soon" .-> notifications
     tasks -. "task.opened" .-> notifications
     tasks -. "task.overdue" .-> notifications
     webhooks -. "webhook.subscription_auto_disabled" .-> notifications
@@ -69,6 +70,7 @@ module's own codes are the staff work notices, under `notifications.staff.*`:
 | -------------------------------------- | ----------------------------- |
 | `notifications.staff.webhook-disabled` | `{ subscriptionId }`          |
 | `notifications.staff.task-opened`      | `{ taskId, kind, category? }` |
+| `notifications.staff.task-due-soon`    | the same as `task-opened`     |
 | `notifications.staff.task-overdue`     | the same as `task-opened`     |
 | `notifications.staff.task-assigned`    | `{ taskId, kind }`            |
 | `notifications.staff.outbox-dead`      | `{ eventName, aggregateId }`  |
@@ -88,7 +90,7 @@ same union.
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
     W["webhooks<br/><i>endpoint auto-disabled</i>"] -. "webhook.subscription_auto_disabled" .-> N["notifications<br/><i>one row per person</i>"]
-    T["tasks<br/><i>opens, hands over, passes due</i>"] -. "task.opened · task.assigned · task.overdue" .-> N
+    T["tasks<br/><i>opens, hands over, passes due</i>"] -. "task.opened · task.assigned · task.due_soon · task.overdue" .-> N
     S["shop-tasks<br/><i>the shop's notices and digest</i>"] -->|"create / notifyStaff / writeSummary"| N
     N --> DB[("notifications")]
     N -->|"SSE"| B["open tab<br/><i>the bell</i>"]
@@ -140,11 +142,13 @@ flowchart LR
 - **Retention.** Work notices have their own cap (`NODE_NOTIFICATIONS_STAFF_MAX_PER_USER`) and a TTL
   (`NODE_NOTIFICATIONS_STAFF_TTL_DAYS`), so a flood of them cannot push a person's own messages out.
 - **This module's codes.** `notifications.staff.webhook-disabled` (bell only),
-  `notifications.staff.task-opened` (mail `now`: a person waits), `notifications.staff.task-overdue`
+  `notifications.staff.task-opened` (mail `now`: a person waits), `notifications.staff.task-due-soon`
+  (mail `now`, once, three days before the due date of an open task, never a contact message; the
+  same people), `notifications.staff.task-overdue`
   (mail `now`, once, when that task passes its due date unclosed; the same people),
   `notifications.staff.task-assigned` (bell only, the assignee alone) and
   `notifications.staff.outbox-dead` (bell only, administrators: the kernel's `outbox.event_dead`
-  fact, a plain emit because an outbox row about the outbox could itself die). The three task events
+  fact, a plain emit because an outbox row about the outbox could itself die). The four task events
   reach `notifications` through the [outbox](../tools/outbox.md), so a failing handler is retried;
   each handler dedupes on its key (`task-opened:<id>` and so on).
 - **The shop's codes.** `shop-tasks.staff.*` register their own route with each call, so the table

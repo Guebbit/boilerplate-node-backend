@@ -86,7 +86,7 @@ flowchart LR
     P["payments · orders · inventory<br/>delivery · returns · cart<br/>wishlist · stock-alerts"] -. "domain events" .-> S["shop-tasks"]
     S -->|"openSystemTask / clearSystemTasks"| T["tasks"]
     S -->|"create / notifyStaff<br/>writeSummary / clearSummary"| N["notifications"]
-    T -. "task.opened · task.overdue" .-> N
+    T -. "task.opened · task.due_soon · task.overdue" .-> N
     S -. "x-extends" .-> C["contract fragments<br/>openapi.tasks.yaml<br/>openapi.notifications.yaml<br/>asyncapi.notifications.yaml"]
 ```
 

@@ -75,6 +75,10 @@ export interface TaskDocument
     dueAt?: Date;
     /** When the one overdue reminder was claimed; absent until then, and never written twice. */
     overdueNotifiedAt?: Date;
+    /** When the one "due soon" reminder was claimed; absent until then, and never written twice. */
+    dueSoonNotifiedAt?: Date;
+    /** Set when the opener asked for no "due soon" reminder; frozen beside `dueAt`. */
+    noDueSoon?: true;
     lastSeenAt?: Date;
     closedAt?: Date;
     respondedAt?: Date;
@@ -179,6 +183,13 @@ export const taskSchema = new Schema<TaskDocument, TaskModel>(
         overdueNotifiedAt: {
             type: Date
         },
+        // Same idea for the "due soon" reminder: the stamp IS the memory, internal, not on the wire.
+        dueSoonNotifiedAt: {
+            type: Date
+        },
+        noDueSoon: {
+            type: Boolean
+        },
         lastSeenAt: {
             type: Date
         },
@@ -265,7 +276,7 @@ taskSchema.index({ closedAt: 1 }, { expireAfterSeconds: retentionDays * 24 * 60 
  * same logic — see `./service` `search()`.
  */
 export const applyTaskTransform = applySerialization(taskSchema, {
-    omit: ['openKey', 'eventIds', 'overdueNotifiedAt', 'work'],
+    omit: ['openKey', 'eventIds', 'overdueNotifiedAt', 'dueSoonNotifiedAt', 'noDueSoon', 'work'],
     after: (serialized) => {
         // References and dates leave as the strings the wire declares, not as ObjectId and Date.
         for (const [key, value] of Object.entries(serialized)) {

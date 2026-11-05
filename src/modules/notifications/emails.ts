@@ -45,6 +45,7 @@ const wordsOf = (
 ): Record<string, string> =>
     body.code === 'notifications.staff.task-opened' ||
     body.code === 'notifications.staff.task-overdue' ||
+    body.code === 'notifications.staff.task-due-soon' ||
     body.code === 'notifications.staff.task-assigned'
         ? { what: taskWhat(t, body.params) }
         : {};

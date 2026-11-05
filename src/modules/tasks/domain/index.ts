@@ -9,6 +9,7 @@
 
 export {
     clear,
+    DUE_SOON_MS,
     initialTaskStatus,
     isOpen,
     markSpam,

@@ -10,7 +10,7 @@ import { asRole } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import { notificationsService } from '@modules/notifications/services';
 import { tasksJobs } from '@modules/tasks/jobs';
-import { backdateDue, createSystemTask } from '@modules/tasks/tests/factories';
+import { backdateDue, createSystemTask, giveLife } from '@modules/tasks/tests/factories';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { callerInScope } from '@kernel/permissions';
 import { resetDomainEvents } from '@kernel/events';
@@ -43,5 +43,26 @@ describe('the overdue sweep run through the job runner', () => {
             )
         );
         expect(items.map((item) => item.code)).toContain('notifications.staff.task-overdue');
+    });
+
+    it('also tells them a task is three days from its deadline', async () => {
+        const [job] = tasksJobs;
+        const admin = await createUser(
+            { email: 'admin@example.com', username: 'admin', authenticatorEnabledAt: new Date() },
+            'admin'
+        );
+        const task = await createSystemTask();
+        await giveLife(String(task._id), 2, 10);
+
+        await prepareJob(job);
+        await job.run();
+
+        const { items } = await notificationsService.listVisible(
+            callerInScope(
+                { ...asRole('admin', admin.id), tenantId: DEPLOYMENT_TENANT_ID },
+                'tenant'
+            )
+        );
+        expect(items.map((item) => item.code)).toContain('notifications.staff.task-due-soon');
     });
 });

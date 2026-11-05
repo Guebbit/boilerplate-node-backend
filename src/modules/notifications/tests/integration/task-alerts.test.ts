@@ -242,6 +242,22 @@ describe('a system task', () => {
         );
     });
 
+    it('carries the screen into the due-soon reminder too', async () => {
+        await staff('moderator', 'mod@example.com');
+
+        await notificationsService.onTaskDueSoon({
+            tenantId: DEPLOYMENT_TENANT_ID,
+            taskId: '64b7f1a2c3d4e5f607182930',
+            kind: 'export_failed',
+            routeSet: 'UserErasure',
+            work: 'users/64b7f1a2c3d4e5f607182931'
+        });
+
+        expect(noticeMails()[0][2]).toMatchObject({
+            link: expect.stringMatching(/\/en\/users\/64b7f1a2c3d4e5f607182931$/)
+        });
+    });
+
     it('carries the screen into the overdue reminder too', async () => {
         await staff('moderator', 'mod@example.com');
 

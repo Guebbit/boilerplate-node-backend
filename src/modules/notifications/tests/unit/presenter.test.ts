@@ -58,6 +58,10 @@ describe('presentNotification, per code', () => {
             params: { taskId: 't1', kind: 'export_failed', work: 'users/u1' }
         },
         {
+            code: 'notifications.staff.task-due-soon',
+            params: { taskId: 't1', kind: 'export_failed', work: 'users/u1' }
+        },
+        {
             code: 'notifications.staff.task-assigned',
             params: { taskId: 't1', kind: 'export_failed' }
         },

@@ -1,7 +1,7 @@
 /**
  * @module
  * What each domain event becomes in the inbox, for the notices every project has: a webhook
- * switched off, an outbox event parked, a to-do opened, overdue or handed over. One function per
+ * switched off, an outbox event parked, a to-do opened, due soon, overdue or handed over. One function per
  * event, each a mapping from a payload to the work notice to write — the module's `subscribe()`
  * wires them to the bus, and the writing itself stays in `./staff`.
  *
@@ -68,6 +68,36 @@ const taskParametersOf = (fact: DomainEventMap['task.opened']) => ({
     ...(fact.work ? { work: fact.work } : {})
 });
 
+/** The to-do notices that go to the people who work a kind: the same sets, the same link. */
+type TaskAlertCode =
+    | 'notifications.staff.task-opened'
+    | 'notifications.staff.task-overdue'
+    | 'notifications.staff.task-due-soon';
+
+/**
+ * Write one to-do notice to everyone who works its kind.
+ *
+ * @param code - which of the three notices
+ * @param dedupePrefix - the dedupe key's front half; the task id is the back half
+ * @param fact - the task event's payload
+ * @returns how many people were told
+ */
+const notifyTaskStaff = (
+    code: TaskAlertCode,
+    dedupePrefix: string,
+    fact: DomainEventMap['task.opened']
+): Promise<number> => {
+    const body = { code, params: taskParametersOf(fact) } as const;
+    return notifyStaff({
+        tenantId: fact.tenantId,
+        body,
+        route: STAFF_ROUTES[code],
+        link: staffLinkOf(body),
+        sets: alertSetsOf(fact),
+        dedupeKey: `${dedupePrefix}:${fact.taskId}`
+    });
+};
+
 /**
  * A task was opened: everyone who works its kind hears of it once, by id and kind alone.
  *
@@ -75,48 +105,33 @@ const taskParametersOf = (fact: DomainEventMap['task.opened']) => ({
  * mailbox instead, with the message in it: that mailbox is then the whole inbox. With even one
  * permitted recipient the mailbox hears nothing.
  */
-export const onTaskOpened = (opened: DomainEventMap['task.opened']): Promise<void> => {
-    const body = {
-        code: 'notifications.staff.task-opened',
-        params: taskParametersOf(opened)
-    } as const;
-    return notifyStaff({
-        tenantId: opened.tenantId,
-        body,
-        route: STAFF_ROUTES[body.code],
-        link: staffLinkOf(body),
-        sets: alertSetsOf(opened),
-        dedupeKey: `task-opened:${opened.taskId}`
-    }).then((told) =>
+export const onTaskOpened = (opened: DomainEventMap['task.opened']): Promise<void> =>
+    notifyTaskStaff('notifications.staff.task-opened', 'task-opened', opened).then((told) =>
         told === 0 && opened.kind === 'contact'
             ? taskService.mailFallbackMailbox(opened.taskId)
             : undefined
     );
-};
 
 /**
  * An open task went overdue: the people the opener told hear of it once more, the same sets, the
  * same fallback mailbox for a contact message nobody could be told of. The sweep claims a task
  * once, but the outbox delivers at least once, so the dedupe key is what keeps it to one notice.
  */
-export const onTaskOverdue = (overdue: DomainEventMap['task.overdue']): Promise<void> => {
-    const body = {
-        code: 'notifications.staff.task-overdue',
-        params: taskParametersOf(overdue)
-    } as const;
-    return notifyStaff({
-        tenantId: overdue.tenantId,
-        body,
-        route: STAFF_ROUTES[body.code],
-        link: staffLinkOf(body),
-        sets: alertSetsOf(overdue),
-        dedupeKey: `task-overdue:${overdue.taskId}`
-    }).then((told) =>
+export const onTaskOverdue = (overdue: DomainEventMap['task.overdue']): Promise<void> =>
+    notifyTaskStaff('notifications.staff.task-overdue', 'task-overdue', overdue).then((told) =>
         told === 0 && overdue.kind === 'contact'
             ? taskService.mailFallbackMailbox(overdue.taskId, true)
             : undefined
     );
-};
+
+/**
+ * An open task is three days from its due date: the same people hear of it once, with no mailbox
+ * fallback (the sweep never claims a contact message, which gets its one reminder when overdue).
+ */
+export const onTaskDueSoon = (dueSoon: DomainEventMap['task.due_soon']): Promise<void> =>
+    notifyTaskStaff('notifications.staff.task-due-soon', 'task-due-soon', dueSoon).then(
+        () => undefined
+    );
 
 /** A task was given to a colleague: the one who now holds it hears, and nobody else. */
 export const onTaskAssigned = (assigned: DomainEventMap['task.assigned']): Promise<void> =>

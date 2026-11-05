@@ -36,6 +36,12 @@ export type TaskRefusal = 'already_resolved' | 'already_spam' | 'already_open';
 /** A door's answer. */
 export type Transition = { patch: TaskPatch } | { refusal: TaskRefusal };
 
+/**
+ * How far ahead of a deadline the one "due soon" reminder is sent, and the shortest task life
+ * that earns one: a task opened with less than this to live gets none (it would be told at once).
+ */
+export const DUE_SOON_MS = 3 * 24 * 60 * 60_000;
+
 /** The statuses that still owe work. */
 export const OPEN_STATUSES: readonly TaskStatus[] = [TaskStatus.new, TaskStatus.in_progress];
 

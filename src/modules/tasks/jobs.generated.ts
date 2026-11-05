@@ -9,6 +9,6 @@ export const tasksJobData = {
         name: 'sweep:tasks-overdue',
         schedule: '40 6 * * *',
         summary:
-            "Tells the staff who work a task's kind, once, that an open task passed its due date; a task closed before the sweep is skipped, and one already told is never told again."
+            "Tells the staff who work a task's kind, once, that an open task is three days from its due date and once more that it passed it; a task closed before the sweep is skipped, and one already told is never told again."
     }
 } as const;

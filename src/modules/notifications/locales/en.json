@@ -16,6 +16,12 @@
                 "title": "A task is overdue",
                 "summary": "A task your role works passed its due date and is still open: {{what}}. Open it to see the details and take it."
             },
+            "task-due-soon": {
+                "subject": "Due soon: {{what}}",
+                "meta-title": "Task due soon",
+                "title": "A task is due in three days",
+                "summary": "A task your role works falls due within three days and is still open: {{what}}. Open it to see the details and take it."
+            },
             "task-kind": {
                 "contact": "Contact message",
                 "account_review": "Account under review",

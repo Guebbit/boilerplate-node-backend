@@ -60,6 +60,27 @@ export const backdateDue = (id: string, hoursAgo = 1): Promise<unknown> =>
         .exec();
 
 /**
+ * Give a task a life: opened `lifeDays` before its deadline, which falls `dueInDays` from now.
+ *
+ * @param id - the task
+ * @param dueInDays - how far ahead the deadline is (negative: already past)
+ * @param lifeDays - how long the task had to live when it opened
+ */
+export const giveLife = (id: string, dueInDays: number, lifeDays: number): Promise<unknown> => {
+    const dayMs = 24 * 3_600_000;
+    const dueAt = Date.now() + dueInDays * dayMs;
+    return taskModel
+        .updateOne(
+            { _id: id },
+            { $set: { dueAt: new Date(dueAt), createdAt: new Date(dueAt - lifeDays * dayMs) } },
+            // Mongoose: `createdAt` is immutable by default; this lets a test move it.
+            // https://mongoosejs.com/docs/timestamps.html
+            { overwriteImmutable: true }
+        )
+        .exec();
+};
+
+/**
  * Close a task straight in storage, past the doors, as staff would have.
  *
  * @param id - the task
