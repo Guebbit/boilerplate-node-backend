@@ -22,7 +22,7 @@ import { createUser } from './controllers/post-user';
 import { replaceUser, updateUser } from './controllers/update-user';
 import { deleteUsers } from './controllers/delete-users';
 import { restoreUsers } from './controllers/post-user-restore';
-import { getUserItem } from './controllers/get-user-item';
+import { getUserItem } from './controllers/get-user';
 import { deletePurchaseHold } from './controllers/delete-purchase-hold';
 import { putPurchaseHold } from './controllers/put-purchase-hold';
 import { postActivate, postDeactivate } from './controllers/post-user-activation';

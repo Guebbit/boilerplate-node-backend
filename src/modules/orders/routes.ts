@@ -25,7 +25,7 @@ import { replaceOrderById, updateOrderById } from './controllers/update-order';
 import { putShippingAddress } from './controllers/put-shipping-address';
 import { deleteOrders } from './controllers/delete-orders';
 import { restoreOrders } from './controllers/post-order-restore';
-import { getOrderItem } from './controllers/get-order-item';
+import { getOrderItem } from './controllers/get-order';
 import { getOrdersExport } from './controllers/get-orders-export';
 import { ordersExportLimiter } from './rate-limits';
 import { getOrderTimeline } from './controllers/get-order-timeline';

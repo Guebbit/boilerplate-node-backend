@@ -42,6 +42,8 @@ describe('deriveNames', () => {
             entity: 'FieldNote',
             entityCamel: 'fieldNote',
             entitySnake: 'field_note',
+            entityKebab: 'field-note',
+            pluralKebab: 'field-notes',
             plural: 'FieldNotes',
             pluralCamel: 'fieldNotes',
             basePath: '/field-notes',

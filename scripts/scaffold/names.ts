@@ -18,6 +18,10 @@ export interface ModuleNames {
     entitySnake: string;
     /** The collection's type-name stem: `FieldNotes`. */
     plural: string;
+    /** One record's hyphenated name, for the single-read handler file: `field-note`. */
+    entityKebab: string;
+    /** The collection's hyphenated name, for the list handler file: `field-notes`. */
+    pluralKebab: string;
     /** The collection's variable name: `fieldNotes`. */
     pluralCamel: string;
     /** Where the router mounts: `/field-notes`. */
@@ -73,6 +77,13 @@ const snake = (value: string): string =>
     lowerFirst(value).replaceAll(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 
 /**
+ * `FieldNote` to `field-note`.
+ * @param value - a PascalCase name
+ * @returns the hyphenated spelling
+ */
+const hyphenate = (value: string): string => snake(value).replaceAll('_', '-');
+
+/**
  * The naive singular of the last word: `-ies` to `-y`, a trailing `s` dropped unless it is `ss`.
  * Wrong for irregular nouns, which is what `--entity` is for.
  * @param word - the PascalCase plural
@@ -112,6 +123,8 @@ export const deriveNames = (kebab: string, entityOverride?: string): ModuleNames
         entity,
         entityCamel: lowerFirst(entity),
         entitySnake: snake(entity),
+        entityKebab: hyphenate(entity),
+        pluralKebab: hyphenate(plural),
         plural,
         pluralCamel: lowerFirst(plural),
         basePath: `/${kebab}`,

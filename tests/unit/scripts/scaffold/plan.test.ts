@@ -50,7 +50,7 @@ describe('planModule', () => {
             'src/modules/field-notes/routes.ts',
             'src/modules/field-notes/factories.ts',
             'src/modules/field-notes/controllers/get-field-notes.ts',
-            'src/modules/field-notes/controllers/get-field-notes-item.ts',
+            'src/modules/field-notes/controllers/get-field-note.ts',
             'src/modules/field-notes/controllers/post-field-notes.ts',
             'src/modules/field-notes/controllers/update-field-notes.ts',
             'src/modules/field-notes/controllers/delete-field-notes.ts',

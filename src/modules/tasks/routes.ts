@@ -13,7 +13,7 @@ import { Router } from 'express';
 import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
 import { postTask } from './controllers/post-task';
 import { getTasks } from './controllers/get-tasks';
-import { getTaskById } from './controllers/get-task-by-id';
+import { getTaskById } from './controllers/get-task';
 import { getTaskSummary } from './controllers/get-task-summary';
 import { postTaskMarkSpam, postTaskReopen, postTaskResolve } from './controllers/post-task-doors';
 import { deleteTaskAssignee } from './controllers/delete-task-assignee';

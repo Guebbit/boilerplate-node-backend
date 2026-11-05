@@ -21,7 +21,7 @@ import { createProduct } from './controllers/post-product';
 import { replaceProduct, updateProduct } from './controllers/update-product';
 import { deleteProducts } from './controllers/delete-products';
 import { restoreProducts } from './controllers/post-product-restore';
-import { getProductItem } from './controllers/get-product-item';
+import { getProductItem } from './controllers/get-product';
 import { getCatalogFacets } from './controllers/get-catalog-facets';
 import { invalidateCache, searchCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
