@@ -191,7 +191,7 @@ export interface RefundFacts {
     /** The record's id, to tell it from its siblings. */
     _id?: { toString: () => string };
     status: RefundStatus;
-    amount: number;
+    amount: string;
     currency: string;
     failureReason?: RefundFailureReason | undefined;
     /** Set once when the provider reported the refund failed, settled or not; never cleared. */
@@ -203,7 +203,7 @@ export interface RefundFacts {
 /** The slice of a payment the refund rules read. */
 export interface RefundablePayment extends DisputablePayment {
     provider: string;
-    amount: number;
+    amount: string;
     currency: string;
     refunds: readonly RefundFacts[];
 }

@@ -55,11 +55,10 @@ const EMPTY_CART = {
     summary: {
         itemsCount: 0,
         totalQuantity: 0,
-        itemsTotal: 0,
-        shippingCost: 0,
-        totalPrice: 0,
-        currency: 'EUR',
-        expectedTotal: { amount: 0, currency: 'EUR' }
+        itemsTotal: '0.00',
+        shippingCost: '0.00',
+        totalPrice: '0.00',
+        currency: 'EUR'
     },
     // Nothing to buy is not something checkout can run on.
     checkoutable: false,
@@ -193,7 +192,7 @@ describe('get', () => {
 
     it('returns the populated product alongside each line', async () => {
         const user = await createUser();
-        const product = await createProduct({ title: 'Keyboard', price: 25 });
+        const product = await createProduct({ title: 'Keyboard', price: '25.00' });
         await cartService.setItemById(user.id, String(product._id), 2);
 
         const items = await cartService.get(user.id);
@@ -226,7 +225,7 @@ describe('get', () => {
 describe('getForBadge', () => {
     it('drops the populated product from every line', async () => {
         const user = await createUser();
-        const product = await createProduct({ title: 'Keyboard', price: 25 });
+        const product = await createProduct({ title: 'Keyboard', price: '25.00' });
         await cartService.setItemById(user.id, String(product._id), 2);
 
         const { items } = await cartService.getForBadge(user.id);
@@ -250,8 +249,8 @@ describe('getForBadge', () => {
 
     it('computes the summary across several lines', async () => {
         const user = await createUser();
-        const keyboard = await createProduct({ title: 'Keyboard', price: 25 });
-        const mouse = await createProduct({ title: 'Mouse', price: 10 });
+        const keyboard = await createProduct({ title: 'Keyboard', price: '25.00' });
+        const mouse = await createProduct({ title: 'Mouse', price: '10.00' });
         await cartService.setItemById(user.id, String(keyboard._id), 2);
         await cartService.setItemById(user.id, String(mouse._id), 3);
 
@@ -262,12 +261,10 @@ describe('getForBadge', () => {
         expect(summary).toEqual({
             itemsCount: 2,
             totalQuantity: 5,
-            itemsTotal: 80,
-            shippingCost: 0,
-            totalPrice: 80,
-            currency: 'EUR',
-            // 80.00 EUR in cents: what a checkout is sent back as `expectedTotal`.
-            expectedTotal: { amount: 8000, currency: 'EUR' }
+            itemsTotal: '80.00',
+            shippingCost: '0.00',
+            totalPrice: '80.00',
+            currency: 'EUR'
         });
     });
 
@@ -297,12 +294,12 @@ describe('shipping (FA-D6/B3)', () => {
     it('prices a free-above threshold live, crossed by the basket alone', async () => {
         const user = await createUser();
         // Two at 60 clears `standard`'s 100 free-above threshold.
-        const product = await createProduct({ price: 60 });
+        const product = await createProduct({ price: '60.00' });
         await cartService.setItemById(user.id, String(product._id), 2);
 
         const { shipping } = await cartService.getForBadge(user.id);
 
-        expect(shipping.options.find((option) => option.id === 'standard')?.price).toBe(0);
+        expect(shipping.options.find((option) => option.id === 'standard')?.price).toBe('0.00');
     });
 
     it('reads the stored choice back as selected once it fits the basket', async () => {
@@ -379,7 +376,7 @@ describe('setItemById', () => {
 
     it('answers with the updated cart, so no controller has to re-read it', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 25 });
+        const product = await createProduct({ price: '25.00' });
 
         const result = await cartService.setItemById(user.id, String(product._id), 2);
 
@@ -396,11 +393,10 @@ describe('setItemById', () => {
             summary: {
                 itemsCount: 1,
                 totalQuantity: 2,
-                itemsTotal: 50,
-                shippingCost: 0,
-                totalPrice: 50,
-                currency: 'EUR',
-                expectedTotal: { amount: 5000, currency: 'EUR' }
+                itemsTotal: '50.00',
+                shippingCost: '0.00',
+                totalPrice: '50.00',
+                currency: 'EUR'
             },
             checkoutable: true,
             // A weightless product fits every method's range, so all three are on offer, priced
@@ -408,9 +404,9 @@ describe('setItemById', () => {
             shipping: {
                 required: true,
                 options: [
-                    { id: 'standard', price: 5, requiresAddress: true, tracked: false },
-                    { id: 'express', price: 15, requiresAddress: true, tracked: true },
-                    { id: 'pickup', price: 0, requiresAddress: false, tracked: false }
+                    { id: 'standard', price: '5.00', requiresAddress: true, tracked: false },
+                    { id: 'express', price: '15.00', requiresAddress: true, tracked: true },
+                    { id: 'pickup', price: '0.00', requiresAddress: false, tracked: false }
                 ]
             }
         });
@@ -918,8 +914,8 @@ describe('orderConfirm', () => {
     it('creates an order carrying the cart lines', async () => {
         const user = await createUser();
         await giveUserAnAddress(user.id);
-        const keyboard = await createProduct({ title: 'Keyboard', price: 25 });
-        const mouse = await createProduct({ title: 'Mouse', price: 10 });
+        const keyboard = await createProduct({ title: 'Keyboard', price: '25.00' });
+        const mouse = await createProduct({ title: 'Mouse', price: '10.00' });
         await cartService.setItemById(user.id, String(keyboard._id), 2);
         await cartService.setItemById(user.id, String(mouse._id), 1);
 
@@ -1002,7 +998,7 @@ describe('orderConfirm', () => {
     it('freezes the chosen shipping method and its cost onto the order', async () => {
         const user = await createUser();
         await giveUserAnAddress(user.id); // `express` requires one
-        const product = await createProduct({ price: 25 });
+        const product = await createProduct({ price: '25.00' });
         await cartService.setItemById(user.id, String(product._id), 2);
 
         await cartRepository.setShippingMethod(user.id, 'express');
@@ -1011,13 +1007,13 @@ describe('orderConfirm', () => {
         expect(result.success).toBe(true);
         const order = await findOrder({ userId: user._id });
         expect(order!.shippingMethod).toBe('express');
-        expect(order!.shippingCost).toBe(15);
+        expect(order!.shippingCost).toBe('15.00');
     });
 
     it('prices the free-above rule against the lines being bought', async () => {
         const user = await createUser();
         await giveUserAnAddress(user.id); // `standard` requires one
-        const product = await createProduct({ price: 60 });
+        const product = await createProduct({ price: '60.00' });
         await cartService.setItemById(user.id, String(product._id), 2); // 120 ≥ standard's 100
 
         await cartRepository.setShippingMethod(user.id, 'standard');
@@ -1025,7 +1021,7 @@ describe('orderConfirm', () => {
 
         expect(result.success).toBe(true);
         const order = await findOrder({ userId: user._id });
-        expect(order!.shippingCost).toBe(0);
+        expect(order!.shippingCost).toBe('0.00');
     });
 
     /*
@@ -1035,8 +1031,8 @@ describe('orderConfirm', () => {
     it('counts every line, digital ones too, toward the free-above-a-threshold rule', async () => {
         const user = await createUser();
         await giveUserAnAddress(user.id); // `standard` requires one
-        const digital = await createProduct({ price: 150, requiresShipping: false });
-        const physical = await createProduct({ price: 10 });
+        const digital = await createProduct({ price: '150.00', requiresShipping: false });
+        const physical = await createProduct({ price: '10.00' });
         await cartService.setItemById(user.id, String(digital._id), 1);
         await cartService.setItemById(user.id, String(physical._id), 1);
 
@@ -1046,7 +1042,7 @@ describe('orderConfirm', () => {
 
         expect(result.success).toBe(true);
         const order = await findOrder({ userId: user._id });
-        expect(order!.shippingCost).toBe(0);
+        expect(order!.shippingCost).toBe('0.00');
         // The cart quoted what the order charged.
         expect(quoted.summary.shippingCost).toBe(order!.shippingCost);
     });
@@ -1090,16 +1086,16 @@ describe('orderConfirm', () => {
     it('a chosen method that costs nothing still freezes the method, unlike no method at all', async () => {
         const user = await createUser();
         await giveUserAnAddress(user.id); // `standard` requires one
-        const product = await createProduct({ price: 500 });
+        const product = await createProduct({ price: '500.00' });
         await cartService.setItemById(user.id, String(product._id), 1);
 
-        // `standard` (5, freeAbove: 100) — a 500 line total clears the threshold.
+        // `standard` (5, freeAbove: '100.00') — a 500 line total clears the threshold.
         await cartRepository.setShippingMethod(user.id, 'standard');
         await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
         const order = await findOrder({ userId: user._id });
         expect(order!.shippingMethod).toBe('standard');
-        expect(order!.shippingCost).toBe(0);
+        expect(order!.shippingCost).toBe('0.00');
     });
 
     it('buys a cart made entirely of digital products even with a method still stored, and orders no shipping', async () => {
@@ -1274,7 +1270,7 @@ describe('orderConfirm', () => {
         const user = await createUser();
         await giveUserAnAddress(user.id); // `standard` requires one
         const ebook = await createProduct({ requiresShipping: false });
-        const mug = await createProduct({ requiresShipping: true, price: 500 });
+        const mug = await createProduct({ requiresShipping: true, price: '500.00' });
         await cartService.setItemById(user.id, String(ebook._id), 1);
         await cartService.addItemById(user.id, String(mug._id), 1);
 
@@ -1289,7 +1285,7 @@ describe('orderConfirm', () => {
         mockEnqueueEmail.mockClear();
         const user = await createUser();
         await giveUserAnAddress(user.id);
-        const keyboard = await createProduct({ title: 'Keyboard', price: 25 });
+        const keyboard = await createProduct({ title: 'Keyboard', price: '25.00' });
         await cartService.setItemById(user.id, String(keyboard._id), 2);
 
         await cartRepository.setShippingMethod(user.id, 'pickup');

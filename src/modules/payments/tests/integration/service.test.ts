@@ -62,7 +62,7 @@ setupTestDb();
 const GOOD_METHOD = 'pm_card_visa';
 
 /** One paying customer with one two-line order, the fixture most tests start from. */
-const orderFor = async (price = 25, quantity = 2) => {
+const orderFor = async (price = '25.00', quantity = 2) => {
     const user = await createUser();
     const product = await createProduct({ price });
     const order = await createOrder(user, [toOrderItem(product, quantity)]);
@@ -80,14 +80,14 @@ const paidOrder = async () => {
 
 describe('createIntent', () => {
     it('freezes the order total into the intent', async () => {
-        const { user, order } = await orderFor(25, 2);
+        const { user, order } = await orderFor('25.00', 2);
 
         const result = await paymentService.createIntent(String(order._id), auth(user));
 
         expect(result.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
         // The order's own arithmetic — 2 × 25 — not a number the intent computed for itself.
-        expect(payment!.amount).toBe(50);
+        expect(payment!.amount).toBe('50.00');
         expect(payment!.status).toBe('requires_confirmation');
     });
 
@@ -100,18 +100,18 @@ describe('createIntent', () => {
      */
     it('charges the total the order publishes, shipping included', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 50 });
+        const product = await createProduct({ price: '50.00' });
         const order = await createOrder(user, [toOrderItem(product, 2)], {
             shippingMethod: 'express',
-            shippingCost: 15
+            shippingCost: '15.00'
         });
 
         const result = await paymentService.createIntent(String(order._id), auth(user));
 
         expect(result.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
-        const { totalPrice } = order.toJSON() as { totalPrice: number };
-        expect(totalPrice).toBe(115);
+        const { totalPrice } = order.toJSON() as { totalPrice: string };
+        expect(totalPrice).toBe('115.00');
         expect(payment!.amount).toBe(totalPrice);
     });
 
@@ -179,7 +179,7 @@ describe('confirmPayment', () => {
 
     it('says `card` on an order checked out as bank transfer once the card pays it (JB8)', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 25 });
+        const product = await createProduct({ price: '25.00' });
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             paymentMethod: 'bank_transfer'
         });
@@ -197,7 +197,7 @@ describe('confirmPayment', () => {
 
     it('keeps `bank_transfer` when the money was recorded by hand instead of a card', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 25 });
+        const product = await createProduct({ price: '25.00' });
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             paymentMethod: 'bank_transfer'
         });
@@ -431,8 +431,8 @@ describe('refund on cancel', () => {
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('succeeded');
         expect(payment!.refunds).toHaveLength(1);
-        expect(payment!.refunds[0]).toMatchObject({ amount: 50, status: 'succeeded' });
-        expect(payment!.amountRefunded).toBe(50);
+        expect(payment!.refunds[0]).toMatchObject({ amount: '50.00', status: 'succeeded' });
+        expect(payment!.amountRefunded).toBe('50.00');
     });
 
     it('an operator cancelling without a refund opens no refund record', async () => {
@@ -467,7 +467,7 @@ describe('refund on cancel', () => {
     });
 
     it('erasing the account cancels its open intent at the provider and releases the hold', async () => {
-        const { user, order } = await orderFor(25, 2);
+        const { user, order } = await orderFor('25.00', 2);
         const [line] = order.items;
         await inventoryService.reserveForOrder(String(order._id), [
             { productId: String(line.product._id), quantity: 2 }
@@ -513,7 +513,7 @@ describe('refund on cancel', () => {
             const stuck = await paymentRepository.findByOrderId(String(order._id));
             expect(stuck!.status).toBe('succeeded');
             expect(stuck!.refunds).toHaveLength(1);
-            expect(stuck!.refunds[0]).toMatchObject({ amount: 50, status: 'failed' });
+            expect(stuck!.refunds[0]).toMatchObject({ amount: '50.00', status: 'failed' });
             // The event was answered, not left failing for the relay to deliver again.
             expect(await outboxEventModel.countDocuments({ status: { $ne: 'published' } })).toBe(0);
 
@@ -563,7 +563,7 @@ describe('refund on cancel', () => {
             const stuck = await paymentRepository.findByOrderId(String(order._id));
             expect(stuck!.status).toBe('succeeded');
             expect(stuck!.refunds).toHaveLength(1);
-            expect(stuck!.refunds[0]).toMatchObject({ amount: 50, status: 'failed' });
+            expect(stuck!.refunds[0]).toMatchObject({ amount: '50.00', status: 'failed' });
 
             expect(await paymentService.retryOpenRefunds()).toBe(1);
             const finished = await paymentRepository.findByOrderId(String(order._id));
@@ -668,7 +668,7 @@ describe('refund on cancel', () => {
         const payment = await paymentRepository.findByOrderId(orderId);
         expect(payment!.status).toBe('succeeded');
         expect(payment!.refunds).toHaveLength(1);
-        expect(payment!.refunds[0]).toMatchObject({ amount: 50, status: 'succeeded' });
+        expect(payment!.refunds[0]).toMatchObject({ amount: '50.00', status: 'succeeded' });
         // The customer is told the order could not be paid, not that it was.
         expect(asReject(result).errors[0]).toMatchObject({ code: 'PAYMENT_ORDER_NOT_PAYABLE' });
         // The order never reached a paid state that stayed paid: nothing announces a success.
@@ -1186,7 +1186,7 @@ describe('syncPayment', () => {
         // which is the one thing this branch exists to catch before it ever reaches the provider.
         const { user, order } = await orderFor();
         const upserted = await paymentRepository.upsertIntent(String(order._id), user.id, {
-            amount: 10,
+            amount: '10.00',
             currency: 'EUR',
             provider: 'fake'
         });
@@ -1505,14 +1505,14 @@ describe('recordOfflinePayment', () => {
     // refunds and invoices are computed from it.
     it('books the order total, delivery included, over a stale card intent, and announces the payment and the status change once', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 50 });
+        const product = await createProduct({ price: '50.00' });
         const order = await createOrder(user, [toOrderItem(product, 2)], {
             shippingMethod: 'standard',
-            shippingCost: 5
+            shippingCost: '5.00'
         });
         const orderId = String(order._id);
         await paymentService.createIntent(orderId, auth(user));
-        await paymentModel.updateOne({ orderId }, { amount: 7 });
+        await paymentModel.updateOne({ orderId }, { amount: '7.00' });
 
         await paymentService.recordOfflinePayment(
             orderId,
@@ -1522,7 +1522,7 @@ describe('recordOfflinePayment', () => {
         await settleOutboxNudges();
 
         const payment = await paymentRepository.findByOrderId(orderId);
-        expect(payment).toMatchObject({ amount: 105, provider: 'manual', status: 'succeeded' });
+        expect(payment).toMatchObject({ amount: '105.00', provider: 'manual', status: 'succeeded' });
         for (const name of [PAYMENT_SUCCEEDED, ORDER_STATUS_CHANGED])
             expect(await outboxEventModel.countDocuments({ name, aggregateId: orderId })).toBe(1);
     });

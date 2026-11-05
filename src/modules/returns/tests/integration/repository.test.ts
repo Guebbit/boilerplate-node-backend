@@ -20,7 +20,7 @@ setupTestDb();
 /** One order with one product, and a function that writes a return on it created at a given time. */
 const orderWithWriter = async () => {
     const user = await createUser({ email: 'repository-reads@example.com' });
-    const product = await createProduct({ title: 'Shirt', price: 30 });
+    const product = await createProduct({ title: 'Shirt', price: '30.00' });
     const order = await createOrder(user, [toOrderItem(product, 1)], {
         status: OrderStatus.delivered
     });
@@ -31,7 +31,7 @@ const orderWithWriter = async () => {
             currency: 'EUR',
             status: 'requested',
             reason,
-            lines: [{ productId: product._id, quantity: 1, title: 'Shirt', unitPrice: 30 }],
+            lines: [{ productId: product._id, quantity: 1, title: 'Shirt', unitPrice: '30.00' }],
             returnPostage: 'consumer',
             ...(createdAt ? { createdAt } : {})
         });

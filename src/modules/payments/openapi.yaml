@@ -102,10 +102,10 @@ paths:
                   schema: { type: string, format: date-time }
                 - name: amountMin
                   in: query
-                  schema: { type: number, format: double, minimum: 0 }
+                  schema: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount' }
                 - name: amountMax
                   in: query
-                  schema: { type: number, format: double, minimum: 0 }
+                  schema: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount' }
                 - name: orderId
                   in: query
                   schema:
@@ -828,21 +828,17 @@ components:
                 userId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 amount:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: >-
-                        The order's total as the intent froze it. Always two decimal places,
-                        rounded half-up at the point of calculation. If the provider reports a success for
+                        The order's total as the intent froze it. Always at the currency's own
+                        places, rounded half-up at the point of calculation. If the provider reports a success for
                         a different amount or currency, the payment reads `succeeded` with what
                         ARRIVED here, its order is canceled and the money is returned.
                 currency:
                     allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     description: ISO-4217 currency code (e.g. EUR)
                 amountRefunded:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: >-
                         How much of `amount` has been asked back, pending and succeeded together —
                         the same reading as Stripe's `amount_refunded`. Counted when a refund is
@@ -962,9 +958,7 @@ components:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 amount:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: The amount returned, in the payment's own `currency`.
                 currency:
                     allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
@@ -1096,9 +1090,7 @@ components:
                 reason:
                     $ref: '#/components/schemas/DisputeReason'
                 amount:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: The disputed amount, in `currency`.
                 currency:
                     allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
@@ -1137,9 +1129,7 @@ components:
                 reason:
                     $ref: '#/components/schemas/DisputeReason'
                 amount:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                 currency:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode'
                 evidenceDueBy:
@@ -1228,8 +1218,10 @@ components:
                 createdTo: { type: string, format: date-time }
                 receivedFrom: { type: string, format: date-time }
                 receivedTo: { type: string, format: date-time }
-                amountMin: { type: number, format: double, minimum: 0 }
-                amountMax: { type: number, format: double, minimum: 0 }
+                amountMin:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
+                amountMax:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                 orderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 disputed:
@@ -1269,7 +1261,8 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 orderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
-                amount: { type: number, format: double, minimum: 0 }
+                amount:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                 currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
                 status:
                     $ref: '#/components/schemas/RefundStatus'
@@ -1344,14 +1337,13 @@ components:
                         On a `dispute_needs_response` row, when the provider's evidence window closes.
                         Absent when the provider gave none. A past date means the window has gone.
                 alreadyRefunded:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: >-
                         On a `dispute_needs_response` row, how much of the payment was already
                         refunded successfully, in its currency. Above zero it is a refund-then-chargeback:
                         send the refund as evidence. Absent when nothing was refunded.
-                amount: { type: number, format: double, minimum: 0 }
+                amount:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                 currency: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }
                 failureReason:
                     $ref: '#/components/schemas/RefundFailureReason'
@@ -1361,9 +1353,7 @@ components:
                     format: date-time
                     description: When the problem was recorded, so the page can sort by age.
                 exceedsBy:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: >-
                         On a `refund_exceeds_remaining` row, by how much this open refund overshoots
                         what the provider can still give back, in the payment's currency.
@@ -1405,9 +1395,7 @@ components:
             additionalProperties: false
             properties:
                 amount:
-                    type: number
-                    format: double
-                    exclusiveMinimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/DecimalAmount'
                     description: >-
                         How much to return, a decimal in the payment's own currency. Absent means
                         everything still refundable.
@@ -1600,15 +1588,11 @@ components:
                 orderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 amount:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                 currency:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode'
                 amountRefunded:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                 refunds:
                     type: array
                     items:

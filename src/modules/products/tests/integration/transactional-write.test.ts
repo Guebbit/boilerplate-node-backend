@@ -56,7 +56,7 @@ describe('productService.create is one transaction', () => {
         await expect(
             productService.create(
                 productService.zodProductCreateSchema.parse({
-                    price: 12,
+                    price: '12.00',
                     translations: { [FALLBACK]: { title: 'Standing Desk' } }
                 }),
                 testCallerContext
@@ -70,7 +70,7 @@ describe('productService.create is one transaction', () => {
     it('commits the product, its translations and the event together', async () => {
         const result = (await productService.create(
             productService.zodProductCreateSchema.parse({
-                price: 12,
+                price: '12.00',
                 translations: { [FALLBACK]: { title: 'Standing Desk' } }
             }),
             callerContextAs('admin')
@@ -97,7 +97,7 @@ describe('productService.create after its commit', () => {
 
         const result = (await productService.create(
             productService.zodProductCreateSchema.parse({
-                price: 12,
+                price: '12.00',
                 translations: { [FALLBACK]: { title: 'Standing Desk' } }
             }),
             callerContextAs('admin')
@@ -113,14 +113,14 @@ describe('productService.create after its commit', () => {
 
 describe('productService.updateById is one transaction', () => {
     it('keeps the old row when the translation write fails', async () => {
-        const product = await createProduct({ title: 'Standing Desk', price: 10, active: true });
+        const product = await createProduct({ title: 'Standing Desk', price: '10.00', active: true });
         write.mockRejectedValueOnce(new Error('translation store down'));
 
         await expect(
             productService.updateById(
                 String(product._id),
                 {
-                    price: 99,
+                    price: '99.00',
                     active: false,
                     translations: { [FALLBACK]: { title: 'Standing Desk' } }
                 },
@@ -129,6 +129,6 @@ describe('productService.updateById is one transaction', () => {
         ).rejects.toThrow('translation store down');
 
         const stored = await readProduct(String(product._id));
-        expect(stored).toMatchObject({ price: 10, active: true });
+        expect(stored).toMatchObject({ price: '10.00', active: true });
     });
 });

@@ -93,7 +93,7 @@ describe('POST /account/export', () => {
     it('holds no null anywhere in an account that has something in every section', async () => {
         await accessService.ensureTenant(DEPLOYMENT_TENANT_SLUG, 'Export shop');
         const { user, bearer } = await authenticateAs('admin');
-        const product = await createProduct({ price: 25, onHand: 5 });
+        const product = await createProduct({ price: '25.00', onHand: 5 });
         const soldOut = await createProduct({ onHand: 0 });
         await giveAddress(user.id);
         await createNotification({ userId: user.id });
@@ -155,7 +155,7 @@ describe('POST /account/export', () => {
 
     it('carries the invoice, the credit note and the cart line with exactly their documented fields', async () => {
         const { user, bearer } = await authenticateAs('user');
-        const product = await createProduct({ price: 25, onHand: 5 });
+        const product = await createProduct({ price: '25.00', onHand: 5 });
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         const orderId = String(order._id);
         const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
@@ -198,7 +198,7 @@ describe('POST /account/export', () => {
 
     it('carries a shipment and a held fulfillment order, and satisfies the contract', async () => {
         const { user, bearer } = await authenticateAs('user');
-        const shirt = await createProduct({ price: 25, onHand: 5 });
+        const shirt = await createProduct({ price: '25.00', onHand: 5 });
         const shipped = await createOrder(user, [toOrderItem(shirt, 1)]);
         await carryOrderTo(String(shipped._id), 'shipped');
         const waiting = await createOrder(user, [toOrderItem(shirt, 1)]);

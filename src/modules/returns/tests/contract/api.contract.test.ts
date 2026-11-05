@@ -24,7 +24,7 @@ setupTestDb();
 /** A customer logged in, with one order in `status`. */
 const customerWithOrder = async (status: OrderStatus) => {
     const { user, bearer } = await authenticateAs('user');
-    const product = await createProduct({ price: 20 });
+    const product = await createProduct({ price: '20.00' });
     const carried = status === OrderStatus.shipped || status === OrderStatus.delivered;
     const order = await createOrder(user, [toOrderItem(product, 2)], {
         status: carried ? OrderStatus.processing : status
@@ -155,7 +155,7 @@ describe('POST /returns', () => {
         const response = await api()
             .post('/returns')
             .set('Authorization', bearer)
-            .send({ orderId, reason: 'withdrawal', refundAmount: 1 });
+            .send({ orderId, reason: 'withdrawal', refundAmount: '1.00' });
 
         expect(response.status).toBe(422);
     });
@@ -368,7 +368,7 @@ describe('POST /returns/{id}/receive', () => {
         const response = await api()
             .post(`/returns/${id}/receive`)
             .set('Authorization', warehouse)
-            .send({ handlingDeduction: 1_000_000 });
+            .send({ handlingDeduction: '1000000.00' });
 
         expect(response.status).toBe(422);
         expect(response.body.errors[0]).toMatchObject({
@@ -596,8 +596,8 @@ const customerWithPartlyShippedOrder = async () => {
 
 /** The same order for an account that already exists — a staff member shopping as a customer. */
 const partlyShippedFor = async (user: UserDocument) => {
-    const shipped = await createProduct({ price: 20 });
-    const waiting = await createProduct({ price: 5 });
+    const shipped = await createProduct({ price: '20.00' });
+    const waiting = await createProduct({ price: '5.00' });
     const order = await createOrder(user, [toOrderItem(shipped, 1), toOrderItem(waiting, 2)], {
         status: OrderStatus.processing
     });
@@ -635,8 +635,8 @@ describe('GET /returns/options', () => {
                     fulfillmentOrderId,
                     number: 1,
                     lines: [{ productId: waitingId, quantity: 2 }],
-                    refundAmount: 10,
-                    shippingRefund: 0
+                    refundAmount: '10.00',
+                    shippingRefund: '0.00'
                 }
             ]
         });
@@ -674,7 +674,7 @@ describe('POST /returns — kind: cancellation', () => {
             status: 'closed',
             fulfillmentOrderId,
             lines: [{ productId: waitingId, quantity: 2 }],
-            refundAmount: 10
+            refundAmount: '10.00'
         });
         // The order moved on with it: nothing remains, one shipment is still out.
         const order = await api().get(`/orders/${orderId}`).set('Authorization', bearer);

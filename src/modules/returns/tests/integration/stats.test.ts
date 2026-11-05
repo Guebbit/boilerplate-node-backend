@@ -45,7 +45,7 @@ const seedReturn = (
             productId,
             quantity,
             title: 'Item',
-            unitPrice: 10
+            unitPrice: '10.00'
         })),
         ...(receivedAt ? { receivedAt: new Date(receivedAt) } : {})
     });

@@ -47,7 +47,7 @@ afterEach(() => resetDomainEvents());
 /** A customer who paid 100.00 and whose invoice was frozen, then LOST: the dead invoice event. */
 const paidWithDeadInvoice = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 50 });
+    const product = await createProduct({ price: '50.00' });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     const orderId = String(order._id);
     const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
@@ -63,7 +63,7 @@ const paidWithDeadInvoice = async () => {
 };
 
 /** Refund `amount` as an operator, and let the credit note's listener run. */
-const refund = (orderId: string, amount: number) =>
+const refund = (orderId: string, amount: string) =>
     refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount }).then(() =>
         settleOutboxNudges()
     );
@@ -82,8 +82,8 @@ const revive = (orderId: string) =>
 describe('reviving a dead invoice event', () => {
     it('issues the invoice, then one note per settled refund in settlement order, once', async () => {
         const { orderId } = await paidWithDeadInvoice();
-        await refund(orderId, 30);
-        await refund(orderId, 20);
+        await refund(orderId, '30.00');
+        await refund(orderId, '20.00');
         await loseInvoice(orderId);
         await expect(invoicingRepository.findCreditNotesByOrderId(orderId)).resolves.toEqual([]);
 
@@ -97,14 +97,14 @@ describe('reviving a dead invoice event', () => {
                 .then((notes) => notes.length === 2)
         );
         const notes = await invoicingRepository.findCreditNotesByOrderId(orderId);
-        expect(notes.map((note) => note.grandTotal).toSorted()).toEqual([20, 30]);
+        expect(notes.map((note) => note.grandTotal).toSorted()).toEqual(['20.00', '30.00']);
         expect(notes.every((note) => String(note.invoiceId) === String(invoice._id))).toBe(true);
     });
 
     it('issues no note for a refund that has not settled', async () => {
         const { orderId } = await paidWithDeadInvoice();
         setFakeRefundFailure(await providerRefOf(orderId), 'declined');
-        await refund(orderId, 30);
+        await refund(orderId, '30.00');
         await loseInvoice(orderId);
 
         await revive(orderId);

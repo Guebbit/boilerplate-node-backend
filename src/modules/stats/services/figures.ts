@@ -12,7 +12,7 @@ import {
     addMoney,
     averageMoney,
     subtractMoney,
-    toDecimalAmount,
+    toDecimalString,
     type Money
 } from '@domain-primitives/money';
 
@@ -37,15 +37,15 @@ export interface Figures {
     unitsOrdered: number;
     unitsReversed: number;
     netUnits: number;
-    grossSales: number;
-    discounts: number;
-    reversals: number;
-    netSales: number;
-    shipping: number;
-    taxes: number;
-    totalSales: number;
-    refunds: number;
-    averageOrderValue: number;
+    grossSales: string;
+    discounts: string;
+    reversals: string;
+    netSales: string;
+    shipping: string;
+    taxes: string;
+    totalSales: string;
+    refunds: string;
+    averageOrderValue: string;
 }
 
 /** Nothing sold. */
@@ -100,15 +100,15 @@ export const figuresOf = (raw: RawFigures, currency: string): Figures => {
         unitsOrdered: raw.unitsOrdered,
         unitsReversed: raw.unitsReversed,
         netUnits: raw.unitsOrdered - raw.unitsReversed,
-        grossSales: toDecimalAmount(raw.invoicedGoods, currency),
-        discounts: 0,
-        reversals: toDecimalAmount(raw.creditedGoods, currency),
-        netSales: toDecimalAmount(netSales, currency),
-        shipping: toDecimalAmount(shipping, currency),
-        taxes: toDecimalAmount(taxes, currency),
-        totalSales: toDecimalAmount(addMoney(netSales, shipping, taxes), currency),
-        refunds: toDecimalAmount(raw.creditedGross, currency),
-        averageOrderValue: toDecimalAmount(averageMoney(raw.invoicedGoods, raw.orders), currency)
+        grossSales: toDecimalString(raw.invoicedGoods, currency),
+        discounts: toDecimalString(NO_MONEY, currency),
+        reversals: toDecimalString(raw.creditedGoods, currency),
+        netSales: toDecimalString(netSales, currency),
+        shipping: toDecimalString(shipping, currency),
+        taxes: toDecimalString(taxes, currency),
+        totalSales: toDecimalString(addMoney(netSales, shipping, taxes), currency),
+        refunds: toDecimalString(raw.creditedGross, currency),
+        averageOrderValue: toDecimalString(averageMoney(raw.invoicedGoods, raw.orders), currency)
     };
 };
 

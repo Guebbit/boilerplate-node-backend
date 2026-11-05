@@ -26,7 +26,7 @@ export interface RefundedInput {
     orderId: string;
     refundId: string;
     /** This refund's gross amount, a decimal in the invoice's currency. */
-    amount: number;
+    amount: string;
     /** Whether this refund is the whole payment — the one case that mirrors the invoice. */
     full: boolean;
     /** The goods and delivery it pays back, when it pays for specific ones — see `../domain/credit-shares.ts`. */
@@ -68,7 +68,7 @@ const reversedFigures = (
     | 'taxSummary'
     | 'shippingByRate'
     | 'grandTotal'
-> & { shippingCost?: number } => {
+> & { shippingCost?: string } => {
     if (input.full)
         return {
             lines: invoice.lines,

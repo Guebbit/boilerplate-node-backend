@@ -39,11 +39,10 @@ import { systemCallerContext } from '@kernel/permissions';
 import {
     fitsCurrency,
     toMinorUnits,
-    toDecimalAmount,
+    toDecimalString,
     addMoney,
     minMoney,
-    subtractMoney
-} from '@domain-primitives/money';
+    subtractMoney, padDecimal } from '@domain-primitives/money';
 import { orderService } from '@modules/orders';
 import { holds } from '@kernel/ability';
 import { auditForbidden } from '@infrastructure/observability/forbidden';
@@ -81,7 +80,7 @@ import { paymentNotFound, RefundLeftOpenError } from './errors';
 /** What one refund is asked to do. */
 export interface RefundRequest {
     /** A decimal in the payment's currency; absent means everything still refundable. */
-    amount?: number;
+    amount?: string;
     /** Why the money goes back — recorded on the refund. */
     reason: RefundReason;
     /**
@@ -92,7 +91,7 @@ export interface RefundRequest {
     /** The goods this pays back, when it pays for specific ones — see `RefundRecord.lines`. */
     lines?: RefundLine[];
     /** The delivery cost inside the amount, beside `lines` — a decimal. */
-    shipping?: number;
+    shipping?: string;
     /**
      * Take at most what is left instead of refusing when the figure no longer fits. A return's
      * amount is clamped on a read that a racing refund can outdate; the re-read after a missed
@@ -241,7 +240,7 @@ const announceOwedByHand = (
                   paymentId: String(payment._id),
                   orderId: String(payment.orderId),
                   refundId: String(refund._id),
-                  amount: refund.amount,
+                  amount: padDecimal(refund.amount, refund.currency),
                   currency: refund.currency
               },
               String(payment.orderId),
@@ -283,7 +282,7 @@ export const openRefund = (
     const refundId = new Types.ObjectId();
     const refund = {
         _id: refundId,
-        amount: toDecimalAmount(amount, currency),
+        amount: toDecimalString(amount, currency),
         currency,
         status: 'pending' as const,
         // Stamped here, not left to mongoose: this exact object is what the caller sends to the
@@ -291,7 +290,7 @@ export const openRefund = (
         createdAt: new Date(),
         reason: request.reason,
         ...(request.returnId ? { returnId: request.returnId } : {}),
-        ...(request.lines ? { lines: request.lines, shipping: request.shipping ?? 0 } : {}),
+        ...(request.lines ? { lines: request.lines, shipping: request.shipping ?? '0' } : {}),
         // One key per RECORD, not per payment: two different partial refunds must not be taken
         // for one by the provider, while a retry of this one must be.
         idempotencyKey: `refund:${String(paymentId)}:${String(refundId)}`,
@@ -308,7 +307,7 @@ export const openRefund = (
             .addRefund(
                 String(paymentId),
                 amountRefunded,
-                toDecimalAmount(newTotal, currency),
+                toDecimalString(newTotal, currency),
                 refund,
                 active
             )
@@ -727,7 +726,7 @@ export const performRefund = (
  */
 const refusalFor = (
     payment: PaymentDocument,
-    body: { amount?: number; currency?: string }
+    body: { amount?: string; currency?: string }
 ): ResponseReject | undefined => {
     const { amount, currency } = body;
     if (currency !== undefined && currency !== payment.currency)
@@ -805,7 +804,7 @@ const refusedRefundAnswer = (
  */
 const refundFoundPayment = (
     payment: PaymentDocument,
-    body: { amount?: number },
+    body: { amount?: string },
     context: CallerContext,
     authContext: AuthContext | undefined
 ): Promise<ResponseSuccess<RefundRequested> | ResponseReject> => {
@@ -850,7 +849,7 @@ export const refundPayment = (
     paymentId: string,
     authContext: AuthContext | undefined,
     context: CallerContext,
-    body: { amount?: number; currency?: string } = {}
+    body: { amount?: string; currency?: string } = {}
 ): Promise<ResponseSuccess<RefundRequested> | ResponseReject> =>
     paymentRepository
         .findByIdScoped(paymentId, callerScope(authContext))
@@ -979,7 +978,7 @@ const canceledPayload = (
     paymentId: String(payment._id),
     orderId: String(payment.orderId),
     refundId: String(refund._id),
-    amount: refund.amount,
+    amount: padDecimal(refund.amount, refund.currency),
     currency: refund.currency
 });
 
@@ -1007,7 +1006,7 @@ const writeCancel = (
             { status: refund.status, failureReason: refund.failureReason },
             {
                 expectedRefunded: payment.amountRefunded,
-                newRefunded: toDecimalAmount(
+                newRefunded: toDecimalString(
                     subtractMoney(
                         toMinorUnits(payment.amountRefunded, payment.currency),
                         toMinorUnits(refund.amount, payment.currency)
@@ -1181,9 +1180,9 @@ export const openReturnRefund = (
     orderId: string,
     input: {
         returnId: string;
-        amount: number;
+        amount: string;
         lines: RefundLine[];
-        shipping: number;
+        shipping: string;
         reason?: Extract<RefundReason, 'return' | 'cancellation'>;
     },
     context: CallerContext,

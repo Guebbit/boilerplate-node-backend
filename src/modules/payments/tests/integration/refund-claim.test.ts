@@ -43,7 +43,7 @@ afterEach(() => {
 /** A customer who paid 100.00 by card. */
 const paidOrder = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 50 });
+    const product = await createProduct({ price: '50.00' });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     await payByCard(order, user);
     await settleOutboxNudges();
@@ -61,7 +61,7 @@ const paymentOf = async (orderId: string) => {
 const firstRefund = (orderId: string) => paymentOf(orderId).then(({ refunds }) => refunds[0]);
 
 /** Refund `amount` as an operator; a provider refusal rejects, the record stays open. */
-const refund = (orderId: string, amount: number) =>
+const refund = (orderId: string, amount: string) =>
     refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount });
 
 /** Rewrite one stored field of the payment's first refund, bypassing every timestamp. */
@@ -77,7 +77,7 @@ describe('a definite refusal', () => {
             const { orderId } = await paidOrder();
             const payment = await paymentOf(orderId);
             setFakeRefundFailure(String(payment.providerRef), 'lost_or_stolen_card');
-            await expect(refund(orderId, 30)).resolves.toMatchObject({
+            await expect(refund(orderId, '30.00')).resolves.toMatchObject({
                 success: true,
                 status: 201
             });
@@ -100,7 +100,7 @@ describe('a retryable refusal', () => {
         withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { orderId } = await paidOrder();
             jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
-            await expect(refund(orderId, 30)).resolves.toMatchObject({
+            await expect(refund(orderId, '30.00')).resolves.toMatchObject({
                 success: true,
                 status: 201
             });
@@ -122,7 +122,7 @@ describe('a pending record', () => {
         withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '1' }, async () => {
             const { orderId } = await paidOrder();
             jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
-            await expect(refund(orderId, 30)).resolves.toMatchObject({
+            await expect(refund(orderId, '30.00')).resolves.toMatchObject({
                 success: true,
                 status: 201
             });
@@ -146,7 +146,7 @@ describe('a pending record', () => {
     it('lets only one of two claims through', async () => {
         const { orderId } = await paidOrder();
         jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
-        await expect(refund(orderId, 30)).resolves.toMatchObject({ success: true, status: 201 });
+        await expect(refund(orderId, '30.00')).resolves.toMatchObject({ success: true, status: 201 });
         const stored = await paymentOf(orderId);
         const refundId = String(stored.refunds[0]._id);
         const window = { now: new Date(), staleBefore: new Date(0) };
@@ -163,7 +163,7 @@ describe('a pending record', () => {
     it('cannot be failed by an attempt that a newer claim superseded', async () => {
         const { orderId } = await paidOrder();
         jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
-        await expect(refund(orderId, 30)).resolves.toMatchObject({ success: true, status: 201 });
+        await expect(refund(orderId, '30.00')).resolves.toMatchObject({ success: true, status: 201 });
         const stored = await paymentOf(orderId);
         const refundId = String(stored.refunds[0]._id);
         const oldAttempt = new Date(0);
@@ -192,7 +192,7 @@ describe('a provider that is no longer registered', () => {
         withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { orderId } = await paidOrder();
             jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
-            await expect(refund(orderId, 30)).resolves.toMatchObject({
+            await expect(refund(orderId, '30.00')).resolves.toMatchObject({
                 success: true,
                 status: 201
             });
@@ -247,7 +247,7 @@ describe('a refund the provider ran but never answered', () => {
             const payment = await paymentOf(orderId);
             setFakeRefundTimeout(String(payment.providerRef), true);
             const before = fakeRefundsMade();
-            await expect(refund(orderId, 30)).resolves.toMatchObject({
+            await expect(refund(orderId, '30.00')).resolves.toMatchObject({
                 success: true,
                 status: 201
             });
@@ -267,7 +267,7 @@ describe('a refund the provider ran but never answered', () => {
             const payment = await paymentOf(orderId);
             setFakeRefundTimeout(String(payment.providerRef), true);
             const before = fakeRefundsMade();
-            await expect(refund(orderId, 30)).resolves.toMatchObject({
+            await expect(refund(orderId, '30.00')).resolves.toMatchObject({
                 success: true,
                 status: 201
             });
@@ -285,7 +285,7 @@ describe('a refund the provider ran but never answered', () => {
             const { orderId } = await paidOrder();
             const payment = await paymentOf(orderId);
             setFakeRefundFailure(String(payment.providerRef), 'unknown');
-            await expect(refund(orderId, 30)).resolves.toMatchObject({
+            await expect(refund(orderId, '30.00')).resolves.toMatchObject({
                 success: true,
                 status: 201
             });

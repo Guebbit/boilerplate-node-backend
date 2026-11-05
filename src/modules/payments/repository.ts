@@ -10,7 +10,7 @@ import { updateStatusIfIn as conditionalStatus } from '@infrastructure/persisten
 import type { ClientSession, PipelineStage, Types } from 'mongoose';
 import { paymentModel, applyPaymentTransform } from './model';
 import { PaymentStatus, PaymentMethod, RefundStatus } from '@types';
-import { reviveDecimals } from '@infrastructure/persistence/money-field';
+import { stringifyDecimals } from '@infrastructure/persistence/money-field';
 import type { ReportWindow } from '@infrastructure/persistence/report';
 import { RefundFailureReason, type RefundReason } from '@types';
 import { paymentProviderRegistry } from './providers/registry';
@@ -218,7 +218,7 @@ const REFUND_ROW_PROJECTION: PipelineStage = {
  */
 const aggregateRefundRows = (pipeline: PipelineStage[]): Promise<RefundRow[]> =>
     aggregatePayments<RefundRow>(pipeline).then((rows) => {
-        for (const row of rows) reviveDecimals(row);
+        for (const row of rows) stringifyDecimals(row);
         return rows;
     });
 
@@ -326,13 +326,13 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     upsertIntent: (
         orderId: string,
         userId: string | undefined,
-        data: { amount: number; currency: string; provider: string }
+        data: { amount: string; currency: string; provider: string }
     ) => Promise<UpsertedPayment | null>;
     upsertOffline: (
         orderId: string,
         userId: string | undefined,
         data: {
-            amount: number;
+            amount: string;
             currency: string;
             method: PaymentMethod;
             reference?: string;
@@ -343,7 +343,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         orderId: string,
         userId: string | undefined,
         data: {
-            amount: number;
+            amount: string;
             currency: string;
             transferReference: string;
             payBy: Date;
@@ -360,8 +360,8 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     ) => Promise<PaymentDocument | null>;
     addRefund: (
         paymentId: string,
-        expectedRefunded: number,
-        newRefunded: number,
+        expectedRefunded: string,
+        newRefunded: string,
         refund: Omit<
             RefundRecord,
             'createdAt' | 'providerRefundRef' | 'failureReason' | 'settledAt' | 'nextAttemptAt'
@@ -370,8 +370,8 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     ) => Promise<PaymentDocument | null>;
     importRefund: (
         paymentId: string,
-        expectedRefunded: number,
-        newRefunded: number,
+        expectedRefunded: string,
+        newRefunded: string,
         refund: RefundRecord,
         session?: ClientSession
     ) => Promise<PaymentDocument | null>;
@@ -409,7 +409,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         paymentId: string,
         refundId: string,
         observed: { status: RefundStatus; failureReason?: RefundFailureReason },
-        amounts: { expectedRefunded: number; newRefunded: number },
+        amounts: { expectedRefunded: string; newRefunded: string },
         session?: ClientSession
     ) => Promise<PaymentDocument | null>;
     searchStaff: (

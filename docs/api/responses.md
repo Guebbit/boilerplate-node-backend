@@ -48,6 +48,15 @@ resource (`{ methods }`, `{ sessions }`).
 the admin tables jump to page N and show "of 37". `GET /api-keys` adds `maxExpiresAt` next to
 `meta`.
 
+## Money
+
+Every amount is a decimal string at its currency's own places: `"19.90"` EUR, `"1000"` JPY,
+`"1.500"` KWD. Two equal amounts are equal strings, and the text carries its own scale, so a
+client needs no currency table to show it. A request may spell an amount any plain way (`"71"`,
+`"71.00"`); more places than the currency has, or a JSON number, answers 422. Rates (`taxRate`) are
+the one exception and stay numbers. The sibling `currency` field names the unit; `GET /shop`
+publishes `minorUnits` for a price input that starts empty.
+
 ## No content
 
 An answer with nothing to say is `204`, with no body and no `Content-Type`: logout, the delete

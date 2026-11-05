@@ -86,7 +86,7 @@ describe('a hard delete of an account that has bought, been refunded and written
     it('takes the address book and the tasks and leaves every legal record', async () => {
         const user = await createUser({ email: 'ada@example.com', verifiedAt: new Date() });
         await giveAddress(user.id);
-        const product = await createProduct({ price: 25 });
+        const product = await createProduct({ price: '25.00' });
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         const orderId = String(order._id);
         const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
@@ -110,7 +110,7 @@ describe('a hard delete of an account that has bought, been refunded and written
             currency: 'EUR',
             status: 'declined',
             reason: 'defective',
-            lines: [{ productId: product._id, quantity: 1, title: 'Shirt', unitPrice: 25 }],
+            lines: [{ productId: product._id, quantity: 1, title: 'Shirt', unitPrice: '25.00' }],
             returnPostage: 'consumer'
         });
         await taskModel.create({
@@ -186,7 +186,7 @@ describe('a scheduled self-deletion that has run', () => {
         const email = 'full-life@example.com';
         const user = await createUser({ email, verifiedAt: new Date() }, 'support');
         await giveAddress(user.id);
-        const product = await createProduct({ price: 25, onHand: 10 });
+        const product = await createProduct({ price: '25.00', onHand: 10 });
         await cartService.addItemById(user.id, String(product._id), 1);
         await wishlistService.add(user.id, String(product._id), testCallerContext);
         await stockAlertModel.create({ userId: user._id, productId: product._id });
@@ -249,7 +249,7 @@ describe('a scheduled self-deletion that has run', () => {
             currency: 'EUR',
             status: 'declined',
             reason: 'defective',
-            lines: [{ productId: product._id, quantity: 1, title: 'Shirt', unitPrice: 25 }],
+            lines: [{ productId: product._id, quantity: 1, title: 'Shirt', unitPrice: '25.00' }],
             returnPostage: 'consumer'
         });
         await taskModel.create({ email, subject: 'Hello', message: 'A question' });

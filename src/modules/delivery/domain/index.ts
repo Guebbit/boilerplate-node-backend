@@ -10,6 +10,7 @@ export {
     SHIPPING_METHODS,
     findShippingMethod,
     priceShipping,
+    quoteMethod,
     methodFitsWeight,
     cheapestStandardShipping
 } from './rates';

@@ -8,6 +8,7 @@
  */
 
 import { ConfigError } from '@infrastructure/config/define';
+import { minorUnitExponent } from '@domain-primitives/money';
 import type { ReturnPostagePayer, Shop, ShopAddress } from '@types';
 import { termsVersion } from '@modules/account';
 import { supportEmail } from '@infrastructure/adapters/config';
@@ -179,6 +180,7 @@ export const BACKORDER_PROMISE_DAYS = 30;
 export const getShop = (): Shop => ({
     ...shopIdentity(),
     currency: shopCurrency(),
+    minorUnits: minorUnitExponent(shopCurrency()),
     shipToCountries: shipToCountries(),
     returnAddress: returnAddress(),
     returnPostagePayer: returnPostagePayer(),

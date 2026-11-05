@@ -89,7 +89,7 @@ describe('writing a product through a multipart body', () => {
         expect(response.status).toBe(201);
         // A number, not the string it arrived as: a 200 storing `'101.5'` would be the same bug
         // with a friendlier status.
-        expect(response.body.price).toBe(101.5);
+        expect(response.body.price).toBe('101.50');
         expect(response.body.imageUrl).toMatch(/^\/images\/.+\.png$/);
     });
 
@@ -99,7 +99,7 @@ describe('writing a product through a multipart body', () => {
         const created = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .send({ price: 10, translations: { en: { title: 'Starts as JSON' } } });
+            .send({ price: '10.00', translations: { en: { title: 'Starts as JSON' } } });
 
         const response = await api()
             .patch(`/products/${created.body.id}`)
@@ -112,7 +112,7 @@ describe('writing a product through a multipart body', () => {
             });
 
         expect(response.status).toBe(200);
-        expect(response.body.price).toBe(42);
+        expect(response.body.price).toBe('42.00');
     });
 
     it('decodes the boolean alongside the number', async () => {

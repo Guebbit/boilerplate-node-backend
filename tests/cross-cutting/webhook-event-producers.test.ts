@@ -124,7 +124,7 @@ describe('every public webhook event has exactly one producer, and no producer n
             paymentId: PAYMENT_ID,
             orderId: ORDER_ID,
             refundId: 'r'.repeat(24),
-            amount: 20,
+            amount: '20.00',
             currency: 'EUR',
             full: true
         });
@@ -132,7 +132,7 @@ describe('every public webhook event has exactly one producer, and no producer n
             paymentId: PAYMENT_ID,
             orderId: ORDER_ID,
             refundId: 'r'.repeat(24),
-            amount: 20,
+            amount: '20.00',
             currency: 'EUR',
             failureReason: 'declined',
             final: true
@@ -141,7 +141,7 @@ describe('every public webhook event has exactly one producer, and no producer n
             paymentId: PAYMENT_ID,
             orderId: ORDER_ID,
             refundId: 'r'.repeat(24),
-            amount: 20,
+            amount: '20.00',
             currency: 'EUR',
             failureReason: 'declined'
         });
@@ -152,7 +152,7 @@ describe('every public webhook event has exactly one producer, and no producer n
             kind: 'chargeback',
             status: 'needs_response',
             reason: 'fraudulent',
-            amount: 20,
+            amount: '20.00',
             currency: 'EUR',
             fundsWithdrawn: true
         } as const;
@@ -169,7 +169,7 @@ describe('every public webhook event has exactly one producer, and no producer n
         await emitDomainEvent(RETURN_CLOSED, {
             returnId: 'q'.repeat(24),
             orderId: ORDER_ID,
-            refundAmount: 20,
+            refundAmount: '20.00',
             currency: 'EUR'
         });
         await emitDomainEvent(EXAMPLE_PUBLISHED, {

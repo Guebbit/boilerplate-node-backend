@@ -73,6 +73,7 @@ components:
                     email,
                     phone,
                     currency,
+                    minorUnits,
                     shipToCountries,
                     returnAddress,
                     returnPostagePayer,
@@ -107,6 +108,14 @@ components:
                 currency:
                     allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     description: ISO-4217 currency code (e.g. EUR) — the shop's one currency, the same one `Product.currency` reports.
+                minorUnits:
+                    type: integer
+                    minimum: 0
+                    maximum: 4
+                    description: >-
+                        How many decimal places `currency` has (ISO 4217's "minor unit": EUR 2, JPY 0, KWD 3).
+                        A client building a price input reads it here; an amount it receives already carries
+                        its own places.
                 shipToCountries:
                     type: array
                     items:

@@ -22,7 +22,7 @@ describe('SHIPPING_METHODS', () => {
             // charged rounded.
             for (const { price, freeAbove } of SHIPPING_METHODS) {
                 expect(fitsCurrency(price, currency)).toBe(true);
-                expect(fitsCurrency(freeAbove ?? 0, currency)).toBe(true);
+                expect(fitsCurrency(freeAbove ?? '0', currency)).toBe(true);
             }
         }
     );
@@ -32,7 +32,7 @@ describe('findShippingMethod', () => {
     it('finds a method by id', () => {
         expect(findShippingMethod('express')).toEqual({
             id: 'express',
-            price: 15,
+            price: '15.00',
             tracked: true,
             maxWeight: 5000,
             requiresAddress: true
@@ -48,27 +48,27 @@ describe('priceShipping', () => {
     it('charges the flat rate below the free-shipping threshold', () => {
         const standard = findShippingMethod('standard')!;
 
-        expect(priceShipping(standard, 99)).toBe(5);
+        expect(priceShipping(standard, '99.00', 'EUR')).toBe('5.00');
     });
 
     it('is free once the items total reaches the threshold', () => {
         const standard = findShippingMethod('standard')!;
 
-        expect(priceShipping(standard, 100)).toBe(0);
-        expect(priceShipping(standard, 150)).toBe(0);
+        expect(priceShipping(standard, '100.00', 'EUR')).toBe('0.00');
+        expect(priceShipping(standard, '150.00', 'EUR')).toBe('0.00');
     });
 
     it('charges the flat rate regardless of total when the method has no threshold', () => {
         const express = findShippingMethod('express')!;
 
-        expect(priceShipping(express, 0)).toBe(15);
-        expect(priceShipping(express, 1_000_000)).toBe(15);
+        expect(priceShipping(express, '0.00', 'EUR')).toBe('15.00');
+        expect(priceShipping(express, '1000000.00', 'EUR')).toBe('15.00');
     });
 
     it('prices pickup at zero, distinct from "no method"', () => {
         const pickup = findShippingMethod('pickup')!;
 
-        expect(priceShipping(pickup, 0)).toBe(0);
+        expect(priceShipping(pickup, '0.00', 'EUR')).toBe('0.00');
     });
 });
 
@@ -92,13 +92,13 @@ describe('methodFitsWeight', () => {
         // in-line, not `SHIPPING_METHODS`, so this rule stays covered either way.
         expect(
             methodFitsWeight(
-                { id: 'heavy', price: 0, tracked: false, requiresAddress: true, minWeight: 1000 },
+                { id: 'heavy', price: '0.00', tracked: false, requiresAddress: true, minWeight: 1000 },
                 999
             )
         ).toBe(false);
         expect(
             methodFitsWeight(
-                { id: 'heavy', price: 0, tracked: false, requiresAddress: true, minWeight: 1000 },
+                { id: 'heavy', price: '0.00', tracked: false, requiresAddress: true, minWeight: 1000 },
                 1000
             )
         ).toBe(true);
@@ -109,7 +109,7 @@ describe('SHIPPING_METHODS', () => {
     it('gives every method a non-negative price', () => {
         // The table this shop quotes from is committed data, not user input — this is the canary
         // for a typo that would otherwise only surface as a wrong number at checkout.
-        for (const method of SHIPPING_METHODS) expect(method.price).toBeGreaterThanOrEqual(0);
+        for (const method of SHIPPING_METHODS) expect(Number(method.price)).toBeGreaterThanOrEqual(0);
     });
 
     it('gives every method a real boolean tracked flag', () => {
@@ -136,11 +136,11 @@ describe('SHIPPING_METHODS', () => {
 
 describe('cheapestStandardShipping', () => {
     it('is the flat standard rate on a small order — pickup is collection, not delivery', () => {
-        expect(cheapestStandardShipping(50)).toBe(5);
+        expect(cheapestStandardShipping('50.00', 'EUR')).toBe('5.00');
     });
 
     it('is zero once standard is free', () => {
-        expect(cheapestStandardShipping(100)).toBe(0);
-        expect(cheapestStandardShipping(150)).toBe(0);
+        expect(cheapestStandardShipping('100.00', 'EUR')).toBe('0.00');
+        expect(cheapestStandardShipping('150.00', 'EUR')).toBe('0.00');
     });
 });

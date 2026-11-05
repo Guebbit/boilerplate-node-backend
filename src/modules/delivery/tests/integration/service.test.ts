@@ -66,7 +66,7 @@ const processingOrderOf = async (
     email = 'user@example.com'
 ) => {
     const user = await createUser({ email });
-    const products = await Promise.all(quantities.map(() => createProduct({ price: 10 })));
+    const products = await Promise.all(quantities.map(() => createProduct({ price: '10.00' })));
     const order = await createOrder(
         user,
         products.map((product, index) => toOrderItem(product, quantities[index])),
@@ -95,20 +95,20 @@ describe('rates', () => {
     it('prices the flat rate below the threshold and zero at it', () => {
         const standard = findShippingMethod('standard')!;
 
-        expect(priceShipping(standard, 99.99)).toBe(standard.price);
-        expect(priceShipping(standard, 100)).toBe(0);
+        expect(priceShipping(standard, '99.99', 'EUR')).toBe(standard.price);
+        expect(priceShipping(standard, '100.00', 'EUR')).toBe('0.00');
     });
 
     it('a method with no threshold never becomes free', () => {
         const express = findShippingMethod('express')!;
 
-        expect(priceShipping(express, 1_000_000)).toBe(express.price);
+        expect(priceShipping(express, '1000000.00', 'EUR')).toBe(express.price);
     });
 
     it('pickup is free and still a method — "cheapest" and "none" stay distinguishable', () => {
         const pickup = findShippingMethod('pickup')!;
 
-        expect(priceShipping(pickup, 1)).toBe(0);
+        expect(priceShipping(pickup, '1.00', 'EUR')).toBe('0.00');
         expect(SHIPPING_METHODS.some(({ id }) => id === 'pickup')).toBe(true);
     });
 
@@ -171,7 +171,7 @@ describe('the fulfillment orders of a paid order', () => {
     it('are made by the `paid` listener when the order is paid', async () => {
         wireDelivery();
         const user = await createUser();
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             status: OrderStatus.pending
         });
@@ -872,8 +872,8 @@ describe('digital fulfillment', () => {
 
     it('ships the digital lines of a mixed order together with the physical ones', async () => {
         const user = await createUser();
-        const physical = await createProduct({ price: 10 });
-        const digital = await createProduct({ price: 5, requiresShipping: false });
+        const physical = await createProduct({ price: '10.00' });
+        const digital = await createProduct({ price: '5.00', requiresShipping: false });
         const order = await createOrder(user, [toOrderItem(physical, 1), toOrderItem(digital, 1)], {
             status: OrderStatus.processing
         });

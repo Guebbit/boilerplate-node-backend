@@ -993,9 +993,7 @@ components:
                 title:
                     type: string
                 price:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: >-
                         Gross — what the customer paid, VAT included, frozen at checkout. Same
                         convention as `Product.price`.
@@ -1120,15 +1118,11 @@ components:
                 # Both derived at serialization from `product.price`/`quantity`/`product.taxRate`
                 # — never stored. See `src/modules/orders/domain/tax.ts`.
                 taxAmount:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     readOnly: true
                     description: VAT included in this line's total, at its own frozen `taxRate`.
                 netAmount:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     readOnly: true
                     description: This line's total excluding VAT — `price × quantity` minus `taxAmount`.
 
@@ -1308,17 +1302,11 @@ components:
                     minimum: 0
                     description: The decimal rate this row is for (`0.22` for 22%) — never repeated across rows.
                 netAmount:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                 taxAmount:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                 grossAmount:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: '`netAmount + taxAmount`, not re-derived from a price.'
 
         Order:
@@ -1372,11 +1360,8 @@ components:
                     description: Sum of `quantity` across every line item.
                     example: 5
                 totalPrice:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: Sum of `product.price × quantity` across every line item, plus `shippingCost` when the checkout chose a method.
-                    example: 149.97
                 # Frozen from `NODE_DEFAULT_CURRENCY` the moment the order was placed — a later
                 # change to the shop's own setting must not rewrite what an old order actually
                 # charged.
@@ -1387,17 +1372,13 @@ components:
                 # Both derived at serialization from the lines' frozen `taxRate` — never stored.
                 # See `src/modules/orders/domain/tax.ts`.
                 netTotal:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     readOnly: true
                     description: >-
                         Sum of every line's `netAmount` — the goods total excluding VAT, GOODS
                         ONLY. Shipping's own net amount is `shippingNetAmount`, not folded in here.
                 taxTotal:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     readOnly: true
                     description: >-
                         Every VAT collected on this order: the lines' own `taxAmount`, plus the VAT
@@ -1405,18 +1386,14 @@ components:
                         taxed at each line's own rate, since delivery is taxed as ancillary to what
                         it delivers.
                 shippingNetAmount:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     readOnly: true
                     description: >-
                         Shipping's own net amount, summed across every line it was apportioned
                         onto — `netTotal` stays goods-only, this is the rest of the split. Zero on
                         an order with no delivery method or free shipping.
                 shippingTaxAmount:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     readOnly: true
                     description: >-
                         Shipping's own tax amount, summed across every line it was apportioned
@@ -1443,9 +1420,7 @@ components:
                     type: string
                     description: The shipping method's id as the checkout froze it (e.g. standard, express, pickup).
                 shippingCost:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: What that method cost at checkout time — a later rate change cannot re-price history.
                 # Where the goods go — present only when a line ships to an address. Absent under
                 # the same conditions as `shippingMethod` above, when the chosen method itself
@@ -1585,11 +1560,8 @@ components:
                     description: Sum of `quantity` across every line item.
                     example: 5
                 totalPrice:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: Sum of `product.price × quantity` across every line item, plus `shippingCost` when the checkout chose a method.
-                    example: 149.97
                 # Frozen from `NODE_DEFAULT_CURRENCY` the moment the order was placed — a later
                 # change to the shop's own setting must not rewrite what an old order actually
                 # charged.
@@ -1600,17 +1572,13 @@ components:
                 # Both derived at serialization from the lines' frozen `taxRate` — never stored.
                 # See `src/modules/orders/domain/tax.ts`.
                 netTotal:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     readOnly: true
                     description: >-
                         Sum of every line's `netAmount` — the goods total excluding VAT, GOODS
                         ONLY. Shipping's own net amount is `shippingNetAmount`, not folded in here.
                 taxTotal:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     readOnly: true
                     description: >-
                         Every VAT collected on this order: the lines' own `taxAmount`, plus the VAT
@@ -1618,18 +1586,14 @@ components:
                         taxed at each line's own rate, since delivery is taxed as ancillary to what
                         it delivers.
                 shippingNetAmount:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     readOnly: true
                     description: >-
                         Shipping's own net amount, summed across every line it was apportioned
                         onto — `netTotal` stays goods-only, this is the rest of the split. Zero on
                         an order with no delivery method or free shipping.
                 shippingTaxAmount:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     readOnly: true
                     description: >-
                         Shipping's own tax amount, summed across every line it was apportioned
@@ -1656,9 +1620,7 @@ components:
                     type: string
                     description: The shipping method's id as the checkout froze it (e.g. standard, express, pickup).
                 shippingCost:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: What that method cost at checkout time — a later rate change cannot re-price history.
                 # Where the goods go — present only when a line ships to an address. Absent under
                 # the same conditions as `shippingMethod` above, when the chosen method itself

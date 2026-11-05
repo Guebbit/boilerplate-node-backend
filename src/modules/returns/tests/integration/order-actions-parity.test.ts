@@ -78,10 +78,10 @@ const orderIn = async (
     status: OrderStatus,
     kind: OrderKind = 'ordinary'
 ): Promise<string> => {
-    const ordinary = await createProduct({ title: `Shirt ${Math.random()}`, price: 30 });
+    const ordinary = await createProduct({ title: `Shirt ${Math.random()}`, price: '30.00' });
     const bespoke = await createProduct({
         title: `Engraved mug ${Math.random()}`,
-        price: 10,
+        price: '10.00',
         noWithdrawal: true
     });
     const items = {

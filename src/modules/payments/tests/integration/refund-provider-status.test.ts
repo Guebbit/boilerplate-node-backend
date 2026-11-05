@@ -40,7 +40,7 @@ afterEach(() => {
 /** A card payment of 100.00 whose first refund of 30.00 the provider accepts and holds `pending`. */
 const pendingRefund = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 50 });
+    const product = await createProduct({ price: '50.00' });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     await payByCard(order, user);
     await settleOutboxNudges();
@@ -49,7 +49,7 @@ const pendingRefund = async () => {
     const providerRef = String(before?.providerRef);
     setFakeRefundPending(providerRef, true);
     const answer = await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
-        amount: 30
+        amount: '30.00'
     });
     const payment = await paymentRepository.findByOrderId(orderId);
     if (!payment) throw new Error('no payment');

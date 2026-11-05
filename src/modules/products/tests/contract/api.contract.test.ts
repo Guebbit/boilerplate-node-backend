@@ -206,9 +206,9 @@ const titlesOf = (response: { body: { items: { title: string }[] } }) =>
 
 describe('sort — GET /products?sort= and POST /products/search { sort }', () => {
     beforeEach(async () => {
-        await createProduct({ title: 'banana', price: 5 });
-        await createProduct({ title: 'Apple', price: 9 });
-        await createProduct({ title: 'cherry', price: 5 });
+        await createProduct({ title: 'banana', price: '5.00' });
+        await createProduct({ title: 'Apple', price: '9.00' });
+        await createProduct({ title: 'cherry', price: '5.00' });
     });
 
     it('orders by one field, descending with a "-" prefix', async () => {

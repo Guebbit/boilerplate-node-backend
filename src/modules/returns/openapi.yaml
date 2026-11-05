@@ -532,9 +532,7 @@ components:
                     type: string
                     description: The product's title as the order froze it.
                 unitPrice:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: The gross unit price the order froze.
                 restocked:
                     type: integer
@@ -651,16 +649,12 @@ components:
                         closed. `replace` and `repair` close the return with no money moving and hand its
                         units back to the buyer, so they are returnable again.
                 handlingDeduction:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: >-
                         An amount kept back from the refund for handling damage (Art. 14(2)),
                         entered when the goods were received. Absent when nothing was kept.
                 refundAmount:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: What the customer is owed for this return, fixed when the goods were received.
                 closedAt:
                     type: string
@@ -743,9 +737,7 @@ components:
                         What the buyer is given. Absent means `refund`. `replace` and `repair` are for a
                         `defective` or `wrong_item` return only (422 `RETURN_REMEDY_INVALID` otherwise).
                 handlingDeduction:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: >-
                         Handling damage to keep back from the refund (Art. 14(2)), a decimal in the
                         return's currency. Absent means none. More than the refund is worth is refused,
@@ -857,14 +849,10 @@ components:
                     items:
                         $ref: '#/components/schemas/CancelOptionLine'
                 refundAmount:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: What the cancel would refund, in `ReturnOptions.currency` — the lines plus `shippingRefund`.
                 shippingRefund:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: The delivery inside `refundAmount` — non-zero only when this cancel takes the last unit of the order.
                 cancel:
                     type: boolean

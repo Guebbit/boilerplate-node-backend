@@ -228,7 +228,7 @@ const namedProducts = [
         id: SEED_PRODUCT_IDS.dogFoodStandard,
         title: NAMED_PRODUCT_COPY.dogFoodStandard.en.title,
         description: NAMED_PRODUCT_COPY.dogFoodStandard.en.description,
-        price: 68,
+        price: '68.00',
         categories: ['dogs', 'food'],
         tags: ['dog-food', 'premium'],
         ...productImages.dogFoodStandard
@@ -242,7 +242,7 @@ const namedProducts = [
         id: SEED_PRODUCT_IDS.heaterSoftDeleted,
         title: NAMED_PRODUCT_COPY.heaterSoftDeleted.en.title,
         description: NAMED_PRODUCT_COPY.heaterSoftDeleted.en.description,
-        price: 55,
+        price: '55.00',
         categories: ['reptiles'],
         tags: ['heating', 'reptile'],
         deletedAt: '2024-02-26T23:34:44.832Z',
@@ -259,7 +259,7 @@ const namedProducts = [
         id: SEED_PRODUCT_IDS.scratchPostOutOfStock,
         title: NAMED_PRODUCT_COPY.scratchPostOutOfStock.en.title,
         description: NAMED_PRODUCT_COPY.scratchPostOutOfStock.en.description,
-        price: 45,
+        price: '45.00',
         categories: ['cats'],
         tags: ['scratching-post', 'heavy-duty'],
         ...productImages.scratchPostOutOfStock
@@ -268,7 +268,7 @@ const namedProducts = [
         id: SEED_PRODUCT_IDS.dogBedPremium,
         title: NAMED_PRODUCT_COPY.dogBedPremium.en.title,
         description: NAMED_PRODUCT_COPY.dogBedPremium.en.description,
-        price: 84,
+        price: '84.00',
         categories: ['dogs'],
         tags: ['dog-bed', 'premium'],
         ...productImages.dogBedPremium
@@ -279,7 +279,7 @@ const namedProducts = [
         id: SEED_PRODUCT_IDS.bundleInactive,
         title: NAMED_PRODUCT_COPY.bundleInactive.en.title,
         description: NAMED_PRODUCT_COPY.bundleInactive.en.description,
-        price: 96,
+        price: '96.00',
         categories: ['rabbits', 'bundles'],
         tags: ['bundle', 'rabbit'],
         active: false,
@@ -294,7 +294,7 @@ const namedProducts = [
         id: SEED_PRODUCT_IDS.bedOffSale,
         title: NAMED_PRODUCT_COPY.bedOffSale.en.title,
         description: NAMED_PRODUCT_COPY.bedOffSale.en.description,
-        price: 120,
+        price: '120.00',
         categories: ['dogs', 'seasonal'],
         tags: ['dog-bed', 'heated'],
         purchasable: false
@@ -308,7 +308,7 @@ const namedProducts = [
     makeUnstockedProduct({
         id: SEED_PRODUCT_IDS.barebones,
         title: NAMED_PRODUCT_COPY.barebones.en.title,
-        price: 9
+        price: '9.00'
     }),
     /*
      * The digital one — `requiresShipping: false`, the flag `cart`/`orders`/`delivery`'s
@@ -319,7 +319,7 @@ const namedProducts = [
         id: SEED_PRODUCT_IDS.puppyCourseDigital,
         title: NAMED_PRODUCT_COPY.puppyCourseDigital.en.title,
         description: NAMED_PRODUCT_COPY.puppyCourseDigital.en.description,
-        price: 29,
+        price: '29.00',
         categories: ['dogs', 'training'],
         tags: ['digital', 'training'],
         requiresShipping: false
@@ -332,7 +332,7 @@ const namedProducts = [
         id: SEED_PRODUCT_IDS.bowlLowStock,
         title: NAMED_PRODUCT_COPY.bowlLowStock.en.title,
         description: NAMED_PRODUCT_COPY.bowlLowStock.en.description,
-        price: 24,
+        price: '24.00',
         categories: ['dogs', 'limited-edition'],
         tags: ['bowl', 'limited'],
         weight: 400
@@ -345,7 +345,7 @@ const namedProducts = [
         id: SEED_PRODUCT_IDS.bowlNoWithdrawal,
         title: NAMED_PRODUCT_COPY.bowlNoWithdrawal.en.title,
         description: NAMED_PRODUCT_COPY.bowlNoWithdrawal.en.description,
-        price: 80,
+        price: '80.00',
         categories: ['dogs', 'personalised'],
         tags: ['bowl', 'personalised'],
         weight: 900,
@@ -360,7 +360,7 @@ const namedProducts = [
         id: SEED_PRODUCT_IDS.catTreeHeavy,
         title: NAMED_PRODUCT_COPY.catTreeHeavy.en.title,
         description: NAMED_PRODUCT_COPY.catTreeHeavy.en.description,
-        price: 40,
+        price: '40.00',
         categories: ['cats'],
         tags: ['cat-tree', 'heavy'],
         weight: 12_000

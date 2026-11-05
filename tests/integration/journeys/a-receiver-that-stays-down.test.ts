@@ -56,7 +56,7 @@ it('switches itself off after five dead chains and three failing days, then star
     const endpoint = await startWebhookReceiver();
     receiver = endpoint;
     endpoint.answerWith(500);
-    const product = await createProduct({ price: 20, onHand: 20 });
+    const product = await createProduct({ price: '20.00', onHand: 20 });
     const productId = String(product._id);
     const { user: admin } = await authenticateAs('admin');
     const subscribed = await api()

@@ -34,7 +34,7 @@ afterEach(() => {
 
 /** A refund record as the schema wants it, with the fields a case varies. */
 const refundRecord = (overrides: Record<string, unknown> = {}) => ({
-    amount: 10,
+    amount: '10.00',
     currency: 'EUR',
     status: 'succeeded',
     reason: 'goodwill',
@@ -52,18 +52,18 @@ let sequence = 0;
 const seedPayment = async (overrides: Record<string, unknown> = {}) => {
     sequence += 1;
     const user = await createUser({ email: `payer${String(sequence)}@example.com` });
-    const product = await createProduct({ price: 50 });
+    const product = await createProduct({ price: '50.00' });
     const order = await createOrder(user, [toOrderItem(product, 1)]);
     const payment = await paymentModel.create({
         orderId: order._id,
         userId: user._id,
-        amount: 50,
+        amount: '50.00',
         currency: 'EUR',
         status: 'succeeded',
         provider: 'fake',
         providerRef: `fake_pi_${String(order._id)}`,
         method: 'card',
-        amountRefunded: 0,
+        amountRefunded: '0.00',
         refunds: [],
         ...overrides
     });
@@ -92,7 +92,7 @@ const idsOf = (filters: Parameters<typeof paymentService.listPayments>[0]): Prom
 /** A payment whose one refund failed `hoursAgo` hours ago — a stale-refund problem. */
 const staleRefund = (hoursAgo: number) =>
     seedPayment({
-        amountRefunded: 10,
+        amountRefunded: '10.00',
         refunds: [
             refundRecord({
                 status: 'failed',
@@ -113,15 +113,15 @@ const seedEveryLabel = async (): Promise<Map<PaymentDisplayStatus, string>> => {
         [PaymentDisplayStatus.succeeded, {}],
         [
             PaymentDisplayStatus.refund_pending,
-            { amountRefunded: 10, refunds: [refundRecord({ status: 'pending' })] }
+            { amountRefunded: '10.00', refunds: [refundRecord({ status: 'pending' })] }
         ],
         [
             PaymentDisplayStatus.partially_refunded,
-            { amountRefunded: 10, refunds: [refundRecord()] }
+            { amountRefunded: '10.00', refunds: [refundRecord()] }
         ],
         [
             PaymentDisplayStatus.refunded,
-            { amountRefunded: 50, refunds: [refundRecord({ amount: 50 })] }
+            { amountRefunded: '50.00', refunds: [refundRecord({ amount: '50.00' })] }
         ],
         [PaymentDisplayStatus.failed, { status: 'declined' }],
         [PaymentDisplayStatus.canceled, { status: 'canceled' }]
@@ -152,16 +152,16 @@ describe('listPayments rows carry the actions of the caller', () => {
         const open = await seedPayment();
         const declined = await seedPayment({ status: 'declined' });
         const returned = await seedPayment({
-            amountRefunded: 50,
-            refunds: [refundRecord({ amount: 50 })]
+            amountRefunded: '50.00',
+            refunds: [refundRecord({ amount: '50.00' })]
         });
 
-        const waiting = refundRecord({ amount: 20, status: 'pending' });
+        const waiting = refundRecord({ amount: '20.00', status: 'pending' });
         const byHand = await seedPayment({
             provider: 'manual',
             providerRef: undefined,
             method: 'cash',
-            amountRefunded: 20,
+            amountRefunded: '20.00',
             refunds: [waiting]
         });
 
@@ -205,9 +205,9 @@ describe('listPayments rows carry the actions of the caller', () => {
 
 describe('listPayments filters and sort', () => {
     it('narrows by method, provider, amount range, order id and reference', async () => {
-        const card = await seedPayment({ amount: 50 });
+        const card = await seedPayment({ amount: '50.00' });
         const cash = await seedPayment({
-            amount: 120,
+            amount: '120.00',
             method: 'cash',
             provider: 'manual',
             providerRef: undefined,
@@ -216,8 +216,8 @@ describe('listPayments filters and sort', () => {
 
         expect(await idsOf({ method: 'cash' })).toEqual([String(cash.payment._id)]);
         expect(await idsOf({ provider: 'fake' })).toEqual([String(card.payment._id)]);
-        expect(await idsOf({ amountMin: 100 })).toEqual([String(cash.payment._id)]);
-        expect(await idsOf({ amountMax: 60 })).toEqual([String(card.payment._id)]);
+        expect(await idsOf({ amountMin: '100.00' })).toEqual([String(cash.payment._id)]);
+        expect(await idsOf({ amountMax: '60.00' })).toEqual([String(card.payment._id)]);
         expect(await idsOf({ orderId: String(card.order._id) })).toEqual([
             String(card.payment._id)
         ]);
@@ -246,15 +246,15 @@ describe('listPayments filters and sort', () => {
     });
 
     it('sorts by amount, either way', async () => {
-        await seedPayment({ amount: 30 });
-        await seedPayment({ amount: 90 });
-        await seedPayment({ amount: 60 });
+        await seedPayment({ amount: '30.00' });
+        await seedPayment({ amount: '90.00' });
+        await seedPayment({ amount: '60.00' });
 
         const asc = await paymentService.listPayments({ sort: ['amount'] }, asAdmin());
         const desc = await paymentService.listPayments({ sort: ['-amount'] }, asAdmin());
 
-        expect(asc.items.map((item) => item.amount)).toEqual([30, 60, 90]);
-        expect(desc.items.map((item) => item.amount)).toEqual([90, 60, 30]);
+        expect(asc.items.map((item) => item.amount)).toEqual(['30.00', '60.00', '90.00']);
+        expect(desc.items.map((item) => item.amount)).toEqual(['90.00', '60.00', '30.00']);
     });
 
     it('sorts by the transfer deadline, a payment with none counting as the earliest', async () => {
@@ -285,7 +285,7 @@ describe('listPayments filters and sort', () => {
 describe('what each audience is sent', () => {
     it('gives staff the provider ids and a failure reason, and the payer none of them', async () => {
         const { user, order } = await seedPayment({
-            amountRefunded: 10,
+            amountRefunded: '10.00',
             refunds: [
                 refundRecord({
                     status: 'failed',
@@ -318,19 +318,19 @@ describe('what each audience is sent', () => {
 describe('listRefunds', () => {
     it('lists one row per refund across payments, newest first, filtered', async () => {
         const first = await seedPayment({
-            amountRefunded: 10,
+            amountRefunded: '10.00',
             refunds: [refundRecord({ createdAt: new Date('2026-03-01T00:00:00Z') })]
         });
         const second = await seedPayment({
-            amountRefunded: 30,
+            amountRefunded: '30.00',
             refunds: [
                 refundRecord({
                     status: 'failed',
                     reason: 'return',
-                    amount: 20,
+                    amount: '20.00',
                     createdAt: new Date('2026-04-01T00:00:00Z')
                 }),
-                refundRecord({ amount: 10, createdAt: new Date('2026-02-01T00:00:00Z') })
+                refundRecord({ amount: '10.00', createdAt: new Date('2026-02-01T00:00:00Z') })
             ]
         });
 
@@ -361,7 +361,7 @@ describe('listAttention', () => {
     it('lists a stale provider refund, and drops it once the sweep has finished it', () =>
         withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { payment } = await seedPayment({
-                amountRefunded: 10,
+                amountRefunded: '10.00',
                 refunds: [
                     refundRecord({
                         status: 'failed',
@@ -407,7 +407,7 @@ describe('listAttention', () => {
     );
 
     it('leaves a refund still inside the threshold alone', async () => {
-        await seedPayment({ amountRefunded: 10, refunds: [refundRecord({ status: 'pending' })] });
+        await seedPayment({ amountRefunded: '10.00', refunds: [refundRecord({ status: 'pending' })] });
 
         expect(await attentionRows()).toEqual([]);
     });
@@ -417,8 +417,8 @@ describe('listAttention', () => {
             provider: 'manual',
             providerRef: undefined,
             method: 'cash',
-            amountRefunded: 50,
-            refunds: [refundRecord({ amount: 50, status: 'pending' })]
+            amountRefunded: '50.00',
+            refunds: [refundRecord({ amount: '50.00', status: 'pending' })]
         });
 
         expect(await attentionRows()).toEqual([
@@ -446,7 +446,7 @@ describe('listAttention', () => {
             expect.objectContaining({
                 kind: 'manual_refund_owed',
                 orderId,
-                amount: 50,
+                amount: '50.00',
                 currency: 'EUR'
             })
         ]);
@@ -464,21 +464,21 @@ describe('listAttention', () => {
 
 describe('methodMix', () => {
     it('groups the payments that took money by method and provider, and skips the rest', async () => {
-        await seedPayment({ amount: 50 });
+        await seedPayment({ amount: '50.00' });
         await seedPayment({
-            amount: 30,
-            amountRefunded: 30,
-            refunds: [refundRecord({ amount: 30 })]
+            amount: '30.00',
+            amountRefunded: '30.00',
+            refunds: [refundRecord({ amount: '30.00' })]
         });
         await seedPayment({
-            amount: 20,
+            amount: '20.00',
             method: 'cash',
             provider: 'manual',
             providerRef: undefined
         });
         // Never took money.
-        await seedPayment({ amount: 99, status: 'declined' });
-        await seedPayment({ amount: 99, status: 'requires_confirmation' });
+        await seedPayment({ amount: '99.00', status: 'declined' });
+        await seedPayment({ amount: '99.00', status: 'requires_confirmation' });
 
         const rows = await paymentService.methodMix({
             from: new Date(Date.now() - 3_600_000),

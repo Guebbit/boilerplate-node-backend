@@ -43,7 +43,7 @@ afterEach(() => resetDomainEvents());
 /** An order of 3 units, held and committed, `processing` — nothing shipped yet. */
 const processingOrder = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 10, onHand: 10 });
+    const product = await createProduct({ price: '10.00', onHand: 10 });
     const order = await createOrder(user, [toOrderItem(product, 3)], {
         status: OrderStatus.processing
     });

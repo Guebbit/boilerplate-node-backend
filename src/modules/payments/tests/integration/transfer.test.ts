@@ -65,13 +65,13 @@ const lapse = async (orderId: string) => {
 
 describe('opening the transfer payment', () => {
     it('opens a waiting, hand-recorded payment for the order total, with the reference and the deadline', async () => {
-        const { order, payment, reference } = await transferOrder({ price: 20 });
+        const { order, payment, reference } = await transferOrder({ price: '20.00' });
 
         expect(payment).toMatchObject({
             status: 'requires_action',
             method: 'bank_transfer',
             provider: 'manual',
-            amount: 20,
+            amount: '20.00',
             currency: order.currency,
             transferReference: reference
         });
@@ -251,7 +251,7 @@ describe('a transfer nobody sent', () => {
 
 describe('a transfer that lands after its order was canceled', () => {
     it('is still matched by its reference, recorded onto the closed payment, and owed straight back', async () => {
-        const { order, reference } = await transferOrder({ price: 20 });
+        const { order, reference } = await transferOrder({ price: '20.00' });
         await lapse(String(order._id));
         const audited: AuditEntry[] = [];
         registerAuditSink((entry) => audited.push(entry));
@@ -272,7 +272,7 @@ describe('a transfer that lands after its order was canceled', () => {
         // The money is real: it is recorded, not refused, and the answer is the payment itself.
         expect(recorded.success).toBe(true);
         const payment = await paymentOf(String(order._id));
-        expect(payment).toMatchObject({ status: 'succeeded', amountRefunded: 20 });
+        expect(payment).toMatchObject({ status: 'succeeded', amountRefunded: '20.00' });
         // A hand-paid refund is returned by an operator off-system: the record stays open.
         expect(payment?.refunds).toHaveLength(1);
         expect(payment?.refunds[0].status).not.toBe('succeeded');
@@ -281,7 +281,7 @@ describe('a transfer that lands after its order was canceled', () => {
         expect(owed).toHaveLength(1);
         expect(owed[0].metadata).toMatchObject({
             refundId: String(payment?.refunds[0]._id),
-            amount: 20,
+            amount: '20.00',
             reason: 'late_payment'
         });
         expect(owed[0].actorUserId).toBeDefined();

@@ -25,7 +25,7 @@ import {
     addMoney,
     apportion,
     scaleMoney,
-    toDecimalAmount,
+    toDecimalString,
     toMinorUnits,
     NO_MONEY,
     type Money
@@ -35,18 +35,18 @@ import {
 export interface CreditableInvoice {
     currency: string;
     /** The invoice's lines; `productId` is how returned goods find the rate they were sold at. */
-    lines: readonly { productId?: string | undefined; unitPrice: number; taxRate: number }[];
+    lines: readonly { productId?: string | undefined; unitPrice: string; taxRate: number }[];
     /** Delivery's own slice of the summary, per rate. */
-    shippingByRate: readonly { rate: number; grossAmount: number }[];
+    shippingByRate: readonly { rate: number; grossAmount: string }[];
     /** One row per distinct VAT rate the invoice charged. */
-    taxSummary: readonly { rate: number; grossAmount: number }[];
+    taxSummary: readonly { rate: number; grossAmount: string }[];
 }
 
 /** The goods and delivery a refund pays back — `PAYMENT_REFUNDED`'s `goods`. */
 export interface RefundedGoods {
     lines: readonly { productId: string; quantity: number }[];
     /** The delivery cost inside the refund, a decimal. */
-    shipping: number;
+    shipping: string;
 }
 
 /** One line of a partial credit note: a share of the refund, at one rate the invoice charged. */
@@ -54,7 +54,7 @@ export interface CreditLine {
     title: string;
     quantity: 1;
     /** Gross (VAT-inclusive) amount of this share. */
-    unitPrice: number;
+    unitPrice: string;
     /** The decimal VAT rate this share is credited at. */
     taxRate: number;
 }
@@ -100,7 +100,7 @@ const goodsWeights = (invoice: CreditableInvoice, goods: RefundedGoods): Money[]
  */
 export const creditShares = (
     invoice: CreditableInvoice,
-    amount: number,
+    amount: string,
     lineTitle: string,
     goods?: RefundedGoods
 ): CreditLine[] => {
@@ -117,7 +117,7 @@ export const creditShares = (
                   {
                       title: lineTitle,
                       quantity: 1,
-                      unitPrice: toDecimalAmount(shares[index], currency),
+                      unitPrice: toDecimalString(shares[index], currency),
                       taxRate: row.rate
                   }
               ]

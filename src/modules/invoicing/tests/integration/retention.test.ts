@@ -44,7 +44,7 @@ afterEach(() => {
 /** A paid order's invoice, with a buyer block, issued at `issuedAt` in `timezone`. */
 const invoiceIssuedAt = async (issuedAt: string, timezone = 'Europe/Rome') => {
     const user = await createUser();
-    const product = await createProduct({ price: 10 });
+    const product = await createProduct({ price: '10.00' });
     const order = await createOrder(user, [toOrderItem(product, 1)], {
         billingAddress: {
             fullName: 'Ada Lovelace',
@@ -130,7 +130,7 @@ describe('reap:invoices', () => {
         const note = await issueCreditNote({
             orderId,
             refundId: 'refund-1',
-            amount: 5,
+            amount: '5.00',
             full: false
         });
         await creditNoteModel.updateOne(

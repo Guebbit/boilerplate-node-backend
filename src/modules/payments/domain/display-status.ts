@@ -21,8 +21,8 @@ import { OPEN_REFUND_STATUSES, isOpenRefund } from './lifecycle';
 /** The slice of a payment the label reads. */
 export interface DisplayStatusInput {
     status: PaymentStatus;
-    amount: number;
-    amountRefunded: number;
+    amount: string;
+    amountRefunded: string;
     currency: string;
     refunds: readonly { status: RefundStatus; failureReason?: RefundFailureReason }[];
 }

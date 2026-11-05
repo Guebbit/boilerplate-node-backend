@@ -145,11 +145,11 @@ describe('imageUrl is never a client-named path', () => {
             const target = await api()
                 .post('/products')
                 .set('Authorization', adminBearer)
-                .send({ price: 1, translations: { en: { title: 'Target' } } });
+                .send({ price: '1.00', translations: { en: { title: 'Target' } } });
             const url = label.startsWith('POST') ? '/products' : `/products/${target.body.id}`;
             const method = label.split(' ', 1)[0].toLowerCase() as 'post' | 'put' | 'patch';
             const full = {
-                price: 1,
+                price: '1.00',
                 translations: { en: { title: 'Attempt' } },
                 active: true,
                 purchasable: true,

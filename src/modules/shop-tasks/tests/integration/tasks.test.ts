@@ -72,7 +72,7 @@ const REFUND = {
     paymentId: PAYMENT,
     orderId: ORDER,
     refundId: 'ref1',
-    amount: 10,
+    amount: '10.00',
     currency: 'EUR'
 };
 const REVERSAL: DomainEventMap['payment.refund_reversed'] = {
@@ -86,7 +86,7 @@ const DISPUTE: DomainEventMap['payment.dispute_opened'] = {
     kind: 'chargeback',
     status: 'needs_response',
     reason: 'fraudulent',
-    amount: 10,
+    amount: '10.00',
     currency: 'EUR',
     fundsWithdrawn: true,
     evidenceDueBy: '2031-01-10T00:00:00.000Z'

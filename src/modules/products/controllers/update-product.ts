@@ -31,7 +31,7 @@ export const { replace: replaceProduct, update: updateProduct } = createUpdateCo
     // outside the schema — `readUploadedImage`, inside `writeWithUploadedImage`, reads it).
     input: {
         booleans: ['active', 'purchasable', 'allowBackorder', 'requiresShipping', 'noWithdrawal'],
-        numbers: ['price', 'weight'],
+        numbers: ['weight'],
         stringArrays: ['categories', 'tags'],
         jsonFields: ['translations']
     },

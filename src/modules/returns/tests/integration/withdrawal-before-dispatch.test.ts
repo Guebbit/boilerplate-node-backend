@@ -45,8 +45,8 @@ afterEach(() => resetDomainEvents());
 /** A customer who bought a shirt (30.00) and a mug (10.00), and paid for it by card. */
 const paidOrder = async () => {
     const user = await createUser({ email: 'withdrawer@example.com' });
-    const shirt = await createProduct({ title: 'Shirt', price: 30, onHand: 10 });
-    const mug = await createProduct({ title: 'Mug', price: 10, onHand: 10 });
+    const shirt = await createProduct({ title: 'Shirt', price: '30.00', onHand: 10 });
+    const mug = await createProduct({ title: 'Mug', price: '10.00', onHand: 10 });
     const order = await createOrder(user, [toOrderItem(shirt, 1), toOrderItem(mug, 1)]);
     const orderId = String(order._id);
     await inventoryService.reserveForOrder(orderId, [
@@ -62,7 +62,7 @@ const paidOrder = async () => {
 describe('a withdrawal before dispatch on a paid order', () => {
     it('refunds the payment once, issues its credit note, and writes the return closed', async () => {
         const { user, orderId } = await paidOrder();
-        const refunds: { returnId?: string; amount: number; full: boolean }[] = [];
+        const refunds: { returnId?: string; amount: string; full: boolean }[] = [];
         onDomainEvent(PAYMENT_REFUNDED, (payload) => void refunds.push(payload));
 
         const outcome = await returnService.createReturn(
@@ -80,16 +80,16 @@ describe('a withdrawal before dispatch on a paid order', () => {
         expect(payment.success && payment.data).toMatchObject({
             status: 'succeeded',
             displayStatus: 'refunded',
-            amountRefunded: 40
+            amountRefunded: '40.00'
         });
         const [written] = await returnRepository.findByOrderId(orderId);
-        expect(written).toMatchObject({ status: 'closed', refundAmount: 40, lines: [] });
+        expect(written).toMatchObject({ status: 'closed', refundAmount: '40.00', lines: [] });
 
         // Both listeners of the one event run inside the relay pass; the drain waits for both.
         await settleOutboxNudges();
         // The refund is the order's own, not the return's: it carries no `returnId`, and the
         // return — closed already — is not closed a second time by it.
-        expect(refunds).toEqual([expect.objectContaining({ amount: 40, full: true })]);
+        expect(refunds).toEqual([expect.objectContaining({ amount: '40.00', full: true })]);
         expect(refunds[0].returnId).toBeUndefined();
         const notes = await invoicingService.findCreditNotesForOrder(orderId);
         expect(notes).toHaveLength(1);

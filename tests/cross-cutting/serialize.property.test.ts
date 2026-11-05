@@ -24,7 +24,7 @@ import { applySerialization, type SerializeTransform } from '@infrastructure/per
 const RUN = { seed: 20_260_809, numRuns: 300, endOnFailure: true } as const;
 
 /** A stand-in for the one method the wiring touches — see `SerializableSchema` in the source. */
-const fakeSchema = () => ({ set: () => 0 });
+const fakeSchema = () => ({ set: () => 0, eachPath: () => undefined });
 
 /** Build a transform without needing a real Mongoose schema. */
 const buildTransform = (options?: Parameters<typeof applySerialization>[1]): SerializeTransform =>

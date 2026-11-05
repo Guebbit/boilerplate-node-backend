@@ -57,7 +57,7 @@ const GOOD_METHOD = 'pm_card_visa';
 /** One customer, one 2-unit order at 25.00 each (50.00), an intent opened, nothing confirmed. */
 const openIntent = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 25, onHand: 10 });
+    const product = await createProduct({ price: '25.00', onHand: 10 });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     const orderId = String(order._id);
     const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
@@ -73,7 +73,7 @@ const openIntent = async () => {
 
 /** What the provider can collect wrongly, one field at a time. */
 const MISMATCHES = [
-    ['amount', { amountReceived: 1 }],
+    ['amount', { amountReceived: '1.00' }],
     ['currency', { currency: 'USD' }],
     ['paymentId', { paymentId: '65dc8a99604c307b702b5ccc' }]
 ] as const;
@@ -119,7 +119,7 @@ describe.each(MISMATCHES)('a provider success whose %s is not the one frozen', (
 describe('a mismatch recorded', () => {
     it('writes what ARRIVED over the frozen figures, so the refund returns what was collected', async () => {
         const { user, orderId, paymentId, providerRef } = await openIntent();
-        setFakeReceipt(providerRef, { amountReceived: 47.5 });
+        setFakeReceipt(providerRef, { amountReceived: '47.50' });
 
         await paymentService.confirmPayment(
             paymentId,
@@ -129,13 +129,13 @@ describe('a mismatch recorded', () => {
         );
 
         const payment = await paymentRepository.findByOrderId(orderId);
-        expect(payment!.amount).toBe(47.5);
-        expect(payment!.refunds[0].amount).toBe(47.5);
+        expect(payment!.amount).toBe('47.50');
+        expect(payment!.refunds[0].amount).toBe('47.50');
     });
 
     it('keeps the canceled order from a hard delete: a payment and a refund point at it', async () => {
         const { user, orderId, paymentId, providerRef } = await openIntent();
-        setFakeReceipt(providerRef, { amountReceived: 1 });
+        setFakeReceipt(providerRef, { amountReceived: '1.00' });
         await paymentService.confirmPayment(
             paymentId,
             GOOD_METHOD,
@@ -178,7 +178,7 @@ describe('a mismatch recorded', () => {
 
     it('does not spend a decline: the order-not-payable answer is not PAYMENT_DECLINED', async () => {
         const { user, paymentId, providerRef } = await openIntent();
-        setFakeReceipt(providerRef, { amountReceived: 1 });
+        setFakeReceipt(providerRef, { amountReceived: '1.00' });
 
         const result = await paymentService.confirmPayment(
             paymentId,
@@ -195,7 +195,7 @@ describe('the other doors into the same settlement', () => {
     it('answers the sync 409 when the browser reports a mismatched success', async () => {
         const { user, orderId, paymentId, providerRef } = await openIntent();
         await fakePaymentProvider.confirm(providerRef, GOOD_METHOD);
-        setFakeReceipt(providerRef, { amountReceived: 1 });
+        setFakeReceipt(providerRef, { amountReceived: '1.00' });
 
         const result = await paymentService.syncPayment(
             paymentId,
@@ -211,7 +211,7 @@ describe('the other doors into the same settlement', () => {
     it('acknowledges the webhook delivery, and still cancels and refunds', async () => {
         const { orderId, providerRef } = await openIntent();
         await fakePaymentProvider.confirm(providerRef, GOOD_METHOD);
-        setFakeReceipt(providerRef, { amountReceived: 1 });
+        setFakeReceipt(providerRef, { amountReceived: '1.00' });
 
         await expect(
             paymentService.applyWebhookDelivery({ id: 'evt_mismatch', providerRef }, 'fake')
@@ -257,7 +257,7 @@ describe('a matching success', () => {
 
     it('tolerates float noise: 50.000000001 collected for 50.00 frozen is the same minor units', async () => {
         const { user, orderId, paymentId, providerRef } = await openIntent();
-        setFakeReceipt(providerRef, { amountReceived: 50 + 1e-9 });
+        setFakeReceipt(providerRef, { amountReceived: '50.000000001' });
 
         const result = await paymentService.confirmPayment(
             paymentId,
@@ -274,7 +274,7 @@ describe('a matching success', () => {
 describe('a crash after the mismatch was recorded', () => {
     it('is finished by the reservation-expiry cancel: the order cancels and the money returns', async () => {
         const { user, orderId, paymentId, providerRef } = await openIntent();
-        setFakeReceipt(providerRef, { amountReceived: 1 });
+        setFakeReceipt(providerRef, { amountReceived: '1.00' });
         // The process dies between the payment write and the cancel: the cancel never runs.
         jest.spyOn(orderService, 'cancelForPaymentMismatchById').mockRejectedValueOnce(
             new Error('process died')
@@ -306,7 +306,7 @@ describe('a crash after the mismatch was recorded', () => {
 
     it('puts the money back directly when the cancel is refused, instead of keeping it', async () => {
         const { user, orderId, paymentId, providerRef } = await openIntent();
-        setFakeReceipt(providerRef, { amountReceived: 1 });
+        setFakeReceipt(providerRef, { amountReceived: '1.00' });
         // The order moved on by itself an instant before: the cancel finds nothing to cancel.
         jest.spyOn(orderService, 'cancelForPaymentMismatchById').mockResolvedValueOnce(
             generateReject(409, [

@@ -19,7 +19,7 @@ export interface Line {
 
 /** The part of `GET /cart` a checkout needs: the total the screen shows. */
 interface CartSummaryData {
-    summary: { totalPrice: number; currency: string };
+    summary: { totalPrice: string; currency: string };
 }
 
 /** What `POST /cart/checkout` answers with — the created order itself. Only the id is ever read. */
@@ -110,7 +110,7 @@ export const checkout = async (
     // What the cart screen would show right before the press, named back as the contract requires.
     const { summary } = await caller.call<CartSummaryData>('GET', '/cart');
     const expectedTotal = {
-        amount: Math.round(summary.totalPrice * 100),
+        amount: summary.totalPrice,
         currency: summary.currency
     };
     const order = await caller.call<CheckoutData>('POST', '/cart/checkout', {

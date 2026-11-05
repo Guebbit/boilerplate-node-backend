@@ -41,14 +41,14 @@ afterEach(() => {
 /** A card payment of 100.00 whose first refund of 30.00 the provider refuses with `reason`. */
 const refusedRefund = async (reason: RefundFailureReason) => {
     const user = await createUser();
-    const product = await createProduct({ price: 50 });
+    const product = await createProduct({ price: '50.00' });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     await payByCard(order, user);
     await settleOutboxNudges();
     const orderId = String(order._id);
     const before = await paymentRepository.findByOrderId(orderId);
     setFakeRefundFailure(String(before?.providerRef), reason);
-    await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: 30 });
+    await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: '30.00' });
     const payment = await paymentRepository.findByOrderId(orderId);
     if (!payment) throw new Error('no payment');
     return { orderId, payment, refundId: String(payment.refunds[0]._id) };

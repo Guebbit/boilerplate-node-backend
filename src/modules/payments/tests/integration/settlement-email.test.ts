@@ -43,7 +43,7 @@ const GOOD_METHOD = 'pm_card_visa';
 /** One customer with one order, ready to pay for it. */
 const orderFor = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 25 });
+    const product = await createProduct({ price: '25.00' });
     const order = await createOrder(user, [toOrderItem(product, 1)]);
     return { user, order };
 };

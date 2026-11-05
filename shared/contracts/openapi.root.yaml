@@ -754,6 +754,26 @@ components:
             maxLength: 3
             pattern: '^[A-Z]{3}$'
             description: ISO 4217 alphabetic currency code, upper case (e.g. `EUR`)
+        # Money on the wire: text at the currency's own ISO 4217 places ("19.90" EUR, "1000" JPY,
+        # "1.500" KWD). Exact in every language; two equal amounts are equal strings. Rates stay numbers.
+        DecimalAmount:
+            type: string
+            format: decimal
+            pattern: '^-?\d+(\.\d+)?$'
+            examples: ['19.90']
+            description: >-
+                A money amount as a plain decimal string at the places of the currency it is priced
+                in (`"19.90"` for EUR, `"1000"` for JPY, `"1.500"` for KWD). May be negative where
+                the field says it is a signed figure.
+        # The same amount where a negative value makes no sense; a string cannot carry `minimum`.
+        NonNegativeDecimalAmount:
+            type: string
+            format: decimal
+            pattern: '^\d+(\.\d+)?$'
+            examples: ['19.90']
+            description: >-
+                A non-negative money amount as a plain decimal string at the places of the
+                currency it is priced in (`"19.90"` for EUR, `"1000"` for JPY, `"1.500"` for KWD).
         Email:
             type: string
             maxLength: 254

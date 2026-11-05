@@ -42,7 +42,7 @@ const viewed = (): Entry[] =>
 const shopWithOrder = async () => {
     const customer = await authenticateAs('user');
     const admin = await authenticateAs('admin');
-    const product = await createProduct({ price: 20 });
+    const product = await createProduct({ price: '20.00' });
     const order = await createOrder(customer.user, [toOrderItem(product, 1)], {
         status: OrderStatus.processing
     });

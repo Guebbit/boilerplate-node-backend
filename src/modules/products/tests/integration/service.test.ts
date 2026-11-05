@@ -138,11 +138,11 @@ describe('productService.search', () => {
     });
 
     it('filters by minimum price', async () => {
-        await createProduct({ title: 'Cheap', price: 5, active: true });
-        await createProduct({ title: 'Expensive', price: 100, active: true });
+        await createProduct({ title: 'Cheap', price: '5.00', active: true });
+        await createProduct({ title: 'Expensive', price: '100.00', active: true });
 
         const result = await productService.search(
-            { priceMin: 50 },
+            { priceMin: '50.00' },
             productService.callerScope(GUEST)
         );
 
@@ -151,11 +151,11 @@ describe('productService.search', () => {
     });
 
     it('filters by maximum price', async () => {
-        await createProduct({ title: 'Cheap', price: 5, active: true });
-        await createProduct({ title: 'Expensive', price: 100, active: true });
+        await createProduct({ title: 'Cheap', price: '5.00', active: true });
+        await createProduct({ title: 'Expensive', price: '100.00', active: true });
 
         const result = await productService.search(
-            { priceMax: 10 },
+            { priceMax: '10.00' },
             productService.callerScope(GUEST)
         );
 
@@ -277,7 +277,7 @@ describe('productService.updateById', () => {
         const result = await productService.updateById(
             id,
             {
-                price: 49.99,
+                price: '49.99',
                 translations: { en: { title: 'Updated Title', description: 'New description' } }
             },
             testCallerContext
@@ -286,7 +286,7 @@ describe('productService.updateById', () => {
         expect(result.success).toBe(true);
         const updated = (result as { data: ProductDocument }).data;
         expect(updated.title).toBe('Updated Title');
-        expect(updated.price).toBe(49.99);
+        expect(updated.price).toBe('49.99');
         expect(updated.description).toBe('New description');
     });
 

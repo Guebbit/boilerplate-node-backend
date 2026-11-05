@@ -134,7 +134,7 @@ describe('GET /orders', () => {
 
         expect(order.totalItems).toBe(1);
         expect(order.totalQuantity).toBe(2);
-        expect(order.totalPrice).toBeGreaterThan(0);
+        expect(Number(order.totalPrice)).toBeGreaterThan(0);
         expect(order).not.toHaveProperty('total');
     });
 });

@@ -15,12 +15,11 @@ import { translator } from '@infrastructure/i18n';
 
 setupTestDb();
 
-/** The sentence a negative price answers with, rendered from the shipped English copy. */
+/** The sentence a negative price answers with (it is not a non-negative decimal), from the shipped English copy. */
 const fieldPriceMin = () => {
     const english = translator('en');
-    return english('validation.too-small-number', {
-        attribute: english('validation.attributes.price'),
-        minimum: '0'
+    return english('validation.invalid-format', {
+        attribute: english('validation.attributes.price')
     });
 };
 
@@ -50,7 +49,7 @@ describe('POST /products', () => {
             .post('/products')
             .set('Authorization', bearer)
             .send({
-                price: 24.9,
+                price: '24.90',
                 translations: { en: { title: 'Memory Foam Bed', description: 'Extra support' } }
             });
 
@@ -64,7 +63,7 @@ describe('POST /products', () => {
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .send({ price: 10, translations: { en: { title: 'Abcd' } } });
+            .send({ price: '10.00', translations: { en: { title: 'Abcd' } } });
 
         expect(response.status).toBe(422);
         expect(response.body.errors).toEqual([
@@ -76,13 +75,40 @@ describe('POST /products', () => {
     });
 
     it.each([
+        ['a JSON number', 10],
+        ['more places than EUR has', '10.005'],
+        ['not a decimal at all', 'ten']
+    ])('refuses a price that is %s: 422', async (_label, price) => {
+        const { bearer } = await authenticateAsRole('editor');
+
+        const response = await api()
+            .post('/products')
+            .set('Authorization', bearer)
+            .send({ price, translations: { en: { title: 'Memory Foam Bed' } } });
+
+        expect(response.status).toBe(422);
+    });
+
+    it('answers a price at the currency\'s places, whatever spelling it was sent in', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+
+        const response = await api()
+            .post('/products')
+            .set('Authorization', bearer)
+            .send({ price: '10.5', translations: { en: { title: 'Memory Foam Bed' } } });
+
+        expect(response.status).toBe(201);
+        expect(response.body.price).toBe('10.50');
+    });
+
+    it.each([
         [
             'a null locale',
-            { price: 10, translations: { en: { title: 'Memory Foam Bed' }, it: null } }
+            { price: '10.00', translations: { en: { title: 'Memory Foam Bed' }, it: null } }
         ],
         [
             'a null imageUrl',
-            { price: 10, translations: { en: { title: 'Memory Foam Bed' } }, imageUrl: null }
+            { price: '10.00', translations: { en: { title: 'Memory Foam Bed' } }, imageUrl: null }
         ]
     ])('refuses %s: a create has nothing to clear', async (_label, body) => {
         const { bearer } = await authenticateAsRole('editor');
@@ -98,7 +124,7 @@ describe('POST /products', () => {
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .send({ price: 10, translations: { en: { title: 'Memory Foam Bed' } } });
+            .send({ price: '10.00', translations: { en: { title: 'Memory Foam Bed' } } });
 
         expect(response.status).toBe(201);
         expect(response.body).not.toHaveProperty('description');
@@ -112,7 +138,7 @@ describe('POST /products', () => {
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .send({ price: 10, translations: {} });
+            .send({ price: '10.00', translations: {} });
 
         expect(response.status).toBe(422);
     });
@@ -129,7 +155,7 @@ describe('POST /products', () => {
             .post('/products')
             .set('Authorization', bearer)
             .send({
-                price: 12,
+                price: '12.00',
                 translations: { en: { title: 'Cedar Chew Toy', description: 'Durable' } }
             });
         const id = String(response.body.id);
@@ -166,7 +192,7 @@ describe('POST /products', () => {
             .post('/products')
             .set('Authorization', bearer)
             .send({
-                price: 12,
+                price: '12.00',
                 onHand: 7,
                 translations: { en: { title: 'Cedar Chew Toy', description: 'Durable' } }
             });
@@ -178,13 +204,13 @@ describe('POST /products', () => {
 describe('PUT /products/{id}', () => {
     it('matches the contract when replacing every writable field', async () => {
         const { bearer } = await authenticateAsRole('editor');
-        const product = await createProduct({ title: 'Bed', price: 10 });
+        const product = await createProduct({ title: 'Bed', price: '10.00' });
 
         const response = await api()
             .put(`/products/${String(product._id)}`)
             .set('Authorization', bearer)
             .send({
-                price: 15,
+                price: '15.00',
                 active: true,
                 purchasable: true,
                 requiresShipping: true,
@@ -196,7 +222,7 @@ describe('PUT /products/{id}', () => {
             });
 
         expect(response.status).toBe(200);
-        expect(response.body.price).toBe(15);
+        expect(response.body.price).toBe('15.00');
         expect(response.body.title).toBe('Bed, replaced');
     });
 
@@ -206,7 +232,7 @@ describe('PUT /products/{id}', () => {
         const { bearer } = await authenticateAsRole('editor');
         const product = await createProduct({
             title: 'Bed',
-            price: 10,
+            price: '10.00',
             releaseDate: new Date(Date.now() + 30 * 86_400_000).toISOString()
         });
         const before = await productRepository.findById(String(product._id));
@@ -216,7 +242,7 @@ describe('PUT /products/{id}', () => {
             .put(`/products/${String(product._id)}`)
             .set('Authorization', bearer)
             .send({
-                price: 10,
+                price: '10.00',
                 active: true,
                 purchasable: true,
                 requiresShipping: true,
@@ -239,9 +265,9 @@ describe('PUT /products/{id}', () => {
         'refuses a PUT that leaves out %s: it has no cleared state',
         async (field) => {
             const { bearer } = await authenticateAsRole('editor');
-            const product = await createProduct({ title: 'Bed', price: 10 });
+            const product = await createProduct({ title: 'Bed', price: '10.00' });
             const body: Record<string, unknown> = {
-                price: 15,
+                price: '15.00',
                 active: true,
                 purchasable: true,
                 requiresShipping: true,
@@ -264,12 +290,12 @@ describe('PUT /products/{id}', () => {
 
     it('refuses a PUT body missing a required field', async () => {
         const { bearer } = await authenticateAsRole('editor');
-        const product = await createProduct({ title: 'Bed', price: 10 });
+        const product = await createProduct({ title: 'Bed', price: '10.00' });
 
         const response = await api()
             .put(`/products/${String(product._id)}`)
             .set('Authorization', bearer)
-            .send({ price: 15, translations: { en: { title: 'Bed, replaced' } } });
+            .send({ price: '15.00', translations: { en: { title: 'Bed, replaced' } } });
 
         expect(response.status).toBe(422);
     });
@@ -283,7 +309,7 @@ describe('PUT /products/{id}', () => {
             .post('/products')
             .set('Authorization', bearer)
             .send({
-                price: 10,
+                price: '10.00',
                 translations: { en: { title: 'Dog Bed' }, it: { title: 'Cuccia' } }
             });
         const id = String(created.body.id);
@@ -292,7 +318,7 @@ describe('PUT /products/{id}', () => {
             .put(`/products/${id}`)
             .set('Authorization', bearer)
             .send({
-                price: 10,
+                price: '10.00',
                 active: true,
                 purchasable: true,
                 requiresShipping: true,
@@ -311,13 +337,13 @@ describe('PUT /products/{id}', () => {
     it('refuses a PUT whose translations leave out the fallback locale', async () => {
         await givenLocale('it');
         const { bearer } = await authenticateAsRole('editor');
-        const product = await createProduct({ title: 'Bed', price: 10 });
+        const product = await createProduct({ title: 'Bed', price: '10.00' });
 
         const response = await api()
             .put(`/products/${String(product._id)}`)
             .set('Authorization', bearer)
             .send({
-                price: 15,
+                price: '15.00',
                 active: true,
                 purchasable: true,
                 requiresShipping: true,
@@ -335,13 +361,13 @@ describe('PUT /products/{id}', () => {
     // otherwise this message never surfaces, refused first by the contract's generic minimum.
     it('422s a negative price with the field-named message, not a generic one', async () => {
         const { bearer } = await authenticateAsRole('editor');
-        const product = await createProduct({ title: 'Bed', price: 10 });
+        const product = await createProduct({ title: 'Bed', price: '10.00' });
 
         const response = await api()
             .put(`/products/${String(product._id)}`)
             .set('Authorization', bearer)
             .send({
-                price: -5,
+                price: '-5.00',
                 active: true,
                 purchasable: true,
                 requiresShipping: true,
@@ -362,15 +388,15 @@ describe('PUT /products/{id}', () => {
 describe('PATCH /products/{id}', () => {
     it('matches the contract, merging a price change and a translation edit', async () => {
         const { bearer } = await authenticateAsRole('editor');
-        const product = await createProduct({ title: 'Bed', price: 10 });
+        const product = await createProduct({ title: 'Bed', price: '10.00' });
 
         const response = await api()
             .patch(`/products/${String(product._id)}`)
             .set('Authorization', bearer)
-            .send({ price: 15, translations: { en: { title: 'Bed, revised' } } });
+            .send({ price: '15.00', translations: { en: { title: 'Bed, revised' } } });
 
         expect(response.status).toBe(200);
-        expect(response.body.price).toBe(15);
+        expect(response.body.price).toBe('15.00');
         expect(response.body.title).toBe('Bed, revised');
     });
 
@@ -380,22 +406,22 @@ describe('PATCH /products/{id}', () => {
     // ability layer instead ("the dictionary keys do not update a price, even together").
     it('lets the editor change a price', async () => {
         const { bearer } = await authenticateAsRole('editor');
-        const product = await createProduct({ title: 'Bed', price: 10 });
+        const product = await createProduct({ title: 'Bed', price: '10.00' });
 
         const response = await api()
             .patch(`/products/${String(product._id)}`)
             .set('Authorization', bearer)
-            .send({ price: 999 });
+            .send({ price: '999.00' });
 
         expect(response.status).toBe(200);
-        expect(response.body.price).toBe(999);
+        expect(response.body.price).toBe('999.00');
     });
 
     // `taxClass: null` means "back to the shop's standard rate", the same as every other
     // clearable field on this schema.
     it('clears taxClass back to the standard rate on an explicit null', async () => {
         const { bearer } = await authenticateAsRole('editor');
-        const product = await createProduct({ title: 'Bed', price: 10, taxClass: 'reduced' });
+        const product = await createProduct({ title: 'Bed', price: '10.00', taxClass: 'reduced' });
 
         const response = await api()
             .patch(`/products/${String(product._id)}`)
@@ -410,12 +436,12 @@ describe('PATCH /products/{id}', () => {
     // `updateById` no longer re-parses — this message has exactly one place left to come from.
     it('422s a negative price with the field-named message, not a generic one', async () => {
         const { bearer } = await authenticateAsRole('editor');
-        const product = await createProduct({ title: 'Bed', price: 10 });
+        const product = await createProduct({ title: 'Bed', price: '10.00' });
 
         const response = await api()
             .patch(`/products/${String(product._id)}`)
             .set('Authorization', bearer)
-            .send({ price: -5 });
+            .send({ price: '-5.00' });
 
         expect(response.status).toBe(422);
         expect(response.body.errors.map((error: { message: string }) => error.message)).toContain(
@@ -431,7 +457,7 @@ const seeded = async () => {
         .post('/products')
         .set('Authorization', bearer)
         .send({
-            price: 10,
+            price: '10.00',
             translations: { en: { title: 'Cozy Bed', description: 'Extra support' } }
         });
     return { bearer, id: String(created.body.id) };
@@ -496,7 +522,7 @@ describe('PATCH /products/{id} translations, field by field (RFC 7396)', () => {
             .put(`/products/${id}`)
             .set('Authorization', bearer)
             .send({
-                price: 10,
+                price: '10.00',
                 active: true,
                 purchasable: true,
                 requiresShipping: true,
@@ -515,7 +541,7 @@ describe('PATCH /products/{id} translations, field by field (RFC 7396)', () => {
 describe('the generic translator door follows the product rules (bug W9)', () => {
     it('refuses a title under the product minimum instead of writing it', async () => {
         const { bearer } = await authenticateAs('admin');
-        const product = await createProduct({ title: 'Cozy Bed', price: 10 });
+        const product = await createProduct({ title: 'Cozy Bed', price: '10.00' });
 
         const response = await api()
             .patch(`/locales/translations/product/${String(product._id)}`)
@@ -528,7 +554,7 @@ describe('the generic translator door follows the product rules (bug W9)', () =>
 
     it('merges one field on PATCH and replaces the locale whole on PUT', async () => {
         const { bearer } = await authenticateAs('admin');
-        const product = await createProduct({ title: 'Cozy Bed', price: 10 });
+        const product = await createProduct({ title: 'Cozy Bed', price: '10.00' });
         const url = `/locales/translations/product/${String(product._id)}`;
         await api()
             .put(url)
@@ -562,7 +588,7 @@ describe('SKU', () => {
             .post('/products')
             .set('Authorization', bearer)
             .send({
-                price: 24.9,
+                price: '24.90',
                 sku: 'DOG-BED-15KG',
                 translations: { en: { title: 'Dog Bed' } }
             });
@@ -581,14 +607,14 @@ describe('SKU', () => {
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .send({ price: 10, sku: 'DUP-1', translations: { en: { title: 'Collides' } } });
+            .send({ price: '10.00', sku: 'DUP-1', translations: { en: { title: 'Collides' } } });
 
         expect(response.status).toBe(409);
     });
 
     it('clears a sku back to unset on an explicit null', async () => {
         const { bearer } = await authenticateAsRole('editor');
-        const product = await createProduct({ title: 'Bed', price: 10, sku: 'BED-1' });
+        const product = await createProduct({ title: 'Bed', price: '10.00', sku: 'BED-1' });
 
         const response = await api()
             .patch(`/products/${String(product._id)}`)
@@ -612,7 +638,7 @@ describe('VAT rate type', () => {
                 .post('/products')
                 .set('Authorization', bearer)
                 .send({
-                    price: 24.9,
+                    price: '24.90',
                     taxClass: 'zero',
                     rateType,
                     translations: { en: { title: 'Dog Bed' } }
@@ -628,7 +654,7 @@ describe('VAT rate type', () => {
         const { bearer } = await authenticateAsRole('editor');
         const product = await createProduct({
             title: 'Bed',
-            price: 10,
+            price: '10.00',
             taxClass: 'zero',
             rateType: 'exempt'
         });
@@ -650,7 +676,7 @@ describe('GET /products/{id}, the translations map', () => {
             .post('/products')
             .set('Authorization', bearer)
             .send({
-                price: 24.9,
+                price: '24.90',
                 translations: { en: { title: 'Memory Foam Bed' } }
             });
 
@@ -664,7 +690,7 @@ describe('GET /products/{id}, the translations map', () => {
 });
 
 /** A create body titled in the fallback language. */
-const bodyTitled = (title: string) => ({ price: 10, translations: { en: { title } } });
+const bodyTitled = (title: string) => ({ price: '10.00', translations: { en: { title } } });
 
 describe('the stock counters on the product writes follow read:StockLevel', () => {
     /** The three counters only a stock reader sees. */
@@ -677,7 +703,7 @@ describe('the stock counters on the product writes follow read:StockLevel', () =
         const byEditor = await api()
             .post('/products')
             .set('Authorization', editor.bearer)
-            .send({ price: 10, translations: { en: { title: 'Editor desk' } } });
+            .send({ price: '10.00', translations: { en: { title: 'Editor desk' } } });
         const byAdmin = await api()
             .post('/products')
             .set('Authorization', admin.bearer)
@@ -724,12 +750,12 @@ describe('product states: `purchasable`', () => {
         const plain = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .send({ price: 10, translations: { en: { title: 'Plain Dog Bed' } } });
+            .send({ price: '10.00', translations: { en: { title: 'Plain Dog Bed' } } });
         const offSale = await api()
             .post('/products')
             .set('Authorization', bearer)
             .send({
-                price: 10,
+                price: '10.00',
                 purchasable: false,
                 translations: { en: { title: 'Off-sale Dog Bed' } }
             });
@@ -759,7 +785,7 @@ describe('product states: `purchasable`', () => {
             .put(`/products/${String(product._id)}`)
             .set('Authorization', bearer)
             .send({
-                price: 15,
+                price: '15.00',
                 active: true,
                 requiresShipping: true,
                 allowBackorder: false,

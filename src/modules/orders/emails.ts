@@ -34,7 +34,7 @@ export interface OrderLines {
         quantity: number;
         product: {
             title: string;
-            price: number;
+            price: string;
             /** Frozen at checkout; absent counts as shipped. */
             requiresShipping?: boolean | null;
             /** Frozen at checkout: Art. 16 takes the right of withdrawal away from this line. */
@@ -50,7 +50,7 @@ export interface OrderLines {
         promiseDated?: boolean | null;
     }[];
     /** The shipping frozen at checkout. Absent on an order that chose no delivery method. */
-    shippingCost?: number;
+    shippingCost?: string;
     /** The order's own frozen currency. */
     currency: string;
 }

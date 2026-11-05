@@ -21,7 +21,7 @@ describe('productRepository', () => {
 
             expect(product._id).toBeDefined();
             expect(product.title).toBe('Test Product');
-            expect(product.price).toBe(9.99);
+            expect(product.price).toBe('9.99');
             expect(product.active).toBe(true);
         });
 
@@ -53,14 +53,14 @@ describe('productRepository', () => {
 
     describe('findOne', () => {
         it('returns a product matching the query', async () => {
-            await createProduct({ title: 'Unique Product', price: 42 });
+            await createProduct({ title: 'Unique Product', price: '42.00' });
 
             const found = await productRepository.findOne({
                 title: 'Unique Product'
             });
 
             expect(found).not.toBeNull();
-            expect(found!.price).toBe(42);
+            expect(found!.price).toBe('42.00');
         });
 
         it('returns null when no product matches', async () => {
@@ -146,12 +146,12 @@ describe('productRepository', () => {
             const id = product._id.toString();
 
             product.title = 'Updated Title';
-            product.price = 99.99;
+            product.price = '99.99';
             await productRepository.save(product);
 
             const refreshed = await productRepository.findById(id);
             expect(refreshed!.title).toBe('Updated Title');
-            expect(refreshed!.price).toBe(99.99);
+            expect(refreshed!.price).toBe('99.99');
         });
     });
 

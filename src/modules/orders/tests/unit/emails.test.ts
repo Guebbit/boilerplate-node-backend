@@ -23,10 +23,10 @@ const ORDER_ID = 'order-1';
 /** Two lines with different titles, quantities and prices, so no field can stand in for another. */
 const ORDER: OrderLines = {
     items: [
-        { quantity: 2, product: { title: 'Grain-Free Dog Food', price: 100 } },
-        { quantity: 3, product: { title: 'Memory Foam Dog Bed', price: 7.5 } }
+        { quantity: 2, product: { title: 'Grain-Free Dog Food', price: '100.00' } },
+        { quantity: 3, product: { title: 'Memory Foam Dog Bed', price: '7.50' } }
     ],
-    shippingCost: 4.25,
+    shippingCost: '4.25',
     currency: 'EUR'
 };
 
@@ -61,12 +61,12 @@ describe('orderConfirmEmail', () => {
     it('promises a delivery on a line that is not ready now, and says nothing on one that is', () => {
         const order: OrderLines = {
             items: [
-                { quantity: 1, product: { title: 'Ready', price: 5 } },
+                { quantity: 1, product: { title: 'Ready', price: '5.00' } },
                 {
                     quantity: 1,
                     product: {
                         title: 'Preorder',
-                        price: 5,
+                        price: '5.00',
                         preorder: true,
                         releaseDate: new Date('2026-12-20T00:00:00Z')
                     }
@@ -76,14 +76,14 @@ describe('orderConfirmEmail', () => {
                     backorderedQuantity: 1,
                     promisedAt: new Date('2026-11-05T00:00:00Z'),
                     promiseDated: true,
-                    product: { title: 'Dated', price: 5 }
+                    product: { title: 'Dated', price: '5.00' }
                 },
                 {
                     quantity: 2,
                     backorderedQuantity: 2,
                     promisedAt: new Date('2026-11-05T00:00:00Z'),
                     promiseDated: false,
-                    product: { title: 'Undated', price: 5 }
+                    product: { title: 'Undated', price: '5.00' }
                 }
             ],
             currency: 'EUR'
@@ -107,7 +107,7 @@ describe('orderConfirmEmail', () => {
                     quantity: 1,
                     product: {
                         title: 'Preorder',
-                        price: 5,
+                        price: '5.00',
                         preorder: true,
                         releaseDate: new Date('2026-12-19T23:00:00Z')
                     }
@@ -126,7 +126,7 @@ describe('orderConfirmEmail', () => {
         // email and the charge cannot drift apart. `totals.property.test.ts` covers the sum.
         const { data } = orderConfirmEmail('en', NAME, ORDER, ORDER_ID);
 
-        expect(orderTotal(ORDER)).toBe(226.75);
+        expect(orderTotal(ORDER)).toBe('226.75');
         expect(data.total).toContain('€226.75');
     });
 
@@ -144,7 +144,7 @@ describe('orderConfirmEmail', () => {
         const withoutShipping = orderConfirmEmail(
             'en',
             NAME,
-            { ...ORDER, shippingCost: 0 },
+            { ...ORDER, shippingCost: '0.00' },
             ORDER_ID
         ).data.total;
 
@@ -209,7 +209,7 @@ describe('orderConfirmEmail', () => {
     it("never re-resolves a line's title through `t()`, even one that collides with a real key", () => {
         const collidingTitle = 'orders.email-confirm.greeting';
         const order: OrderLines = {
-            items: [{ quantity: 1, product: { title: collidingTitle, price: 1 } }],
+            items: [{ quantity: 1, product: { title: collidingTitle, price: '1.00' } }],
             currency: 'EUR'
         };
 
@@ -240,7 +240,7 @@ describe('orderCanceledEmail', () => {
     const UNPAID = { ...ORDER, currency: 'EUR' };
     /** The grand total the order itself computes — what a full refund returns. */
     const TOTAL = new Intl.NumberFormat('en', { style: 'currency', currency: 'EUR' }).format(
-        orderTotal({ ...ORDER, currency: 'EUR' })
+        Number(orderTotal({ ...ORDER, currency: 'EUR' }))
     );
 
     it('names the canceled template and the order', () => {
@@ -286,7 +286,7 @@ describe('orderCanceledEmail', () => {
 describe('every order mail prints money in the order"s own currency', () => {
     // 1990 yen: no decimals, so a builder that formatted as euros would print `€1,990.00`.
     const YEN: OrderLines = {
-        items: [{ quantity: 1, product: { title: 'Dog Bed', price: 1990 } }],
+        items: [{ quantity: 1, product: { title: 'Dog Bed', price: '1990.00' } }],
         currency: 'JPY'
     };
     it.each([

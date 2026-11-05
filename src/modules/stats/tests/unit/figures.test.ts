@@ -31,24 +31,24 @@ describe('figuresOf', () => {
             unitsOrdered: 5,
             unitsReversed: 1,
             netUnits: 4,
-            grossSales: 140,
-            discounts: 0,
-            reversals: 40,
-            netSales: 100,
-            shipping: 10,
-            taxes: 24.2,
-            totalSales: 134.2,
-            refunds: 48.8,
-            averageOrderValue: 70
+            grossSales: '140.00',
+            discounts: '0.00',
+            reversals: '40.00',
+            netSales: '100.00',
+            shipping: '10.00',
+            taxes: '24.20',
+            totalSales: '134.20',
+            refunds: '48.80',
+            averageOrderValue: '70.00'
         });
     });
 
     it('reads a shop with no sales as zeros, with no division by nothing', () => {
         expect(figuresOf(emptyRawFigures(), 'EUR')).toMatchObject({
             orders: 0,
-            netSales: 0,
-            totalSales: 0,
-            averageOrderValue: 0
+            netSales: '0.00',
+            totalSales: '0.00',
+            averageOrderValue: '0.00'
         });
     });
 
@@ -58,7 +58,7 @@ describe('figuresOf', () => {
                 { ...emptyRawFigures(), orders: 3, invoicedGoods: toMinorUnits(1000, 'JPY') },
                 'JPY'
             ).averageOrderValue
-        ).toBe(333);
+        ).toBe('333');
     });
 });
 

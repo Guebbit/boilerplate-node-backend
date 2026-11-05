@@ -9,6 +9,7 @@
  * See: docs/modules/returns.md#the-withdrawal-button
  */
 
+import { padDecimal } from '@domain-primitives/money';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { nudgeOutbox } from '@kernel/outbox';
 import { callerForSubject } from '@kernel/permissions';
@@ -45,7 +46,7 @@ import {
  * nobody paid for owes nothing — the cancel releases its hold and that is all.
  * @param order - the order being withdrawn from
  */
-const refundOwedOn = (order: OrderDocument): number => (order.paidAt ? orderTotal(order) : 0);
+const refundOwedOn = (order: OrderDocument): string => (order.paidAt ? orderTotal(order) : padDecimal('0', order.currency));
 
 /**
  * Write the record of a withdrawal the cancel already settled: closed at birth, no lines (nothing

@@ -40,12 +40,12 @@ export const cancellationRefundOn = (
         currency: order.currency,
         lines: lines.map(({ productId, quantity }) => ({
             quantity,
-            unitPrice: price.get(productId) ?? 0
+            unitPrice: price.get(productId) ?? '0'
         })),
         takesLastUnit: takesLastUnit(ordered, [...accounts.accountedFor, ...lines]),
         shippingPaid: shippingStillOwed(
             order.currency,
-            order.shippingCost ?? 0,
+            order.shippingCost ?? '0',
             accounts.shippingRefunded
         )
     });

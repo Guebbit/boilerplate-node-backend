@@ -57,7 +57,7 @@ describe('paymentSchema', () => {
     it('stores every amount as a Decimal128, so a database sum is exact', () => {
         expect(typeOf(paymentSchema, 'amount')).toBe('Decimal128');
         expect(typeOf(paymentSchema, 'amountRefunded')).toBe('Decimal128');
-        expect(defaultOf(paymentSchema, 'amountRefunded')).toBe(0);
+        expect(defaultOf(paymentSchema, 'amountRefunded')).toBe('0');
     });
 
     it('restricts status to the contract enum and starts unconfirmed', () => {

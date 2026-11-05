@@ -20,7 +20,7 @@ export interface DisputeEventPayload {
     kind: DisputeKind;
     status: DisputeStatus;
     reason: DisputeReason;
-    amount: number;
+    amount: string;
     currency: string;
     fundsWithdrawn: boolean;
     evidenceDueBy?: string;
@@ -80,9 +80,9 @@ declare module '@kernel/events' {
             goods?: {
                 lines: { productId: string; quantity: number }[];
                 /** The delivery cost inside `amount`, a decimal. */
-                shipping: number;
+                shipping: string;
             };
-            amount: number;
+            amount: string;
             currency: string;
             full: boolean;
         };
@@ -100,7 +100,7 @@ declare module '@kernel/events' {
             paymentId: string;
             orderId: string;
             refundId: string;
-            amount: number;
+            amount: string;
             currency: string;
         };
 
@@ -120,7 +120,7 @@ declare module '@kernel/events' {
             paymentId: string;
             orderId: string;
             refundId: string;
-            amount: number;
+            amount: string;
             currency: string;
             failureReason: RefundFailureReason;
             final: boolean;
@@ -138,7 +138,7 @@ declare module '@kernel/events' {
             paymentId: string;
             orderId: string;
             refundId: string;
-            amount: number;
+            amount: string;
             currency: string;
             failureReason: RefundFailureReason;
         };
@@ -177,7 +177,7 @@ declare module '@kernel/events' {
             paymentId: string;
             orderId: string;
             refundId: string;
-            amount: number;
+            amount: string;
             currency: string;
         };
 

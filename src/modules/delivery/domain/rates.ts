@@ -6,6 +6,7 @@
  * See `docs/theory/domain-layer.md`.
  */
 
+import { padDecimal, toDecimalString, toMinorUnits, type Money } from '@domain-primitives/money';
 import type { ShippingMethod } from '@types';
 
 /**
@@ -28,20 +29,20 @@ export type StaticShippingMethod = Omit<ShippingMethod, 'currency'>;
 export const SHIPPING_METHODS: readonly StaticShippingMethod[] = [
     {
         id: 'standard',
-        price: 5,
-        freeAbove: 100,
+        price: '5.00',
+        freeAbove: '100.00',
         tracked: false,
         maxWeight: 30_000,
         requiresAddress: true
     },
     {
         id: 'express',
-        price: 15,
+        price: '15.00',
         tracked: true,
         maxWeight: 5000,
         requiresAddress: true
     },
-    { id: 'pickup', price: 0, tracked: false, requiresAddress: false }
+    { id: 'pickup', price: '0.00', tracked: false, requiresAddress: false }
 ];
 
 /** The method behind an id, or undefined — the caller decides what absence answers. */
@@ -49,13 +50,50 @@ export const findShippingMethod = (methodId: string): StaticShippingMethod | und
     SHIPPING_METHODS.find(({ id }) => id === methodId);
 
 /**
- * What a method costs against a given items total.
+ * What a method costs against a given items total, in minor units of `currency`. The table is
+ * written in decimal text; compared and added only as minor units, so `"100"` and `"100.00"` agree.
  * @param method - the chosen method
  * @param itemsTotal - the order's lines total, compared against `freeAbove`
- * @returns the cost — `0` once the threshold is met, the flat rate otherwise
+ * @param currency - the ISO-4217 code `itemsTotal` and the table are priced in
+ * @returns the cost — nothing once the threshold is met, the flat rate otherwise
  */
-export const priceShipping = (method: StaticShippingMethod, itemsTotal: number): number =>
-    method.freeAbove !== undefined && itemsTotal >= method.freeAbove ? 0 : method.price;
+const priceShippingMoney = (
+    method: StaticShippingMethod,
+    itemsTotal: string,
+    currency: string
+): Money =>
+    method.freeAbove !== undefined &&
+    toMinorUnits(itemsTotal, currency) >= toMinorUnits(method.freeAbove, currency)
+        ? toMinorUnits(0, currency)
+        : toMinorUnits(method.price, currency);
+
+/**
+ * {@link priceShippingMoney}, spelled as the wire's decimal text.
+ * @param method - the chosen method
+ * @param itemsTotal - the order's lines total, compared against `freeAbove`
+ * @param currency - the ISO-4217 code `itemsTotal` and the table are priced in
+ * @returns the cost as decimal text at the currency's places
+ */
+export const priceShipping = (
+    method: StaticShippingMethod,
+    itemsTotal: string,
+    currency: string
+): string => toDecimalString(priceShippingMoney(method, itemsTotal, currency), currency);
+
+/**
+ * A table row as the wire shows it: prices at `currency`'s own places, and the currency itself.
+ * @param method - a row of the static table
+ * @param currency - the shop's live ISO-4217 code
+ * @returns the method with `price`/`freeAbove` padded to the currency
+ */
+export const quoteMethod = (method: StaticShippingMethod, currency: string): ShippingMethod => ({
+    ...method,
+    price: padDecimal(method.price, currency),
+    ...(method.freeAbove === undefined
+        ? {}
+        : { freeAbove: padDecimal(method.freeAbove, currency) }),
+    currency
+});
 
 /**
  * Whether a basket of the given weight is within a method's declared range. Absent
@@ -78,11 +116,12 @@ export const methodFitsWeight = (method: StaticShippingMethod, weight: number): 
  * the answer is zero, so a paid express upgrade stays entirely with the shop.
  *
  * @param itemsTotal - the order's lines total
+ * @param currency - the ISO-4217 code `itemsTotal` is priced in
  * @returns the cheapest delivery price on offer, or `0` when nothing delivers at all
  */
-export const cheapestStandardShipping = (itemsTotal: number): number => {
+export const cheapestStandardShipping = (itemsTotal: string, currency: string): string => {
     const prices = SHIPPING_METHODS.filter(({ requiresAddress }) => requiresAddress).map((method) =>
-        priceShipping(method, itemsTotal)
+        priceShippingMoney(method, itemsTotal, currency)
     );
-    return prices.length > 0 ? Math.min(...prices) : 0;
+    return toDecimalString(prices.length > 0 ? (Math.min(...prices) as Money) : toMinorUnits(0, currency), currency);
 };

@@ -7,11 +7,7 @@
 
 import { z } from 'zod';
 import { coerceStringArray } from '@guebbit/js-toolkit';
-import {
-    SearchProductsBody,
-    searchProductsBodyPriceMinMin,
-    searchProductsBodyPriceMaxMin
-} from '@api/schemas.zod';
+import { SearchProductsBody } from '@api/schemas.zod';
 import { productService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';
 import {
@@ -28,21 +24,16 @@ import {
 
 /**
  * Extends the orval-generated `SearchProductsBody` (kept in sync with openapi.yaml), coercing
- * page/pageSize/priceMin/priceMax from strings since GET carries them as query text, not JSON
- * numbers. `page`/`pageSize` come from the shared schemas so all four search endpoints agree on
+ * page/pageSize from strings since GET carries them as query text, not JSON
+ * numbers, and reading a blank price bound as absent. `page`/`pageSize` come from the shared schemas so all four search endpoints agree on
  * what's legal; absent stays absent, since `normalizePagination` owns the defaults.
  */
 const searchProductsQuerySchema = SearchProductsBody.extend({
     page: pageSchema,
     pageSize: pageSizeSchema,
-    priceMin: z.preprocess(
-        blankToUndefined,
-        z.coerce.number().min(searchProductsBodyPriceMinMin).optional()
-    ),
-    priceMax: z.preprocess(
-        blankToUndefined,
-        z.coerce.number().min(searchProductsBodyPriceMaxMin).optional()
-    ),
+    // A blank query value (`priceMin=`) is no filter; the amount stays decimal text.
+    priceMin: z.preprocess(blankToUndefined, SearchProductsBody.shape.priceMin),
+    priceMax: z.preprocess(blankToUndefined, SearchProductsBody.shape.priceMax),
     // A query string spells a boolean as text; the body carries a real one.
     active: optionalBooleanSchema,
     purchasable: optionalBooleanSchema,
@@ -67,7 +58,7 @@ const extendSearchInput = (input: Record<string, unknown>): Record<string, unkno
 
 /**
  * The validated search a request asks, for the response cache's key: the same merge and the same
- * schema the controller uses, so `priceMin: "0e0"` and `priceMin: 0` are one key and a request the
+ * schema the controller uses, so `priceMin: ""` and an absent `priceMin` are one key and a request the
  * controller would refuse never gets one.
  *
  * @param request - the incoming request

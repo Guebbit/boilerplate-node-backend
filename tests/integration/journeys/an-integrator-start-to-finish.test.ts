@@ -42,7 +42,7 @@ const inAWeek = () => new Date(Date.now() + 7 * 86_400_000).toISOString();
 it('delivers every event once, signed, in causal order', async () => {
     const endpoint = await startWebhookReceiver();
     receiver = endpoint;
-    const dogFood = await createProduct({ price: 20, onHand: 10 });
+    const dogFood = await createProduct({ price: '20.00', onHand: 10 });
     const dogFoodId = String(dogFood._id);
     const { bearer: admin } = await authenticateAs('admin');
 

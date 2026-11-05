@@ -5,7 +5,7 @@
  * by whichever cancel or return takes the LAST unit" is testable without a database.
  */
 
-import { addMoney, toDecimalAmount, toMinorUnits, NO_MONEY } from '@domain-primitives/money';
+import { addMoney, toDecimalString, toMinorUnits, NO_MONEY } from '@domain-primitives/money';
 import { BACK_RETURN_STATUSES, handsUnitsBack } from './lifecycle';
 import type { ReturnKind, ReturnRemedy, ReturnStatus } from './lifecycle';
 import { wireLines } from './quantities';
@@ -19,7 +19,7 @@ export interface AccountedReturn {
     remedy?: ReturnRemedy | undefined;
     lines: readonly { productId: { toString(): string }; quantity: number }[];
     /** The delivery inside what it refunded; absent on one that refunded none. */
-    shippingRefund?: number | undefined;
+    shippingRefund?: string | undefined;
 }
 
 /** What the order's other returns and cancels have already settled. */
@@ -27,7 +27,7 @@ export interface OrderAccounts {
     /** Units canceled before they shipped, plus units that came back. */
     accountedFor: ProductQuantity[];
     /** The delivery already refunded, summed. */
-    shippingRefunded: number;
+    shippingRefunded: string;
 }
 
 /**
@@ -58,6 +58,6 @@ export const accountsOf = (
 
     return {
         accountedFor: settled.flatMap(({ lines }) => wireLines(lines)),
-        shippingRefunded: toDecimalAmount(shippingRefunded, currency)
+        shippingRefunded: toDecimalString(shippingRefunded, currency)
     };
 };

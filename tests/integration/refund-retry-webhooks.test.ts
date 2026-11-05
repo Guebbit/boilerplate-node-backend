@@ -37,7 +37,7 @@ afterEach(() => {
 /** One order, paid by card — the fixture this whole suite cancels and retries. */
 const paidOrder = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 20 });
+    const product = await createProduct({ price: '20.00' });
     const created = await orderService.create(
         user.id,
         user.email,
@@ -81,7 +81,7 @@ it('writes one outbox row with the cancel, and the refund lands once the relay h
     await settleOutboxNudges();
     const payment = await paymentRepository.findByOrderId(orderId);
     expect(payment!.refunds).toHaveLength(1);
-    expect(payment!.refunds[0]).toMatchObject({ amount: 20, status: 'succeeded' });
+    expect(payment!.refunds[0]).toMatchObject({ amount: '20.00', status: 'succeeded' });
     const [row] = await canceledRows(orderId);
     expect(row).toMatchObject({ status: 'published' });
 });

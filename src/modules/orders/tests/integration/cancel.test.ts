@@ -861,6 +861,6 @@ describe('withActions', () => {
 
         expect(body.id).toBe(String(order._id));
         expect(body).not.toHaveProperty('_id');
-        expect(body.totalPrice).toEqual(expect.any(Number));
+        expect(body.totalPrice).toEqual(expect.any(String));
     });
 });

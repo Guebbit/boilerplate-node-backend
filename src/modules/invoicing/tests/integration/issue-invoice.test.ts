@@ -39,7 +39,7 @@ afterEach(() => resetDomainEvents());
 describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
     it('freezes an invoice, numbered, the moment the order reaches paid', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 19.9, taxClass: undefined });
+        const product = await createProduct({ price: '19.90', taxClass: undefined });
         const order = await createOrder(user, [toOrderItem(product, 2)], {
             billingAddress: {
                 fullName: 'Ada Lovelace',
@@ -60,12 +60,12 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
             'Ada Lovelace'
         );
         expect(invoice.lines).toHaveLength(1);
-        expect(invoice.grandTotal).toBeCloseTo(39.8, 2);
+        expect(invoice.grandTotal).toBe('39.80');
     });
 
     it('bills the billing address, never the ship-to one', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             shippingAddress: {
                 fullName: 'Grace Hopper',
@@ -93,7 +93,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
 
     it('carries no buyer address when the order recorded only a ship-to one', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             shippingAddress: {
                 fullName: 'Grace Hopper',
@@ -116,7 +116,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
     it('freezes VAT rounded once per rate, not summed from per-line rounded amounts', async () => {
         const user = await createUser();
         const products = await Promise.all(
-            [0.1, 0.1, 0.1].map((price) => createProduct({ price }))
+            [0.1, 0.1, 0.1].map((price) => createProduct({ price: price.toFixed(2) }))
         );
         const order = await createOrder(
             user,
@@ -130,10 +130,10 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         expect(invoice.taxSummary).toHaveLength(1);
         const [row] = invoice.taxSummary;
         expect([row.rate, row.netAmount, row.taxAmount, row.grossAmount]).toEqual([
-            0.22, 0.25, 0.05, 0.3
+            0.22, '0.25', '0.05', '0.30'
         ]);
-        expect(invoice.taxTotal).toBe(0.05);
-        expect(invoice.grandTotal).toBe(0.3);
+        expect(invoice.taxTotal).toBe('0.05');
+        expect(invoice.grandTotal).toBe('0.30');
     });
 
     // `rateType` rides frozen onto the order line at checkout (`orders/services/snapshot.ts`)
@@ -142,11 +142,11 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
     it('freezes the order line’s rateType onto the invoice line', async () => {
         const user = await createUser();
         const zeroRated = await createProduct({
-            price: 10,
+            price: '10.00',
             taxClass: 'zero',
             rateType: 'zero_rated'
         });
-        const exempt = await createProduct({ price: 20, taxClass: 'zero', rateType: 'exempt' });
+        const exempt = await createProduct({ price: '20.00', taxClass: 'zero', rateType: 'exempt' });
         const order = await createOrder(user, [toOrderItem(zeroRated, 1), toOrderItem(exempt, 1)]);
 
         await orderService.markPaid(String(order._id));
@@ -157,7 +157,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
 
     it('numbers two invoices in the same year one apart', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
         const [orderA, orderB] = await Promise.all([
             createOrder(user, [toOrderItem(product, 1)]),
             createOrder(user, [toOrderItem(product, 1)])
@@ -178,7 +178,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
 
     it('never issues a second invoice for the same order, and burns no number on the loser', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             status: OrderStatus.paid
         });
@@ -201,7 +201,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
 
     it('writes one `invoice_issued` row on the order timeline, whoever wins the race', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             status: OrderStatus.paid
         });
@@ -221,7 +221,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
 
     it('answers the existing invoice when the order is invoiced again later', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             status: OrderStatus.paid
         });
@@ -237,7 +237,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
 
     it('gives the number back when the insert fails for any other reason', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             status: OrderStatus.paid
         });
@@ -258,7 +258,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
 
     it("numbers an invoice by the shop's calendar year, not UTC's", async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             status: OrderStatus.paid
         });
@@ -279,7 +279,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
     // legal document's day; a credit note reads like the invoice it corrects.
     it('freezes the shop’s time zone at issue, and keeps it when the setting changes later', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         const issued = await invoicingService.issueInvoice(order);
 
@@ -295,7 +295,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
     it('freezes the seller as issued, without the shop’s email or phone, and keeps it when the settings change', async () => {
         setEnvironment({ NODE_SHOP_VAT_NUMBER: 'IT12345678901' });
         const user = await createUser();
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         await invoicingService.issueInvoice(order);
 

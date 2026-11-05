@@ -69,11 +69,11 @@ const admin = callerContextAs('admin');
 const shippedParcel = async () => {
     customers += 1;
     const user = await createUser({ email: `lost-${customers}@example.com` });
-    const shirt = await createProduct({ title: 'Shirt', price: 30, onHand: 10 });
-    const mug = await createProduct({ title: 'Mug', price: 10, onHand: 10 });
+    const shirt = await createProduct({ title: 'Shirt', price: '30.00', onHand: 10 });
+    const mug = await createProduct({ title: 'Mug', price: '10.00', onHand: 10 });
     const order = await createOrder(user, [toOrderItem(shirt, 2), toOrderItem(mug, 1)], {
         shippingMethod: 'standard',
-        shippingCost: 5
+        shippingCost: '5.00'
     });
     const orderId = String(order._id);
     await inventoryService.reserveForOrder(orderId, [
@@ -143,8 +143,8 @@ describe('cancelling what a lost parcel carried', () => {
             callerContextAs('customer', parcel.user.id)
         );
 
-        expect(canceled.success && canceled.data.refundAmount).toBe(75);
-        expect(await refundsOf(parcel.orderId)).toEqual([{ reason: 'cancellation', amount: 75 }]);
+        expect(canceled.success && canceled.data.refundAmount).toBe('75.00');
+        expect(await refundsOf(parcel.orderId)).toEqual([{ reason: 'cancellation', amount: '75.00' }]);
         expect(await countersOf(parcel.shirt._id)).toEqual({
             onHand: 8,
             reserved: 0,
@@ -191,7 +191,7 @@ describe('settling an order whose every parcel was lost and refunded', () => {
         expect(canceledRows).toHaveLength(1);
         expect(canceledRows[0].actor).toBeUndefined();
         expect(canceledRows[0].data).toMatchObject({ by: 'system', cause: 'lost', refund: false });
-        expect(await refundsOf(parcel.orderId)).toEqual([{ reason: 'cancellation', amount: 75 }]);
+        expect(await refundsOf(parcel.orderId)).toEqual([{ reason: 'cancellation', amount: '75.00' }]);
         expect(await reservationRepository.findByOrderId(parcel.orderId)).toMatchObject({
             status: 'released'
         });

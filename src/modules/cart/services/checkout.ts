@@ -15,7 +15,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import { toMinorUnits } from '@domain-primitives/money';
+import { fitsCurrency, toMinorUnits } from '@domain-primitives/money';
 import {
     orderService,
     orderTotal,
@@ -77,7 +77,7 @@ const toOrderAddress = (address: AddressItem) => ({
  *   default entry when nothing ships to an address.
  * - `paymentMethod`: a method id from `GET /payments/methods`; omitted means `card`.
  * - `notes`: free text left for the order.
- * - `expectedTotal`: the total the buyer was shown, in minor units. A checkout that would charge
+ * - `expectedTotal`: the total the buyer was shown, as decimal text with its currency. A checkout that would charge
  *   another amount or currency is refused before anything is held (`CART_TOTAL_CHANGED`).
  */
 export type CheckoutChoices = Partial<CheckoutRequest>;
@@ -333,7 +333,7 @@ const buildStockRefusal = (refusal: StockRefusal): ResponseReject => {
 };
 
 /**
- * What this basket would cost right now, in minor units: the items plus the chosen shipping, priced
+ * What this basket would cost right now: the items plus the chosen shipping, priced
  * exactly as `GET /cart`'s summary and the order itself price them, so the three cannot disagree.
  */
 const totalNow = (
@@ -341,15 +341,13 @@ const totalNow = (
     shippingMethod: StaticShippingMethod | undefined
 ): ExpectedTotal => {
     const currency = shopCurrency();
-    const shippingCost = shippingMethod ? shippingPriceFor(shippingMethod, joined, currency) : 0;
-    return {
-        amount: toMinorUnits(orderTotal({ items: joined, shippingCost, currency }), currency),
-        currency
-    };
+    const shippingCost = shippingMethod ? shippingPriceFor(shippingMethod, joined, currency) : undefined;
+    return { amount: orderTotal({ items: joined, shippingCost, currency }), currency };
 };
 
 /**
  * Refuse a checkout whose total is not the one the buyer was shown (409 `CART_TOTAL_CHANGED`),
+ * or whose named total has more places than its currency (422),
  * answering with both totals so the screen can show the new one. Nothing is written yet, so
  * nothing needs undoing. A request without `expectedTotal` is not refused here: the HTTP contract
  * requires the field, and a direct service caller that names none has shown nobody anything.
@@ -365,8 +363,18 @@ const refuseChangedTotal = (
     expectedTotal: ExpectedTotal | undefined
 ): ResponseReject | undefined => {
     if (!expectedTotal) return undefined;
+    // More places than the currency has is a typing mistake, not a moved cart: 422, not 409.
+    if (!fitsCurrency(expectedTotal.amount, expectedTotal.currency))
+        return generateReject(422, [
+            fieldError('expectedTotal.amount', t('cart.expected-total-invalid'))
+        ]);
     const actual = totalNow(joined, shippingMethod);
-    if (actual.amount === expectedTotal.amount && actual.currency === expectedTotal.currency)
+    // By minor units, so `"71"` and `"71.00"` are the same total.
+    if (
+        toMinorUnits(actual.amount, actual.currency) ===
+            toMinorUnits(expectedTotal.amount, expectedTotal.currency) &&
+        actual.currency === expectedTotal.currency
+    )
         return undefined;
     return generateReject(409, [
         {

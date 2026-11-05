@@ -45,7 +45,7 @@ describe('the ship action and the ship door agree', () => {
 
         for (const status of STATUSES)
             for (const { role, staff } of signedIn) {
-                const product = await createProduct({ title: `Shirt ${Math.random()}`, price: 30 });
+                const product = await createProduct({ title: `Shirt ${Math.random()}`, price: '30.00' });
                 const order = await createOrder(owner.user, [toOrderItem(product, 1)], {
                     status: OrderStatus.paid
                 });

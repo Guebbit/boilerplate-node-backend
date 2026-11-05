@@ -7,6 +7,7 @@
 
 import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
+import { padDecimal } from '@domain-primitives/money';
 import {
     fieldError,
     generateReject,
@@ -240,7 +241,7 @@ export const returnClosedEvent = (
     payload: {
         returnId: String(closed._id),
         orderId: String(closed.orderId),
-        refundAmount: closed.refundAmount ?? 0,
+        refundAmount: padDecimal(closed.refundAmount ?? '0', closed.currency),
         currency: closed.currency,
         ...(closed.remedy ? { remedy: closed.remedy } : {})
     },

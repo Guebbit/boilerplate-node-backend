@@ -74,7 +74,7 @@ const outcomes = new Map<string, ProviderPaymentState>();
  * and currency it was opened with and the payment id it carries — what a real provider echoes back.
  * Same in-memory trade-off as {@link outcomes}: an intent this process never prepared reports none.
  */
-const intents = new Map<string, { amount: number; currency: string; paymentId: string }>();
+const intents = new Map<string, { amount: string; currency: string; paymentId: string }>();
 
 /** What {@link setFakeReceipt} may override in a `succeeded` answer, per intent. */
 type ReceiptOverride = Pick<ProviderPaymentState, 'amountReceived' | 'currency' | 'paymentId'>;
@@ -225,7 +225,7 @@ interface KeyedAnswer {
 /** One refund the fake holds, the way a provider keeps it as an object of its own. */
 interface FakeRefund extends ProviderRefundState {
     providerRef: string;
-    amount: number;
+    amount: string;
     currency: string;
     createdAt: Date;
 }
@@ -257,7 +257,7 @@ const stateOf = (known: FakeRefund): ProviderRefundState => ({
 export const addFakeExternalRefund = (
     providerRef: string,
     refund: {
-        amount: number;
+        amount: string;
         currency: string;
         status: ProviderRefundState['status'];
         createdAt?: Date;

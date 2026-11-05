@@ -6,7 +6,7 @@
  */
 
 import { invoicingService } from '@modules/invoicing';
-import { addMoney, toDecimalAmount } from '@domain-primitives/money';
+import { addMoney, toDecimalString } from '@domain-primitives/money';
 import { orderService } from '@modules/orders';
 import { paymentService } from '@modules/payments';
 import { returnService } from '@modules/returns';
@@ -47,7 +47,7 @@ export const getProductStats = (
                     unitsOrdered: row.units,
                     unitsReversed,
                     netUnits: row.units - unitsReversed,
-                    netSales: toDecimalAmount(row.netSales, row.currency)
+                    netSales: toDecimalString(row.netSales, row.currency)
                 };
             })
         };
@@ -64,7 +64,7 @@ export const getCategoryStats = (period: Period): Promise<WithoutLimits<Category
             category: row.category,
             currency: row.currency,
             unitsOrdered: row.units,
-            netSales: toDecimalAmount(row.netSales, row.currency)
+            netSales: toDecimalString(row.netSales, row.currency)
         }))
     }));
 
@@ -107,7 +107,7 @@ export const getPaymentMix = (period: Period): Promise<WithoutLimits<PaymentMix>
             provider: row.provider,
             currency: row.currency,
             payments: row.payments,
-            amount: toDecimalAmount(row.amount, row.currency)
+            amount: toDecimalString(row.amount, row.currency)
         }))
     }));
 
@@ -135,8 +135,8 @@ export const getOperationsStats = (period: Period): Promise<WithoutLimits<Operat
                 const credited = addMoney(...rows.map((row) => row.credited.gross));
                 return {
                     currency,
-                    invoiced: toDecimalAmount(invoiced, currency),
-                    credited: toDecimalAmount(credited, currency),
+                    invoiced: toDecimalString(invoiced, currency),
+                    credited: toDecimalString(credited, currency),
                     rate: rateOf(credited, invoiced)
                 };
             })
@@ -163,7 +163,7 @@ export const getPipelineStats = (): Promise<PipelineStats> =>
         awaitingTransfers: snapshot.awaitingTransfers.map((row) => ({
             currency: row.currency,
             count: row.count,
-            amount: toDecimalAmount(row.amount, row.currency),
+            amount: toDecimalString(row.amount, row.currency),
             ...(row.nearestPayBy ? { nearestPayBy: row.nearestPayBy.toISOString() } : {})
         }))
     }));

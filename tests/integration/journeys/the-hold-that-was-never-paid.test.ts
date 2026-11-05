@@ -51,7 +51,7 @@ const awaiting = async (staff: string) =>
 describe('an abandoned 3-D Secure challenge', () => {
     it('is expired by the sweep: stock back, order canceled, shopper told', async () => {
         freezeDate();
-        const product = await createProduct({ price: 20, onHand: 10 });
+        const product = await createProduct({ price: '20.00', onHand: 10 });
         const productId = String(product._id);
         const { bearer, email } = await newShopper();
         const { user: admin } = await authenticateAs('admin');
@@ -77,7 +77,7 @@ describe('an abandoned 3-D Secure challenge', () => {
 describe('a bank transfer nobody sent', () => {
     it('is expired after the transfer hold: off the awaiting list, stock back, shopper told', async () => {
         freezeDate();
-        const product = await createProduct({ price: 20, onHand: 10 });
+        const product = await createProduct({ price: '20.00', onHand: 10 });
         const productId = String(product._id);
         const { bearer, email } = await newShopper();
         const { user: admin } = await authenticateAs('admin');

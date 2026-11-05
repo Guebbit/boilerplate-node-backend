@@ -142,7 +142,7 @@ describe('stock arriving for a paid preorder', () => {
 
     it('serves the earliest promise first when an order holds the same product for two dates', async () => {
         const user = await createUser({ email: 'two-dates@example.com' });
-        const product = await createProduct({ onHand: 0, price: 10 });
+        const product = await createProduct({ onHand: 0, price: '10.00' });
         const early = inDays(20);
         const late = inDays(40);
         const [first, second] = [toOrderItem(product, 1), toOrderItem(product, 2)];

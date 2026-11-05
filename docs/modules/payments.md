@@ -174,7 +174,7 @@ to ask back), not a status write.
 
 **Before the final write, the money is compared with what was asked.** A provider's `succeeded`
 carries `amountReceived`, `currency` and `paymentId`, and `settlePayment` checks all three against
-the payment frozen at the intent, in minor units. One that differs, or is missing, is not accepted
+the payment frozen at the intent, compared in minor units (the provider's `amountReceived` is decimal text, so `"50"` and `"50.00"` agree). One that differs, or is missing, is not accepted
 (PayPal IPN, WooCommerce "on hold" and Magento "Suspected Fraud" all make the same comparison). The
 payment is written `succeeded` with what ARRIVED, and then:
 
@@ -417,7 +417,7 @@ sequenceDiagram
 - **Opened before asked.** The write that appends the record also raises `amountRefunded`, and it is
   conditional on `amountRefunded` still being what the caller read — so two racing partial refunds
   cannot return more than was paid. A miss re-reads and re-checks.
-- **Exact sums.** Amounts are summed in integer minor units (`toMinorUnits`/`toDecimalAmount` from
+- **Exact sums.** Amounts are summed in integer minor units (`toMinorUnits`/`toDecimalString` from
   `@domain-primitives/money`), never by adding decimals. They rest as `Decimal128`
   ([Money at rest](../theory/tactical-ddd.md#at-rest-decimal128)); a refund with more places than
   the currency's minor unit is refused (`fitsCurrency`).
@@ -1095,7 +1095,7 @@ onto them and nothing else is visible to the rest of the module.
 
 A decline is an answer, not an error: `confirm` returns `declined` and throws only on transport
 failure. `succeeded` without `amountReceived` is treated as a mismatch, so convert minor units to
-the decimal the payment stores.
+the decimal the payment stores. Amounts, refunds, disputes and the `amountMin`/`amountMax` filters travel as decimal strings; the webhook `amount` fields likewise.
 
 ### Declines are reported once
 

@@ -17,7 +17,7 @@ import { DisputeKind, DisputeStatus } from '@types';
 export interface DisputeFacts {
     kind: DisputeKind;
     status: DisputeStatus;
-    amount: number;
+    amount: string;
     currency: string;
 }
 
@@ -96,7 +96,7 @@ export const lostToChargebacks = (payment: DisputablePayment, currency: string):
  */
 export const lostChargebackCovers = (
     payment: DisputablePayment,
-    amount: number,
+    amount: string,
     currency: string
 ): boolean => lostToChargebacks(payment, currency) >= toMinorUnits(amount, currency);
 

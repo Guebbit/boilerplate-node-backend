@@ -29,7 +29,7 @@ afterEach(() => {
 });
 
 /** One order, paid by card — refundable once, same fixture shape as the retry-webhooks suite. */
-const paidOrder = async (price: number) => {
+const paidOrder = async (price: string) => {
     const user = await createUser();
     const product = await createProduct({ price });
     const created = await orderService.create(
@@ -57,7 +57,7 @@ it('an admin refund fans out a payment.refunded delivery carrying the amount and
         { caller: callerAs('manager'), analyticsConsent: false }
     );
 
-    const { order } = await paidOrder(20);
+    const { order } = await paidOrder('20.00');
 
     const refunded = await refundOrderPayment(
         String(order._id),
@@ -73,7 +73,7 @@ it('an admin refund fans out a payment.refunded delivery carrying the amount and
     const [delivery] = await refundDeliveries();
     expect(delivery?.payload).toMatchObject({
         orderId: String(order._id),
-        amount: 20,
+        amount: '20.00',
         currency
     });
 });

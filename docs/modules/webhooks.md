@@ -293,7 +293,7 @@ Subscriptions, the secret ring and the delivery log all have an admin screen in 
 endpoints. "Usable via any HTTP client" is true too (nothing here requires the UI). See that repo's `docs/modules/webhooks.md` for the client side, including why
 `createSecret`'s response never gets cached client-side.
 
-Delivery payloads carry ids, amounts and the return `reason` code, never a return's free text
+Delivery payloads carry ids, amounts (decimal strings at the currency's own places, `"19.90"` EUR, `"1000"` JPY, like every API amount) and the return `reason` code, never a return's free text
 (`note`, `declineMessage`). Delivery rows are kept `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` (30) days.
 
 ## Not wanted? Remove the module

@@ -37,11 +37,11 @@ describe('resolveSnapshotProducts', () => {
         );
 
         const [result] = await resolveSnapshotProducts('it', [
-            { _id: id, title: 'Dog Bed', price: 10 }
+            { _id: id, title: 'Dog Bed', price: '10.00' }
         ]);
 
         expect(result.title).toBe('Cuccia');
-        expect(result.price).toBe(10);
+        expect(result.price).toBe('10.00');
     });
 
     it('asks the port for the whole fallback chain — exact tag, base language, then the deployment fallback', async () => {
@@ -49,7 +49,7 @@ describe('resolveSnapshotProducts', () => {
         const resolve = jest.fn().mockResolvedValue(new Map());
         registerTranslationPort(fakePort({ resolve }));
 
-        await resolveSnapshotProducts('it-CH', [{ _id: id, title: 'Dog Bed', price: 10 }]);
+        await resolveSnapshotProducts('it-CH', [{ _id: id, title: 'Dog Bed', price: '10.00' }]);
 
         expect(resolve).toHaveBeenCalledWith(
             'product',
@@ -64,7 +64,7 @@ describe('resolveSnapshotProducts', () => {
         registerTranslationPort(fakePort());
 
         const [result] = await resolveSnapshotProducts('it', [
-            { _id: id, title: 'Dog Bed', price: 10 }
+            { _id: id, title: 'Dog Bed', price: '10.00' }
         ]);
 
         expect(result.title).toBe('Dog Bed');
@@ -77,7 +77,7 @@ describe('resolveSnapshotProducts', () => {
 
         const { runWithLocale } = await import('@infrastructure/i18n');
         await runWithLocale('en', () =>
-            resolveSnapshotProducts('it', [{ _id: id, title: 'Dog Bed', price: 10 }])
+            resolveSnapshotProducts('it', [{ _id: id, title: 'Dog Bed', price: '10.00' }])
         );
 
         // Candidates are built from the explicit 'it' argument, never from the ambient 'en'.
@@ -89,7 +89,7 @@ describe('resolveSnapshotProducts', () => {
         registerTranslationPort(fakePort());
 
         const [result] = await resolveSnapshotProducts('it', [
-            { _id: id, title: 'Dog Bed', price: 10 }
+            { _id: id, title: 'Dog Bed', price: '10.00' }
         ]);
 
         expect(result._id).toBe(id);
@@ -108,7 +108,7 @@ describe('freezeOrderLines — the VAT rate', () => {
 
         const [item] = await freezeOrderLines(
             'en',
-            [{ _id: new Types.ObjectId(), title: 'Dog Bed', price: 10 }],
+            [{ _id: new Types.ObjectId(), title: 'Dog Bed', price: '10.00' }],
             [1]
         );
 
@@ -122,7 +122,7 @@ describe('freezeOrderLines — the VAT rate', () => {
 
         const [item] = await freezeOrderLines(
             'en',
-            [{ _id: new Types.ObjectId(), title: 'Book', price: 10, taxClass: 'reduced' }],
+            [{ _id: new Types.ObjectId(), title: 'Book', price: '10.00', taxClass: 'reduced' }],
             [1]
         );
 
@@ -134,7 +134,7 @@ describe('freezeOrderLines — the VAT rate', () => {
 
         return freezeOrderLines(
             'en',
-            [{ _id: new Types.ObjectId(), title: 'Dog Bed', price: 10, weight: 2500 }],
+            [{ _id: new Types.ObjectId(), title: 'Dog Bed', price: '10.00', weight: 2500 }],
             [1]
         ).then(([item]) => {
             expect(item.product.weight).toBe(2500);
@@ -146,7 +146,7 @@ describe('freezeOrderLines — the VAT rate', () => {
 
         return freezeOrderLines(
             'en',
-            [{ _id: new Types.ObjectId(), title: 'Dog Bed', price: 10 }],
+            [{ _id: new Types.ObjectId(), title: 'Dog Bed', price: '10.00' }],
             [1]
         ).then(([item]) => {
             expect(item.product.weight).toBeUndefined();
@@ -158,7 +158,7 @@ describe('freezeOrderLines — the VAT rate', () => {
 
         return freezeOrderLines(
             'en',
-            [{ _id: new Types.ObjectId(), title: 'Dog Bed', price: 10, sku: 'DOG-BED-15KG' }],
+            [{ _id: new Types.ObjectId(), title: 'Dog Bed', price: '10.00', sku: 'DOG-BED-15KG' }],
             [1]
         ).then(([item]) => {
             expect(item.product.sku).toBe('DOG-BED-15KG');
@@ -170,7 +170,7 @@ describe('freezeOrderLines — the VAT rate', () => {
 
         return freezeOrderLines(
             'en',
-            [{ _id: new Types.ObjectId(), title: 'Dog Bed', price: 10 }],
+            [{ _id: new Types.ObjectId(), title: 'Dog Bed', price: '10.00' }],
             [1]
         ).then(([item]) => {
             expect(item.product.sku).toBeUndefined();
@@ -188,7 +188,7 @@ describe('freezeOrderLines — the VAT rate', () => {
                 {
                     _id: new Types.ObjectId(),
                     title: 'Book',
-                    price: 10,
+                    price: '10.00',
                     taxClass: 'zero',
                     rateType: 'exempt'
                 }
@@ -204,7 +204,7 @@ describe('freezeOrderLines — the VAT rate', () => {
 
         return freezeOrderLines(
             'en',
-            [{ _id: new Types.ObjectId(), title: 'Dog Bed', price: 10 }],
+            [{ _id: new Types.ObjectId(), title: 'Dog Bed', price: '10.00' }],
             [1]
         ).then(([item]) => {
             expect(item.product.rateType).toBeUndefined();
@@ -218,7 +218,7 @@ describe('freezeOrderLines — the VAT rate', () => {
 
         return freezeOrderLines(
             'en',
-            [{ _id: new Types.ObjectId(), title: 'Book', price: 10, taxClass: 'reduced' }],
+            [{ _id: new Types.ObjectId(), title: 'Book', price: '10.00', taxClass: 'reduced' }],
             [1]
         ).then(([item]) => {
             expect(item.product).not.toHaveProperty('taxClass');
@@ -234,7 +234,7 @@ describe('freezeOrderLines — the VAT rate', () => {
 
             return freezeOrderLines(
                 'en',
-                [{ _id: new Types.ObjectId(), title: 'Coming soon', price: 10, releaseDate }],
+                [{ _id: new Types.ObjectId(), title: 'Coming soon', price: '10.00', releaseDate }],
                 [1]
             ).then(([item]) => {
                 expect(item.product).toMatchObject({ preorder: true, releaseDate });
@@ -250,10 +250,10 @@ describe('freezeOrderLines — the VAT rate', () => {
                     {
                         _id: new Types.ObjectId(),
                         title: 'Released',
-                        price: 10,
+                        price: '10.00',
                         releaseDate: new Date(Date.now() - day)
                     },
-                    { _id: new Types.ObjectId(), title: 'Ordinary', price: 10 }
+                    { _id: new Types.ObjectId(), title: 'Ordinary', price: '10.00' }
                 ],
                 [1, 1]
             ).then((items) => {

@@ -5,12 +5,11 @@
  * check goes through here instead of spelling the body out each time.
  */
 
-import { toMinorUnits } from '@domain-primitives/money';
 import { api } from '@tests/http';
 
-/** What a client's cart screen would show as the total, in the shape the checkout request names it. */
+/** What a client's cart screen would show as the total, in the shape the checkout request names it (decimal text). */
 export interface ShownTotal {
-    amount: number;
+    amount: string;
     currency: string;
 }
 
@@ -18,14 +17,14 @@ export interface ShownTotal {
  * The total `GET /cart` shows the caller right now.
  *
  * @param bearer - the `Authorization` header value of the shopper
- * @returns the total in minor units, with its currency
+ * @returns the total as the cart printed it, with its currency
  */
 export const shownTotal = async (bearer: string): Promise<ShownTotal> => {
     const response = await api().get('/cart').set('Authorization', bearer);
     const { totalPrice, currency } = (
-        response.body as { summary: { totalPrice: number; currency: string } }
+        response.body as { summary: { totalPrice: string; currency: string } }
     ).summary;
-    return { amount: toMinorUnits(totalPrice, currency), currency };
+    return { amount: totalPrice, currency };
 };
 
 /**

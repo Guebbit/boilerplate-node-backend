@@ -17,7 +17,7 @@ const ORDER_ID = 'order-1';
 const line = (
     title: string,
     flags: { requiresShipping?: boolean; noWithdrawal?: boolean } = {}
-): OrderLines['items'][number] => ({ quantity: 1, product: { title, price: 10, ...flags } });
+): OrderLines['items'][number] => ({ quantity: 1, product: { title, price: '10.00', ...flags } });
 
 const GOODS: OrderLines = { items: [line('Dog Bed')], currency: 'EUR' };
 const DIGITAL: OrderLines = {

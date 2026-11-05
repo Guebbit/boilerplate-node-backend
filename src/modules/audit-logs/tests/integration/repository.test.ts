@@ -275,7 +275,7 @@ describe('auditLogService.search — the ownOrder filter', () => {
         await auditLogRepository.create(
             makeEntry({ targetId: 'own', metadata: { ownOrder: true } })
         );
-        await auditLogRepository.create(makeEntry({ targetId: 'other', metadata: { amount: 3 } }));
+        await auditLogRepository.create(makeEntry({ targetId: 'other', metadata: { amount: '3.00' } }));
         await auditLogRepository.create(makeEntry({ targetId: 'bare' }));
     });
 

@@ -16,7 +16,7 @@ import { canProcessOrder, orderService } from '@modules/orders';
 import type { AuthContext, CallerContext, Order, ShippingMethodsResponse } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { deliveryAuditActions } from '../audit';
-import { SHIPPING_METHODS } from '../domain';
+import { SHIPPING_METHODS, quoteMethod } from '../domain';
 import { ensureFulfillmentOrders } from './ensure';
 import { shopCurrency } from '@modules/shop';
 
@@ -32,8 +32,8 @@ import { shopCurrency } from '@modules/shop';
 export const listMethods = (): ResponseSuccess<ShippingMethodsResponse> => {
     const currency = shopCurrency();
     return generateSuccess({
-        // Spread: `SHIPPING_METHODS` itself is `readonly`, and the response type isn't.
-        methods: SHIPPING_METHODS.map((method) => ({ ...method, currency }))
+        // A fresh row each: `SHIPPING_METHODS` itself is `readonly`, and the response type isn't.
+        methods: SHIPPING_METHODS.map((method) => quoteMethod(method, currency))
     });
 };
 

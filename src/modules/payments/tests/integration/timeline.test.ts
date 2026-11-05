@@ -37,7 +37,7 @@ afterEach(() => {
 /** A customer who paid 100.00 by card: one product at 50.00, two units. */
 const paidOrder = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 50 });
+    const product = await createProduct({ price: '50.00' });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     const intent = await paymentService.createIntent(String(order._id), asCustomer(user.id));
     await paymentService.confirmPayment(
@@ -50,7 +50,7 @@ const paidOrder = async () => {
 };
 
 /** Refund `amount` of the order's payment as the operator `admin-1`. */
-const refund = (orderId: string, amount: number) =>
+const refund = (orderId: string, amount: string) =>
     refundOrderPayment(orderId, asAdmin(), callerContextAs('admin', 'admin-1'), {
         amount
     });
@@ -67,7 +67,7 @@ describe('the payment', () => {
 
     it('names the operator and the real method for money recorded by hand', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 10, onHand: 5 });
+        const product = await createProduct({ price: '10.00', onHand: 5 });
         const placed = await orderService.create(
             user.id,
             user.email,
@@ -90,7 +90,7 @@ describe('the payment', () => {
 
     it('writes a decline once, and nothing for one that lost its race', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 10, onHand: 5 });
+        const product = await createProduct({ price: '10.00', onHand: 5 });
         const placed = await orderService.create(
             user.id,
             user.email,
@@ -114,16 +114,16 @@ describe('a refund', () => {
     it('writes its issue and its settlement, with the operator, the money and the reason code', async () => {
         const { orderId } = await paidOrder();
 
-        await refund(orderId, 30);
+        await refund(orderId, '30.00');
 
         const rows = await timelineOf(orderId, 'refund');
         expect(rows).toMatchObject([
             {
                 type: 'refund_issued',
                 actor: 'admin-1',
-                data: { amount: 30, currency: 'EUR', reason: 'goodwill' }
+                data: { amount: '30.00', currency: 'EUR', reason: 'goodwill' }
             },
-            { type: 'refund_settled', actor: 'admin-1', data: { amount: 30 } }
+            { type: 'refund_settled', actor: 'admin-1', data: { amount: '30.00' } }
         ]);
         expect(rows[0].data.refundId).toBe(rows[1].data.refundId);
     });
@@ -134,7 +134,7 @@ describe('a refund', () => {
             new PaymentProviderError('insufficient_funds', 'raw provider text')
         );
 
-        await expect(refund(orderId, 30)).resolves.toMatchObject({ success: true, status: 201 });
+        await expect(refund(orderId, '30.00')).resolves.toMatchObject({ success: true, status: 201 });
 
         const rows = await timelineOf(orderId, 'refund');
         expect(rows.map(({ type }) => type)).toEqual(['refund_issued', 'refund_failed']);
@@ -150,7 +150,7 @@ describe('a refund', () => {
                 .mockRejectedValueOnce(new PaymentProviderError('insufficient_funds', 'x'))
                 .mockRejectedValueOnce(new PaymentProviderError('insufficient_funds', 'x'))
                 .mockRejectedValueOnce(new PaymentProviderError('declined', 'x'));
-            await expect(refund(orderId, 30)).resolves.toMatchObject({
+            await expect(refund(orderId, '30.00')).resolves.toMatchObject({
                 success: true,
                 status: 201
             });
@@ -175,7 +175,7 @@ describe('a refund', () => {
     it('hides the failed attempt from the buyer and shows it to staff', async () => {
         const { user, orderId } = await paidOrder();
         jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
-        await expect(refund(orderId, 30)).resolves.toMatchObject({ success: true, status: 201 });
+        await expect(refund(orderId, '30.00')).resolves.toMatchObject({ success: true, status: 201 });
 
         const buyer = await orderService.readTimeline(orderId, asCustomer(user.id));
         const staff = await orderService.readTimeline(orderId, asAdmin());

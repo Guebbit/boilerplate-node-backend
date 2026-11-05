@@ -31,7 +31,7 @@ let customers = 0;
 const heldAged = async (ageDays: number) => {
     customers += 1;
     const user = await createUser({ email: `hold-${customers}@example.com` });
-    const product = await createProduct({ price: 10 });
+    const product = await createProduct({ price: '10.00' });
     const order = await createOrder(user, [toOrderItem(product, 1)], {
         status: OrderStatus.processing
     });

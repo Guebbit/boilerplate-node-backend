@@ -72,7 +72,7 @@ export const refundIssuedEmail = (
     locale: string,
     name: string,
     orderRef: string,
-    refund: { amount: number; currency: string },
+    refund: { amount: string; currency: string },
     full: boolean
 ): EmailContent => {
     const t = translator(locale);
@@ -110,7 +110,7 @@ export const refundUndeliverableEmail = (
     locale: string,
     name: string,
     orderRef: string,
-    refund: { amount: number; currency: string },
+    refund: { amount: string; currency: string },
     shopEmail: string,
     orderId: string
 ): EmailContent => {

@@ -176,7 +176,7 @@ bank blocks because of a dispute (Stripe `charge_disputed`, `refund_disputed_pay
 | `kind`               | `inquiry` (information asked, no money taken) or `chargeback` (money taken back)            |
 | `status`             | `needs_response`, `under_review`, `won`, `lost`, `accepted`, `closed`                       |
 | `reason`             | Stripe's closed list (`fraudulent`, `product_not_received`, ...); map your provider onto it |
-| `amount`, `currency` | decimal, in the payment's currency; a report in another currency is dropped                 |
+| `amount`, `currency` | decimal text, in the payment's currency (`"19.90"`); a report in another currency is dropped |
 | `evidenceDueBy`      | the evidence deadline, when the provider gives one                                          |
 | `fundsWithdrawn`     | whether the bank has taken the money out of the shop's balance                              |
 | `observedAt`         | the provider's own event time: every write is conditional on it being newer                 |

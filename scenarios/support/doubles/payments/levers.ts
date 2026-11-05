@@ -85,8 +85,7 @@ const installDisputeLever = (app: Express): void => {
                     kind: wanted.kind,
                     status: wanted.status,
                     reason: wanted.reason,
-                    // A Decimal128 stringifies to its decimal.
-                    amount: wanted.amount ?? Number(String(payment.amount)),
+                    amount: wanted.amount?.toFixed(2) ?? String(payment.amount),
                     currency: payment.currency,
                     fundsWithdrawn: wanted.kind === 'chargeback' && wanted.status !== 'won',
                     evidenceDueBy: new Date(now + wanted.evidenceInDays * 86_400_000).toISOString(),

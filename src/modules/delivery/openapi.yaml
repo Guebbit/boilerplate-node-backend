@@ -663,17 +663,13 @@ components:
                     type: string
                     description: Stable id, frozen onto orders at checkout (standard, express, pickup).
                 price:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: Flat rate, in `currency`.
                 currency:
                     allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     description: ISO-4217 currency code (e.g. EUR) — this deployment's `NODE_DEFAULT_CURRENCY`.
                 freeAbove:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: Items total at which this method becomes free. Absent — it never does.
                 tracked:
                     type: boolean

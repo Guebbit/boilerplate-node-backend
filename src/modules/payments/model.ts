@@ -43,7 +43,7 @@ export interface RefundLine {
 export interface RefundRecord {
     _id: Types.ObjectId;
     /** Decimal, in the payment's own currency — at most what was still refundable when it was opened. */
-    amount: number;
+    amount: string;
     /** Copied from the payment at the time, so a record reads on its own. */
     currency: string;
     status: RefundStatus;
@@ -66,7 +66,7 @@ export interface RefundRecord {
      */
     lines?: RefundLine[];
     /** The delivery cost inside `amount`, beside `lines` — a decimal. Never published. */
-    shipping?: number;
+    shipping?: string;
     /** The provider's id for the refund, once it answered. Staff only, like `providerRef`. */
     providerRefundRef?: string;
     /**
@@ -124,7 +124,7 @@ export interface DisputeRecord {
     status: DisputeStatus;
     reason: DisputeReason;
     /** Decimal, in `currency`. */
-    amount: number;
+    amount: string;
     currency: string;
     /** When the provider stops taking evidence. */
     evidenceDueBy?: Date;
@@ -168,7 +168,7 @@ export interface PaymentDocument extends Document {
      */
     userId?: Types.ObjectId;
     /** What the intent froze the price at — the order's total when the intent was created. */
-    amount: number;
+    amount: string;
     /** ISO-4217, from `NODE_DEFAULT_CURRENCY`. Carried per document: config can change. */
     currency: string;
     status: PaymentStatus;
@@ -207,7 +207,7 @@ export interface PaymentDocument extends Document {
      * counts a refund the moment it is opened, which is what stops two racing partial refunds
      * from returning more than the customer paid.
      */
-    amountRefunded: number;
+    amountRefunded: string;
     /** One record per refund attempt, oldest first. */
     refunds: RefundRecord[];
     /** Disputes the buyer's bank opened on this payment, oldest first. Staff only on the wire. */
@@ -338,7 +338,7 @@ export const paymentSchema = new Schema<PaymentDocument>(
         payBy: {
             type: Date
         },
-        amountRefunded: moneyPath({ required: true, nonNegative: true, default: 0 }),
+        amountRefunded: moneyPath({ required: true, nonNegative: true, default: '0' }),
         refunds: {
             type: [refundSchema],
             default: []
@@ -354,7 +354,7 @@ export const paymentSchema = new Schema<PaymentDocument>(
 );
 
 /**
- * Money is stored as Decimal128 and a lean read hands numbers back — see `@infrastructure/persistence/money-field`.
+ * Money is stored as Decimal128 and a lean read hands decimal text back — see `@infrastructure/persistence/money-field`.
  */
 paymentSchema.plugin(moneyPlugin);
 

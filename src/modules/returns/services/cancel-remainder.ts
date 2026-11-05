@@ -19,6 +19,7 @@
  */
 
 import { t } from '@infrastructure/i18n';
+import { NO_MONEY, toMinorUnits } from '@domain-primitives/money';
 import { generateReject } from '@infrastructure/http/response';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { nudgeOutbox } from '@kernel/outbox';
@@ -80,7 +81,7 @@ const rowFor = (
     opening: Opener,
     fulfillmentOrderId: string,
     lines: readonly ProductQuantity[],
-    breakdown: { total: number; shipping: number }
+    breakdown: { total: string; shipping: string }
 ): Partial<ReturnDocument> => {
     const now = new Date();
     const byProduct = new Map(order.items.map((item) => [String(item.product._id), item]));
@@ -163,16 +164,16 @@ const cancelUnderLock = (
         );
         await enqueueRequested(created, session);
         await enqueueClosed(created, session);
-        const owed = created.refundAmount ?? 0;
+        const owed = created.refundAmount ?? '0';
         const opened =
-            owed > 0
+            toMinorUnits(owed, created.currency) > NO_MONEY
                 ? await paymentService.openReturnRefund(
                       orderId,
                       {
                           returnId: String(created._id),
                           amount: owed,
                           lines: canceled.lines,
-                          shipping: created.shippingRefund ?? 0,
+                          shipping: created.shippingRefund ?? '0',
                           reason: 'cancellation'
                       },
                       context,

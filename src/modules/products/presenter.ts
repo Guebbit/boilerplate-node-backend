@@ -15,6 +15,7 @@ import { isBuyable, type BuyableFacts } from './domain/buyable';
 import { lowStockThreshold } from './config';
 import type { ProductDocument } from './model';
 import { shopCurrency } from '@modules/shop';
+import { padDecimal } from '@domain-primitives/money';
 
 /**
  * The block of a product's response that is derived, never stored: `available` (the shelf, or for
@@ -57,7 +58,8 @@ export const presentProduct = (document: ProductDocument): Product => {
     return carryVersion(document, {
         id: document.id,
         title: document.title,
-        price: document.price,
+        // The wire spelling: the stored Decimal128 forgot its trailing zeros; the shop's live currency fixes the places.
+        price: padDecimal(document.price, shopCurrency()),
         ...derivedStockFields(document),
         ...(document.taxClass === undefined ? {} : { taxClass: document.taxClass }),
         ...(document.rateType === undefined ? {} : { rateType: document.rateType }),

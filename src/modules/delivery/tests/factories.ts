@@ -168,7 +168,7 @@ export const paidPreorderOrder = async (
     const user = typeof buyer === 'string' ? await createUser({ email: buyer }) : buyer;
     const products = await Promise.all(
         wanted.map(({ releaseDate }) =>
-            createProduct({ onHand: 0, price: 10, releaseDate: releaseDate.toISOString() })
+            createProduct({ onHand: 0, price: '10.00', releaseDate: releaseDate.toISOString() })
         )
     );
     const order = await createOrder(
@@ -213,7 +213,7 @@ export const paidBackorderOrder = async (
     const user = typeof buyer === 'string' ? await createUser({ email: buyer }) : buyer;
     const product = await createProduct({
         onHand: wanted.shelf,
-        price: 10,
+        price: '10.00',
         allowBackorder: true,
         ...(wanted.restockDate ? { restockDate: wanted.restockDate.toISOString() } : {})
     });

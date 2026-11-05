@@ -30,7 +30,7 @@ import {
     parseReference,
     refundDueBy
 } from '../domain';
-import { addMoney, toDecimalAmount, toMinorUnits } from '@domain-primitives/money';
+import { addMoney, NO_MONEY, padDecimal, toDecimalString, toMinorUnits } from '@domain-primitives/money';
 import { DisputeStatus } from '@types';
 import type { PaymentDocument, RefundRecord } from '../model';
 import { paymentRepository, type RefundFilters, type RefundRow } from '../repository';
@@ -163,7 +163,7 @@ const refundAttention = (row: RefundRow, kind: PaymentAttentionKind): PaymentAtt
     orderId: String(row.orderId),
     paymentId: String(row.paymentId),
     refundId: String(row.refund._id),
-    amount: row.refund.amount,
+    amount: padDecimal(row.refund.amount, row.refund.currency),
     currency: row.refund.currency,
     ...(row.refund.failureReason ? { failureReason: row.refund.failureReason } : {}),
     // A reversed refund is a problem from the day it bounced, not from the day it was opened.
@@ -190,9 +190,9 @@ const exceedingRows = (payments: PaymentDocument[]): PaymentAttentionItem[] =>
                     orderId: String(payment.orderId),
                     paymentId: String(payment._id),
                     refundId: String(refund._id),
-                    amount: refund.amount,
+                    amount: padDecimal(refund.amount, refund.currency),
                     currency: refund.currency,
-                    exceedsBy: toDecimalAmount(exceedsBy(payment, refund), payment.currency),
+                    exceedsBy: toDecimalString(exceedsBy(payment, refund), payment.currency),
                     since: refund.createdAt.toISOString()
                 })
             )
@@ -202,8 +202,8 @@ const exceedingRows = (payments: PaymentDocument[]): PaymentAttentionItem[] =>
  * How much of a payment has been returned for good: its settled refunds that were not taken back.
  * @param payment - the payment
  */
-const refundedForGood = (payment: PaymentDocument): number =>
-    toDecimalAmount(
+const refundedForGood = (payment: PaymentDocument): string =>
+    toDecimalString(
         addMoney(
             ...payment.refunds
                 .filter((refund) => refund.status === 'succeeded' && !refund.reversedAt)
@@ -230,13 +230,13 @@ const disputeRows = (payments: PaymentDocument[]): PaymentAttentionItem[] =>
                     orderId: String(payment.orderId),
                     paymentId: String(payment._id),
                     disputeId: dispute.disputeRef,
-                    amount: dispute.amount,
+                    amount: padDecimal(dispute.amount, dispute.currency),
                     currency: dispute.currency,
                     since: dispute.openedAt.toISOString(),
                     ...(dispute.evidenceDueBy
                         ? { dueBy: dispute.evidenceDueBy.toISOString() }
                         : {}),
-                    ...(refunded > 0 ? { alreadyRefunded: refunded } : {})
+                    ...(toMinorUnits(refunded, payment.currency) > NO_MONEY ? { alreadyRefunded: refunded } : {})
                 };
             })
     );

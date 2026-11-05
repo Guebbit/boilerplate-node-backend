@@ -41,7 +41,7 @@ const admin = callerContextAs('admin', 'admin-1');
 /** A `processing` order of two units of one product, ready to ship. */
 const processingOrder = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 10 });
+    const product = await createProduct({ price: '10.00' });
     const order = await createOrder(user, [toOrderItem(product, 2)], {
         status: OrderStatus.processing
     });
@@ -150,7 +150,7 @@ describe('shipping and delivering', () => {
 describe('starting fulfillment', () => {
     it('names the operator on the processing row, as the first shipment does', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: '10.00' });
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             status: OrderStatus.paid
         });

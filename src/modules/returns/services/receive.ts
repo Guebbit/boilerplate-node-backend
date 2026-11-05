@@ -23,6 +23,7 @@
 
 import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
+import { NO_MONEY, toMinorUnits } from '@domain-primitives/money';
 import {
     fieldError,
     generateReject,
@@ -65,7 +66,7 @@ import { syncReturnStatus } from './projection';
 /** What staff may enter when the goods arrive. */
 export interface ReceiveReturnInput {
     /** Handling damage kept back from the refund (Art. 14(2)), a decimal in the return's currency. */
-    handlingDeduction?: number;
+    handlingDeduction?: string;
     /**
      * How many units of each returned product go back on sale. A product not listed goes back in
      * full; absent restocks everything. A broken unit is set to 0.
@@ -108,7 +109,7 @@ const deductionOnGuarantee = (): ResponseReject =>
     ]);
 
 /** What a replacement or a repair refunds: nothing. */
-const NO_REFUND: RefundBreakdown = { goods: 0, shipping: 0, deduction: 0, total: 0 };
+const NO_REFUND: RefundBreakdown = { goods: '0', shipping: '0', deduction: '0', total: '0' };
 
 /** What {@link claimAndRestock} decided. */
 type Claimed =
@@ -158,7 +159,7 @@ const quote = (
     returned: ReturnDocument,
     order: OrderDocument,
     earlier: readonly ReturnDocument[],
-    handlingDeduction: number
+    handlingDeduction: string
 ) => {
     const accounts = accountsOf(earlier, returned.currency);
     const ordered = order.items.map((item) => ({
@@ -175,11 +176,12 @@ const quote = (
         ]),
         shippingPaid: shippingStillOwed(
             returned.currency,
-            order.shippingCost ?? 0,
+            order.shippingCost ?? '0',
             accounts.shippingRefunded
         ),
         cheapestStandardShipping: cheapestStandardShipping(
-            sumLineItems(order.items, order.currency).price
+            sumLineItems(order.items, order.currency).price,
+            order.currency
         ),
         handlingDeduction
     });
@@ -231,7 +233,7 @@ const handOverRemedy = (
 const claimAndRestock = (
     returned: ReturnDocument,
     order: OrderDocument,
-    handlingDeduction: number,
+    handlingDeduction: string,
     restocked: readonly number[],
     remedy: ReturnRemedy,
     context: CallerContext
@@ -258,7 +260,7 @@ const claimAndRestock = (
                     remedy,
                     refundAmount: verdict.breakdown.total,
                     shippingRefund: verdict.breakdown.shipping,
-                    ...(handlingDeduction > 0 ? { handlingDeduction } : {}),
+                    ...(toMinorUnits(handlingDeduction, returned.currency) > NO_MONEY ? { handlingDeduction } : {}),
                     ...stampRestocked(restocked)
                 },
                 session
@@ -286,7 +288,7 @@ const claimAndRestock = (
             );
             // Nothing owed (a deduction ate it all, or zero-priced lines) opens no record.
             const opened =
-                verdict.breakdown.total > 0
+                toMinorUnits(verdict.breakdown.total, returned.currency) > NO_MONEY
                     ? await paymentService.openReturnRefund(
                           orderId,
                           {
@@ -362,7 +364,7 @@ const receiveFor = (
     // Checked before anything is written: a count that cannot stand never half-receives a return.
     if (remedy !== ReturnRemedy.refund && !isGuaranteeReason(returned.reason))
         return Promise.resolve(badRemedyFor());
-    if (isGuaranteeReason(returned.reason) && (input.handlingDeduction ?? 0) > 0)
+    if (isGuaranteeReason(returned.reason) && toMinorUnits(input.handlingDeduction ?? '0', returned.currency) > NO_MONEY)
         return Promise.resolve(deductionOnGuarantee());
     const restock = resolveRestock(wireLines(returned.lines), input.lines);
     if (!restock.ok) return Promise.resolve(badRestock(restock));
@@ -371,7 +373,7 @@ const receiveFor = (
         claimAndRestock(
             returned,
             order,
-            input.handlingDeduction ?? 0,
+            input.handlingDeduction ?? '0',
             restock.restocked,
             remedy,
             context

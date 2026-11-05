@@ -495,7 +495,7 @@ export const orderSchema = new Schema<OrderDocument>(
 );
 
 /**
- * Money is stored as Decimal128 and a lean read hands numbers back — see `@infrastructure/persistence/money-field`.
+ * Money is stored as Decimal128 and a lean read hands decimal text back — see `@infrastructure/persistence/money-field`.
  */
 orderSchema.plugin(moneyPlugin);
 

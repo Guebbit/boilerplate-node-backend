@@ -27,7 +27,7 @@ afterEach(() => {
 /** A priced order for a fresh customer, ready to be paid. */
 const anOrder = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 25 });
+    const product = await createProduct({ price: '25.00' });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     return { user, orderId: String(order._id) };
 };

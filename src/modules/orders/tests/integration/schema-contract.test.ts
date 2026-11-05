@@ -25,7 +25,7 @@ setupTestDb();
  */
 const makeOrderPayload = async () => {
     const user = await createUser({ email: 'buyer@example.com' });
-    const product = await createProduct({ title: 'Bought', price: 12.5 });
+    const product = await createProduct({ title: 'Bought', price: '12.50' });
     const { taxClass, ...snapshot } = product.toObject();
     return {
         userId: user._id,

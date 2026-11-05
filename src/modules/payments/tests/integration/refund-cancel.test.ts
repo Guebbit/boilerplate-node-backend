@@ -47,7 +47,7 @@ afterEach(() => {
 /** A fresh order of 100.00 (two units at 50.00). */
 const freshOrder = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 50 });
+    const product = await createProduct({ price: '50.00' });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     return { user, order, orderId: String(order._id) };
 };
@@ -67,7 +67,7 @@ const cashRefund = async () => {
         { method: 'cash' },
         callerContextAs('admin')
     );
-    await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: 30 });
+    await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: '30.00' });
     const payment = await paymentOf(orderId);
     return { orderId, payment, refundId: String(payment.refunds[0]._id) };
 };
@@ -79,7 +79,7 @@ const refusedRefund = async (reason: RefundFailureReason) => {
     await settleOutboxNudges();
     const before = await paymentOf(orderId);
     setFakeRefundFailure(String(before.providerRef), reason);
-    await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: 30 });
+    await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: '30.00' });
     const payment = await paymentOf(orderId);
     return { orderId, payment, refundId: String(payment.refunds[0]._id) };
 };
@@ -91,7 +91,7 @@ const cancel = (paymentId: string, refundId: string, note = 'refunded in the das
 describe('cancelling a hand-paid refund that waits', () => {
     it('closes the record, releases its share and writes the audit, the timeline and the event once', async () => {
         const { orderId, payment, refundId } = await cashRefund();
-        expect(payment.amountRefunded).toBe(30);
+        expect(payment.amountRefunded).toBe('30.00');
 
         const result = await cancel(String(payment._id), refundId);
 
@@ -99,13 +99,13 @@ describe('cancelling a hand-paid refund that waits', () => {
         const after = await paymentOf(orderId);
         expect(after.refunds[0]).toMatchObject({ status: 'failed', failureReason: 'canceled' });
         expect(after.refunds[0].settledByHand).toBeUndefined();
-        expect(after.amountRefunded).toBe(0);
+        expect(after.amountRefunded).toBe('0.00');
         await settleOutboxNudges();
         expect(await outboxEventModel.countDocuments({ name: PAYMENT_REFUND_CANCELED })).toBe(1);
         expect(audited.filter(({ action }) => action === 'admin.payment.refund_canceled')).toEqual([
             expect.objectContaining({
                 targetId: orderId,
-                metadata: { refundId, amount: 30, note: 'refunded in the dashboard too' }
+                metadata: { refundId, amount: '30.00', note: 'refunded in the dashboard too' }
             })
         ]);
         const rows = await timelineOf(orderId, 'refund_canceled');
@@ -141,12 +141,12 @@ describe('cancelling a hand-paid refund that waits', () => {
         await cancel(String(payment._id), refundId);
 
         const again = await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
-            amount: 100
+            amount: '100.00'
         });
 
         expect(again.success).toBe(true);
         const after = await paymentOf(orderId);
-        expect(after.amountRefunded).toBe(100);
+        expect(after.amountRefunded).toBe('100.00');
     });
 
     it('answers 409 PAYMENT_REFUND_NOT_OPEN to a second cancel and writes nothing more', async () => {
@@ -186,7 +186,7 @@ describe('cancelling a hand-paid refund that waits', () => {
     it('reads a payment with only a canceled refund as plainly succeeded, and refunded in full once the rest goes', async () => {
         const { orderId, payment, refundId } = await cashRefund();
         await cancel(String(payment._id), refundId);
-        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: 100 });
+        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: '100.00' });
         const second = await paymentOf(orderId);
         const owed = second.refunds[1];
 
@@ -217,7 +217,7 @@ describe.each(['declined', 'insufficient_funds'] as const)(
                     status: 'failed',
                     failureReason: 'canceled'
                 });
-                expect(after.amountRefunded).toBe(0);
+                expect(after.amountRefunded).toBe('0.00');
                 const spy = jest.spyOn(fakePaymentProvider, 'refund').mockClear();
                 await paymentService.retryOpenRefunds();
                 expect(spy).not.toHaveBeenCalled();
@@ -238,7 +238,7 @@ describe.each(['provider_unavailable', 'unknown'] as const)(
             expect(asReject(result).errors[0].code).toBe('PAYMENT_REFUND_IN_FLIGHT');
             const after = await paymentOf(orderId);
             expect(after.refunds[0]).toMatchObject({ status: 'failed', failureReason: reason });
-            expect(after.amountRefunded).toBe(30);
+            expect(after.amountRefunded).toBe('30.00');
             const offered = await paymentService.getForOrder(orderId, asAdmin());
             expect(offered.data?.actions?.cancelRefund).toEqual([]);
         });
@@ -250,7 +250,7 @@ describe('cancelling a refund that already paid out', () => {
         const { user, order, orderId } = await freshOrder();
         await payByCard(order, user);
         await settleOutboxNudges();
-        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: 30 });
+        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: '30.00' });
         const payment = await paymentOf(orderId);
         expect(payment.refunds[0].status).toBe('succeeded');
 
@@ -258,7 +258,7 @@ describe('cancelling a refund that already paid out', () => {
 
         expect(asReject(result).errors[0].code).toBe('PAYMENT_REFUND_NOT_OPEN');
         const after = await paymentOf(orderId);
-        expect(after.amountRefunded).toBe(30);
+        expect(after.amountRefunded).toBe('30.00');
     });
 });
 
@@ -282,6 +282,6 @@ describe('cancelling against a racing sweep', () => {
             expect(asReject(result).errors[0].code).toBe('PAYMENT_REFUND_IN_FLIGHT');
             const after = await paymentOf(orderId);
             expect(after.refunds[0].status).toBe('pending');
-            expect(after.amountRefunded).toBe(30);
+            expect(after.amountRefunded).toBe('30.00');
         }));
 });

@@ -21,7 +21,7 @@ import { testCallerContext } from '@tests/callers';
 setupTestDb();
 
 /** A shopper with a basket of `quantity` units of one product, shipping set to pickup (free). */
-const shopperWith = async (price: number, quantity = 2) => {
+const shopperWith = async (price: string, quantity = 2) => {
     const { user, bearer } = await authenticateAs('user');
     await giveAddress(user.id);
     const product = await createProduct({ price, onHand: 10 });
@@ -40,34 +40,34 @@ const shopperWith = async (price: number, quantity = 2) => {
 
 describe('POST /cart/checkout and the total the buyer was shown', () => {
     it('places the order when the named total is the one the cart shows', async () => {
-        const { bearer } = await shopperWith(10);
+        const { bearer } = await shopperWith('10.00');
 
         const response = await checkoutAs(bearer);
 
         expect(response.status).toBe(201);
-        expect(response.body.totalPrice).toBe(20);
+        expect(response.body.totalPrice).toBe('20.00');
     });
 
     it('refuses with both totals when the price moved after the cart was read', async () => {
-        const { bearer, product } = await shopperWith(10);
+        const { bearer, product } = await shopperWith('10.00');
         const shown = await shownTotal(bearer);
-        expect(shown).toEqual({ amount: 2000, currency: 'EUR' });
+        expect(shown).toEqual({ amount: '20.00', currency: 'EUR' });
 
-        await productService.updateById(String(product._id), { price: 12 }, testCallerContext);
+        await productService.updateById(String(product._id), { price: '12.00' }, testCallerContext);
         const response = await checkoutAs(bearer, { expectedTotal: shown });
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('CART_TOTAL_CHANGED');
         expect(response.body.errors[0].details).toEqual({
-            expected: { amount: 2000, currency: 'EUR' },
-            actual: { amount: 2400, currency: 'EUR' }
+            expected: { amount: '20.00', currency: 'EUR' },
+            actual: { amount: '24.00', currency: 'EUR' }
         });
     });
 
     it('leaves nothing behind: no order, no stock held, the cart still full', async () => {
-        const { bearer, product } = await shopperWith(10);
+        const { bearer, product } = await shopperWith('10.00');
         const shown = await shownTotal(bearer);
-        await productService.updateById(String(product._id), { price: 12 }, testCallerContext);
+        await productService.updateById(String(product._id), { price: '12.00' }, testCallerContext);
 
         await checkoutAs(bearer, { expectedTotal: shown });
 
@@ -78,11 +78,11 @@ describe('POST /cart/checkout and the total the buyer was shown', () => {
     });
 
     it('lets the buyer confirm the new total: naming it places the order', async () => {
-        const { bearer, product } = await shopperWith(10);
-        await productService.updateById(String(product._id), { price: 12 }, testCallerContext);
+        const { bearer, product } = await shopperWith('10.00');
+        await productService.updateById(String(product._id), { price: '12.00' }, testCallerContext);
 
         const response = await checkoutAs(bearer, {
-            expectedTotal: { amount: 2000, currency: 'EUR' }
+            expectedTotal: { amount: '20.00', currency: 'EUR' }
         });
         expect(response.status).toBe(409);
 
@@ -90,14 +90,14 @@ describe('POST /cart/checkout and the total the buyer was shown', () => {
             expectedTotal: response.body.errors[0].details.actual as Record<string, unknown>
         });
         expect(confirmed.status).toBe(201);
-        expect(confirmed.body.totalPrice).toBe(24);
+        expect(confirmed.body.totalPrice).toBe('24.00');
     });
 
     it('refuses a total named in another currency, even with the same amount', async () => {
-        const { bearer } = await shopperWith(10);
+        const { bearer } = await shopperWith('10.00');
 
         const response = await checkoutAs(bearer, {
-            expectedTotal: { amount: 2000, currency: 'USD' }
+            expectedTotal: { amount: '20.00', currency: 'USD' }
         });
 
         expect(response.status).toBe(409);
@@ -105,7 +105,7 @@ describe('POST /cart/checkout and the total the buyer was shown', () => {
     });
 
     it('refuses when the basket itself changed: a line added after the screen was read', async () => {
-        const { bearer, product } = await shopperWith(10);
+        const { bearer, product } = await shopperWith('10.00');
         const shown = await shownTotal(bearer);
         await api()
             .post('/cart/items')
@@ -116,11 +116,30 @@ describe('POST /cart/checkout and the total the buyer was shown', () => {
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('CART_TOTAL_CHANGED');
-        expect(response.body.errors[0].details.actual.amount).toBe(3000);
+        expect(response.body.errors[0].details.actual.amount).toBe('30.00');
+    });
+
+    it('accepts the named total however it is spelled: "20" and "20.00" are the same minor units', async () => {
+        const { bearer } = await shopperWith('10.00');
+
+        const response = await checkoutAs(bearer, { expectedTotal: { amount: '20', currency: 'EUR' } });
+
+        expect(response.status).toBe(201);
+    });
+
+    it('answers 422 to a total with more places than the currency has: an input mistake, not a moved cart', async () => {
+        const { bearer } = await shopperWith('10.00');
+
+        const response = await checkoutAs(bearer, {
+            expectedTotal: { amount: '20.005', currency: 'EUR' }
+        });
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].details.field).toBe('expectedTotal.amount');
     });
 
     it('answers 422 to a request that names no total at all: the field is required', async () => {
-        const { bearer } = await shopperWith(10);
+        const { bearer } = await shopperWith('10.00');
 
         const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
 
@@ -128,13 +147,13 @@ describe('POST /cart/checkout and the total the buyer was shown', () => {
     });
 
     it.each([
-        { amount: -1, currency: 'EUR' },
-        { amount: 20.5, currency: 'EUR' },
-        { amount: 2000, currency: 'EURO' },
-        { amount: 2000, currency: 'eur' },
-        { amount: 2000 }
+        { amount: '-1.00', currency: 'EUR' },
+        { amount: 2000, currency: 'EUR' },
+        { amount: '20.00', currency: 'EURO' },
+        { amount: '20.00', currency: 'eur' },
+        { amount: '20.00' }
     ])('answers 422 to a malformed total: %j', async (expectedTotal) => {
-        const { bearer } = await shopperWith(10);
+        const { bearer } = await shopperWith('10.00');
 
         const response = await api()
             .post('/cart/checkout')
@@ -145,12 +164,12 @@ describe('POST /cart/checkout and the total the buyer was shown', () => {
     });
 
     it('checks the stock first: a short line is told its own refusal, not a price one', async () => {
-        const { bearer, product } = await shopperWith(10, 2);
-        await productService.updateById(String(product._id), { price: 12 }, testCallerContext);
+        const { bearer, product } = await shopperWith('10.00', 2);
+        await productService.updateById(String(product._id), { price: '12.00' }, testCallerContext);
         await inventoryService.adjust(String(product._id), -9, 'stocktake', testCallerContext);
 
         const response = await checkoutAs(bearer, {
-            expectedTotal: { amount: 2000, currency: 'EUR' }
+            expectedTotal: { amount: '20.00', currency: 'EUR' }
         });
 
         expect(response.status).toBe(409);

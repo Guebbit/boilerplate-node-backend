@@ -56,7 +56,7 @@ export interface ProviderPaymentState {
      * a `succeeded` without it cannot be verified, so it is treated as a mismatch. A real adapter
      * converts its minor units here.
      */
-    amountReceived?: number;
+    amountReceived?: string;
     /** The currency that was collected, as the payment stores it (ISO-4217, upper case). */
     currency?: string;
     /**
@@ -113,7 +113,7 @@ export interface ProviderRefund extends ProviderRefundState {
     /** The provider's refund id (`re_…`). */
     refundRef: string;
     /** A decimal in {@link ProviderRefund.currency}; the adapter converts its minor units. */
-    amount: number;
+    amount: string;
     /** ISO-4217, upper case, as the payment stores it. */
     currency: string;
     /** When the provider created it. */
@@ -187,7 +187,7 @@ export interface PaymentProvider {
      * @param existingProviderRef - the reference this payment already holds, when it does
      */
     prepare(
-        charge: { amount: number; currency: string },
+        charge: { amount: string; currency: string },
         metadata: { orderId: string; paymentId: string },
         existingProviderRef?: string
     ): Promise<PreparedPayment>;
@@ -243,7 +243,7 @@ export interface PaymentProvider {
      */
     refund(
         providerRef: string,
-        charge: { amount: number; currency: string },
+        charge: { amount: string; currency: string },
         idempotency: { idempotencyKey: string; refundId: string; createdAt: Date }
     ): Promise<RefundedByProvider>;
 

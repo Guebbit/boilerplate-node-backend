@@ -26,7 +26,7 @@ x-error-codes:
     CART_SHIPPING_METHOD_REQUIRED: { status: 422, description: 'A shipping method is required and none is set on the cart.' }
     CART_SHIPPING_METHOD_WEIGHT: { status: 409, description: 'The cart''s total weight falls outside the chosen shipping method''s configured range.' }
     CART_SHIPPING_NOT_APPLICABLE: { status: 409, description: 'The chosen shipping method does not apply to an all-digital cart.' }
-    CART_TOTAL_CHANGED: { status: 409, description: 'The total the buyer was shown is not the total this checkout would charge — a price, a shipping cost or the cart itself changed. `errors[].details` carries `expected` (what the request named) and `actual` (what the order would cost now), each `{ amount, currency }` in minor units; show the new total and let the buyer confirm.' }
+    CART_TOTAL_CHANGED: { status: 409, description: 'The total the buyer was shown is not the total this checkout would charge — a price, a shipping cost or the cart itself changed. `errors[].details` carries `expected` (what the request named) and `actual` (what the order would cost now), each `{ amount, currency }` with the amount as a decimal string; show the new total and let the buyer confirm.' }
     CART_SHIP_TO_COUNTRY_NOT_SUPPORTED: { status: 422, description: 'The address''s country is outside this deployment''s configured ship-to list.' }
     EMAIL_NOT_VERIFIED: { status: 403, description: 'Checkout requires a verified email address — see `POST /account/email-verification/resend`.' }
     REORDER_UNAVAILABLE: { status: 409, description: 'The past order named for reorder no longer has any purchasable lines.' }
@@ -493,13 +493,12 @@ components:
             additionalProperties: false
             required: [amount, currency]
             description: >-
-                An order total as the buyer saw it, or as the checkout would charge it. The amount is
-                in minor units (cents), so two totals compare as integers and never as floats.
+                An order total as the buyer saw it, or as the checkout would charge it. Checkout
+                compares by minor units, so `"71"` and `"71.00"` are the same total.
             properties:
                 amount:
-                    type: integer
-                    minimum: 0
-                    description: The total in minor units of `currency` (EUR 71.00 is 7100).
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
+                    description: The total at the places of `currency` (EUR 71.00 is `"71.00"`).
                 currency:
                     allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     description: The ISO-4217 code the total is priced in.
@@ -561,7 +560,7 @@ components:
         CartSummaryResponse:
             type: object
             additionalProperties: false
-            required: [itemsCount, totalQuantity, itemsTotal, shippingCost, totalPrice, currency, expectedTotal]
+            required: [itemsCount, totalQuantity, itemsTotal, shippingCost, totalPrice, currency]
             properties:
                 itemsCount:
                     type: integer
@@ -572,16 +571,12 @@ components:
                     minimum: 0
                     description: Sum of quantities across all items
                 itemsTotal:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: >-
                         Sum of item prices * quantity. Gross — VAT included, same as each product's
                         own `price` — before shipping. There are no discounts to net out.
                 shippingCost:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: >-
                         What the cart's chosen shipping method (`PUT /cart/shipping-method`) costs
                         against `itemsTotal` right now (free-above thresholds included). `0` with
@@ -590,19 +585,11 @@ components:
                         freezes onto the order, priced early so a shopper sees the true total
                         before paying.
                 totalPrice:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: itemsTotal + shippingCost
                 currency:
                     allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     description: ISO-4217 currency code (e.g. USD)
-                expectedTotal:
-                    allOf: [{ $ref: '#/components/schemas/ExpectedTotal' }]
-                    description: >-
-                        `totalPrice` in minor units, exactly as `POST /cart/checkout` compares it:
-                        send it back unchanged as the checkout's `expectedTotal`. A client never
-                        converts the decimal itself, so it needs no table of currency exponents.
 
         CartResponse:
             type: object
@@ -669,9 +656,7 @@ components:
                     type: string
                     description: Matches a `ShippingMethod.id` from `GET /delivery/methods`.
                 price:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: >-
                         What this method costs against `summary.itemsTotal` right now (free-above
                         thresholds included) — the same figure `PUT /cart/shipping-method` would

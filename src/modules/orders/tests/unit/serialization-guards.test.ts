@@ -14,8 +14,8 @@ describe('order serialization guards', () => {
         // The happy path, stated first so the guards below are read as the exceptions they are.
         const serialized: Record<string, unknown> = {
             items: [
-                { product: { price: 10 }, quantity: 2 },
-                { product: { price: 5 }, quantity: 3 }
+                { product: { price: '10.00' }, quantity: 2 },
+                { product: { price: '5.00' }, quantity: 3 }
             ]
         };
 
@@ -23,7 +23,7 @@ describe('order serialization guards', () => {
 
         expect(serialized.totalItems).toBe(2);
         expect(serialized.totalQuantity).toBe(5);
-        expect(serialized.totalPrice).toBe(35);
+        expect(serialized.totalPrice).toBe('35.00');
     });
 
     it('survives a projection that never selected items', () => {
@@ -43,7 +43,7 @@ describe('order serialization guards', () => {
 
         expect(serialized.totalItems).toBe(0);
         expect(serialized.totalQuantity).toBe(0);
-        expect(serialized.totalPrice).toBe(0);
+        expect(serialized.totalPrice).toBe('0.00');
     });
 
     it('leaves a line item with no product snapshot alone', () => {

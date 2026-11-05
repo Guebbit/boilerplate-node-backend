@@ -415,13 +415,13 @@ changed is the arithmetic _between_ the boundaries.
 flowchart LR
     IN["product.price<br/>shippingCost<br/><i>decimal, unknown</i>"] -->|toMinorUnits| M["Money<br/><i>integer cents</i>"]
     M -->|addMoney / scaleMoney| M
-    M -->|toDecimalAmount| OUT["totalPrice<br/><i>decimal, contract</i>"]
+    M -->|toDecimalString| OUT["totalPrice<br/><i>decimal, contract</i>"]
 
     classDef exact fill:#dcfce7,stroke:#16a34a,color:#111827,stroke-width:2px;
     class M exact;
 ```
 
-One function in (`toMinorUnits`) and one out (`toDecimalAmount`), both taking the currency they
+One function in (`toMinorUnits`) and one out (`toDecimalString`), both taking the currency they
 convert for. Every intermediate is an integer, so the sum is exact and
 order-independent — no accumulator can round differently depending on the sequence it saw the lines
 in. The rounding rule exists once, in this file.
@@ -439,8 +439,8 @@ needs no conversion. Nothing above the persistence layer sees one.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
 flowchart LR
-    W["number<br/><i>19.99</i>"] -->|"cast by the schema"| D[("Decimal128<br/><i>stored</i>")]
-    D -->|"path getter · lean hook · serializer"| R["number<br/><i>19.99, the wire</i>"]
+    W["decimal string<br/><i>"19.99"</i>"] -->|"cast by the schema"| D[("Decimal128<br/><i>stored</i>")]
+    D -->|"path getter · lean hook · serializer"| R["string at the currency's scale<br/><i>"19.99", the wire</i>"]
     D -->|"$sum"| S["Decimal128<br/><i>exact sum</i>"]
     S -->|"toMinorUnits, read as text"| M["Money<br/><i>integer cents</i>"]
 
@@ -452,10 +452,11 @@ flowchart LR
   model declares a money field, and `moneyPlugin` is what a lean read needs. Decimal128 has no `min`,
   so `nonNegative` is a validator.
 - **Reading a sum.** `toMinorUnits` takes the `Decimal128` of a `$sum` as text and moves the digits;
-  it never multiplies a float. A `number` is still multiplied and rounded, for the wire's side.
-- **Not every aggregation is revived.** A lean read and `toJSON` hand back numbers. An aggregation's
+  it never multiplies a float. A `number` is still multiplied and rounded, for the callers that hold one.
+- **On the wire.** Every amount is a decimal string padded to its currency's ISO 4217 places (`"19.90"` EUR, `"1000"` JPY, `"1.500"` KWD), so two equal amounts are equal strings. `Decimal128` drops trailing zeros and `$inc`/`$sum` lose the scale, so `applySerialization` pads every money path last, from the schema's `moneyPath` list, with the document's own currency (products use the live shop currency). `toDecimalString` moves digits, never divides. A JSON number is refused with 422; more places than the currency has is refused with 422; rates (`taxRate`) stay numbers.
+- **Not every aggregation is revived.** A lean read and `toJSON` hand back decimal text. An aggregation's
   output is whatever its pipeline shaped, so a pipeline that returns stored money row by row
-  (`payments/repository.ts#aggregateRefundRows`) revives it with `reviveDecimals`.
+  (`payments/repository.ts#aggregateRefundRows`) revives it with `stringifyDecimals`; the serializer pads it on the way out.
 
 ### Which decimals a currency has
 
@@ -473,7 +474,7 @@ because that cannot vary by currency, so it is a refinement beside each schema.
 A class would give the domain layer an object identity to maintain, a `toJSON` every serialization
 path must know about, and a shape Mongoose would try to store. A branded number is **the same
 integer at runtime** and a distinct type at compile time — which is the whole benefit:
-`toDecimalAmount` is the only way back to a plain `number`, so an amount cannot be summed with a raw
+`toDecimalString` is the only way back to a plain `number`, so an amount cannot be summed with a raw
 price by accident or written to a document without passing the boundary that rounds it.
 
 ### Totality is checked at every step, not at the end
@@ -564,7 +565,7 @@ and `domain/credit-shares.ts` read it from there.
 ### Currency is an argument, not part of the type
 
 A currency's minor unit is not always a hundredth (JPY has none, KWD has three), so
-`toMinorUnits(value, currency)` and `toDecimalAmount(amount, currency)` take the code they convert
+`toMinorUnits(value, currency)` and `toDecimalString(amount, currency)` take the code they convert
 for, and `orderTotal` takes the order's own `currency`. The `Money` brand itself carries no
 currency, so `addMoney` cannot refuse a mismatch: the shop is single-currency per deployment
 (`NODE_DEFAULT_CURRENCY`), and a tag on the type would have one possible value.

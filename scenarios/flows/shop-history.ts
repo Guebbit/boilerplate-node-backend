@@ -266,7 +266,7 @@ const driveCatalogEdits = async (owner: Caller): Promise<void> => {
     await owner.call('PATCH', `/products/${SEED_PRODUCT_IDS.dogFoodStandard}`, {
         // A price change is the edit an operator makes most, and the one an audit reader most
         // wants to see a trail for.
-        price: 71
+        price: '71.00'
     });
 
     // Each module that owns a piece of the story contributes its own edit (`shop-modules.ts`'s

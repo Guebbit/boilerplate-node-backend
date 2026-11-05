@@ -71,7 +71,7 @@ const lostMails = () =>
 /** An order of `quantity` units, held, paid, `processing` and shipped in one parcel. */
 const shippedOrder = async (quantity: number, onHand = 10, email = 'lost@example.com') => {
     const user = await createUser({ email });
-    const product = await createProduct({ price: 10, onHand });
+    const product = await createProduct({ price: '10.00', onHand });
     const productId = String(product._id);
     const order = await createOrder(user, [toOrderItem(product, quantity)], {
         status: OrderStatus.processing
@@ -232,7 +232,7 @@ describe('reporting a parcel lost', () => {
 
     it('leaves a processing order processing and moves nothing else when other units were still to ship', async () => {
         const user = await createUser({ email: 'part@example.com' });
-        const product = await createProduct({ price: 10, onHand: 10 });
+        const product = await createProduct({ price: '10.00', onHand: 10 });
         const productId = String(product._id);
         const order = await createOrder(user, [toOrderItem(product, 3)], {
             status: OrderStatus.processing
@@ -487,7 +487,7 @@ describe('a short shelf', () => {
         const stranger = await createUser({ email: 'stranger@example.com' });
         const other = await createOrder(
             stranger,
-            [toOrderItem(await createProduct({ price: 1 }), 1)],
+            [toOrderItem(await createProduct({ price: '1.00' }), 1)],
             { status: OrderStatus.paid }
         );
         await inventoryService.reserveForOrder(String(other._id), [{ productId, quantity: 1 }]);
@@ -662,9 +662,9 @@ describe('cancelling the remainder after a loss', () => {
 
     it('ends delivered when a digital line arrived, because part of the contract was performed', async () => {
         const user = await createUser({ email: 'mixed@example.com' });
-        const physical = await createProduct({ price: 10, onHand: 10 });
+        const physical = await createProduct({ price: '10.00', onHand: 10 });
         const digital = await createProduct({
-            price: 5,
+            price: '5.00',
             requiresShipping: false,
             noWithdrawal: true
         });

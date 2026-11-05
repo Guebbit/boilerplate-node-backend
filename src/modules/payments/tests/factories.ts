@@ -54,7 +54,7 @@ export interface TransferOrderOptions {
     /** The buyer; a fresh customer by default. */
     user?: UserDocument;
     /** Unit price of the single line; 20 by default. */
-    price?: number;
+    price?: string;
     /** Hours until the stock hold ends; 168 (a week) by default. */
     holdHours?: number;
 }
@@ -69,7 +69,7 @@ export const transferOrder = async (
     options: TransferOrderOptions = {}
 ): Promise<{ order: OrderDocument; payment: PaymentDocument; reference: string }> => {
     const user = options.user ?? (await createUser());
-    const product = await createProduct({ price: options.price ?? 20 });
+    const product = await createProduct({ price: options.price ?? '20.00' });
     const id = new Types.ObjectId();
     const order = await createOrder(user, [toOrderItem(product, 1)], {
         id: id.toHexString(),
@@ -113,7 +113,7 @@ export const refundOrderPayment = (
     orderId: string,
     authContext: AuthContext,
     context: CallerContext,
-    body?: { amount?: number; currency?: string }
+    body?: { amount?: string; currency?: string }
 ) =>
     paymentRepository
         .findByOrderId(orderId)

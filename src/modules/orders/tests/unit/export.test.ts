@@ -15,7 +15,7 @@ const order: OrderCsvSource = {
     email: 'buyer@example.com',
     totalItems: 2,
     totalQuantity: 3,
-    totalPrice: 59.9,
+    totalPrice: '59.90',
     currency: 'EUR',
     paymentMethod: 'card',
     createdAt: new Date('2026-05-01T09:30:00Z'),
@@ -53,7 +53,7 @@ describe('toOrderCsvRow', () => {
             email: 'buyer@example.com',
             lines: 2,
             units: 3,
-            total: 59.9,
+            total: '59.90',
             currency: 'EUR',
             paymentMethod: 'card',
             paidAt: '2026-05-01T09:35:00.000Z'

@@ -51,7 +51,7 @@ afterEach(() => {
 /** A customer who paid 100.00 by card: one product at 50.00, two units. */
 const paidOrder = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 50 });
+    const product = await createProduct({ price: '50.00' });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     await payByCard(order, user);
     // Delivery is after the response: let the relay publish the settlement's rows before a test
@@ -68,22 +68,22 @@ const paymentOf = async (orderId: string) => {
 };
 
 /** Refund `amount` of the order's payment as an operator. */
-const refund = (orderId: string, body: { amount?: number; currency?: string } = {}) =>
+const refund = (orderId: string, body: { amount?: string; currency?: string } = {}) =>
     refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), body);
 
 describe('a partial refund', () => {
     it('records the refund and keeps the payment succeeded, with the rest still refundable', async () => {
         const { orderId } = await paidOrder();
 
-        const result = await refund(orderId, { amount: 30 });
+        const result = await refund(orderId, { amount: '30.00' });
 
         expect(result.success).toBe(true);
         const payment = await paymentOf(orderId);
         expect(payment.status).toBe('succeeded');
-        expect(payment.amountRefunded).toBe(30);
+        expect(payment.amountRefunded).toBe('30.00');
         expect(payment.refunds).toHaveLength(1);
         expect(payment.refunds[0]).toMatchObject({
-            amount: 30,
+            amount: '30.00',
             currency: 'EUR',
             status: 'succeeded',
             reason: 'goodwill'
@@ -94,63 +94,63 @@ describe('a partial refund', () => {
     it('moves the payment to refunded once the parts add up to what was paid', async () => {
         const { orderId } = await paidOrder();
 
-        await refund(orderId, { amount: 30 });
-        await refund(orderId, { amount: 70 });
+        await refund(orderId, { amount: '30.00' });
+        await refund(orderId, { amount: '70.00' });
 
         const payment = await paymentOf(orderId);
         expect(payment.status).toBe('succeeded');
-        expect(payment.amountRefunded).toBe(100);
+        expect(payment.amountRefunded).toBe('100.00');
         expect(payment.refunds).toHaveLength(2);
     });
 
     it('refunds everything left when no amount is given', async () => {
         const { orderId } = await paidOrder();
-        await refund(orderId, { amount: 30 });
+        await refund(orderId, { amount: '30.00' });
 
         await refund(orderId);
 
         const payment = await paymentOf(orderId);
         expect(payment.status).toBe('succeeded');
-        expect(payment.refunds.map((entry) => entry.amount)).toEqual([30, 70]);
+        expect(payment.refunds.map((entry) => entry.amount)).toEqual(['30.00', '70.00']);
     });
 
     it('sums in minor units — three refunds of 0.10 and 0.20 never drift', async () => {
         const { orderId } = await paidOrder();
 
-        await refund(orderId, { amount: 0.1 });
-        await refund(orderId, { amount: 0.2 });
+        await refund(orderId, { amount: '0.10' });
+        await refund(orderId, { amount: '0.20' });
 
         const { amountRefunded: amountRefundedNow } = await paymentOf(orderId);
-        expect(amountRefundedNow).toBe(0.3);
+        expect(amountRefundedNow).toBe('0.30');
     });
 
     it('sends the provider only the part being returned, under a key of its own', async () => {
         const spy = jest.spyOn(fakePaymentProvider, 'refund');
         const { orderId } = await paidOrder();
 
-        await refund(orderId, { amount: 30 });
-        await refund(orderId, { amount: 20 });
+        await refund(orderId, { amount: '30.00' });
+        await refund(orderId, { amount: '20.00' });
 
         const [first, second] = spy.mock.calls;
-        expect(first[1]).toEqual({ amount: 30, currency: 'EUR' });
-        expect(second[1]).toEqual({ amount: 20, currency: 'EUR' });
+        expect(first[1]).toEqual({ amount: '30.00', currency: 'EUR' });
+        expect(second[1]).toEqual({ amount: '20.00', currency: 'EUR' });
         expect(first[2].idempotencyKey).not.toBe(second[2].idempotencyKey);
     });
 
     it('announces each refund once, saying whether it was the whole payment', async () => {
-        const events: { amount: number; full: boolean; refundId: string }[] = [];
+        const events: { amount: string; full: boolean; refundId: string }[] = [];
         onDomainEvent(PAYMENT_REFUNDED, (payload) => {
             events.push(payload);
         });
         const { orderId } = await paidOrder();
 
-        await refund(orderId, { amount: 30 });
+        await refund(orderId, { amount: '30.00' });
         await refund(orderId);
         await settleOutboxNudges();
 
         expect(events.map(({ amount, full }) => ({ amount, full }))).toEqual([
-            { amount: 30, full: false },
-            { amount: 70, full: false }
+            { amount: '30.00', full: false },
+            { amount: '70.00', full: false }
         ]);
         expect(new Set(events.map(({ refundId }) => refundId)).size).toBe(2);
     });
@@ -172,9 +172,9 @@ describe('a partial refund', () => {
 describe('a refund that asks for too much', () => {
     it('is refused with 422 when it is more than is left', async () => {
         const { orderId } = await paidOrder();
-        await refund(orderId, { amount: 60 });
+        await refund(orderId, { amount: '60.00' });
 
-        const result = await refund(orderId, { amount: 40.01 });
+        const result = await refund(orderId, { amount: '40.01' });
 
         expect(asReject(result).status).toBe(422);
         expect(asReject(result).errors[0]).toMatchObject({
@@ -189,7 +189,7 @@ describe('a refund that asks for too much', () => {
         const { orderId } = await paidOrder();
         await refund(orderId);
 
-        const result = await refund(orderId, { amount: 1 });
+        const result = await refund(orderId, { amount: '1.00' });
 
         expect(asReject(result).status).toBe(422);
         expect(asReject(result).errors[0].code).toBe('PAYMENT_REFUND_EXCEEDS_REMAINING');
@@ -198,7 +198,7 @@ describe('a refund that asks for too much', () => {
     it('is refused with 422 naming `currency` when it is not the payment currency', async () => {
         const { orderId } = await paidOrder();
 
-        const result = await refund(orderId, { amount: 10, currency: 'USD' });
+        const result = await refund(orderId, { amount: '10.00', currency: 'USD' });
 
         expect(asReject(result).status).toBe(422);
         expect(asReject(result).errors[0]).toMatchObject({
@@ -210,7 +210,7 @@ describe('a refund that asks for too much', () => {
     it('is refused with 422 naming `amount` when the currency has no unit that small', async () => {
         const { orderId } = await paidOrder();
 
-        const result = await refund(orderId, { amount: 0.001 });
+        const result = await refund(orderId, { amount: '0.001' });
 
         expect(asReject(result).status).toBe(422);
         expect(asReject(result).errors[0]).toMatchObject({
@@ -232,13 +232,13 @@ describe('a refund that asks for too much', () => {
         const { orderId } = await paidOrder();
 
         const results = await Promise.all([
-            refund(orderId, { amount: 60 }),
-            refund(orderId, { amount: 60 })
+            refund(orderId, { amount: '60.00' }),
+            refund(orderId, { amount: '60.00' })
         ]);
 
         expect(results.filter((result) => result.success)).toHaveLength(1);
         const payment = await paymentOf(orderId);
-        expect(payment.amountRefunded).toBe(60);
+        expect(payment.amountRefunded).toBe('60.00');
         expect(payment.refunds).toHaveLength(1);
     });
 
@@ -253,18 +253,18 @@ describe('a refund that asks for too much', () => {
                 return providerRefund(...args);
             });
 
-            const result = await refund(orderId, { amount: 30 });
+            const result = await refund(orderId, { amount: '30.00' });
 
             expect(result.success).toBe(true);
             const payment = await paymentOf(orderId);
-            expect(payment.amountRefunded).toBe(30);
+            expect(payment.amountRefunded).toBe('30.00');
             expect(payment.refunds).toHaveLength(1);
         }));
 
     it('refuses an amount in another currency with 422', async () => {
         const { orderId } = await paidOrder();
 
-        const result = await refund(orderId, { amount: 10, currency: 'JPY' });
+        const result = await refund(orderId, { amount: '10.00', currency: 'JPY' });
 
         expect(asReject(result).status).toBe(422);
     });
@@ -272,7 +272,7 @@ describe('a refund that asks for too much', () => {
     it('refuses an amount the currency has no minor unit for', async () => {
         const { orderId } = await paidOrder();
 
-        const result = await refund(orderId, { amount: 10.001 });
+        const result = await refund(orderId, { amount: '10.001' });
 
         expect(asReject(result).status).toBe(422);
         const { refunds: refundsNow } = await paymentOf(orderId);
@@ -287,7 +287,7 @@ describe('a refund the provider refuses', () => {
             new Error('provider secret detail')
         );
 
-        await expect(refund(orderId, { amount: 30 })).resolves.toMatchObject({
+        await expect(refund(orderId, { amount: '30.00' })).resolves.toMatchObject({
             success: true,
             status: 201
         });
@@ -298,9 +298,9 @@ describe('a refund the provider refuses', () => {
             failureReason: 'unknown'
         });
         // Still counted: the sweep will finish THIS refund, so nothing may be opened beside it.
-        expect(payment.amountRefunded).toBe(30);
+        expect(payment.amountRefunded).toBe('30.00');
         const wire: Record<string, unknown> = { ...presentPayment(payment).refunds[0] };
-        expect(wire).toMatchObject({ status: 'failed', amount: 30 });
+        expect(wire).toMatchObject({ status: 'failed', amount: '30.00' });
         expect(wire).not.toHaveProperty('lastError');
         expect(wire).not.toHaveProperty('failureReason');
         expect(wire).not.toHaveProperty('idempotencyKey');
@@ -314,7 +314,7 @@ describe('a refund the provider refuses', () => {
             new PaymentProviderError('insufficient_funds', 'raw provider text')
         );
 
-        await expect(refund(orderId, { amount: 30 })).resolves.toMatchObject({
+        await expect(refund(orderId, { amount: '30.00' })).resolves.toMatchObject({
             success: true,
             status: 201
         });
@@ -333,7 +333,7 @@ describe('a refund the provider refuses', () => {
             const spy = jest.spyOn(fakePaymentProvider, 'refund');
             const { orderId } = await paidOrder();
             spy.mockRejectedValueOnce(new Error('unreachable'));
-            await expect(refund(orderId, { amount: 30 })).resolves.toMatchObject({
+            await expect(refund(orderId, { amount: '30.00' })).resolves.toMatchObject({
                 success: true,
                 status: 201
             });
@@ -351,7 +351,7 @@ describe('a refund the provider refuses', () => {
     it('completes the payment when the sweep finishes the last part', () =>
         withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { orderId } = await paidOrder();
-            await refund(orderId, { amount: 40 });
+            await refund(orderId, { amount: '40.00' });
             jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
             await expect(refund(orderId)).resolves.toMatchObject({ success: true, status: 201 });
             const { status: statusNow } = await paymentOf(orderId);
@@ -385,7 +385,7 @@ describe('a refund the provider refuses', () => {
 });
 
 /** Makes the fake provider refuse every refund of exactly `amount`, and take any other. */
-const refuseRefundsOf = (amount: number) => {
+const refuseRefundsOf = (amount: string) => {
     const providerRefund = fakePaymentProvider.refund.bind(fakePaymentProvider);
     return jest
         .spyOn(fakePaymentProvider, 'refund')
@@ -399,8 +399,8 @@ const refuseRefundsOf = (amount: number) => {
 describe('a refund after one the provider keeps refusing', () => {
     it('is opened and sent by a cancel, and the refused one is left to the sweep', async () => {
         const { orderId } = await paidOrder();
-        const spy = refuseRefundsOf(20);
-        await expect(refund(orderId, { amount: 20 })).resolves.toMatchObject({
+        const spy = refuseRefundsOf('20.00');
+        await expect(refund(orderId, { amount: '20.00' })).resolves.toMatchObject({
             success: true,
             status: 201
         });
@@ -409,12 +409,12 @@ describe('a refund after one the provider keeps refusing', () => {
 
         const payment = await paymentOf(orderId);
         expect(payment.refunds.map((entry) => [entry.amount, entry.status])).toEqual([
-            [20, 'failed'],
-            [80, 'succeeded']
+            ['20.00', 'failed'],
+            ['80.00', 'succeeded']
         ]);
-        expect(payment.amountRefunded).toBe(100);
+        expect(payment.amountRefunded).toBe('100.00');
         // The request sent only the new record: the retry of the refused one is the sweep's job.
-        expect(spy.mock.calls.map(([, charge]) => charge.amount)).toEqual([20, 80]);
+        expect(spy.mock.calls.map(([, charge]) => charge.amount)).toEqual(['20.00', '80.00']);
     });
 
     it('lets two returns during an outage both open a record, both finished by the sweep', () =>
@@ -423,19 +423,19 @@ describe('a refund after one the provider keeps refusing', () => {
             const down = jest
                 .spyOn(fakePaymentProvider, 'refund')
                 .mockRejectedValue(new Error('outage'));
-            const input = { lines: [], shipping: 0 };
+            const input = { lines: [], shipping: '0.00' };
 
             await expect(
                 refundForReturn(
                     orderId,
-                    { ...input, returnId: 'return-a', amount: 30 },
+                    { ...input, returnId: 'return-a', amount: '30.00' },
                     callerContextAs('admin')
                 )
             ).resolves.toBe('open');
             await expect(
                 refundForReturn(
                     orderId,
-                    { ...input, returnId: 'return-b', amount: 40 },
+                    { ...input, returnId: 'return-b', amount: '40.00' },
                     callerContextAs('admin')
                 )
             ).resolves.toBe('open');
@@ -457,7 +457,7 @@ describe('the refund sweep', () => {
         withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { orderId } = await paidOrder();
             jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
-            await expect(refund(orderId, { amount: 30 })).resolves.toMatchObject({
+            await expect(refund(orderId, { amount: '30.00' })).resolves.toMatchObject({
                 success: true,
                 status: 201
             });
@@ -487,30 +487,30 @@ describe('a return refund racing another refund', () => {
         const addRefund = paymentRepository.addRefund.bind(paymentRepository);
         // The goodwill refund lands between the return's read and its write.
         jest.spyOn(paymentRepository, 'addRefund').mockImplementationOnce(async (...args) => {
-            await refund(orderId, { amount: 30 });
+            await refund(orderId, { amount: '30.00' });
             return addRefund(...args);
         });
 
         const outcome = await refundForReturn(
             orderId,
-            { returnId: 'return-a', amount: 100, lines: [], shipping: 0 },
+            { returnId: 'return-a', amount: '100.00', lines: [], shipping: '0.00' },
             callerContextAs('admin')
         );
 
         expect(outcome).not.toBeNull();
         const payment = await paymentOf(orderId);
         expect(payment.refunds.map((entry) => [entry.amount, entry.returnId])).toEqual([
-            [30, undefined],
-            [70, 'return-a']
+            ['30.00', undefined],
+            ['70.00', 'return-a']
         ]);
-        expect(payment.amountRefunded).toBe(100);
+        expect(payment.amountRefunded).toBe('100.00');
     });
 });
 
 describe('cancelling an order that was already partly refunded', () => {
     it('returns only what is left', async () => {
         const { user, orderId } = await paidOrder();
-        await refund(orderId, { amount: 30 });
+        await refund(orderId, { amount: '30.00' });
 
         const canceled = await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
         expect(canceled.success).toBe(true);
@@ -519,8 +519,8 @@ describe('cancelling an order that was already partly refunded', () => {
         const payment = await paymentOf(orderId);
         expect(payment.status).toBe('succeeded');
         expect(payment.refunds.map((entry) => [entry.amount, entry.reason])).toEqual([
-            [30, 'goodwill'],
-            [70, 'cancellation']
+            ['30.00', 'goodwill'],
+            ['70.00', 'cancellation']
         ]);
     });
 });
@@ -528,7 +528,7 @@ describe('cancelling an order that was already partly refunded', () => {
 describe('a partial refund on a payment recorded by hand', () => {
     it('only opens the records; settling each by hand finishes the payment when it adds up', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 50 });
+        const product = await createProduct({ price: '50.00' });
         const order = await createOrder(user, [toOrderItem(product, 2)]);
         const orderId = String(order._id);
         await paymentService.recordOfflinePayment(
@@ -538,13 +538,13 @@ describe('a partial refund on a payment recorded by hand', () => {
         );
         const providerSpy = jest.spyOn(fakePaymentProvider, 'refund');
 
-        await refund(orderId, { amount: 40 });
+        await refund(orderId, { amount: '40.00' });
         await refund(orderId);
         const opened = await paymentOf(orderId);
         expect(opened.refunds.some((entry) => entry.settledByHand)).toBe(false);
         expect(opened.refunds.map((entry) => [entry.amount, entry.status])).toEqual([
-            [40, 'pending'],
-            [60, 'pending']
+            ['40.00', 'pending'],
+            ['60.00', 'pending']
         ]);
 
         for (const record of opened.refunds) {
@@ -570,7 +570,7 @@ describe('the payment.refunded announcement', () => {
     it('is an outbox row written with the settlement, once per refund', async () => {
         const { orderId } = await paidOrder();
 
-        await refund(orderId, { amount: 30 });
+        await refund(orderId, { amount: '30.00' });
         await settleOutboxNudges();
 
         const payment = await paymentOf(orderId);
@@ -579,7 +579,7 @@ describe('the payment.refunded announcement', () => {
         expect(rows[0]).toMatchObject({
             aggregateId: orderId,
             status: 'published',
-            payload: { orderId, refundId: String(payment.refunds[0]._id), amount: 30, full: false }
+            payload: { orderId, refundId: String(payment.refunds[0]._id), amount: '30.00', full: false }
         });
     });
 
@@ -602,9 +602,9 @@ describe('the order payment status', () => {
     it('reads partially_refunded after a part, then refunded after the last one', async () => {
         const { orderId } = await paidOrder();
 
-        await refund(orderId, { amount: 30 });
+        await refund(orderId, { amount: '30.00' });
         const afterPart = await readOrder(orderId);
-        await refund(orderId, { amount: 70 });
+        await refund(orderId, { amount: '70.00' });
         const afterLast = await readOrder(orderId);
 
         expect(afterPart?.paymentStatus).toBe('partially_refunded');
@@ -661,11 +661,11 @@ describe('the request of a refund', () => {
         const { orderId } = await paidOrder();
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
-        await refund(orderId, { amount: 30 });
+        await refund(orderId, { amount: '30.00' });
 
         const rows = requestRows(auditSpy);
         expect(rows).toHaveLength(1);
-        expect(rows[0].metadata).toMatchObject({ amount: 30, reason: 'goodwill' });
+        expect(rows[0].metadata).toMatchObject({ amount: '30.00', reason: 'goodwill' });
         expect(rows[0].metadata).toHaveProperty('refundId');
         expect(rows[0].metadata).not.toHaveProperty('ownOrder');
     });
@@ -677,7 +677,7 @@ describe('the request of a refund', () => {
             const auditSpy = observePort(auditPort.emitAuditEvent);
             jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
             await expect(
-                refundOrderPayment(orderId, asAdmin(), own, { amount: 30 })
+                refundOrderPayment(orderId, asAdmin(), own, { amount: '30.00' })
             ).resolves.toMatchObject({ success: true, status: 201 });
 
             await paymentService.retryOpenRefunds();
@@ -686,7 +686,7 @@ describe('the request of a refund', () => {
             expect(payment.refunds[0]).toMatchObject({ status: 'succeeded' });
             const rows = requestRows(auditSpy);
             expect(rows).toHaveLength(1);
-            expect(rows[0].metadata).toMatchObject({ amount: 30, ownOrder: true });
+            expect(rows[0].metadata).toMatchObject({ amount: '30.00', ownOrder: true });
         }));
 
     it('is audited for a return’s refund too, flagged when the staff member is the buyer', () =>
@@ -701,9 +701,9 @@ describe('the request of a refund', () => {
                     orderId,
                     {
                         returnId: new Types.ObjectId().toString(),
-                        amount: 40,
+                        amount: '40.00',
                         lines: [],
-                        shipping: 0
+                        shipping: '0.00'
                     },
                     own
                 )
@@ -713,7 +713,7 @@ describe('the request of a refund', () => {
             const rows = requestRows(auditSpy);
             expect(rows).toHaveLength(1);
             expect(rows[0].metadata).toMatchObject({
-                amount: 40,
+                amount: '40.00',
                 reason: 'return',
                 ownOrder: true
             });

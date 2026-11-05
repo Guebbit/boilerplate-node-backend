@@ -46,7 +46,7 @@ declare module '@kernel/events' {
         'return.closed': {
             returnId: string;
             orderId: string;
-            refundAmount: number;
+            refundAmount: string;
             currency: string;
             /** What the buyer was given; absent on a return born closed. */
             remedy?: ReturnRemedy;

@@ -17,10 +17,10 @@ const ORDER_ID = 'order-1';
 /** Two lines with different titles, quantities and prices, so no field can stand in for another. */
 const ORDER = {
     items: [
-        { quantity: 2, product: { title: 'Grain-Free Dog Food', price: 100 } },
-        { quantity: 3, product: { title: 'Memory Foam Dog Bed', price: 7.5 } }
+        { quantity: 2, product: { title: 'Grain-Free Dog Food', price: '100.00' } },
+        { quantity: 3, product: { title: 'Memory Foam Dog Bed', price: '7.50' } }
     ],
-    shippingCost: 4.25,
+    shippingCost: '4.25',
     currency: 'EUR'
 };
 
@@ -38,7 +38,7 @@ describe('paymentReceivedEmail', () => {
     it("quotes the order's own total, shipping included, and links to the order", () => {
         const mail = paymentReceivedEmail('en', NAME, ORDER, ORDER_ID);
 
-        expect(orderTotal(ORDER)).toBe(226.75);
+        expect(orderTotal(ORDER)).toBe('226.75');
         expect(mail.data.total).toContain('€226.75');
         expect((mail.data.lines as string[])[1]).toContain('€7.50');
         expect(mail.data.linkUrl).toBe(orderFrontendLink({ locale: 'en', id: ORDER_ID }));
@@ -59,7 +59,7 @@ describe('refundIssuedEmail', () => {
             'en',
             NAME,
             '2026-000041',
-            { amount: 12.5, currency: 'EUR' },
+            { amount: '12.50', currency: 'EUR' },
             true
         );
 
@@ -69,7 +69,7 @@ describe('refundIssuedEmail', () => {
     });
 
     it('tells a full refund from a partial one', () => {
-        const refund = { amount: 5, currency: 'EUR' };
+        const refund = { amount: '5.00', currency: 'EUR' };
 
         const full = refundIssuedEmail('en', NAME, ORDER_ID, refund, true).data.detail;
         const partial = refundIssuedEmail('en', NAME, ORDER_ID, refund, false).data.detail;
@@ -80,7 +80,7 @@ describe('refundIssuedEmail', () => {
     });
 
     it('translates by the recipient locale', () => {
-        const refund = { amount: 5, currency: 'EUR' };
+        const refund = { amount: '5.00', currency: 'EUR' };
 
         expect(refundIssuedEmail('it', NAME, ORDER_ID, refund, true).subject).not.toBe(
             refundIssuedEmail('en', NAME, ORDER_ID, refund, true).subject
@@ -97,7 +97,7 @@ describe('the bank transfer mails', () => {
     const PAY_BY = new Date('2026-10-05T10:30:00.000Z');
     // 1990 yen: no decimals, so a builder that formatted as euros would print `€1,990.00`.
     const YEN = {
-        items: [{ quantity: 1, product: { title: 'Dog Bed', price: 1990 } }],
+        items: [{ quantity: 1, product: { title: 'Dog Bed', price: '1990.00' } }],
         currency: 'JPY'
     };
 

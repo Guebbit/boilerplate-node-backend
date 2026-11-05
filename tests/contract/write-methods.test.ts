@@ -24,7 +24,7 @@ type WriteCase = readonly [method: 'post' | 'put' | 'patch', url: string, body: 
  * each body is valid, so the empty string is the only reason for the 422.
  */
 const EMPTY_STRING_CASES: readonly WriteCase[] = [
-    ['post', '/cart/checkout', { notes: '', expectedTotal: { amount: 0, currency: 'EUR' } }],
+    ['post', '/cart/checkout', { notes: '', expectedTotal: { amount: '0.00', currency: 'EUR' } }],
     ['put', '/cart/shipping-method', { shippingMethodId: '' }],
     [
         'post',
@@ -108,7 +108,7 @@ describe('stock writes replay under an Idempotency-Key', () => {
         ['adjust', { delta: -2 }, -2]
     ])('a retried %s call moves the stock once', async (route, amount, expectedDelta) => {
         const { bearer } = await authenticateAs('admin');
-        const product = await createProduct({ title: 'Cedar Toy', price: 5, onHand: 10 });
+        const product = await createProduct({ title: 'Cedar Toy', price: '5.00', onHand: 10 });
         const send = () =>
             api()
                 .post(`/inventory/levels/${String(product._id)}/${route}`)

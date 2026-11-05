@@ -156,3 +156,11 @@ flowchart LR
 | `cases/request-headers.cases.yaml`          | `tests/cross-cutting/request-headers-conformance.test.ts`                                                                                                                                                                                                                       |
 | `cases/security-headers.cases.yaml`         | `tests/cross-cutting/security-headers-conformance.test.ts`                                                                                                                                                                                                                      |
 | `cases/ssrf.cases.yaml`                     | `tests/cross-cutting/ssrf-conformance.test.ts`                                                                                                                                                                                                                                  |
+
+## Money is a case file, not a rule table
+
+`cases/money.cases.yaml` pins how an amount is read and spelled: its `decimal` kind yields the
+padded string (`"19.90"` EUR, `"1000"` JPY, `"1.500"` KWD), with exponent cases for MGA and MRU
+(2 places). The ISO 4217 exponent table itself stays in `src/domain-primitives/money.ts`; it is not
+a shared YAML, and the frontend keeps no table at all, because an amount at its currency's scale
+carries its own decimals.

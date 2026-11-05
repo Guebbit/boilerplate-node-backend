@@ -55,7 +55,7 @@ const orderStatusOf = (orderId: string) =>
 /** An order with a card intent nobody confirmed, then canceled and drained. */
 const canceledOrder = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 25, onHand: 10 });
+    const product = await createProduct({ price: '25.00', onHand: 10 });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     const orderId = String(order._id);
     await paymentService.createIntent(orderId, asCustomer(user.id));
@@ -78,18 +78,18 @@ describe('cancelling an order with an open intent', () => {
 
     it('writes `canceled` for a payment that never reached the provider', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 25, onHand: 10 });
+        const product = await createProduct({ price: '25.00', onHand: 10 });
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         const orderId = String(order._id);
         await paymentModel.create({
             orderId: order._id,
             userId: user._id,
-            amount: 25,
+            amount: '25.00',
             currency: 'EUR',
             status: 'requires_confirmation',
             provider: 'fake',
             method: 'card',
-            amountRefunded: 0,
+            amountRefunded: '0.00',
             refunds: []
         });
 
@@ -101,7 +101,7 @@ describe('cancelling an order with an open intent', () => {
 
     it('leaves the payment as it was when the provider refuses to close the intent', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 25, onHand: 10 });
+        const product = await createProduct({ price: '25.00', onHand: 10 });
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         const orderId = String(order._id);
         await paymentService.createIntent(orderId, asCustomer(user.id));
@@ -180,16 +180,16 @@ describe('the retention reaper', () => {
     it('deletes an old canceled payment and keeps an old succeeded one', async () => {
         const { orderId } = await canceledOrder();
         const buyer = await createUser({ email: 'second@example.com' });
-        const product = await createProduct({ price: 10, onHand: 5 });
+        const product = await createProduct({ price: '10.00', onHand: 5 });
         const paidOrder = await createOrder(buyer, [toOrderItem(product, 1)]);
         const kept = await paymentModel.create({
             orderId: paidOrder._id,
-            amount: 10,
+            amount: '10.00',
             currency: 'EUR',
             status: 'succeeded',
             provider: 'fake',
             method: 'card',
-            amountRefunded: 0,
+            amountRefunded: '0.00',
             refunds: []
         });
         const future = new Date(Date.now() + 60_000);

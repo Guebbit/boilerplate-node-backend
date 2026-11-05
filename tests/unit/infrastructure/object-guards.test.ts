@@ -11,7 +11,7 @@ describe('stripUndefined', () => {
     });
 
     it('keeps null, zero, empty string and false', () => {
-        // Each of these is a VALUE a factory may deliberately state — `shippingCost: 0` and
+        // Each of these is a VALUE a factory may deliberately state — `shippingCost: '0.00'` and
         // `active: false` both mean something. Only `undefined` means "not specified".
         expect(stripUndefined({ n: null, z: 0, s: '', f: false })).toEqual({
             n: null,

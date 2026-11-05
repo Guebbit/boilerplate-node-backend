@@ -44,9 +44,9 @@ afterEach(() => {
 });
 
 /** A card payment of 100.00 whose first refund of `amount` settled at once. */
-const settledRefund = async (amount = 30) => {
+const settledRefund = async (amount = '30.00') => {
     const user = await createUser();
-    const product = await createProduct({ price: 50 });
+    const product = await createProduct({ price: '50.00' });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     await payByCard(order, user);
     await settleOutboxNudges();
@@ -104,8 +104,8 @@ describe('a settled refund the provider takes back', () => {
     });
 
     it('keeps the stamp partial while another refund still stands', async () => {
-        const { orderId, providerRef, refundRef } = await settledRefund(30);
-        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: 20 });
+        const { orderId, providerRef, refundRef } = await settledRefund('30.00');
+        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: '20.00' });
 
         setFakeLateRefundFailure(refundRef);
         await deliver(providerRef, refundRef);
@@ -171,7 +171,7 @@ describe('a settled refund the provider takes back', () => {
 describe('a webhook that beats refund()', () => {
     it('fails the open record for good: the late success answer settles nothing', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 50 });
+        const product = await createProduct({ price: '50.00' });
         const order = await createOrder(user, [toOrderItem(product, 2)]);
         await payByCard(order, user);
         await settleOutboxNudges();
@@ -187,7 +187,7 @@ describe('a webhook that beats refund()', () => {
             })
         );
 
-        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: 30 });
+        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: '30.00' });
 
         const payment = await paymentRepository.findByOrderId(orderId);
         expect(payment?.refunds[0]).toMatchObject({ status: 'failed', failureReason: 'declined' });

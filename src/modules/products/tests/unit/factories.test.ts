@@ -20,7 +20,7 @@ describe('makeProduct', () => {
         // both or every `makeProduct()` in the suite is an invalid document.
         expect(product._id).toBeInstanceOf(Types.ObjectId);
         expect(product.title).toBe('Test Product');
-        expect(product.price).toBe(9.99);
+        expect(product.price).toBe('9.99');
     });
 
     it('takes the id it is given, as a real ObjectId', () => {
@@ -28,10 +28,10 @@ describe('makeProduct', () => {
     });
 
     it('lets an override replace a default', () => {
-        const product = makeProduct({ title: 'Grain-Free Dog Food', price: 100 });
+        const product = makeProduct({ title: 'Grain-Free Dog Food', price: '100.00' });
 
         expect(product.title).toBe('Grain-Free Dog Food');
-        expect(product.price).toBe(100);
+        expect(product.price).toBe('100.00');
     });
 
     it('omits unspecified fields entirely, leaving them to the schema', () => {

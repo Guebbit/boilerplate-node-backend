@@ -56,16 +56,12 @@ paths:
                   in: query
                   required: false
                   schema:
-                      type: number
-                      format: double
-                      minimum: 0
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                 - name: priceMax
                   in: query
                   required: false
                   schema:
-                      type: number
-                      format: double
-                      minimum: 0
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                 - name: title
                   in: query
                   schema:
@@ -560,13 +556,9 @@ components:
                     maxItems: 100
                     items: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id' }
                 priceMin:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                 priceMax:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                 category:
                     type: string
                     maxLength: 200
@@ -599,9 +591,7 @@ components:
                 translations:
                     $ref: '#/components/schemas/ProductTranslationsCreate'
                 price:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: Gross — VAT included. Same convention as `Product.price`.
                 taxClass:
                     $ref: '#/components/schemas/TaxClass'
@@ -683,9 +673,7 @@ components:
                     maxLength: 100000
                     description: JSON-encoded `ProductTranslationsWrite`.
                 price:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: Gross — VAT included. Same convention as `Product.price`.
                 taxClass:
                     $ref: '#/components/schemas/TaxClass'
@@ -754,9 +742,7 @@ components:
                 translations:
                     $ref: '#/components/schemas/ProductTranslationsWrite'
                 price:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: Gross — VAT included. Same convention as `Product.price`.
                 # `null` clears the class back to the shop's standard rate. Omitted on a PUT is
                 # the same as `null` — see the operation description.
@@ -825,9 +811,7 @@ components:
                     maxLength: 100000
                     description: JSON-encoded `ProductTranslationsWrite`.
                 price:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: Gross — VAT included. Same convention as `Product.price`.
                 taxClass:
                     type: string
@@ -891,9 +875,7 @@ components:
                 translations:
                     $ref: '#/components/schemas/ProductTranslationsPatch'
                 price:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: Gross — VAT included. Same convention as `Product.price`.
                 # `null` clears the class back to the shop's standard rate. Omitted leaves the
                 # stored value alone.
@@ -968,9 +950,7 @@ components:
                     maxLength: 100000
                     description: JSON-encoded `ProductTranslationsPatch`.
                 price:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: Gross — VAT included. Same convention as `Product.price`.
                 taxClass:
                     type: string
@@ -1109,9 +1089,7 @@ components:
                 title:
                     type: string
                 price:
-                    type: number
-                    format: double
-                    minimum: 0
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: >-
                         Gross — what the customer pays, VAT included. Never net-of-tax: the invoice
                         derives the net amount and the VAT amount FROM this, at whatever rate

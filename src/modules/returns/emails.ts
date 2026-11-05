@@ -45,7 +45,7 @@ export interface ReturnNoticeInput {
     /** What staff wrote to the buyer beside the code, when they did. */
     declineMessage?: string | undefined;
     /** What went back, on a closed return. */
-    refund?: { amount: number; currency: string };
+    refund?: { amount: string; currency: string };
     /** Where to send the goods, on an approval. */
     returnAddress?: ShopAddress;
     /** A faulty or wrong item: tell the buyer they choose the remedy, and what a repair adds (2024/1799). */

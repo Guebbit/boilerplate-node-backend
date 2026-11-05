@@ -15,10 +15,6 @@ import {
 import { createSearchController } from '@infrastructure/surfaces/create-search-controller';
 import { paymentService } from '../services';
 
-/**
- * A number as a query string carries it: text, so coerced; blank is no filter.
- */
-const amountSchema = z.preprocess(blankToUndefined, z.coerce.number().min(0).optional());
 
 /**
  * The generated body schema with the transport coercions a query string needs: `page`, `pageSize`,
@@ -27,8 +23,9 @@ const amountSchema = z.preprocess(blankToUndefined, z.coerce.number().min(0).opt
 const searchPaymentsQuerySchema = SearchPaymentsBody.extend({
     page: pageSchema,
     pageSize: pageSizeSchema,
-    amountMin: amountSchema,
-    amountMax: amountSchema,
+    // A blank query value (`amountMin=`) is no filter; an amount stays decimal text.
+    amountMin: z.preprocess(blankToUndefined, SearchPaymentsBody.shape.amountMin),
+    amountMax: z.preprocess(blankToUndefined, SearchPaymentsBody.shape.amountMax),
     disputed: optionalBooleanSchema
 });
 

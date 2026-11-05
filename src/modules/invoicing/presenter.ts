@@ -5,6 +5,7 @@
  * (`get-order-invoice.ts`, `get-order-credit-note.ts`), never the frozen document itself.
  */
 
+import { padDecimal } from '@domain-primitives/money';
 import type { CreditNoteSummary } from '@types';
 import type { InvoiceDocument, CreditNoteDocument } from './model';
 
@@ -14,7 +15,7 @@ export interface ExportedDocument {
     number: string;
     issuedAt: Date;
     currency: string;
-    grandTotal: number;
+    grandTotal: string;
 }
 
 /** Formats a frozen invoice or credit note for the export envelope. */
@@ -25,7 +26,7 @@ export const presentExportedDocument = (
     number: document.number,
     issuedAt: document.issuedAt,
     currency: document.currency,
-    grandTotal: document.grandTotal
+    grandTotal: padDecimal(document.grandTotal, document.currency)
 });
 
 /** Formats a credit note as one row of the per-order list. */
@@ -34,6 +35,6 @@ export const presentCreditNoteSummary = (creditNote: CreditNoteDocument): Credit
     number: creditNote.number,
     issuedAt: creditNote.issuedAt.toISOString(),
     currency: creditNote.currency,
-    grandTotal: creditNote.grandTotal,
+    grandTotal: padDecimal(creditNote.grandTotal, creditNote.currency),
     refundId: creditNote.refundId
 });

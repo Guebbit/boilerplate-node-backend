@@ -51,8 +51,8 @@ let customers = 0;
 const approvedReturn = async () => {
     customers += 1;
     const user = await createUser({ email: `restock-${customers}@example.com` });
-    const shirt = await createProduct({ title: 'Shirt', price: 30, onHand: 10 });
-    const mug = await createProduct({ title: 'Mug', price: 10, onHand: 10 });
+    const shirt = await createProduct({ title: 'Shirt', price: '30.00', onHand: 10 });
+    const mug = await createProduct({ title: 'Mug', price: '10.00', onHand: 10 });
     const order = await createOrder(user, [toOrderItem(shirt, 2), toOrderItem(mug, 1)]);
     const orderId = String(order._id);
     await inventoryService.reserveForOrder(orderId, [
@@ -127,14 +127,14 @@ describe('receiving with a restock count', () => {
         );
 
         // Restocking is about the goods, not the money: the same 70.00 goes back.
-        expect(result.success && result.data).toMatchObject({ status: 'closed', refundAmount: 70 });
+        expect(result.success && result.data).toMatchObject({ status: 'closed', refundAmount: '70.00' });
         expect(await countersOf(shirt._id)).toMatchObject({ onHand: 8 });
         const movements = await inventoryService.listMovements({
             productId: String(shirt._id)
         });
         expect(movements.items.filter(({ reason }) => reason === 'restock')).toHaveLength(0);
         const payment = await paymentService.getForOrder(orderId, asAdmin());
-        expect(payment.success && payment.data.amountRefunded).toBe(70);
+        expect(payment.success && payment.data.amountRefunded).toBe('70.00');
     });
 
     it('names the per-line counts in the audit row', async () => {
@@ -213,7 +213,7 @@ const lucaReturnsWhileAnnaWaits = async () => {
     const anna = await createUser({ email: `anna-${customers}@example.com` });
     const lamp = await createProduct({
         title: 'Lamp',
-        price: 80,
+        price: '80.00',
         onHand: 1,
         allowBackorder: true
     });

@@ -9,6 +9,7 @@
  * the usual way. It moves the same status but announces nothing, because no money went back.
  */
 
+import { padDecimal } from '@domain-primitives/money';
 import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import {
@@ -56,7 +57,7 @@ const claimClosed = (
                               actor,
                               data: {
                                   returnId: id,
-                                  refundAmount: closed.refundAmount ?? 0,
+                                  refundAmount: padDecimal(closed.refundAmount ?? '0', closed.currency),
                                   currency: closed.currency,
                                   ...(closed.remedy ? { remedy: closed.remedy } : {})
                               }

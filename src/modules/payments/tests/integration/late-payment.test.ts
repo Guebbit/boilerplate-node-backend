@@ -81,7 +81,7 @@ const heldOrderFor = async (
  */
 const expiredCardOrder = async (onHand: number) => {
     const user = await createUser({ email: 'late-card@example.com' });
-    const product = await createProduct({ price: 25, onHand });
+    const product = await createProduct({ price: '25.00', onHand });
     const orderId = await heldOrderFor(user, product);
     await paymentService.createIntent(orderId, asCustomer(user.id));
     const providerRef = await paymentRepository
@@ -176,7 +176,7 @@ describe('a card payment that lands on a released hold', () => {
 
 describe('a hand-recorded payment that lands on a released hold', () => {
     it('is recorded and owed back by hand, when the units were sold meanwhile', async () => {
-        const product = await createProduct({ price: 20, onHand: 1 });
+        const product = await createProduct({ price: '20.00', onHand: 1 });
         const orderId = await heldOrderFor(
             await createUser({ email: 'late-transfer@example.com' }),
             product,
@@ -198,7 +198,7 @@ describe('a hand-recorded payment that lands on a released hold', () => {
         // The answer says the order could not take the money; the money itself is on record.
         expect(asReject(recorded).status).toBe(409);
         const payment = await paymentRepository.findByOrderId(orderId);
-        expect(payment).toMatchObject({ status: 'succeeded', amountRefunded: 20 });
+        expect(payment).toMatchObject({ status: 'succeeded', amountRefunded: '20.00' });
         // A hand-paid refund is returned by an operator off-system: the record stays open.
         expect(payment?.refunds).toHaveLength(1);
         expect(payment?.refunds[0]?.status).not.toBe('succeeded');
@@ -207,7 +207,7 @@ describe('a hand-recorded payment that lands on a released hold', () => {
     });
 
     it('pays the order when the shelf still has the units', async () => {
-        const product = await createProduct({ price: 20, onHand: 5 });
+        const product = await createProduct({ price: '20.00', onHand: 5 });
         const orderId = await heldOrderFor(
             await createUser({ email: 'late-transfer-ok@example.com' }),
             product,

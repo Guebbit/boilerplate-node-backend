@@ -12,7 +12,7 @@ import { canSeeStock, redactStock } from '../../services/stock-view';
 const product: Product = {
     id: 'p1',
     title: 'Desk',
-    price: 10,
+    price: '10.00',
     currency: 'EUR',
     inStock: true,
     lowStock: false,
@@ -53,7 +53,7 @@ describe('redactStock', () => {
         expect(redacted).toEqual({
             id: 'p1',
             title: 'Desk',
-            price: 10,
+            price: '10.00',
             currency: 'EUR',
             inStock: true,
             lowStock: false,

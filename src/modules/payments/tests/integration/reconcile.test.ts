@@ -37,7 +37,7 @@ afterEach(() => {
 /** An order with an open intent the provider has already charged, and no webhook seen. */
 const chargedAtProvider = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 25, onHand: 10 });
+    const product = await createProduct({ price: '25.00', onHand: 10 });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     const orderId = String(order._id);
     await paymentService.createIntent(orderId, asCustomer(user.id));
@@ -100,7 +100,7 @@ const orderStatusOf = (orderId: string) =>
 /** An order with an intent prepared and nothing attempted: the card was never presented. */
 const unconfirmedIntent = async () => {
     const user = await createUser();
-    const product = await createProduct({ price: 25, onHand: 10 });
+    const product = await createProduct({ price: '25.00', onHand: 10 });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     const orderId = String(order._id);
     const intent = await paymentService.createIntent(orderId, asCustomer(user.id));

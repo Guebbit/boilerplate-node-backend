@@ -198,7 +198,7 @@ describe('the daily digest', () => {
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             status: OrderStatus.paid,
             shippingMethod: 'express',
-            shippingCost: 0
+            shippingCost: '0.00'
         });
         await forceOrderStatus(String(order._id), OrderStatus.processing);
         await shipEverything(String(order._id));
