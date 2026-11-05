@@ -20,7 +20,7 @@ describe('GET /shop', () => {
             city: 'Milano',
             zip: '20100',
             country: 'IT',
-            email: 'shop@example.com',
+            email: 'support@example.com',
             phone: '+39 02 1234567',
             currency: 'EUR',
             minorUnits: 2,
