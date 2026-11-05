@@ -193,14 +193,20 @@ const reclaimAbandoned = (
  *
  * Wraps `response.json` rather than hooking `finish`, same reasoning as `cache.ts`'s
  * `armCacheWrite`: `json` is the one place that already has the parsed body in hand.
+ * A bodiless answer (`202` through `acceptedResponse`) never reaches `json`, so `end` is wrapped
+ * too and records it with no body; `json` ends through `end`, hence the `recorded` latch.
  *
- * @param response - the response whose `json` method is being overridden
+ * @param response - the response whose `json` and `end` methods are being overridden
  * @param key - the caller-supplied `Idempotency-Key`
  * @param caller - this request's caller identity — see {@link callerKeyOf}
  */
 const armOutcomeCapture = (response: Response, key: string, caller: string): void => {
-    const responseJson = response.json.bind(response);
-    response.json = ((body: unknown) => {
+    let recorded = false;
+
+    /** Writes the outcome once; a second call (json, then the end it triggers) is a no-op. */
+    const record = (body: unknown): void => {
+        if (recorded) return;
+        recorded = true;
         void idempotencyRecordModel
             .updateOne(
                 { key, caller },
@@ -231,9 +237,20 @@ const armOutcomeCapture = (response: Response, key: string, caller: string): voi
                 });
                 // Stryker restore all
             });
+    };
 
+    const responseJson = response.json.bind(response);
+    response.json = ((body: unknown) => {
+        record(body);
         return responseJson(body);
     }) as Response['json'];
+
+    const responseEnd = response.end.bind(response);
+    // `end` has several overloads; the wrapper forwards whatever it was given untouched.
+    response.end = ((...endArguments: Parameters<Response['end']>) => {
+        record(undefined);
+        return responseEnd(...endArguments);
+    }) as Response['end'];
 };
 
 /**
@@ -269,6 +286,9 @@ const respondToCollision = (
     if (existing.location) response.location(existing.location);
     if (existing.contentType) response.type(existing.contentType);
     for (const [name, value] of Object.entries(existing.headers ?? {})) response.set(name, value);
+    // A bodiless outcome (202) replays bodiless: no JSON content type, no document.
+    if (existing.body === undefined || existing.body === null)
+        return response.status(existing.status ?? 200).end();
     return response.status(existing.status ?? 200).json(existing.body);
 };
 

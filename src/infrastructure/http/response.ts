@@ -136,20 +136,19 @@ export const createdOrOk = <T>(
  * Answer 202 with no body: the request is stored and handled later, and there is nothing to hand
  * back (RFC 9110 §15.3.3).
  *
- * Goes through `.json(undefined)`, not `.end()`: the idempotency ledger captures a response only
- * through `res.json`, and a keyed route that bypassed it would leave its key in flight. Express
- * sends an empty body for `undefined`. https://expressjs.com/en/api.html#res.json
+ * Ends with `.end()`, not `.json(undefined)`: Express 5 answers that with a JSON content type and
+ * zero bytes. The idempotency ledger wraps `end` as well as `json`, so a keyed route that answers
+ * here is still recorded, and replayed bodiless.
  *
  * @param response - Express response
  */
-export const acceptedResponse = (response: Response) => response.status(202).json(undefined);
+export const acceptedResponse = (response: Response) => response.status(202).end();
 
 /**
  * Answer 204: the work is done and there is nothing to say (RFC 9110 §15.3.5).
  *
  * Ends with `.end()`, not `.json()`: a 204 carries no body and no `Content-Type`. The idempotency
- * ledger captures a response through `res.json` only, so a route behind `idempotencyKey` must not
- * answer through here (none does today; see docs/tools/idempotency.md).
+ * ledger records a bodiless answer through `end`, so a keyed route may answer through here.
  *
  * @param response - Express response
  */

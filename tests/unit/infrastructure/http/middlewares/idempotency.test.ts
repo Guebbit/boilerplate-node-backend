@@ -318,7 +318,7 @@ describe('idempotencyKey', () => {
 /** A response that remembers the headers set on it, as far as the middleware reads them. */
 const makeHeaderResponse = (initial: Record<string, string> = {}) => {
     const headers = new Map(Object.entries(initial).map(([k, v]) => [k.toLowerCase(), v]));
-    return asStub<Response & { json: jest.Mock; status: jest.Mock }>({
+    return asStub<Response & { json: jest.Mock; status: jest.Mock; end: jest.Mock }>({
         statusCode: 503,
         getHeader: (name: string) => headers.get(name.toLowerCase()),
         set: jest.fn((name: string, value: string) => {
@@ -329,7 +329,8 @@ const makeHeaderResponse = (initial: Record<string, string> = {}) => {
         }),
         location: jest.fn(),
         status: jest.fn().mockReturnThis(),
-        json: jest.fn().mockReturnThis()
+        json: jest.fn().mockReturnThis(),
+        end: jest.fn().mockReturnThis()
     });
 };
 
@@ -362,6 +363,41 @@ describe('an answer that is stored and replayed', () => {
             headers: { 'Retry-After': '30' }
         });
         expect(update.$set.headers).not.toHaveProperty('X-Other');
+    });
+
+    it('records a bodiless answer that ends without json, and only once', async () => {
+        const response = makeHeaderResponse();
+        response.statusCode = 202;
+
+        idempotencyKey(makeRequest('key-1', { a: 1 }), response, jest.fn());
+        await flush();
+        response.end();
+
+        expect(updateOne).toHaveBeenCalledTimes(1);
+        const [, update] = updateOne.mock.calls.at(-1) as [
+            unknown,
+            { $set: Record<string, unknown> }
+        ];
+        expect(update.$set).toMatchObject({ state: 'done', status: 202, body: undefined });
+    });
+
+    it('replays a stored bodiless answer with end, not json', async () => {
+        const fingerprint = await fingerprintOfFirstClaim();
+        create.mockRejectedValueOnce({ code: 11_000 });
+        findOne.mockReturnValueOnce({
+            lean: () => ({
+                exec: () => Promise.resolve({ state: 'done', fingerprint, status: 202 })
+            })
+        });
+        const response = makeHeaderResponse();
+
+        idempotencyKey(makeRequest('key-1', { a: 1 }), response, jest.fn());
+        await flush();
+        await flush();
+
+        expect(response.status).toHaveBeenCalledWith(202);
+        expect(response.end).toHaveBeenCalledTimes(1);
+        expect(response.json).not.toHaveBeenCalled();
     });
 
     it('replays the stored content type and headers beside the body', async () => {

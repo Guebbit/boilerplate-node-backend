@@ -29,6 +29,7 @@ import type { Response } from 'express';
 export type ResponseStub = Response & {
     status: jest.Mock;
     json: jest.Mock;
+    end: jest.Mock;
     setHeader: jest.Mock;
     hasHeader: jest.Mock;
     getHeader: jest.Mock;
@@ -48,6 +49,7 @@ export const makeResponseStub = (): ResponseStub => {
     const response = asStub<ResponseStub>({
         status: jest.fn(),
         json: jest.fn(),
+        end: jest.fn(),
         setHeader: jest.fn((name: string, value: unknown) => {
             headers.set(name.toLowerCase(), value);
         }),
@@ -60,6 +62,7 @@ export const makeResponseStub = (): ResponseStub => {
 
     response.status.mockReturnValue(response);
     response.json.mockReturnValue(response);
+    response.end.mockReturnValue(response);
 
     return response;
 };
