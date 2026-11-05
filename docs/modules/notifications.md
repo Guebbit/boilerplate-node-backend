@@ -161,6 +161,7 @@ Some work is not an event but a count of what waits. A **summary row** is one no
 code whose `dedupeKey` is its code, so a re-run replaces it instead of piling copies. This module
 holds the primitives (`writeSummary`, `clearSummary`, `staffRecipients`); the jobs that count, the
 codes and the digest mail are the shop's: see [the staff digest](./shop-tasks.md#the-staff-digest).
+A summary row's params carry `work`, the filtered list path the bell opens.
 
 ## What decides what
 

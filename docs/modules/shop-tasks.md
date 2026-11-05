@@ -173,6 +173,11 @@ per run.
 | `shop-tasks.staff.low-stock`                  | products low on stock                     | daily  | `InventoryManagement` | bell   |
 | `shop-tasks.staff.preorders-late`             | preorders past their date                 | weekly | `OrderEditing`        | digest |
 
+Each row carries `params.work`: the filtered list path, from the `staffPages:` block of
+`shared/rules/frontend-links.yaml` (`SUMMARY_PAGES`). The bell opens it as it is, and the digest mail
+links the same entry, so the two cannot drift. Some rows open a list slightly wider than the count
+(for instance `unshipped` shows every paid order, not only the late ones).
+
 There is no digest extension point in `notifications`: all ten rows are the shop's, so a registry
 would have one caller. The primitives (`writeSummary`, `clearSummary`, `staffRecipients`) are the
 extension point; the digest is lifted back into `notifications` only when a foundation row exists.

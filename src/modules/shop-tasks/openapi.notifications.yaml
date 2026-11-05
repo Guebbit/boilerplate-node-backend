@@ -398,12 +398,17 @@ components:
         WorkCountParams:
             type: object
             additionalProperties: false
-            required: [count]
+            required: [count, work]
             description: A summary row of how many items need the reader today. The screen it points at lists them.
             properties:
                 count:
                     type: integer
                     minimum: 1
+                work:
+                    type: string
+                    description: >-
+                        The staff list that shows what the count is of, filtered to it: a path under
+                        the staff frontend's locale, query included (`sales/orders?status=paid`).
 
         NotificationStaffTransfersDue:
             type: object
