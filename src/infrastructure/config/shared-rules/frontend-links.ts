@@ -46,16 +46,28 @@ export const frontendLinksSchema = z.strictObject({
         task: template,
         /** One return. */
         return: template,
-        /** The orders list. */
-        salesOrders: template,
-        /** The preorders list. */
-        salesPreorders: template,
         /** The payments list. */
         salesPayments: template,
-        /** The returns list. */
-        returns: template,
-        /** The inventory board. */
-        inventory: template
+        /** Summary row: bank transfers still unpaid, on the awaiting tab. */
+        transfersDue: template,
+        /** Summary row: preorders past their expected date. */
+        preordersLate: template,
+        /** Summary row: fulfillment orders held too long. */
+        deliveryHoldsOpen: template,
+        /** Summary row: withdrawals whose goods have not come back. */
+        withdrawalsAwaitingGoods: template,
+        /** Summary row: return requests awaiting a decision. */
+        returnsUndecided: template,
+        /** Summary row: the low-stock board. */
+        lowStock: template,
+        /** Summary row: paid orders not yet shipped. */
+        unshipped: template,
+        /** Summary row: shipped orders still without tracking. */
+        awaitingTracking: template,
+        /** Summary row: shipped orders not yet delivered. */
+        undelivered: template,
+        /** Summary row: refunds open past the attention threshold. */
+        staleRefunds: template
     }),
     /** Public pages that take no id. The empty string is the home page. */
     staticPages: z.array(z.string())

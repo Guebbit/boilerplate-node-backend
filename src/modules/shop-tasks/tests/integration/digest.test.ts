@@ -71,6 +71,17 @@ const summariesOf = (role: string, userId: string) =>
                 .toSorted()
         );
 
+/** The `work` path the member's bell row carries for the unshipped summary. */
+const unshippedWorkOf = (role: string, userId: string) =>
+    notificationsService
+        .listVisible(
+            callerInScope({ ...asRole(role, userId), tenantId: DEPLOYMENT_TENANT_ID }, 'tenant')
+        )
+        .then(
+            ({ items }) =>
+                items.find((item) => item.code === 'shop-tasks.staff.unshipped')?.params.work
+        );
+
 /** The digest mails queued so far. */
 const digestMails = () =>
     mockEnqueueEmail.mock.calls.filter(([, template]) => template === 'shop-tasks.staff-digest');
@@ -105,18 +116,22 @@ describe('the daily digest', () => {
     });
 
     it('mails the overdue summary once, in the reader’s language, and not a second run', async () => {
-        await staff('warehouse', 'warehouse@example.com', 'it');
+        const warehouse = await staff('warehouse', 'warehouse@example.com', 'it');
         await paidAndWaiting(5);
 
         await runStaffDigest('daily');
         await runStaffDigest('daily');
+
+        // The bell carries the filtered list path, and the mail links the very same one.
+        const work = await unshippedWorkOf('warehouse', warehouse.id);
+        expect(work).toEqual(expect.stringContaining('sales/orders?'));
 
         const mails = digestMails();
         expect(mails).toHaveLength(1);
         expect(mails[0][0]).toMatchObject({ to: 'warehouse@example.com' });
         expect(mails[0][2]).toMatchObject({
             locale: 'it',
-            lines: [{ link: expect.stringContaining('/it/sales/orders') }]
+            lines: [{ link: expect.stringContaining(`/it/${String(work)}`) }]
         });
     });
 

@@ -24,7 +24,7 @@ import type { StaffContact } from '@modules/users';
 import { notificationsService } from '@modules/notifications';
 import { shopTasksConfig } from '../config';
 import { staffDigestEmail, type DigestItem } from '../emails';
-import { SHOP_STAFF_ROUTES, type SummaryCode } from '../staff-routing';
+import { SHOP_STAFF_ROUTES, SUMMARY_PAGES, type SummaryCode } from '../staff-routing';
 
 /** Which run owns a summary: most are daily, the late-preorder one is weekly. */
 export type DigestRun = 'daily' | 'weekly';
@@ -141,7 +141,8 @@ const writeSummary = async (
             {
                 userId: new Types.ObjectId(contact.id),
                 code: summary.code,
-                params: { count },
+                // `work` is the filtered list path; the bell opens it, the digest mail links the same one.
+                params: { count, work: SUMMARY_PAGES[summary.code] },
                 severity: route.severity,
                 tenantId: DEPLOYMENT_TENANT_ID,
                 sets: [...route.sets],

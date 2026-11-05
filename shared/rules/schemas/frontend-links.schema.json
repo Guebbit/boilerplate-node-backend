@@ -79,23 +79,47 @@
           "type": "string",
           "minLength": 1
         },
-        "salesOrders": {
-          "type": "string",
-          "minLength": 1
-        },
-        "salesPreorders": {
-          "type": "string",
-          "minLength": 1
-        },
         "salesPayments": {
           "type": "string",
           "minLength": 1
         },
-        "returns": {
+        "transfersDue": {
           "type": "string",
           "minLength": 1
         },
-        "inventory": {
+        "preordersLate": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deliveryHoldsOpen": {
+          "type": "string",
+          "minLength": 1
+        },
+        "withdrawalsAwaitingGoods": {
+          "type": "string",
+          "minLength": 1
+        },
+        "returnsUndecided": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lowStock": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unshipped": {
+          "type": "string",
+          "minLength": 1
+        },
+        "awaitingTracking": {
+          "type": "string",
+          "minLength": 1
+        },
+        "undelivered": {
+          "type": "string",
+          "minLength": 1
+        },
+        "staleRefunds": {
           "type": "string",
           "minLength": 1
         }
@@ -105,11 +129,17 @@
         "webhookSubscription",
         "task",
         "return",
-        "salesOrders",
-        "salesPreorders",
         "salesPayments",
-        "returns",
-        "inventory"
+        "transfersDue",
+        "preordersLate",
+        "deliveryHoldsOpen",
+        "withdrawalsAwaitingGoods",
+        "returnsUndecided",
+        "lowStock",
+        "unshipped",
+        "awaitingTracking",
+        "undelivered",
+        "staleRefunds"
       ],
       "additionalProperties": false
     },

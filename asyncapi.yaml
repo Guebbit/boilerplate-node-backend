@@ -2474,10 +2474,14 @@ components:
             type: object
             required:
                 - count
+                - work
             properties:
                 count:
                     type: integer
                     minimum: 1
+                work:
+                    type: string
+                    description: The staff list, filtered to what the count is of; a path under the staff frontend's locale, query included.
             additionalProperties: false
         NotificationStaffTransfersDuePayload:
             title: NotificationStaffTransfersDuePayload
