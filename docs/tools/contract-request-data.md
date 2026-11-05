@@ -17,7 +17,7 @@
 
 ## Why not `@faker-js/faker`
 
-Tried first, and worth documenting because the failure is instructive. `@faker-js/faker@10` ships **ESM-only**. This project's Jest setup (`@swc/jest`, CommonJS output, no `transformIgnorePatterns` override — see [Unit Testing](./unit-testing.md)) can't load it:
+Tried first, and worth documenting because the failure is instructive. `@faker-js/faker@10` ships **ESM-only**. This project's Jest setup (`ts-jest`, `module: "node16"`, no `transformIgnorePatterns` override — see [Unit Testing](./unit-testing.md)) can't load it:
 
 ```
 SyntaxError: Cannot use import statement outside a module
@@ -182,4 +182,4 @@ Excluded from [Mutation Testing](./mutation-testing.md) the same way the rest of
 
 - [Contract Testing](./contract-testing.md) — the response-shape mirror of this page
 - [Testing](./testing-and-docs.md) — suite overview
-- [Unit Testing](./unit-testing.md) — the Jest transform this page's ESM finding builds on
+- [Unit Testing](./unit-testing.md) — the `tsconfig.jest.json` note this page's ESM finding builds on

@@ -5,7 +5,8 @@
  * `emitAuditEvent` and `emitAnalyticsEvent` are consumed as `import * as auditPort` and called
  * through the namespace, so the obvious `jest.spyOn(auditPort, 'emitAuditEvent')` reads as the
  * natural thing to write. It is not portable: a CommonJS namespace object exposes each export as a
- * NON-CONFIGURABLE getter — `@swc/jest` does it under every Jest config — and `spyOn` has to `defineProperty` over the name it replaces. Under
+ * NON-CONFIGURABLE getter — `__importStar` does it under ts-jest, and `@swc/jest` does it under
+ * `jest.config.mutation.js` — and `spyOn` has to `defineProperty` over the name it replaces. Under
  * the default transform the two happen to agree often enough that the pattern looks fine; under
  * swc, and inside Stryker's instrumented sandbox, it throws
  * `TypeError: Cannot redefine property: emitAuditEvent` before the first assertion runs.

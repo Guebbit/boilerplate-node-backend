@@ -270,7 +270,7 @@ copies of the tests, which jest would otherwise discover and run as if they were
 
 The `tests/cross-cutting/` entry is excluded for a sandbox-specific reason — not cost, correctness:
 
-- **`contract-bundles.test.ts`** asserts each committed contract document is byte-identical to the sources it's built from. Stryker's sandbox prepends `// @ts-nocheck` to every file it copies (`disableTypeChecks`), so the sources it reads carry lines the committed bundle doesn't — the byte comparison can never hold. Turning `disableTypeChecks` off is the wrong fix: a type-checking transform would fail a type-breaking mutant to _compile_, count it as killed, and inflate the score with kills no assertion earned. Excluding the file costs nothing either way — it exercises committed files and `scripts/`, neither of which is in `mutate`.
+- **`contract-bundles.test.ts`** asserts each committed contract document is byte-identical to the sources it's built from. Stryker's sandbox prepends `// @ts-nocheck` to every file it copies (`disableTypeChecks`), so the sources it reads carry lines the committed bundle doesn't — the byte comparison can never hold. Turning `disableTypeChecks` off is the wrong fix: `ts-jest` runs with diagnostics on, so a type-breaking mutant would fail to _compile_, count as killed, and inflate the score with kills no assertion earned. Excluding the file costs nothing either way — it exercises committed files and `scripts/`, neither of which is in `mutate`.
 
 **The unit layer's cost depends on a naming rule, and that is the fragile part.** A file under
 `src/modules/*/tests/unit/` that calls `setupTestDb()` starts a real `mongod` and connects mongoose
@@ -740,21 +740,21 @@ The number is a property of the machine, so it lives in `.env` as `JEST_WORKERS`
 
 ### The fix
 
-Every Jest config compiles with `@swc/jest` (set in `jest.config.js`; `jest.config.mutation.js` inherits it). swc
+`jest.config.mutation.js` swaps the transform to `@swc/jest` for the mutation run only. swc
 translates and checks nothing, so it retains nothing between mutants. Types are still checked — once,
 by `npm run ts-check` inside `npm run complete`, which is the right number of times: a mutant
 changes an expression, not a signature, so re-checking per mutant cannot return a different answer.
 
 It is also simply faster. The same 110 suites and 1527 tests:
 
-| Transform                       | Time       |
-| ------------------------------- | ---------- |
-| ts-jest (the former normal run) | ~21 s      |
-| swc (every run now)             | **~9.7 s** |
+| Transform                                         | Time       |
+| ------------------------------------------------- | ---------- |
+| ts-jest (`jest.config.js`, the normal run)        | ~21 s      |
+| swc (`jest.config.mutation.js`, the mutation run) | **~9.7 s** |
 
 **One compatibility note, and it is a real semantic difference rather than a quirk.** TypeScript
 emits each `require` where its `import` stood; swc follows ESM and hoists imports to the top. A
-`jest.mock` factory that reads a `const` declared between the two therefore works under a CommonJS-emitting TypeScript transform and
+`jest.mock` factory that reads a `const` declared between the two therefore works under ts-jest and
 throws `Cannot access '<name>' before initialization` under swc. The fix is to reach the variable
 from inside a function — a getter, or a wrapping arrow — so the read happens on access rather than
 at factory time. `tests/unit/infrastructure/adapters/mailer-dispatch.test.ts` carries a worked
@@ -765,8 +765,6 @@ transpiles file-by-file with no cross-file knowledge — which is what makes it 
 one constraint: a type-only import must be written `import type`, or swc emits a real `require` for
 a value that does not exist at runtime. The app is already written that way, enforced by
 `verbatimModuleSyntax` in `tsconfig.json`, so nothing needs doing here beyond not turning that off.
-
-**These notes now apply to every suite, not only the mutation run.**
 
 **A third note: `jest.spyOn` on a namespace import.** `jest.spyOn(port, 'fn')` after
 `import * as port` has to redefine an export. swc makes exports non-configurable getters, so under

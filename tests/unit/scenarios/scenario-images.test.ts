@@ -70,7 +70,7 @@ const collectImageUrls = (): [label: string, url: string][] => {
         const seeds = path.join(SCENARIOS_ROOT, file);
 
         // Synchronous on purpose: `it.each` needs the list while the file is being collected, and
-        // an async import would hand it a promise. @swc/jest runs this suite as CommonJS, so a
+        // an async import would hand it a promise. ts-jest runs this suite as CommonJS, so a
         // `require` of a `.ts` module resolves in place.
         // eslint-disable-next-line @typescript-eslint/no-require-imports -- synchronous load needed while the file list is being collected, see the note above
         const loaded = require(seeds) as Record<string, unknown>;

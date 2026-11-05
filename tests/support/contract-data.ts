@@ -11,7 +11,7 @@
  *              (typed, public) introspection surface, not an implementation-detail hack — see
  *              `node_modules/zod/v4/core/schemas.d.ts`.
  * No faker:    why a hand-rolled PRNG instead of `@faker-js/faker`: tried it first.
- *              `@faker-js/faker@10` ships ESM-only, and this project's Jest setup (@swc/jest,
+ *              `@faker-js/faker@10` ships ESM-only, and this project's Jest setup (ts-jest,
  *              CommonJS `module` target, no `transformIgnorePatterns` override) can't load it —
  *              `SyntaxError: Cannot use import statement outside a module`, thrown from inside
  *              faker's own entry point. Fixing that means teaching Jest to transform an ESM

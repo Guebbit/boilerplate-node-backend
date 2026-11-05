@@ -1,0 +1,20 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        // `node16` rather than `commonjs`/`node`: the app imports subpath exports
+        // (`@opentelemetry/semantic-conventions/incubating`), which only `node16` resolution
+        // understands. Without it `src/app.ts` cannot be imported by a test at all.
+        //
+        // ts-jest warns that a hybrid module kind wants `isolatedModules: true`. Do not add it:
+        // with it, ts-jest stops downlevelling `await import(...)` to `require`, and the dynamic
+        // import in `tests/unit/services/products.test.ts` fails under jest's CJS VM. The warning
+        // is noise; the failure would not be. It is suppressed by `diagnostics.ignoreCodes` in
+        // `jest.config.js` — one banner per test file is 58 lines of it on every commit, now
+        // that the unit suite runs from the pre-commit hook.
+        "module": "node16",
+        "moduleResolution": "node16",
+        // The app is written for a bundler-style resolver where type-only imports must be
+        // marked; ts-jest transpiles per file and does not need that guarantee.
+        "verbatimModuleSyntax": false
+    }
+}

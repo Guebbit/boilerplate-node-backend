@@ -1,7 +1,9 @@
 /*
  * Jest config used only by Stryker (`npm run mutation`, `npm run mutation:full`): `jest.config.js`
- * with the worker pool collapsed to one and an absolute test environment path. The swc transform
- * is inherited from the base config, so mutation runs and ordinary runs compile alike.
+ * with ts-jest
+ * swapped for swc and the worker pool collapsed to one. ts-jest type-checks, and its
+ * LanguageService cache grows with every mutant until the worker is OOM-killed; swc only
+ * transpiles, so it retains nothing, and `npm run ts-check` already checks the types once.
  * See docs/tools/mutation-testing.md.
  */
 const path = require('node:path');
@@ -9,6 +11,8 @@ const baseConfig = require('./jest.config');
 
 module.exports = {
     ...baseConfig,
+    // The ts-jest preset is what installs the transform this file exists to replace.
+    preset: undefined,
     /*
      * `jest.config.js`'s own `<rootDir>/tests/support/test-environment.ts` never resolves under
      * Stryker: its jest-runner reads config with jest-config's lightweight `readInitialOptions`
@@ -35,5 +39,26 @@ module.exports = {
      * still caught: Stryker's own `timeoutMS` stops it, independently of this.
      * https://stryker-mutator.io/docs/stryker-js/configuration/#timeoutms-number
      */
-    testTimeout: 120_000
+    testTimeout: 120_000,
+    transform: {
+        // Spread first: only the TypeScript matcher is replaced, so the base config's `.js` entry
+        // (babel-jest, for the ESM-only `@scure`/`@noble`) survives.
+        ...baseConfig.transform,
+        /*
+         * @swc/jest: transpile-only TypeScript, no type-check.
+         * `target` matches the app's compile target — swc emits for the runtime, not a browser
+         * matrix — and `module: commonjs` downlevels `import()` for Jest's CJS runtime.
+         * https://swc.rs/docs/configuration/compilation
+         */
+        '^.+\\.tsx?$': [
+            '@swc/jest',
+            {
+                jsc: {
+                    parser: { syntax: 'typescript' },
+                    target: 'es2022'
+                },
+                module: { type: 'commonjs' }
+            }
+        ]
+    }
 };

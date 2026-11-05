@@ -21,6 +21,7 @@
 const base = require('./jest.config.js');
 
 module.exports = {
+    preset: base.preset,
     moduleNameMapper: base.moduleNameMapper,
     transform: base.transform,
     testEnvironment: base.testEnvironment,
