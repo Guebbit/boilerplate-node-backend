@@ -50,6 +50,38 @@ import { setAndUnset } from '@infrastructure/persistence/changes';
  */
 export type PaymentWire = Omit<Wire<PaymentDocument>, 'providerRef'>;
 
+/**
+ * The `$match` fields that pick one attention kind out of the unwound refund records.
+ * A record the provider reported failed (`reversedAt`) is a refusal unless it had settled first.
+ * Without a kind (the manual read), a record the provider reported failed is left out.
+ *
+ * @param refusal - the kind asked for, see `findOpenRefundRows`
+ */
+const refusalMatch = (
+    refusal: 'final' | 'not-final' | 'reversed' | undefined
+): Record<string, unknown> => {
+    if (refusal === 'reversed') return { 'refunds.reversedAfterSettling': true };
+    if (refusal === 'final')
+        return {
+            'refunds.reversedAfterSettling': { $exists: false },
+            $or: [
+                { 'refunds.failureReason': { $in: [...FINAL_REFUND_FAILURES] } },
+                { 'refunds.reversedAt': { $exists: true } }
+            ]
+        };
+    return {
+        'refunds.reversedAt': { $exists: false },
+        ...(refusal === 'not-final'
+            ? {
+                  // `canceled` stays out here too: this key replaces the caller's own canceled filter.
+                  'refunds.failureReason': {
+                      $nin: [...FINAL_REFUND_FAILURES, RefundFailureReason.canceled]
+                  }
+              }
+            : {})
+    };
+};
+
 /** What the staff list may order by: wire field → column. */
 const PAYMENT_SORTABLE = { createdAt: 'createdAt', amount: 'amount', payBy: 'payBy' };
 
@@ -391,8 +423,9 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         manual: boolean;
         openBefore?: Date;
         /**
-         * `final` keeps only refusals that end the retrying, `not-final` leaves them out;
-         * `reversed` keeps only refunds the provider took back. The first two skip the reversed.
+         * `final` keeps only refusals that end the retrying (a refund the provider reported failed
+         * before it settled counts, whatever the reason), `not-final` leaves them out; `reversed`
+         * keeps only refunds the provider took back AFTER settling them. The first two skip those.
          */
         refusal?: 'final' | 'not-final' | 'reversed';
         limit: number;
@@ -823,8 +856,10 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     /**
      * Record that the PROVIDER says this refund failed: the record goes `failed` with the reason
      * and `reversedAt`, whether it had settled (a bank sent the money back) or was still open (the
-     * provider refused it on its own). Set once: a record already reversed matches nothing, so a
-     * redelivered report changes nothing. `settledAt` goes, the money is not back with the buyer.
+     * provider refused it on its own). A record taken from `succeeded` also gets
+     * `reversedAfterSettling`, which is what tells the attention list a bounce from a refusal.
+     * Set once: a record already reversed matches nothing, so a redelivered report changes nothing.
+     * `settledAt` goes, the money is not back with the buyer.
      *
      * @param paymentId - the payment
      * @param refundId - the refund record inside it
@@ -850,7 +885,10 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                     $set: {
                         'refunds.$.status': RefundStatus.failed,
                         'refunds.$.failureReason': reason,
-                        'refunds.$.reversedAt': new Date()
+                        'refunds.$.reversedAt': new Date(),
+                        ...(from.includes(RefundStatus.succeeded)
+                            ? { 'refunds.$.reversedAfterSettling': true }
+                            : {})
                     },
                     $unset: { 'refunds.$.settledAt': 1, 'refunds.$.nextAttemptAt': 1 },
                     $inc: { 'refunds.$.attempts': 1 }
@@ -1002,16 +1040,9 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                     'refunds.status': { $in: [...OPEN_REFUND_STATUSES] },
                     ...(openBefore ? { 'refunds.createdAt': { $lte: openBefore } } : {}),
                     // A canceled record is closed: it needs nobody, whichever kind is asked for.
-                    'refunds.failureReason': {
-                        $ne: RefundFailureReason.canceled,
-                        ...(refusal === 'final' || refusal === 'not-final'
-                            ? {
-                                  [refusal === 'final' ? '$in' : '$nin']: [...FINAL_REFUND_FAILURES]
-                              }
-                            : {})
-                    },
-                    // A refund the provider took back is its own kind of row.
-                    'refunds.reversedAt': { $exists: refusal === 'reversed' }
+                    // A canceled record is closed: it needs nobody, whichever kind is asked for.
+                    'refunds.failureReason': { $ne: RefundFailureReason.canceled },
+                    ...refusalMatch(refusal)
                 }
             },
             { $sort: { 'refunds.createdAt': 1, 'refunds._id': 1, _id: 1 } },

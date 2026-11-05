@@ -562,7 +562,9 @@ stateDiagram-v2
   echoes our record id, so the delivery finds the open record, fails it for good, and the late
   success answer then settles nothing (the settle refuses a record with `reversedAt`).
 - **Needs a person.** `reversed_refund` is on `GET /payments/attention` at once, with `since` = when
-  it bounced. A reversed refund cannot be cancelled (it settled once): only paid by hand.
+  it bounced. It is only for a refund that HAD settled (`reversedAfterSettling` on the record); the
+  provider refusing an open one shows as `refused_refund`, with `reversedAt` as the once-guard.
+  A reversed refund cannot be cancelled (it settled once): only paid by hand.
 
 ### Telling the buyer their refund cannot reach the card {#telling-the-buyer}
 

@@ -1303,9 +1303,10 @@ components:
                 `stale_refund` — a provider refund open past the threshold, still waiting for the
                 provider's answer or its next retry;
                 `refused_refund` — a card refund the provider refused for good (a final
-                `RefundFailureReason`), shown at once: the money has to go back another way;
+                `RefundFailureReason`), or reported failed before it ever settled, shown at once:
+                the money has to go back another way;
                 `reversed_refund` — a refund the provider took back after settling it (a bank sent
-                it back), shown at once with `since` = when it was reversed: the money is owed
+                it back), and only that, never a refusal of an open refund, shown at once with `since` = when it was reversed: the money is owed
                 another way, agreed with the buyer;
                 `refund_exceeds_remaining` — a refund made in the provider's dashboard took the room an
                 open refund here counted on: the open one is held unsent (the provider would refuse it)
