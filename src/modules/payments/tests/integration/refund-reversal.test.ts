@@ -87,6 +87,7 @@ describe('a settled refund the provider takes back', () => {
         });
         expect(payment?.refunds[0].reversedAt).toBeInstanceOf(Date);
         expect(payment?.refunds[0].settledAt).toBeUndefined();
+        expect(payment?.refunds[0].reversedAfterSettling).toBe(true);
         // Nothing else succeeded: the order reads paid again.
         expect(await stampOf(orderId)).toBeUndefined();
         await settleOutboxNudges();
@@ -195,5 +196,18 @@ describe('a webhook that beats refund()', () => {
         expect(await events(PAYMENT_REFUNDED)).toBe(0);
         expect(await events(PAYMENT_REFUND_FAILED)).toBe(1);
         expect(await events(PAYMENT_REFUND_REVERSED)).toBe(0);
+        // Never settled, so the bank sent nothing back: a refusal, not a reversal.
+        expect(payment?.refunds[0].reversedAfterSettling).toBeUndefined();
+        const attention = await paymentService.listAttention();
+        expect(attention.items).toEqual([expect.objectContaining({ kind: 'refused_refund' })]);
+
+        // A redelivered failure report changes nothing and announces nothing.
+        const refundRef = refundRefOfRecord(String(payment?.refunds[0]._id));
+        if (!refundRef) throw new Error('the provider made no refund');
+        await deliver(providerRef, refundRef);
+        await settleOutboxNudges();
+        expect(await events(PAYMENT_REFUND_FAILED)).toBe(1);
+        const again = await paymentService.listAttention();
+        expect(again.items).toHaveLength(1);
     });
 });
