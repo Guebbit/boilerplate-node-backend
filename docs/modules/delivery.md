@@ -565,7 +565,9 @@ merchant cancels it. We settle it for them, with `settleOrder` asking `orders`' 
 else runs: no withdrawal or guarantee clock, no `delivered` row, no second refund, no second stock
 release, and no mail (the loss and the refund were already mailed). The `cancelled` row is the
 system's. The `order.cancelled` listeners treat `lost` as no purchase-hold count and no refund, and
-`orders` counts it as an `order_cancelled` analytics event once the settlement commits.
+`returns`, which owns the transaction, writes the `orders.order.cancelled` audit row (system actor) and
+sends the `order_cancelled` analytics event once the transaction commits, through the callback
+`settleOrder` hands back, exactly like any other cancel.
 
 The move is its own lifecycle constant (`UNDELIVERABLE_EVENT`), not an actor on `cancelInFulfilment`:
 a `system` actor on `processing → cancelled` would let the three existing system cancels match orders
