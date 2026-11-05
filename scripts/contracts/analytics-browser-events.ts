@@ -6,7 +6,7 @@
  * After the bundle is built, this step adds those schemas and replaces `AnalyticsEventRequest`
  * with a `oneOf` discriminated on `event`. With `analytics` absent nothing is added, and with no
  * fragment the placeholder in `analytics/openapi.yaml` stays. Same principle as the webhook
- * events (`asyncapi-webhook-events.ts`): a module's contract leaves with the module.
+ * events (`asyncapi-webhook-events.ts`, `asyncapi-section-fragments.ts`): a module's contract leaves with the module.
  *
  * Its own file so the OpenAPI bundler meets it at one call (`withBrowserEvents`).
  *

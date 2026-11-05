@@ -24,7 +24,7 @@ first before the second.
 ## Why shards and not a bigger heap
 
 Jest gives every test file a fresh module registry, but the **process** keeps what that registry
-allocated — measured at roughly 70 MB per file. Over the integration layer's ~180 test files that is
+allocated — measured at roughly 70 MB per file. Over the integration layer's hundreds of test files that is
 
 > 10 GB of retention in one process, and the run dies long before the last file.
 
@@ -41,7 +41,7 @@ flowchart TD
     S2 --> S3["...\none shard live at a time"]
     S3 --> Done["every file ran,\npeak was one shard"]
 
-    OldWay["one process, all 75 files"] -.-> OOM["OOM-killed at file ~40;\nthe rest never ran and\nnothing said so"]
+    OldWay["one process, every file of the layer"] -.-> OOM["OOM-killed at file ~40;\nthe rest never ran and\nnothing said so"]
 
     classDef ok fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef proc fill:#ddd6fe,stroke:#7c3aed,color:#111827;
@@ -70,12 +70,15 @@ layer with fewer files than that (cross-cutting, unit) in one, where `--shard` i
 
 A constrained machine does not rely on the rail — it sets `JEST_PROCESS_BUDGET_MB` below it. 2600 is
 the figure measured green here: 19 files in one in-band shard peaked at 2407 MB RSS and passed,
-where all 75 files of the layer, as it was then, in one process reached Node's heap ceiling and died at 448 s.
+where the whole layer, as it was then (75 files), in one process reached Node's heap ceiling and died at 448 s.
 
 ## Why in-band inside a shard
 
 `integration`, `contract` and `fuzz` keep `--runInBand` within their shard. They share one
-in-memory mongod and were written against one-file-at-a-time execution.
+in-memory mongod and were written against one-file-at-a-time execution. So does any layer narrowed
+to one worker (`JEST_WORKERS=1`), and it is then sharded like them: in band there is no worker to
+recycle, so the shard boundary is the only reset. `unit` and `cross-cutting` run parallel workers
+in a single shard.
 
 `--workerIdleMemoryLimit` set **below** a worker's steady-state baseline is worse than the problem
 it solves: jest finds every worker over budget the moment it goes idle and restarts it after every
@@ -148,7 +151,9 @@ TEST_FUZZ_RUNS=3 TEST_PROPERTY_RUNS_DB=10 npm run test:fuzz
 ```
 
 `JEST_WORKERS` and `JEST_WORKER_MEMORY_MB` also work from `.env`, and a real environment variable
-always beats the file — so a one-off run goes lower without editing anything.
+always beats the file — so a one-off run goes lower without editing anything. `jest.config.js` sets
+the worker recycle limit only for more than one worker, so `JEST_WORKERS=1 npx jest <file>` runs in
+band by itself.
 
 ## Related
 

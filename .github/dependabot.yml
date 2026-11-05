@@ -83,9 +83,18 @@ updates:
       # checks the collector config against whatever the compose file names.
       ignore:
           - dependency-name: otel/opentelemetry-collector-contrib
+          # Mongo minors are short-lived. On a patch PR, bump `config.mongodbMemoryServer.version`
+          # in package.json in the same PR: tests/cross-cutting/mongo-version-pin.test.ts fails until then.
+          - dependency-name: '*mongo'
+            update-types:
+                - version-update:semver-minor
+                - version-update:semver-major
       groups:
           dev-images:
               applies-to: version-updates
+              # Its own PR, so mongo's red patch PR does not hold the other image bumps back.
+              exclude-patterns:
+                  - '*mongo'
               update-types:
                   - minor
                   - patch

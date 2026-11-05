@@ -58,10 +58,28 @@ describe('withFilledEnums', () => {
         expect(schemas?.Colour).toEqual({ type: 'string', enum: ['blue', 'red', 'green'] });
     });
 
-    it('keeps a hand-written enum whole when nobody supplies the source (the extender is gone)', () => {
-        const schemas = filled(bundle({ type: 'string', enum: ['blue'], 'x-enum-from': 'shapes' }));
+    it('keeps a hand-written enum whole when nobody supplies the schema’s own source (the extender is gone)', () => {
+        const document = asStub<OpenApiDocument>({
+            openapi: '3.1.0',
+            components: {
+                schemas: { Shape: { type: 'string', enum: ['blue'], 'x-enum-from': 'Shape' } }
+            }
+        });
 
-        expect(schemas?.Colour).toEqual({ type: 'string', enum: ['blue'] });
+        expect(filled(document)?.Shape).toEqual({ type: 'string', enum: ['blue'] });
+    });
+
+    it('refuses a source nobody supplies that is not the schema’s own name, even beside written values', () => {
+        const document = asStub<OpenApiDocument>({
+            openapi: '3.1.0',
+            components: {
+                schemas: { Shape: { type: 'string', enum: ['blue'], 'x-enum-from': 'Shpae' } }
+            }
+        });
+
+        expect(() => withFilledEnums(document, SOURCES)).toThrow(
+            /names no known source \(Shpae\) and is not this schema's own name/
+        );
     });
 
     it('leaves a document with no placeholder as it was', () => {

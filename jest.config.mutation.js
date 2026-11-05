@@ -29,6 +29,9 @@ module.exports = {
      * `.env` is the one knob. See docs/tools/mutation-testing.md#the-worker-pool-multiplication.
      */
     maxWorkers: 1,
+    // Dropped with the pool: the base config only sets it for more than one worker, and a limit
+    // left on a one-worker run stops jest running in band.
+    workerIdleMemoryLimit: undefined,
     /*
      * Four times the base config's 30 s. Instrumented code under per-test coverage runs slower, and
      * one timed-out test in Stryker's initial run fails the whole shard — measured 2026-10-07, the

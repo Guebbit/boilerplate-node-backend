@@ -66,10 +66,10 @@ the decision actually gets made.
 
 **Authentication is not here.** Signup, login, password reset, sessions and the one-time-token lifecycle all live in
 [`account`](./account.md), which is a _second service over this same collection_. That split is why
-this module's barrel is the widest in the repo: alongside `userService`, it publishes its events
-and the model's types — `account` needs them to authenticate the same document. `userRepository` and the model's
-runtime value stay inside even so: every read or write, `account`'s included, goes through
-`userService`, never the collection directly.
+this module's barrel is the widest in the repo: `account` needs more of it to authenticate the same
+document. What a barrel publishes, and the deny-list that holds even here, is
+[Published language](../theory/strategic-ddd.md#5-published-language-the-barrel). Every read or
+write, `account`'s included, goes through `userService`, never the collection directly.
 
 ::: tip Why two modules and not one
 `/users` and `/account` are different mounts. Merging them
@@ -377,6 +377,6 @@ evaluator — [Authorization](../theory/authorization.md) explains the model.
 
 - [Modules overview](./index.md) — the whole context map
 - [`account`](./account.md) — the other service over this collection
-- [Strategic DDD](../theory/strategic-ddd.md#_5-published-language-—-the-barrel) — why a wide barrel is a map edge, not a private detail
+- [Strategic DDD](../theory/strategic-ddd.md#5-published-language-—-the-barrel) — why a wide barrel is a map edge, not a private detail
 - [Security](../tools/security.md) — password hashing and the token shapes
 - [Events & Logging](../tools/events-and-logging.md) — the domain-event bus

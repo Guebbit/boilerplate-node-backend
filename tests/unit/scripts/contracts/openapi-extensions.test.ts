@@ -8,11 +8,13 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { asStub } from '@tests/stub';
+import { parse as parseYaml } from 'yaml';
 
 import {
     checkExtensions,
     enumSourcesOf,
     extensionFragments,
+    withExtensionSchemas,
     withUnionExtensions
 } from '../../../../scripts/contracts/openapi-extensions';
 import type { OpenApiDocument } from '../../../../scripts/contracts/openapi-document';
@@ -27,7 +29,7 @@ afterEach(() => {
 const modulesWith = (files: Record<string, string>): string => {
     const root = mkdtempSync(path.join(os.tmpdir(), 'extensions-'));
     roots.push(root);
-    for (const [relative, text] of Object.entries(files)) {
+    for (const [relative, text] of Object.entries({ 'owner/openapi.yaml': OWNER, ...files })) {
         mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
         writeFileSync(path.join(root, relative), text);
     }
@@ -41,6 +43,14 @@ const VARIANT = `
             properties:
                 code: { type: string, enum: [shop.notice] }
                 severity: { $ref: '../owner/openapi.yaml#/components/schemas/Severity' }
+`;
+
+/** The owner's own contract: the schemas an extension may name. */
+const OWNER = `openapi: 3.1.0
+components:
+    schemas:
+        Kind: { type: string, enum: [contact], x-enum-from: Kind }
+        Notice: { oneOf: [] }
 `;
 
 /** The fragment a shop-like module ships for `owner`. */
@@ -65,7 +75,11 @@ const bundle = () =>
                         mapping: { 'own.notice': '#/components/schemas/Own' }
                     }
                 },
-                Own: { type: 'object', properties: { code: { enum: ['own.notice'] } } }
+                Own: { type: 'object', properties: { code: { enum: ['own.notice'] } } },
+                ShopNotice: {
+                    type: 'object',
+                    properties: { code: { type: 'string', enum: ['shop.notice'] } }
+                }
             }
         }
     });
@@ -97,7 +111,19 @@ describe('extensionFragments', () => {
     it('refuses an x-extends that is not a map of string lists', () => {
         const root = modulesWith({ 'shop/openapi.owner.yaml': 'x-extends:\n    Kind: nope\n' });
 
-        expect(() => extensionFragments(root)).toThrow(/must map a schema name to a list/);
+        expect(() => extensionFragments(root)).toThrow(/x-extends Kind must be a list of strings/);
+    });
+
+    it('refuses a fragment whose owner module ships no contract', () => {
+        const root = modulesWith({ 'shop/openapi.ghost.yaml': 'x-extends:\n    Kind: [refund]\n' });
+
+        expect(() => extensionFragments(root)).toThrow(/owner module ghost ships no openapi.yaml/);
+    });
+
+    it('refuses an x-extends naming a schema the owner does not declare', () => {
+        const root = modulesWith({ 'shop/openapi.owner.yaml': 'x-extends:\n    Nope: [x]\n' });
+
+        expect(() => extensionFragments(root)).toThrow(/x-extends Nope is not a schema of owner/);
     });
 });
 
@@ -137,8 +163,38 @@ describe('checkExtensions', () => {
     });
 });
 
+describe('withExtensionSchemas', () => {
+    const ROOT = 'openapi: 3.1.0\ncomponents:\n    schemas:\n        Id: { type: string }\n';
+
+    it('adds each fragment schema to the root as a ref to its staged file', () => {
+        const root = modulesWith({ 'shop/openapi.owner.yaml': FRAGMENT });
+
+        const staged = parseYaml(withExtensionSchemas(ROOT, extensionFragments(root), root)) as {
+            components: { schemas: Record<string, unknown> };
+        };
+
+        expect(staged.components.schemas.ShopNotice).toEqual({
+            $ref: '../../src/modules/shop/openapi.owner.yaml#/components/schemas/ShopNotice'
+        });
+        expect(staged.components.schemas.Id).toEqual({ type: 'string' });
+    });
+
+    it('returns the root untouched when nothing extends anything', () => {
+        expect(withExtensionSchemas(ROOT, [])).toBe(ROOT);
+    });
+
+    it('refuses a schema name the root already declares', () => {
+        const root = modulesWith({ 'shop/openapi.owner.yaml': FRAGMENT });
+        const taken = ROOT.replace('Id:', 'ShopNotice:');
+
+        expect(() => withExtensionSchemas(taken, extensionFragments(root), root)).toThrow(
+            /schema ShopNotice already exists in the root/
+        );
+    });
+});
+
 describe('withUnionExtensions', () => {
-    it('adds the schemas, appends the variants and maps each under its code', () => {
+    it('appends the variants and maps each under its discriminator value', () => {
         const schemas = run(FRAGMENT);
 
         expect(schemas?.Notice).toMatchObject({
@@ -153,13 +209,26 @@ describe('withUnionExtensions', () => {
                 }
             }
         });
-        expect(schemas?.ShopNotice).toBeDefined();
     });
 
-    it('makes refs into the owner’s file local', () => {
-        const shopNotice = run(FRAGMENT)?.ShopNotice as { properties: { severity: unknown } };
+    it('reads the discriminator value off the union’s own propertyName', () => {
+        const document = bundle();
+        const notice = document.components?.schemas?.Notice as {
+            discriminator: { propertyName: string; mapping: Record<string, string> };
+        };
+        notice.discriminator.propertyName = 'kind';
+        const shop = document.components?.schemas?.ShopNotice as { properties: object };
+        shop.properties = { kind: { type: 'string', enum: ['shop.kind'] } };
 
-        expect(shopNotice.properties.severity).toEqual({ $ref: '#/components/schemas/Severity' });
+        run(FRAGMENT, document);
+
+        expect(notice.discriminator.mapping['shop.kind']).toBe('#/components/schemas/ShopNotice');
+    });
+
+    it('moves the fragment’s schemas behind everything else, in fragment order', () => {
+        const schemas = run(FRAGMENT);
+
+        expect(Object.keys(schemas ?? {}).at(-1)).toBe('ShopNotice');
     });
 
     it('leaves enum keys to the enum fill', () => {
@@ -170,23 +239,18 @@ describe('withUnionExtensions', () => {
         });
     });
 
-    it('refuses a schema name the bundle already holds', () => {
-        const text = FRAGMENT.replaceAll('ShopNotice', 'Own');
-
-        expect(() => run(text)).toThrow(/schema Own already exists/);
-    });
-
     it('refuses a variant the fragment does not declare', () => {
-        expect(() => run('x-extends:\n    Notice: [Ghost]\n')).toThrow(/Ghost is not declared/);
+        expect(() => run('x-extends:\n    Notice: [Ghost]\n')).toThrow(
+            /variant Ghost is not declared/
+        );
     });
 
-    it('refuses a variant with no code enum to read its discriminator from', () => {
-        const text = FRAGMENT.replace(
-            'code: { type: string, enum: [shop.notice] }',
-            'code: { type: string }'
-        );
+    it('refuses a variant with no discriminator value to read', () => {
+        const document = bundle();
+        const shop = document.components?.schemas?.ShopNotice as { properties: object };
+        shop.properties = { code: { type: 'string' } };
 
-        expect(() => run(text)).toThrow(/has no properties.code.enum/);
+        expect(() => run(FRAGMENT, document)).toThrow(/has no properties.code.enum/);
     });
 
     it('leaves a oneOf-less target alone (an enum key is the enum fill’s business)', () => {
@@ -194,8 +258,10 @@ describe('withUnionExtensions', () => {
     });
 
     it('refuses a discriminator value two variants share', () => {
-        const text = FRAGMENT.replace('shop.notice', 'own.notice');
+        const document = bundle();
+        const shop = document.components?.schemas?.ShopNotice as { properties: object };
+        shop.properties = { code: { type: 'string', enum: ['own.notice'] } };
 
-        expect(() => run(text)).toThrow(/reuses the discriminator value own.notice/);
+        expect(() => run(FRAGMENT, document)).toThrow(/reuses the discriminator value own.notice/);
     });
 });
