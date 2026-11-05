@@ -8,22 +8,22 @@
 
 import { Router } from 'express';
 import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
-import { listWebhookSubscriptions } from './controllers/list-subscriptions';
-import { createWebhookSubscription } from './controllers/create-subscription';
+import { listWebhookSubscriptions } from './controllers/get-subscriptions';
+import { createWebhookSubscription } from './controllers/post-subscription';
 import {
     replaceWebhookSubscription,
     updateWebhookSubscription
 } from './controllers/update-subscription';
-import { createWebhookSubscriptionSecret } from './controllers/create-subscription-secret';
-import { removeWebhookSubscriptionSecret } from './controllers/remove-subscription-secret';
+import { createWebhookSubscriptionSecret } from './controllers/post-subscription-secret';
+import { deleteWebhookSubscriptionSecret } from './controllers/delete-subscription-secret';
 import { deleteWebhookSubscription } from './controllers/delete-subscription';
 import { getWebhookSubscription } from './controllers/get-subscription';
-import { enableWebhookSubscription } from './controllers/enable-subscription';
-import { disableWebhookSubscription } from './controllers/disable-subscription';
-import { listWebhookDeliveries } from './controllers/list-deliveries';
+import { enableWebhookSubscription } from './controllers/post-subscription-enable';
+import { disableWebhookSubscription } from './controllers/post-subscription-disable';
+import { listWebhookDeliveries } from './controllers/get-deliveries';
 import { getWebhookDelivery } from './controllers/get-delivery';
-import { replayWebhookDelivery } from './controllers/replay-delivery';
-import { listWebhookEvents } from './controllers/list-events';
+import { replayWebhookDelivery } from './controllers/post-delivery-replay';
+import { listWebhookEvents } from './controllers/get-events';
 
 /** Express router for the webhooks admin surface. */
 export const router = Router();
@@ -100,7 +100,7 @@ router.post(
 router.delete(
     '/subscriptions/:id/secrets/:secretId',
     requirePermission('update', 'WebhookSubscription'),
-    removeWebhookSubscriptionSecret
+    deleteWebhookSubscriptionSecret
 );
 
 // GET /webhooks/deliveries — the delivery log, newest first

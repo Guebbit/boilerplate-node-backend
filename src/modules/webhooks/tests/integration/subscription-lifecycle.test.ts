@@ -199,7 +199,7 @@ describe('listing', () => {
             enable: false,
             disable: false,
             createSecret: false,
-            removeSecret: false
+            deleteSecret: false
         });
     });
 });

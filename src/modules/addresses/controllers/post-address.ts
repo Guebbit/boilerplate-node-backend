@@ -5,7 +5,7 @@
  */
 
 import type { Request, Response } from 'express';
-import { AddAddressBody } from '@api/schemas.zod';
+import { CreateAddressBody } from '@api/schemas.zod';
 import { createdResponse } from '@infrastructure/http/response';
 import type { Address, CreateAddressRequest } from '@types';
 import { addressService } from '../service';
@@ -24,7 +24,7 @@ export const postAddress = (
     /* Auth context is guaranteed by isAuth middleware */
     const { id } = request.authContext!;
 
-    const body = parseBody(AddAddressBody, request.body, response);
+    const body = parseBody(CreateAddressBody, request.body, response);
     if (!body) return;
 
     return addressService

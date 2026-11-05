@@ -297,7 +297,7 @@ paths:
                 The other half of a rotation, once every consumer has switched. Refuses to empty
                 the ring — a subscription with no secret can never sign a delivery. The remove twin
                 of `POST .../secrets`.
-            operationId: removeWebhookSubscriptionSecret
+            operationId: deleteWebhookSubscriptionSecret
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -504,7 +504,7 @@ components:
         WebhookSubscriptionActions:
             type: object
             additionalProperties: false
-            required: [update, delete, enable, disable, createSecret, removeSecret]
+            required: [update, delete, enable, disable, createSecret, deleteSecret]
             properties:
                 update:
                     type: boolean
@@ -521,7 +521,7 @@ components:
                 createSecret:
                     type: boolean
                     description: Whether `POST /webhooks/subscriptions/{id}/secrets` would be accepted.
-                removeSecret:
+                deleteSecret:
                     type: boolean
                     description: Whether `DELETE /webhooks/subscriptions/{id}/secrets/{secretId}` would be accepted — false while the ring holds a single secret.
 

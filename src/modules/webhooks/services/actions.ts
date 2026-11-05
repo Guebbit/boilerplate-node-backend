@@ -57,8 +57,8 @@ export const subscriptionActions = (
     enable: standing.update && !state.enabled,
     disable: standing.update && state.enabled,
     createSecret: standing.update,
-    // A ring never empties (`removeSecret` 422s it), so a second secret must exist to drop one.
-    removeSecret: standing.update && state.secretCount > 1
+    // A ring never empties (`deleteSecret` 422s it), so a second secret must exist to drop one.
+    deleteSecret: standing.update && state.secretCount > 1
 });
 
 /**

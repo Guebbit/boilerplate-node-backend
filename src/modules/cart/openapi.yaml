@@ -112,7 +112,7 @@ paths:
             tags: [Cart]
             summary: Set cart item quantity
             description: Sets the quantity of the cart line for the product identified by `{productId}` in the path — the quantity, not an increment; `POST /cart/items` is the door that adds. A change never creates, so a product the cart holds no line for is 404 `cart.item-not-found`, and a held line whose product the storefront no longer shows is 404 `products.not-found`. Repeating it changes nothing. Returns the updated cart.
-            operationId: updateCartItemById
+            operationId: updateCartItemByProductId
             security:
                 - bearerAuth: []
             parameters:
@@ -122,10 +122,10 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpdateCartItemByIdRequest'
+                            $ref: '#/components/schemas/UpdateCartItemByProductIdRequest'
                     application/merge-patch+json:
                         schema:
-                            $ref: '#/components/schemas/UpdateCartItemByIdRequest'
+                            $ref: '#/components/schemas/UpdateCartItemByProductIdRequest'
             responses:
                 '200':
                     description: Updated cart
@@ -142,7 +142,7 @@ paths:
             tags: [Cart]
             summary: Remove item from cart
             description: Removes the cart line for the product identified by `{productId}` in the path from the authenticated user's cart. Returns the updated cart.
-            operationId: removeCartItem
+            operationId: deleteCartItemByProductId
             security:
                 - bearerAuth: []
             parameters:
@@ -463,7 +463,7 @@ components:
                     items:
                         $ref: '#/components/schemas/MergeLineResult'
 
-        UpdateCartItemByIdRequest:
+        UpdateCartItemByProductIdRequest:
             type: object
             additionalProperties: false
             required: [quantity]

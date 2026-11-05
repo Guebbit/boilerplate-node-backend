@@ -18,13 +18,14 @@ import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { upload } from '@infrastructure/http/middlewares/upload';
 import { roleChangeRequested } from './services/update';
 import { getUsers } from './controllers/get-users';
-import { createUser } from './controllers/create-user';
+import { createUser } from './controllers/post-user';
 import { replaceUser, updateUser } from './controllers/update-user';
 import { deleteUsers } from './controllers/delete-users';
-import { restoreUsers } from './controllers/restore-users';
+import { restoreUsers } from './controllers/post-user-restore';
 import { getUserItem } from './controllers/get-user-item';
-import { deletePurchaseHold, putPurchaseHold } from './controllers/purchase-hold';
-import { postActivate, postDeactivate } from './controllers/activation';
+import { deletePurchaseHold } from './controllers/delete-purchase-hold';
+import { putPurchaseHold } from './controllers/put-purchase-hold';
+import { postActivate, postDeactivate } from './controllers/post-user-activation';
 import { noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 

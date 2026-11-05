@@ -1,6 +1,6 @@
 /**
  * @module
- * `PUT /tasks/:id/assignee` (take or assign) and `DELETE /tasks/:id/assignee` (give back).
+ * `PUT /tasks/:id/assignee` (take or assign).
  *
  * See: docs/modules/tasks.md
  */
@@ -31,18 +31,4 @@ export const putTaskAssignee = (
             successResponse<Task>(response, result.data, 200);
         })
         .catch(catchAs(response, 'putTaskAssignee'));
-};
-
-/** DELETE /tasks/:id/assignee (staff) — give the task back. */
-export const deleteTaskAssignee = (request: Request<{ id: string }>, response: Response) => {
-    const id = requireId(request, response, { notFound: 'generic.error-item-gone' });
-    if (!id) return Promise.resolve();
-
-    return taskService
-        .unassign(id, callerContextOf(request))
-        .then((result) => {
-            if (refused(response, result)) return;
-            successResponse<Task>(response, result.data, 200);
-        })
-        .catch(catchAs(response, 'deleteTaskAssignee'));
 };

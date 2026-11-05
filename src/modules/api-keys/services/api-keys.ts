@@ -26,7 +26,7 @@ import { heldRules } from '@kernel/ability';
 import { findRule, systemCallerContext } from '@kernel/permissions';
 import type { Caller } from '@types';
 import type {
-    MintApiKeyRequest,
+    CreateApiKeyRequest,
     ApiKeyCreated,
     ApiKey,
     ApiKeysResponse,
@@ -218,7 +218,7 @@ export const get = (
  *   doesn't hold, or isn't a declared tenant key at all
  */
 export const mint = (
-    body: MintApiKeyRequest,
+    body: CreateApiKeyRequest,
     context: TenantCallerContext
 ): Promise<ResponseSuccess<ApiKeyCreated> | ResponseReject> => {
     // A credential that never expires is one that is never rotated: bounded at mint, not at use.

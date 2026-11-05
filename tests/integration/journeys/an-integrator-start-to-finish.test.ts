@@ -14,7 +14,7 @@ import {
     CreateReturn201Response,
     DeliverShipment200Response,
     ListOrderFulfillmentOrders200Response,
-    MintApiKey201Response,
+    CreateApiKey201Response,
     ShipFulfillmentOrder201Response,
     CreateWebhookSubscription201Response
 } from '@api/schemas.zod';
@@ -56,7 +56,7 @@ it('delivers every event once, signed, in causal order', async () => {
                 permissions: ['create:WebhookSubscription', 'read:WebhookSubscription'],
                 expiresAt: inAWeek()
             }),
-        MintApiKey201Response
+        CreateApiKey201Response
     );
     const key = `Bearer ${minted.secret}`;
     const { secret } = bodyOf(
@@ -173,7 +173,7 @@ const adminWithKey = async (n: number) => {
                 permissions: ['read:WebhookSubscription'],
                 expiresAt: inAWeek()
             }),
-        MintApiKey201Response
+        CreateApiKey201Response
     );
 
     return { user, key: `Bearer ${minted.secret}` };

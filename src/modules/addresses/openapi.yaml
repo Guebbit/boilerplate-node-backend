@@ -36,7 +36,7 @@ paths:
             tags: [Account]
             summary: Add an address
             description: Adds an entry to the authenticated user's address book and answers the entry it created, with its `Location`. The first entry becomes the default automatically; a later entry claims the default slot only by sending `default true`, which demotes the previous holder — a different row, so a client showing the book refetches it.
-            operationId: addAddress
+            operationId: createAddress
             x-error-codes:
                 '409': [ADDRESS_BOOK_LIMIT_REACHED]
             security:
@@ -155,7 +155,7 @@ paths:
             tags: [Account]
             summary: Remove an address
             description: Removes one entry of the caller's own book. Removing the default promotes the oldest remaining entry, so a non-empty book always has exactly one default; a client showing the book refetches it.
-            operationId: removeAddress
+            operationId: deleteAddress
             security:
                 - bearerAuth: []
             parameters:

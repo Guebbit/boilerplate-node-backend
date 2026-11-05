@@ -4,8 +4,8 @@
  */
 
 import type { Request, Response } from 'express';
-import { MintApiKeyBody } from '@api/schemas.zod';
-import type { MintApiKeyRequest, ApiKeyCreated } from '@types';
+import { CreateApiKeyBody } from '@api/schemas.zod';
+import type { CreateApiKeyRequest, ApiKeyCreated } from '@types';
 import { createdResponse } from '@infrastructure/http/response';
 import { tenantCallerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
@@ -17,10 +17,10 @@ import { apiKeysService } from '../services';
  * naming the offending keys when it isn't.
  */
 export const mintApiKey = (
-    request: Request<unknown, unknown, MintApiKeyRequest>,
+    request: Request<unknown, unknown, CreateApiKeyRequest>,
     response: Response
 ) => {
-    const body = parseBody(MintApiKeyBody, request.body, response);
+    const body = parseBody(CreateApiKeyBody, request.body, response);
     if (!body) return;
 
     return apiKeysService
@@ -33,5 +33,5 @@ export const mintApiKey = (
                 `/api-keys/${result.data.id}`
             );
         })
-        .catch(catchAs(response, 'mintApiKey'));
+        .catch(catchAs(response, 'createApiKey'));
 };

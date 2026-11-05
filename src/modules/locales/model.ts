@@ -16,7 +16,7 @@ import { trimmedInto } from '@infrastructure/http/schemas';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
 /**
- * A display name that survives being trimmed. Shared by `create-locale.ts` and `update-locale.ts`.
+ * A display name that survives being trimmed. Shared by `post-locale.ts` and `update-locale.ts`.
  * `minLength: 1` in `openapi.yaml` accepts a single space, which Mongoose then trims to `""` at a
  * `required: true` column; trimming first piles the contract's own bounds on the trimmed value, so
  * a blank name is refused at validation with a field-named error.

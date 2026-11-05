@@ -60,7 +60,7 @@ describe('GET /webhooks/subscriptions', () => {
             enable: false,
             disable: true,
             createSecret: true,
-            removeSecret: false
+            deleteSecret: false
         });
     });
 
@@ -458,7 +458,7 @@ describe('POST /webhooks/subscriptions/:id/secrets', () => {
         expect(response.body.retiringSecrets).toEqual([
             { id: created.body.secretIds[0], retiresAt: expect.any(String) }
         ]);
-        expect(response.body.actions.removeSecret).toBe(true);
+        expect(response.body.actions.deleteSecret).toBe(true);
         expect(created.body.retiringSecrets).toEqual([]);
     });
 

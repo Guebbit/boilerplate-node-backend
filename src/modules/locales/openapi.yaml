@@ -99,7 +99,7 @@ paths:
                 caller who holds `display:Locale` is answered outside the shared cache, so only
                 such a caller gets a flag set to `true`; everyone else's answer is the cached one,
                 with every flag `false`.
-            operationId: getLocales
+            operationId: listLocales
             security:
                 - {}
                 - bearerAuth: []

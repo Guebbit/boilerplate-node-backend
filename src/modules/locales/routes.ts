@@ -18,27 +18,24 @@ import { localeService } from './services';
 import { getLocales, getLocale, getLocaleDictionary } from './controllers/get-locales';
 import { getLocaleMessages } from './controllers/get-locale-messages';
 import { getLocaleApps } from './controllers/get-locale-apps';
-import { createLocale } from './controllers/create-locale';
+import { createLocale } from './controllers/post-locale';
 import { replaceLocale, updateLocale } from './controllers/update-locale';
-import { activateLocale, deactivateLocale } from './controllers/activate-locale';
+import { activateLocale, deactivateLocale } from './controllers/post-locale-activation';
 import { deleteLocale } from './controllers/delete-locale';
 import {
     getLocaleEntries,
     getAppLocaleEntries,
     getLocaleEntry
 } from './controllers/get-locale-entries';
-import {
-    createLocaleEntry,
-    replaceLocaleEntry,
-    replaceLocaleEntries,
-    updateLocaleEntries
-} from './controllers/write-locale-entries';
+import { createLocaleEntry } from './controllers/post-locale-entry';
+import { replaceLocaleEntry } from './controllers/put-locale-entry';
+import { replaceLocaleEntries, updateLocaleEntries } from './controllers/update-locale-entries';
 import { deleteLocaleEntry } from './controllers/delete-locale-entry';
 import { getEntityTranslations } from './controllers/get-entity-translations';
 import {
     replaceEntityTranslations,
     updateEntityTranslations
-} from './controllers/write-entity-translations';
+} from './controllers/update-entity-translations';
 
 /**
  * Express router mounted at `/locales` — see the module header for the ordering and guard rules.
@@ -168,7 +165,7 @@ router.get(
     getLocaleEntries
 );
 // One app's slice of the entries is a resource of its own — the app is a path segment, so a
-// PUT replaces exactly what the GET on the same URI lists. See `controllers/write-locale-entries.ts`.
+// PUT replaces exactly what the GET on the same URI lists. See `controllers/put-locale-entry.ts` and `controllers/update-locale-entries.ts`.
 router.get(
     '/:locale/apps/:app/entries',
     getAuth,

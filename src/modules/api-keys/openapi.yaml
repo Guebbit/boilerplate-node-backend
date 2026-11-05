@@ -70,7 +70,7 @@ paths:
                 request is refused with 422. The minter is mailed that a key was created, and every
                 key a person minted is revoked (and listed to them by mail) when they log out
                 everywhere, reset their password or report an email change as not theirs.
-            operationId: mintApiKey
+            operationId: createApiKey
             x-error-codes:
                 '401': [REAUTH_REQUIRED]
             security:
@@ -80,7 +80,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/MintApiKeyRequest'
+                            $ref: '#/components/schemas/CreateApiKeyRequest'
             responses:
                 '201':
                     description: The minted credential, with its one-time secret
@@ -277,7 +277,7 @@ components:
                     type: string
                     description: The newly minted credential, in plaintext — `sk_<prefix>_<secret>`. Shown here once, on creation, and never again.
 
-        MintApiKeyRequest:
+        CreateApiKeyRequest:
             type: object
             additionalProperties: false
             required: [name, permissions, expiresAt]

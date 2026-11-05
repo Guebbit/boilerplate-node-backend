@@ -111,6 +111,27 @@ The full "I changed X, run Y" table is [Regenerating After a Change](./regenerat
 
 Names in US English (AIP-190 / Zalando #103); prose is free. The rule covers what a machine reads: operationIds, schema names, property names, enum values, error-code keys, and on the async side channels, messages and operations. `cancelled`, `cancellable`, `catalogue`, `fulfil…` and the other British stems fail `npm run lint:openapi` (`names-in-us-english-*` in `shared/contracts/spectral.yaml`) and `npm run lint:asyncapi:names` (`shared/contracts/spectral.asyncapi.names.yaml`, run on the bundled `asyncapi.yaml`). `cancellation*` is the US spelling too and stays; `cancel` verbs stay.
 
+## Operation names
+
+An operationId is `<verb><Subject>`. The verbs, in the order a resource uses them:
+
+| Verb | Means |
+| --- | --- |
+| `list` | read a collection (`listLocales`) |
+| `get` | read one record (`getOrderById`) |
+| `search` | read a collection with a body of filters |
+| `create` | POST a new record (`createAddress`, `createApiKey`) |
+| `replace` | PUT |
+| `update` | PATCH |
+| `delete` | remove a record; `hardDelete` for the permanent form |
+| `restore` | undo a soft delete |
+
+A domain verb is used only where CRUD would mislead: `revoke`, `cancel`, `unlink`, `clear`,
+`rotate`, `lift`, and `add` for the cart line (the POST grows an existing line).
+
+`ById` is the resource's own id; `By<Other>Id` is addressed by another resource's id (today only
+the cart line, addressed by its product: `updateCartItemByProductId`).
+
 ## Request body names
 
 Every top-level request body ends in `Request` (`RequestMultipart` for multipart). `*Input` is

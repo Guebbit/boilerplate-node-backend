@@ -17,10 +17,10 @@ import {
     searchProductsKeyValues,
     searchProductsOrderedParameters
 } from './controllers/get-products';
-import { createProduct } from './controllers/create-product';
+import { createProduct } from './controllers/post-product';
 import { replaceProduct, updateProduct } from './controllers/update-product';
 import { deleteProducts } from './controllers/delete-products';
-import { restoreProducts } from './controllers/restore-products';
+import { restoreProducts } from './controllers/post-product-restore';
 import { getProductItem } from './controllers/get-product-item';
 import { getCatalogFacets } from './controllers/get-catalog-facets';
 import { invalidateCache, searchCache, setCache } from '@infrastructure/http/middlewares/cache';

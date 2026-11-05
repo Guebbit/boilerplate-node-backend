@@ -8,10 +8,10 @@
 
 import { Router } from 'express';
 import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
-import { listApiKeys } from './controllers/list-api-keys';
+import { listApiKeys } from './controllers/get-api-keys';
 import { getApiKey } from './controllers/get-api-key';
-import { mintApiKey } from './controllers/mint-api-key';
-import { revokeApiKey } from './controllers/revoke-api-key';
+import { mintApiKey } from './controllers/post-api-key';
+import { revokeApiKey } from './controllers/delete-api-key';
 
 /** Express router for the api-keys admin surface. */
 export const router = Router();

@@ -14,7 +14,7 @@
  */
 import '@tests/contract';
 import {
-    AddAddress201Response,
+    CreateAddress201Response,
     ApproveReturn200Response,
     Checkout201Response,
     ConfirmPayment200Response,
@@ -94,7 +94,7 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
             zip: '41121',
             country: 'IT'
         }),
-        AddAddress201Response
+        CreateAddress201Response
     );
     await api()
         .post('/cart/items')
@@ -263,7 +263,7 @@ it('records a staff buyer’s refund of their own order as theirs', async () => 
             zip: '41121',
             country: 'IT'
         }),
-        AddAddress201Response
+        CreateAddress201Response
     );
     await api()
         .post('/cart/items')
