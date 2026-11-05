@@ -501,6 +501,18 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
 2. Send it back as `If-Match` on the save; take the new `ETag` from the 200.
 3. On 412 the record changed under you: re-read it, show the user what is different, resend.
 
+## Date filters
+
+A date filter on a read has one of three spellings. Each means one thing.
+
+| Spelling | Meaning | Where |
+| --- | --- | --- |
+| `<field>From` / `<field>To` | Inclusive, date-time, optional; filters that field | orders `createdFrom`/`createdTo`, `paidFrom`/`paidTo`; payments `createdFrom`/`createdTo` |
+| `from` / `to` | A report period in calendar days, required | `stats` |
+| `since` | A log's "strictly after", exclusive, date-time | `audit-logs`, `observability` |
+
+A new date filter picks one of the three; a fourth spelling needs a card.
+
 ## Deliberate exceptions
 
 | Route | Differs how | Why |
