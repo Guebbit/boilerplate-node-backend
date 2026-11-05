@@ -12,7 +12,7 @@ import {
 import { Types, type ClientSession } from 'mongoose';
 import { addressBookModel, applyAddressBookTransform } from './model';
 import type { AddressBookDocument } from './model';
-import type { AddressInput, UpdateAddressRequest } from '@types';
+import type { CreateAddressRequest, UpdateAddressRequest } from '@types';
 import {
     createRepository,
     toObjectId,
@@ -122,7 +122,7 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
     findByUserId: (userId: string) => Promise<AddressBookDocument | null>;
     addEntry: (
         userId: string,
-        entry: AddressInput,
+        entry: CreateAddressRequest,
         attemptsLeft?: number
     ) => Promise<AddressBookDocument | typeof ADDRESS_BOOK_LIMIT_REACHED>;
     updateEntry: (
@@ -178,7 +178,7 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
      * the upsert collide with the unique `userId` index; that duplicate key is told apart from a
      * first-insert race by one more read.
      */
-    addEntry: (userId: string, entry: AddressInput, attemptsLeft = 3) => {
+    addEntry: (userId: string, entry: CreateAddressRequest, attemptsLeft = 3) => {
         const owner = toObjectId(userId);
         // `_id` first: it is part of every field's AAD.
         const item = encryptAddressItem(entry, new Types.ObjectId());

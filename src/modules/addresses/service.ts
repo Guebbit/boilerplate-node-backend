@@ -14,7 +14,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import type { Address, AddressInput, UpdateAddressRequest } from '@types';
+import type { Address, CreateAddressRequest, UpdateAddressRequest } from '@types';
 import { addressBookRepository, ADDRESS_BOOK_LIMIT_REACHED } from './repository';
 import { ERROR_CODES } from '@api/error-codes';
 import type { AddressItem } from './model';
@@ -53,7 +53,7 @@ const get = (
  */
 const create = (
     userId: string,
-    entry: AddressInput
+    entry: CreateAddressRequest
 ): Promise<ResponseSuccess<Address> | ResponseReject> =>
     addressBookRepository.addEntry(userId, entry).then((book) => {
         if (book === ADDRESS_BOOK_LIMIT_REACHED)

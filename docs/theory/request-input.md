@@ -4,8 +4,8 @@ A value an endpoint needs may arrive as a route param, a query-string entry or a
 the same endpoint often accepts more than one of those. That is deliberate, and it has two names:
 
 - **Operation aliases** — the contract practice. One canonical operation, plus alternate forms of
-  it: `POST /products/search {"text":"x"}` beside `GET /products?text=x`, or `DELETE /products`
-  with an `{id}` body beside `DELETE /products/{id}`. An alias carries `x-alias-of: <canonical
+  it: `POST /products/search {"text":"x"}` beside `GET /products?text=x`, or `DELETE /products/{id}/hard`
+  beside `DELETE /products/{id}?hardDelete=true`. An alias carries `x-alias-of: <canonical
 operationId>` in its module's `openapi.yaml`.
 - **Multi-source input binding** — the mechanism behind them. One entry point, `readInput`, reads
   a value from the route params, the query string or the body, in a fixed precedence order. One
@@ -62,14 +62,14 @@ happened to pass — and a seventh combination has to be added there deliberatel
 reviewed against the spec. `tests/contract/request-sources.test.ts` pins the set for exactly that
 reason: adding one fails that test once, which is the prompt to update this page alongside it.
 
-| Surface  | Sources (highest first) | Used by                                                                                                               |
-| -------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `search` | body, query             | the endpoints with a `POST …/search` sibling (`example`, `orders`, `payments`, `tasks`, `products`, `users`)          |
-| `list`   | query                   | the GET-only collection reads, which have no such sibling                                                             |
-| `write`  | params, body            | the item writes whose id rides in the path and whose fields ride in the body                                          |
-| `create` | body                    | `createProduct`, `createUser`, and the PUT/PATCH factory's body, `updateProduct` included (its id is read apart)      |
-| `delete` | params, query, body     | the three soft/hard delete controllers' `hardDelete` flag; their `id` is `path` on `/:id`, `create` on the collection |
-| `path`   | params                  | `requireId`'s default, for a path id with no body to fall back on                                                     |
+| Surface  | Sources (highest first) | Used by                                                                                                          |
+| -------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `search` | body, query             | the endpoints with a `POST …/search` sibling (`example`, `orders`, `payments`, `tasks`, `products`, `users`)     |
+| `list`   | query                   | the GET-only collection reads, which have no such sibling                                                        |
+| `write`  | params, body            | the item writes whose id rides in the path and whose fields ride in the body                                     |
+| `create` | body                    | `createProduct`, `createUser`, and the PUT/PATCH factory's body, `updateProduct` included (its id is read apart) |
+| `delete` | params, query           | the three soft/hard delete controllers' `hardDelete` flag; their `id` is `path` (a DELETE has no body)           |
+| `path`   | params                  | `requireId`'s default, for a path id with no body to fall back on                                                |
 
 `search` and `list` differ on one question: **is there a route that can carry a body?** A GET
 cannot — RFC 9110 §9.3.1 gives content on a GET no defined semantics and the Fetch spec refuses to
@@ -79,46 +79,46 @@ decorative: `setCache` keys on the declared **query** parameters, so a body-born
 invisible to the key. Give a collection read a real DTO form by adding `POST /x/search`, not by
 declaring a body on its GET.
 
-| Endpoint(s)                                                             | Parameter                                       | Sources (highest first)                    | Treatment                                                                               |
-| ----------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------- |
-| `GET /products`, `POST /products/search`                                | `id`                                            | body, query                                | `stringArrays` — merged, not collapsed; a batch filter, `$in`                           |
-|                                                                         | `category`, `tag`                               | body, query                                | merged, then `coerceStringArray(...)[0]`                                                |
-|                                                                         | `page`, `pageSize`                              | body, query                                | merged, then the shared pagination schema                                               |
-|                                                                         | `text`, `priceMin`, `priceMax`                  | body, query                                | merged, then Zod                                                                        |
-| every `GET x`, `POST x/search` pair                                     | `sort`                                          | body, query                                | `csvLists` — a query CSV is split, a body array is taken as sent; blank query is absent |
-| `GET /users`, `POST /users/search`                                      | `id`                                            | body, query                                | `stringArrays` — merged, not collapsed; a batch filter, `$in`                           |
-|                                                                         | `active`                                        | body, query                                | merged, then Zod `value === 'true'`                                                     |
-|                                                                         | `page`, `pageSize`, `text`, `email`, `username` | body, query                                | merged, then Zod (pagination shared)                                                    |
-| `GET /orders`, `POST /orders/search`                                    | `id`                                            | body, query                                | `stringArrays` — merged, not collapsed; a batch filter, `$in`                           |
-|                                                                         | `userId`                                        | body, query                                | merged; **ignored unless the caller holds the key**                                     |
-|                                                                         | `page`, `pageSize`, `productId`, `email`        | body, query                                | merged, then Zod (pagination shared)                                                    |
-| `DELETE /products`, `DELETE /products/:id`, `DELETE /products/:id/hard` | `id`                                            | path (`/:id`), body (`DELETE /x`)          | `requireId`: a malformed path id is a 404, a malformed body id a 422 naming `id`        |
-|                                                                         | `hardDelete`                                    | params, query, body — **OR'd, not ranked** | boolean; any `true` wins; 422 for anything that is not one                              |
-| `DELETE /users`, `DELETE /users/:id`, `DELETE /users/:id/hard`          | `id`                                            | path (`/:id`), body (`DELETE /x`)          | `requireId`: a malformed path id is a 404, a malformed body id a 422 naming `id`        |
-|                                                                         | `hardDelete`                                    | params, query, body — **OR'd, not ranked** | boolean; any `true` wins; 422 for anything that is not one                              |
-| `DELETE /orders`, `DELETE /orders/:id`, `DELETE /orders/:id/hard`       | `id`                                            | path (`/:id`), body (`DELETE /x`)          | `requireId`: a malformed path id is a 404, a malformed body id a 422 naming `id`        |
-|                                                                         | `hardDelete`                                    | params, query, body — **OR'd, not ranked** | boolean; any `true` wins; 422 for anything that is not one                              |
-| `POST /orders`, `PUT /orders/:id`                                       | `id`                                            | params                                     | absent means create                                                                     |
-|                                                                         | everything else                                 | body                                       | untouched                                                                               |
-| `PUT /products/:id`, `PATCH /products/:id`                              | `id`                                            | params                                     | from the path only, through the shared factory's `requireId` (404 when malformed)       |
-| `POST /products`, `PUT /products/:id`, `PATCH /products/:id`            | `active`                                        | body                                       | boolean; decoded only on `multipart/form-data`                                          |
-|                                                                         | `categories`, `tags`                            | body                                       | string array; decoded only on multipart                                                 |
-|                                                                         | everything else                                 | body                                       | untouched                                                                               |
-| `POST /users`                                                           | `active`                                        | body                                       | boolean; decoded only on multipart                                                      |
-|                                                                         | everything else                                 | body                                       | untouched                                                                               |
-| `POST /cart/items`, `POST /wishlist/items`, `POST /stock-alerts`        | `productId` (`quantity` on the cart)            | body                                       | `parseBody`: Zod, and a `productId` that is not an ObjectId is a 422 naming it          |
-| `PATCH /cart/items/:productId`                                          | `productId`                                     | params                                     | `requireId` (404 when malformed)                                                        |
-|                                                                         | `quantity`                                      | body                                       | Zod                                                                                     |
-| `DELETE /cart/items/:productId`                                         | `productId`                                     | params                                     | `requireId`: 404 when malformed                                                         |
-| `GET /tasks`, `POST /tasks/search`                                      | `page`, `pageSize`                              | body, query                                | merged, then the shared pagination schema                                               |
-|                                                                         | `text`, `email`, `status`                       | body, query                                | merged, passed through as strings                                                       |
-| `GET /inventory/levels`                                                 | `page`, `pageSize`, `lowOnly`                   | query                                      | `lowOnly` decoded as a boolean, then Zod                                                |
-| `GET /inventory/movements`                                              | `productId`                                     | query                                      | first non-empty wins                                                                    |
-|                                                                         | `page`, `pageSize`, `reason`                    | query                                      | then Zod                                                                                |
-| `GET /locales/{locale}/entries`                                         | `page`, `pageSize`, `text`                      | query                                      | then the shared pagination schema                                                       |
-| `GET /locales/{locale}/apps/{app}/entries`                              | `app`                                           | params                                     | the rest as above                                                                       |
-| `GET /observability/audit`                                              | `actor`, `action`, `outcome`, `since`           | query                                      | then Zod; a repeated key is a 422                                                       |
-|                                                                         | `page`, `pageSize`                              | query                                      | then the shared pagination schema                                                       |
+| Endpoint(s)                                                      | Parameter                                       | Sources (highest first)              | Treatment                                                                               |
+| ---------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------- |
+| `GET /products`, `POST /products/search`                         | `id`                                            | body, query                          | `stringArrays` — merged, not collapsed; a batch filter, `$in`                           |
+|                                                                  | `category`, `tag`                               | body, query                          | merged, then `coerceStringArray(...)[0]`                                                |
+|                                                                  | `page`, `pageSize`                              | body, query                          | merged, then the shared pagination schema                                               |
+|                                                                  | `text`, `priceMin`, `priceMax`                  | body, query                          | merged, then Zod                                                                        |
+| every `GET x`, `POST x/search` pair                              | `sort`                                          | body, query                          | `csvLists` — a query CSV is split, a body array is taken as sent; blank query is absent |
+| `GET /users`, `POST /users/search`                               | `id`                                            | body, query                          | `stringArrays` — merged, not collapsed; a batch filter, `$in`                           |
+|                                                                  | `active`                                        | body, query                          | merged, then Zod `value === 'true'`                                                     |
+|                                                                  | `page`, `pageSize`, `text`, `email`, `username` | body, query                          | merged, then Zod (pagination shared)                                                    |
+| `GET /orders`, `POST /orders/search`                             | `id`                                            | body, query                          | `stringArrays` — merged, not collapsed; a batch filter, `$in`                           |
+|                                                                  | `userId`                                        | body, query                          | merged; **ignored unless the caller holds the key**                                     |
+|                                                                  | `page`, `pageSize`, `productId`, `email`        | body, query                          | merged, then Zod (pagination shared)                                                    |
+| `DELETE /products/:id`, `DELETE /products/:id/hard`              | `id`                                            | path (`/:id`)                        | `requireId`: a malformed path id is a 404                                               |
+|                                                                  | `hardDelete`                                    | params, query — **OR'd, not ranked** | boolean; any `true` wins; 422 for anything that is not one                              |
+| `DELETE /users/:id`, `DELETE /users/:id/hard`                    | `id`                                            | path (`/:id`)                        | `requireId`: a malformed path id is a 404                                               |
+|                                                                  | `hardDelete`                                    | params, query — **OR'd, not ranked** | boolean; any `true` wins; 422 for anything that is not one                              |
+| `DELETE /orders/:id`, `DELETE /orders/:id/hard`                  | `id`                                            | path (`/:id`)                        | `requireId`: a malformed path id is a 404                                               |
+|                                                                  | `hardDelete`                                    | params, query — **OR'd, not ranked** | boolean; any `true` wins; 422 for anything that is not one                              |
+| `POST /orders`, `PUT /orders/:id`                                | `id`                                            | params                               | absent means create                                                                     |
+|                                                                  | everything else                                 | body                                 | untouched                                                                               |
+| `PUT /products/:id`, `PATCH /products/:id`                       | `id`                                            | params                               | from the path only, through the shared factory's `requireId` (404 when malformed)       |
+| `POST /products`, `PUT /products/:id`, `PATCH /products/:id`     | `active`                                        | body                                 | boolean; decoded only on `multipart/form-data`                                          |
+|                                                                  | `categories`, `tags`                            | body                                 | string array; decoded only on multipart                                                 |
+|                                                                  | everything else                                 | body                                 | untouched                                                                               |
+| `POST /users`                                                    | `active`                                        | body                                 | boolean; decoded only on multipart                                                      |
+|                                                                  | everything else                                 | body                                 | untouched                                                                               |
+| `POST /cart/items`, `POST /wishlist/items`, `POST /stock-alerts` | `productId` (`quantity` on the cart)            | body                                 | `parseBody`: Zod, and a `productId` that is not an ObjectId is a 422 naming it          |
+| `PATCH /cart/items/:productId`                                   | `productId`                                     | params                               | `requireId` (404 when malformed)                                                        |
+|                                                                  | `quantity`                                      | body                                 | Zod                                                                                     |
+| `DELETE /cart/items/:productId`                                  | `productId`                                     | params                               | `requireId`: 404 when malformed                                                         |
+| `GET /tasks`, `POST /tasks/search`                               | `page`, `pageSize`                              | body, query                          | merged, then the shared pagination schema                                               |
+|                                                                  | `text`, `email`, `status`                       | body, query                          | merged, passed through as strings                                                       |
+| `GET /inventory/levels`                                          | `page`, `pageSize`, `lowOnly`                   | query                                | `lowOnly` decoded as a boolean, then Zod                                                |
+| `GET /inventory/movements`                                       | `productId`                                     | query                                | first non-empty wins                                                                    |
+|                                                                  | `page`, `pageSize`, `reason`                    | query                                | then Zod                                                                                |
+| `GET /locales/{locale}/entries`                                  | `page`, `pageSize`, `text`                      | query                                | then the shared pagination schema                                                       |
+| `GET /locales/{locale}/apps/{app}/entries`                       | `app`                                           | params                               | the rest as above                                                                       |
+| `GET /observability/audit`                                       | `actor`, `action`, `outcome`, `since`           | query                                | then Zod; a repeated key is a 422                                                       |
+|                                                                  | `page`, `pageSize`                              | query                                | then the shared pagination schema                                                       |
 
 Pagination has exactly two authorities, and they answer different questions. `@infrastructure/http/schemas`
 owns the **bounds** — `openapi.yaml` declares `minimum: 1` / `maximum: 100`, and every one of the
@@ -294,7 +294,7 @@ None outstanding: `openapi.yaml` and the declarations agree, and `tests/contract
 keeps it that way.
 
 What remains is a granularity, not a discrepancy. The comparison is per controller against the union
-of its routes, so a source declared on one route it serves excuses that source on all of them. A
-collection delete (`DELETE /users`) shares its controller with the `{id}` forms, so the `hardDelete`
+of its routes, so a source declared on one route it serves excuses that source on all of them. The
+delete controller is shared by the `{id}` and `/hard` forms, so the `hardDelete`
 query parameter has to be declared on every one of them — it is a shared `HardDeleteParam` for that
 reason. Per-operation declarations are what would remove the blind spot.

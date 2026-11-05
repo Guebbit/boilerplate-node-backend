@@ -515,15 +515,14 @@ describe('PATCH /orders/{id}', () => {
     });
 });
 
-describe('DELETE /orders and DELETE /orders/{id}/hard', () => {
-    it('matches the contract for a soft delete with the id in the body', async () => {
+describe('DELETE /orders/{id} and DELETE /orders/{id}/hard', () => {
+    it('matches the contract for a soft delete', async () => {
         const { bearer, user } = await authenticateAs('admin');
         const order = await seedOrderFor(user, OrderStatus.canceled);
 
         const response = await api()
-            .delete('/orders')
-            .set('Authorization', bearer)
-            .send({ id: String(order._id) });
+            .delete(`/orders/${String(order._id)}`)
+            .set('Authorization', bearer);
 
         expect(response.status).toBe(204);
         const stored = await orderRepository.findById(String(order._id));

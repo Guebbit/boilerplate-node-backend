@@ -111,6 +111,13 @@ The full "I changed X, run Y" table is [Regenerating After a Change](./regenerat
 
 Names in US English (AIP-190 / Zalando #103); prose is free. The rule covers what a machine reads: operationIds, schema names, property names, enum values, error-code keys, and on the async side channels, messages and operations. `cancelled`, `cancellable`, `catalogue`, `fulfil…` and the other British stems fail `npm run lint:openapi` (`names-in-us-english-*` in `shared/contracts/spectral.yaml`) and `npm run lint:asyncapi:names` (`shared/contracts/spectral.asyncapi.names.yaml`, run on the bundled `asyncapi.yaml`). `cancellation*` is the US spelling too and stays; `cancel` verbs stay.
 
+## Request body names
+
+Every top-level request body ends in `Request` (`RequestMultipart` for multipart). `*Input` is
+only for a nested writable sub-object (`OrderLineInput`, `LocaleEntryInput`), and a body a
+provider defines keeps its own name (`PaymentWebhookEvent`). A DELETE has no body: its target is
+the path, and the flags ride in the query or the `/hard` form.
+
 ## Nullable fields (OpenAPI 3.1)
 
 The contract is OpenAPI **3.1.0**, where `nullable: true` does not exist: JSON Schema 2020-12 has no such keyword, so every tool ignores it without complaint and the field silently stops accepting `null`. The `no-nullable-keyword` Spectral rule fails the lint on it.

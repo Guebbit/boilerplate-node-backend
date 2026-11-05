@@ -176,35 +176,6 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 # Also answered when `Idempotency-Key` was already used with a different body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-        delete:
-            tags: [Orders]
-            summary: Delete order
-            description: Deletes the order identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record, which is only allowed for an order that is canceled and was never paid (409 `ORDER_NOT_CANCELED` while it is open, 409 `ORDER_INVOICED` once paid, 409 `ORDER_HAS_MONEY_HISTORY` once money was recorded after the cancel); a `true` from any source wins, so a `false` sent elsewhere does not cancel it. A soft delete hides a canceled order from its buyer (409 `ORDER_NOT_CANCELED` while it is open), is safe to repeat, and is undone with `POST /orders/{id}/restore`.
-            operationId: deleteOrder
-            x-error-codes:
-                '409': [ORDER_HAS_MONEY_HISTORY, ORDER_INVOICED, ORDER_NOT_CANCELED]
-            x-alias-of: deleteOrderById
-            security:
-                - bearerAuth: []
-            # The flag is readable from the query here too, exactly as it is on the `{id}` form:
-            # one controller serves both, and the flag is read from the path flag, the query and
-            # the body on whichever route it is mounted on. The id is the body's alone here, and the
-            # path's alone on the `{id}` form. Declared rather than merely tolerated.
-            parameters:
-                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/HardDeleteParam'
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/DeleteOrderRequest'
-            responses:
-                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
     # Same as GET /orders, but with JSON body, more suitable for DTOs and multi-language codegen
     /orders/export:
@@ -421,7 +392,7 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-        # Same as DELETE /orders
+        # Same as DELETE /orders/{id}
         delete:
             tags: [Orders]
             summary: Delete order
@@ -956,17 +927,6 @@ components:
             properties:
                 email:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
-
-        DeleteOrderRequest:
-            type: object
-            additionalProperties: false
-            required: [id]
-            properties:
-                id:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
-                hardDelete:
-                    type: boolean
-                    default: false
 
         OrdersResponse:
             type: object

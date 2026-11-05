@@ -96,15 +96,6 @@ router.post(
     createProduct
 );
 
-// DELETE /products — admin only, id in body
-router.delete(
-    '/',
-    isAuthOrCredential,
-    requirePermission('delete', 'Product'),
-    invalidateCache(['products']),
-    deleteProducts
-);
-
 // GET /products/facets — the filter chips; a static segment, so declared before /:id
 // for the same readability rule the create route follows. `() => true`, not `cacheScopeKey`:
 // `productService.facets()` scopes to active rows UNCONDITIONALLY (see its own comment) — it

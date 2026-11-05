@@ -46,7 +46,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/AddressInput'
+                            $ref: '#/components/schemas/CreateAddressRequest'
             responses:
                 '201':
                     description: The created address
@@ -229,7 +229,7 @@ components:
                 default:
                     type: boolean
 
-        AddressInput:
+        CreateAddressRequest:
             type: object
             additionalProperties: false
             required: [fullName, street, city, zip, country]

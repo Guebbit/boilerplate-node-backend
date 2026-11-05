@@ -85,9 +85,6 @@ router.post(
     createOrder
 );
 
-// DELETE /orders — admin, id in body
-router.delete('/', requirePermission('delete', 'Order'), deleteOrders);
-
 // POST /orders/:id/cancel — the one order write a customer can make (owner or admin;
 // the service's conditional write carries the caller's scope). An operator's cancel asks a fresh
 // session first, before the cache is touched: it is the door that can refund, or keep, the money.

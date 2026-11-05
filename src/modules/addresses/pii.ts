@@ -43,7 +43,7 @@ export const ADDRESS_PII_FIELDS: [
 
 /**
  * The PII fields shared by a stored entry and an incoming write — `AddressItem` and the
- * contract's `AddressInput` alike carry these under the same names.
+ * contract's `CreateAddressRequest` alike carry these under the same names.
  */
 type AddressPiiFields = Pick<AddressItem, (typeof ADDRESS_PII_FIELDS)[number]>;
 
@@ -76,7 +76,7 @@ export const addressAad = (
 /**
  * One entry, its PII fields encrypted — a new object, everything else on `item` (label, default)
  * untouched, and `_id` set to `entryId`. Generic over `T` so it fits both a stored `AddressItem`
- * and an incoming `AddressInput`.
+ * and an incoming `CreateAddressRequest`.
  *
  * @param entryId - the entry's own `_id`, assigned BEFORE encrypting because it is in the AAD
  */

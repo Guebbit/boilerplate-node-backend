@@ -52,19 +52,13 @@ export const createDeleteController = ({ entity, remove, notFoundKey }: DeleteCo
     const operation = operationName('delete', entity);
 
     return namedHandler(operation, (request: Request, response: Response) => {
-        // `DELETE /x/{id}` takes the id from the path alone; `DELETE /x` takes it from the body
-        // alone. A stray `?id=` must never outvote the body's id: it names a different record.
-        // A malformed one is the same 404 an unknown id gets when it came in the path, and a 422
-        // naming `id` when it came in the body.
-        const id = requireId(request, response, {
-            notFound: notFoundKey,
-            surface: Object.hasOwn(request.params, 'id') ? 'path' : 'create'
-        });
+        // The id comes from the path alone: a DELETE names its target in the URL, never in a body
+        // (RFC 9110 §9.3.5). A malformed one is the same 404 an unknown id gets.
+        const id = requireId(request, response, { notFound: notFoundKey, surface: 'path' });
         if (!id) return Promise.resolve();
 
-        // `hardDelete` arrives three ways (path segment via `routeFlag`, query, or the collection
-        // route's body) and is OR'd across sources rather than following surface precedence: any
-        // true wins, all false/absent defaults to false, any undecodable value 422s. OR avoids
+        // `hardDelete` arrives two ways (path segment via `routeFlag`, or the query) and is OR'd
+        // across sources rather than following surface precedence: any true wins, all false/absent defaults to false, any undecodable value 422s. OR avoids
         // `false` (the default, what nobody types) ever outvoting a `true` someone deliberately
         // sent on a different transport.
         const input = readInput(request, { surface: 'delete', anyTrue: ['hardDelete'] });

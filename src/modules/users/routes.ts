@@ -98,9 +98,6 @@ router.post(
     createUser
 );
 
-// DELETE /users — id in body
-router.delete('/', requirePermission('delete', 'User'), deleteUsers);
-
 // GET /users/:id — never Redis-cached, same reasoning as the search routes above.
 router.get('/:id', requirePermission('read', 'User'), privateNoCache, getUserItem);
 

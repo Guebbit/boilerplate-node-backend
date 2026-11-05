@@ -142,33 +142,6 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `uploadLimiter` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
-        delete:
-            tags: [Products]
-            summary: Delete product
-            description: Deletes the product identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; a `true` from any source wins, so a `false` sent elsewhere does not cancel it. A soft delete is one-way and safe to repeat — undo it with `POST /products/{id}/restore`.
-            operationId: deleteProduct
-            x-alias-of: deleteProductById
-            security:
-                - bearerAuth: []
-                - apiKeyAuth: []
-            # The flag is readable from the query here too, exactly as it is on the `{id}` form:
-            # one controller serves both, and the flag is read from the path flag, the query and
-            # the body on whichever route it is mounted on. The id is the body's alone here, and the
-            # path's alone on the `{id}` form. Declared rather than merely tolerated.
-            parameters:
-                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/HardDeleteParam'
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/DeleteProductRequest'
-            responses:
-                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
     /products/facets:
         get:
@@ -325,7 +298,7 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # `uploadLimiter` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
-        # Same as DELETE /products
+        # Same as DELETE /products/{id}
         delete:
             tags: [Products]
             summary: Delete product
@@ -1050,17 +1023,6 @@ components:
                         type: string
                         maxLength: 50
                         minLength: 1
-
-        DeleteProductRequest:
-            type: object
-            additionalProperties: false
-            required: [id]
-            properties:
-                id:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
-                hardDelete:
-                    type: boolean
-                    default: false
 
         ProductsResponse:
             type: object

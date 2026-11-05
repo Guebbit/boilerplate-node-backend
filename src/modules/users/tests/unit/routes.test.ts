@@ -26,7 +26,6 @@ const ALL = [
     'POST /search',
     'GET /',
     'POST /',
-    'DELETE /',
     'GET /:id',
     'PUT /:id',
     'PATCH /:id',
@@ -110,6 +109,5 @@ describe('user routes — caching and uploads', () => {
     it('reaches the hard delete only through the flag route', () => {
         expect(chainOf(router, 'DELETE /:id/hard')).toContain('routeFlag(hardDelete)');
         expect(chainOf(router, 'DELETE /:id')).not.toContain('routeFlag(hardDelete)');
-        expect(chainOf(router, 'DELETE /')).not.toContain('routeFlag(hardDelete)');
     });
 });
