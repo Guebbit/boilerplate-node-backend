@@ -175,7 +175,10 @@ const KEPT_BY_LAW = {
     // Art. 17(3)(b): the paid order is the sale; its buyer is scrubbed once the claim window closes.
     orders: 'paid order, tax law',
     // The invoice freezes the billing address (name and address) for the tax duty.
-    invoices: 'tax law'
+    invoices: 'tax law',
+    // Art. 5(2) and 17: proof the account was erased, so a backup restore re-erases it. Holds the
+    // id only, and expires on NODE_ERASURE_LEDGER_RETENTION_DAYS.
+    erasureledgers: 'erasure proof, outlives backups'
 } as const;
 
 describe('a scheduled self-deletion that has run', () => {
