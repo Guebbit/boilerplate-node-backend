@@ -203,7 +203,7 @@ a crash between the commit and the send no longer loses the mail. The rules that
 - **Not every mail is a customer's.** Account links (reset, verification, deletion) answer a
   request the user is waiting on and are sent by the request.
 - **Staff are told by a listener too.** `notifications` turns `task.*` events into notices and the
-  fallback-mailbox mail, see [notifications](../modules/notifications.md).
+  main-mailbox mail (`NODE_SUPPORT_EMAIL`), see [notifications](../modules/notifications.md).
 
 ## Poison events
 

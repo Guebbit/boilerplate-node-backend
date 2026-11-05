@@ -21,18 +21,20 @@
                 "meta-title": "Task due soon",
                 "title": "A task is due in three days",
                 "summary": "A task your role works falls due within three days and is still open: {{what}}. Open it to see the details and take it."
-            },
-            "task-kind": {
-                "contact": "Contact message",
-                "account_review": "Account under review",
-                "export_failed": "Data export failed"
-            },
-            "task-category": {
-                "account": "Account",
-                "privacy": "Personal data",
-                "other": "Other",
-                "none": "Uncategorised"
             }
+        }
+    },
+    "tasks": {
+        "task-kind": {
+            "contact": "Contact message",
+            "account_review": "Account under review",
+            "export_failed": "Data export failed"
+        },
+        "task-category": {
+            "account": "Account",
+            "privacy": "Personal data",
+            "other": "Other",
+            "none": "Uncategorised"
         }
     }
 }

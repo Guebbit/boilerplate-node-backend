@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — situations someone must take and close: a contact message a visitor sent, or a task the system opened for staff. A signed-in sender's account is recorded, so erasure and export follow it.
-**Depends on** — [`users`](./users.md) (the assignee's name) and [`access`](./access.md) (the roles of a person a task may be given to). [`notifications`](./notifications.md) depends on it (the two task events, and the fallback mailbox mail); the account erasure reaches it through the `personalData` manifest, never an import.
+**Depends on** — [`users`](./users.md) (the assignee's name) and [`access`](./access.md) (the roles of a person a task may be given to). [`notifications`](./notifications.md) depends on it (the two task events, and the main mailbox mail); the account erasure reaches it through the `personalData` manifest, never an import.
 **Breaks if you change** — the `status` doors and their stamps (`closedAt`, `resolution`, the dedup key): the retention clock and the one-open-task-per-situation rule both live there.
 :::
 
@@ -185,19 +185,40 @@ so a crash or a failing listener cannot lose a notice. Delivery is at-least-once
 dedupes (`task-opened:<id>`, `task-due-soon:<id>`, `task-overdue:<id>`, `task-assigned:<id>:<assignedAt>`). The
 `aggregateId` is the task id, so a task's events arrive in order. Contact spam writes no row.
 
-| Event           | Told                                                                                          | Mail                                                                                                                                                       |
-| --------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `task.opened`   | everyone who works the kind (a contact message: `TaskManagement`, not the read-only managers) | a fixed phrase, the kind (a contact message also its category) and a link to the task. Never the visitor's name, address, subject, message or order number |
-| `task.due_soon` | the same people as `task.opened`, once, never for a contact message                           | the same phrase, kind and link as the opener's, worded as a reminder that the deadline is three days away                                                  |
-| `task.overdue`  | the same people as `task.opened`, once                                                        | the same phrase, kind and link as the opener's, worded as a reminder                                                                                       |
-| `task.assigned` | the assignee only                                                                             | none (the bell)                                                                                                                                            |
+| Event           | Told                                                                                          | Mail                                                                                                                                                                                                                                                  |
+| --------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `task.opened`   | everyone who works the kind (a contact message: `TaskManagement`, not the read-only managers) | a contact message: none per person, the [main mailbox](#who-is-told) gets it. Other kinds: a fixed phrase, the kind (a contact message also its category) and a link to the task. Never the visitor's name, address, subject, message or order number |
+| `task.due_soon` | the same people as `task.opened`, once, never for a contact message                           | the same phrase, kind and link as the opener's, worded as a reminder that the deadline is three days away                                                                                                                                             |
+| `task.overdue`  | the same people as `task.opened`, once                                                        | a contact message: none per person, ONE reminder to the main mailbox ("message #ref from <address> is still unanswered"). Other kinds: the opener's phrase, worded as a reminder                                                                      |
+| `task.assigned` | the assignee only                                                                             | none (the bell)                                                                                                                                                                                                                                       |
 
-**The fallback mailbox.** `NODE_CONTACT_NOTIFY_EMAIL` (optional) is mailed only when a contact
-message finds nobody to tell: no staff member holding the set has an address that can act. It then
-carries the full message, the category and `Reply-To: <the visitor's bare address>`, because that
-mailbox is the whole inbox. With even one permitted recipient it hears nothing. It sits outside
-the retention TTL and outside `DELETE /tasks/{id}`: erasing a message there is done by hand. The
-overdue reminder reaches it by the same rule, worded as `Overdue contact request`.
+**The main mailbox.** A contact message is answered from ONE mailbox, `NODE_SUPPORT_EMAIL`
+(required). It is mailed every time, on `task.opened` and again on `task.overdue`, and carries the
+full message, the order number, the category as a word, a link to the item, a plain-text part and
+`Reply-To: <the visitor's bare address>`, so pressing Reply in that mailbox reaches them. The
+subject carries `[#ref]` (the last eight characters of the task id) and, for a privacy request,
+`[privacy]`. No person is mailed for a contact message: it stays in the bell. The other kinds
+(account review, export failed, the shop's) keep their per-person mail. The mailbox sits outside
+the retention TTL and outside `DELETE /tasks/{id}`: erasing a message there is done by hand
+([data protection](../theory/data-protection.md)). The reminder threads under the first mail (`Message-ID` `<task-<id>@<support domain>>`, then `In-Reply-To`
+and `References` pointing at it). Nothing is mailed to the visitor.
+
+```mermaid
+sequenceDiagram
+    actor V as Visitor
+    participant A as POST /tasks
+    participant N as notifications
+    participant B as Main mailbox
+    actor S as Staff
+    V->>A: the form
+    A-->>V: 202, no body
+    A->>N: task.opened (outbox)
+    N->>N: bell for the people who work the kind
+    N->>B: full mail, Reply-To the visitor
+    S->>B: Reply
+    B->>V: the answer
+    Note over N,B: past its due date: task.overdue,<br/>bell again and ONE reminder to the mailbox
+```
 
 ### The overdue reminder
 
@@ -239,32 +260,36 @@ flowchart LR
   reopened task keeps that state. Delivery is at-least-once, deduped on `task-overdue:<id>`.
 - **Closed first, nothing sent.** A resolved or spam task is never claimed.
 - **Same audience as the opener.** `notifications` tells the sets that work the kind (a contact
-  message: `TaskManagement`); a contact message nobody could be told of goes to the fallback
-  mailbox; any other kind with nobody to tell goes nowhere, exactly as at opening.
+  message: `TaskManagement`, by bell only) and mails the main mailbox the one reminder for a
+  contact message; any other kind with nobody to tell goes nowhere, exactly as at opening.
 
 ### The staff badge
 
 `GET /tasks/summary` answers `{ open, mine, overdue, unassigned }`, scoped to the caller's
 jurisdiction. `overdue` is read-time arithmetic (open and past `dueAt`): no sweep keeps it true.
-A contact message is due `NODE_TASKS_CONTACT_SLA_HOURS` (default 48) after it was filed.
+A contact message is due `NODE_TASKS_CONTACT_SLA_HOURS` (default 48) after it was filed; a
+message in the `privacy` category is due one calendar month after (GDPR Art. 12(3)).
 
 **The honeypot.** `website` is a field a real browser always submits empty and a bot reliably
 fills — declared in the contract (so an undeclared field wouldn't 422 real browsers too) but never
 persisted or returned. A non-empty value — or an address the email policy `refused`
 (`checkEmailPolicy`, `service.ts`) — writes the row straight to `status: spam`, closed at birth, and
-announces nothing; the caller still gets the same `201` a real submission gets, so a
+announces nothing; the caller still gets the same `202` a real submission gets, so a
 bot learns nothing from the response. That trades an email amplifier for a storage amplifier,
 which `contactLimiters` bounds and the TTL index expires.
 
+`POST /tasks` answers `202` with no body, in every case: the sender is a visitor with nothing to do
+with the stored task. Staff read it from the bell, the inbox and the main mailbox.
+
 ## Personal data
 
-| Topic       | Rule                                                                                                                                                                                                                                                                                                                                                                  |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Export      | Two sections, both always present. `tasks`: the visitor tasks the person owns (sent signed in, or under their **verified** address). `systemTasks`: the system tasks about them, by `subjectId`, every field except the staff ids and the dedup key                                                                                                                   |
-| Notes       | Exported as words and time, never the author. A task is itself an assessment of the person, so it is theirs to read (CJEU C-434/16)                                                                                                                                                                                                                                   |
-| Erasure     | In the hard-delete transaction only (the purge, an admin hard delete, the inactivity erasure), **never at the reversible lock**. Visitor tasks: deleted. System tasks whose record IS the person (a `user` or `export` link): deleted. Others (order, payment…): kept, detached from the account. An erased member of staff is removed as assignee and as note author |
-| Retention   | A TTL on `closedAt` (`NODE_TASKS_RETENTION_DAYS`, default 730 — 24 months). An open task never expires; a reopen stops the clock. Changing the window on a live database needs `npm run db:sync` — a restart alone fails the boot, the same caveat [`audit-logs`](./audit-logs.md) carries                                                                            |
-| Not matched | An old address after an email change, or a message typed under another address while signed out, is not matched: the technician finds those by hand                                                                                                                                                                                                                   |
+| Topic       | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Export      | Two sections, both always present. `tasks`: the visitor tasks the person owns (sent signed in, or under their **verified** address). `systemTasks`: the system tasks about them, by `subjectId`, every field except the staff ids and the dedup key                                                                                                                                                                                                                         |
+| Notes       | Exported as words and time, never the author. A task is itself an assessment of the person, so it is theirs to read (CJEU C-434/16)                                                                                                                                                                                                                                                                                                                                         |
+| Erasure     | In the hard-delete transaction only (the purge, an admin hard delete, the inactivity erasure), **never at the reversible lock**. Visitor tasks: deleted. System tasks whose record IS the person (a `user` or `export` link): deleted. Others (order, payment…): kept, detached from the account. An erased member of staff is removed as assignee and as note author                                                                                                       |
+| Retention   | A TTL on `closedAt` (`NODE_TASKS_RETENTION_DAYS`, default 730 — 24 months). An open system to-do never expires; a reopen stops the clock. A visitor's message has a second TTL on `createdAt` (same window, partial on `source: visitor`), so a forgotten one is deleted 730 days after it arrived, closed or not. Changing the window on a live database needs `npm run db:sync` — a restart alone fails the boot, the same caveat [`audit-logs`](./audit-logs.md) carries |
+| Not matched | An old address after an email change, or a message typed under another address while signed out, is not matched: the technician finds those by hand                                                                                                                                                                                                                                                                                                                         |
 
 The owned set is one pure rule, `ownTasksFilter` in `domain/ownership.ts`, used by both the export
 and the erasure, so they cannot disagree. The `{ subjectId }` and `{ email }` indexes serve it.

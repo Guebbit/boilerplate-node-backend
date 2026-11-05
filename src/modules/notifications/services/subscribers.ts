@@ -88,45 +88,46 @@ const notifyTaskStaff = (
     fact: DomainEventMap['task.opened']
 ): Promise<number> => {
     const body = { code, params: taskParametersOf(fact) } as const;
-    return notifyStaff({
+    const notice = {
         tenantId: fact.tenantId,
         body,
-        route: STAFF_ROUTES[code],
         link: staffLinkOf(body),
         sets: alertSetsOf(fact),
         dedupeKey: `${dedupePrefix}:${fact.taskId}`
-    });
+    };
+    // A contact message is answered from the main mailbox, so here it is the bell's alone: no
+    // mail to each person. The other kinds keep theirs.
+    return notifyStaff(
+        fact.kind === 'contact'
+            ? { ...notice, route: { ...STAFF_ROUTES[code], email: 'none' as const } }
+            : { ...notice, route: STAFF_ROUTES[code] }
+    );
 };
 
 /**
  * A task was opened: everyone who works its kind hears of it once, by id and kind alone.
  *
- * A contact message nobody could be told of (no staff with an address) goes to the fallback
- * mailbox instead, with the message in it: that mailbox is then the whole inbox. With even one
- * permitted recipient the mailbox hears nothing.
+ * A contact message also goes, with the message in it, to the main mailbox: staff answer from
+ * there, so that mailbox is the inbox whoever else was told.
  */
 export const onTaskOpened = (opened: DomainEventMap['task.opened']): Promise<void> =>
-    notifyTaskStaff('notifications.staff.task-opened', 'task-opened', opened).then((told) =>
-        told === 0 && opened.kind === 'contact'
-            ? taskService.mailFallbackMailbox(opened.taskId)
-            : undefined
+    notifyTaskStaff('notifications.staff.task-opened', 'task-opened', opened).then(() =>
+        opened.kind === 'contact' ? taskService.mailMainMailbox(opened.taskId) : undefined
     );
 
 /**
- * An open task went overdue: the people the opener told hear of it once more, the same sets, the
- * same fallback mailbox for a contact message nobody could be told of. The sweep claims a task
- * once, but the outbox delivers at least once, so the dedupe key is what keeps it to one notice.
+ * An open task went overdue: the people the opener told hear of it once more, the same sets, and
+ * the main mailbox gets the one reminder for a contact message. The sweep claims a task once, but
+ * the outbox delivers at least once, so the dedupe key is what keeps it to one notice.
  */
 export const onTaskOverdue = (overdue: DomainEventMap['task.overdue']): Promise<void> =>
-    notifyTaskStaff('notifications.staff.task-overdue', 'task-overdue', overdue).then((told) =>
-        told === 0 && overdue.kind === 'contact'
-            ? taskService.mailFallbackMailbox(overdue.taskId, true)
-            : undefined
+    notifyTaskStaff('notifications.staff.task-overdue', 'task-overdue', overdue).then(() =>
+        overdue.kind === 'contact' ? taskService.mailMainMailbox(overdue.taskId, true) : undefined
     );
 
 /**
  * An open task is three days from its due date: the same people hear of it once, with no mailbox
- * fallback (the sweep never claims a contact message, which gets its one reminder when overdue).
+ * copy (the sweep never claims a contact message, which gets its one reminder when overdue).
  */
 export const onTaskDueSoon = (dueSoon: DomainEventMap['task.due_soon']): Promise<void> =>
     notifyTaskStaff('notifications.staff.task-due-soon', 'task-due-soon', dueSoon).then(

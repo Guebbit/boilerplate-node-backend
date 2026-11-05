@@ -596,7 +596,7 @@ flowchart LR
   automatically". `failureReason` stays staff-only.
 - **No bank details are stored.** The buyer replies by email and the IBAN stays in the shop's mailbox
   and bank, under the shop's own retention (GDPR Art. 5(1)(c): the app keeps nothing for a rare
-  event). The mail shows `NODE_SHOP_EMAIL` as text.
+  event). The mail shows `NODE_SUPPORT_EMAIL` as text.
 
 ### Refunds made outside the app {#refunds-made-outside-the-app}
 

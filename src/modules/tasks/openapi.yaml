@@ -66,14 +66,10 @@ paths:
                         schema:
                             $ref: '#/components/schemas/CreateContactTaskRequest'
             responses:
-                '201':
-                    description: Created task
-                    headers:
-                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/Task'
+                # No body, on purpose: the sender is a visitor who has nothing to do with the stored
+                # task, and a spam catch must look exactly like a stored message.
+                '202':
+                    description: The message was received; staff answer it from the support mailbox.
                 # A human-challenge provider is active and the caller's token is missing or refused.
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # `Idempotency-Key` names a request still in flight.

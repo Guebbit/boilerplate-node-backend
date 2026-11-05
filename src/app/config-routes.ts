@@ -1,7 +1,8 @@
 /**
  * @module
  * `GET /config` — what a client reads before it has a session, in one answer: the session config
- * (`account`), the OAuth providers (`account`) and the human-challenge config (`antibot`).
+ * (`account`), the OAuth providers (`account`), the human-challenge config (`antibot`) and the
+ * support address every "write to us" line shows (`NODE_SUPPORT_EMAIL`).
  *
  * Here, not in a module: the answer belongs to neither piece's owner, so each module keeps its own
  * part and this composes them. `GET /shop` stays its own call, because the shop is removable and
@@ -11,6 +12,7 @@
 import { Router } from 'express';
 import { accountService } from '@modules/account';
 import { antibotService } from '@modules/antibot';
+import { supportEmail } from '@infrastructure/adapters/config';
 import { successResponse } from '@infrastructure/http/response';
 import { catchAs } from '@infrastructure/http/controller';
 import type { Config } from '@types';
@@ -38,7 +40,8 @@ router.get('/config', (_request, response) => {
             successResponse<Config>(response, {
                 session: accountService.sessionConfig(),
                 oauthProviders: accountService.oauthProviders(),
-                antibot
+                antibot,
+                supportEmail: supportEmail()
             });
         })
         .catch(catchAs(response, 'getConfig'));

@@ -51,6 +51,7 @@ describe('taskSchema', () => {
         expect(indexSpecs(taskSchema)).toEqual([
             'assigneeId_1_status_1: assigneeId+1, status+1',
             'closedAt_1: closedAt+1',
+            'createdAt_1: createdAt+1',
             'email_1: email+1',
             'eventIds_1: eventIds+1',
             'openKey_1: openKey+1',
@@ -70,6 +71,7 @@ describe('taskSchema', () => {
         expect(indexOptionSpecs(taskSchema)).toEqual([
             'assigneeId_1_status_1: partialFilterExpression={"assigneeId":{"$exists":true}}',
             `closedAt_1: expireAfterSeconds=${RETENTION_SECONDS}`,
+            `createdAt_1: expireAfterSeconds=${RETENTION_SECONDS}, partialFilterExpression={"source":"visitor"}`,
             'email_1: partialFilterExpression={"email":{"$exists":true}}',
             'eventIds_1: partialFilterExpression={"eventIds":{"$exists":true}}',
             'openKey_1: partialFilterExpression={"openKey":{"$exists":true}}, unique=true',

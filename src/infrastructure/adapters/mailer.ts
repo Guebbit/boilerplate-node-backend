@@ -19,7 +19,7 @@ import type { SendMailOptions } from 'nodemailer';
 import { ATTR_MESSAGING_SYSTEM } from '@opentelemetry/semantic-conventions/incubating';
 import type { EmailJobPayload } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
-import { mailConfig } from '@infrastructure/adapters/config';
+import { mailConfig, supportEmail } from '@infrastructure/adapters/config';
 import { resolveMailTransport } from '@infrastructure/adapters/mail-transports';
 import { resolveSpooled, discardSpooled } from '@infrastructure/adapters/mail-spool';
 import { withSpan } from '@infrastructure/observability/tracer';
@@ -114,7 +114,15 @@ const renderMessage = (
         subject: envelope.subject,
         text: envelope.text,
         // nodemailer `replyTo`: sets the Reply-To header — https://nodemailer.com/message/
-        ...(envelope.replyTo === undefined ? {} : { replyTo: envelope.replyTo }),
+        // A mail that names none gets the support address, so a customer's reply reaches a person
+        // (the sender is a `noreply@` by default).
+        replyTo: envelope.replyTo ?? supportEmail(),
+        // nodemailer `messageId`, `inReplyTo` and `references`: the thread headers.
+        // `References` repeats the one parent, which is all a two-mail thread needs.
+        ...(envelope.messageId === undefined ? {} : { messageId: envelope.messageId }),
+        ...(envelope.inReplyTo === undefined
+            ? {}
+            : { inReplyTo: envelope.inReplyTo, references: envelope.inReplyTo }),
         // A producer that supplied its own HTML keeps it; otherwise the rendered template.
         html: envelope.html ?? html,
         ...(resolvedAttachments.length > 0 ? { attachments: resolvedAttachments } : {})

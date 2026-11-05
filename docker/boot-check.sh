@@ -62,7 +62,7 @@ docker run -d --name "$app" --network "$network" \
     -e NODE_SHOP_STREET="Via Roma 1" \
     -e NODE_SHOP_CITY=Bologna \
     -e NODE_SHOP_ZIP=40121 \
-    -e NODE_SHOP_EMAIL=shop@example.com \
+    -e NODE_SUPPORT_EMAIL=support@example.com \
     -e NODE_SHOP_PHONE="+39 051 555 0100" \
     -e NODE_VAT_RATE_DEFAULT=0.22 \
     -e NODE_VAT_RATE_REDUCED=0.10 \

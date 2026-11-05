@@ -3,8 +3,8 @@
  * Task alerts, driven the way production drives them: the real modules registered, a contact
  * message filed through the service (or a task handed to a colleague) at one end, the bell and
  * the mailboxes at the other. Proves who hears of a task (the sets that WORK it), what the
- * per-person mail may carry (a category and a link, never the visitor's words), and when the
- * fallback mailbox takes over (only when nobody permitted has an address).
+ * per-person mail may carry (a category and a link, never the visitor's words), and that a
+ * contact message gets no per-person mail: the main mailbox gets the full message, every time.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -36,7 +36,7 @@ setupTestDb();
 beforeEach(() => {
     mockEnqueueEmail.mockReset();
     mockEnqueueEmail.mockResolvedValue(undefined);
-    setEnvironment({ NODE_CONTACT_NOTIFY_EMAIL: 'desk@example.com' });
+    setEnvironment({ NODE_SUPPORT_EMAIL: 'desk@example.com' });
     resetDomainEvents();
     registerModules(enabledModules);
 });
@@ -82,8 +82,8 @@ const fileContact = (category?: TaskCategory) =>
 const noticeMails = () =>
     mockEnqueueEmail.mock.calls.filter(([, template]) => template === 'notifications.staff-notice');
 
-/** The fallback-mailbox mails queued so far. */
-const fallbackMails = () =>
+/** The support-mailbox mails queued so far. */
+const mailboxMails = () =>
     mockEnqueueEmail.mock.calls.filter(([, template]) => template === 'tasks.contact');
 
 describe('a contact message', () => {
@@ -105,51 +105,43 @@ describe('a contact message', () => {
         await expect(bellOf('manager', manager.id)).resolves.toEqual([]);
     });
 
-    it('mails each person a link and the category only: no name, address, subject or message', async () => {
-        await staff('support', 'support@example.com', 'it');
+    it('rings the bell but mails no person: the support mailbox is where it is answered', async () => {
+        const support = await staff('support', 'support@example.com', 'it');
+        await fileContact(TaskCategory.privacy);
+
+        await expect(bellOf('support', support.id)).resolves.toHaveLength(1);
+        expect(noticeMails()).toHaveLength(0);
+    });
+
+    it('mails the support mailbox the full message, with the category as a word and a Reply-To of the visitor', async () => {
+        await staff('support', 'support@example.com');
         const task = await fileContact(TaskCategory.privacy);
 
-        const [[envelope, , data]] = noticeMails();
-        expect(envelope.to).toBe('support@example.com');
-        expect(data).toMatchObject({
-            locale: 'it',
-            link: expect.stringContaining(`/it/tasks/${String(task._id)}`)
+        const [[envelope, , data]] = mailboxMails();
+        expect(envelope).toMatchObject({
+            to: 'desk@example.com',
+            replyTo: 'ada@example.com',
+            subject: expect.stringContaining(`[#${String(task._id).slice(-8)}] [privacy]`)
         });
-        const mailed = JSON.stringify([envelope, data]);
-        for (const secret of ['Ada', 'ada@', 'secret parcel', 'diagnosis'])
-            expect(mailed).not.toContain(secret);
-        expect(mailed).toContain('Dati personali');
-        expect(fallbackMails()).toHaveLength(0);
+        expect(data).toMatchObject({
+            message: 'Please call me about the diagnosis.',
+            category: 'Personal data'
+        });
     });
 
     it('labels a message with no category as uncategorised rather than leaving a hole', async () => {
-        await staff('support', 'support@example.com');
-
         await fileContact();
 
-        expect(JSON.stringify(noticeMails()[0][0])).toContain('Uncategorised');
+        expect(mailboxMails()[0][2]).toMatchObject({ category: 'Uncategorised' });
     });
 
-    it('leaves the fallback mailbox silent whenever one permitted person has an address', async () => {
-        await staff('support', 'support@example.com');
-
-        await fileContact();
-
-        expect(fallbackMails()).toHaveLength(0);
-    });
-
-    it('falls back to the mailbox, with the full message and a Reply-To, when nobody can be told', async () => {
+    it('mails the support mailbox once even when nobody can be told by name', async () => {
         await createUser({ email: 'unarmed@example.com', username: 'unarmed' }, 'support');
 
         await fileContact(TaskCategory.other);
 
         expect(noticeMails()).toHaveLength(0);
-        const [[envelope, , data]] = fallbackMails();
-        expect(envelope).toMatchObject({ to: 'desk@example.com', replyTo: 'ada@example.com' });
-        expect(data).toMatchObject({
-            message: 'Please call me about the diagnosis.',
-            category: 'other'
-        });
+        expect(mailboxMails()).toHaveLength(1);
     });
 
     it('says nothing at all for a spam submission', async () => {
@@ -180,7 +172,6 @@ describe('a contact message', () => {
         await notificationsService.onTaskOpened(fact);
 
         await expect(bellOf('support', support.id)).resolves.toHaveLength(1);
-        expect(noticeMails()).toHaveLength(1);
     });
 });
 
@@ -201,10 +192,10 @@ describe('a system task', () => {
         ]);
         await expect(bellOf('support', support.id)).resolves.toEqual([]);
         expect(noticeMails().map(([envelope]) => envelope.to)).toEqual(['mod@example.com']);
-        expect(fallbackMails()).toHaveLength(0);
+        expect(mailboxMails()).toHaveLength(0);
     });
 
-    it('never reaches the contact fallback mailbox, even with nobody to tell', async () => {
+    it('never reaches the contact main mailbox, even with nobody to tell', async () => {
         await notificationsService.onTaskOpened({
             tenantId: DEPLOYMENT_TENANT_ID,
             taskId: '64b7f1a2c3d4e5f607182930',

@@ -258,6 +258,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     ]),
     'example.published': examplePublishedEmail(locale, 'Ada', 'A title'),
     'tasks.contact': contactRequestEmail(locale, {
+        id: '6ad69a48f753b902e5b98dfe',
         name: 'Ada',
         email: 'ada@example.com',
         subject: 'A subject',

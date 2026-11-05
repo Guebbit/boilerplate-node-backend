@@ -155,9 +155,12 @@ flowchart LR
   above is not theirs: see [shop-tasks](./shop-tasks.md#the-notices) for their sets and mail class.
 - **Task notices.** The task codes name their sets per notice (`per-notice` in the route
   table): the set of the opened task's kind. Params are the task id, its kind and a contact
-  message's category, nothing the visitor typed. A contact message that finds no recipient with
-  an address is handed to the tasks module's fallback mailbox
-  ([`tasks`](./tasks.md#who-is-told)).
+  message's category, nothing the visitor typed. A contact message is the bell's alone for each
+  person (`notifyTaskStaff` turns `email` off for the kind `contact`, on `task-opened` and
+  `task-overdue`): it is answered from the main mailbox, which the tasks module mails every time
+  ([`tasks`](./tasks.md#who-is-told)). Account-review and export-failed keep their mail. The
+  words for a task's kind and category (`tasks.task-kind.*`, `tasks.task-category.*`) live in the
+  `tasks` locales, contributed by `notifications` and `shop-tasks` for the kinds they add.
 
 ## Summary rows
 

@@ -133,6 +133,18 @@ export const createdOrOk = <T>(
         : successResponse(response, data, status);
 
 /**
+ * Answer 202 with no body: the request is stored and handled later, and there is nothing to hand
+ * back (RFC 9110 §15.3.3).
+ *
+ * Goes through `.json(undefined)`, not `.end()`: the idempotency ledger captures a response only
+ * through `res.json`, and a keyed route that bypassed it would leave its key in flight. Express
+ * sends an empty body for `undefined`. https://expressjs.com/en/api.html#res.json
+ *
+ * @param response - Express response
+ */
+export const acceptedResponse = (response: Response) => response.status(202).json(undefined);
+
+/**
  * Answer 204: the work is done and there is nothing to say (RFC 9110 §15.3.5).
  *
  * Ends with `.end()`, not `.json()`: a 204 carries no body and no `Content-Type`. The idempotency

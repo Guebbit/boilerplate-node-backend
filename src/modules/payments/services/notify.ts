@@ -12,7 +12,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import type { DomainEventMap } from '@kernel/events';
 import { RefundStatus } from '@types';
-import { shopIdentity } from '@modules/shop';
+import { supportEmail } from '@infrastructure/adapters/config';
 import { toMinorUnits } from '@domain-primitives/money';
 import { orderService } from '@modules/orders';
 import {
@@ -137,7 +137,7 @@ export const mailRefundUndeliverable = ({
                     name,
                     order.orderNumber,
                     { amount: refund.amount, currency: refund.currency },
-                    shopIdentity().email,
+                    supportEmail(),
                     orderId
                 );
                 // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)

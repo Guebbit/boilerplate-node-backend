@@ -10,6 +10,7 @@ import { Types } from 'mongoose';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { taskService } from '@modules/tasks/service';
 import { taskRepository } from '@modules/tasks/repository';
+import { findAllTasks } from '../factories';
 import tasksModule from '@modules/tasks/module';
 import type { PersonalDataEraser } from '@kernel/registry';
 import { TaskKind, TaskLinkType, TaskSource } from '@types';
@@ -64,15 +65,17 @@ describe('POST /tasks records who sent it', () => {
 
         const response = await api().post('/tasks').set('Authorization', bearer).send(FORM);
 
-        expect(response.status).toBe(201);
-        expect(response.body.subjectId).toBe(String(user._id));
+        expect(response.status).toBe(202);
+        const [stored] = await findAllTasks();
+        expect(String(stored?.subjectId)).toBe(String(user._id));
     });
 
     it('records no account for an anonymous sender', async () => {
         const response = await api().post('/tasks').send(FORM);
 
-        expect(response.status).toBe(201);
-        expect(response.body).not.toHaveProperty('subjectId');
+        expect(response.status).toBe(202);
+        const [stored] = await findAllTasks();
+        expect(stored?.subjectId).toBeUndefined();
     });
 
     it('files a post with a bad token as anonymous, not a refusal', async () => {
@@ -81,8 +84,9 @@ describe('POST /tasks records who sent it', () => {
             .set('Authorization', 'Bearer eyJhbGciOiJIUzI1NiJ9.e30.not-a-valid-signature')
             .send(FORM);
 
-        expect(response.status).toBe(201);
-        expect(response.body).not.toHaveProperty('subjectId');
+        expect(response.status).toBe(202);
+        const [stored] = await findAllTasks();
+        expect(stored?.subjectId).toBeUndefined();
     });
 });
 

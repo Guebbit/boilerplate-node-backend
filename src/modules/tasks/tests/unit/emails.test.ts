@@ -9,6 +9,7 @@
 import { contactRequestEmail, type ContactRequest } from '@modules/tasks/emails';
 
 const REQUEST: ContactRequest = {
+    id: '6ad69a48f753b902e5b98dfe',
     name: 'Ada Lovelace',
     email: 'ada@example.com',
     subject: 'The parcel never arrived',
@@ -53,12 +54,46 @@ describe('contactRequestEmail', () => {
         expect(data.createdAt).toBe(REQUEST.createdAt);
     });
 
-    it('carries the category, or the translated placeholder when the sender chose none', () => {
+    it('prints the category as a word, or "Uncategorised" when the sender chose none', () => {
         expect(contactRequestEmail('en', { ...REQUEST, category: 'privacy' }).data.category).toBe(
-            'privacy'
+            'Personal data'
         );
-        expect(contactRequestEmail('en', REQUEST).data.category).not.toBeUndefined();
-        expect(contactRequestEmail('en', REQUEST).data.category).not.toMatch(/^tasks\./);
+        expect(contactRequestEmail('en', { ...REQUEST, category: 'order' }).data.category).toBe(
+            'Order'
+        );
+        expect(contactRequestEmail('en', REQUEST).data.category).toBe('Uncategorised');
+    });
+
+    it('puts a stable [#ref] in the subject, the same for the first mail and the reminder', () => {
+        const first = contactRequestEmail('en', REQUEST);
+        const reminder = contactRequestEmail('en', { ...REQUEST, overdue: true });
+
+        expect(first.subject).toContain(`[#${REQUEST.id.slice(-8)}]`);
+        expect(reminder.subject).toContain(`[#${REQUEST.id.slice(-8)}]`);
+    });
+
+    it('tags a privacy message [privacy] in the subject and no other', () => {
+        expect(contactRequestEmail('en', { ...REQUEST, category: 'privacy' }).subject).toContain(
+            '[privacy]'
+        );
+        expect(contactRequestEmail('en', REQUEST).subject).not.toContain('[privacy]');
+    });
+
+    it('carries the order number, a link to the item and a plain-text part with the message', () => {
+        const mail = contactRequestEmail('en', { ...REQUEST, orderNumber: '2026-000041' });
+
+        expect(mail.data.orderNumber).toBe('2026-000041');
+        expect(mail.data.link).toContain(`/tasks/${REQUEST.id}`);
+        expect(mail.text).toContain(REQUEST.message);
+        expect(mail.text).toContain('2026-000041');
+        expect(mail.text).toContain(`/tasks/${REQUEST.id}`);
+    });
+
+    it('words the reminder with the reference and the sender address', () => {
+        const { data } = contactRequestEmail('en', { ...REQUEST, overdue: true });
+
+        expect(data.title).toContain(`#${REQUEST.id.slice(-8)}`);
+        expect(data.title).toContain(REQUEST.email);
     });
 
     it('falls back to translated copy when the sender left no name', () => {

@@ -138,6 +138,8 @@ Proven by `tests/integration/idempotency-server-fault.test.ts`.
 The ledger records a JSON response. A `204` sent with `.end()`
 (`noContentResponse`) bypasses it, so the key would stay in flight and a retry would answer `409`.
 No keyed route answers 204 today; a new one that must, answers through `.json()` instead.
+`POST /tasks` is the keyed route that answers with no body: it answers `202` through
+`acceptedResponse`, which sends `.json(undefined)`, so the ledger still captures it.
 
 ## Retention
 

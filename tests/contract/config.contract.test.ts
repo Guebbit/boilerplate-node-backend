@@ -34,6 +34,14 @@ describe('GET /config', () => {
         expect(Array.isArray(response.body.oauthProviders)).toBe(true);
     });
 
+    it('publishes the support address the contact page shows', async () => {
+        setEnvironment({ NODE_SUPPORT_EMAIL: 'help@shop.example' });
+
+        const response = await api().get('/config');
+
+        expect(response.body.supportEmail).toBe('help@shop.example');
+    });
+
     it('lists an OAuth provider once it is registered', async () => {
         registerOAuthProvider('fake', () => fakeOAuthProvider);
 

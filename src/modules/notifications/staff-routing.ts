@@ -55,7 +55,8 @@ export const STAFF_ROUTES = {
         severity: NotificationSeverity.warning
     },
     // A task opened: whoever works its kind takes it. Mailed now because a person waits on it
-    // (a visitor's message, a refund owed, a legal clock).
+    // (a refund owed, a legal clock). A contact message is the exception: `notifyTaskStaff` makes
+    // it the bell's alone, and the main mailbox gets the mail.
     'notifications.staff.task-opened': {
         sets: 'per-notice',
         email: 'now',
@@ -63,6 +64,7 @@ export const STAFF_ROUTES = {
     },
     // The same people as the opener, once, when the task passes its due date and nobody closed
     // it: this is the "overdue" mail the digest's rule describes. Warning, since something is late.
+    // A contact message is the bell's alone here too (`notifyTaskStaff`).
     'notifications.staff.task-overdue': {
         sets: 'per-notice',
         email: 'now',

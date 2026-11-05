@@ -9,10 +9,9 @@
 import type { Request, Response } from 'express';
 import { CreateContactTaskBody } from '@api/schemas.zod';
 import { trimmedInto } from '@infrastructure/http/schemas';
-import { createdResponse } from '@infrastructure/http/response';
-import type { CreateContactTaskRequest, Task } from '@types';
+import { acceptedResponse } from '@infrastructure/http/response';
+import type { CreateContactTaskRequest } from '@types';
 import { taskService } from '../service';
-import { NO_ACTIONS, presentTask } from '../presenter';
 import { catchAs, parseBody } from '@infrastructure/http/controller';
 
 /**
@@ -30,7 +29,8 @@ const createContactTaskSchema = CreateContactTaskBody.extend({
 
 /**
  * POST /tasks (public; a signed-in sender is recognised)
- * Create a task and send an email notification to the configured contact mailbox.
+ * Create a contact task. Answers `202` with no body: the message is stored and queued for the
+ * main mailbox, so there is nothing to hand back.
  */
 export const postTask = (
     request: Request<unknown, unknown, CreateContactTaskRequest>,
@@ -49,9 +49,6 @@ export const postTask = (
      */
     return taskService
         .create(body, request.authContext?.id)
-        .then((createdTask) => {
-            const taskRecord = presentTask(createdTask, NO_ACTIONS);
-            createdResponse<Task>(response, taskRecord, `/tasks/${taskRecord.id}`);
-        })
+        .then(() => acceptedResponse(response))
         .catch(catchAs(response, 'postTask'));
 };

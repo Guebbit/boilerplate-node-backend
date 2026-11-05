@@ -10,6 +10,7 @@
 import { ConfigError } from '@infrastructure/config/define';
 import type { ReturnPostagePayer, Shop, ShopAddress } from '@types';
 import { termsVersion } from '@modules/account';
+import { supportEmail } from '@infrastructure/adapters/config';
 import { shopConfig } from './config';
 
 /**
@@ -87,7 +88,7 @@ export const shopIdentity = (): ShopIdentity => {
         city: requiredValue('NODE_SHOP_CITY', config.NODE_SHOP_CITY),
         zip: requiredValue('NODE_SHOP_ZIP', config.NODE_SHOP_ZIP),
         country: requiredValue('NODE_SHOP_COUNTRY', config.NODE_SHOP_COUNTRY),
-        email: requiredValue('NODE_SHOP_EMAIL', config.NODE_SHOP_EMAIL),
+        email: config.NODE_LEGAL_EMAIL ?? supportEmail(),
         phone: requiredValue('NODE_SHOP_PHONE', config.NODE_SHOP_PHONE)
     };
 };

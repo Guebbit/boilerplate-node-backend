@@ -92,7 +92,8 @@ These settings are deploy-time env on purpose: a correction is a restart, not an
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | `NODE_SHOP_LEGAL_NAME`, `_STREET`, `_CITY`, `_ZIP`   | The seller's name and address (required)                                           |
 | `NODE_SHOP_COUNTRY`                                  | The country VAT is charged in (required)                                           |
-| `NODE_SHOP_EMAIL`, `NODE_SHOP_PHONE`                 | How a customer reaches the shop (required)                                         |
+| `NODE_LEGAL_EMAIL`                                   | The legal-notice address; unset means `NODE_SUPPORT_EMAIL` (`GET /shop` `email`)   |
+| `NODE_SHOP_PHONE`                                    | How a customer reaches the shop (required)                                         |
 | `NODE_SHOP_VAT_NUMBER`                               | VAT identification number; absent below the registration threshold                 |
 | `NODE_SHOP_TRADE_REGISTER`, `_REGISTRATION_NUMBER`   | The commercial register and the seller's number in it; absent for a seller in none |
 | `NODE_SHOP_TIMEZONE`                                 | The IANA zone whose calendar numbering series and reports follow                   |

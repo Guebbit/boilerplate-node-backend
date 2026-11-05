@@ -29,7 +29,6 @@ const IDENTITY = {
     NODE_SHOP_STREET: 'Via Roma 1',
     NODE_SHOP_CITY: 'Milano',
     NODE_SHOP_ZIP: '20100',
-    NODE_SHOP_EMAIL: 'shop@example.com',
     NODE_SHOP_PHONE: '+39 02 1234567'
 } as const;
 
@@ -44,6 +43,7 @@ const TOUCHED = [
     'NODE_SHOP_TIMEZONE',
     ...IDENTITY_VARIABLES,
     'NODE_SHOP_VAT_NUMBER',
+    'NODE_LEGAL_EMAIL',
     'NODE_RETURN_ADDRESS_NAME',
     'NODE_RETURN_ADDRESS_STREET',
     'NODE_RETURN_ADDRESS_CITY',
@@ -149,9 +149,9 @@ describe('the shop identity boot gate', () => {
 
     it('refuses an email that is not one', () => {
         configure();
-        setEnvironment({ NODE_SHOP_EMAIL: 'not-an-address' });
+        setEnvironment({ NODE_LEGAL_EMAIL: 'not-an-address' });
 
-        expect(() => assertModuleConfig([shopModule], [])).toThrow(/NODE_SHOP_EMAIL/);
+        expect(() => assertModuleConfig([shopModule], [])).toThrow(/NODE_LEGAL_EMAIL/);
     });
 });
 
@@ -165,9 +165,16 @@ describe('shopIdentity', () => {
             city: 'Milano',
             zip: '20100',
             country: 'IT',
-            email: 'shop@example.com',
+            email: 'support@example.com',
             phone: '+39 02 1234567'
         });
+    });
+
+    it('uses NODE_LEGAL_EMAIL for the legal-notice address when set', () => {
+        configure();
+        setEnvironment({ NODE_LEGAL_EMAIL: 'legal@example.com' });
+
+        expect(shopIdentity().email).toBe('legal@example.com');
     });
 
     it('carries the VAT number when set', () => {

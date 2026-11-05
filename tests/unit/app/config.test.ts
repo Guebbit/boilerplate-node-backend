@@ -22,6 +22,7 @@ withoutEnvironmentInThisFile([
     'NODE_SMTP_USER',
     'NODE_SMTP_PASS',
     'NODE_SMTP_SENDER',
+    'NODE_SUPPORT_EMAIL',
     'NODE_ANALYTICS_PROVIDER',
     'NODE_MAIL_TRANSPORT',
     'NODE_E2E_RUN',
@@ -41,6 +42,7 @@ withoutEnvironmentInThisFile([
 const configure = (): void => {
     setEnvironment({ NODE_ENV: 'development' });
     setEnvironment({ NODE_URL: 'https://api.example.com/' });
+    setEnvironment({ NODE_SUPPORT_EMAIL: 'support@example.com' });
 };
 
 /** `assertModuleConfig` wired the way `src/app.ts` wires it — the whole point of this file. */
@@ -140,6 +142,22 @@ describe('a bare environment', () => {
         configure();
 
         expect(assertApp).not.toThrow();
+    });
+});
+
+describe('the support address', () => {
+    it('refuses to boot with no NODE_SUPPORT_EMAIL: every customer mail and the contact form need it', () => {
+        configure();
+        setEnvironment({ NODE_SUPPORT_EMAIL: undefined });
+
+        expect(assertApp).toThrow(/NODE_SUPPORT_EMAIL/);
+    });
+
+    it('refuses a value that is not an address', () => {
+        configure();
+        setEnvironment({ NODE_SUPPORT_EMAIL: 'not-an-address' });
+
+        expect(assertApp).toThrow(/NODE_SUPPORT_EMAIL/);
     });
 });
 

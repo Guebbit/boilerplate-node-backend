@@ -87,7 +87,7 @@ describe('resolveAttachments — resolving attachments', () => {
             expect(sent).not.toHaveProperty(key);
     });
 
-    it('passes a Reply-To through as the replyTo header, and sets none when the request has none', async () => {
+    it('passes a Reply-To through as the replyTo header, and falls back to the support address when the request has none', async () => {
         await sendTemplatedEmail(
             { to: 'desk@example.com', replyTo: 'ada@example.com' },
             'account.reset-confirm',
@@ -98,7 +98,26 @@ describe('resolveAttachments — resolving attachments', () => {
         const [withReply] = sendMailMock.mock.calls[0] as [Record<string, unknown>];
         const [withoutReply] = sendMailMock.mock.calls[1] as [Record<string, unknown>];
         expect(withReply.replyTo).toBe('ada@example.com');
-        expect(withoutReply).not.toHaveProperty('replyTo');
+        expect(withoutReply.replyTo).toBe(process.env.NODE_SUPPORT_EMAIL);
+    });
+
+    it('sets the thread headers a producer names, and none it does not', async () => {
+        await sendTemplatedEmail(
+            { to: 'desk@example.com', messageId: '<a@example.com>', inReplyTo: '<b@example.com>' },
+            'account.reset-confirm',
+            DATA
+        );
+        await sendTemplatedEmail({ to: 'desk@example.com' }, 'account.reset-confirm', DATA);
+
+        const [threaded] = sendMailMock.mock.calls[0] as [Record<string, unknown>];
+        const [plain] = sendMailMock.mock.calls[1] as [Record<string, unknown>];
+        expect(threaded).toMatchObject({
+            messageId: '<a@example.com>',
+            inReplyTo: '<b@example.com>',
+            references: '<b@example.com>'
+        });
+        expect(plain).not.toHaveProperty('messageId');
+        expect(plain).not.toHaveProperty('inReplyTo');
     });
 
     it('carries no attachments key at all when the request names none', async () => {

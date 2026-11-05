@@ -28,14 +28,14 @@ describe('Idempotency-Key — POST /tasks', () => {
             .set('Idempotency-Key', 'replay-key-1')
             .send(PAYLOAD);
 
-        expect(first.status).toBe(201);
+        expect(first.status).toBe(202);
 
         const second = await api()
             .post('/tasks')
             .set('Idempotency-Key', 'replay-key-1')
             .send(PAYLOAD);
 
-        expect(second.status).toBe(201);
+        expect(second.status).toBe(202);
         expect(second.headers['idempotent-replay']).toBe('true');
         expect(second.body).toEqual(first.body);
 
@@ -106,7 +106,7 @@ describe('Idempotency-Key — POST /tasks', () => {
     it('runs normally, with no ledger row at all, when no key is sent', async () => {
         const response = await api().post('/tasks').send(PAYLOAD);
 
-        expect(response.status).toBe(201);
+        expect(response.status).toBe(202);
         expect(await idempotencyRecordModel.countDocuments({})).toBe(0);
     });
 });

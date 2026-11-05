@@ -11,8 +11,8 @@
  */
 
 import path from 'node:path';
-import { defineConfig } from '@infrastructure/config/define';
-import { choice, csv, flag, int, text } from '@infrastructure/config/fields';
+import { ConfigError, defineConfig } from '@infrastructure/config/define';
+import { choice, csv, email, flag, int, text } from '@infrastructure/config/fields';
 import { sharedDefaults } from '@infrastructure/config/defaults.generated';
 
 /**
@@ -35,6 +35,10 @@ export const mailConfig = defineConfig({
         NODE_SMTP_USER: text(),
         NODE_SMTP_PASS: text({ sensitive: true }),
         NODE_SMTP_SENDER: text(),
+        // The ONE customer-facing address: the contact form's mail goes here, `Reply-To` on every
+        // customer mail points at it, and the site shows it. Lives here because the mailer reads it
+        // and infrastructure may not import a module.
+        NODE_SUPPORT_EMAIL: email({ required: { minLength: 1 } }),
         NODE_E2E_RUN: flag({ default: false })
     },
     check: (config) => [
@@ -50,6 +54,20 @@ export const mailConfig = defineConfig({
             : [])
     ]
 });
+
+/**
+ * The support address, or a refusal. `NODE_ENV=test` skips the boot check, so a suite that forgot
+ * to set it gets this error instead of a mail with an `undefined` address.
+ *
+ * @returns `NODE_SUPPORT_EMAIL`
+ * @throws {ConfigError} when it is unset
+ */
+export const supportEmail = (): string => {
+    const address = mailConfig().NODE_SUPPORT_EMAIL;
+    if (address === undefined)
+        throw new ConfigError('Invalid configuration (mail): NODE_SUPPORT_EMAIL is required');
+    return address;
+};
 
 /** The mail slice's parsed values: what a transport is asked about itself. */
 export type MailConfig = ReturnType<typeof mailConfig>;

@@ -30,7 +30,6 @@ const IDENTITY = {
     NODE_SHOP_STREET: 'Via Roma 1',
     NODE_SHOP_CITY: 'Milano',
     NODE_SHOP_ZIP: '20100',
-    NODE_SHOP_EMAIL: 'shop@example.com',
     NODE_SHOP_PHONE: '+39 02 1234567'
 } as const;
 

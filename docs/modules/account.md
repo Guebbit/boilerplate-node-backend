@@ -235,10 +235,9 @@ Three things in the flow above are decisions rather than mechanics:
   to use "Forgot password" if it was not the owner: a reset signs every device out and revokes the
   API keys. No link, no timestamp. It is queued after the change and never fails it. The
   reset confirmation says the same ("reset it again and contact us").
-- **Security notices name a support address when one is set.** `NODE_ACCOUNT_SUPPORT_EMAIL`
-  (unset by default) replaces the plain footer of the password, second-factor, sign-in-method and
-  email-change notices with one that names it. Account sits in the foundation, which cannot read
-  the shop's contact, so the address is its own setting.
+- **Security notices name the support address.** The password, second-factor, sign-in-method and
+  email-change notices end with a footer that names `NODE_SUPPORT_EMAIL` (required, read from the
+  mail slice, which infrastructure owns, so the foundation can read it).
 
 Collision is checked twice, because the two checks catch different things. At **request time**,
 the requested address is compared against every account's `email` _and_ `pendingEmail`. At **swap

@@ -104,7 +104,7 @@ describe('withdrawalNotice: every placeholder is filled', () => {
             'Via Roma 1',
             '20100 Milano',
             '+39 02 1234567',
-            'shop@example.com'
+            'support@example.com'
         ]) {
             expect(terms.join('\n')).toContain(fragment);
             expect(form.join('\n')).toContain(fragment);

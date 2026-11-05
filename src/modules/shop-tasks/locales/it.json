@@ -24,24 +24,22 @@
             }
         }
     },
-    "notifications": {
-        "staff-mail": {
-            "task-kind": {
-                "manual_refund_owed": "Rimborso da fare a mano",
-                "refund_refused": "Rimborso rifiutato",
-                "amount_mismatch": "Importo del pagamento non corrispondente",
-                "dispute": "Contestazione di pagamento",
-                "refund_reversed": "Rimborso restituito dalla banca",
-                "dispute_awaiting_bank": "Contestazione: in attesa della banca",
-                "paid_without_hold": "Ordine pagato senza riserva di stock",
-                "consent_due": "Consenso dell'acquirente al ritardo da ottenere"
-            },
-            "task-category": {
-                "order": "Ordine",
-                "cancellation": "Annullamento",
-                "return": "Reso",
-                "payment": "Pagamento"
-            }
+    "tasks": {
+        "task-kind": {
+            "manual_refund_owed": "Rimborso da fare a mano",
+            "refund_refused": "Rimborso rifiutato",
+            "amount_mismatch": "Importo del pagamento non corrispondente",
+            "dispute": "Contestazione di pagamento",
+            "refund_reversed": "Rimborso restituito dalla banca",
+            "dispute_awaiting_bank": "Contestazione: in attesa della banca",
+            "paid_without_hold": "Ordine pagato senza riserva di stock",
+            "consent_due": "Consenso dell'acquirente al ritardo da ottenere"
+        },
+        "task-category": {
+            "order": "Ordine",
+            "cancellation": "Annullamento",
+            "return": "Reso",
+            "payment": "Pagamento"
         }
     }
 }

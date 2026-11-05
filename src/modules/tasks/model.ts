@@ -270,6 +270,20 @@ taskSchema.index({ email: 1 }, { partialFilterExpression: { email: { $exists: tr
  */
 taskSchema.index({ closedAt: 1 }, { expireAfterSeconds: retentionDays * 24 * 60 * 60 });
 
+/*
+ * A visitor's message is also deleted a retention window after it ARRIVED, closed or not: the
+ * clock on `closedAt` alone would keep a forgotten message (and its address) for ever. Partial on
+ * `source`, so a system to-do, which is work owed, keeps its closed-only rule. Same caveat as the
+ * index above for a change of window.
+ */
+taskSchema.index(
+    { createdAt: 1 },
+    {
+        expireAfterSeconds: retentionDays * 24 * 60 * 60,
+        partialFilterExpression: { source: TaskSource.visitor }
+    }
+);
+
 /**
  * Normalizes a serialized task: `_id` → `id`, drops `__v`.
  * Exported so lean results (which bypass `toJSON`) can be mapped through the

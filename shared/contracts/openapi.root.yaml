@@ -1038,7 +1038,7 @@ components:
         Config:
             type: object
             additionalProperties: false
-            required: [session, oauthProviders, antibot]
+            required: [session, oauthProviders, antibot, supportEmail]
             properties:
                 session:
                     $ref: '../../src/modules/account/openapi.yaml#/components/schemas/SessionConfig'
@@ -1048,6 +1048,10 @@ components:
                     description: Registry names this deployment holds OAuth credentials for, e.g. `["google", "github"]`. Empty when none are configured.
                 antibot:
                     $ref: '../../src/modules/antibot/openapi.yaml#/components/schemas/AntibotConfig'
+                supportEmail:
+                    type: string
+                    format: email
+                    description: The one customer-facing support address (`NODE_SUPPORT_EMAIL`). The contact form's mail goes there and customers' replies come back to it; show it as "write to us at".
 
         # What `GET /account` answers: the account as its holder sees it, plus what a client needs
         # to render from it without a second call. A separate schema, not optional members on

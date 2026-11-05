@@ -133,6 +133,18 @@ const sendKeyedContact = () =>
         .set('Idempotency-Key', 'located-replay-1')
         .send({ email: 'ada@example.com', subject: 'Replay', message: 'Once only, please.' });
 
+describe('a bodiless 202 under an Idempotency-Key', () => {
+    it('replays a keyed contact request as the same empty 202', async () => {
+        const first = await sendKeyedContact();
+        const second = await sendKeyedContact();
+
+        expect(first.status).toBe(202);
+        expect(second.status).toBe(202);
+        expect(second.headers['idempotent-replay']).toBe('true');
+        expect(second.text).toBe('');
+    });
+});
+
 describe('a 201 names the new resource in Location', () => {
     it('sends /users/{id} for an admin-created user', async () => {
         const { bearer } = await authenticateAs('admin');
@@ -144,25 +156,6 @@ describe('a 201 names the new resource in Location', () => {
 
         expect(response.status).toBe(201);
         expect(response.headers.location).toBe(`/users/${String(response.body.id)}`);
-    });
-
-    it('sends /tasks/{id} for a contact request', async () => {
-        const response = await api().post('/tasks').send({
-            email: 'ada@example.com',
-            subject: 'Located',
-            message: 'Where did this land?'
-        });
-
-        expect(response.status).toBe(201);
-        expect(response.headers.location).toBe(`/tasks/${String(response.body.id)}`);
-    });
-
-    it('replays the Location with the body when a create is retried under its Idempotency-Key', async () => {
-        const first = await sendKeyedContact();
-        const second = await sendKeyedContact();
-
-        expect(second.headers['idempotent-replay']).toBe('true');
-        expect(second.headers.location).toBe(first.headers.location);
     });
 
     it('sends /webhooks/subscriptions/{id} for a subscription', async () => {

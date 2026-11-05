@@ -95,7 +95,7 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     NODE_SHOP_STREET: 'Via Roma 1',
     NODE_SHOP_CITY: 'Milano',
     NODE_SHOP_ZIP: '20100',
-    NODE_SHOP_EMAIL: 'shop@example.com',
+    NODE_SUPPORT_EMAIL: 'support@example.com',
     NODE_SHOP_PHONE: '+39 02 1234567',
     NODE_VAT_RATE_DEFAULT: '0.22',
     NODE_VAT_RATE_REDUCED: '0.10',

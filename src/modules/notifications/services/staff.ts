@@ -95,7 +95,7 @@ export const staffRecipients = (
  *
  * @param notice - what happened and where
  * @returns how many people with an address could act, whether or not they had been told already:
- *   zero is what lets a caller reach for a fallback mailbox
+ *   zero is what lets a caller tell that nobody could be reached
  */
 export const notifyStaff = async (notice: StaffNotice): Promise<number> => {
     const contacts = await staffRecipients(notice.tenantId, setsOfRoute(notice.route, notice.sets));

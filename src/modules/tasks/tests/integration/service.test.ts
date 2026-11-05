@@ -14,6 +14,7 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import * as auditPort from '@infrastructure/observability/audit';
 import { tasksAuditActions } from '@modules/tasks/audit';
 import { TaskKind, TaskSource, TaskStatus } from '@types';
+import { oneCalendarMonthLaterUtc } from '@domain-primitives/time';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import {
     markDomainEventsWired,
@@ -45,12 +46,12 @@ setupTestDb();
 let opened: DomainEventMap['task.opened'][] = [];
 
 /*
- * `mailFallbackMailbox` reads `NODE_CONTACT_NOTIFY_EMAIL` at call time. `.env` supplies it via
+ * `mailMainMailbox` reads `NODE_SUPPORT_EMAIL` at call time. `.env` supplies it via
  * `dotenv/config` in `src/app.ts`, which a service-level suite never imports, so it is set here.
  * Modules are not registered: the announcement is caught by a listener of the test's own.
  */
 beforeEach(() => {
-    setEnvironment({ NODE_CONTACT_NOTIFY_EMAIL: 'admin@example.com' });
+    setEnvironment({ NODE_SUPPORT_EMAIL: 'admin@example.com' });
     opened = [];
     resetDomainEvents();
     onDomainEvent(TASK_OPENED, (fact) => {
@@ -124,6 +125,17 @@ describe('create', () => {
         expect(task.orderNumber).toBe('ORD-1042');
     });
 
+    it('owes a privacy request an answer in one calendar month, any other message in the SLA', async () => {
+        const privacy = await taskService.create({ ...makePayload(), category: 'privacy' });
+        const ordinary = await taskService.create(makePayload());
+
+        // `!`: `createdAt` is stamped by mongoose timestamps on every stored task.
+        expect(privacy.dueAt).toEqual(oneCalendarMonthLaterUtc(privacy.createdAt!));
+        // `dueAt` is computed from the service's own clock, `createdAt` stamped a moment later.
+        const wait = ordinary.dueAt!.getTime() - ordinary.createdAt!.getTime();
+        expect(Math.abs(wait - 48 * 3_600_000)).toBeLessThan(1000);
+    });
+
     it('leaves both absent when the visitor chose neither', async () => {
         const task = await taskService.create(makePayload());
 
@@ -180,39 +192,46 @@ describe('create — the announcement', () => {
     });
 });
 
-describe('mailFallbackMailbox', () => {
-    it('mails the configured mailbox the full message, the category and a Reply-To of the bare address', async () => {
+describe('mailMainMailbox', () => {
+    it('mails the support mailbox the full message, the category and a Reply-To of the bare address', async () => {
         const task = await taskService.create(
             makePayload({ name: '"Ada" <evil@example.com>', category: 'privacy' })
         );
 
-        await taskService.mailFallbackMailbox(String(task._id));
+        await taskService.mailMainMailbox(String(task._id));
 
         const [envelope, template, data] = mockEnqueueEmail.mock.calls[0];
         expect(envelope).toEqual({
             to: 'admin@example.com',
             subject: expect.stringContaining('Broken checkout'),
-            replyTo: 'ada@example.com'
+            // The plain-text part carries the message too, for a client that shows no HTML.
+            text: expect.stringContaining('The cart total is wrong.'),
+            replyTo: 'ada@example.com',
+            messageId: `<task-${String(task._id)}@example.com>`
         });
         expect(template).toBe('tasks.contact');
         expect(data).toMatchObject({
             message: 'The cart total is wrong.',
-            category: 'privacy',
+            category: 'Personal data',
             createdAt: task.createdAt?.toISOString()
         });
     });
 
-    it('sends nothing when no fallback mailbox is configured', async () => {
-        setEnvironment({ NODE_CONTACT_NOTIFY_EMAIL: undefined });
+    it('threads the reminder under the first mail: a stable Message-ID, then In-Reply-To pointing at it', async () => {
         const task = await taskService.create(makePayload());
 
-        await taskService.mailFallbackMailbox(String(task._id));
+        await taskService.mailMainMailbox(String(task._id));
+        await taskService.mailMainMailbox(String(task._id), true);
 
-        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+        const [[first], [reminder]] = mockEnqueueEmail.mock.calls;
+        expect(first.messageId).toBe(`<task-${String(task._id)}@example.com>`);
+        expect(first.inReplyTo).toBeUndefined();
+        expect(reminder.inReplyTo).toBe(first.messageId);
+        expect(reminder.messageId).not.toBe(first.messageId);
     });
 
     it('sends nothing for a task that is gone', async () => {
-        await taskService.mailFallbackMailbox(MISSING_ID);
+        await taskService.mailMainMailbox(MISSING_ID);
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });
@@ -226,7 +245,7 @@ describe('mailFallbackMailbox', () => {
             message: 'Export e1 needs a person.'
         });
 
-        await taskService.mailFallbackMailbox(String(system._id));
+        await taskService.mailMainMailbox(String(system._id));
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });
@@ -235,7 +254,7 @@ describe('mailFallbackMailbox', () => {
         const task = await taskService.create(makePayload());
         mockEnqueueEmail.mockRejectedValueOnce(new Error('queue down'));
 
-        await expect(taskService.mailFallbackMailbox(String(task._id))).resolves.toBeUndefined();
+        await expect(taskService.mailMainMailbox(String(task._id))).resolves.toBeUndefined();
     });
 });
 

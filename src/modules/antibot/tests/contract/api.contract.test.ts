@@ -54,7 +54,7 @@ describe('the gate it guards, end to end on one guarded route', () => {
 
         const response = await api().post('/tasks').send(CONTACT_PAYLOAD);
 
-        expect(response.status).toBe(201);
+        expect(response.status).toBe(202);
     });
 
     it('refuses the guarded route with no token once a provider is selected', async () => {

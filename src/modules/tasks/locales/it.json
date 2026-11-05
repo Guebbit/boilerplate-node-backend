@@ -5,14 +5,16 @@
             "subject-overdue": "Richiesta di contatto in ritardo",
             "meta-title": "Nuova richiesta di contatto",
             "title": "Nuova richiesta di contatto",
-            "title-overdue": "Richiesta di contatto in ritardo: nessuno ha ancora risposto",
+            "title-overdue": "Il messaggio #{{ref}} di {{email}} non ha ancora risposta: segnalo come risposto quando hai finito",
             "label-name": "Nome",
             "label-email": "Email",
             "label-subject": "Oggetto",
             "label-message": "Messaggio",
             "label-category": "Categoria",
             "label-created-at": "Creata il",
-            "not-available": "N/D"
+            "not-available": "N/D",
+            "label-order-number": "Numero d'ordine",
+            "label-link": "Aprilo"
         },
         "already-resolved": "Questo task è già risolto.",
         "already-spam": "Questo task è già segnato come spam.",

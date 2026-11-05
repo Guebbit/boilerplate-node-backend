@@ -24,12 +24,12 @@ const taskWhat = (
     t: ReturnType<typeof translator>,
     parameters: { kind: string; category?: string }
 ): string => {
-    const kind = t(`notifications.staff-mail.task-kind.${parameters.kind}`);
+    const kind = t(`tasks.task-kind.${parameters.kind}`);
     if (parameters.kind !== 'contact') return kind;
     // "Uncategorised" when the visitor chose none: the mail must not look broken.
     const category = parameters.category
-        ? t(`notifications.staff-mail.task-category.${parameters.category}`)
-        : t('notifications.staff-mail.task-category.none');
+        ? t(`tasks.task-category.${parameters.category}`)
+        : t('tasks.task-category.none');
     return `${kind} · ${category}`;
 };
 

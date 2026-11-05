@@ -32,7 +32,7 @@ setupTestDb();
 beforeEach(() => {
     mockEnqueueEmail.mockReset();
     mockEnqueueEmail.mockResolvedValue(undefined);
-    setEnvironment({ NODE_CONTACT_NOTIFY_EMAIL: 'desk@example.com' });
+    setEnvironment({ NODE_SUPPORT_EMAIL: 'desk@example.com' });
     resetDomainEvents();
     registerModules(enabledModules);
 });
@@ -100,7 +100,7 @@ describe('a task three days from its deadline', () => {
         expect(dueSoonMails()).toHaveLength(1);
     });
 
-    it('does not mail the fallback mailbox for a contact message nobody could be told of', async () => {
+    it('does not mail the main mailbox from the due-soon notice', async () => {
         const task = await taskService.create({
             name: 'Ada Lovelace',
             email: 'ada@example.com',

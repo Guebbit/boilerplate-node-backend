@@ -48,7 +48,7 @@ const nextEventId = () => `event-${String(++eventCounter)}`;
 beforeEach(() => {
     mockEnqueueEmail.mockReset();
     mockEnqueueEmail.mockResolvedValue(undefined);
-    setEnvironment({ NODE_CONTACT_NOTIFY_EMAIL: 'desk@example.com', NODE_SHOP_COUNTRY: 'IT' });
+    setEnvironment({ NODE_SUPPORT_EMAIL: 'desk@example.com', NODE_SHOP_COUNTRY: 'IT' });
     resetDomainEvents();
     registerModules(enabledModules);
 });
@@ -506,7 +506,7 @@ describe('who is told, and where the alert takes them', () => {
             ]);
     });
 
-    it('never reaches the contact fallback mailbox, even with nobody to tell', async () => {
+    it('never reaches the contact main mailbox, even with nobody to tell', async () => {
         await emitDomainEvent('payment.dispute_opened', DISPUTE, { eventId: nextEventId() });
         await settleOutboxNudges();
 

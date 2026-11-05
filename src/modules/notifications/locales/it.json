@@ -21,18 +21,20 @@
                 "meta-title": "Task in scadenza",
                 "title": "Un task scade tra tre giorni",
                 "summary": "Un task di cui si occupa il tuo ruolo scade entro tre giorni ed è ancora aperto: {{what}}. Aprilo per vedere i dettagli e prenderlo in carico."
-            },
-            "task-kind": {
-                "contact": "Messaggio di contatto",
-                "account_review": "Account in verifica",
-                "export_failed": "Esportazione dati non riuscita"
-            },
-            "task-category": {
-                "account": "Account",
-                "privacy": "Dati personali",
-                "other": "Altro",
-                "none": "Senza categoria"
             }
+        }
+    },
+    "tasks": {
+        "task-kind": {
+            "contact": "Messaggio di contatto",
+            "account_review": "Account in verifica",
+            "export_failed": "Esportazione dati non riuscita"
+        },
+        "task-category": {
+            "account": "Account",
+            "privacy": "Dati personali",
+            "other": "Altro",
+            "none": "Senza categoria"
         }
     }
 }

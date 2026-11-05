@@ -8,6 +8,7 @@ import { asStub } from '@tests/stub';
 import { callerContextAs } from '@tests/callers';
 import { setupTestDb } from '@tests/setup-test-db';
 import { taskRepository } from '@modules/tasks/repository';
+import { taskModel } from '@modules/tasks/model';
 import { taskService } from '@modules/tasks/service';
 
 setupTestDb();
@@ -18,6 +19,23 @@ const createTask = () =>
         subject: 'Something broke',
         message: 'Details about what broke.'
     });
+
+describe('retention clocks', () => {
+    it('ages a visitor message from its arrival, and nothing else from there', async () => {
+        const all = await taskModel.collection.indexes();
+        const indexes = all.filter((index) => index.expireAfterSeconds !== undefined);
+
+        expect(indexes).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    key: { createdAt: 1 },
+                    partialFilterExpression: { source: 'visitor' }
+                }),
+                expect.objectContaining({ key: { closedAt: 1 } })
+            ])
+        );
+    });
+});
 
 describe('task serialization', () => {
     it('normalizes a hydrated document via toJSON', async () => {
