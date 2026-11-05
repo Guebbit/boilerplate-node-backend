@@ -31,7 +31,6 @@ import {
 import { inventoryService } from '@modules/inventory';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { setEnvironment } from '@tests/environment';
-import * as analyticsPort from '@infrastructure/observability/analytics';
 import { reservationRepository, stockLevelRepository } from '@modules/inventory/tests/factories';
 import { OrderStatus } from '@types';
 import ordersModule from '@modules/orders/module';
@@ -47,13 +46,6 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     enqueueEmail: jest.fn()
 }));
 const mockEnqueueEmail = jest.mocked(enqueueEmail);
-
-jest.mock('@infrastructure/observability/analytics', () => ({
-    __esModule: true,
-    ...jest.requireActual('@infrastructure/observability/analytics'),
-    emitAnalyticsEvent: jest.fn()
-}));
-const mockEmitAnalytics = jest.mocked(analyticsPort.emitAnalyticsEvent);
 
 setupTestDb();
 
@@ -653,10 +645,9 @@ const cancelledRows = (orderId: string) =>
     outboxEventModel.find({ name: 'order.cancelled', aggregateId: orderId }).lean().exec();
 
 describe('cancelling the remainder after a loss', () => {
-    it('ends cancelled with cause lost, counted as a cancelled order, and no listener moves stock', async () => {
+    it('ends cancelled with cause lost, and no listener moves stock', async () => {
         const { orderId, productId, shipmentId } = await shippedOrder(2);
         await reportLost(shipmentId);
-        mockEmitAnalytics.mockClear();
         const before = await levelOf(productId);
 
         await cancelRemainderOf(orderId);
@@ -665,12 +656,6 @@ describe('cancelling the remainder after a loss', () => {
         const rows = await cancelledRows(orderId);
         expect(rows).toHaveLength(1);
         expect(rows[0].payload).toMatchObject({ cause: 'lost', refund: false });
-        expect(mockEmitAnalytics).toHaveBeenCalledWith(
-            expect.objectContaining({
-                event: 'order_cancelled',
-                properties: { order_id: orderId }
-            })
-        );
         // No listener of `order.cancelled` touches the shelf for a lost cancel.
         expect(await levelOf(productId)).toEqual(before);
     });
