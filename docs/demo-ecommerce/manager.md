@@ -177,6 +177,8 @@ waiting. So the routine is a person's:
    from; [FTC 16 CFR 435.2(b)](https://www.ecfr.gov/current/title-16/section-435.2)), write to the buyer and ask whether they still want it.
 3. If they do not, or the goods will not come, **cancel and refund** with the ordinary staff cancel.
 
+The board lists the earliest expected date first. When stock arrives it goes to the earliest **payment** first, automatically, so the **Paid** column is the order stock is handed out in.
+
 Before you move a release or restock date, the product form shows how many orders would get an
 email. → [`delivery`](../modules/delivery.md#what-staff-do-about-a-late-order)
 

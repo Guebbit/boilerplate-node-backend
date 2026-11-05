@@ -99,26 +99,35 @@ describe('user credential exposure', () => {
             expect(JSON.stringify(json)).not.toContain('__v');
         });
 
-        it('emits only the OpenAPI User properties', async () => {
-            const user = await withCredentials();
+        const BASE_PROPERTIES = [
+            'active',
+            'createdAt',
+            'email',
+            'id',
+            // The user's preferred language. Public rather than stripped: the client shows
+            // it in the profile and writes it back, and it is in the `User` contract.
+            'locale',
+            'updatedAt',
+            'username'
+        ];
+
+        it.each([
+            // absent until it is: the wire leaves out a stored null
+            { state: 'unverified', overrides: {}, expected: BASE_PROPERTIES },
+            // `verifiedAt` is WHEN the address was confirmed: in the `User` contract, informational
+            // only (the membership role is what `checkout:Cart` actually reads).
+            {
+                state: 'verified',
+                overrides: { verifiedAt: new Date() },
+                expected: [...BASE_PROPERTIES, 'verifiedAt']
+            }
+        ])('emits only the OpenAPI User properties ($state)', async ({ overrides, expected }) => {
+            const user = await createUser(overrides);
 
             // No `role` here: it is a membership fact now, never a column on this document —
             // `@modules/access` is the sole authority, and `presentUser` (`../../presenter`) takes
             // the caller's current role as an explicit parameter instead of reading one off the schema.
-            expect(Object.keys(user.toJSON() as object).toSorted()).toEqual([
-                'active',
-                'createdAt',
-                'email',
-                'id',
-                // The user's preferred language. Public rather than stripped: the client shows
-                // it in the profile and writes it back, and it is in the `User` contract.
-                'locale',
-                'updatedAt',
-                'username',
-                // WHEN the address was confirmed, or `null` until it is — in the `User` contract,
-                // informational only: the membership role is what `checkout:Cart` actually reads.
-                'verifiedAt'
-            ]);
+            expect(Object.keys(user.toJSON() as object).toSorted()).toEqual(expected);
         });
 
         // `active` and `deletedAt` are independent: a deleted-but-active account and a

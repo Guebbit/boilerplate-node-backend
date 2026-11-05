@@ -503,7 +503,9 @@ only this module already reaches all four. In **one transaction**, under the ord
 asks `delivery` to mark the lines (`cancelRemainder`, which also recomputes the order's summary and
 moves its status when that completes it), gives the units back (`orders.releaseStock`, which drives the hold) and
 writes the Return and opens its refund record (`openReturnRefund`, `reason: cancellation`, the
-Return's id). Only the provider call follows the commit (`sendOpenedRefund`); a refund the provider refuses stays open for the payment
+Return's id). After the commit, when the settlement cancelled the order (every parcel lost), `returns` runs the
+cancel report `orders` handed back: the audit row and the analytics event. Then the provider call
+(`sendOpenedRefund`); a refund the provider refuses stays open for the payment
 sweep, and the Return stays closed.
 
 ```mermaid
@@ -522,6 +524,7 @@ sequenceDiagram
     R->>R: write the Return (closed) · return.requested · return.closed
     R->>P: openReturnRefund(reason: cancellation, returnId)
     Note over R: commit
+    R->>O: report the lost-parcel cancel (audit + analytics), when the settlement cancelled the order
     R->>P: sendOpenedRefund
     P-->>C: the refund's own mail
 ```

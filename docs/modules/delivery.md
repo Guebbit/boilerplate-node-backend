@@ -180,6 +180,8 @@ its lines. "One day" is the shop's calendar day (`NODE_SHOP_TIMEZONE`): staff ty
 wall clock, so two instants UTC splits can still be the same day. The emails print those dates in the
 same zone, so the day staff typed is the day the buyer reads. A product line that carries neither flag simply lands in #1.
 
+The split is decided at payment; the cart shows each line's date and a notice on any basket with a later line.
+
 ### Holds
 
 | Reason                                               | Set by            | Released by                                                                                                                        |
@@ -565,7 +567,7 @@ merchant cancels it. We settle it for them, with `settleOrder` asking `orders`' 
 else runs: no withdrawal or guarantee clock, no `delivered` row, no second refund, no second stock
 release, and no mail (the loss and the refund were already mailed). The `cancelled` row is the
 system's. The `order.cancelled` listeners treat `lost` as no purchase-hold count and no refund, and
-`returns`, which owns the transaction, writes the `orders.order.cancelled` audit row (system actor) and
+`returns`, which owns the transaction, writes the `order.cancelled` audit row (system actor) and
 sends the `order_cancelled` analytics event once the transaction commits, through the callback
 `settleOrder` hands back, exactly like any other cancel.
 

@@ -1,4 +1,4 @@
-# The LIGHT gate: eslint + prettier on the STAGED files only (lint-staged), then `complete:hook:gates`.
+# The LIGHT gate: eslint + prettier on the STAGED files only (lint-staged), then `complete:light:gates`.
 # Staged-only so a peer session's dirty file cannot fail an unrelated commit; CI lints the whole tree.
 # It keeps every static check (type-check, lint, both spec lints, format, the contract-bundle, docs and
 # cross-repo checks) plus the unit and cross-cutting suites — nothing that starts `mongod`.
@@ -45,10 +45,7 @@ npm run regenerate -- --no-sync
 git add asyncapi.yaml asyncapi.public.yaml 'shared/rules/schemas/*.json' ':(glob)src/**/*.generated.ts'
 
 npx lint-staged
-# `complete:hook:gates` is `complete:light:gates` without the artifact verify: the `regenerate` above
-# has just written them, so verifying them again would only check the hook against itself.
-# `check` (artifact verify included) stays the standalone and CI guard.
-npm run complete:hook:gates
+npm run complete:light:gates
 
 # Last, because it is the one step that starts `mongod`: every integration, contract or fuzz test
 # file this commit adds or changes, run by file. Light skips those layers, so a new one would
