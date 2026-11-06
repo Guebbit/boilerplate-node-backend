@@ -3,7 +3,7 @@
  * Fails when `asyncapi.public.yaml` — the partner-facing webhook event catalogue — drops or
  * narrows something a subscriber already depends on. `npm run check`.
  *
- * Diffs the working tree's bundle against `origin/main`'s, at their merge-base: the same "what
+ * Diffs the working tree's bundle against the one `origin/main` builds, at their merge-base: the same "what
  * would this change actually ship" comparison `scripts/mutation/run-diff.ts` uses, not the tip of
  * a possibly-stale local `main`.
  *
@@ -18,7 +18,8 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { DiffOutputItem } from '@asyncapi/diff';
 import { Parser } from '@asyncapi/parser';
@@ -33,15 +34,38 @@ const BUNDLE = 'asyncapi.public.yaml';
 /** The git ref to compare against; `origin/main` unless `--base` says otherwise. */
 const base = flagValue('base') ?? 'origin/main';
 
-/** `BUNDLE` as it stood at `ref`, or undefined when the ref predates the file. */
+/**
+ * `BUNDLE` as it would have been built at `ref`, or undefined when that tree cannot build it.
+ *
+ * The bundle is not committed, so there is nothing to `git show`: the commit's own tree is
+ * exported to a scratch folder and bundled there with its own fragments and its own bundler.
+ * `node_modules` is linked in rather than installed; the bundle step needs no generated file.
+ */
 const bundleAt = (ref: string): string | undefined => {
+    const scratch = mkdtempSync(path.join(tmpdir(), 'asyncapi-base-'));
     try {
-        return execFileSync('git', ['show', `${ref}:${BUNDLE}`], {
-            cwd: REPO_ROOT,
-            encoding: 'utf8'
+        // `git archive`: a tar of the tree at `ref`, without `.git`. `-o` writes it to a file.
+        execFileSync(
+            'git',
+            ['archive', '--format=tar', '-o', path.join(scratch, 'tree.tar'), ref],
+            {
+                cwd: REPO_ROOT
+            }
+        );
+        const tree = path.join(scratch, 'tree');
+        mkdirSync(tree);
+        execFileSync('tar', ['-xf', path.join(scratch, 'tree.tar'), '-C', tree]);
+        symlinkSync(path.join(REPO_ROOT, 'node_modules'), path.join(tree, 'node_modules'));
+        // The base's own bundler, narrowed to the one bundle this gate reads (`asyncapi-public`).
+        execFileSync('npx', ['tsx', 'scripts/contracts/build-bundles.ts', 'asyncapi-public'], {
+            cwd: tree,
+            stdio: 'ignore'
         });
+        return readFileSync(path.join(tree, BUNDLE), 'utf8');
     } catch {
         return undefined;
+    } finally {
+        rmSync(scratch, { recursive: true, force: true });
     }
 };
 
@@ -61,7 +85,7 @@ if (baseCommit === undefined) process.exit(0);
 /** The public bundle as it stood on the base. */
 const before = bundleAt(baseCommit);
 
-/** The public bundle as it is now on disk. */
+/** The public bundle as it is now on disk (`npm run regenerate` writes it). */
 const after = readFileSync(path.join(REPO_ROOT, BUNDLE), 'utf8');
 
 // The file is new on this branch: nothing to break yet.

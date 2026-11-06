@@ -270,7 +270,7 @@ copies of the tests, which jest would otherwise discover and run as if they were
 
 The `tests/cross-cutting/` entry is excluded for a sandbox-specific reason — not cost, correctness:
 
-- **`contract-bundles.test.ts`** asserts each committed contract document is byte-identical to the sources it's built from. Stryker's sandbox prepends `// @ts-nocheck` to every file it copies (`disableTypeChecks`), so the sources it reads carry lines the committed bundle doesn't — the byte comparison can never hold. Turning `disableTypeChecks` off is the wrong fix: `ts-jest` runs with diagnostics on, so a type-breaking mutant would fail to _compile_, count as killed, and inflate the score with kills no assertion earned. Excluding the file costs nothing either way — it exercises committed files and `scripts/`, neither of which is in `mutate`.
+- **`contract-bundles.test.ts`** asserts each contract document is byte-identical to the sources it's built from. Stryker's sandbox prepends `// @ts-nocheck` to every file it copies (`disableTypeChecks`), so the sources it reads carry lines the committed bundle doesn't — the byte comparison can never hold. Turning `disableTypeChecks` off is the wrong fix: `ts-jest` runs with diagnostics on, so a type-breaking mutant would fail to _compile_, count as killed, and inflate the score with kills no assertion earned. Excluding the file costs nothing either way — it exercises committed files and `scripts/`, neither of which is in `mutate`.
 
 **The unit layer's cost depends on a naming rule, and that is the fragile part.** A file under
 `src/modules/*/tests/unit/` that calls `setupTestDb()` starts a real `mongod` and connects mongoose

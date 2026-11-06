@@ -100,7 +100,7 @@ Change](../api/regenerating.md).
 
 | Script                      | Stage    | Job                                                                                                                                                           | Read more                                                                   |
 | --------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `contracts:bundle`          | bundle   | rebuild the authored bundles (`openapi.yaml`, `asyncapi.yaml`, `asyncapi.public.yaml`) from their fragments; name a target to narrow it                       | [Contract Fragmentation](../api/contract-fragmentation.md)                  |
+| `contracts:bundle`          | bundle   | rebuild the bundles (`openapi.yaml`, `asyncapi.yaml`, `asyncapi.public.yaml`) from their fragments; name a target to narrow it                                | [Contract Fragmentation](../api/contract-fragmentation.md)                  |
 | `gen:permission-vocabulary` | generate | `api/permission-vocabulary.ts` from `shared/authorization-keys.yaml`; `regenerate` runs it before the first bundle                                            | [Permission Vocabulary](permission-vocabulary.md)                           |
 | `gen:api`                   | generate | `rm -rf ./api`, then regenerate types + Zod schemas from `openapi.yaml` via orval, plus the error codes, the request content types and the permission actions | [OpenAPI Workflow](../api/openapi-workflow.md)                              |
 | `gen:asyncapi`              | generate | regenerate `src/types/asyncapi.generated.ts` from `asyncapi.yaml`                                                                                             | [AsyncAPI Workflow](../api/asyncapi-workflow.md)                            |
@@ -111,6 +111,7 @@ Change](../api/regenerating.md).
 | `lint:asyncapi:modules`     | verify   | the same for each section document, against `shared/contracts/spectral.asyncapi.modules.yaml`                                                                 | [AsyncAPI Workflow](../api/asyncapi-workflow.md)                            |
 | `sync:frontend`             | generate | copy the shared documents into the paired frontend checkout, so the spec-identity check can go green                                                          | [Contract Fragmentation](../api/contract-fragmentation.md)                  |
 | `regenerate`                | generate | every generator, in dependency order, then the sync — the one command to run after changing a generator input; `-- --check` verifies                          | [Regenerating After a Change](../api/regenerating.md)                       |
+| `check:generated`           | generate | the pre-commit hook's check: export the index, regenerate there, fail if a committed generated file changed; never stages                                     | [Regenerating After a Change](../api/regenerating.md#the-pre-commit-hook)   |
 
 The `:modules` pair exists because each module's contract is a valid document on its own, so it can
 be linted where it is written rather than only after bundling.
@@ -122,12 +123,11 @@ collections are generated from `openapi.yaml` and `.gitignore`d, so they are pro
 `npm run contracts:bundle -- bruno insomnia mockoon postman` — and `--check` refuses them, because an
 uncommitted file cannot be stale.
 
-`openapi.yaml`, `api/` (from `gen:api`) and `src/types/asyncapi.generated.ts` (from `gen:asyncapi`)
-are gitignored too, for the same reason: `postinstall` rebuilds all three automatically after
-`npm install`/`npm ci`, so there's nothing committed left to go stale between them and the
-fragments they're built from — no freshness check exists for any of them.
-`asyncapi.yaml`/`asyncapi.public.yaml` themselves
-stay committed — see [Regenerating After a Change](../api/regenerating.md#the-generated-output-and-what-is-committed)
+`openapi.yaml`, `asyncapi.yaml`, `asyncapi.public.yaml`, `api/` (from `gen:api`), every `*.generated.ts`
+(including `src/types/asyncapi.generated.ts`, from `gen:asyncapi`) are gitignored too, for the same
+reason: `postinstall` rebuilds all of them automatically after `npm install`/`npm ci`, so there's
+nothing committed left to go stale between them and the fragments they're built from — no freshness
+check exists for any of them. What stays committed is checked by the pre-commit hook — see [Regenerating After a Change](../api/regenerating.md#the-generated-output-and-what-is-committed)
 for exactly which is which.
 
 ## Docs scripts
@@ -211,15 +211,15 @@ live in `.env` and this one cannot.
 
 ## Maintenance & publishing scripts
 
-| Script                       | Job                                                                                                                             | Read more                                                                                        |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `setup`                      | first run: copies `.env-example` to `.env` if absent and fills the placeholder secrets                                          | [First run](./configuration.md#first-run-npm-run-setup)                                          |
-| `refresh:breached-passwords` | rebuild the committed breached-password list the signup/password check reads (`scripts/security/refresh-breached-passwords.ts`) | [Breached passwords](../theory/defences/authentication.md)                                       |
-| `scaffold:module`            | generate a new module's skeleton                                                                                                | [Module scaffolder](./module-scaffolder.md)                                                      |
-| `demo:remove`                | strip the `shop` and `example` modules and the demo scenarios from THIS checkout, to start a real project                       | [Getting started: new project](../getting-started-new-project.md)                                |
-| `measure:demo-strip`         | the measuring twin: run the strip in a scratch copy and run the gate on the result (CI: `demo-strip-measure`)                   | [Getting started: new project](../getting-started-new-project.md)                                |
-| `postinstall`                | npm lifecycle hook — rebuilds `openapi.yaml`/`api/`/`asyncapi.generated.ts` after `npm install`/`npm ci`                        | [Regenerating After a Change](../api/regenerating.md#the-generated-output-and-what-is-committed) |
-| `prepare`                    | npm lifecycle hook — installs the husky hooks after `npm install`                                                               | not run by hand                                                                                  |
+| Script                       | Job                                                                                                                                                                             | Read more                                                                                        |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `setup`                      | first run: copies `.env-example` to `.env` if absent and fills the placeholder secrets                                                                                          | [First run](./configuration.md#first-run-npm-run-setup)                                          |
+| `refresh:breached-passwords` | rebuild the committed breached-password list the signup/password check reads (`scripts/security/refresh-breached-passwords.ts`)                                                 | [Breached passwords](../theory/defences/authentication.md)                                       |
+| `scaffold:module`            | generate a new module's skeleton                                                                                                                                                | [Module scaffolder](./module-scaffolder.md)                                                      |
+| `demo:remove`                | strip the `shop` and `example` modules and the demo scenarios from THIS checkout, to start a real project                                                                       | [Getting started: new project](../getting-started-new-project.md)                                |
+| `measure:demo-strip`         | the measuring twin: run the strip in a scratch copy and run the gate on the result (CI: `demo-strip-measure`)                                                                   | [Getting started: new project](../getting-started-new-project.md)                                |
+| `postinstall`                | npm lifecycle hook — rebuilds the scenario registries, the authorization bundle, the shared rules, the bundles, `api/` and `asyncapi.generated.ts` after `npm install`/`npm ci` | [Regenerating After a Change](../api/regenerating.md#the-generated-output-and-what-is-committed) |
+| `prepare`                    | npm lifecycle hook — installs the husky hooks after `npm install`                                                                                                               | not run by hand                                                                                  |
 
 ## Periodic jobs
 

@@ -1,14 +1,16 @@
 #!/usr/bin/env tsx
 /**
  * Rebuild every generated artifact — `npm run regenerate`. Most of what it writes is gitignored
- * (`api/`, `src/types/asyncapi.generated.ts`, `openapi.yaml`); the two AsyncAPI bundles and the
- * docs pages the doc steps rewrite are the committed exceptions. `--check` verifies instead of
+ * (`api/`, every `*.generated.ts`, the three bundles); the shared-rules schemas, the authorization
+ * keys, the crontab, `docker/Dockerfile.dockerignore` and the docs tables the doc steps rewrite
+ * are the committed exceptions. `--check` verifies instead of
  * writing — the first half of `npm run check`.
  *
  * Run it after changing anything a generator reads: a module's `openapi.yaml` or `asyncapi.yaml`,
  * `shared/contracts/asyncapi.workers.yaml`, a `probes.ts`.
- * Usually you will not have to remember — `.husky/pre-commit` runs it with `--no-sync` and stages
- * what it produced, so `npm run check` only ever VERIFIES.
+ * Usually you will not have to remember — `.husky/pre-commit` runs it with `--no-sync` and then
+ * refuses a commit whose committed generated files are stale (`npm run check:generated`). It
+ * never stages; `npm run check` only ever VERIFIES.
  *
  * A script rather than a chain of `&&` because the order is not obvious and needs somewhere to
  * live:

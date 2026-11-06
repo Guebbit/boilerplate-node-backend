@@ -186,6 +186,13 @@ The five libraries underneath them:
 | `scripts/docs/marker-block.ts`      | The write-or-report logic every doc generator shares for a generated block between `<!-- name:start -->` / `<!-- name:end -->` markers inside a hand-written page.                                         | —                                                        |
 | `scripts/docs/module-catalog.ts`    | Every module's place in the docs, derived from its `module.yaml#group`: feeds the module index and the `/modules/` sidebar.                                                                                | [Modules](../modules/index.md)                           |
 
+## Git hooks — `scripts/hooks/`
+
+| File                                     | What it is                                                                                                                                                 | Read next                                                                 |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `scripts/hooks/check-generated-fresh.ts` | `npm run check:generated`, run by `.husky/pre-commit`: refuses a commit whose committed generated files are stale, naming them. Only checks; never stages. | [Regenerating After a Change](../api/regenerating.md#the-pre-commit-hook) |
+| `scripts/hooks/stale-generated-files.ts` | The check itself: exports the index to a scratch folder, regenerates there, returns what changed.                                                          | [Regenerating After a Change](../api/regenerating.md#the-pre-commit-hook) |
+
 ## Docker — `scripts/docker/`
 
 | File                                                 | What it is                                                                                                                                                                                                                                                                                                 | Read next                                 |
@@ -248,8 +255,8 @@ rules they report in the editor and fix on save.
 
 ## Git hooks
 
-| File                | What it is                                                                                                                                                         | Read next                                      |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
-| `.husky/pre-commit` | Runs lint-staged, then the light local gate (`complete:light:gates`), then the staged integration/contract/fuzz tests (`test:staged`), before a commit is written. | [Package Scripts](../tools/package-scripts.md) |
-| `.husky/commit-msg` | Runs commitlint, so every message is a conventional commit.                                                                                                        | [Repository Root](./root.md)                   |
-| `.husky/.gitignore` | Husky's own — keeps the shell wrappers husky generates out of the repository.                                                                                      | —                                              |
+| File                | What it is                                                                                                                                                                                                                                                                             | Read next                                      |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `.husky/pre-commit` | Regenerates on disk, refuses a commit whose committed generated files are stale (`check:generated`; it never stages), then runs lint-staged, the light local gate (`complete:light:gates`) and the staged integration/contract/fuzz tests (`test:staged`), before a commit is written. | [Package Scripts](../tools/package-scripts.md) |
+| `.husky/commit-msg` | Runs commitlint, so every message is a conventional commit.                                                                                                                                                                                                                            | [Repository Root](./root.md)                   |
+| `.husky/.gitignore` | Husky's own — keeps the shell wrappers husky generates out of the repository.                                                                                                                                                                                                          | —                                              |

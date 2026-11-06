@@ -11,10 +11,10 @@ name: CI
 # The jobs fall into these groups:
 #   - style           commitlint, lint, prettier
 #   - contract        lint-openapi, lint-asyncapi, their per-module counterparts,
-#                     contracts-bundle-freshness, asyncapi-breaking (PR-only — nothing to diff
+#                     asyncapi-breaking (PR-only — nothing to diff
 #                     against on a push to main),
 #                     spec-identity — the spec is valid, and the paired frontend still agrees with
-#                     it. api/ and src/types/asyncapi.generated.ts are no longer committed — see
+#                     it. The bundles, api/ and the *.generated.ts files are not committed — see
 #                     `postinstall` in package.json — so there is nothing left to go stale for
 #                     them to check.
 #   - observability   alert-rules
@@ -176,11 +176,6 @@ jobs:
         #
         # Both are ASSEMBLED HERE from per-module fragments and copied to the frontend, so this
         # job asks whether the copies over there are still the bundles built here.
-        # `contracts-bundle-freshness` asks the other half of the question — whether the two
-        # committed bundles (`asyncapi.yaml`, `asyncapi.public.yaml`) still match the fragments
-        # they're built from — by diffing them against what `Setup`'s own `npm ci` just rebuilt.
-        # `openapi.yaml` is gitignored, so it has no committed copy for that job to diff.
-        #
         # Until this job existed they were checked by nothing. `lint-openapi` and `lint-asyncapi`
         # lint THIS repo's copy and pass, because a forked spec is still a valid spec. What nobody
         # could see was the fork itself.
@@ -318,39 +313,6 @@ jobs:
 
             - name: Lint per-module AsyncAPI fragments
               run: npm run lint:asyncapi:modules
-
-    contracts-bundle-freshness:
-        # The committed bundles are what their fragments say they are. Without this, a merged
-        # fragment edit leaves `asyncapi.yaml`/`asyncapi.public.yaml` describing the previous
-        # version of the API. `openapi.yaml` carries no such check here — it is gitignored, so
-        # there is nothing committed to diff it against; `lint-openapi` still proves it assembles.
-        #
-        # `Setup`'s `npm ci` already runs `postinstall`, which reassembles every bundle from its
-        # fragments before this job's own step runs. Running the bundler's `--check` here after
-        # that would only compare the just-rebuilt file with itself — green on every push, whether
-        # or not anyone remembered to re-bundle before committing. `git diff` against what the
-        # checkout actually has on disk is the real question.
-        runs-on: ubuntu-latest
-        timeout-minutes: 10
-        permissions:
-            contents: read
-        steps:
-            - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-              with:
-                  persist-credentials: false # no step after the checkout needs the token on disk
-
-            - name: Setup
-              uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
-
-            - name: Check the committed bundles are current
-              run: |
-                  if ! git diff --exit-code -- asyncapi.yaml asyncapi.public.yaml; then
-                      echo "asyncapi.yaml / asyncapi.public.yaml are stale. Run 'npm run contracts:bundle' and commit the result."
-                      exit 1
-                  fi
 
     asyncapi-breaking:
         # asyncapi.public.yaml is partner-facing — GET /webhooks/events serves it, and a
@@ -1082,7 +1044,6 @@ jobs:
             - spec-identity
             - lint-openapi-modules
             - lint-asyncapi-modules
-            - contracts-bundle-freshness
             - asyncapi-breaking
             - typecheck
             - cluster

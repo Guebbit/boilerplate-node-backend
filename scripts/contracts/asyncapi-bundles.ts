@@ -260,9 +260,8 @@ export const asyncapiBundle: ContractBundle = {
 /**
  * The shared half, and the file the paired frontend holds as its `asyncapi.yaml`.
  *
- * Committed rather than produced on demand for the reason every shared document is: it is
- * hash-compared across the repos by the spec-identity check, and a check cannot compare a file that
- * only exists after someone remembers to build it.
+ * Rebuilt by `postinstall` rather than committed: the spec-identity check hash-compares it across
+ * the repos, and the paired frontend reads it from this checkout only after an install has built it.
  */
 export const asyncapiPublicBundle: ContractBundle = {
     name: 'asyncapi-public',

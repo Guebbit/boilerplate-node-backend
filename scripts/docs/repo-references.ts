@@ -76,11 +76,19 @@ export const ALLOWED: { prefix: string; reason: string }[] = [
 ];
 
 /**
+ * Gitignored outputs a citation may end in, whichever tail of the path it spells: a docs page
+ * writes `jobs.generated.ts` as often as `src/app/jobs.generated.ts`, so a prefix cannot name
+ * them. Absent from a clean checkout until `postinstall` runs.
+ */
+const GENERATED_SUFFIXES: readonly string[] = ['.generated.ts', 'asyncapi.public.yaml'];
+
+/**
  * Whether an allowlist entry covers this token — the directory itself as well as what is under
  * it, since a page naming `tmp/reports` and a page naming `tmp/reports/mutation/` make the same
  * claim.
  */
 export const allowed = (token: string): boolean =>
+    GENERATED_SUFFIXES.some((suffix) => token.endsWith(suffix)) ||
     ALLOWED.some(({ prefix }) => token === prefix.replace(/\/$/, '') || token.startsWith(prefix));
 
 /**

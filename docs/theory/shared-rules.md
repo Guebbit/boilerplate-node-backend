@@ -53,7 +53,7 @@ Two things deliberately do **not** go to YAML:
 | Rule data       | `shared/rules/<name>.yaml`                                                          |
 | Its schema      | Zod, in `src/infrastructure/config/shared-rules/<name>.ts`, listed in `registry.ts` |
 | Its JSON Schema | `shared/rules/schemas/<name>.schema.json`, generated, committed                     |
-| Its TS (opt-in) | `<out>.generated.ts`, an `as const` file built from the YAML, committed             |
+| Its TS (opt-in) | `<out>.generated.ts`, an `as const` file built from the YAML, gitignored            |
 | Cases           | `shared/cases/<name>.cases.yaml`                                                    |
 | Cases test      | `tests/cross-cutting/<name>-conformance.test.ts`, through `tests/support/cases.ts`  |
 | Moved verbatim  | `shared/rules/breached-passwords.txt`, `shared/locales/*.json`                      |
@@ -102,7 +102,8 @@ flowchart LR
   `authorization-keys.yaml`) is listed in the generator beside the registry's entries.
 - `shape` is `verbatim` (dump the parsed data) or `keyed-list` (`{ value, description }` rows become
   `{ KEY: 'value' }` with a JSDoc per key).
-- The generated files are excluded from Stryker and staged by the pre-commit hook.
+- The generated TypeScript is gitignored and rebuilt by `postinstall`; Stryker excludes it. The
+  committed JSON Schemas are checked by the pre-commit hook, which refuses a stale one.
 
 ## 5 · Adding a rule
 

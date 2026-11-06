@@ -5,14 +5,15 @@ The cheat sheet for "I edited a fragment — now what?".
 [Contract Ownership & Fragmentation](./contract-fragmentation.md) explains **why** the pipeline has
 this shape. This page is the short version you keep open while working.
 
-## `openapi.yaml`, `api/` and the AsyncAPI types are not committed
+## The bundles, `api/` and the generated TypeScript are not committed
 
-`postinstall` runs `contracts:bundle` + `gen:api` + `gen:asyncapi` automatically after `npm install`/
-`npm ci`, so a fresh clone has them without anyone doing anything. The rest of this page still
-matters the moment you're actively editing a fragment mid-session — `postinstall` only fires on
-install, not on every save — but there is no committed copy of these three to go stale, forget to
-regenerate, or diff in a PR. The AsyncAPI bundles (`asyncapi.yaml`/`asyncapi.public.yaml`) are the
-exception: those stay committed — see
+`postinstall` runs the scenario registries, the authorization bundle, the shared-rules step and then
+`contracts:bundle` + `gen:api` + `gen:asyncapi` automatically after `npm install`/`npm ci`, so a
+fresh clone has all of it without anyone doing anything. The rest of this page still matters the
+moment you're actively editing a fragment mid-session — `postinstall` only fires on install, not on
+every save — but there is no committed copy of these to go stale, forget to regenerate, or diff in
+a PR: `openapi.yaml`, both AsyncAPI bundles, `api/` and every `*.generated.ts`. What stays committed
+is a short list, because something reads it without our tools — see
 [The generated output and what is committed](#the-generated-output-and-what-is-committed).
 
 ## The one command
@@ -157,32 +158,60 @@ npm run test:contract             # do real responses match the contract?
 | spectral reports a dangling `$ref`                                   | a schema moved into a module document while another module still references it              | move it to `shared/contracts/openapi.root.yaml`         |
 
 Freshness itself is not `contract-bundles.test.ts`'s job — its own docblock says so. The bundle
-check in `npm run check` is the one guard that asks "does the committed file equal a fresh build",
-and `contracts-bundle-freshness` is CI's `git diff` re-check of the same question after
-`postinstall` has already rebuilt everything. What `contract-bundles.test.ts` asserts instead,
-on **every** test run: that whatever is currently committed is *structurally* correct — every path
+check in `npm run check` asks "does the file on disk equal a fresh build" for a fragment edited
+mid-session; nothing about a bundle is committed, so there is no committed copy for CI to diff.
+What `contract-bundles.test.ts` asserts instead,
+on **every** test run: that the bundles are *structurally* correct — every path
 files under exactly one module, every AsyncAPI channel resolves, the public bundle is a strict
 subset, and the generated client collections cover the contract.
 
 ## The generated output and what is committed
 
-Not everything generated is a build artefact you can delete and forget — but four of them are exactly
-that, rebuilt by `postinstall`:
+Two groups. The first is rebuilt by `postinstall`, gitignored, and never reviewed in a diff. The
+second is committed, because something reads it without running our tools; the pre-commit hook
+refuses a commit where one of them is stale ([below](#the-pre-commit-hook)).
 
-| Generated output                                                | Read by                                                    | Committed?                                                                                                                             |
-| ----------------------------------------------------------------| ------------------------------------------------------------------------------------------------------- | ---------- |
-| `openapi.yaml`                                                  | spectral · orval · Prism · the frontend                                                                  | no — gitignored, rebuilt by `postinstall` |
-| `api/models/` · `api/schemas.zod.ts`                            | `@types` and the services that validate input                                                            | no — gitignored, rebuilt by `postinstall` |
-| `api/permission-vocabulary.ts`                                     | `kernel/permissions.ts` — the action vocabulary, from `shared/authorization-keys.yaml` (see [Permission Vocabulary](../tools/permission-vocabulary.md)) | no — gitignored, rebuilt by `postinstall` |
-| `src/types/asyncapi.generated.ts`                                | every SSE, domain-event and queue call site                                                              | no — gitignored, rebuilt by `postinstall` |
-| `asyncapi.yaml`                                                 | `gen:asyncapi` · `lint:asyncapi`                                                                         | yes |
-| `asyncapi.public.yaml`                                          | the frontend's whole realtime pipeline · `GET /webhooks/events`                                          | yes |
-| `shared/authorization-keys.yaml`                                | `kernel/permissions.ts` at boot · the PHP twin — assembled by `regenerate` from each module's `authorization.yaml` | yes |
-| `contract.{bruno,insomnia,mockoon,postman}.*`                   | you, and whoever explores the API without running it                                                     | no — generated on demand, see above |
+| Generated output                                                | Read by                                                                                                 | Committed?                                |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `openapi.yaml`                                                  | spectral · orval · Prism · the frontend                                                                 | no — gitignored, rebuilt by `postinstall` |
+| `asyncapi.yaml` · `asyncapi.public.yaml`                        | `gen:asyncapi` · `lint:asyncapi` · the frontend's realtime pipeline · `GET /webhooks/events`            | no — gitignored, rebuilt by `postinstall` |
+| `api/models/` · `api/schemas.zod.ts`                            | `@types` and the services that validate input                                                           | no — gitignored, rebuilt by `postinstall` |
+| `api/permission-vocabulary.ts`                                  | `kernel/permissions.ts` — the action vocabulary, from `shared/authorization-keys.yaml` (see [Permission Vocabulary](../tools/permission-vocabulary.md)) | no — gitignored, rebuilt by `postinstall` |
+| `src/types/asyncapi.generated.ts`                               | every SSE, domain-event and queue call site                                                             | no — gitignored, rebuilt by `postinstall` |
+| every other `*.generated.ts` (`src/`, `scenarios/`)             | this repo's own code only — built from the shared rules and the scenario files                          | no — gitignored, rebuilt by `postinstall` |
+| `contract.{bruno,insomnia,mockoon,postman}.*`                   | you, and whoever explores the API without running it                                                    | no — generated on demand, see above       |
+| `shared/authorization-keys.yaml`                                | `kernel/permissions.ts` at boot · the PHP twin — assembled by `regenerate` from each module's `authorization.yaml` | yes — read at boot and handed to the twin |
+| `shared/rules/schemas/*.schema.json`                            | the PHP twin, which validates with them and cannot rebuild them                                         | yes                                       |
+| `docker/crontab`                                                | the production host bind-mounts it, with no dev tools                                                   | yes                                       |
+| `docker/Dockerfile.dockerignore`                                | `docker build` in CI, before any npm runs                                                               | yes                                       |
+| the generated tables inside `docs/` pages                       | readers; they sit inside hand-written pages                                                             | yes                                       |
+| `scenarios/*-images.generated.json`                             | seeding. Not part of `regenerate`: it downloads random photos, so it cannot be rebuilt                  | yes                                       |
 
-For the three gitignored ones: **never hand-edit anything under `api/`, `openapi.yaml`, or
-`src/types/asyncapi.generated.ts`.** `npm run gen:api` starts with `rm -rf ./api`, and all three are
+For the gitignored ones: **never hand-edit anything under `api/`, `openapi.yaml`, the two AsyncAPI
+bundles or a `*.generated.ts`.** `npm run gen:api` starts with `rm -rf ./api`, and all of them are
 fully derived — there is no diff to review because there is nothing committed to diff against.
+
+## The pre-commit hook
+
+The hook never stages anything. It regenerates on disk, so the gates after it read current files,
+then **refuses** a commit whose committed generated files are stale. The check builds from what is
+being committed, not from your working tree: `check:generated` exports the index
+(`git checkout-index`, so a partial `git commit -- <paths>` is honoured) to a scratch folder, runs
+`regenerate --no-sync` there and fails if any file changed.
+
+```mermaid
+flowchart TD
+    A[git commit] --> B["npm run regenerate -- --no-sync<br/>(on disk, for the later gates)"]
+    B --> C["check:generated: export the index to a scratch folder"]
+    C --> D["regenerate --no-sync in the scratch folder"]
+    D --> E{"did a committed<br/>file change?"}
+    E -- yes --> F["refuse: name the files,<br/>run npm run regenerate and stage"]
+    E -- no --> G["lint-staged, light gate, test:staged"]
+```
+
+Fixing a refusal is one step: `npm run regenerate`, then stage the files it names. The hook has
+already rewritten them on disk by the time it refuses. Nothing is staged for you — a regenerated
+file you did not stage is not in the commit, and that is the thing the refusal exists to say.
 
 ## Handing the contract to the frontend
 

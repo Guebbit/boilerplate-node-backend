@@ -6,8 +6,8 @@ Contracts are edited at the leaves and generated everywhere else. The order is n
 1. **Edit the module's own contract file** — `src/modules/<module>/openapi.yaml` or
    `asyncapi.yaml`, or `shared/contracts/*.root.yaml` / `asyncapi.workers.yaml` for what belongs to
    no module. Never hand-edit the root bundles: `openapi.yaml`, `asyncapi.yaml` and
-   `asyncapi.public.yaml` at the repo root are generated artifacts, and an edit there is overwritten
-   on the next bundle.
+   `asyncapi.public.yaml` at the repo root are generated artifacts, gitignored and rebuilt on
+   install, and an edit there is overwritten on the next bundle.
 2. **Bundle the root contract** from those fragments — `npm run contracts:bundle`.
 3. **Generate from the root bundle**, not from the fragments — `npm run gen:api` (the typed client
    and the Zod schemas under `api/`, which the models themselves import) and `npm run gen:asyncapi`
@@ -395,11 +395,14 @@ Conventional Commits, enforced by commitlint on the `commit-msg` hook
   other's edits, reconciled by hand afterward, is exactly how a merged file ends up with defects
   that pass review and only surface under execution — the failure mode is silent, not a merge
   conflict.
-- The pre-commit hook runs `regenerate --no-sync`, eslint + prettier on the staged files, then the
-  light `complete:light:gates` (static checks + unit + cross-cutting; no integration, contract, fuzz
-  or `docs:build`), then `test:staged`: every integration, contract or fuzz test file the commit adds
-  or changes, run by file. That is the permanent commit gate. Run `npm run complete` before merging a lane
-  and once on main after; CI on push is authoritative.
+- The pre-commit hook runs `regenerate --no-sync` on disk, then `check:generated` (refuses a commit
+  whose committed generated files are stale: run `npm run regenerate` and stage them; the hook never
+  stages anything itself), eslint + prettier on the staged files, then the light
+  `complete:light:gates` (static checks + unit + cross-cutting; no integration, contract, fuzz or
+  `docs:build`), then `test:staged`: every integration, contract or fuzz test file the commit adds
+  or changes, run by file. That is the permanent commit gate.
+- A lane merges on `complete:light`. The full `npm run complete` (no live e2e, no mutation) runs on
+  main every 20 commits; CI on push is authoritative.
 - Default: commit normally and let the hook run its light gate. Nothing more is required.
 - A new test the hook does not run (a Cypress journey, a live e2e) is run before the commit when the
   stack can run it; otherwise right after, and the report says which.

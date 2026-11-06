@@ -19,30 +19,27 @@
 # (re-executes the unit suite once per mutant — nightly in CI), `complete:manual` (`test:prism`,
 # which binds a real port), and `bench` / `bench:search` (need a running server, and report numbers
 # rather than a verdict).
-# Write the generated artefacts first, then verify them. Regenerating here rather than leaving it
-# to whoever remembers is what stops a commit failing the gate with "STALE" for a file no human
-# authors. Costs about five seconds for the contract artefacts.
+# Write the generated artefacts first, so the gates below read them off disk, then check that what
+# is being COMMITTED is current. The hook never stages anything: a regenerated file you did not
+# stage is not in the commit, and the check below refuses the commit for it instead of papering
+# over it. Costs about thirty seconds for each half.
 #
 # `--no-sync` is not optional. A full `regenerate` ends with `sync:frontend`, which writes into the
 # PAIRED REPO's working tree — a commit here would silently dirty a checkout you are not looking
 # at, and possibly one with its own work in progress. Hand the files over deliberately, with
 # `npm run regenerate` by itself, when you mean to.
 #
-# `git add` is required for what's still committed: a file rewritten after staging is not in the
-# commit, so the gate below would pass against content that is not what gets committed. Note this
-# widens a partial `git add -p` to include the whole regenerated output — which is what you want
-# for a generated file, and a surprise exactly once.
+# What stays committed and is therefore checked: `shared/rules/schemas/*.json`,
+# `shared/authorization-keys.yaml`, `docker/crontab`, `docker/Dockerfile.dockerignore` and the
+# tables inside `docs/`. Everything else `regenerate` writes (`openapi.yaml`, both asyncapi
+# bundles, `api/`, every `*.generated.ts`) is gitignored: postinstall rebuilds it, and the gates
+# below read it off disk.
 #
-# The shared-rules step's output (`shared/rules/schemas/*.json`, committed `src/**/*.generated.ts`) is
-# staged by pathspec for the same reason; the gitignored `src/types/asyncapi.generated.ts` is skipped
-# silently, a glob never names it.
-#
-# `openapi.yaml`, `api/` and `src/types/asyncapi.generated.ts` are NOT
-# named here — they are gitignored (postinstall rebuilds them, see package.json), and `git add`
-# errors outright on an explicitly-named ignored path. `regenerate` above still has to build them:
-# the gate that follows reads them off disk regardless of git's opinion of them.
+# `check:generated` exports the index (`git checkout-index`, so a partial `git commit -- <paths>`
+# is honoured) to a scratch folder, regenerates there and fails if anything changed. It names the
+# files; the fix is `npm run regenerate` and staging them.
 npm run regenerate -- --no-sync
-git add asyncapi.yaml asyncapi.public.yaml 'shared/rules/schemas/*.json' ':(glob)src/**/*.generated.ts'
+npm run check:generated
 
 npx lint-staged
 npm run complete:light:gates

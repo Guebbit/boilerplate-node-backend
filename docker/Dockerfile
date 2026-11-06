@@ -49,7 +49,7 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Copy the whole build context, not just package*.json: `npm ci`'s postinstall runs
 # contracts:bundle + gen:api + gen:asyncapi (scripts/, shared/contracts/, orval.config.ts,
-# asyncapi.yaml, ...), which npm ci needs on disk before it can run them. This is still a
+# shared/rules/, src/modules/*/asyncapi.yaml, ...), which npm ci needs on disk before it can run them. This is still a
 # dev-only image — the bind mount in docker-compose.yml (`.:/app:Z`) overlays this copy with
 # the live host tree at runtime, so `npm ci`'s only lasting effect is populating the
 # `/app/node_modules` anonymous volume.

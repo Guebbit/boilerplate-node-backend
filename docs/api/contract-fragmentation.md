@@ -16,7 +16,7 @@ versioned or published for a second consumer to pin an *older* copy of. That is 
 choice, not a gap: a versioned, publishable contract artefact is worth building once a second real
 API consumer exists (a second frontend, a mobile client, a partner integration), not before. Until
 then, `sync:frontend` copying the shared files on every change is the cheapest correct thing, and
-`spec-identity` (both repos) and `contracts-bundle-freshness` are what make "lockstep" a checked
+`spec-identity` (both repos) is what makes "lockstep" a checked
 claim rather than a hope. The fuzz suite (`tests/fuzz/`) fuzzes this repo against its own spec — it
 compares nothing across repos, so it isn't part of that lockstep guarantee.
 
@@ -61,18 +61,15 @@ A hand-written restatement of the contract is a copy and copies rot, which is wh
 exists at all. See [The client collections](#the-client-collections-generated).
 
 ```bash
-npm run contracts:bundle              # build the committed specs
-npm run contracts:bundle -- bruno     # one collection, from the committed contract
-npm run check                         # fail if any committed bundle is stale
+npm run contracts:bundle              # build the specs
+npm run contracts:bundle -- bruno     # one collection, from the contract on disk
+npm run check                         # fail if any bundle on disk is stale
 ```
 
-The bundle check in `npm run check` asserts every **committed** bundle equals a fresh build, so a fragment
-edited without re-bundling fails it locally. `openapi.yaml` is gitignored and rebuilt by
-`postinstall` on every install, so it carries no such check — only `asyncapi.yaml` and
-`asyncapi.public.yaml` are committed and can go stale. In CI, `npm ci`'s `postinstall` rebuilds
-every bundle before that check gets a turn, so it is the `contracts-bundle-freshness` job's
-`git diff` of those two committed bundles against the checkout — not this check — that actually
-catches a missed re-bundle on a push.
+The bundle check in `npm run check` asserts every bundle on disk equals a fresh build, so a fragment
+edited without re-bundling fails it locally. No bundle is committed: `postinstall` rebuilds all
+three on every install, so there is no committed copy to go stale on a push and CI has no job that
+diffs one. What CI compares is the frontend's copy, through `spec-identity`.
 
 Nothing else is shared. `shared/contracts/spectral.yaml` and `generate-asyncapi-types.ts` exist in
 both repos but are hand-maintained on each side, so a fork in one is a question (which copy is
@@ -273,14 +270,14 @@ src/modules/<name>/openapi.yaml       one standalone OpenAPI document per module
 
 ```bash
 npm run contracts:bundle              # rebuild every bundle from the fragments
-npm run check                         # fail if any committed bundle is stale
+npm run check                         # fail if any bundle on disk is stale
 ```
 
 **The root's path index is completed, not trusted.** `scripts/contracts/root-assembly.ts` reads
 every fragment on disk, drops the root's `$ref` for a path no fragment declares any more, appends
 the paths and tags of a fragment the root has not heard of (a tag the fragment declares in its own
-`tags:` arrives with that description), and stages the completed tree under `tmp/` for redocly. The root's hand order is kept for what it already lists, so the committed
-bundle does not move; a new module is in the contract from its own `openapi.yaml` alone.
+`tags:` arrives with that description), and stages the completed tree under `tmp/` for redocly. The root's hand order is kept for what it already lists, so the bundle's
+section order does not move; a new module is in the contract from its own `openapi.yaml` alone.
 
 **Two guards close the bundle.** `redocly bundle` runs with
 `--component-renaming-conflicts-severity=error`, so two files defining one schema name fail the
@@ -309,8 +306,8 @@ ordering lives inside `scripts/contracts/build-bundles.ts` rather than as an `&&
 which is what makes that flag narrow the run instead of silently doing everything else. See
 [Regenerating After a Change](./regenerating.md#regenerate-one-bundle-only).
 
-What the bundle check in `npm run check` catches locally versus what `contracts-bundle-freshness` catches in
-CI: see [The seven bundles](#the-seven-bundles) above.
+What the bundle check in `npm run check` catches, and why nothing is diffed in CI: see
+[The seven bundles](#the-seven-bundles) above.
 
 ### Why the REST contract stopped concatenating, and the rest did not
 
