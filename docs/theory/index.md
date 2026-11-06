@@ -141,6 +141,7 @@ surely as no barrel would, since there is nothing in it to reach for.
 | Read the folder-by-folder explanation                              | [Layers](./layers.md)                                                       |
 | Follow one request end-to-end                                      | [Request Flow](./request-flow.md)                                           |
 | Know which sources an endpoint reads                               | [Request Input](./request-input.md)                                         |
+| Know which HTTP standards the API follows, and where it differs    | [API Standards](./api-standards.md)                                         |
 | Understand process model & shutdown                                | [Clustering & Shutdown](./clustering.md)                                    |
 | Know how one shop becomes many, and what is deliberately not built | [Tenancy](./tenancy.md)                                                     |
 | Know which rules are shared data and how a backend loads them      | [Shared rules](./shared-rules.md)                                           |
