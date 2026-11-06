@@ -15,7 +15,7 @@ import { apiKeysService } from '../services';
 /**
  * DELETE /api-keys/:id
  * Revoke a credential — a soft state change. Idempotent: revoking an already-revoked key still
- * answers 200.
+ * answers 204.
  */
 export const revokeApiKey = (request: Request<{ id: string }>, response: Response) => {
     // A malformed id answers as an unknown one, before the database is asked.
