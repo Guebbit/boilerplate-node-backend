@@ -96,10 +96,10 @@ components:
                         type: string
                 agreedAt:
                     type: string
-                    format: date-time
+                    format: date
                 expectedAt:
                     type: string
-                    format: date-time
+                    format: date
             additionalProperties: false
         FulfillmentHeldParamsPayload:
             title: FulfillmentHeldParamsPayload
@@ -148,7 +148,7 @@ components:
                         type: string
                 expectedAt:
                     type: string
-                    format: date-time
+                    format: date
             additionalProperties: false
         PurchaseHoldPlacedParamsPayload:
             title: PurchaseHoldPlacedParamsPayload

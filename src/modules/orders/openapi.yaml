@@ -1099,10 +1099,11 @@ components:
                         placed. Absent when the shelf covered the whole line.
                 promisedAt:
                     type: string
-                    format: date-time
+                    format: date
                     description: >-
-                        When the owed units were promised: the product's `restockDate`, or the day the
-                        order was placed plus 30 days when it had none. Present with `backorderedQuantity`
+                        The day the owed units were promised, a day on the shop's calendar
+                        (`Shop.timeZone`): the product's `restockDate`, or the day the order was
+                        placed plus 30 days when it had none. Present with `backorderedQuantity`
                         and frozen with it, so a later change to the catalogue moves no promise.
                 promiseDated:
                     type: boolean

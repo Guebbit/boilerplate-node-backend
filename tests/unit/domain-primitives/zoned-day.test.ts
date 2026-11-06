@@ -43,6 +43,25 @@ describe('zonedStartOfDay', () => {
     });
 });
 
+describe('zonedStartOfDay in a zone whose midnight does not exist', () => {
+    it('lands on the first instant after the gap, which still reads as that day', () => {
+        // Santiago springs forward at 00:00 on 2026-09-06: 00:00-00:59 is skipped, 01:00 is first.
+        const start = zonedStartOfDay(2026, 9, 6, 'America/Santiago');
+
+        expect(start.toISOString()).toBe('2026-09-06T04:00:00.000Z');
+        expect(dayInZone(start, 'America/Santiago')).toBe('2026-09-06');
+    });
+
+    it('leaves the days around the gap on their ordinary midnights', () => {
+        expect(zonedStartOfDay(2026, 9, 5, 'America/Santiago').toISOString()).toBe(
+            '2026-09-05T04:00:00.000Z'
+        );
+        expect(zonedStartOfDay(2026, 9, 7, 'America/Santiago').toISOString()).toBe(
+            '2026-09-07T03:00:00.000Z'
+        );
+    });
+});
+
 describe('startOfDayInZone', () => {
     it('reads a plain day as that day starts in the zone', () => {
         expect(startOfDayInZone('2026-01-05', 'Europe/Rome').toISOString()).toBe(

@@ -166,6 +166,8 @@ union by `openapi.notifications.yaml` and to the stream's `NotificationPayload` 
 | `shop-tasks.staff.return-requested`                       | staff    | `return.requested` (not withdrawals) | `ReturnManagement`                 | —                     |
 | the ten summary rows, see [the digest](#the-staff-digest) | staff    | the digest jobs                      | the set that does the counted work | digest, where overdue |
 
+The `fulfillment-delayed` and `shipment-lost` params name their dates (`agreedAt`, `expectedAt`) as plain shop days (`YYYY-MM-DD`), converted from the event's instants when the row is written, so the inbox prints the same day as the mail.
+
 `fulfillment_order.delayed` is both a to-do and a message. One module has one handler per event, so
 a single handler runs the to-do first (idempotent by `eventId`) and then the notice: a redelivery
 after a failed notice re-runs a no-op open and writes the notice once.

@@ -90,10 +90,12 @@ components:
                         type: string
                 agreedAt:
                     type: string
-                    format: date-time
+                    format: date
+                    description: The day promised, a day on the shop's calendar (`Shop.timeZone`).
                 expectedAt:
                     type: string
-                    format: date-time
+                    format: date
+                    description: The day now expected, a day on the shop's calendar (`Shop.timeZone`).
 
         ShipmentLostParams:
             type: object
@@ -122,7 +124,8 @@ components:
                         type: string
                 expectedAt:
                     type: string
-                    format: date-time
+                    format: date
+                    description: The day the owed units are expected, a day on the shop's calendar (`Shop.timeZone`).
 
         FulfillmentHeldParams:
             type: object

@@ -289,8 +289,11 @@ describe('the module subscriptions', () => {
                 severity: 'warning',
                 params: { orderId, titles: [expect.any(String)] }
             });
-            expect(message?.params).toHaveProperty('agreedAt');
-            expect(message?.params).toHaveProperty('expectedAt');
+            // Both dates reach the inbox as plain shop days, not instants.
+            expect(message?.params).toMatchObject({
+                agreedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+                expectedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)
+            });
             expect(message?.params).not.toHaveProperty('answerBy');
         });
 
@@ -367,7 +370,8 @@ describe('the module subscriptions', () => {
                     reason: 'lost',
                     message: 'A new one ships on Monday.',
                     owed: ['Blue mug'],
-                    expectedAt: '2026-12-20T00:00:00.000Z'
+                    // The event's instant, named as the shop's day.
+                    expectedAt: '2026-12-20'
                 }
             });
             expect(JSON.stringify(message)).not.toMatch(/note/i);

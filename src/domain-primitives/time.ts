@@ -126,7 +126,16 @@ export const zonedStartOfDay = (
     const offsetAt = (instant: number): number =>
         wallClockAsUtc(new Date(instant), timeZone) - Math.floor(instant / 1000) * 1000;
     const guess = wall - offsetAt(wall);
-    return new Date(wall - offsetAt(guess));
+    const corrected = wall - offsetAt(guess);
+    // A midnight skipped by a spring-forward has no right answer in either candidate's own
+    // offset: one of them lands on the previous day. The earliest one that reads as the requested
+    // day is the first instant after the gap.
+    const requested = dayInZone(new Date(wall), 'UTC');
+    return new Date(
+        [guess, corrected]
+            .toSorted((first, second) => first - second)
+            .find((instant) => dayInZone(new Date(instant), timeZone) === requested) ?? corrected
+    );
 };
 
 /**

@@ -17,6 +17,7 @@ import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { DomainEventMap } from '@kernel/events';
 import { FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
 import { notificationsService } from '@modules/notifications';
+import { shopDayOf } from '@modules/shop';
 import { SHOP_STAFF_ROUTES } from '../staff-routing';
 
 /** One row per owner of a removed product, all the same message. */
@@ -112,7 +113,10 @@ export const shopNotices = {
                           ...(lost.owed.length > 0
                               ? { owed: lost.owed.map(({ title }) => title) }
                               : {}),
-                          ...(lost.expectedAt ? { expectedAt: lost.expectedAt } : {})
+                          // A notice names a shop day, which is what the inbox prints.
+                          ...(lost.expectedAt
+                              ? { expectedAt: shopDayOf(new Date(lost.expectedAt)) }
+                              : {})
                       }
                   }
               ]),
@@ -136,8 +140,10 @@ export const shopNotices = {
                           orderId: delayed.orderId,
                           fulfillmentOrderId: delayed.fulfillmentOrderId,
                           titles: delayed.titles,
-                          agreedAt: delayed.agreedAt,
-                          ...(delayed.expectedAt ? { expectedAt: delayed.expectedAt } : {})
+                          agreedAt: shopDayOf(new Date(delayed.agreedAt)),
+                          ...(delayed.expectedAt
+                              ? { expectedAt: shopDayOf(new Date(delayed.expectedAt)) }
+                              : {})
                       }
                   }
               ]),

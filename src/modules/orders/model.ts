@@ -552,6 +552,8 @@ const applyOrderItems = (serialized: Record<string, unknown>) => {
     if (!Array.isArray(serialized.items)) return;
 
     for (const item of serialized.items as Record<string, unknown>[]) {
+        // The owed units' promise goes out as the shop's day; the stored instant is untouched.
+        if (item.promisedAt instanceof Date) item.promisedAt = shopDayOf(item.promisedAt);
         if (item.product && typeof item.product === 'object')
             applyOrderLineProductTransform(item.product as Record<string, unknown>);
     }

@@ -1976,7 +1976,7 @@ components:
                         type: string
                 expectedAt:
                     type: string
-                    format: date-time
+                    format: date
             additionalProperties: false
         NotificationShipmentLostPayload:
             title: NotificationShipmentLostPayload
@@ -2092,10 +2092,10 @@ components:
                         type: string
                 agreedAt:
                     type: string
-                    format: date-time
+                    format: date
                 expectedAt:
                     type: string
-                    format: date-time
+                    format: date
             additionalProperties: false
         NotificationFulfillmentDelayedPayload:
             title: NotificationFulfillmentDelayedPayload

@@ -14,6 +14,7 @@ import { giveAddress } from '@modules/addresses/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { inventoryService } from '@modules/inventory';
+import { shopDayOf } from '@modules/shop';
 import paymentsModule from '@modules/payments/module';
 import { resetDomainEvents } from '@kernel/events';
 import { cartService } from '../../services';
@@ -124,6 +125,25 @@ describe('checking out a backorder', () => {
         expect(result.success ? result.data.items[0]?.promiseDated : undefined).toBe(false);
         expect(promised?.getTime()).toBeGreaterThanOrEqual(before + 30 * DAY_MS);
         expect(promised?.getTime()).toBeLessThan(Date.now() + 30 * DAY_MS + 1000);
+    });
+
+    it('sends the promise as the shop day on the wire, for the 30-day default too', async () => {
+        const dated = await backorderProduct(0, 10, 20);
+        const undated = await backorderProduct(0, 10);
+        const user = await shopperWith(String(dated._id), 1);
+        await cartService.addItemById(user.id, String(undated._id), 1);
+
+        const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
+
+        // The wire shape: `toJSON` is the serializer every response goes through. The cast names
+        // the one field read; the serializer's return type is the loose Document one.
+        const wire = (result.success ? result.data.toJSON() : { items: [] }) as {
+            items: { promisedAt?: string }[];
+        };
+        const days = wire.items.map((item) => item.promisedAt);
+        expect(days).toContain(shopDayOf(dated.restockDate ?? new Date(0)));
+        expect(days).toContain(shopDayOf(new Date(Date.now() + 30 * DAY_MS)));
+        expect(days.every((day) => /^\d{4}-\d{2}-\d{2}$/.test(day ?? ''))).toBe(true);
     });
 
     it('freezes nothing owed when the shelf covered the whole line', async () => {
