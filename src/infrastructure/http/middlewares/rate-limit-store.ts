@@ -190,6 +190,24 @@ const warnPerProcessCounting = (namespace: string): void => {
 };
 
 /**
+ * Every in-process counter store built so far, so the demo's restore can empty them all.
+ * Escalating budgets are covered too: their levels and strike counter are plain stores. A Redis
+ * store is not here — {@link clearRateLimitCounters} owns that one.
+ */
+const memoryStores = new Set<MemoryStore>();
+
+/**
+ * Empty every in-process limiter counter, so the next request starts with a full budget.
+ *
+ * For `POST /__test/restore` (demo profile only): `clearRateLimitCounters` cannot reach a counter
+ * living in the running server's memory, and a spent budget (login, say) would otherwise survive
+ * a data restore, because the keys are identical after a reseed.
+ */
+export const resetMemoryRateLimitCounters = async (): Promise<void> => {
+    await Promise.all([...memoryStores].map((store) => store.resetAll()));
+};
+
+/**
  * The plain store one counter lives in: Redis behind a failover when a `limits` URL is configured,
  * an in-process one otherwise. Split out so the escalating wrapper below can build several.
  *
@@ -202,7 +220,11 @@ const plainStore = (
 ): SyncInitStore => {
     const url = limitsRedisUrl();
 
-    if (!url) return new MemoryStore();
+    if (!url) {
+        const memory = new MemoryStore();
+        memoryStores.add(memory);
+        return memory;
+    }
 
     return failoverStore(namespace, lazyRedisStore(namespace, url), onStoreError);
 };

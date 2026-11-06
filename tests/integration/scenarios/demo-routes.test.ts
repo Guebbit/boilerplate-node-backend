@@ -26,6 +26,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem, detachOrderUserId } from '@modules/orders/tests/factories';
 import { payByCard } from '@modules/payments/tests/factories';
 import { paymentModel } from '@modules/payments/model';
+import { rateLimitStore } from '@infrastructure/http/middlewares/rate-limit-store';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 
 /**
@@ -146,6 +147,29 @@ describe('POST /__test/restore', () => {
 
         const emails = await request(app).get('/__test/emails');
         expect(emails.body).toEqual({ emails: [] });
+    });
+});
+
+/** Builds an initialised store on a window long enough to outlive the test. */
+const spentStore = (escalation?: { limit: number; doublings: number }) => {
+    const store = rateLimitStore('restore-test', 'memory', escalation);
+    store.init({ windowMs: 600_000 } as Parameters<typeof store.init>[0]);
+    return store;
+};
+
+describe('POST /__test/restore and the limiter counters', () => {
+    it.each([
+        ['a flat budget', undefined],
+        ['an escalating one, lockout and strikes included', { limit: 1, doublings: 2 }]
+    ])('gives %s a full allowance again', async (_label, escalation) => {
+        const store = spentStore(escalation);
+        // Past the cap of 1 when escalating, so a strike is on record too.
+        await store.increment('k');
+        await store.increment('k');
+
+        await request(testApp()).post('/__test/restore').send({ scenario: 'blank' });
+
+        await expect(store.increment('k')).resolves.toMatchObject({ totalHits: 1 });
     });
 });
 

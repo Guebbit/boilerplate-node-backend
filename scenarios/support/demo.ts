@@ -26,6 +26,7 @@
 import type { Express, Request, Response } from 'express';
 import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
+import { resetMemoryRateLimitCounters } from '@infrastructure/http/middlewares/rate-limit-store';
 import { rejectResponse } from '@infrastructure/http/response';
 import { refreshLocaleOverrides } from '@infrastructure/i18n';
 import type { JobDeclaration } from '@kernel/registry';
@@ -136,6 +137,8 @@ const runRestore = (scenario: string | undefined): Promise<void> =>
             // A time-travelling spec must not leave its future behind for the next one.
             getDemoClock()?.reset();
         })
+        // A spent login or checkout budget must not outlive a restore: the keys are the same after a reseed.
+        .then(() => resetMemoryRateLimitCounters())
         .then(() => refreshLocaleOverrides())
         .then(() => clearCache())
         .then(() => undefined);
