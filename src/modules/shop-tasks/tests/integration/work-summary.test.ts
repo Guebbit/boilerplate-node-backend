@@ -12,9 +12,20 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/tests/factories';
 import { forceStockLevel } from '@modules/inventory/tests/factories';
 import { insertBareReturns } from '@modules/returns/tests/factories';
+import {
+    fulfillmentOrdersOf,
+    paidPreorderOrder,
+    setFulfillmentOrderState
+} from '@modules/delivery/tests/factories';
+import { refundOrderPayment } from '@modules/payments/tests/factories';
+import { paymentService } from '@modules/payments';
+import { asAdmin, callerContextAs } from '@tests/callers';
+import { resetDomainEvents } from '@kernel/events';
 import { OrderStatus } from '@types';
 
 setupTestDb();
+
+afterEach(() => resetDomainEvents());
 
 /** The summary as the caller reads it. */
 const summaryFor = (bearer: string) =>
@@ -70,6 +81,34 @@ describe('GET /shop-tasks/summary', () => {
         // The seeded rows are really in it, not an empty agreement.
         expect(response.body.salesOrders).toBe(2);
         expect(response.body.inventory).toBeGreaterThan(0);
+    });
+
+    it('counts one payment needing attention and one late preorder, each as one', async () => {
+        const { bearer } = await authenticateAs('admin');
+        // A cash payment with a hand-paid refund still owed: the payments list's "attention" row.
+        const refunded = await orderIn(OrderStatus.pending);
+        await paymentService.recordOfflinePayment(
+            String(refunded._id),
+            { method: 'cash' },
+            callerContextAs('admin')
+        );
+        await refundOrderPayment(String(refunded._id), asAdmin(), callerContextAs('admin'), {
+            amount: '1.00'
+        });
+        // A paid preorder whose promised date is already behind it, with units still to come.
+        const preorder = await paidPreorderOrder(
+            [{ quantity: 1, releaseDate: new Date(Date.now() + 86_400_000) }],
+            'late-buyer@example.com'
+        );
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(preorder.orderId);
+        await setFulfillmentOrderState(String(fulfillmentOrder._id), {
+            expectedAt: new Date(Date.now() - 86_400_000)
+        });
+
+        const response = await summaryFor(bearer);
+
+        expect(response.body.salesPayments).toBe(1);
+        expect(response.body.salesPreorders).toBe(1);
     });
 
     it('sends zero as zero, never leaves a key out for an administrator', async () => {
