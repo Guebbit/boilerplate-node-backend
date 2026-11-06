@@ -253,14 +253,17 @@ paths:
             tags: [Payments]
             summary: Payments that need a person (staff)
             description: >-
-                Only problems still recorded on a document, so a fixed one disappears: refunds
-                open past `NODE_PAYMENT_ATTENTION_MINUTES` (`stale_refund`), card refunds the
-                provider refused for good (`refused_refund`: shown at once, the money has to go back
-                another way), and refunds owed by hand on a `manual` payment
-                (`manual_refund_owed`: the sweep never finishes those, so they show at any age). A canceled order's refund is one of them, because its
-                record opens before the provider is asked. Oldest first, each source capped at
-                100 rows. An amount mismatch is not here: it is an audit row
-                (`payment.amount_mismatch`), not stored state. Needs `display:Payment`.
+                Only problems still recorded on a document, so a fixed one disappears. Six kinds,
+                each source capped at 100 rows: refunds open past `NODE_PAYMENT_ATTENTION_MINUTES`
+                (`stale_refund`); card refunds the provider refused for good (`refused_refund`:
+                shown at once, the money has to go back another way); refunds the provider took
+                back after settling them (`reversed_refund`); an open refund an outside refund left
+                no room for (`refund_exceeds_remaining`); refunds owed by hand on a `manual`
+                payment (`manual_refund_owed`: the sweep never finishes those, so they show at any
+                age); and disputes the shop has to answer (`dispute_needs_response`, with its
+                deadline). A canceled order's refund is one of them, because its record opens
+                before the provider is asked. Oldest first. An amount mismatch is not here: it is an
+                audit row (`payment.amount_mismatch`), not stored state. Needs `display:Payment`.
             operationId: listPaymentAttention
             security:
                 - bearerAuth: []

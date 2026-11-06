@@ -265,6 +265,8 @@ flowchart LR
 
 ### The staff badge
 
+This is the Tasks badge only; the other staff badges are counted by [`GET /shop-tasks/summary`](./shop-tasks.md#the-nav-badge-summary).
+
 `GET /tasks/summary` answers `{ open, mine, overdue, unassigned }`, scoped to the caller's
 jurisdiction. `overdue` is read-time arithmetic (open and past `dueAt`): no sweep keeps it true.
 A contact message is due `NODE_TASKS_CONTACT_SLA_HOURS` (default 48) after it was filed; a

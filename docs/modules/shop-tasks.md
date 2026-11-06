@@ -1,7 +1,7 @@
 # shop-tasks
 
 ::: tip At a glance
-**Owns** — the shop's side of the helpdesk: the to-dos a payment, stock or delivery situation opens, the buyer's messages, the staff's work notices and the daily and weekly staff digest. No routes, no collection: [`tasks`](./tasks.md) and [`notifications`](./notifications.md) do the writing.
+**Owns** — the shop's side of the helpdesk: the to-dos a payment, stock or delivery situation opens, the buyer's messages, the staff's work notices and the daily and weekly staff digest. One read route (the nav badge counts), no collection: [`tasks`](./tasks.md) and [`notifications`](./notifications.md) do the writing.
 **Depends on** — `tasks` and `notifications` (the doors it writes through), `payments`, `orders`, `inventory`, `delivery`, `returns`, `cart`, `wishlist` and `stock-alerts` (the events it hears, and the counts the digest reads), `users` (who can act today) and `shop` (the shop's country).
 **Breaks if you change** — a `shop-tasks.*` notice code: the code is its own dictionary key in both repos, so renaming one orphans the copy that words it.
 :::
@@ -201,6 +201,54 @@ links the same entry, so the two cannot drift. Some rows open a list slightly wi
 There is no digest extension point in `notifications`: all ten rows are the shop's, so a registry
 would have one caller. The primitives (`writeSummary`, `clearSummary`, `staffRecipients`) are the
 extension point; the digest is lifted back into `notifications` only when a foundation row exists.
+
+### The nav badge summary
+
+`GET /shop-tasks/summary` answers one count per staff screen that has a badge. A badge shows open
+work, not unread notices, so opening the bell never empties it. The key names live only in the
+`ShopWorkSummary` schema of `src/modules/shop-tasks/openapi.yaml`.
+
+Each count is the `meta.totalItems` of the list its screen shows, read through the owning module's
+own list as the caller, so a badge and its screen agree by construction. A key is present only when
+the caller holds the screen's route gate; zero is sent as `0`, never left out.
+
+| Key              | Screen           | Gate              | Counts                                                  |
+| ---------------- | ---------------- | ----------------- | ------------------------------------------------------- |
+| `salesOrders`    | sales orders     | `display:Order`   | orders `paid` or `processing`, live, held ones included |
+| `salesPayments`  | payments         | `display:Payment` | the rows of `GET /payments/attention`, all six sources  |
+| `returns`        | sales returns    | `read:Return`     | returns with `status=requested`                         |
+| `salesPreorders` | preorders board  | `display:Order`   | fulfillment orders with `late=true`                     |
+| `inventory`      | inventory ledger | `read:StockLevel` | stock levels with `lowOnly=true`                        |
+
+Reading it as the caller is why the route takes a session and no API key: a key resolves to no
+`AuthContext`, and the orders scope comes from the caller. The orders read passes no caller
+context, because that context fires an `orders_viewed` analytics event on every refresh.
+
+Counts the summary does not carry: Users (`purchaseHoldReview=true`, `deleted=false`) and Webhooks
+(`autoDisabled=true`) are read by the frontend from their own list's total, since `users` and
+`webhooks` are foundation modules; the Tasks badge is `GET /tasks/summary`.
+
+Known edges, on purpose:
+
+- The payments count can reach 600 (100 per source) and overlaps the Tasks badge: the badge is the
+  screen it opens.
+- A late preorder is on both the orders and the preorders badge: real work on both screens.
+- `salesOrders` includes orders waiting for stock and staff holds; only a person releases a staff
+  hold, so hiding them would take them off every badge.
+- `salesPayments` includes open disputes in `under_review`, whose to-do says nothing to do.
+  Payments' rule to revisit.
+- `read:Return` is a staff key: a buyer gets no `returns` key, and the buyer's own returns page has
+  no badge.
+
+```mermaid
+flowchart LR
+    FE["staff shell<br/>(route change, tab visible,<br/>staff notice, viewer change)"] -->|"GET /shop-tasks/summary"| R["shop-tasks route<br/>session only"]
+    R --> W["workSummary(caller)"]
+    W --> G{"holds the gate?<br/>per key"}
+    G -->|"yes"| L["owning module's list<br/>pageSize 1, meta.totalItems"]
+    G -->|"no"| X["key left out"]
+    L --> O["salesOrders, salesPayments,<br/>returns, salesPreorders, inventory"]
+```
 
 ### Who is told
 

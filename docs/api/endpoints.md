@@ -201,6 +201,12 @@ Public sitemap files for search engines: `GET /sitemap/index.xml`, `GET /sitemap
 
 Staff-only sales numbers (`read:Stats`), never cached: `GET /stats/sales`, `/products`, `/products/{productId}`, `/categories`, `/payments`, `/operations`, `/customers`, `/pipeline` and `/limits` (the two ceilings a period may not pass).
 
+## Shop work
+
+> The domain behind this route: [`shop-tasks`](../modules/shop-tasks.md#the-nav-badge-summary) · routes and middleware: `src/modules/shop-tasks/routes.ts`
+
+`GET /shop-tasks/summary`: the open-work count behind each staff navigation badge, one key per screen the caller may open. A session, never cached.
+
 ## Stock alerts
 
 > The domain behind these routes: [`stock-alerts`](../modules/stock-alerts.md) · routes and middleware: `src/modules/stock-alerts/routes.ts`

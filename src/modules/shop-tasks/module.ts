@@ -2,9 +2,10 @@
  * @module
  * The shop's side of the helpdesk. Subscribes to the shop's events and, for each, opens or clears
  * a to-do (`tasks`), writes the buyer's message or the staff's work notice (`notifications`), or
- * both; and runs the staff digest. It has no routes and no collection: `tasks` and `notifications`
- * do the writing and audit it, and their contracts grow by this module's fragments
- * (`openapi.tasks.yaml`, `openapi.notifications.yaml`, `asyncapi.notifications.yaml`).
+ * both; and runs the staff digest. It has no collection: `tasks` and `notifications` do the
+ * writing and audit it, and their contracts grow by this module's fragments (`openapi.tasks.yaml`,
+ * `openapi.notifications.yaml`, `asyncapi.notifications.yaml`). Its one route, `GET
+ * /shop-tasks/summary`, counts the open work behind the staff navigation badges.
  *
  * No producer imports this module: delete it and the shop's events simply have no listener.
  *
@@ -39,11 +40,13 @@ import { STOCK_ALERT_SENT } from '@modules/stock-alerts';
 import { WISHLIST_ITEMS_REMOVED } from '@modules/wishlist';
 import { shopTasksConfig } from './config';
 import { shopTasksJobs } from './jobs';
+import { router } from './routes';
 import { shopTasksService } from './services';
 
 /** This module's manifest entry: event subscriptions, the digest jobs, config, locales and the digest template. */
 export default {
     name: 'shop-tasks',
+    mounts: [{ basePath: '/shop-tasks', routes: router }],
     config: [shopTasksConfig.slice],
     jobs: shopTasksJobs,
     // Writes through `tasks` and `notifications`, which export and erase their own rows.

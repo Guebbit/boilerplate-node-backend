@@ -1,0 +1,66 @@
+openapi: 3.1.0
+info:
+    title: shop-tasks — module contract
+    version: '0.1.0'
+
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Shop
+      x-family: Running the shop
+      description: What the shop's staff have waiting, counted for the navigation badges.
+
+paths:
+    /shop-tasks/summary:
+        get:
+            tags: [Shop]
+            summary: Open work behind the staff navigation badges
+            description: >-
+                One count per staff screen that has a badge: the same number the screen's own list
+                shows, so a badge and its screen never disagree. A count is present only when the
+                caller may open that screen; zero is sent as `0`, never left out. Every count is
+                read as the caller (a person's session, never an API key), so it is the caller's own
+                jurisdiction. Never cached: it is one person's view.
+            operationId: getShopWorkSummary
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: The counts
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ShopWorkSummary'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+
+components:
+    schemas:
+        ShopWorkSummary:
+            type: object
+            additionalProperties: false
+            description: >-
+                The open work behind each staff navigation badge. Each key is present only when
+                the caller may open the screen it counts.
+            properties:
+                salesOrders:
+                    type: integer
+                    minimum: 0
+                    description: Orders paid and not yet with a carrier (`paid` or `processing`), held ones included. Needs `display:Order`.
+                salesPayments:
+                    type: integer
+                    minimum: 0
+                    description: >-
+                        The rows `GET /payments/attention` lists, all its sources together (each
+                        capped at 100). Transfers still awaited are not counted: the buyer acts
+                        there. Needs `display:Payment`.
+                returns:
+                    type: integer
+                    minimum: 0
+                    description: Returns waiting for a decision (`status=requested`). Needs `read:Return`.
+                salesPreorders:
+                    type: integer
+                    minimum: 0
+                    description: Preorder fulfillment orders past their expected date (`late=true`). Needs `display:Order`.
+                inventory:
+                    type: integer
+                    minimum: 0
+                    description: Stock levels at or under the low-stock threshold (`lowOnly=true`). Needs `read:StockLevel`.
