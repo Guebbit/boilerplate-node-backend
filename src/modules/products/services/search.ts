@@ -47,7 +47,7 @@ export const search = (
         ? searchWithTranslatedText(filters, scope, pattern)
         : productRepository.search(filters, scope);
 
-    // `.search()` already normalized every item (`_id` → `id`, dates to ISO strings), so this
+    // `.search()` already normalized every item (`_id` → `id`, promise dates to shop days), so this
     // overlays the caller's locale on top of an already wire-shaped page — one batched query,
     // never one per item. A no-op when nothing is registered or no row matches, which is why
     // this can sit in the base function rather than only in the viewed wrapper below.

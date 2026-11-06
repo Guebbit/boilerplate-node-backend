@@ -20,7 +20,7 @@ import { fitsCurrency, minorUnitExponent } from '@domain-primitives/money';
 import { latestReleaseDate } from './domain/preorder';
 import { derivedStockFields } from './presenter';
 import { RateType, TaxClass, type Product } from '@types';
-import { shopCurrency, startOfShopDay } from '@modules/shop';
+import { shopCurrency, shopDayOf, startOfShopDay } from '@modules/shop';
 
 /**
  * A product's stored fields, without Mongoose's document machinery — `Product` from
@@ -510,6 +510,12 @@ const applyProductAvailability = (serialized: Record<string, unknown>) => {
             restockDate: serialized.restockDate instanceof Date ? serialized.restockDate : undefined
         })
     );
+    // The two promise dates go out as the shop's day, after the derivation above used the Date.
+    // Only a `Date` is converted, so a row that already went through here is left alone.
+    if (serialized.releaseDate instanceof Date)
+        serialized.releaseDate = shopDayOf(serialized.releaseDate);
+    if (serialized.restockDate instanceof Date)
+        serialized.restockDate = shopDayOf(serialized.restockDate);
     // Read above, never returned: the contract's `Product` does not carry the allowance.
     delete serialized.backorderLimit;
     delete serialized.backordered;

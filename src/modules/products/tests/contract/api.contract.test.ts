@@ -18,6 +18,7 @@ import {
     registerLocaleOverrideProvider,
     resetLocaleOverrides
 } from '@infrastructure/i18n';
+import { startOfShopDay } from '@modules/shop';
 import { productRepository } from '../../repository';
 
 setupTestDb();
@@ -198,6 +199,29 @@ describe('POST /products/search', () => {
 
         // The depth guard refuses it before the cache key is ever built.
         expect(response.status).toBe(400);
+    });
+});
+
+describe('promise dates on the list reads', () => {
+    const releaseDay = '2999-01-05';
+    const restockDay = '2999-02-10';
+
+    it('goes out as the shop day on GET /products and POST /products/search', async () => {
+        await createProduct({ releaseDate: startOfShopDay(releaseDay).toISOString() });
+        await createProduct({
+            allowBackorder: true,
+            restockDate: startOfShopDay(restockDay).toISOString()
+        });
+
+        const listed = await api().get('/products');
+        const searched = await api().post('/products/search').send({ page: 1, pageSize: 10 });
+
+        for (const response of [listed, searched]) {
+            expect(response.status).toBe(200);
+            const { items } = response.body as { items: Record<string, unknown>[] };
+            expect(items.map((item) => item.releaseDate).filter(Boolean)).toEqual([releaseDay]);
+            expect(items.map((item) => item.restockDate).filter(Boolean)).toEqual([restockDay]);
+        }
     });
 });
 
