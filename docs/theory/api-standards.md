@@ -1,0 +1,114 @@
+# API Standards
+
+This API follows the mature HTTP standards, and writes down where it does not. This page names
+each standard, links its source, and lists the differences with their reasons. The ten audits under
+`scripts/audit/api-*` read it; they report and never change a file.
+
+## Why standards matter here
+
+This is a boilerplate other projects copy. A copied API should be boring and predictable
+([API](../api/index.md#what-matters-most-here)): a client, a proxy or a reader who knows HTTP
+should not be surprised. A standard is the cheapest way to be unsurprising.
+
+Most of it is already held mechanically. Spectral lints the contract, the bundler adds `ETag`,
+`If-Match`, `412` and `304`, and tests walk the contract. The audits cover what a rule cannot: does
+an operation's _meaning_ fit the standard, is a difference written down, does a doc disagree with
+the code.
+
+## How the standards stack up
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 55}}}%%
+flowchart TD
+    Core["HTTP core<br/>RFC 9110 semantics"] --> Cache["RFC 9111 caching"]
+    Core --> Prob["RFC 9457 problem details"]
+    Core --> Patch["RFC 5789 PATCH<br/>RFC 7396 merge patch"]
+    Core --> Codes["RFC 6585 extra status codes"]
+    Core --> Guides["Design guides<br/>Google AIP, Zalando"]
+    Guides --> Drafts["IETF drafts<br/>Idempotency-Key, RateLimit"]
+    Cache --> Hold
+    Prob --> Hold
+    Patch --> Hold
+    Codes --> Hold
+    Guides --> Hold
+    Drafts --> Hold["What holds them<br/>Spectral, tests, audits"]
+
+    classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef guide fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef hold fill:#dcfce7,stroke:#16a34a,color:#111827;
+    class Core,Cache,Prob,Patch,Codes core;
+    class Guides,Drafts guide;
+    class Hold hold;
+```
+
+## The standards
+
+Each audit has one standard, a folder under `scripts/audit/`, and its rules in
+[`scripts/audit/api-standards.yaml`](https://github.com/Guebbit/boilerplate-node-backend/blob/main/scripts/audit/api-standards.yaml).
+The "follows" column is a link, not a restatement.
+
+| Standard          | What it is                                                    | Source                                                                                                                                         | Where we follow it, and differ                                                                                |
+| ----------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| RFC 9110          | HTTP semantics: methods, status codes, conditional requests   | [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110), [MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP)                                   | [Write methods](../api/write-methods.md)                                                                      |
+| RFC 9111          | HTTP caching                                                  | [RFC 9111](https://www.rfc-editor.org/rfc/rfc9111)                                                                                             | [HTTP and caches](./defences/http-and-caches.md)                                                              |
+| RFC 9457          | Problem details for HTTP errors                               | [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457)                                                                                             | [Errors](../api/errors.md#problem-details)                                                                    |
+| RFC 5789          | The PATCH method                                              | [RFC 5789](https://www.rfc-editor.org/rfc/rfc5789)                                                                                             | [PATCH](../api/write-methods.md#patch-—-json-merge-patch)                                                     |
+| RFC 7396          | JSON Merge Patch                                              | [RFC 7396](https://www.rfc-editor.org/rfc/rfc7396)                                                                                             | [PATCH](../api/write-methods.md#patch-—-json-merge-patch), [null](../api/write-methods.md#empty-null-omitted) |
+| RFC 6585          | 428, 429, 431, 511                                            | [RFC 6585](https://www.rfc-editor.org/rfc/rfc6585)                                                                                             | [Status codes a write answers](../api/write-methods.md#status-codes-a-write-answers)                          |
+| RateLimit headers | `RateLimit`, `RateLimit-Policy` (an IETF draft)               | [draft-ietf-httpapi-ratelimit-headers](https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/)                                 | [Security](../tools/security.md)                                                                              |
+| Idempotency-Key   | Safe retry of a POST (an IETF draft)                          | [draft-ietf-httpapi-idempotency-key-header](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/)                       | [Idempotency](../tools/idempotency.md)                                                                        |
+| Google AIP        | Resource-oriented design (AIP-121 to 136, 140, 158, 193, 216) | [AIP-135](https://google.aip.dev/135), [136](https://google.aip.dev/136), [158](https://google.aip.dev/158), [193](https://google.aip.dev/193) | the rows below                                                                                                |
+| Zalando           | RESTful API guidelines                                        | [Zalando guidelines](https://opensource.zalando.com/restful-api-guidelines/)                                                                   | the rows below                                                                                                |
+
+The two IETF drafts move. The page was checked on 2026-11-06 against
+`draft-ietf-httpapi-ratelimit-headers-11` (expires 2026-11-24) and
+`draft-ietf-httpapi-idempotency-key-header-08` (dated 2026-10-22). Each audit re-checks the latest
+draft when it runs, because a draft's number is not a fact that keeps.
+
+The OWASP API Security Top 10 is deliberately not an audit. It is a list of risks, not of rules,
+and [Web Attacks & Defences](./defences/) already answers each one.
+
+Compatibility and sunset rules are not covered yet. There is nothing to compare before 1.0; then
+the right tool is a deterministic contract diff such as oasdiff, not an AI.
+
+## When standards disagree
+
+They do: Zalando wants `snake_case` and Google's JSON mapping wants `lowerCamelCase`; Zalando wants
+problem JSON and Google wants `google.rpc.Status`. A single audit reports against its own standard
+only.
+
+When someone asks for several audits at once, they state the **order of precedence first**
+(for example "RFC 9110 > Google AIP > Zalando"). Each conflict is then reported once, under the
+winning standard, and the losing standards' view is a note. The agent never picks the order.
+
+## Where we differ, and why
+
+This is information, not a rule the audits obey. Each row has an `id` that a rule in the registry
+may name; the audit then reports a hit as `KNOWN-DIFFERENCE`, still visible. A source marked
+`verified` was read on 2026-11-06; `from memory` was not re-read.
+
+| id                        | Standard says                                                                                                                                                                   | We do                                                                                   | Why                                                                                                                                                                                                                                                                                                   | Source                                                                                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `offset-paging`           | AIP-158: pages by opaque `page_token`; `skip` and `total_size` are optional. Zalando #160: prefer cursor paging, avoid offset                                                   | `page` and `pageSize`, with totals                                                      | admin tables jump to page N and show "of 37": [Pagination](../api/responses.md#pagination)                                                                                                                                                                                                            | verified: https://google.aip.dev/158, https://opensource.zalando.com/restful-api-guidelines/                                                   |
+| `merge-patch-field-masks` | AIP-134: a partial update carries a field mask (`update_mask`)                                                                                                                  | PATCH takes an RFC 7396 merge patch, no mask                                            | A mask is a second parameter that names the fields; a merge patch says it in the one body, with `null` as the explicit clear. Any HTTP client and JSON tool can send it. The mask is a protobuf idea with no counterpart in this stack. See [PATCH](../api/write-methods.md#patch-—-json-merge-patch) | verified: https://google.aip.dev/134                                                                                                           |
+| `custom-verb-path`        | AIP-136: a custom method is `POST /x/{id}:verb`                                                                                                                                 | `POST /x/{id}/verb`                                                                     | `:` opens a parameter in Express route patterns and is awkward in OpenAPI path templates; a path segment needs no escaping anywhere. The shape stays one rule: [Action](../api/write-methods.md#post)                                                                                                 | verified: https://google.aip.dev/136                                                                                                           |
+| `camel-case`              | Zalando #118: property names are `snake_case`, never `camelCase`                                                                                                                | `camelCase` properties                                                                  | the JSON maps straight onto the TypeScript types and the frontend, with no rename layer to keep true. Google's JSON mapping is `lowerCamelCase`, so AIP agrees with us here                                                                                                                           | verified: https://opensource.zalando.com/restful-api-guidelines/ (AIP side: from memory)                                                       |
+| `problem-json-status`     | AIP-193: an error is a `google.rpc.Status` with an `ErrorInfo` detail                                                                                                           | `application/problem+json` (RFC 9457) with an `errors[]` extension                      | RFC 9457 is the IETF standard for any HTTP API; `google.rpc.Status` is protobuf-first. Zalando #176 asks for problem JSON too, so the two guides disagree and RFC 9457 sits above both: [Problem details](../api/errors.md#problem-details)                                                           | verified: https://google.aip.dev/193, https://opensource.zalando.com/restful-api-guidelines/                                                   |
+| `conflict-409`            | AIP-216 maps a refused state transition to a precondition failure (HTTP 400)                                                                                                    | 409 with a `<RESOURCE>_ALREADY_<STATE>` code                                            | RFC 9110 §15.5.10 defines 409 as a conflict with the current state, which is exactly this: [Repeating an action](../api/write-methods.md#repeating-an-action-409)                                                                                                                                     | RFC: from memory; AIP: from memory                                                                                                             |
+| `oauth-callback-get`      | RFC 9110 §9.2.1: a GET is safe, it changes nothing                                                                                                                              | `GET /account/oauth/{provider}/callback` sets a session                                 | the identity provider redirects the browser, and a redirect is a GET; the method is not ours to choose. The `state` cookie is the CSRF guard: [OAuth](../modules/account-oauth.md#the-endpoint-surface-and-how-failure-travels)                                                                       | from memory (RFC 6749 §3.1.2)                                                                                                                  |
+| `line-answers-parent`     | RFC 9110 §15.3.2: a 201 names a new resource at `Location`                                                                                                                      | a line write (cart item, saved product) answers 200 with the whole parent               | a line has no URL of its own; the parent is what the client re-renders: [A line is written through its parent](../api/write-methods.md#a-line-is-written-through-its-parent)                                                                                                                          | RFC: from memory                                                                                                                               |
+| `metrics-text-plain`      | RFC 9457 and Zalando #176: an error is problem JSON                                                                                                                             | a failed Prometheus scrape answers `text/plain`                                         | the scraper reads exposition text and nothing else: [Outside the JSON API](../api/errors.md#outside-the-json-api)                                                                                                                                                                                     | verified: https://opensource.zalando.com/restful-api-guidelines/                                                                               |
+| `request-id-x-prefix`     | RFC 6648: new parameters SHOULD NOT carry an `X-` prefix                                                                                                                        | the `x-request-id` header                                                               | it is the de facto name that proxies, load balancers and log tools already read and forward; a new name would be one nobody propagates. RFC 6648 also says no assumption may rest on the prefix, and no standard defines a request-id header to use instead                                           | verified: https://www.rfc-editor.org/rfc/rfc6648                                                                                               |
+| `lowercase-enums`         | Zalando #240: enum values are `UPPER_SNAKE_CASE`                                                                                                                                | lowercase `snake_case` values                                                           | one casing for every machine value, matching the `snake_case` the contract uses for tokens: [Contract style](../api/openapi-workflow.md#generated-output-api)                                                                                                                                         | verified: https://opensource.zalando.com/restful-api-guidelines/                                                                               |
+| `revoke-keeps-row`        | AIP-135 and AIP-164: a soft delete returns the resource; a delete removes it                                                                                                    | `DELETE /api-keys/{id}` answers 204 and keeps the row, with `revokedAt` set             | the credential stops working at once, which is what a DELETE means to a client (RFC 9110 §9.3.5), while the row and its audit history stay readable. There is no undelete door, and the secret is never shown again, so a returned resource would add nothing                                         | verified: https://google.aip.dev/135, https://google.aip.dev/164                                                                               |
+| `money-string`            | Google `google.type.Money`: `currency_code`, whole `units` (int64) and `nanos` (10^-9 units). Zalando #173: `amount` is a JSON number with `format: decimal`, beside `currency` | `amount` is a decimal **string** at the currency's own places (`"19.90"`, `"1000"` JPY) | a JSON number loses its scale (`19.9` is not `19.90`) and may lose digits in a client's float; the string keeps both and needs no currency table to show it: [Money](../api/responses.md#money)                                                                                                       | verified: https://github.com/googleapis/googleapis/blob/master/google/type/money.proto, https://opensource.zalando.com/restful-api-guidelines/ |
+
+Not a difference: a promise date is `format: date`, a civil date with no time zone, which is the
+point of AIP-142's date rule (AIP-142 spells it as `google.type.Date`; verified:
+https://google.aip.dev/142).
+
+## Related
+
+- [Write Methods](../api/write-methods.md), [Errors](../api/errors.md), [Responses](../api/responses.md)
+- [AI auditing](../tools/ai-auditing.md): how the ten audits run and where reports go
+- [Contract Fragmentation](../api/contract-fragmentation.md): where the bundled contract the audits read comes from

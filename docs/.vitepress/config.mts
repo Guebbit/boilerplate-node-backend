@@ -67,6 +67,7 @@ export default withMermaid(
                             { text: 'Tactical DDD', link: '/theory/tactical-ddd' },
                             { text: 'Request Flow', link: '/theory/request-flow' },
                             { text: 'Request Input', link: '/theory/request-input' },
+                            { text: 'API Standards', link: '/theory/api-standards' },
                             { text: 'Clustering & Shutdown', link: '/theory/clustering' },
                             { text: 'Authorization', link: '/theory/authorization' },
                             { text: 'Sessions', link: '/theory/sessions' },
