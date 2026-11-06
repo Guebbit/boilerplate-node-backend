@@ -187,6 +187,29 @@ const reclaimAbandoned = (
         });
 
 /**
+ * Whether this `end` call closes an answer that has no body at all: no chunk handed to `end`
+ * (its first argument is absent or the callback) and nothing flushed before it.
+ *
+ * @param response - the response being ended
+ * @param firstArgument - the first argument `end` was called with
+ */
+const endsBodiless = (response: Response, firstArgument: unknown): boolean =>
+    (firstArgument === undefined || typeof firstArgument === 'function') && !response.headersSent;
+
+/**
+ * A keyed answer ended with bytes the ledger cannot capture (`send`, `write` + `end`): the key
+ * stays in flight rather than store a body-less record that would replay truncated.
+ *
+ * @param key - the caller-supplied `Idempotency-Key`
+ */
+const warnUnrecordableEnd = (key: string): void => {
+    logger.warn({
+        message: 'Idempotency answer ended with a body outside json; the key stays in flight.',
+        key
+    });
+};
+
+/**
  * Make a later hit on this same `(key, caller)` write its own outcome back to the ledger the
  * moment the guarded handler answers — success or a handled error alike, since both are a
  * finished attempt a retry should replay rather than re-run.
@@ -195,6 +218,7 @@ const reclaimAbandoned = (
  * `armCacheWrite`: `json` is the one place that already has the parsed body in hand.
  * A bodiless answer (`202` through `acceptedResponse`) never reaches `json`, so `end` is wrapped
  * too and records it with no body; `json` ends through `end`, hence the `recorded` latch.
+ * An `end` that carries bytes (or follows a `write`) is not recorded: see {@link endsBodiless}.
  *
  * @param response - the response whose `json` and `end` methods are being overridden
  * @param key - the caller-supplied `Idempotency-Key`
@@ -248,7 +272,10 @@ const armOutcomeCapture = (response: Response, key: string, caller: string): voi
     const responseEnd = response.end.bind(response);
     // `end` has several overloads; the wrapper forwards whatever it was given untouched.
     response.end = ((...endArguments: Parameters<Response['end']>) => {
-        record(undefined);
+        if (!recorded) {
+            if (endsBodiless(response, endArguments[0])) record(undefined);
+            else warnUnrecordableEnd(key);
+        }
         return responseEnd(...endArguments);
     }) as Response['end'];
 };

@@ -150,7 +150,7 @@ export const moneyPlugin = (schema: Schema): void => {
 
 /** The two things `moneyPathsOf` reads off a schema type: its options and any embedded schema. */
 interface WalkableSchemaType {
-    options?: unknown;
+    options: Record<string, unknown>;
     schema?: unknown;
 }
 
@@ -179,8 +179,7 @@ const isWalkableSchema = (value: unknown): value is MoneyWalkableSchema =>
 export const moneyPathsOf = (schema: MoneyWalkableSchema, prefix = ''): string[] => {
     const found: string[] = [];
     schema.eachPath((path, type) => {
-        // Narrowing cast: mongoose types `options` as unknown, but it is always an object.
-        if ((type.options as Record<string, unknown>).money === true) found.push(prefix + path);
+        if (type.options.money === true) found.push(prefix + path);
         if (isWalkableSchema(type.schema))
             found.push(...moneyPathsOf(type.schema, `${prefix}${path}.`));
     });

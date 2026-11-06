@@ -19,6 +19,7 @@ jest.mock('@infrastructure/http/middlewares/idempotency-model', () => ({
     }
 }));
 
+import { logger } from '@infrastructure/adapters/logger';
 import { idempotencyRecordModel } from '@infrastructure/http/middlewares/idempotency-model';
 import {
     idempotencyKey,
@@ -379,6 +380,51 @@ describe('an answer that is stored and replayed', () => {
             { $set: Record<string, unknown> }
         ];
         expect(update.$set).toMatchObject({ state: 'done', status: 202, body: undefined });
+    });
+
+    it('does not record an answer that ends with a chunk, and warns', async () => {
+        const response = makeHeaderResponse();
+        response.statusCode = 200;
+        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+
+        idempotencyKey(makeRequest('key-1', { a: 1 }), response, jest.fn());
+        await flush();
+        response.end('plain text');
+
+        expect(updateOne).not.toHaveBeenCalled();
+        expect(warn).toHaveBeenCalledTimes(1);
+        warn.mockRestore();
+    });
+
+    it('does not record an end that follows a flushed write', async () => {
+        const response = makeHeaderResponse();
+        Object.assign(response, { headersSent: true });
+        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+
+        idempotencyKey(makeRequest('key-1', { a: 1 }), response, jest.fn());
+        await flush();
+        response.end();
+
+        expect(updateOne).not.toHaveBeenCalled();
+        expect(warn).toHaveBeenCalledTimes(1);
+        warn.mockRestore();
+    });
+
+    it('records json once, even though json ends with a chunk', async () => {
+        const response = makeHeaderResponse();
+        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+        // Express's own json ends through `end(chunk)`; the stub stands in for that.
+        response.json.mockImplementation(function (this: Response, body: unknown) {
+            return this.end(JSON.stringify(body));
+        });
+
+        idempotencyKey(makeRequest('key-1', { a: 1 }), response, jest.fn());
+        await flush();
+        response.json({ ok: true });
+
+        expect(updateOne).toHaveBeenCalledTimes(1);
+        expect(warn).not.toHaveBeenCalled();
+        warn.mockRestore();
     });
 
     it('replays a stored bodiless answer with end, not json', async () => {

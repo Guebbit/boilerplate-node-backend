@@ -133,11 +133,15 @@ after the provider moved the money would pay twice. The client therefore:
 
 Proven by `tests/integration/idempotency-server-fault.test.ts`.
 
-## A body-less answer is never captured
+## A body-less answer is captured too
 
 The ledger records a response through `json`, and a bodiless one (`202` from `acceptedResponse`,
 `204` from `noContentResponse`) through `end`. A replay of a bodiless outcome is bodiless too: the
 stored status, no content type, no bytes. `POST /tasks` is the keyed route that answers this way.
+
+An answer that ends with bytes any other way (`send`, or `write` then `end`) is not recorded: the
+key stays in flight and a warning is logged, because a body-less record would replay it truncated.
+A keyed route answers through `json` or with no body.
 
 ## Retention
 
