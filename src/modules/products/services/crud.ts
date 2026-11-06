@@ -26,6 +26,7 @@ import type { ClientSession } from 'mongoose';
 import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import { afterCommit } from '@infrastructure/runtime/after-commit';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { startOfShopDay } from '@modules/shop';
 import { productsAuditActions } from '../audit';
 import {
     PRODUCT_BUYABLE_AGAIN,
@@ -61,9 +62,9 @@ type ProductCreateData = Omit<
     | 'updatedAt'
     | 'deletedAt'
 > & {
-    /** ISO date-time the product ships from; a future one makes it a preorder. */
+    /** The shop day (`YYYY-MM-DD`) the product ships from; a future one makes it a preorder. */
     releaseDate?: string;
-    /** ISO date-time stock is expected back, for a product that allows backorder. */
+    /** The shop day (`YYYY-MM-DD`) stock is expected back, for a product that allows backorder. */
     restockDate?: string;
     /** Set alongside the pending-image placeholder — see `readUploadedImage`. */
     pendingImageKey?: string;
@@ -158,13 +159,13 @@ export const insertProduct = (
         .create(
             {
                 ...withoutDates(data),
-                // Mongoose casts an ISO string, but `create`'s input is typed with the stored `Date`.
+                // The body carries a plain day; the document stores the shop's midnight of it.
                 ...(data.releaseDate === undefined
                     ? {}
-                    : { releaseDate: new Date(data.releaseDate) }),
+                    : { releaseDate: startOfShopDay(data.releaseDate) }),
                 ...(data.restockDate === undefined
                     ? {}
-                    : { restockDate: new Date(data.restockDate) }),
+                    : { restockDate: startOfShopDay(data.restockDate) }),
                 onHand: 0,
                 categories: sanitizeStringArray(data.categories),
                 tags: sanitizeStringArray(data.tags)
@@ -301,7 +302,7 @@ interface DateChange {
  *
  * @param product - the fetched document, mutated in place
  * @param field - which date: when it ships from, or when stock is expected back
- * @param requested - the new ISO date, `null` to clear, `undefined` to leave it alone
+ * @param requested - the new day (`YYYY-MM-DD`), `null` to clear, `undefined` to leave it alone
  * @returns the `from`/`to` of an actual change, or `undefined` when the stored instant is the one
  *   asked for
  */
@@ -313,7 +314,7 @@ const applyDate = (
     if (requested === undefined) return undefined;
 
     const from = product[field];
-    const to = requested === null ? undefined : new Date(requested);
+    const to = requested === null ? undefined : startOfShopDay(requested);
     if (from?.getTime() === to?.getTime()) return undefined;
 
     product[field] = clearedOrValue(to ?? null);

@@ -23,6 +23,7 @@ import { deliveryService } from '@modules/delivery/services';
 import deliveryModule from '@modules/delivery/module';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { markDomainEventsWired, resetDomainEvents } from '@kernel/events';
+import { shopDayOf } from '@modules/shop';
 
 setupTestDb();
 
@@ -66,7 +67,7 @@ describe('grouping a paid preorder', () => {
         ]);
         await productService.updateById(
             productIds[0],
-            { releaseDate: new Date(Date.now() - DAY).toISOString() },
+            { releaseDate: shopDayOf(new Date(Date.now() - DAY)) },
             testCallerContext
         );
 

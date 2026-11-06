@@ -25,6 +25,7 @@ import deliveryModule from '@modules/delivery/module';
 import { forceOrderStatus } from '@modules/orders/tests/factories';
 import { productService } from '@modules/products';
 import { OrderStatus } from '@types';
+import { shopDayOf } from '@modules/shop';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -168,7 +169,7 @@ describe('the Late view and the due-soon warning', () => {
         const order = await placed(1, 30, 'slipped@example.com');
         await productService.updateById(
             order.productIds[0],
-            { releaseDate: inDays(40).toISOString() },
+            { releaseDate: shopDayOf(inDays(40)) },
             testCallerContext
         );
         await settleOutboxNudges();

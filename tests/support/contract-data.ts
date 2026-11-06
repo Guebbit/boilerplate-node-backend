@@ -189,6 +189,10 @@ const randomStringForFormat = (format?: string): string => {
         case 'datetime': {
             return new Date().toISOString();
         }
+        // `format: date`, a plain calendar day (the promised dates).
+        case 'date': {
+            return new Date().toISOString().slice(0, 10);
+        }
         case 'uuid':
         case 'guid': {
             const hex = (length: number) => randomHex(length);

@@ -1047,22 +1047,25 @@ components:
 
         ReleaseDate:
             type: string
-            format: date-time
+            format: date
             description: >-
-                When a product ships from, as an ISO 8601 date-time with a zone. A product with a
-                future date that is active and purchasable is a preorder. At most one year ahead
-                (Google's `availability_date` rule); a date in the past is accepted and simply means
-                "released". Moving it later notifies the buyers who already paid (`delivery`).
+                The day a product ships from, a day on the shop's calendar (`Shop.timeZone`) as
+                `YYYY-MM-DD`; stored as the UTC instant of that day's midnight in the shop's zone and
+                always answered back as the same day. A product with a future date that is active and
+                purchasable is a preorder. At most one year ahead (Google's `availability_date` rule);
+                a day in the past is accepted and simply means "released". Moving it later notifies
+                the buyers who already paid (`delivery`).
 
         RestockDate:
             type: string
-            format: date-time
+            format: date
             description: >-
-                When stock is expected back, as an ISO 8601 date-time with a zone, for a product that
-                allows backorder. At most one year ahead. Without one the shop promises delivery within
-                30 days. A date in the past is accepted and the product then reads sold out until staff
-                set a new date or clear it. Moving it later notifies the buyers who already paid
-                (`delivery`).
+                The day stock is expected back, for a product that allows backorder: a day on the
+                shop's calendar (`Shop.timeZone`) as `YYYY-MM-DD`; stored as the UTC instant of that
+                day's midnight in the shop's zone and always answered back as the same day. At most
+                one year ahead. Without one the shop promises delivery within 30 days. A day in the
+                past is accepted and the product then reads sold out until staff set a new date or
+                clear it. Moving it later notifies the buyers who already paid (`delivery`).
 
         # A stock-keeping unit, deliberately just a string — this deployment's own numbering
         # scheme, unvalidated beyond "not empty". Product VARIANTS (one SKU per size/colour) are

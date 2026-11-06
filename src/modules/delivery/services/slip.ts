@@ -19,6 +19,7 @@
 
 import { orderService } from '@modules/orders';
 import { productService } from '@modules/products';
+import { shopDayOf, shopTimezone } from '@modules/shop';
 import { expectedDateOfWaiting, judgeMove } from '../domain';
 import type { SlipVerdict, WaitCause } from '../domain';
 import { fulfillmentOrderRepository } from '../repository';
@@ -71,11 +72,11 @@ const recordDateMoved = (
             at: now,
             data: {
                 fulfillmentOrderId: String(fulfillmentOrder._id),
-                // An unset side (no date before, or none now) is the absent key.
+                // The shop's day on each side; an unset side (no date before, or none now) is the absent key.
                 ...(fulfillmentOrder.expectedAt
-                    ? { from: fulfillmentOrder.expectedAt.toISOString() }
+                    ? { from: shopDayOf(fulfillmentOrder.expectedAt) }
                     : {}),
-                ...(next ? { to: next.toISOString() } : {})
+                ...(next ? { to: shopDayOf(next) } : {})
             }
         },
         session
@@ -137,7 +138,7 @@ const judgeOne = (fulfillmentOrderId: string): Promise<SentNotice | undefined> =
         if (!fulfillmentOrder) return undefined;
 
         const next = await expectedFrom(fulfillmentOrder);
-        const verdict = judgeMove(fulfillmentOrder, next);
+        const verdict = judgeMove(fulfillmentOrder, next, shopTimezone());
         return verdict && apply(fulfillmentOrder, verdict, next, new Date(), session);
     }).then((result) => (result.refused ? undefined : result.value));
 

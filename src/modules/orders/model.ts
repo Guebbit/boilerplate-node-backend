@@ -25,6 +25,7 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
 import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
 import { sumLineItems, orderTotal, type LineItem } from './domain/totals';
 import { orderTaxBreakdown, type TaxableLineItem } from './domain/tax';
+import { shopDayOf } from '@modules/shop';
 import { decryptSerializedOrder } from './pii';
 import { fulfillmentStatusOf, type FulfillmentSummary } from './domain/fulfillment';
 import {
@@ -305,7 +306,14 @@ const orderLineProductSchema = new Schema(
  * unlike `applyProductTransform`, there is no `available` to compute, because there is no
  * `onHand`/`reserved` on this schema to compute it FROM.
  */
-const applyOrderLineProductTransform = applySerialization(orderLineProductSchema);
+const applyOrderLineProductTransform = applySerialization(orderLineProductSchema, {
+    after: (serialized) => {
+        // The frozen promise goes out as the shop's day, like the catalogue's `releaseDate`. Only a
+        // `Date` is converted, so a snapshot that already went through here is left alone.
+        if (serialized.releaseDate instanceof Date)
+            serialized.releaseDate = shopDayOf(serialized.releaseDate);
+    }
+});
 
 /**
  * Schema for a single embedded order item.

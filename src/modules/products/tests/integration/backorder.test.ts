@@ -11,14 +11,18 @@ import { api, authenticateAsRole } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct } from '@modules/products/tests/factories';
 import { outboxEventModel } from '@kernel/outbox';
+import { shopDayOf, startOfShopDay } from '@modules/shop';
 import { productModel } from '../../model';
 import { productService } from '../../services';
 import { PRODUCT_BUYABLE_AGAIN, PRODUCT_RESTOCK_DATE_CHANGED } from '../../events';
 
 setupTestDb();
 
-/** A date `days` from now, as the ISO string a client sends. */
-const inDays = (days: number): string => new Date(Date.now() + days * 86_400_000).toISOString();
+/** The shop day `days` from now, as the `YYYY-MM-DD` a client sends. */
+const inDays = (days: number): string => shopDayOf(new Date(Date.now() + days * 86_400_000));
+
+/** What a stored day is: the shop's midnight of it, as the ISO instant the factory takes. */
+const stored = (day: string): string => startOfShopDay(day).toISOString();
 
 /** A product with the switch on and room under a cap of five, as `inventory` syncs it. */
 const backorderProduct = async (overrides: Parameters<typeof createProduct>[0] = {}) => {
@@ -33,7 +37,7 @@ const backorderProduct = async (overrides: Parameters<typeof createProduct>[0] =
 describe('GET /products/:id', () => {
     it('flags a released product that allows backorder, with its restock date', async () => {
         const restockDate = inDays(20);
-        const id = await backorderProduct({ restockDate });
+        const id = await backorderProduct({ restockDate: stored(restockDate) });
 
         const response = await api().get(`/products/${id}`);
 
@@ -56,7 +60,7 @@ describe('GET /products/:id', () => {
     });
 
     it('reads sold out once the restock date has passed, with nothing run', async () => {
-        const id = await backorderProduct({ restockDate: inDays(-1) });
+        const id = await backorderProduct({ restockDate: stored(inDays(-1)) });
 
         const response = await api().get(`/products/${id}`);
 
@@ -68,7 +72,7 @@ describe('GET /products/:id', () => {
     });
 
     it('is a preorder, not a backorder, before its release date', async () => {
-        const id = await backorderProduct({ releaseDate: inDays(30) });
+        const id = await backorderProduct({ releaseDate: stored(inDays(30)) });
 
         const response = await api().get(`/products/${id}`);
 
@@ -157,16 +161,16 @@ describe('PATCH /products/:id restockDate announcements', () => {
         await patch(null);
 
         expect(await announced()).toEqual([
-            { productId: id, to: first },
-            { productId: id, from: first, to: second },
-            { productId: id, from: second }
+            { productId: id, to: stored(first) },
+            { productId: id, from: stored(first), to: stored(second) },
+            { productId: id, from: stored(second) }
         ]);
     });
 
     it('announces nothing when the date it already has is saved again', async () => {
         const { bearer } = await authenticateAsRole('editor');
         const restockDate = inDays(10);
-        const product = await createProduct({ restockDate });
+        const product = await createProduct({ restockDate: stored(restockDate) });
 
         await api()
             .patch(`/products/${String(product._id)}`)
@@ -205,7 +209,11 @@ describe('product.buyable_again', () => {
         await productModel.updateOne({ _id: switched }, { $set: { backorderLimit: 5 } });
         const hidden = idOf(await createProduct({ onHand: 3, active: false }));
         const missed = idOf(
-            await createProduct({ onHand: 0, allowBackorder: true, restockDate: inDays(-2) })
+            await createProduct({
+                onHand: 0,
+                allowBackorder: true,
+                restockDate: stored(inDays(-2))
+            })
         );
         await productModel.updateOne({ _id: missed }, { $set: { backorderLimit: 5 } });
 

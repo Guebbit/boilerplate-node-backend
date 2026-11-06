@@ -19,6 +19,7 @@ import paymentsModule from '@modules/payments/module';
 import { resetDomainEvents } from '@kernel/events';
 import { cartService } from '../../services';
 import { cartRepository } from '../../repository';
+import { shopDayOf } from '@modules/shop';
 
 setupTestDb();
 
@@ -85,7 +86,7 @@ describe('a preorder line', () => {
 
         await productService.updateById(
             String(product._id),
-            { releaseDate: new Date(Date.now() - 86_400_000).toISOString() },
+            { releaseDate: shopDayOf(new Date(Date.now() - 86_400_000)) },
             testCallerContext
         );
 
@@ -161,7 +162,7 @@ describe('checking out a preorder', () => {
 
         await productService.updateById(
             String(product._id),
-            { releaseDate: new Date(Date.now() - 86_400_000).toISOString() },
+            { releaseDate: shopDayOf(new Date(Date.now() - 86_400_000)) },
             testCallerContext
         );
 

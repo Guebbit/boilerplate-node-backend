@@ -264,8 +264,8 @@ paths:
                   required: false
                   schema:
                       type: string
-                      format: date-time
-                  description: The date to preview, an ISO 8601 date-time with a zone. Absent or blank means cleared.
+                      format: date
+                  description: The day to preview, a day on the shop's calendar as `YYYY-MM-DD`. Absent or blank means cleared.
             responses:
                 '200':
                     description: How many orders the move would email
@@ -307,8 +307,8 @@ paths:
                   required: false
                   schema:
                       type: string
-                      format: date-time
-                  description: The date to preview, an ISO 8601 date-time with a zone. Absent or blank means cleared.
+                      format: date
+                  description: The day to preview, a day on the shop's calendar as `YYYY-MM-DD`. Absent or blank means cleared.
             responses:
                 '200':
                     description: How many orders the move would email
@@ -824,12 +824,12 @@ components:
                     description: Staff's free text about the hold. Left out for anyone who cannot update fulfillment.
                 agreedAt:
                     type: string
-                    format: date-time
-                    description: The date promised when ordering, frozen from the line snapshot (CRD Art. 18).
+                    format: date
+                    description: The day promised when ordering, frozen from the line snapshot (CRD Art. 18). A day on the shop's calendar (`Shop.timeZone`); stored as the UTC instant of its midnight.
                 expectedAt:
                     type: string
-                    format: date-time
-                    description: When it is now expected to ship, when that differs from what was agreed. Absent when the release date was cleared after the order was paid, since then nothing is expected.
+                    format: date
+                    description: The shop-calendar day it is now expected to ship, when that differs from what was agreed. Absent when the release date was cleared after the order was paid, since then nothing is expected.
                 lastNoticeAt:
                     type: string
                     format: date-time
@@ -1058,10 +1058,12 @@ components:
                     description: Staff's free text about the hold. Present until the retention sweep unsets it.
                 agreedAt:
                     type: string
-                    format: date-time
+                    format: date
+                    description: The day promised when ordering, a day on the shop's calendar (`Shop.timeZone`).
                 expectedAt:
                     type: string
-                    format: date-time
+                    format: date
+                    description: The day now expected, a day on the shop's calendar (`Shop.timeZone`).
                 lastNoticeAt:
                     type: string
                     format: date-time
@@ -1195,10 +1197,12 @@ components:
                     description: When the order was paid. The payment's instant, which is also the queue key stock is allocated by (`inventory` stamps the hold in the same transaction).
                 agreedAt:
                     type: string
-                    format: date-time
+                    format: date
+                    description: The day promised when ordering, a day on the shop's calendar (`Shop.timeZone`).
                 expectedAt:
                     type: string
-                    format: date-time
+                    format: date
+                    description: The day now expected, a day on the shop's calendar (`Shop.timeZone`).
                 slippedDays:
                     type: integer
                     minimum: 0
@@ -1248,8 +1252,8 @@ components:
                     description: As the earliest order froze it.
                 firstAgreedAt:
                     type: string
-                    format: date-time
-                    description: The earliest date any buyer was promised.
+                    format: date
+                    description: The earliest day any buyer was promised, a day on the shop's calendar (`Shop.timeZone`).
                 paid:
                     type: integer
                     minimum: 0

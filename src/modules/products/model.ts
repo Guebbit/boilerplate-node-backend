@@ -20,7 +20,7 @@ import { fitsCurrency, minorUnitExponent } from '@domain-primitives/money';
 import { latestReleaseDate } from './domain/preorder';
 import { derivedStockFields } from './presenter';
 import { RateType, TaxClass, type Product } from '@types';
-import { shopCurrency } from '@modules/shop';
+import { shopCurrency, startOfShopDay } from '@modules/shop';
 
 /**
  * A product's stored fields, without Mongoose's document machinery — `Product` from
@@ -179,7 +179,7 @@ const DATE_TOO_FAR_MESSAGES = {
  * it. Shared by create, PUT and PATCH, like {@link refineFallbackLocale}.
  *
  * @param field - which date this is; it names the issue's path and picks the refusal text
- * @param value - the date in the body; absent or `null` (a clear) always passes
+ * @param value - the day in the body, resolved to the shop's midnight before the comparison; absent or `null` (a clear) always passes
  * @param context - the Zod context to report into
  */
 const refineDateWithinYear = (
@@ -188,7 +188,10 @@ const refineDateWithinYear = (
     context: z.RefinementCtx
 ): void => {
     if (value === undefined || value === null) return;
-    if (new Date(value).getTime() > latestReleaseDate(new Date()).getTime())
+    // A refinement still runs after the field's own `format: date` check failed; that issue is
+    // already reported, and there is no day to resolve.
+    if (!z.iso.date().safeParse(value).success) return;
+    if (startOfShopDay(value).getTime() > latestReleaseDate(new Date()).getTime())
         context.addIssue({
             code: 'custom',
             message: t(DATE_TOO_FAR_MESSAGES[field]),

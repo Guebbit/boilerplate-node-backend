@@ -9,6 +9,7 @@
 
 import { ConfigError } from '@infrastructure/config/define';
 import { minorUnitExponent } from '@domain-primitives/money';
+import { dayInZone, startOfDayInZone } from '@domain-primitives/time';
 import type { ReturnPostagePayer, Shop, ShopAddress } from '@types';
 import { termsVersion } from '@modules/account';
 import { supportEmail } from '@infrastructure/adapters/config';
@@ -48,6 +49,20 @@ export const shopCountry = (): string | undefined => shopConfig().NODE_SHOP_COUN
  */
 export const shopTimezone = (): string =>
     requiredValue('NODE_SHOP_TIMEZONE', shopConfig().NODE_SHOP_TIMEZONE);
+
+/**
+ * The shop-calendar day an instant falls in: how a stored promise date goes on the wire.
+ * @param instant - a stored promise date, always a shop midnight
+ * @returns `YYYY-MM-DD`
+ */
+export const shopDayOf = (instant: Date): string => dayInZone(instant, shopTimezone());
+
+/**
+ * The instant a shop-calendar day starts: how a day staff typed is stored.
+ * @param day - `YYYY-MM-DD`, already checked by the request schema
+ * @returns the shop's midnight of that day
+ */
+export const startOfShopDay = (day: string): Date => startOfDayInZone(day, shopTimezone());
 
 /** Where and who the shop is: the trader identity of CRD Art. 6(1)(b)-(c) and an invoice's seller block. */
 export interface ShopIdentity {
@@ -173,7 +188,7 @@ export const BACKORDER_PROMISE_DAYS = 30;
 /**
  * What `GET /shop` answers: the seller's identity, the currency, where the shop ships, where
  * returns go, the Terms version and the backorder promise. Everything a visitor is entitled to before a sale (CRD Art. 6(1), e-Commerce
- * Directive Art. 5). Not published: the time zone, and the bank details (those travel per order).
+ * Directive Art. 5). The time zone is published too, for naming the calendar a promised day belongs to. Not published: the bank details (those travel per order).
  * @returns the public shop record
  * @throws {ConfigError} when a required variable is unset (only possible under `NODE_ENV=test`)
  */
@@ -185,5 +200,6 @@ export const getShop = (): Shop => ({
     returnAddress: returnAddress(),
     returnPostagePayer: returnPostagePayer(),
     termsVersion: termsVersion(),
-    backorderPromiseDays: BACKORDER_PROMISE_DAYS
+    backorderPromiseDays: BACKORDER_PROMISE_DAYS,
+    timeZone: shopTimezone()
 });

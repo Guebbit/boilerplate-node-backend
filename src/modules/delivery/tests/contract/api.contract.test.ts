@@ -35,6 +35,7 @@ import {
 } from '@modules/delivery/tests/factories';
 import { reauthWindowSeconds } from '@kernel/config';
 import { OrderStatus } from '@types';
+import { shopDayOf } from '@modules/shop';
 
 setupTestDb();
 
@@ -966,7 +967,7 @@ describe('GET /delivery/fulfillment-orders/summary', () => {
             {
                 productId: productIds[0],
                 title: expect.any(String),
-                firstAgreedAt: releaseDate.toISOString(),
+                firstAgreedAt: shopDayOf(releaseDate),
                 paid: 3,
                 waiting: 3,
                 allocated: 0,
@@ -1017,7 +1018,7 @@ describe('GET /delivery/fulfillment-orders/release-date-impact', () => {
 
         const response = await api()
             .get(url)
-            .query({ productId, releaseDate: new Date(Date.now() + 75 * DAY).toISOString() })
+            .query({ productId, releaseDate: shopDayOf(new Date(Date.now() + 75 * DAY)) })
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
@@ -1029,7 +1030,7 @@ describe('GET /delivery/fulfillment-orders/release-date-impact', () => {
 
         const response = await api()
             .get(url)
-            .query({ productId, releaseDate: new Date(Date.now() + 10 * DAY).toISOString() })
+            .query({ productId, releaseDate: shopDayOf(new Date(Date.now() + 10 * DAY)) })
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
@@ -1059,7 +1060,7 @@ describe('GET /delivery/fulfillment-orders/release-date-impact', () => {
 
         const response = await api()
             .get(url)
-            .query({ productId, releaseDate: new Date(Date.now() + 400 * DAY).toISOString() })
+            .query({ productId, releaseDate: shopDayOf(new Date(Date.now() + 400 * DAY)) })
             .set('Authorization', bearer);
 
         expect(response.status).toBe(422);

@@ -18,6 +18,7 @@ import type {
 import { boardStateOf, holdNoticeOf, isLate, remainingOfLine, slippedDays } from './domain';
 import type { ProductSummaryRow } from './repository';
 import type { OrderBrief } from '@modules/orders';
+import { shopDayOf, shopTimezone } from '@modules/shop';
 import { decryptDestination } from './pii';
 import type { FulfillmentOrderDocument, ShipmentDocument } from './model';
 
@@ -106,10 +107,8 @@ const presentRecord = (fulfillmentOrder: FulfillmentOrderDocument) => ({
         ? { holdNotice: holdNoticeOf(fulfillmentOrder.holdReason) }
         : {}),
     ...(fulfillmentOrder.holdMessage ? { holdMessage: fulfillmentOrder.holdMessage } : {}),
-    ...(fulfillmentOrder.agreedAt ? { agreedAt: fulfillmentOrder.agreedAt.toISOString() } : {}),
-    ...(fulfillmentOrder.expectedAt
-        ? { expectedAt: fulfillmentOrder.expectedAt.toISOString() }
-        : {}),
+    ...(fulfillmentOrder.agreedAt ? { agreedAt: shopDayOf(fulfillmentOrder.agreedAt) } : {}),
+    ...(fulfillmentOrder.expectedAt ? { expectedAt: shopDayOf(fulfillmentOrder.expectedAt) } : {}),
     ...(fulfillmentOrder.lastNoticeAt
         ? { lastNoticeAt: fulfillmentOrder.lastNoticeAt.toISOString() }
         : {}),
@@ -178,13 +177,11 @@ export const presentPreorderFulfillmentOrder = (
         ...(brief?.userId ? { userId: brief.userId } : {})
     },
     ...(brief?.paidAt ? { paidAt: brief.paidAt.toISOString() } : {}),
-    ...(fulfillmentOrder.agreedAt ? { agreedAt: fulfillmentOrder.agreedAt.toISOString() } : {}),
-    ...(fulfillmentOrder.expectedAt
-        ? { expectedAt: fulfillmentOrder.expectedAt.toISOString() }
-        : {}),
+    ...(fulfillmentOrder.agreedAt ? { agreedAt: shopDayOf(fulfillmentOrder.agreedAt) } : {}),
+    ...(fulfillmentOrder.expectedAt ? { expectedAt: shopDayOf(fulfillmentOrder.expectedAt) } : {}),
     slippedDays:
         fulfillmentOrder.agreedAt && fulfillmentOrder.expectedAt
-            ? slippedDays(fulfillmentOrder.agreedAt, fulfillmentOrder.expectedAt)
+            ? slippedDays(fulfillmentOrder.agreedAt, fulfillmentOrder.expectedAt, shopTimezone())
             : 0,
     late: isLate(fulfillmentOrder, now),
     delivered,
@@ -203,7 +200,7 @@ export const presentPreorderFulfillmentOrder = (
 export const presentProductSummary = (row: ProductSummaryRow): PreorderProductSummary => ({
     productId: row.productId,
     title: row.title,
-    firstAgreedAt: row.firstAgreedAt.toISOString(),
+    firstAgreedAt: shopDayOf(row.firstAgreedAt),
     paid: row.paid,
     waiting: row.waiting,
     allocated: row.allocated,

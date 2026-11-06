@@ -17,7 +17,7 @@
  * See: docs/modules/delivery.md#preorders-and-a-moved-date
  */
 
-import { DAY_MS } from '@domain-primitives/time';
+import { DAY_MS, dayInZone } from '@domain-primitives/time';
 import { FulfillmentHoldReason, FulfillmentOrderStatus, PreorderFulfillmentState } from '@types';
 import { remainingOf, remainingOfLine, type FulfillmentLine } from './fulfillment';
 
@@ -37,18 +37,21 @@ export interface SlipFacts {
     expectedAt?: Date | undefined;
     /** The date now expected; absent when the date was cleared, which is an indefinite delay. */
     next?: Date | undefined;
+    /** The shop's zone: the two dates are compared as days on its calendar. */
+    timeZone: string;
 }
 
 /**
  * What a moved release date owes the buyer: an email when it moves later or is cleared, nothing
- * when it moves earlier or there was no date to move.
+ * when it moves earlier, stays on the same shop day, or there was no date to move.
  *
- * @param facts - the current expectation and the new date
+ * @param facts - the current expectation, the new date and the shop's zone
  */
-export const judgeSlip = ({ expectedAt, next }: SlipFacts): SlipVerdict => {
+export const judgeSlip = ({ expectedAt, next, timeZone }: SlipFacts): SlipVerdict => {
     if (next === undefined)
         return expectedAt === undefined ? { kind: 'earlier' } : { kind: 'notify' };
-    return expectedAt === undefined || next.getTime() <= expectedAt.getTime()
+    // Days, not instants: a promise is a day, so a move within the same day tells nobody.
+    return expectedAt === undefined || dayInZone(next, timeZone) <= dayInZone(expectedAt, timeZone)
         ? { kind: 'earlier' }
         : { kind: 'notify' };
 };
@@ -110,10 +113,17 @@ export interface MoveFacts {
  *
  * @param facts - the fulfillment order
  * @param next - the date now expected, from {@link expectedDateOf}
+ * @param timeZone - the shop's zone
  * @returns the verdict, or `undefined` when nothing was ever promised, so there is nothing to slip
  */
-export const judgeMove = (facts: MoveFacts, next: Date | undefined): SlipVerdict | undefined =>
-    facts.agreedAt === undefined ? undefined : judgeSlip({ expectedAt: facts.expectedAt, next });
+export const judgeMove = (
+    facts: MoveFacts,
+    next: Date | undefined,
+    timeZone: string
+): SlipVerdict | undefined =>
+    facts.agreedAt === undefined
+        ? undefined
+        : judgeSlip({ expectedAt: facts.expectedAt, next, timeZone });
 
 /**
  * How far ahead of its expected date the sweep tells the buyer it will be missed. A daily sweep
@@ -143,14 +153,19 @@ export const needsDueNotice = (facts: SweepFacts, now: Date): boolean =>
     facts.dueNoticeFor?.getTime() !== facts.expectedAt.getTime();
 
 /**
- * The day gap between the date promised and the date expected, for a board column.
+ * The day gap between the day promised and the day expected, for a board column. Counted on the
+ * shop's calendar, so the hour a promise happens to carry never rounds a day away.
  *
  * @param agreedAt - the date promised when ordering
  * @param expectedAt - the date expected now
+ * @param timeZone - the shop's zone
  * @returns whole days, never negative: an earlier date is not a slip
  */
-export const slippedDays = (agreedAt: Date, expectedAt: Date): number =>
-    Math.max(0, Math.round((expectedAt.getTime() - agreedAt.getTime()) / DAY_MS));
+export const slippedDays = (agreedAt: Date, expectedAt: Date, timeZone: string): number => {
+    // Each shop day read as UTC midnight: two whole-day instants, so the gap is an exact day count.
+    const asUtcDay = (instant: Date): number => Date.parse(dayInZone(instant, timeZone));
+    return Math.max(0, Math.round((asUtcDay(expectedAt) - asUtcDay(agreedAt)) / DAY_MS));
+};
 
 /**
  * The date the buyer holds after a notice (`promisedAt`): a later date replaces it, a cleared date

@@ -20,6 +20,7 @@ import { deliveryService } from '@modules/delivery/services';
 import deliveryModule from '@modules/delivery/module';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { markDomainEventsWired, resetDomainEvents } from '@kernel/events';
+import { shopDayOf } from '@modules/shop';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -49,7 +50,7 @@ const inDays = (days: number): Date => new Date(Date.now() + days * DAY);
 const moveRestockDate = async (productId: string, to: Date | null) => {
     await productService.updateById(
         productId,
-        { restockDate: to === null ? null : to.toISOString() },
+        { restockDate: to === null ? null : shopDayOf(to) },
         testCallerContext
     );
     await settleOutboxNudges();
@@ -198,7 +199,7 @@ describe('a restock date that moves', () => {
 
         await productService.updateById(
             productId,
-            { releaseDate: inDays(5).toISOString() },
+            { releaseDate: shopDayOf(inDays(5)) },
             testCallerContext
         );
         await settleOutboxNudges();

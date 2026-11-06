@@ -128,3 +128,19 @@ export const zonedStartOfDay = (
     const guess = wall - offsetAt(wall);
     return new Date(wall - offsetAt(guess));
 };
+
+/**
+ * The instant a `YYYY-MM-DD` day starts on the wall clock of `timeZone`: how a day staff typed is
+ * stored. The reverse of {@link dayInZone}.
+ * @param day - a plain calendar day, already checked as `format: date` by the request schema
+ * @param timeZone - canonical IANA zone name
+ * @returns that day's local midnight as an instant
+ */
+export const startOfDayInZone = (day: string, timeZone: string): Date => {
+    return zonedStartOfDay(
+        Number(day.slice(0, 4)),
+        Number(day.slice(5, 7)),
+        Number(day.slice(8, 10)),
+        timeZone
+    );
+};

@@ -19,6 +19,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { productService } from '@modules/products';
+import { shopTimezone } from '@modules/shop';
 import type { ReleaseDateImpact } from '@types';
 import { expectedDateOfWaiting, judgeMove } from '../domain';
 import type { SlipVerdict, WaitCause } from '../domain';
@@ -80,7 +81,8 @@ const verdictsFor = (
         return waiting.flatMap<Judged>((fulfillmentOrder) => {
             const verdict = judgeMove(
                 fulfillmentOrder,
-                expectedDateOfWaiting(fulfillmentOrder, dateOf)
+                expectedDateOfWaiting(fulfillmentOrder, dateOf),
+                shopTimezone()
             );
             return verdict ? [{ orderId: String(fulfillmentOrder.orderId), verdict }] : [];
         });

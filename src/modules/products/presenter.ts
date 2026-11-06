@@ -14,7 +14,7 @@ import { isBackorder } from './domain/backorder';
 import { isBuyable, type BuyableFacts } from './domain/buyable';
 import { lowStockThreshold } from './config';
 import type { ProductDocument } from './model';
-import { shopCurrency } from '@modules/shop';
+import { shopCurrency, shopDayOf } from '@modules/shop';
 import { padDecimal } from '@domain-primitives/money';
 
 /**
@@ -71,13 +71,13 @@ export const presentProduct = (document: ProductDocument): Product => {
         ...(document.purchasable === undefined ? {} : { purchasable: document.purchasable }),
         ...(document.releaseDate === undefined
             ? {}
-            : { releaseDate: document.releaseDate.toISOString() }),
+            : { releaseDate: shopDayOf(document.releaseDate) }),
         ...(document.allowBackorder === undefined
             ? {}
             : { allowBackorder: document.allowBackorder }),
         ...(document.restockDate === undefined
             ? {}
-            : { restockDate: document.restockDate.toISOString() }),
+            : { restockDate: shopDayOf(document.restockDate) }),
         ...(document.requiresShipping === undefined
             ? {}
             : { requiresShipping: document.requiresShipping }),

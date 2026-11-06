@@ -18,8 +18,8 @@ paths:
                 Everything a visitor is entitled to know before a sale: the seller's legal identity
                 (Consumer Rights Directive Art. 6(1), e-Commerce Directive Art. 5), the one currency
                 every price is quoted in, the countries the shop ships to, where returned goods
-                go, the version of the Terms in force and the backorder promise in days. Public and cheap to read; it never changes without a redeploy. Not published:
-                the shop's time zone, and the bank-transfer details, which travel on each order.
+                go, the version of the Terms in force and the backorder promise in days. Public and cheap to read; it never changes without a redeploy. The shop's time zone (an IANA name) is published so a screen can name the calendar a
+                promised day belongs to. Not published: the bank-transfer details, which travel on each order.
             operationId: getShop
             security: []
             responses:
@@ -78,7 +78,8 @@ components:
                     returnAddress,
                     returnPostagePayer,
                     termsVersion,
-                    backorderPromiseDays
+                    backorderPromiseDays,
+                    timeZone
                 ]
             properties:
                 legalName:
@@ -139,4 +140,10 @@ components:
                     description: >-
                         Days a buyer is promised when a backorder names no restock date: "ships
                         within N days". A legal value the server fixes (CRD Art. 18(1)), not a setting.
+                timeZone:
+                    type: string
+                    description: >-
+                        The shop's calendar, a canonical IANA zone name such as `Europe/Rome`. The promised
+                        days (`releaseDate`, `restockDate`, `agreedAt`, `expectedAt`) are days on this
+                        calendar; they are sent and answered as plain days, so a screen never converts them.
 

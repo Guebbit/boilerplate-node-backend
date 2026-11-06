@@ -3,7 +3,7 @@
  * instant is two different days in two zones, and a day of 23 or 25 hours (DST) must not move the
  * edge.
  */
-import { zonedStartOfDay } from '@domain-primitives/time';
+import { dayInZone, startOfDayInZone, zonedStartOfDay } from '@domain-primitives/time';
 
 describe('zonedStartOfDay', () => {
     it('is local midnight, an hour before UTC midnight in Rome in winter and two in summer', () => {
@@ -40,5 +40,34 @@ describe('zonedStartOfDay', () => {
             '2026-01-04T18:30:00.000Z'
         );
         expect(zonedStartOfDay(2026, 1, 5, 'UTC').toISOString()).toBe('2026-01-05T00:00:00.000Z');
+    });
+});
+
+describe('startOfDayInZone', () => {
+    it('reads a plain day as that day starts in the zone', () => {
+        expect(startOfDayInZone('2026-01-05', 'Europe/Rome').toISOString()).toBe(
+            '2026-01-04T23:00:00.000Z'
+        );
+    });
+
+    it('lands on the same side of both Rome DST edges as the numeric form', () => {
+        expect(startOfDayInZone('2026-03-29', 'Europe/Rome').toISOString()).toBe(
+            '2026-03-28T23:00:00.000Z'
+        );
+        expect(startOfDayInZone('2026-10-25', 'Europe/Rome').toISOString()).toBe(
+            '2026-10-24T22:00:00.000Z'
+        );
+    });
+
+    it('round-trips through dayInZone on the days either side of a change', () => {
+        for (const day of [
+            '2026-03-28',
+            '2026-03-29',
+            '2026-03-30',
+            '2026-10-24',
+            '2026-10-25',
+            '2026-10-26'
+        ])
+            expect(dayInZone(startOfDayInZone(day, 'Europe/Rome'), 'Europe/Rome')).toBe(day);
     });
 });

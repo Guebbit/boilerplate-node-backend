@@ -19,6 +19,7 @@ import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { markDomainEventsWired, resetDomainEvents } from '@kernel/events';
 import { MISSING_ID } from '@tests/ids';
 import { fulfillmentOrderModel } from '@modules/delivery/model';
+import { shopDayOf } from '@modules/shop';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -47,7 +48,7 @@ const inDays = (days: number): Date => new Date(Date.now() + days * DAY);
 const moveDate = async (productId: string, to: Date | null) => {
     await productService.updateById(
         productId,
-        { releaseDate: to === null ? null : to.toISOString() },
+        { releaseDate: to === null ? null : shopDayOf(to) },
         testCallerContext
     );
     await settleOutboxNudges();
@@ -94,6 +95,8 @@ describe('the preview matches what the save then does', () => {
         ['a long slip', [30], undefined, 75, { notify: 1 }],
         ['a second slip, however small', [30], 35, 37, { notify: 1 }],
         ['an earlier date', [30], undefined, 10, { notify: 0 }],
+        ['the next shop day', [30], undefined, 31, { notify: 1 }],
+        ['the same shop day, saved as a day', [30], undefined, 30, { notify: 0 }],
         ['a cleared date', [30], undefined, null, { notify: 1 }],
         ['a cleared date, cleared again', [30], null, null, { notify: 0 }],
         ['the date it already has', [30], undefined, 'same', { notify: 0 }],

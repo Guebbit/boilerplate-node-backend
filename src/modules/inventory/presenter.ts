@@ -7,6 +7,7 @@
 
 import type { Types } from 'mongoose';
 import type { InventoryLevel, PreorderLevel } from '@types';
+import { shopDayOf } from '@modules/shop';
 import type { PreorderLevelRow, StockLevelRow } from './repository';
 
 /** What `products` tells the preorder board about one row. */
@@ -62,7 +63,7 @@ export const presentPreorderLevel = (
         ...counters,
         ...capOf(backorderLimit),
         title: title ?? row.productId,
-        ...(releaseDate ? { releaseDate: releaseDate.toISOString() } : {}),
+        ...(releaseDate ? { releaseDate: shopDayOf(releaseDate) } : {}),
         ...(sellsAgainstCap && backorderLimit !== null
             ? { left: Math.max(0, backorderLimit - row.backordered) }
             : {})

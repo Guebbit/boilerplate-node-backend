@@ -17,6 +17,7 @@ import {
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
 const AGREED = new Date('2026-12-01T00:00:00Z');
+const ZONE = 'Europe/Rome';
 
 /** A date `days` after the agreed one. */
 const afterAgreed = (days: number): Date => new Date(AGREED.getTime() + days * DAY);
@@ -29,28 +30,53 @@ describe('judgeSlip', () => {
         ['a slip of 29 days', 29],
         ['a slip of a year', 365]
     ])('tells the buyer about %s', (_name, days) => {
-        expect(judgeSlip({ expectedAt: afterAgreed(0), next: afterAgreed(days) }).kind).toBe(
-            'notify'
-        );
+        expect(
+            judgeSlip({ expectedAt: afterAgreed(0), next: afterAgreed(days), timeZone: ZONE }).kind
+        ).toBe('notify');
     });
 
     it.each([
         ['earlier than expected', afterAgreed(5)],
         ['the same date', afterAgreed(10)]
     ])('says nothing for a date %s', (_name, next) => {
-        expect(judgeSlip({ expectedAt: afterAgreed(10), next }).kind).toBe('earlier');
+        expect(judgeSlip({ expectedAt: afterAgreed(10), next, timeZone: ZONE }).kind).toBe(
+            'earlier'
+        );
+    });
+
+    // 2026-12-04T23:00Z is 5 December 00:00 in Rome; 2026-12-05T20:00Z is 5 December 21:00.
+    it('says nothing for a move inside the same shop day', () => {
+        expect(
+            judgeSlip({
+                expectedAt: new Date('2026-12-04T23:00:00Z'),
+                next: new Date('2026-12-05T20:00:00Z'),
+                timeZone: ZONE
+            }).kind
+        ).toBe('earlier');
+    });
+
+    it('tells the buyer about a move to the next shop day', () => {
+        expect(
+            judgeSlip({
+                expectedAt: new Date('2026-12-05T20:00:00Z'),
+                next: new Date('2026-12-05T23:00:00Z'),
+                timeZone: ZONE
+            }).kind
+        ).toBe('notify');
     });
 
     it('tells the buyer when the date was cleared', () => {
-        expect(judgeSlip({ expectedAt: afterAgreed(0), next: undefined }).kind).toBe('notify');
+        expect(
+            judgeSlip({ expectedAt: afterAgreed(0), next: undefined, timeZone: ZONE }).kind
+        ).toBe('notify');
     });
 
     it('says nothing when there was no date and there is none', () => {
-        expect(judgeSlip({ next: undefined }).kind).toBe('earlier');
+        expect(judgeSlip({ next: undefined, timeZone: ZONE }).kind).toBe('earlier');
     });
 
     it('follows a new date quietly when there was none', () => {
-        expect(judgeSlip({ next: afterAgreed(90) }).kind).toBe('earlier');
+        expect(judgeSlip({ next: afterAgreed(90), timeZone: ZONE }).kind).toBe('earlier');
     });
 });
 
@@ -94,7 +120,7 @@ describe('judgeMove', () => {
     const waiting = { agreedAt: AGREED, expectedAt: AGREED };
 
     it('has nothing to judge when nothing was promised', () => {
-        expect(judgeMove({}, afterAgreed(90))).toBeUndefined();
+        expect(judgeMove({}, afterAgreed(90), ZONE)).toBeUndefined();
     });
 
     it.each([
@@ -102,11 +128,11 @@ describe('judgeMove', () => {
         ['a long slip', afterAgreed(60), 'notify'],
         ['a cleared date', undefined, 'notify']
     ])('judges %s', (_name, next, expected) => {
-        expect(judgeMove(waiting, next)?.kind).toBe(expected);
+        expect(judgeMove(waiting, next, ZONE)?.kind).toBe(expected);
     });
 
     it('says nothing for a date that was already cleared and is cleared again', () => {
-        expect(judgeMove({ agreedAt: AGREED }, undefined)?.kind).toBe('earlier');
+        expect(judgeMove({ agreedAt: AGREED }, undefined, ZONE)?.kind).toBe('earlier');
     });
 });
 
@@ -138,8 +164,15 @@ describe('needsDueNotice', () => {
 
 describe('slippedDays', () => {
     it('counts whole days between the promise and the expectation, never below zero', () => {
-        expect(slippedDays(AGREED, afterAgreed(12))).toBe(12);
-        expect(slippedDays(AGREED, afterAgreed(-3))).toBe(0);
+        expect(slippedDays(AGREED, afterAgreed(12), ZONE)).toBe(12);
+        expect(slippedDays(AGREED, afterAgreed(-3), ZONE)).toBe(0);
+    });
+
+    it('counts shop days, whatever hour either date carries', () => {
+        // 5 December 21:30 Rome to 7 December 00:00 Rome: under two days of clock, two shop days.
+        expect(
+            slippedDays(new Date('2026-12-05T20:30:00Z'), new Date('2026-12-06T23:00:00Z'), ZONE)
+        ).toBe(2);
     });
 });
 

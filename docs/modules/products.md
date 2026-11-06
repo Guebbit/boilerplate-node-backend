@@ -168,9 +168,16 @@ preorder = active && purchasable && releaseDate > now
 ```
 
 The day the date passes the product stops being one, with no job to run (BigCommerce and
-WooCommerce auto-revert the same way). `releaseDate` is "ships from", an ISO 8601 date-time at most
-one year ahead (Google's `availability_date` rule); a date in the past is accepted and means
+WooCommerce auto-revert the same way). `releaseDate` is "ships from", a plain day (`YYYY-MM-DD`) on the shop's calendar at most
+one year ahead (Google's `availability_date` rule); a day in the past is accepted and means
 "released". `null` clears it; a `PUT` that omits it clears it too.
+
+**A promise date is a day, not an instant.** Staff type a day; the server stores the UTC instant of
+that day's midnight in the shop's zone (`NODE_SHOP_TIMEZONE`, published as `GET /shop` `timeZone`)
+and answers with the same day, so no client does zone maths and a screen, a mail and a day-grouping
+agree. There is no launch hour. The same holds for `restockDate`. The one-year limit and "a past
+day means released" are checked on the stored instant. Unchanged: withdrawal deadlines count UTC
+days, and an invoice prints in the zone frozen when it was issued.
 
 ```mermaid
 stateDiagram-v2
@@ -195,7 +202,7 @@ numbers are `inventory`'s, copied onto the product beside `onHand` and `reserved
 `syncStockCache` door, and never sent to a client.
 
 Moving the date announces `product.release_date_changed` through the outbox, in the edit's own
-transaction and only when the instant actually changed. `delivery` listens: buyers who already paid
+transaction and only when the stored instant actually changed (the payload carries the two instants). `delivery` listens: buyers who already paid
 were promised the old date, and consumer law decides what they must be told (see
 [delivery](./delivery.md#preorders-and-a-moved-date)). The edit form can [preview the
 count](./delivery.md#previewing-a-move-before-it-is-saved) first.

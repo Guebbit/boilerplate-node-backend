@@ -26,6 +26,7 @@ flowchart LR
     account["account"]
     cart["cart"]
     delivery["delivery"]
+    inventory["inventory"]
     invoicing["invoicing"]
     orders["orders"]
     payments["payments"]
@@ -36,6 +37,7 @@ flowchart LR
 
     cart --> shop
     delivery --> shop
+    inventory --> shop
     invoicing --> shop
     orders --> shop
     payments --> shop
@@ -50,7 +52,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders,products core;
-    class delivery,invoicing,payments,returns,shop_tasks,stats supporting;
+    class delivery,inventory,invoicing,payments,returns,shop_tasks,stats supporting;
     class account generic;
     class shop centre;
 ```
@@ -74,8 +76,13 @@ every call, so a test varies a setting per case and a deployment corrects one wi
 **The seller is public on purpose.** The Consumer Rights Directive (Art. 6(1)) wants the trader's
 identity, address, phone and email before the contract, and the e-Commerce Directive (Art. 5) wants
 the VAT number. `GET /shop` is where a visitor, and the Terms page, read them. Not published: the
-time zone (an operator's fact, not a visitor's), and the bank-transfer details, which travel on
-each order and stay with `payments`.
+bank-transfer details, which travel on each order and stay with `payments`.
+
+**`GET /shop` publishes `timeZone`** (an IANA name). The promised days (`releaseDate`,
+`restockDate`, `agreedAt`, `expectedAt`) are sent and answered as plain `YYYY-MM-DD` days of this
+calendar, so a screen never needs it to print one; it is there for a screen that has to name the
+calendar. Google AIP-142 and Zalando's guidelines both want a calendar day as a `date`, with an
+IANA zone named beside it.
 
 **Required at boot, because a notice without an address is not one.** The legal name, street,
 city, zip, country, email, phone and time zone refuse to boot when unset; the VAT number, the trade

@@ -14,6 +14,7 @@ import { productsAuditActions } from '../../audit';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
 import { callerContextAs } from '@tests/callers';
+import { startOfShopDay } from '@modules/shop';
 
 /* The audit port is replaced, not spied on — see `delete-restore-audit.test.ts`. */
 jest.mock('@infrastructure/observability/audit', () =>
@@ -122,14 +123,14 @@ describe('productService.updateById — the audit row of a money edit', () => {
             String(product._id),
             {
                 translations: { en: { title: 'A different title' } },
-                releaseDate: '2031-01-01T00:00:00.000Z'
+                releaseDate: '2031-01-01'
             },
             callerContextAs('admin')
         );
 
         const metadata = updatedRowMetadata(auditSpy);
         expect(metadata).toEqual({
-            changes: { releaseDate: { to: '2031-01-01T00:00:00.000Z' } },
+            changes: { releaseDate: { to: startOfShopDay('2031-01-01').toISOString() } },
             changedFields: ['title']
         });
         expect(JSON.stringify(metadata)).not.toContain('different title');

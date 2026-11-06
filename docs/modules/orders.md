@@ -597,7 +597,8 @@ flowchart LR
 - **The window ends with the last hour of its last day.** The day of the event is not counted and
   the last day of the period is counted whole (CRD recital 41 → Regulation 1182/71 Art. 3(1),
   3(2)(b)), in UTC. A date in an email is the opposite case: staff type it on the shop's clock, so it
-  is printed in `NODE_SHOP_TIMEZONE` (the delivery mails, the order confirmation, the bank-transfer
+  is printed in `NODE_SHOP_TIMEZONE`; a promised day (`releaseDate` on a line, `agreedAt` and
+  `expectedAt` in `delivery`) is likewise sent and answered as that shop day (the delivery mails, the order confirmation, the bank-transfer
   deadline with its zone named, the API-key expiry in UTC, named).
 - **One silent grace day.** `withdrawUntil` is the last day the buyer is **told**; a withdrawal is
   accepted one UTC day past it (`withdrawalClosesAt`, the end of the next UTC day). The delivery

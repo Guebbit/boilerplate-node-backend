@@ -16,6 +16,7 @@ import { blankToUndefined } from '@infrastructure/http/schemas';
 import { successResponse } from '@infrastructure/http/response';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { productService } from '@modules/products';
+import { startOfShopDay } from '@modules/shop';
 import { deliveryService } from '../services';
 
 /**
@@ -56,7 +57,7 @@ const dateImpactController =
             .previewDateImpact(
                 query.productId,
                 cause,
-                date === undefined ? undefined : new Date(date)
+                date === undefined ? undefined : startOfShopDay(date)
             )
             .then((result) => {
                 if (refused(response, result)) return;

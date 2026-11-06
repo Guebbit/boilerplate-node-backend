@@ -25,6 +25,7 @@ import {
 import deliveryModule from '@modules/delivery/module';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { markDomainEventsWired, resetDomainEvents } from '@kernel/events';
+import { shopDayOf } from '@modules/shop';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -62,7 +63,7 @@ const preorder = async (days = 30, quantity = 2) => {
 const moveDate = async (productId: string, to: Date | null) => {
     await productService.updateById(
         productId,
-        { releaseDate: to === null ? null : to.toISOString() },
+        { releaseDate: to === null ? null : shopDayOf(to) },
         testCallerContext
     );
     await settleOutboxNudges();
@@ -294,7 +295,7 @@ describe('what the buyer, the export and the board see of a late preorder', () =
         const { buyer, exported, board } = await viewsOf(orderId, user.id);
 
         for (const view of [buyer, exported, board]) {
-            expect(view?.expectedAt).toBe(expectedAt!.toISOString());
+            expect(view?.expectedAt).toBe(shopDayOf(expectedAt!));
             expect(view).not.toHaveProperty('consent');
             expect(view).not.toHaveProperty('consentDeadline');
             expect(view).not.toHaveProperty('revisedShipDate');

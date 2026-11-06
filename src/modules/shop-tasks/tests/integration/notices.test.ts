@@ -23,6 +23,7 @@ import { emitDomainEvent, resetDomainEvents } from '@kernel/events';
 import { countNotifications } from '@modules/notifications/tests/factories';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { enabledModules } from '../../../../modules';
+import { shopDayOf } from '@modules/shop';
 
 setupTestDb();
 
@@ -270,7 +271,7 @@ describe('the module subscriptions', () => {
             await fulfillmentOrdersOf(placed.orderId);
             await productService.updateById(
                 placed.productIds[0],
-                { releaseDate: new Date(Date.now() + days * DAY).toISOString() },
+                { releaseDate: shopDayOf(new Date(Date.now() + days * DAY)) },
                 testCallerContext
             );
             await settleOutboxNudges();

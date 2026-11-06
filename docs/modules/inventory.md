@@ -24,6 +24,7 @@ flowchart LR
     orders["orders"]
     products["products"]
     returns["returns"]
+    shop["shop"]
     shop_tasks["shop-tasks"]
 
     cart --> inventory
@@ -32,6 +33,7 @@ flowchart LR
     returns --> inventory
     shop_tasks --> inventory
     inventory --> products
+    inventory --> shop
     products -. "product.created" .-> inventory
     products -. "product.deleted" .-> inventory
     inventory -. "inventory.backorder_allocated" .-> delivery
@@ -43,7 +45,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders,products core;
-    class delivery,returns,shop_tasks supporting;
+    class delivery,returns,shop,shop_tasks supporting;
     class inventory centre;
 ```
 

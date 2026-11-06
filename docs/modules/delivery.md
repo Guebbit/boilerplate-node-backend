@@ -173,9 +173,12 @@ Pure, in `domain/fulfillment.ts`, over the order's **frozen** line snapshot:
 | the owed part of a line the shelf half covered, promised day D | the shelf part ships in #1; the owed part is its own group per day, cause and `noWithdrawal` value, `on_hold`, dated by the promise frozen on the order |
 
 The preorder flag and the date are read from the snapshot frozen at checkout, never from the product
-at payment time: a bank transfer can be paid a week after it was ordered. `agreedAt` is the date the
+at payment time: a bank transfer can be paid a week after it was ordered. `agreedAt` is the day the
 buyer was shown, and it never moves; `expectedAt` starts equal to it and is rewritten if the date
-slips. A group of one day leaves together, so it is promised for the latest release instant among
+slips. Both (and the board's `firstAgreedAt`) go out as plain shop days (`YYYY-MM-DD`) and are
+stored as the UTC instant of that day's shop midnight; the 30-day backorder default is the one
+promise that is an arbitrary instant, and is also answered as the day it falls on. "Moved later"
+compares days, so a move inside the same shop day sends no delayed notice. A group of one day leaves together, so it is promised for the latest release instant among
 its lines. "One day" is the shop's calendar day (`NODE_SHOP_TIMEZONE`): staff type a date on the shop's
 wall clock, so two instants UTC splits can still be the same day. The emails print those dates in the
 same zone, so the day staff typed is the day the buyer reads. A product line that carries neither flag simply lands in #1.
@@ -675,16 +678,16 @@ is given back is the preorder allowance and not shelf units.
 Each act writes its rows to the order's [timeline](./orders.md#the-timeline) in its own transaction
 (`services/announce.ts`), beside the outbox event it already wrote.
 
-| Row                    | Written when                                                   | Carries                                                              |
-| ---------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `shipment_shipped`     | a shipment is cut (also a digital fulfilment)                  | shipment and fulfillment order ids, `number`, `trackingCode`         |
-| `shipment_delivered`   | a shipment arrives                                             | the same ids                                                         |
-| `shipment_lost`        | staff report a shipment lost or damaged                        | the same ids, `reason` code; never the note or the message           |
-| `fulfillment_held`     | staff hold one, or a preorder group is born on hold            | `reason` code; never the note (staff only)                           |
-| `fulfillment_released` | staff, or an allocation of stock, release it (staff only)      | fulfillment order id                                                 |
-| `remainder_canceled`   | `returns` cancels what had not shipped                         | fulfillment order id                                                 |
-| `release_date_moved`   | a product's date moved and this order's expected date followed | fulfillment order id, `from` and `to` (ISO; an unset side is absent) |
-| `delay_notice_sent`    | the buyer was told: the date moved, or it will be missed       | fulfillment order id, `reason`, `expectedAt`                         |
+| Row                    | Written when                                                   | Carries                                                                    |
+| ---------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `shipment_shipped`     | a shipment is cut (also a digital fulfilment)                  | shipment and fulfillment order ids, `number`, `trackingCode`               |
+| `shipment_delivered`   | a shipment arrives                                             | the same ids                                                               |
+| `shipment_lost`        | staff report a shipment lost or damaged                        | the same ids, `reason` code; never the note or the message                 |
+| `fulfillment_held`     | staff hold one, or a preorder group is born on hold            | `reason` code; never the note (staff only)                                 |
+| `fulfillment_released` | staff, or an allocation of stock, release it (staff only)      | fulfillment order id                                                       |
+| `remainder_canceled`   | `returns` cancels what had not shipped                         | fulfillment order id                                                       |
+| `release_date_moved`   | a product's date moved and this order's expected date followed | fulfillment order id, `from` and `to` (shop days; an unset side is absent) |
+| `delay_notice_sent`    | the buyer was told: the date moved, or it will be missed       | fulfillment order id, `reason`, `expectedAt`                               |
 
 A whole-order cancel writes no `remainder_canceled`: the order's own `canceled` row says it. The
 shipment row comes first, then the order's own move that it caused (`shipped`, `delivered`). A

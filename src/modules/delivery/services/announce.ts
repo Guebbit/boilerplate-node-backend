@@ -9,6 +9,7 @@ import type { ClientSession } from 'mongoose';
 import { enqueueOutboxEvent } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
+import { shopDayOf } from '@modules/shop';
 import { holdNeedsBuyerNotice, holdNoticeOf } from '../domain';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
 import {
@@ -339,7 +340,10 @@ export const announceDelayed = (
                 data: {
                     fulfillmentOrderId: delayed.fulfillmentOrderId,
                     reason: delayed.reason,
-                    ...(delayed.expectedAt ? { expectedAt: delayed.expectedAt } : {})
+                    // The timeline holds the shop's day, which is what a screen prints.
+                    ...(delayed.expectedAt
+                        ? { expectedAt: shopDayOf(new Date(delayed.expectedAt)) }
+                        : {})
                 }
             },
             session

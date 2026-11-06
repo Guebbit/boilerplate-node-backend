@@ -1,7 +1,8 @@
 /**
  * @module
  * Contract tests for `GET /shop`: public, answers the seller's identity, the currency, the
- * ship-to countries and the return address — and nothing that is an operator's own business.
+ * ship-to countries, the return address and the time zone — and nothing that is an operator's own
+ * business.
  */
 
 import '@tests/contract';
@@ -34,7 +35,8 @@ describe('GET /shop', () => {
             },
             returnPostagePayer: 'consumer',
             termsVersion: '1',
-            backorderPromiseDays: 30
+            backorderPromiseDays: 30,
+            timeZone: 'Europe/Rome'
         });
     });
 
@@ -67,11 +69,12 @@ describe('GET /shop', () => {
             expect(response.body).toMatchObject({ termsVersion: '2026-10' });
         }));
 
-    it('never publishes the shop time zone', async () => {
-        const response = await api().get('/shop');
+    it('publishes the shop time zone, the calendar a promised day belongs to', () =>
+        withEnvironmentOverrides({ NODE_SHOP_TIMEZONE: 'Asia/Tokyo' }, async () => {
+            const response = await api().get('/shop');
 
-        expect(JSON.stringify(response.body)).not.toContain('Europe/Rome');
-    });
+            expect(response.body).toMatchObject({ timeZone: 'Asia/Tokyo' });
+        }));
 
     it('leaves the VAT number out when the shop has none', () =>
         withEnvironmentOverrides({ NODE_SHOP_VAT_NUMBER: '' }, async () => {

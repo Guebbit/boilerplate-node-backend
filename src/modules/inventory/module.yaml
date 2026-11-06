@@ -3,6 +3,7 @@ subdomain: supporting
 group: shop
 dependsOn:
     - products # a shortfall's title, and syncing the catalogue's read-only stock cache
+    - shop # the calendar a preorder's release day is answered on
 jobs:
     sweepReservations:
         name: sweep:reservations
