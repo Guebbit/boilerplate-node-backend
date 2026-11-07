@@ -407,11 +407,11 @@ A contact message is stored twice: as a task in the database, and as a mail in t
 (`NODE_SUPPORT_EMAIL`). The task follows the rules above. The mailbox is the operator's own mail
 provider, outside the app, so the app cannot delete from it.
 
-| Question                           | Answer                                                                                                                                                                                                |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| How long is a mail kept?           | 24 months from arrival, the same window as a task. The operator deletes older mail every month (a mail rule can do it)                                                                                |
-| What happens at an erasure?        | The shop deletes the person's messages, then mails the mailbox ONE notice with their `[#ref]`s only. Staff delete the matching mails: [the guide](../demo-ecommerce/support.md#mailbox-after-erasure) |
-| What do the provider's backups do? | They age out on the provider's own schedule, which the Art. 28 processor contract states                                                                                                              |
+| Question                           | Answer                                                                                                                                                                                                                                                                                      |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| How long is a mail kept?           | 24 months from arrival, the same window as a task. The operator deletes older mail every month (a mail rule can do it)                                                                                                                                                                      |
+| What happens at an erasure?        | By any door (admin hard delete, the purge, the inactivity erasure, a restore replay), the shop deletes the person's messages, then mails the mailbox ONE notice with their `[#ref]`s only. Staff delete the matching mails: [the guide](../demo-ecommerce/support.md#mailbox-after-erasure) |
+| What do the provider's backups do? | They age out on the provider's own schedule, which the Art. 28 processor contract states                                                                                                                                                                                                    |
 
 ## Backups and erasure
 

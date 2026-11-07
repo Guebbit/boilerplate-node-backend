@@ -10,7 +10,7 @@ import { setEnvironment } from '@tests/environment';
 import { callerContextAs } from '@tests/callers';
 import { systemCallerContext } from '@kernel/permissions';
 import type { UserDocument } from '@modules/users';
-import { createUser, eraseAsScheduled } from '@modules/users/tests/factories';
+import { createUser, eraseAsInactive, eraseAsScheduled } from '@modules/users/tests/factories';
 import { userService } from '@modules/users';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { resetDomainEvents } from '@kernel/events';
@@ -47,13 +47,14 @@ const messageFrom = (userId: string, email: string, subject: string) =>
 const notices = () =>
     mockEnqueueEmail.mock.calls.filter(([, template]) => template === 'tasks.erasure-notice');
 
-/** The three ways an account is erased, each through its own door. */
+/** The four ways an account is erased, each through its own door. */
 const doors: [string, (user: UserDocument) => Promise<unknown>][] = [
     [
         'an administrator hard-deleting it',
         (user) => userService.removeById(user.id, true, callerContextAs('admin'))
     ],
     ['the scheduled purge after the owner asked', (user) => eraseAsScheduled(user)],
+    ['the inactivity reaper hard-deleting it', (user) => eraseAsInactive(user)],
     [
         'the erasure ledger replayed on a restored database',
         (user) => userService.eraseAgain(user.id, new Date(), systemCallerContext('User'))

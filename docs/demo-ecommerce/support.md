@@ -102,7 +102,8 @@ If the message clearly says so, record it on the order the same day
 
 ### Someone is erased: clean the mailbox {#mailbox-after-erasure}
 
-When an account is erased, the shop deletes their messages, to-dos and notes. It cannot delete the
+When an account is erased (an admin's hard delete, the purge after the owner asked, the inactivity
+erasure, or a restore replaying the erasure ledger), the shop deletes their messages, to-dos and notes. It cannot delete the
 copies in the support mailbox, so it mails the mailbox ONE notice listing the `[#ref]`s of the
 deleted messages (no address, name or text). Do this the same week:
 

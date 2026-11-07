@@ -14,7 +14,7 @@ import { userRepository } from '../repository';
 import { isAudienceName } from '@kernel/permissions';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { makeUser } from '../factories';
-import { eraseScheduledDeletion } from '../services/own-account';
+import { eraseInactive, eraseScheduledDeletion } from '../services/own-account';
 import { systemCallerContext } from '@kernel/permissions';
 import { DAY_MS } from '@domain-primitives/time';
 import type { UserOverrides } from '../factories';
@@ -110,3 +110,16 @@ export const eraseAsScheduled = (user: UserDocument): ReturnType<typeof eraseSch
             }
         )
         .then(() => eraseScheduledDeletion(user, systemCallerContext('User')));
+
+/**
+ * Erase an account the way the inactivity reaper does: mark it reaper-soft-deleted, reload it as
+ * the reaper's read would, then take the real {@link eraseInactive} door, cascade included.
+ *
+ * @param user - a stored account
+ * @returns the door's answer
+ */
+export const eraseAsInactive = (user: UserDocument): ReturnType<typeof eraseInactive> =>
+    userRepository
+        .updateMany({ _id: user.id }, { $set: { deletedAt: new Date(), deletedBy: 'reaper' } })
+        .then(() => userRepository.findByIdWithCredentials(user.id))
+        .then((marked) => eraseInactive(marked ?? user, systemCallerContext('User')));
