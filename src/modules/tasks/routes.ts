@@ -37,10 +37,13 @@ export const router = Router();
  * them skipping success: this form's abuse is a successful post repeated, not a failed one.
  * See docs/tools/security.md#the-rate-limit-budgets.
  *
- * `humanChallengeGate` next — rung 3, off by default (`NODE_ANTIBOT_PROVIDER`) — before the write it
- * would otherwise refuse just as cheaply after.
+ * `getAuth` next, so a stale sign-in is refused (401) before an antibot token — single-use — is
+ * spent on a request that then fails.
+ *
+ * `humanChallengeGate` after — rung 3, off by default (`NODE_ANTIBOT_PROVIDER`) — before the write
+ * it would otherwise refuse just as cheaply after.
  */
-router.post('/', contactLimiters, humanChallengeGate, getAuth, idempotencyKey, postTask);
+router.post('/', contactLimiters, getAuth, humanChallengeGate, idempotencyKey, postTask);
 
 /*
  * Everything below is admin-only. POSITIONAL — guards routes below it, not above — which is why

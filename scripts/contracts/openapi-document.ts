@@ -112,3 +112,19 @@ export const operationsOf = (document: OpenApiDocument): OperationEntry[] =>
             return operation ? [{ route, method, operation }] : [];
         })
     );
+
+/**
+ * The upper-case methods of one path whose operation declares `security: []` — an operation that
+ * takes no sign-in at all (login, refresh, signup, …). An operation that omits `security`, or lists
+ * schemes, is not one: `[{}, bearerAuth]` means "a guest is fine, a sign-in is also accepted".
+ *
+ * @param pathItem - the `paths.<route>` object
+ * @returns the methods, in {@link HTTP_METHODS} order
+ */
+export const securityOpenMethods = (
+    pathItem: NonNullable<OpenApiDocument['paths']>[string]
+): string[] =>
+    HTTP_METHODS.filter((method) => {
+        const security = pathItem?.[method]?.security;
+        return Array.isArray(security) && security.length === 0;
+    }).map((method) => method.toUpperCase());

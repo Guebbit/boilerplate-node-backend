@@ -3,9 +3,9 @@
  *
  * Three middlewares with deliberately different failure modes, and the difference is the point:
  *
- *   `getAuth`  — *optional* identification. A MISS (a bad or expired token) means "anonymous", not
- *                "rejected", because it also guards public routes; a resolver that REJECTS is a
- *                fault and goes to `next(error)`. It must always call `next()` exactly once, on
+ *   `getAuth`  — *optional* identification. No credential means "anonymous"; a bad bearer is
+ *                refused 401 (RFC 6750 §3.1) unless the operation takes no sign-in; a resolver
+ *                that REJECTS is a fault and goes to `next(error)`. It must always call `next()` exactly once, on
  *                every path, or the request hangs.
  *   `isAuth`   — *required* identification. Fails closed with 401.
  *   `requirePermission(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)`  — *required* elevation. Fails closed, and the status says which check refused:
@@ -143,6 +143,7 @@ const makeRequest = (options: { authorization?: string; authContext?: AuthContex
         // Both, because `getAuth` sets both: a stub carrying only the session would let a guard
         // pass a test while attributing every denial in the trail to nobody.
         caller: options.authContext && callerInScope(options.authContext, 'tenant'),
+        baseUrl: '',
         path: '/protected',
         method: 'GET',
         headers: {}
@@ -153,6 +154,7 @@ const makeCookieRequest = (jwt?: string) =>
     asStub<Request>({
         cookies: jwt === undefined ? {} : { '__Host-session': jwt },
         header: jest.fn(),
+        baseUrl: '',
         path: '/orders/1/invoice',
         method: 'GET',
         headers: {}
@@ -167,6 +169,7 @@ const makeCredentialRequest = () =>
         header: jest.fn(() => undefined),
         caller: asStub<Caller>({}),
         credentialId: 'cred-1',
+        baseUrl: '',
         path: '/protected',
         method: 'GET',
         headers: {}
@@ -203,7 +206,7 @@ const runUntilNext = async (
  * Runs `getAuth` on an `sk_` token that does not resolve, until it answers: a refused key ends the
  * request with a 401 instead of calling `next`.
  */
-const runUntilRefused = async (request: Request) => {
+const runUntilRefused = async (request: Request, next = jest.fn()) => {
     const response = makeResponseStub();
     const refused = new Promise<void>((resolve) => {
         response.json.mockImplementation(() => {
@@ -211,7 +214,7 @@ const runUntilRefused = async (request: Request) => {
             return response;
         });
     });
-    getAuth(request, response, jest.fn());
+    getAuth(request, response, asStub<NextFunction>(next));
     await refused;
     return { response, setHeader: response.setHeader };
 };
@@ -269,28 +272,70 @@ describe('getAuth', () => {
         expect(request.caller).toEqual(callerInScope(resolved, 'tenant'));
     });
 
-    it('proceeds anonymously when the token is invalid or expired', async () => {
-        // Fails open on purpose: this middleware also runs on public routes, where a stale token
-        // in a browser must not turn a public page into an error.
-        mockedVerifyAccessToken.mockResolvedValue({ miss: 'expired' });
+    it.each(['malformed', 'invalid_signature', 'expired', 'revoked'] as const)(
+        'answers 401 with WWW-Authenticate for a %s bearer, never anonymous',
+        async (reason) => {
+            // RFC 6750 §3.1: a bearer somebody chose to present and that is bad is told so, so
+            // the client can refresh and retry instead of a public page quietly answering as a guest.
+            mockedVerifyAccessToken.mockResolvedValue({ miss: reason });
+            const request = makeRequest({ authorization: 'Bearer stale.token' });
+            const next = jest.fn();
 
-        const request = makeRequest({ authorization: 'Bearer expired.token' });
-        const next = await runUntilNext(getAuth, request, makeResponseStub());
+            const { response, setHeader } = await runUntilRefused(request, next);
 
-        expect(next).toHaveBeenCalledTimes(1);
-        expect(request.authContext).toBeUndefined();
-    });
+            expect(response.status).toHaveBeenCalledWith(401);
+            expect(setHeader).toHaveBeenCalledWith(
+                'WWW-Authenticate',
+                'Bearer error="invalid_token"'
+            );
+            expect(next).not.toHaveBeenCalled();
+            expect(request.authContext).toBeUndefined();
+        }
+    );
 
-    it('proceeds anonymously when the token is valid but the user no longer exists', async () => {
-        // A deleted account holding a still-valid JWT must not be granted an identity.
+    it('answers 401 when the token is valid but the user no longer exists', async () => {
+        // A deleted account holding a still-valid JWT has no identity to grant, and is told so.
         mockedVerifyAccessToken.mockResolvedValue({ ok: undefined });
-
         const request = makeRequest({ authorization: 'Bearer valid.token' });
-        const next = await runUntilNext(getAuth, request, makeResponseStub());
 
-        expect(next).toHaveBeenCalledTimes(1);
+        const { response } = await runUntilRefused(request);
+
+        expect(response.status).toHaveBeenCalledWith(401);
         expect(request.authContext).toBeUndefined();
     });
+
+    it('answers SESSION_IDLE, not a generic 401, for an idle staff session', async () => {
+        mockedVerifyAccessToken.mockResolvedValue({ miss: 'idle' });
+
+        const { response } = await runUntilRefused(
+            makeRequest({ authorization: 'Bearer idle.token' })
+        );
+
+        expect(response.status).toHaveBeenCalledWith(401);
+        expect(response.json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                errors: [expect.objectContaining({ code: 'SESSION_IDLE' })]
+            })
+        );
+    });
+
+    it.each([
+        ['login', 'POST', '/account/login'],
+        ['refresh', 'POST', '/account/refresh'],
+        ['signup', 'POST', '/account/signup']
+    ])(
+        'lets a stale bearer through on %s, whose contract takes no sign-in',
+        async (_label, method, path) => {
+            mockedVerifyAccessToken.mockResolvedValue({ miss: 'expired' });
+            const request = makeRequest({ authorization: 'Bearer expired.token' });
+            Object.assign(request, { method, path });
+
+            const next = await runUntilNext(getAuth, request, makeResponseStub());
+
+            expect(next).toHaveBeenCalledTimes(1);
+            expect(request.authContext).toBeUndefined();
+        }
+    );
 
     it('forwards a failure nobody anticipated to the error handler, instead of going anonymous', async () => {
         // Only a miss proceeds anonymous. A resolver that REJECTS — an outage or anything else —
@@ -324,12 +369,11 @@ describe('getAuth', () => {
         expect(request.authContext).toBeUndefined();
     });
 
-    it('never sends a response of its own', async () => {
+    it('never sends a response of its own for a request that carries no credential', async () => {
         // It identifies; it does not authorize. Any status set here would pre-empt the route.
-        mockedVerifyAccessToken.mockResolvedValue({ miss: 'malformed' });
         const response = makeResponseStub();
 
-        await runUntilNext(getAuth, makeRequest({ authorization: 'Bearer x' }), response);
+        await runUntilNext(getAuth, makeRequest(), response);
 
         expect(response.status).not.toHaveBeenCalled();
         expect(response.json).not.toHaveBeenCalled();
@@ -345,7 +389,7 @@ describe('getAuth', () => {
         securityEventsTotal.reset();
 
         const request = makeRequest({ authorization: 'Bearer forged.token' });
-        await runUntilNext(getAuth, request, makeResponseStub());
+        await runUntilRefused(request);
 
         expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -367,11 +411,7 @@ describe('getAuth', () => {
             mockedVerifyAccessToken.mockResolvedValue({ miss: reason });
             staleCredentialsTotal.reset();
 
-            await runUntilNext(
-                getAuth,
-                makeRequest({ authorization: 'Bearer stale.token' }),
-                makeResponseStub()
-            );
+            await runUntilRefused(makeRequest({ authorization: 'Bearer stale.token' }));
 
             expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
             const counted = await staleCredentialsTotal.get();

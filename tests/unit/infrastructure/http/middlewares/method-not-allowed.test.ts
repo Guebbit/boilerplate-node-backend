@@ -9,16 +9,41 @@ import { methodNotAllowed } from '@infrastructure/http/middlewares/method-not-al
 
 /** A static-vs-param pair, a read-only path, a path of a module this build does not serve, a system route. */
 const TABLE: readonly OperationRoute[] = [
-    { pattern: /^\/things$/, parameterCount: 0, module: 'things', methods: ['GET', 'POST'] },
-    { pattern: /^\/things\/search$/, parameterCount: 0, module: 'things', methods: ['POST'] },
+    {
+        pattern: /^\/things$/,
+        parameterCount: 0,
+        module: 'things',
+        methods: ['GET', 'POST'],
+        securityOpenMethods: []
+    },
+    {
+        pattern: /^\/things\/search$/,
+        parameterCount: 0,
+        module: 'things',
+        methods: ['POST'],
+        securityOpenMethods: []
+    },
     {
         pattern: /^\/things\/[^/]+$/,
         parameterCount: 1,
         module: 'things',
-        methods: ['DELETE', 'PATCH', 'PUT']
+        methods: ['DELETE', 'PATCH', 'PUT'],
+        securityOpenMethods: []
     },
-    { pattern: /^\/ghosts$/, parameterCount: 0, module: 'ghosts', methods: ['GET'] },
-    { pattern: /^\/ping$/, parameterCount: 0, module: null, methods: ['GET'] }
+    {
+        pattern: /^\/ghosts$/,
+        parameterCount: 0,
+        module: 'ghosts',
+        methods: ['GET'],
+        securityOpenMethods: []
+    },
+    {
+        pattern: /^\/ping$/,
+        parameterCount: 0,
+        module: null,
+        methods: ['GET'],
+        securityOpenMethods: []
+    }
 ];
 
 /** What the guard did with one request. */

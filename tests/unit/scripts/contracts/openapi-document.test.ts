@@ -5,7 +5,11 @@
  */
 
 import { stringify as stringifyYaml } from 'yaml';
-import { operationsOf, parseOpenApi } from '../../../../scripts/contracts/openapi-document';
+import {
+    operationsOf,
+    parseOpenApi,
+    securityOpenMethods
+} from '../../../../scripts/contracts/openapi-document';
 
 describe('parseOpenApi', () => {
     it('returns the document a YAML object describes', () => {
@@ -49,5 +53,26 @@ describe('operationsOf', () => {
 
     it('lists nothing for a document with no paths', () => {
         expect(operationsOf(parseOpenApi(stringifyYaml({ openapi: '3.1.0' })))).toEqual([]);
+    });
+});
+
+/** The one path item of a minimal document, as the generator hands it over. */
+const pathItemOf = (item: object) =>
+    parseOpenApi(stringifyYaml({ openapi: '3.1.0', paths: { '/x': item } })).paths?.['/x'];
+
+describe('securityOpenMethods', () => {
+    it('names only the methods that declare `security: []`', () => {
+        const item = pathItemOf({
+            post: { security: [], responses: {} },
+            get: { security: [{}, { bearerAuth: [] }], responses: {} },
+            put: { security: [{ bearerAuth: [] }], responses: {} },
+            delete: { responses: {} }
+        });
+
+        expect(securityOpenMethods(item)).toEqual(['POST']);
+    });
+
+    it('answers nothing for a path with no operations', () => {
+        expect(securityOpenMethods(pathItemOf({ parameters: [] }))).toEqual([]);
     });
 });

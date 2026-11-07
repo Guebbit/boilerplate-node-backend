@@ -30,15 +30,37 @@ In `cookie` mode there is one credential, a random session id kept hashed in the
     1. JWT signature/expiry with the refresh secret.
     2. a live row in the `sessions` collection, to reject revoked/unknown refresh tokens.
 
-If access-token verification fails, protected routes return `401`. The client can then call refresh and retry with the new access token.
+If access-token verification fails, the route returns `401` — a protected one and a public one alike (see [A bad bearer on a public page](#a-bad-bearer-on-a-public-page)). The client can then call refresh and retry with the new access token.
+
+### A bad bearer on a public page
+
+A bearer is a credential the client chose to present, so a bad one is told so, never quietly
+served as a guest (RFC 6750 §3.1; the same rule `sk_` keys already had). `getAuth` answers a
+bearer that names no live session — bad signature, expired, revoked, a user who no longer exists —
+with `401` and `WWW-Authenticate: Bearer error="invalid_token"`, and an idle staff session with
+`401 SESSION_IDLE`. The client refreshes and retries as the same person; if the refresh fails it
+falls back to a guest by itself.
+
+| Request                                                         | Answer                                         |
+| --------------------------------------------------------------- | ---------------------------------------------- |
+| No credential at all                                            | a guest, as ever                               |
+| A cookie that names no session (`cookie` mode)                  | a guest: a browser sends the cookie unasked    |
+| A bad bearer on an operation that accepts a sign-in             | `401 invalid_token` (`SESSION_IDLE` when idle) |
+| A bad bearer on an operation whose contract says `security: []` | answered as if it were absent                  |
+
+The exemption is read from the contract, not listed by hand: the generated `OPERATION_ROUTES`
+carries `securityOpenMethods` per path, and `getAuth` matches method and path against it. A new
+open operation is exempt the moment its contract says `security: []`. A request that matches no
+contract operation is not exempt. A 401 is never cached: `getAuth` runs before any cache layer.
+Tested in `tests/cross-cutting/stale-bearer-on-open-operations.test.ts`.
 
 **A failure while resolving a token is not "invalid credentials".** `getAuth` tells a _miss_ from a
 _fault_ (`kernel/middlewares/authorizations.ts`, `infrastructure/http/errors.ts#isInfrastructureError`).
-Only a miss proceeds anonymous: a bad signature, an expired token, a user who no longer exists. A
+Only a miss is a `401`: a bad signature, an expired token, a user who no longer exists. A
 resolver that **rejects** — a Mongo/Redis connection failure, or anything nobody anticipated — is
 forwarded to the global error handler, which logs it and answers `503` with `Retry-After` for an
 outage and `500` for the rest. The same holds for an `sk_` key. A build with no `account` module has no
-sessions, so every token there is a miss. RFC 9110 §15.5.2 vs §15.6.4 — telling a client its
+sessions, so every bearer there is a miss. RFC 9110 §15.5.2 vs §15.6.4 — telling a client its
 credentials are wrong when the server is the one that is broken is a lie the client acts on, logging
 out a session that was never invalid.
 
@@ -725,7 +747,7 @@ account exists.
 
 Every 401 carries a `WWW-Authenticate` challenge (RFC 9110 §15.5.2): `rejectResponse` adds
 `Bearer realm="api"` by default, and a guard that knows more sets its own first
-(`error="invalid_token"` for an `sk_` key, `error="insufficient_user_authentication"` for a
+(`error="invalid_token"` for an `sk_` key or a bad bearer, `error="insufficient_user_authentication"` for a
 step-up). The app's own clients read `errors[].code` and never the header. A failed human check
 is not a 401: it is a 403 `ANTIBOT_VERIFICATION_FAILED`, so no client reads it as a logout. See
 [Error Responses](../api/errors.md#headers-on-an-error).

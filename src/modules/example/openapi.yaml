@@ -151,6 +151,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Example'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
         put:
             tags: [Examples]

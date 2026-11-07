@@ -23,7 +23,9 @@ paths:
                 answer is the same `204`, and nothing is recorded or forwarded. A page should not
                 call this before the visitor has agreed.
             operationId: createAnalyticsEvent
-            security: []
+            security:
+                - {}
+                - bearerAuth: []
             requestBody:
                 required: true
                 content:

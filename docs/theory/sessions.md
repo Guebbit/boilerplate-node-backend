@@ -134,6 +134,12 @@ What counts as activity is a real request. What does not: a request sent with
 a refresh, which renews a token and carries the clock over unchanged. A refresh is still judged: a staff family idle past the limit gets `401 SESSION_IDLE` from `POST /account/refresh` and the family is removed. `POST /account/sessions/current/touch`
 counts and answers the clock, which is how a client asks "still there?" from server numbers.
 
+The idle answer is not kept for private pages. A public page (a product, a search) refuses an idle
+bearer with the same `401 SESSION_IDLE` instead of serving the person as a guest, so the client
+learns why the session ended and an editor who only browses is not silently logged out by the
+clock. The same holds for an expired or revoked bearer (`401 invalid_token`); see
+[A bad bearer on a public page](../tools/security.md#a-bad-bearer-on-a-public-page).
+
 ## The staff lifetime cap
 
 An idle timeout does not bound a stolen session that is kept in use: a script that polls every few

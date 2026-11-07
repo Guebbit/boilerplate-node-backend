@@ -60,7 +60,7 @@ A task is **one situation someone must take and close**. Two sources open one:
 The form is open to anyone, a stranger's write alongside signup, login, password reset,
 second-factor login and analytics events. It always records the address typed; when the sender is
 signed in it also records the account (`subjectId`, read from the session token the browser sends
-along — an absent or expired token files the message as anonymous).
+along. No token files the message as anonymous; a token that names no live session is refused `401`, so the client refreshes and sends it again as the person).
 
 A visitor may add a **category** (`order`, `cancellation`, `return`, `payment`, `account`,
 `privacy`, `other`) and the order number they typed (`orderNumber`, free text, never checked

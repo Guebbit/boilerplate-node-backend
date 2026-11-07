@@ -67,6 +67,16 @@ describe.each(MODES)('the staff idle timeout in %s mode', (mode) => {
         expect(await sessionRowsOf(user.id)).toEqual([]);
     });
 
+    it('answers SESSION_IDLE on a public read too, so the client learns why it was a guest', async () => {
+        const { user, bearer } = await signInAs('editor');
+        await idleFor(user.id, LIMIT + 60);
+
+        const response = await api().get('/products').set('Authorization', bearer);
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].code).toBe('SESSION_IDLE');
+    });
+
     it('never idles a shopper out, however long the session has sat', async () => {
         const { user, bearer } = await signInAs('customer');
         await idleFor(user.id, LIMIT * 100);

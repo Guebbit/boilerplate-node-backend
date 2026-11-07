@@ -51,12 +51,15 @@ paths:
                 Creates a contact task and notifies the support mailbox by email. Open to
                 anyone. A valid session bearer token, when one is sent, records the sender's
                 account on the task (`subjectId`), so the account's data export and erasure
-                include it; an absent or expired token files it as anonymous.
+                include it. No token files it as anonymous; a token that names no live session is
+                refused `401`, so the client refreshes and sends it again as the person.
             operationId: createContactTask
             x-error-codes:
                 '409': [IDEMPOTENCY_IN_FLIGHT]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
-            security: []
+            security:
+                - {}
+                - bearerAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/AntibotChallengeTokenHeader'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
@@ -71,6 +74,8 @@ paths:
                 # task, and a spam catch must look exactly like a stored message.
                 '202':
                     description: The message was received; staff answer it from the support mailbox.
+                # A session bearer was sent and names no live session: refresh and send it again.
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # A human-challenge provider is active and the caller's token is missing or refused.
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # `Idempotency-Key` names a request still in flight.

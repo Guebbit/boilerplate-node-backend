@@ -43,6 +43,7 @@ import {
 import { t } from '@infrastructure/i18n';
 import { rejectResponse, type ResponseErrorItem } from '@infrastructure/http/response';
 import { ERROR_CODES, type ErrorCode } from '@api/error-codes';
+import { OPERATION_ROUTES } from '@api/operation-routes';
 import { callerContextOf } from '@infrastructure/http/request';
 import { apiKeyLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { requireAllowedOrigin } from '@infrastructure/http/middlewares/origin';
@@ -181,13 +182,16 @@ const resolveOptionsOf = (request: Request): ResolveOptions => ({
  * @param resolution - the resolver's promise for the presented credential
  * @param via - which credential carried it
  * @param onMiss - runs when the credential was refused, after the miss is counted
+ * @param refuseDead - answers the request itself for a credential that names nobody (a miss, or a
+ *   user who is gone); `true` means it did, so the request goes no further
  */
 const continueWithSession = (
     request: Request,
     next: NextFunction,
     resolution: ReturnType<typeof resolveBearer>,
     via: 'bearer' | 'cookie',
-    onMiss?: () => void
+    onMiss?: () => void,
+    refuseDead?: () => boolean
 ): void => {
     resolution
         .then((resolved) => {
@@ -199,9 +203,56 @@ const continueWithSession = (
             }
             const user = 'ok' in resolved ? resolved.ok : undefined;
             if (user) applySession(request, user, via);
+            else if (refuseDead?.()) return;
             next();
         })
         .catch(next);
+};
+
+/**
+ * Whether the contract says this operation reads no sign-in at all (`security: []`: login,
+ * refresh, signup, password reset, …). Read from the generated route table, so a new open
+ * operation is exempt the moment its contract says so. A request no contract operation matches
+ * is not one.
+ *
+ * @param request - judged by its method and full path
+ */
+const takesNoSignIn = (request: Request): boolean => {
+    const method = request.method === 'HEAD' ? 'GET' : request.method;
+    const full = request.baseUrl + request.path;
+    const path = full.length > 1 ? full.replace(/\/$/, '') : full;
+    // The table is fewest-parameters-first, so a literal path wins over `/{id}` as it does in OAS.
+    const operation = OPERATION_ROUTES.find(
+        (route) => route.methods.includes(method) && route.pattern.test(path)
+    );
+    return operation?.securityOpenMethods.includes(method) ?? false;
+};
+
+/**
+ * The 401 for a bearer that names no live session (expired, revoked, malformed, idle, or its user
+ * gone). A bearer is a credential somebody chose to present, so a bad one is told so — RFC 6750
+ * §3.1, as {@link refuseInvalidApiKey} does for a key — and the client can refresh and retry,
+ * instead of the page quietly answering as a guest. An idle staff session answers `SESSION_IDLE`.
+ * An operation that takes no sign-in is not refused.
+ * https://www.rfc-editor.org/rfc/rfc6750#section-3.1
+ *
+ * @param request - judged by its operation
+ * @param response - answered 401 here
+ * @returns whether it answered
+ */
+const refuseDeadBearer = (request: Request, response: Response): boolean => {
+    if (takesNoSignIn(request)) return false;
+    response.setHeader('WWW-Authenticate', 'Bearer error="invalid_token"');
+    // Not `refuseUnauthenticated`: `noteMiss` already counted and, for a forged token, audited
+    // this one, and a token that merely expired every few minutes must not flood the trail.
+    rejectResponse(
+        response,
+        401,
+        request.sessionIdle
+            ? [{ code: ERROR_CODES.SESSION_IDLE, message: t('account.session-idle') }]
+            : cookieUnauthorizedErrors()
+    );
+    return true;
 };
 
 /**
@@ -264,9 +315,12 @@ const refuseInvalidApiKey = (response: Response): void => {
  *
  * Credential: `Authorization: Bearer` first — an access token or a `ses_…` session id. With no
  *             header, the session cookie, in a deployment whose sessions live in one.
- * No caller:  an absent, invalid or expired token, or one naming a user who no longer exists,
- *             leaves `authContext` unset — `isAuth`/`requirePermission` are what gate a route.
- *             A build with no `account` module has no sessions, so every token is a miss.
+ * No caller:  no credential at all leaves `authContext` unset — `isAuth`/`requirePermission` are
+ *             what gate a route. A cookie that names no session does the same.
+ * Bad bearer:  an invalid, expired, revoked or idle bearer, or one naming a user who no longer
+ *             exists, is refused with 401 `invalid_token` (`SESSION_IDLE` when idle) — except on
+ *             an operation whose contract says `security: []`. A build with no `account` module
+ *             has no sessions, so every bearer is bad there.
  * Failure:    any failure resolving a credential or a session goes to `next(error)`; only a miss
  *             proceeds anonymous. The global handler answers 503 for an outage
  *             (RFC 9110 §15.5.4; see `infrastructure/http/errors.ts#isInfrastructureError`), 500
@@ -318,7 +372,14 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
         return;
     }
 
-    continueWithSession(request, next, resolveBearer(token, resolveOptionsOf(request)), 'bearer');
+    continueWithSession(
+        request,
+        next,
+        resolveBearer(token, resolveOptionsOf(request)),
+        'bearer',
+        undefined,
+        () => refuseDeadBearer(request, response)
+    );
 };
 
 /**

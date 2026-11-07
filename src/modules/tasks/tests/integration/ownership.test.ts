@@ -78,15 +78,14 @@ describe('POST /tasks records who sent it', () => {
         expect(stored?.subjectId).toBeUndefined();
     });
 
-    it('files a post with a bad token as anonymous, not a refusal', async () => {
+    it('refuses a post with a bad token, filing nothing as anonymous in its place', async () => {
         const response = await api()
             .post('/tasks')
             .set('Authorization', 'Bearer eyJhbGciOiJIUzI1NiJ9.e30.not-a-valid-signature')
             .send(FORM);
 
-        expect(response.status).toBe(202);
-        const [stored] = await findAllTasks();
-        expect(stored?.subjectId).toBeUndefined();
+        expect(response.status).toBe(401);
+        expect(await findAllTasks()).toEqual([]);
     });
 });
 

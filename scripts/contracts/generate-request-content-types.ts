@@ -7,7 +7,7 @@
  * path matcher as a regex literal, so the guard compiles nothing at boot.
  *
  * It also writes `api/operation-routes.ts` beside it: for every path, the methods the contract gives
- * it and the module that owns it. The 405 handler
+ * it, the module that owns it and which methods take no sign-in (`security: []`). The 405 handler
  * (`src/infrastructure/http/middlewares/method-not-allowed.ts`) reads it, so a known path asked
  * with the wrong method answers 405 + `Allow` instead of the catch-all's 404.
  *
@@ -23,7 +23,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeOrCheck } from './generated-file';
-import { HTTP_METHODS, WRITE_METHODS, parseOpenApi } from './openapi-document';
+import { HTTP_METHODS, WRITE_METHODS, parseOpenApi, securityOpenMethods } from './openapi-document';
 import { requiredPath } from '../cli';
 
 /** The repo root. `import.meta.url` rather than `__dirname`: this script runs as ESM. */
@@ -114,7 +114,7 @@ const renderRouteRows = (): string[] =>
             return {
                 route,
                 parameterCount,
-                text: `    { pattern: ${literal}, parameterCount: ${String(parameterCount)}, module: ${JSON.stringify(owner ?? null)}, methods: ${JSON.stringify(methods)} },`
+                text: `    { pattern: ${literal}, parameterCount: ${String(parameterCount)}, module: ${JSON.stringify(owner ?? null)}, methods: ${JSON.stringify(methods)}, securityOpenMethods: ${JSON.stringify(securityOpenMethods(operations))} },`
             };
         })
         .toSorted(
@@ -140,6 +140,8 @@ const routesOutput =
     '    module: string | null;\n' +
     '    /** Upper-case methods the contract declares on the path. */\n' +
     '    methods: readonly string[];\n' +
+    '    /** The upper-case methods whose operation declares `security: []`: no sign-in is read there. */\n' +
+    '    securityOpenMethods: readonly string[];\n' +
     '}\n\n' +
     '/** Every contract path, fewest path parameters first. */\n' +
     `export const OPERATION_ROUTES: readonly OperationRoute[] = [\n${renderRouteRows().join('\n')}\n];\n`;
