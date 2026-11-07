@@ -2,6 +2,7 @@ summary: 'Frozen invoice and credit-note documents, issued from payment and refu
 subdomain: supporting
 group: shop
 dependsOn:
+    - account # operatorIdentity: the seller block frozen on every document
     - orders # the VAT breakdown, the seller's jurisdiction, and an auth-scoped order read
     - payments # PAYMENT_REFUNDED — the fact a credit note is issued from
     - shop # the seller block frozen on every document, and the zone its numbers are counted in

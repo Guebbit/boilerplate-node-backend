@@ -90,6 +90,7 @@ flowchart TD
     example --> users
     inventory --> products
     inventory --> shop
+    invoicing --> account
     invoicing --> orders
     invoicing --> payments
     invoicing --> shop
@@ -99,6 +100,7 @@ flowchart TD
     notifications --> webhooks
     observability --> audit_logs
     orders --> access
+    orders --> account
     orders --> inventory
     orders --> products
     orders --> shop
@@ -152,7 +154,7 @@ flowchart TD
 
 |                 | Reaches                                                                                                  | Reached by                                                                                   |
 | --------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `orders`        | access, inventory, products, shop, users                                                                 | cart, delivery, invoicing, payments, returns, shop-tasks, stats                              |
+| `orders`        | access, account, inventory, products, shop, users                                                        | cart, delivery, invoicing, payments, returns, shop-tasks, stats                              |
 | `shop`          | account                                                                                                  | cart, delivery, inventory, invoicing, orders, payments, products, returns, shop-tasks, stats |
 | `shop-tasks`    | cart, delivery, inventory, notifications, orders, payments, returns, shop, stock-alerts, tasks, wishlist | —                                                                                            |
 | `cart`          | addresses, delivery, inventory, orders, payments, products, shop, users                                  | shop-tasks, wishlist                                                                         |
@@ -161,13 +163,13 @@ flowchart TD
 | `payments`      | access, orders, shop                                                                                     | cart, invoicing, returns, shop-tasks, stats                                                  |
 | `products`      | shop                                                                                                     | cart, delivery, inventory, orders, sitemap, stock-alerts, wishlist                           |
 | `returns`       | access, delivery, inventory, orders, payments, shop                                                      | shop-tasks, stats                                                                            |
+| `account`       | access, users                                                                                            | api-keys, invoicing, orders, shop, tasks                                                     |
 | `delivery`      | inventory, orders, products, shop                                                                        | cart, returns, shop-tasks                                                                    |
 | `inventory`     | products, shop                                                                                           | cart, delivery, orders, returns, shop-tasks                                                  |
-| `account`       | access, users                                                                                            | api-keys, shop, tasks                                                                        |
+| `invoicing`     | account, orders, payments, shop                                                                          | stats                                                                                        |
 | `notifications` | access, tasks, users, webhooks                                                                           | shop-tasks                                                                                   |
 | `stats`         | invoicing, orders, payments, returns, shop                                                               | —                                                                                            |
 | `tasks`         | access, account, users                                                                                   | notifications, shop-tasks                                                                    |
-| `invoicing`     | orders, payments, shop                                                                                   | stats                                                                                        |
 | `api-keys`      | access, account, users                                                                                   | —                                                                                            |
 | `stock-alerts`  | products, users                                                                                          | shop-tasks                                                                                   |
 | `wishlist`      | cart, products                                                                                           | shop-tasks                                                                                   |
@@ -260,7 +262,7 @@ The pet-supply e-commerce domain this boilerplate demos itself with. Nothing in 
 - [`payments`](./payments.md) — An order's money, behind a provider port. Deeper: [The provider port](./payments-provider-port.md).
 - [`products`](./products.md) — The catalogue, its search surface and its cache.
 - [`returns`](./returns.md) — Sending goods back, including the EU withdrawal button.
-- [`shop`](./shop.md) — The shop itself: who it is, where it is, where goods come back to, what it ships to, and the one currency it trades in.
+- [`shop`](./shop.md) — The shop itself: its time zone, where goods come back to, what it ships to, and the one currency it trades in.
 - [`shop-tasks`](./shop-tasks.md) — The shop's side of the helpdesk: opens a to-do for each payment, stock or delivery situation that needs a person, writes the buyer's messages and the staff's work notices, and sends the staff digest.
 - [`sitemap`](./sitemap.md) — sitemap.xml for search engines: the shop pages and every public product, once per language.
 - [`stats`](./stats.md) — Sales numbers, read on demand from the modules that own them.

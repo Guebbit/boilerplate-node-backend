@@ -1,8 +1,8 @@
 /**
  * @module
- * Contract tests for `GET /shop`: public, answers the seller's identity, the currency, the
- * ship-to countries, the return address and the time zone — and nothing that is an operator's own
- * business.
+ * Contract tests for `GET /shop`: public, answers the currency, the ship-to countries, the return
+ * address and the time zone — and neither the operator's identity nor the Terms version, which are
+ * `GET /config`'s.
  */
 
 import '@tests/contract';
@@ -10,19 +10,12 @@ import { api } from '@tests/http';
 import { withEnvironmentOverrides } from '@tests/environment';
 
 describe('GET /shop', () => {
-    it('answers the seller, the currency, where it ships and where returns go, with no credential', async () => {
+    it('answers the currency, where it ships and where returns go, with no credential', async () => {
         const response = await api().get('/shop');
 
         expect(response.status).toBe(200);
-        // `tests/support/setup-environment.ts` sets the identity; the rest are defaults.
+        // `tests/support/setup-environment.ts` sets the operator, whose address is the return fallback.
         expect(response.body).toEqual({
-            legalName: 'Guebbit Demo Shop Srl',
-            street: 'Via Roma 1',
-            city: 'Milano',
-            zip: '20100',
-            country: 'IT',
-            email: 'support@example.com',
-            phone: '+39 02 1234567',
             currency: 'EUR',
             minorUnits: 2,
             shipToCountries: ['IT'],
@@ -34,18 +27,16 @@ describe('GET /shop', () => {
                 country: 'IT'
             },
             returnPostagePayer: 'consumer',
-            termsVersion: '1',
             backorderPromiseDays: 30,
             timeZone: 'Europe/Rome'
         });
     });
 
-    it('reports the configured currency, ship-to list, VAT number and postage payer', () =>
+    it('reports the configured currency, ship-to list and postage payer', () =>
         withEnvironmentOverrides(
             {
                 NODE_DEFAULT_CURRENCY: 'JPY',
                 NODE_SHIP_TO_COUNTRIES: 'it,fr',
-                NODE_SHOP_VAT_NUMBER: 'IT12345678901',
                 NODE_RETURN_POSTAGE_PAYER: 'shop'
             },
             async () => {
@@ -56,18 +47,17 @@ describe('GET /shop', () => {
                     // JPY has no minor unit: a price input in this shop takes whole yen.
                     minorUnits: 0,
                     shipToCountries: ['IT', 'FR'],
-                    vatNumber: 'IT12345678901',
                     returnPostagePayer: 'shop'
                 });
             }
         ));
 
-    it('reports the Terms version in force', () =>
-        withEnvironmentOverrides({ NODE_TERMS_VERSION: '2026-10' }, async () => {
-            const response = await api().get('/shop');
+    it('carries no identity and no Terms version: those are GET /config', async () => {
+        const response = await api().get('/shop');
 
-            expect(response.body).toMatchObject({ termsVersion: '2026-10' });
-        }));
+        expect(response.body).not.toHaveProperty('legalName');
+        expect(response.body).not.toHaveProperty('termsVersion');
+    });
 
     it('publishes the shop time zone, the calendar a promised day belongs to', () =>
         withEnvironmentOverrides({ NODE_SHOP_TIMEZONE: 'Asia/Tokyo' }, async () => {
@@ -75,38 +65,4 @@ describe('GET /shop', () => {
 
             expect(response.body).toMatchObject({ timeZone: 'Asia/Tokyo' });
         }));
-
-    it('leaves the VAT number out when the shop has none', () =>
-        withEnvironmentOverrides({ NODE_SHOP_VAT_NUMBER: '' }, async () => {
-            const response = await api().get('/shop');
-
-            expect(response.body).not.toHaveProperty('vatNumber');
-        }));
-
-    it('reports the trade register and the registration number when the shop has them', () =>
-        withEnvironmentOverrides(
-            {
-                NODE_SHOP_TRADE_REGISTER: 'Registro Imprese di Bologna',
-                NODE_SHOP_REGISTRATION_NUMBER: 'BO-123456'
-            },
-            async () => {
-                const response = await api().get('/shop');
-
-                expect(response.body).toMatchObject({
-                    tradeRegister: 'Registro Imprese di Bologna',
-                    registrationNumber: 'BO-123456'
-                });
-            }
-        ));
-
-    it('leaves the trade register and the registration number out when the shop has none', () =>
-        withEnvironmentOverrides(
-            { NODE_SHOP_TRADE_REGISTER: '', NODE_SHOP_REGISTRATION_NUMBER: '' },
-            async () => {
-                const response = await api().get('/shop');
-
-                expect(response.body).not.toHaveProperty('tradeRegister');
-                expect(response.body).not.toHaveProperty('registrationNumber');
-            }
-        ));
 });

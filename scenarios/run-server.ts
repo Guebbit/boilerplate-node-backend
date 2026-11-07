@@ -89,14 +89,14 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     // `orders`' and `products`' own boot-time requirements — `assertModuleConfig` gates this
     // profile too, so it satisfies the gate the ordinary way, with the same values `.env-example`
     // ships for a plain developer checkout.
-    NODE_SHOP_COUNTRY: 'IT',
+    NODE_LEGAL_COUNTRY: 'IT',
     NODE_SHOP_TIMEZONE: 'Europe/Rome',
-    NODE_SHOP_LEGAL_NAME: 'Guebbit Demo Shop Srl',
-    NODE_SHOP_STREET: 'Via Roma 1',
-    NODE_SHOP_CITY: 'Milano',
-    NODE_SHOP_ZIP: '20100',
+    NODE_LEGAL_NAME: 'Guebbit Demo Shop Srl',
+    NODE_LEGAL_STREET: 'Via Roma 1',
+    NODE_LEGAL_CITY: 'Milano',
+    NODE_LEGAL_ZIP: '20100',
     NODE_SUPPORT_EMAIL: 'support@example.com',
-    NODE_SHOP_PHONE: '+39 02 1234567',
+    NODE_LEGAL_PHONE: '+39 02 1234567',
     NODE_VAT_RATE_DEFAULT: '0.22',
     NODE_VAT_RATE_REDUCED: '0.10',
     // `.env`'s own value when it sets one — a lane pointed at non-default frontend ports (to

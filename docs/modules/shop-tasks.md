@@ -144,7 +144,7 @@ notice replaces it, a "no date yet" notice removes it.
 The rule binds a shop in the United States or one of its territories (`FTC_JURISDICTIONS`: `US`,
 `PR`, `GU`, `VI`, `AS`, `MP`, 16 CFR 435) for **every** destination, including a delay with no ship-to
 country. A shop elsewhere owes it only to a buyer shipped to one of those places. The shop's country
-is `NODE_SHOP_COUNTRY`; there is no list to configure.
+is `NODE_LEGAL_COUNTRY`; there is no list to configure.
 
 ### The notices
 

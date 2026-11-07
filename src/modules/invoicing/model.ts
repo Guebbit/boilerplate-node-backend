@@ -14,8 +14,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
-import { RateType, type OrderTaxSummaryRow } from '@types';
-import type { ShopIdentity } from '@modules/shop';
+import { RateType, type Operator, type OrderTaxSummaryRow } from '@types';
 
 /**
  * One frozen line — a product's title, quantity and the price/rate it was actually sold at. No
@@ -59,7 +58,7 @@ export interface InvoiceParty {
  * The seller's own legal identity, frozen onto the document at issue — Art. 226(d)/(f)/(g). The
  * shop's identity less the contact fields an invoice does not carry, every field optional.
  */
-export type InvoiceSeller = Partial<Omit<ShopIdentity, 'email' | 'phone'>>;
+export type InvoiceSeller = Partial<Omit<Operator, 'email' | 'phone'>>;
 
 /**
  * Fields an invoice and a credit note both freeze — everything Art. 226 and EN 16931's BR-CO-17

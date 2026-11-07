@@ -300,15 +300,15 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
     // The seller is a legal fact of the day of sale: a later rename or a new VAT number must not
     // reach a document that already exists.
     it('freezes the seller as issued, without the shop’s email or phone, and keeps it when the settings change', async () => {
-        setEnvironment({ NODE_SHOP_VAT_NUMBER: 'IT12345678901' });
+        setEnvironment({ NODE_LEGAL_VAT_NUMBER: 'IT12345678901' });
         const user = await createUser();
         const product = await createProduct({ price: '10.00' });
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         await invoicingService.issueInvoice(order);
 
         setEnvironment({
-            NODE_SHOP_LEGAL_NAME: 'Renamed Holding Srl',
-            NODE_SHOP_VAT_NUMBER: 'IT99999999999'
+            NODE_LEGAL_NAME: 'Renamed Holding Srl',
+            NODE_LEGAL_VAT_NUMBER: 'IT99999999999'
         });
         const stored = await invoicingRepository.findInvoiceByOrderId(String(order._id));
 

@@ -11,8 +11,7 @@ import { ConfigError } from '@infrastructure/config/define';
 import { minorUnitExponent } from '@domain-primitives/money';
 import { dayInZone, startOfDayInZone } from '@domain-primitives/time';
 import type { ReturnPostagePayer, Shop, ShopAddress } from '@types';
-import { termsVersion } from '@modules/account';
-import { supportEmail } from '@infrastructure/adapters/config';
+import { operatorIdentity } from '@modules/account';
 import { shopConfig } from './config';
 
 /**
@@ -31,19 +30,18 @@ const requiredValue = (name: string, value: string | undefined): string => {
 
 /**
  * The shop's own country — the ONLY jurisdiction VAT is ever charged at: no destination lookup,
- * no per-customer address, legal below the EU's €10,000 distance-selling threshold. Required at
- * boot via this module's manifest; read defensively regardless, since `NODE_ENV=test` skips that
- * check — the demo profile does not: it sets `NODE_SHOP_COUNTRY` itself, the same as any other
- * deployment must.
- * @returns the configured ISO-3166 country code, or `undefined`
+ * no per-customer address, legal below the EU's €10,000 distance-selling threshold. It is the
+ * operator's country (`NODE_LEGAL_COUNTRY`, required at boot by `account`).
+ * @returns the configured ISO-3166 country code
+ * @throws {ConfigError} when it is unset (only possible under `NODE_ENV=test`)
  */
-export const shopCountry = (): string | undefined => shopConfig().NODE_SHOP_COUNTRY;
+export const shopCountry = (): string => operatorIdentity().country;
 
 /**
  * The shop's own time zone — whose calendar every year-numbered series, and every "day" a report
  * counts, follows. One named zone (not a fixed offset, which ignores summer time) so a sale at
  * 00:30 on 1 January in Rome lands in the new year's series. Required at boot via this module's
- * manifest; the throw is the same `NODE_ENV=test` backstop {@link shopIdentity} has.
+ * manifest; the throw is the same `NODE_ENV=test` backstop {@link traderPhone} has.
  * @returns the canonical IANA zone name, e.g. `Europe/Rome`
  * @throws {ConfigError} when it is unset (only possible under `NODE_ENV=test`)
  */
@@ -64,54 +62,18 @@ export const shopDayOf = (instant: Date): string => dayInZone(instant, shopTimez
  */
 export const startOfShopDay = (day: string): Date => startOfDayInZone(day, shopTimezone());
 
-/** Where and who the shop is: the trader identity of CRD Art. 6(1)(b)-(c) and an invoice's seller block. */
-export interface ShopIdentity {
-    /** The legal name, as registered. */
-    legalName: string;
-    /** VAT identification number; absent for a shop below the registration threshold. */
-    vatNumber?: string;
-    /** The commercial register the seller is entered in (e-Commerce Directive Art. 5(1)(d)); absent for a seller in none. */
-    tradeRegister?: string;
-    /** The seller's number in that register; absent when there is no register. */
-    registrationNumber?: string;
-    street: string;
-    city: string;
-    zip: string;
-    /** ISO-3166 alpha-2. */
-    country: string;
-    /** Where a customer writes to. */
-    email: string;
-    /** Telephone number. */
-    phone: string;
-}
-
 /**
- * The shop's identity — every required field present, the optional ones (VAT number, trade
- * register, registration number) only when set.
- * @returns the identity
- * @throws {ConfigError} when a required variable is unset (only possible under `NODE_ENV=test`)
+ * The operator's telephone number, which the withdrawal form's "To" row prints. Optional on the
+ * site, required with the shop: boot refuses without it (see `config.ts`).
+ * @returns the number
+ * @throws {ConfigError} when it is unset (only possible under `NODE_ENV=test`)
  */
-export const shopIdentity = (): ShopIdentity => {
-    const config = shopConfig();
-    const { NODE_SHOP_VAT_NUMBER: vatNumber, NODE_SHOP_TRADE_REGISTER: tradeRegister } = config;
-    const registrationNumber = config.NODE_SHOP_REGISTRATION_NUMBER;
-    return {
-        legalName: requiredValue('NODE_SHOP_LEGAL_NAME', config.NODE_SHOP_LEGAL_NAME),
-        ...(vatNumber ? { vatNumber } : {}),
-        ...(tradeRegister ? { tradeRegister } : {}),
-        ...(registrationNumber ? { registrationNumber } : {}),
-        street: requiredValue('NODE_SHOP_STREET', config.NODE_SHOP_STREET),
-        city: requiredValue('NODE_SHOP_CITY', config.NODE_SHOP_CITY),
-        zip: requiredValue('NODE_SHOP_ZIP', config.NODE_SHOP_ZIP),
-        country: requiredValue('NODE_SHOP_COUNTRY', config.NODE_SHOP_COUNTRY),
-        email: config.NODE_LEGAL_EMAIL ?? supportEmail(),
-        phone: requiredValue('NODE_SHOP_PHONE', config.NODE_SHOP_PHONE)
-    };
-};
+export const traderPhone = (): string =>
+    requiredValue('NODE_LEGAL_PHONE', operatorIdentity().phone);
 
 /**
- * Where returned goods are sent: the configured return address, or the shop's legal address when
- * none is fully set. Partial config reads as none rather than guessed at: a customer told to post
+ * Where returned goods are sent: the configured return address, or the operator's postal address
+ * when none is fully set. Partial config reads as none rather than guessed at: a customer told to post
  * a parcel to "Via Roma, " is worse off than one sent to the legal address.
  * @returns the address; never `undefined`
  */
@@ -126,7 +88,7 @@ export const returnAddress = (): ShopAddress => {
     if (street && city && zip && country)
         return { ...(name ? { name } : {}), street, city, zip, country };
 
-    const legal = shopIdentity();
+    const legal = operatorIdentity();
     return {
         name: legal.legalName,
         street: legal.street,
@@ -159,15 +121,14 @@ export const returnPostagePayer = (): ReturnPostagePayer => shopConfig().NODE_RE
  * Which ISO-3166 countries this deployment will ship a physical order to — checkout refuses
  * (422) any method that `requiresAddress` once the resolved address's country falls outside it.
  * Comma-separated; each code is upper-cased so a deployment typing `it` still matches an address
- * stored as `IT`. Defaults to the shop's own country alone: ship only where the VAT assumption in
+ * stored as `IT`. Defaults to the operator's country alone: ship only where the VAT assumption in
  * {@link shopCountry}'s docblock already holds, until a deployment explicitly widens it.
- * @returns the configured list, upper-cased; empty when neither this nor `NODE_SHOP_COUNTRY` is set
+ * @returns the configured list, upper-cased; the shop's own country alone when none is set
  */
 export const shipToCountries = (): string[] => {
     const configured = shopConfig().NODE_SHIP_TO_COUNTRIES;
     if (configured.length > 0) return configured;
-    const shop = shopCountry();
-    return shop ? [shop] : [];
+    return [shopCountry()];
 };
 
 /**
@@ -186,20 +147,19 @@ export const shopCurrency = (): string => shopConfig().NODE_DEFAULT_CURRENCY;
 export const BACKORDER_PROMISE_DAYS = 30;
 
 /**
- * What `GET /shop` answers: the seller's identity, the currency, where the shop ships, where
- * returns go, the Terms version and the backorder promise. Everything a visitor is entitled to before a sale (CRD Art. 6(1), e-Commerce
- * Directive Art. 5). The time zone is published too, for naming the calendar a promised day belongs to. Not published: the bank details (those travel per order).
+ * What `GET /shop` answers: the currency, where the shop ships, where returns go, who pays the
+ * postage and the backorder promise. The time zone is published too, for naming the calendar a
+ * promised day belongs to. The legal identity and the Terms version are `GET /config`'s. Not
+ * published: the bank details (those travel per order).
  * @returns the public shop record
  * @throws {ConfigError} when a required variable is unset (only possible under `NODE_ENV=test`)
  */
 export const getShop = (): Shop => ({
-    ...shopIdentity(),
     currency: shopCurrency(),
     minorUnits: minorUnitExponent(shopCurrency()),
     shipToCountries: shipToCountries(),
     returnAddress: returnAddress(),
     returnPostagePayer: returnPostagePayer(),
-    termsVersion: termsVersion(),
     backorderPromiseDays: BACKORDER_PROMISE_DAYS,
     timeZone: shopTimezone()
 });

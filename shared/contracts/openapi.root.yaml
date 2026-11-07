@@ -1064,11 +1064,11 @@ components:
                 purchaseHold:
                     $ref: '#/components/schemas/PurchaseHold'
 
-        # What `GET /config` answers: three pieces, each owned by its own module.
+        # What `GET /config` answers: pieces owned by `account`, `antibot` and the operator identity.
         Config:
             type: object
             additionalProperties: false
-            required: [session, oauthProviders, antibot, supportEmail]
+            required: [session, oauthProviders, antibot, supportEmail, operator, termsVersion]
             properties:
                 session:
                     $ref: '../../src/modules/account/openapi.yaml#/components/schemas/SessionConfig'
@@ -1082,6 +1082,13 @@ components:
                     type: string
                     format: email
                     description: The one customer-facing support address (`NODE_SUPPORT_EMAIL`). The contact form's mail goes there and customers' replies come back to it; show it as "write to us at".
+                operator:
+                    $ref: '../../src/modules/account/openapi.yaml#/components/schemas/Operator'
+                termsVersion:
+                    type: string
+                    description: >-
+                        Which text of the Terms is in force (`NODE_TERMS_VERSION`, `1` by default).
+                        An account stores the version it accepted beside the date (`User.termsVersion`).
 
         # What `GET /account` answers: the account as its holder sees it, plus what a client needs
         # to render from it without a second call. A separate schema, not optional members on
@@ -1276,15 +1283,17 @@ paths:
             tags: [System]
             summary: What a client needs to boot, before it has a session
             description: |
-                One public answer for the three things a client reads before anyone has signed in:
-                how the deployment keeps people signed in (`session`), which "Continue with..."
-                buttons to render (`oauthProviders`) and which human challenge a protected form
-                asks for (`antibot`). Each piece is owned by its own module and composed here, so
-                a client makes one call at start instead of three.
+                One public answer for what a client reads before anyone has signed in: how the
+                deployment keeps people signed in (`session`), which "Continue with..." buttons to
+                render (`oauthProviders`), which human challenge a protected form asks for
+                (`antibot`), the support address, who runs the site (`operator`, the legal identity
+                its footer, Terms, Legal notice and Privacy page print) and the version of the Terms
+                in force (`termsVersion`). Each piece is owned by its own module and composed here,
+                so a client makes one call at start instead of several.
 
                 None of it is secret and none of it changes while the process runs, so it is
                 cached for a short while. `GET /shop` stays its own call: the shop is removable and
-                this answer must exist without it.
+                this answer must exist without it, which is why the legal identity is here.
             operationId: getConfig
             security: []
             responses:

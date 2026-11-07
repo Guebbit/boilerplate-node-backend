@@ -204,8 +204,8 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         const { orderId, invoice } = await paidAndInvoiced();
 
         setEnvironment({
-            NODE_SHOP_LEGAL_NAME: 'Renamed Holding Srl',
-            NODE_SHOP_VAT_NUMBER: 'IT99999999999'
+            NODE_LEGAL_NAME: 'Renamed Holding Srl',
+            NODE_LEGAL_VAT_NUMBER: 'IT99999999999'
         });
         const note = await issueCreditNote({
             orderId,

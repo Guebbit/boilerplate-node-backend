@@ -56,14 +56,14 @@ docker run -d --name "$app" --network "$network" \
     -e NODE_WEBHOOK_SECRET_ENCRYPTION_KEY_FILE=/run/secrets/webhook \
     -e NODE_PSEUDONYM_KEY_FILE=/run/secrets/pseudonym \
     -e NODE_METRICS_TOKEN_FILE=/run/secrets/metrics \
-    -e NODE_SHOP_COUNTRY=IT \
+    -e NODE_LEGAL_COUNTRY=IT \
     -e NODE_SHOP_TIMEZONE=Europe/Rome \
-    -e NODE_SHOP_LEGAL_NAME="Boot Check S.r.l." \
-    -e NODE_SHOP_STREET="Via Roma 1" \
-    -e NODE_SHOP_CITY=Bologna \
-    -e NODE_SHOP_ZIP=40121 \
+    -e NODE_LEGAL_NAME="Boot Check S.r.l." \
+    -e NODE_LEGAL_STREET="Via Roma 1" \
+    -e NODE_LEGAL_CITY=Bologna \
+    -e NODE_LEGAL_ZIP=40121 \
     -e NODE_SUPPORT_EMAIL=support@example.com \
-    -e NODE_SHOP_PHONE="+39 051 555 0100" \
+    -e NODE_LEGAL_PHONE="+39 051 555 0100" \
     -e NODE_VAT_RATE_DEFAULT=0.22 \
     -e NODE_VAT_RATE_REDUCED=0.10 \
     "$image" >/dev/null

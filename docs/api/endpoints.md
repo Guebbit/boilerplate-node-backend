@@ -187,7 +187,7 @@ One read, `GET /audit`, behind `read:AuditLog` — the queryable trail, kept for
 
 > The domain behind these routes: [`shop`](../modules/shop.md) · routes and middleware: `src/modules/shop/routes.ts`
 
-`GET /shop` is public: the shop's identity, currency, ship-to countries and return address.
+`GET /shop` is public: the shop's currency, ship-to countries, return address and time zone. The operator's identity and the Terms version are on `GET /config`.
 
 ## Sitemap
 

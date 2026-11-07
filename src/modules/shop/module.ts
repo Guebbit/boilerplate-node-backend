@@ -1,8 +1,8 @@
 /**
  * @module
- * The shop's own settings, published once. The boot gate is its config slice: the legal name,
- * address, email and phone are required (a withdrawal notice with no address on it is not one), and
- * so are the country and the time zone.
+ * The shop's own settings, published once. The boot gate is its config slice: the time zone is
+ * required, and so is the operator's phone, which `account` leaves optional (the withdrawal notice
+ * prints it).
  *
  * See: docs/modules/shop.md
  */
@@ -11,7 +11,7 @@ import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
 import { shopConfig } from './config';
 
-/** This module's manifest entry: one public route, the identity config gate, no persistence. */
+/** This module's manifest entry: one public route, the config gate, no persistence. */
 export default {
     name: 'shop',
     mounts: [{ basePath: '/shop', routes: router }],

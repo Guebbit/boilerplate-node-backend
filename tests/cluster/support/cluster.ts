@@ -183,14 +183,14 @@ const startCluster = ({
                          * (`shop/config.ts`) — the invoice and the withdrawal notice print them. Same
                          * values `.env-example` ships, so the child boots the way a fresh checkout does.
                          */
-                        NODE_SHOP_COUNTRY: 'IT',
+                        NODE_LEGAL_COUNTRY: 'IT',
                         NODE_SHOP_TIMEZONE: 'Europe/Rome',
-                        NODE_SHOP_LEGAL_NAME: 'Guebbit Demo Shop Srl',
-                        NODE_SHOP_STREET: 'Via Roma 1',
-                        NODE_SHOP_CITY: 'Milano',
-                        NODE_SHOP_ZIP: '20100',
+                        NODE_LEGAL_NAME: 'Guebbit Demo Shop Srl',
+                        NODE_LEGAL_STREET: 'Via Roma 1',
+                        NODE_LEGAL_CITY: 'Milano',
+                        NODE_LEGAL_ZIP: '20100',
                         NODE_SUPPORT_EMAIL: 'support@example.com',
-                        NODE_SHOP_PHONE: '+39 02 1234567',
+                        NODE_LEGAL_PHONE: '+39 02 1234567',
                         NODE_VAT_RATE_DEFAULT: '0.22',
                         NODE_VAT_RATE_REDUCED: '0.10',
                         /*

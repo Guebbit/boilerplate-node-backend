@@ -3,7 +3,7 @@
 ::: tip At a glance
 **Owns** — the `Invoice`/`CreditNote` collections and their own numbering series, outright.
 **Depends on** — [`orders`](./orders.md) (the VAT breakdown, the seller's jurisdiction, an
-auth-scoped order read), [`payments`](./payments.md) (`PAYMENT_REFUNDED`) and [`shop`](./shop.md) (the seller block and the numbering zone).
+auth-scoped order read), [`payments`](./payments.md) (`PAYMENT_REFUNDED`) and [`account`](./account.md#operator-identity) (the seller block) and [`shop`](./shop.md) (the numbering zone).
 **Breaks if you change** — `orders`' `ORDER_STATUS_CHANGED` payload shape, or `payments`'
 `PAYMENT_REFUNDED` one; both listeners below read them by name.
 :::
@@ -19,12 +19,14 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     invoicing["invoicing<br/><i>this module</i>"]
+    account["account"]
     orders["orders"]
     payments["payments"]
     shop["shop"]
     stats["stats"]
 
     stats --> invoicing
+    invoicing --> account
     invoicing --> orders
     invoicing --> payments
     invoicing --> shop
@@ -37,6 +39,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders core;
     class payments,shop,stats supporting;
+    class account generic;
     class invoicing centre;
 ```
 
@@ -99,7 +102,7 @@ one note each. `refundId` is unique, so a repeat issues nothing twice.
 frozen unit price, frozen VAT rate, frozen rate type), the VAT breakdown `orderTaxBreakdown`
 computes from them, the order's own `billingAddress` as the Art. 226 buyer address (every checkout
 order carries one, chosen at checkout — "same as shipping" by default, so a digital-only order,
-which has no ship-to address at all, is still invoiced to someone), the seller's own identity (`shopIdentity()` from the [`shop`](./shop.md) module), and the order's own frozen
+which has no ship-to address at all, is still invoiced to someone), the seller's own identity (`operatorIdentity()` from the [`account`](./account.md#operator-identity) module), and the order's own frozen
 `currency`/`orderNumber`/`locale`.
 `issueCreditNote` (`services/issue-credit-note.ts`) freezes one credit note per REFUND
 (`PAYMENT_REFUNDED` carries `refundId`, this refund's `amount`, `full`, and — for a return — the
@@ -223,7 +226,7 @@ aborts both, so each document leaves exactly one row.
 | `NODE_INVOICE_BUYER_RETENTION_YEARS` | `10`                    | Years after the end of the issue year that the buyer block stays on a document; see [Retention](#retention) |
 | `NODE_DOCUMENT_STORE_PATH`           | `tmp/storage/documents` | Where those PDFs live — private, plaintext, regenerable; mount a volume                                     |
 
-The seller's identity (legal name, VAT number, address) is [`shop`'s](./shop.md#the-story): the
+The seller's identity (legal name, VAT number, address) is [`account`'s](./account.md#operator-identity): the
 withdrawal notice prints it too, and `orders` cannot import this module. Every getter is read fresh
 per call, so a correction needs no restart. It reaches only the documents issued after it: an
 invoice keeps the seller it was issued with, and a credit note copies the invoice's.

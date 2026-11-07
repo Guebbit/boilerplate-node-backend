@@ -48,7 +48,7 @@ const nextEventId = () => `event-${String(++eventCounter)}`;
 beforeEach(() => {
     mockEnqueueEmail.mockReset();
     mockEnqueueEmail.mockResolvedValue(undefined);
-    setEnvironment({ NODE_SUPPORT_EMAIL: 'desk@example.com', NODE_SHOP_COUNTRY: 'IT' });
+    setEnvironment({ NODE_SUPPORT_EMAIL: 'desk@example.com', NODE_LEGAL_COUNTRY: 'IT' });
     resetDomainEvents();
     registerModules(enabledModules);
 });
@@ -251,7 +251,7 @@ describe('what opens a task', () => {
 
 describe('the delay rule follows the shop’s country', () => {
     it('counts every destination for a shop in the United States', async () => {
-        setEnvironment({ NODE_SHOP_COUNTRY: 'US' });
+        setEnvironment({ NODE_LEGAL_COUNTRY: 'US' });
 
         await emitDomainEvent(
             'fulfillment_order.delayed',
@@ -265,7 +265,7 @@ describe('the delay rule follows the shop’s country', () => {
     });
 
     it('counts a delay with no ship-to country for a shop in the United States', async () => {
-        setEnvironment({ NODE_SHOP_COUNTRY: 'US' });
+        setEnvironment({ NODE_LEGAL_COUNTRY: 'US' });
 
         await emitDomainEvent(
             'fulfillment_order.delayed',

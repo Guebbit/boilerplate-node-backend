@@ -3,6 +3,7 @@ subdomain: core
 group: shop
 dependsOn:
     - access # ownOrderFlag: the audit flag of a cancel on the caller's own order
+    - account # operatorIdentity: the trader printed on the withdrawal notice
     - inventory # a claim on units, released on cancel or RESERVATION_EXPIRED
     - products # a line copies the catalogue row's fields at purchase time
     - shop # the currency a total is frozen in, and the seller on its emails

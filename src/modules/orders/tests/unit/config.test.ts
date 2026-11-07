@@ -1,5 +1,5 @@
 /**
- * The shop's own jurisdiction (`NODE_SHOP_COUNTRY`, declared on the manifest) — pure env reads, so
+ * The shop's own jurisdiction (`NODE_LEGAL_COUNTRY`, declared on the manifest) — pure env reads, so
  * the unit suite is enough. Also the shop's identity
  * (legal name, address, email, phone), the return address with its fallback to it, and who pays
  * return postage.
@@ -26,11 +26,11 @@ import { withoutEnvironmentInThisFile, setEnvironment } from '@tests/environment
 
 /** The required identity variables, each with a value that satisfies its rule. */
 const IDENTITY = {
-    NODE_SHOP_LEGAL_NAME: 'Guebbit Demo Shop Srl',
-    NODE_SHOP_STREET: 'Via Roma 1',
-    NODE_SHOP_CITY: 'Milano',
-    NODE_SHOP_ZIP: '20100',
-    NODE_SHOP_PHONE: '+39 02 1234567'
+    NODE_LEGAL_NAME: 'Guebbit Demo Shop Srl',
+    NODE_LEGAL_STREET: 'Via Roma 1',
+    NODE_LEGAL_CITY: 'Milano',
+    NODE_LEGAL_ZIP: '20100',
+    NODE_LEGAL_PHONE: '+39 02 1234567'
 } as const;
 
 /** The names of {@link IDENTITY}, in declaration order. */
@@ -40,10 +40,10 @@ const IDENTITY_VARIABLES = Object.keys(IDENTITY) as (keyof typeof IDENTITY)[]; /
 const TOUCHED = [
     'NODE_ENV',
     'NODE_URL',
-    'NODE_SHOP_COUNTRY',
+    'NODE_LEGAL_COUNTRY',
     'NODE_SHOP_TIMEZONE',
     ...IDENTITY_VARIABLES,
-    'NODE_SHOP_VAT_NUMBER',
+    'NODE_LEGAL_VAT_NUMBER',
     'NODE_RETURN_ADDRESS_NAME',
     'NODE_RETURN_ADDRESS_STREET',
     'NODE_RETURN_ADDRESS_CITY',
@@ -65,7 +65,7 @@ withoutEnvironmentInThisFile(TOUCHED);
 const configure = (): void => {
     setEnvironment({ NODE_ENV: 'development' });
     setEnvironment({ NODE_URL: 'https://api.example.com/' });
-    setEnvironment({ NODE_SHOP_COUNTRY: 'IT' });
+    setEnvironment({ NODE_LEGAL_COUNTRY: 'IT' });
     setEnvironment({ NODE_SHOP_TIMEZONE: 'Europe/Rome' });
     setEnvironment(IDENTITY);
 };

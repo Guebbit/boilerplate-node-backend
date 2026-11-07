@@ -1,6 +1,6 @@
-summary: 'The shop itself: who it is, where it is, where goods come back to, what it ships to, and the one currency it trades in.'
+summary: 'The shop itself: its time zone, where goods come back to, what it ships to, and the one currency it trades in.'
 subdomain: supporting
 group: shop
 dependsOn:
-    - account # termsVersion: which text of the Terms is in force, printed by GET /shop
+    - account # operatorIdentity: the legal address a return falls back to, and the VAT country
 noAudit: "Reads the deployer's own configuration and writes nothing, so there is no subject an audit row could name."

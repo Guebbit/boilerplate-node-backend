@@ -11,12 +11,13 @@ import { translator } from '@infrastructure/i18n';
 import { formatMoney } from '@domain-primitives/money';
 import { orderFrontendLink, withdrawalPeriodDays } from './config';
 import { isExcludedFromWithdrawal, isShippedItem, orderTotal } from './domain';
+import { operatorIdentity } from '@modules/account';
 import {
     addressLine,
     returnAddress,
     returnPostagePayer,
-    shopIdentity,
-    shopTimezone
+    shopTimezone,
+    traderPhone
 } from '@modules/shop';
 
 /**
@@ -157,11 +158,11 @@ export const withdrawalNotice = (
             form: []
         };
 
-    const identity = shopIdentity();
+    const identity = operatorIdentity();
     const trader = t('orders.email-withdrawal.trader', {
         name: identity.legalName,
         address: addressLine(identity),
-        phone: identity.phone,
+        phone: traderPhone(),
         email: identity.email
     });
     const days = withdrawalPeriodDays();

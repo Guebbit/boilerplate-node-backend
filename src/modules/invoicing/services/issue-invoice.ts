@@ -18,14 +18,15 @@ import { invoicingRepository } from '../repository';
 import { encryptInvoiceParty } from '../pii';
 import { allocateInvoiceNumber, readWinner } from './numbering';
 import type { InvoiceDocument, InvoiceLine, InvoiceSeller } from '../model';
-import { shopIdentity, shopTimezone } from '@modules/shop';
+import { shopTimezone } from '@modules/shop';
+import { operatorIdentity } from '@modules/account';
 
 /**
  * The seller's own identity, frozen fresh at every issue — never re-read once an invoice exists.
  * Everything but the VAT number is required at boot, so only that one can be absent.
  */
 const frozenSeller = (): InvoiceSeller => {
-    const { legalName, vatNumber, street, city, zip, country } = shopIdentity();
+    const { legalName, vatNumber, street, city, zip, country } = operatorIdentity();
     return { legalName, ...(vatNumber ? { vatNumber } : {}), street, city, zip, country };
 };
 

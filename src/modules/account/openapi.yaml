@@ -1751,6 +1751,46 @@ components:
                         How long the session may then sit unused before it ends. Absent when no idle
                         timeout applies to this account (a shopper, or the timeout is switched off).
 
+        Operator:
+            type: object
+            additionalProperties: false
+            required: [legalName, street, city, zip, country, email]
+            description: >-
+                Who runs the site: the provider identity a visitor is entitled to before any sale or
+                signup (e-Commerce Directive Art. 5(1), GDPR Art. 13(1)(a)). Set once by the deployment
+                in `NODE_LEGAL_*`; the footer, the Terms, the Legal notice and the Privacy page print it.
+            properties:
+                legalName:
+                    type: string
+                    description: The operator's name, as registered (`NODE_LEGAL_NAME`).
+                vatNumber:
+                    type: string
+                    description: VAT identification number (`NODE_LEGAL_VAT_NUMBER`); absent below the registration threshold.
+                tradeRegister:
+                    type: string
+                    description: The commercial register the operator is entered in (`NODE_LEGAL_TRADE_REGISTER`); absent for an operator in none.
+                registrationNumber:
+                    type: string
+                    description: The operator's number in that register (`NODE_LEGAL_REGISTRATION_NUMBER`); absent when there is no register.
+                street:
+                    type: string
+                    description: Street and number of the postal address (`NODE_LEGAL_STREET`).
+                city:
+                    type: string
+                    description: City of the postal address (`NODE_LEGAL_CITY`).
+                zip:
+                    type: string
+                    description: Postal code of the postal address (`NODE_LEGAL_ZIP`).
+                country:
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CountryCode' }]
+                    description: Country of the postal address, ISO-3166 alpha-2 (`NODE_LEGAL_COUNTRY`). Also the shop's VAT jurisdiction.
+                email:
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email' }]
+                    description: Where a visitor writes to (`NODE_LEGAL_EMAIL`, or the support address when unset).
+                phone:
+                    type: string
+                    description: Telephone number (`NODE_LEGAL_PHONE`); absent when none is set. A deployment with the shop always sets it.
+
         SessionConfig:
             type: object
             additionalProperties: false

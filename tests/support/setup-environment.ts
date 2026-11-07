@@ -204,14 +204,14 @@ process.env.NODE_BANK_TRANSFER_IBAN ??= 'IT60X0542811101000000123456';
  * here rather than the code's own `0.22`/`0.1` fallback (which would pass silently even if a
  * test's expectation and the fallback happened to agree by coincidence).
  */
-process.env.NODE_SHOP_COUNTRY ??= 'IT';
+process.env.NODE_LEGAL_COUNTRY ??= 'IT';
 process.env.NODE_SHOP_TIMEZONE ??= 'Europe/Rome';
-process.env.NODE_SHOP_LEGAL_NAME ??= 'Guebbit Demo Shop Srl';
-process.env.NODE_SHOP_STREET ??= 'Via Roma 1';
-process.env.NODE_SHOP_CITY ??= 'Milano';
-process.env.NODE_SHOP_ZIP ??= '20100';
+process.env.NODE_LEGAL_NAME ??= 'Guebbit Demo Shop Srl';
+process.env.NODE_LEGAL_STREET ??= 'Via Roma 1';
+process.env.NODE_LEGAL_CITY ??= 'Milano';
+process.env.NODE_LEGAL_ZIP ??= '20100';
 process.env.NODE_SUPPORT_EMAIL ??= 'support@example.com';
-process.env.NODE_SHOP_PHONE ??= '+39 02 1234567';
+process.env.NODE_LEGAL_PHONE ??= '+39 02 1234567';
 process.env.NODE_VAT_RATE_DEFAULT ??= '0.22';
 process.env.NODE_VAT_RATE_REDUCED ??= '0.10';
 

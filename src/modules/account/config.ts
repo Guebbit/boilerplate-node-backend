@@ -8,7 +8,7 @@
  */
 
 import { defineConfig } from '@infrastructure/config/define';
-import { int, text } from '@infrastructure/config/fields';
+import { email, int, text } from '@infrastructure/config/fields';
 import { frontendLink, FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
 import { DAY_MS, oneCalendarMonthLaterUtc } from '@domain-primitives/time';
 
@@ -16,7 +16,8 @@ import { DAY_MS, oneCalendarMonthLaterUtc } from '@domain-primitives/time';
 export type AccountLinkKind = 'verify' | 'reset' | 'restore' | 'email-change' | 'email-undo';
 
 /**
- * The frontend link templates, the two mail-link lifetimes and how long a data export is kept.
+ * The frontend link templates, the two mail-link lifetimes, how long a data export is kept, the
+ * Terms version and the operator's legal identity.
  *
  * Each template defaults to the paired frontend's own route
  * (`<paired-frontend>/src/modules/account/routes.ts`). `{token}` is filled in by
@@ -43,7 +44,21 @@ export const accountConfig = defineConfig({
         NODE_ACCOUNT_DELETION_GRACE_DAYS: int({ default: 30, min: 1, max: 31 }),
         // 220 days: the default backup keep (6 monthly snapshots, up to ~7 months back) plus a margin.
         NODE_ERASURE_LEDGER_RETENTION_DAYS: int({ default: 220, min: 1 }),
-        NODE_TERMS_VERSION: text({ default: '1' })
+        NODE_TERMS_VERSION: text({ default: '1' }),
+        // The operator's legal identity: name and postal address are required (e-Commerce
+        // Directive Art. 5(1)(a)-(c), GDPR Art. 13(1)(a)); the rest is published when set.
+        NODE_LEGAL_NAME: text({ required: { minLength: 1 } }),
+        NODE_LEGAL_VAT_NUMBER: text(),
+        NODE_LEGAL_TRADE_REGISTER: text(),
+        NODE_LEGAL_REGISTRATION_NUMBER: text(),
+        NODE_LEGAL_STREET: text({ required: { minLength: 1 } }),
+        NODE_LEGAL_CITY: text({ required: { minLength: 1 } }),
+        NODE_LEGAL_ZIP: text({ required: { minLength: 1 } }),
+        NODE_LEGAL_COUNTRY: text({ required: { minLength: 1 } }),
+        // Optional for the site; the `shop` module's own check requires it (CRD Art. 6(1)(c)).
+        NODE_LEGAL_PHONE: text(),
+        // The legal-notice address; unset means the support address (`NODE_SUPPORT_EMAIL`).
+        NODE_LEGAL_EMAIL: email()
     }
 });
 

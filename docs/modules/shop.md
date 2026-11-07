@@ -1,15 +1,16 @@
 # shop
 
 ::: tip At a glance
-**Owns** — the shop itself: who the seller is (legal name, address, email, phone, VAT number), the
-country VAT is charged in, the time zone its days follow, the one currency it trades in, the
-countries it ships to, where returned goods go and who pays the postage, the version of the Terms in
-force and the backorder promise in days. One public read, `GET /shop`.
-**Depends on** — `account`, for the Terms version `GET /shop` prints (the shop group reaches the
-foundation, never the reverse). Eight modules read it: `orders`, `products`, `cart`, `delivery`,
+**Owns** — the shop itself: the time zone its days follow, the one currency it trades in, the
+countries it ships to, where returned goods go and who pays the postage, and the backorder promise
+in days. One public read, `GET /shop`. Who runs the site (legal name, address, VAT number) is
+[`account`'s](./account.md#operator-identity), not the shop's.
+**Depends on** — `account`, for the operator's postal address (the VAT country and the return
+fallback) and phone (the shop group reaches the foundation, never the reverse). Eight modules read it: `orders`, `products`, `cart`, `delivery`,
 `invoicing`, `payments`, `returns` and `stats`.
 **Breaks if you change** — the `Shop` wire shape, which the paired frontend reads once into its
-shop store: price inputs, the address form's country list and the legal pages all draw on it.
+shop store: price inputs and the address form's country list draw on it. The legal pages do not:
+they read `GET /config`, so a project without the shop keeps them.
 :::
 
 ## Its neighbourhood
@@ -67,16 +68,18 @@ cycle. That is a reason about the import graph, not about the business, and ever
 setting made `orders` more of a hub. Every commerce platform models the shop apart from its orders
 (Shopify's `Shop`, Saleor's `shop` query, Medusa's Store module).
 
-**Everything is read live, per call.** The readers (`shopIdentity`, `shopCountry`, `shopTimezone`,
+**Everything is read live, per call.** The readers (`shopCountry`, `shopTimezone`, `traderPhone`,
 `shopCurrency`, `shipToCountries`, `returnAddress`, `returnPostagePayer`) ask the config slice on
 every call, so a test varies a setting per case and a deployment corrects one with a restart.
 
 **`GET /shop` publishes `minorUnits`**, the places of the shop currency (2 EUR, 0 JPY, 3 KWD). Amounts travel as decimal strings that carry their own scale, so the one client that has to know it up front is a price input that starts empty (`ProductCreate`); no ISO table lives in the client.
 
-**The seller is public on purpose.** The Consumer Rights Directive (Art. 6(1)) wants the trader's
-identity, address, phone and email before the contract, and the e-Commerce Directive (Art. 5) wants
-the VAT number. `GET /shop` is where a visitor, and the Terms page, read them. Not published: the
-bank-transfer details, which travel on each order and stay with `payments`.
+**The seller's identity is not here.** The Consumer Rights Directive (Art. 6(1)) wants the
+trader's identity, address, phone and email before the contract, and the e-Commerce Directive (Art. 5) wants the VAT number, but any online service owes its provider identity, so
+[`account`](./account.md#operator-identity) owns it and serves it on `GET /config` as `operator`.
+The shop reads it: `shopCountry()` is the operator's country, and a return with no address of its
+own falls back to the operator's. Not published: the bank-transfer details, which travel on each
+order and stay with `payments`.
 
 **`GET /shop` publishes `timeZone`** (an IANA name). The promised days (`releaseDate`,
 `restockDate`, `agreedAt`, `expectedAt`) are sent and answered as plain `YYYY-MM-DD` days of this
@@ -84,10 +87,11 @@ calendar, so a screen never needs it to print one; it is there for a screen that
 calendar. Google AIP-142 and Zalando's guidelines both want a calendar day as a `date`, with an
 IANA zone named beside it.
 
-**Required at boot, because a notice without an address is not one.** The legal name, street,
-city, zip, country, email, phone and time zone refuse to boot when unset; the VAT number, the trade
-register, the registration number and the return address stay optional. A return address that is only partly set reads as none and falls back
-to the legal address, rather than telling a customer to post a parcel to "Via Roma, ".
+**Required at boot.** The time zone, and the operator's phone, which `account` leaves optional
+(the withdrawal form's "To" row prints it; CRD Art. 6(1)(c), Directive 2011/83/EU as amended). A
+project without this module boots with no phone. The return address stays optional: one that is
+only partly set reads as none and falls back to the operator's postal address, rather than telling
+a customer to post a parcel to "Via Roma, ".
 
 **One currency, no per-product override.** `NODE_DEFAULT_CURRENCY` is read here and nowhere else.
 A shop that ever needs a second currency needs a real design, not several modules quietly reading
@@ -97,15 +101,10 @@ the same variable.
 
 These settings are deploy-time env on purpose: a correction is a restart, not an admin screen. Commerce platforms keep them in a database; this boilerplate declines to become one.
 
-| Variable                                             | Meaning                                                                            |
-| ---------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `NODE_SHOP_LEGAL_NAME`, `_STREET`, `_CITY`, `_ZIP`   | The seller's name and address (required)                                           |
-| `NODE_SHOP_COUNTRY`                                  | The country VAT is charged in (required)                                           |
-| `NODE_LEGAL_EMAIL`                                   | The legal-notice address; unset means `NODE_SUPPORT_EMAIL` (`GET /shop` `email`)   |
-| `NODE_SHOP_PHONE`                                    | How a customer reaches the shop (required)                                         |
-| `NODE_SHOP_VAT_NUMBER`                               | VAT identification number; absent below the registration threshold                 |
-| `NODE_SHOP_TRADE_REGISTER`, `_REGISTRATION_NUMBER`   | The commercial register and the seller's number in it; absent for a seller in none |
-| `NODE_SHOP_TIMEZONE`                                 | The IANA zone whose calendar numbering series and reports follow                   |
-| `NODE_RETURN_ADDRESS_*`, `NODE_RETURN_POSTAGE_PAYER` | Where returns go (default: the legal address) and who pays the postage             |
-| `NODE_SHIP_TO_COUNTRIES`                             | Countries a physical order ships to (default: the shop's own country)              |
-| `NODE_DEFAULT_CURRENCY`                              | The one ISO-4217 currency, `EUR` by default; an unknown code is refused            |
+| Variable                                             | Meaning                                                                                                                                                                     |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_LEGAL_*`                                       | The operator's identity, owned by [`account`](./account.md#operator-identity); the shop requires `NODE_LEGAL_PHONE` of it and reads `NODE_LEGAL_COUNTRY` as the VAT country |
+| `NODE_SHOP_TIMEZONE`                                 | The IANA zone whose calendar numbering series and reports follow                                                                                                            |
+| `NODE_RETURN_ADDRESS_*`, `NODE_RETURN_POSTAGE_PAYER` | Where returns go (default: the operator's postal address) and who pays the postage                                                                                          |
+| `NODE_SHIP_TO_COUNTRIES`                             | Countries a physical order ships to (default: the operator's country)                                                                                                       |
+| `NODE_DEFAULT_CURRENCY`                              | The one ISO-4217 currency, `EUR` by default; an unknown code is refused                                                                                                     |

@@ -18,6 +18,7 @@ graph cannot see._
 flowchart LR
     orders["orders<br/><i>this module</i>"]
     access["access"]
+    account["account"]
     cart["cart"]
     delivery["delivery"]
     inventory["inventory"]
@@ -38,6 +39,7 @@ flowchart LR
     shop_tasks --> orders
     stats --> orders
     orders --> access
+    orders --> account
     orders --> inventory
     orders --> products
     orders --> shop
@@ -59,7 +61,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,products core;
     class delivery,inventory,invoicing,payments,returns,shop,shop_tasks,stats supporting;
-    class access,users generic;
+    class access,account,users generic;
     class orders centre;
 ```
 
@@ -840,8 +842,9 @@ kept after the hold ends are in [the purchase hold](../theory/data-retention.md#
 
 ## Shop identity
 
-Who the shop is — the legal identity, the return address, who pays the return postage — belongs to
-[shop](./shop.md), which `orders` reads. A partly-set return address counts as none.
+The legal identity belongs to [account](./account.md#operator-identity) (`operatorIdentity()`, which
+the withdrawal notice prints); the return address, the phone and who pays the return postage belong
+to [shop](./shop.md). `orders` reads both. A partly-set return address counts as none.
 
 ### What the placed-order emails carry
 

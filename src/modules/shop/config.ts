@@ -1,12 +1,12 @@
 /**
  * @module
- * The shop's own settings: who it is, where it is, how to reach it, where returned goods go,
- * what it ships to and the one currency it trades in. All read per call rather than captured at
+ * The shop's own settings: its time zone, where returned goods go, what it ships to and the one
+ * currency it trades in. All read per call rather than captured at
  * import, the pattern `inventory/config.ts` sets, so a test can vary any of them per case. A
  * deployment corrects one with a restart.
  *
- * Owner of the identity:  `shop`, since none of these is an order concept — `orders`, `cart`,
- *                         `delivery`, `invoicing`, `returns`, `products` and `stats` all read them.
+ * Owner of the identity:  `account` (`NODE_LEGAL_*`): the site's legal identity is not a shop
+ *                         concept. The shop reads it, and requires the phone of it at boot.
  * Bank transfer:          not here; `payments` owns it, since it renders `transferInstructions`.
  * VAT rates:              not here; `products` resolves them and `orders` only freezes the number.
  *
@@ -14,31 +14,30 @@
  */
 
 import { defineConfig } from '@infrastructure/config/define';
-import { choice, csv, currency, email, text, timeZone } from '@infrastructure/config/fields';
+import { choice, csv, currency, text, timeZone } from '@infrastructure/config/fields';
+import type { Environment } from '@infrastructure/config/store';
 import { ReturnPostagePayer } from '@types';
 
 /**
- * What the shop is, where it is, and what it trades in.
- *
- * The legal name, address, email and phone are required at boot: the invoice and the withdrawal
- * notice both print them, and a notice with no address on it is not one (CRD Art. 6(1)(c)). The VAT
- * number, the trade register, the registration number and the return address stay optional.
+ * The shop's boot refusals: the operator's phone, which `account` leaves optional.
+ * CRD Art. 6(1)(c), Directive 2011/83/EU as amended by 2019/2161: a distance trader states a
+ * telephone number, and the withdrawal form's "To" row prints it (EUR-Lex CELEX 02011L0083).
+ * @param _config - this slice's parsed values, unused
+ * @param environment - the environment being judged
+ * @returns the refusals; empty when the shop may boot
+ */
+const phoneCheck = (_config: unknown, environment: Environment): string[] =>
+    environment.NODE_LEGAL_PHONE?.trim() ? [] : ['NODE_LEGAL_PHONE is required with the shop'];
+
+/**
+ * What the shop trades in and where it ships. The legal identity is `account`'s; the phone it
+ * leaves optional is required here.
  */
 export const shopConfig = defineConfig({
     name: 'shop',
+    check: phoneCheck,
     shape: {
-        NODE_SHOP_COUNTRY: text({ required: { minLength: 1 } }),
         NODE_SHOP_TIMEZONE: timeZone({ required: { minLength: 1 } }),
-        NODE_SHOP_LEGAL_NAME: text({ required: { minLength: 1 } }),
-        NODE_SHOP_VAT_NUMBER: text(),
-        NODE_SHOP_TRADE_REGISTER: text(),
-        NODE_SHOP_REGISTRATION_NUMBER: text(),
-        NODE_SHOP_STREET: text({ required: { minLength: 1 } }),
-        NODE_SHOP_CITY: text({ required: { minLength: 1 } }),
-        NODE_SHOP_ZIP: text({ required: { minLength: 1 } }),
-        // The legal-notice address; unset means the support address (`NODE_SUPPORT_EMAIL`).
-        NODE_LEGAL_EMAIL: email(),
-        NODE_SHOP_PHONE: text({ required: { minLength: 1 } }),
         NODE_RETURN_ADDRESS_NAME: text(),
         NODE_RETURN_ADDRESS_STREET: text(),
         NODE_RETURN_ADDRESS_CITY: text(),

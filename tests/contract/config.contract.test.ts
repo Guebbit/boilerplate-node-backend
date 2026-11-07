@@ -1,6 +1,7 @@
 /**
  * Contract tests for `GET /config` — the one public answer a client boots from: the session config
- * and the OAuth providers (`account`) with the human-challenge config (`antibot`). Each piece keeps
+ * and the OAuth providers (`account`) with the human-challenge config (`antibot`), and who runs the
+ * site with the Terms version (`account`). Each piece keeps
  * its own owner; what is pinned here is that they arrive together, public and briefly cacheable.
  */
 import '@tests/contract';
@@ -40,6 +41,35 @@ describe('GET /config', () => {
         const response = await api().get('/config');
 
         expect(response.body.supportEmail).toBe('help@shop.example');
+    });
+
+    it('publishes who runs the site and the Terms version in force', async () => {
+        setEnvironment({ NODE_TERMS_VERSION: '2026-10' });
+
+        const response = await api().get('/config');
+
+        // `tests/support/setup-environment.ts` sets the operator.
+        expect(response.body.operator).toEqual({
+            legalName: 'Guebbit Demo Shop Srl',
+            street: 'Via Roma 1',
+            city: 'Milano',
+            zip: '20100',
+            country: 'IT',
+            email: expect.any(String),
+            phone: '+39 02 1234567'
+        });
+        expect(response.body.termsVersion).toBe('2026-10');
+    });
+
+    it('leaves the optional operator fields out when unset, and the phone with them', async () => {
+        setEnvironment({ NODE_LEGAL_PHONE: undefined });
+        setEnvironment({ NODE_LEGAL_VAT_NUMBER: undefined });
+
+        const response = await api().get('/config');
+
+        expect(response.status).toBe(200);
+        expect(response.body.operator).not.toHaveProperty('phone');
+        expect(response.body.operator).not.toHaveProperty('vatNumber');
     });
 
     it('lists an OAuth provider once it is registered', async () => {

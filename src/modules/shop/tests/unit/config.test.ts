@@ -1,8 +1,8 @@
 /**
  * @module
- * The shop's own settings — jurisdiction, time zone, identity (legal name, address, email, phone),
- * the return address with its fallback to it, who pays return postage, the ship-to countries and
- * the currency. Pure env reads, so the unit suite is enough.
+ * The shop's own settings — the VAT country it reads off the operator, the time zone, the operator's
+ * phone it requires, the return address with its fallback to the operator's, who pays return
+ * postage, the ship-to countries and the currency. Pure env reads, so the unit suite is enough.
  *
  * Driven through `assertModuleConfig` rather than by reading the manifest — the wiring is half
  * of what makes the check run at all.
@@ -12,6 +12,8 @@
  */
 import { assertModuleConfig } from '@kernel/module-config';
 import shopModule from '../../module';
+import accountModule from '@modules/account/module';
+import { operatorIdentity } from '@modules/account';
 import { withoutEnvironmentInThisFile, setEnvironment } from '@tests/environment';
 import {
     returnAddress,
@@ -19,18 +21,21 @@ import {
     shipToCountries,
     shopCountry,
     shopCurrency,
-    shopIdentity,
-    shopTimezone
+    shopTimezone,
+    traderPhone
 } from '../../service';
 
-/** The required identity variables, each with a value that satisfies its rule. */
+/** The operator variables the shop reads, each with a value that satisfies its rule. */
 const IDENTITY = {
-    NODE_SHOP_LEGAL_NAME: 'Guebbit Demo Shop Srl',
-    NODE_SHOP_STREET: 'Via Roma 1',
-    NODE_SHOP_CITY: 'Milano',
-    NODE_SHOP_ZIP: '20100',
-    NODE_SHOP_PHONE: '+39 02 1234567'
+    NODE_LEGAL_NAME: 'Guebbit Demo Shop Srl',
+    NODE_LEGAL_STREET: 'Via Roma 1',
+    NODE_LEGAL_CITY: 'Milano',
+    NODE_LEGAL_ZIP: '20100',
+    NODE_LEGAL_PHONE: '+39 02 1234567'
 } as const;
+
+/** The identity a deployment sets besides {@link IDENTITY}. */
+const COUNTRY = { NODE_LEGAL_COUNTRY: 'IT' } as const;
 
 /** The names of {@link IDENTITY}, in declaration order. */
 const IDENTITY_VARIABLES = Object.keys(IDENTITY) as (keyof typeof IDENTITY)[]; // `as`: Object.keys is string[]
@@ -39,10 +44,10 @@ const IDENTITY_VARIABLES = Object.keys(IDENTITY) as (keyof typeof IDENTITY)[]; /
 const TOUCHED = [
     'NODE_ENV',
     'NODE_URL',
-    'NODE_SHOP_COUNTRY',
+    ...Object.keys(COUNTRY),
     'NODE_SHOP_TIMEZONE',
     ...IDENTITY_VARIABLES,
-    'NODE_SHOP_VAT_NUMBER',
+    'NODE_LEGAL_VAT_NUMBER',
     'NODE_LEGAL_EMAIL',
     'NODE_RETURN_ADDRESS_NAME',
     'NODE_RETURN_ADDRESS_STREET',
@@ -60,24 +65,15 @@ withoutEnvironmentInThisFile(TOUCHED);
 const configure = (): void => {
     setEnvironment({ NODE_ENV: 'development' });
     setEnvironment({ NODE_URL: 'https://api.example.com/' });
-    setEnvironment({ NODE_SHOP_COUNTRY: 'IT' });
+    setEnvironment(COUNTRY);
     setEnvironment({ NODE_SHOP_TIMEZONE: 'Europe/Rome' });
     setEnvironment(IDENTITY);
 };
 
-describe('the shop jurisdiction boot gate', () => {
-    it('refuses to boot with no NODE_SHOP_COUNTRY — a checkout with no VAT jurisdiction is not one', () => {
-        configure();
-        setEnvironment({ NODE_SHOP_COUNTRY: undefined });
-
-        expect(() => assertModuleConfig([shopModule], [])).toThrow(/NODE_SHOP_COUNTRY/);
-    });
-});
-
 describe('reading the jurisdiction', () => {
     it('reads the field per call, so an override applies to the next read', () => {
         configure();
-        setEnvironment({ NODE_SHOP_COUNTRY: 'FR' });
+        setEnvironment({ NODE_LEGAL_COUNTRY: 'FR' });
 
         expect(shopCountry()).toBe('FR');
     });
@@ -114,81 +110,75 @@ describe('the shop time zone', () => {
 
 describe('shipToCountries', () => {
     it("defaults to the shop's own country alone", () => {
-        setEnvironment({ NODE_SHOP_COUNTRY: 'IT' });
+        configure();
 
         expect(shipToCountries()).toEqual(['IT']);
     });
 
-    it('is empty when neither variable is set', () => {
-        setEnvironment({ NODE_SHOP_COUNTRY: undefined });
-
-        expect(shipToCountries()).toEqual([]);
-    });
-
     it('reads the configured list over the shop country, upper-cased and trimmed', () => {
-        setEnvironment({ NODE_SHOP_COUNTRY: 'IT' });
+        configure();
         setEnvironment({ NODE_SHIP_TO_COUNTRIES: 'it, fr ,de' });
 
         expect(shipToCountries()).toEqual(['IT', 'FR', 'DE']);
     });
 });
 
-describe('the shop identity boot gate', () => {
-    it.each(IDENTITY_VARIABLES)('refuses to boot with no %s', (name) => {
+describe('the shop phone boot gate', () => {
+    it('refuses to boot with no NODE_LEGAL_PHONE: a distance trader states a telephone number', () => {
         configure();
-        setEnvironment({ [name]: undefined });
+        setEnvironment({ NODE_LEGAL_PHONE: undefined });
 
-        expect(() => assertModuleConfig([shopModule], [])).toThrow(new RegExp(name));
+        expect(() => assertModuleConfig([shopModule], [])).toThrow(/NODE_LEGAL_PHONE/);
     });
 
-    it('does not require the VAT number', () => {
+    it('boots with the phone set', () => {
         configure();
 
         expect(() => assertModuleConfig([shopModule], [])).not.toThrow();
     });
 
-    it('refuses an email that is not one', () => {
+    it('is not asked of a deployment without the shop module', () => {
         configure();
-        setEnvironment({ NODE_LEGAL_EMAIL: 'not-an-address' });
+        setEnvironment({ NODE_LEGAL_PHONE: undefined });
 
-        expect(() => assertModuleConfig([shopModule], [])).toThrow(/NODE_LEGAL_EMAIL/);
+        expect(() => assertModuleConfig([], [])).not.toThrow();
     });
 });
 
-describe('shopIdentity', () => {
-    it('reads every field, leaving the VAT number out when unset', () => {
-        configure();
+/**
+ * The account module reduced to its own config slice (the first of its three). The other two
+ * slices are the token and OAuth secrets, which have nothing to do with the phone rule.
+ */
+const accountSliceOnly = { ...accountModule, config: accountModule.config?.slice(0, 1) };
 
-        expect(shopIdentity()).toEqual({
-            legalName: 'Guebbit Demo Shop Srl',
-            street: 'Via Roma 1',
-            city: 'Milano',
-            zip: '20100',
-            country: 'IT',
-            email: 'support@example.com',
-            phone: '+39 02 1234567'
-        });
+describe('the account phone rule, the other half of the split', () => {
+    it('boots with no NODE_LEGAL_PHONE: the site is entitled to an operator, not to a telephone', () => {
+        configure();
+        setEnvironment({ NODE_LEGAL_PHONE: undefined });
+
+        expect(() => assertModuleConfig([accountSliceOnly], [])).not.toThrow();
     });
 
-    it('uses NODE_LEGAL_EMAIL for the legal-notice address when set', () => {
+    it('publishes an operator identity with no phone when none is set', () => {
         configure();
-        setEnvironment({ NODE_LEGAL_EMAIL: 'legal@example.com' });
+        setEnvironment({ NODE_LEGAL_PHONE: undefined });
 
-        expect(shopIdentity().email).toBe('legal@example.com');
+        expect(operatorIdentity()).not.toHaveProperty('phone');
+    });
+});
+
+describe('traderPhone', () => {
+    it('reads the operator phone', () => {
+        configure();
+
+        expect(traderPhone()).toBe('+39 02 1234567');
     });
 
-    it('carries the VAT number when set', () => {
+    it('throws a ConfigError when read unset, rather than print an empty notice', () => {
         configure();
-        setEnvironment({ NODE_SHOP_VAT_NUMBER: 'IT12345678901' });
+        setEnvironment({ NODE_LEGAL_PHONE: undefined });
 
-        expect(shopIdentity().vatNumber).toBe('IT12345678901');
-    });
-
-    it('refuses to answer with a required field unset, rather than print an empty notice', () => {
-        configure();
-        setEnvironment({ NODE_SHOP_PHONE: undefined });
-
-        expect(() => shopIdentity()).toThrow(/NODE_SHOP_PHONE/);
+        expect(() => traderPhone()).toThrow(/NODE_LEGAL_PHONE/);
     });
 });
 

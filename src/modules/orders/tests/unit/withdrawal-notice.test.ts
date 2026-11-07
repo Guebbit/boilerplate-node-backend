@@ -248,7 +248,7 @@ describe('the shared partial, rendered', () => {
     });
 
     it('escapes a shop name once, not twice', () =>
-        withEnvironmentOverrides({ NODE_SHOP_LEGAL_NAME: 'Smith & Sons' }, async () => {
+        withEnvironmentOverrides({ NODE_LEGAL_NAME: 'Smith & Sons' }, async () => {
             const html = await render(orderConfirmEmail('en', 'Ada', GOODS, ORDER_ID));
 
             expect(html).toContain('Smith &amp; Sons');

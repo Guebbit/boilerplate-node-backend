@@ -116,7 +116,7 @@ describe('GET /orders/{id}/invoice', () => {
         await orderService.markPaid(String(order._id));
         await waitUntilInvoiced(String(order._id), bearer);
 
-        setEnvironment({ NODE_SHOP_LEGAL_NAME: 'Renamed Holding Srl' });
+        setEnvironment({ NODE_LEGAL_NAME: 'Renamed Holding Srl' });
         jest.mocked(renderHtmlToPdf).mockClear();
         const response = await api()
             .get(`/orders/${String(order._id)}/invoice`)

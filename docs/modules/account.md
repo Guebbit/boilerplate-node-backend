@@ -19,11 +19,15 @@ flowchart LR
     account["account<br/><i>this module</i>"]
     access["access"]
     api_keys["api-keys"]
+    invoicing["invoicing"]
+    orders["orders"]
     shop["shop"]
     tasks["tasks"]
     users["users"]
 
     api_keys --> account
+    invoicing --> account
+    orders --> account
     shop --> account
     tasks --> account
     account --> access
@@ -40,7 +44,8 @@ flowchart LR
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
-    class shop supporting;
+    class orders core;
+    class invoicing,shop supporting;
     class access,api_keys,tasks,users generic;
     class account centre;
 ```
@@ -379,8 +384,19 @@ the write is re-checked.
 ## Terms version {#terms-version}
 
 `NODE_TERMS_VERSION` and `termsVersion()` belong here, with the consent record signup writes: the
-version is stored beside the date the Terms were accepted. `shop` reads it through this module's
-barrel to print it on `GET /shop`; `account` is foundation and never reaches the other way.
+version is stored beside the date the Terms were accepted. `GET /config` prints it as `termsVersion`.
+
+## Operator identity {#operator-identity}
+
+Who runs the site: `NODE_LEGAL_NAME`, `_STREET`, `_CITY`, `_ZIP`, `_COUNTRY` (required at boot),
+`_EMAIL` (default `NODE_SUPPORT_EMAIL`), `_PHONE`, `_VAT_NUMBER`, `_TRADE_REGISTER`,
+`_REGISTRATION_NUMBER` (optional). `operatorIdentity()` reads them live and `GET /config` serves
+them as `operator`.
+
+It is here, not in `shop`, because any online service owes its provider identity (e-Commerce
+Directive Art. 5(1), GDPR Art. 13(1)(a)), so a project without the shop keeps its footer, Terms,
+Legal notice and Privacy page. `shop` requires the phone on top of this (CRD Art. 6(1)(c)); `orders`
+(withdrawal notice) and `invoicing` (seller block) read the rest.
 
 ## Related pages
 
