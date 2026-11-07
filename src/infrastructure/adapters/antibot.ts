@@ -11,6 +11,7 @@ import { Resolver } from 'node:dns/promises';
 import { isDisposableEmailDomain } from 'disposable-email-domains-js';
 import type { RungVerdict } from './antibot-verdict';
 import { antibotConfig } from '@infrastructure/adapters/config';
+import { logger } from '@infrastructure/adapters/logger';
 
 /** The three postures a deployment can pick via `NODE_ANTIBOT_EMAIL_POLICY`. */
 export type EmailPolicy = 'off' | 'disposable' | 'mx';
@@ -32,15 +33,66 @@ export const resolveEmailPolicy = (): EmailPolicy => antibotConfig().NODE_ANTIBO
 const mxResolver = new Resolver({ timeout: 2000, tries: 1 });
 
 /**
- * Node: MX lookup, used only by the `mx` policy. Resolves `false` — never rejects — for NXDOMAIN,
- * a timeout, or a domain with no mail exchanger: all three mean "refuse", not "unknown".
+ * Whether a DNS error says "this name has no such data" (NXDOMAIN or an empty answer), as opposed
+ * to "the lookup itself failed" (timeout, SERVFAIL, refused). Only the first is evidence.
+ */
+const isNoDataError = (error: unknown): boolean =>
+    error instanceof Error &&
+    'code' in error &&
+    (error.code === 'ENOTFOUND' || error.code === 'ENODATA');
+
+/**
+ * An address lookup that settles: the addresses found, `[]` for "no such data", or a rejection
+ * only for a failed lookup.
+ */
+const addressesOf = (lookup: Promise<string[]>): Promise<string[]> =>
+    lookup.catch((error: unknown) => {
+        if (isNoDataError(error)) return [];
+        throw error;
+    });
+
+/**
+ * RFC 5321 §5.1 fallback: a domain with no MX is still a mail target when it has an A or AAAA.
+ * Resolves `false` only when both answer "no data"; a failed lookup with no address found is
+ * unknown, so it passes.
+ * https://www.rfc-editor.org/rfc/rfc5321#section-5.1
+ */
+const hasAddressRecord = (domain: string): Promise<boolean> =>
+    Promise.all([
+        addressesOf(mxResolver.resolve4(domain)).then((found) => found.length > 0),
+        addressesOf(mxResolver.resolve6(domain)).then((found) => found.length > 0)
+    ]).then(
+        ([v4, v6]) => v4 || v6,
+        (error: unknown) => {
+            logger.warn({ message: 'MX fallback address lookup failed; allowing.', domain, error });
+            return true;
+        }
+    );
+
+/**
+ * Node: mail-target check, used only by the `mx` policy. Resolves `false` — never rejects — only
+ * on evidence of "no mail": NXDOMAIN, a null MX (RFC 7505, `0 .`), or no MX and no A/AAAA.
+ * A timeout, SERVFAIL or any other failed lookup is unknown, not refusal: it resolves `true`
+ * and logs a warning.
  * https://nodejs.org/api/dns.html#dnspromisesresolvemxhostname
+ * https://www.rfc-editor.org/rfc/rfc7505
  */
 const hasMxRecord = (domain: string): Promise<boolean> =>
     mxResolver
         .resolveMx(domain)
-        .then((records) => records.length > 0)
-        .catch(() => false);
+        .then((records) => {
+            if (records.length === 0) return hasAddressRecord(domain);
+            // Null MX: the domain states it accepts no mail. Node reports the root as '' or '.'.
+            return records.some(({ exchange }) => exchange !== '' && exchange !== '.');
+        })
+        .catch((error: unknown) => {
+            // NXDOMAIN: the domain does not exist. ENODATA: it exists but has no MX.
+            if (error instanceof Error && 'code' in error && error.code === 'ENODATA')
+                return hasAddressRecord(domain);
+            if (isNoDataError(error)) return false;
+            logger.warn({ message: 'MX lookup failed; allowing.', domain, error });
+            return true;
+        });
 
 /**
  * Whether a caller may proceed with `email`, under the active `NODE_ANTIBOT_EMAIL_POLICY`.
