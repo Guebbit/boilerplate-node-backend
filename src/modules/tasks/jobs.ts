@@ -10,6 +10,7 @@ import { settleOutboxNudges } from '@kernel/outbox';
 import { logger } from '@infrastructure/adapters/logger';
 import { tasksJobData } from './jobs.generated';
 import { taskService } from './service';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /** The jobs `tasks` owns. */
 export const tasksJobs: readonly JobDeclaration[] = [
@@ -28,6 +29,6 @@ export const tasksJobs: readonly JobDeclaration[] = [
         // subscription, and the staff mail is rendered from the translations.
         needs: { subscriptions: true, i18n: true },
         // A sweep that outruns its day would only re-claim nothing, but one at a time is simpler.
-        lease: { ttlMs: 30 * 60 * 1000 }
+        lease: { ttlMs: 30 * MINUTE_MS }
     }
 ];

@@ -9,6 +9,7 @@ import { toObjectId } from '@infrastructure/persistence/create-repository';
 import type { TaskDocument } from '../model';
 import { taskRepository } from '../repository';
 import { taskModel } from '../model';
+import { DAY_MS, HOUR_MS } from '@domain-primitives/time';
 
 /**
  * Persist an open system task about a failed data export, the kind routed to `UserErasure`.
@@ -56,7 +57,7 @@ export const createSystemTaskAbout = (
  */
 export const backdateDue = (id: string, hoursAgo = 1): Promise<unknown> =>
     taskModel
-        .updateOne({ _id: id }, { $set: { dueAt: new Date(Date.now() - hoursAgo * 3_600_000) } })
+        .updateOne({ _id: id }, { $set: { dueAt: new Date(Date.now() - hoursAgo * HOUR_MS) } })
         .exec();
 
 /**
@@ -67,12 +68,11 @@ export const backdateDue = (id: string, hoursAgo = 1): Promise<unknown> =>
  * @param lifeDays - how long the task had to live when it opened
  */
 export const giveLife = (id: string, dueInDays: number, lifeDays: number): Promise<unknown> => {
-    const dayMs = 24 * 3_600_000;
-    const dueAt = Date.now() + dueInDays * dayMs;
+    const dueAt = Date.now() + dueInDays * DAY_MS;
     return taskModel
         .updateOne(
             { _id: id },
-            { $set: { dueAt: new Date(dueAt), createdAt: new Date(dueAt - lifeDays * dayMs) } },
+            { $set: { dueAt: new Date(dueAt), createdAt: new Date(dueAt - lifeDays * DAY_MS) } },
             // Mongoose: `createdAt` is immutable by default; this lets a test move it.
             // https://mongoosejs.com/docs/timestamps.html
             { overwriteImmutable: true }

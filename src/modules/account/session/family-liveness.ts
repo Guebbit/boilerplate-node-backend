@@ -12,9 +12,10 @@ import type { AuthContext, ResolveOptions } from '@types';
 import { sessionRepository } from '../repository';
 import type { SessionMode } from '../session-mode';
 import { hasIdledOut, hasOutlivedStaffCap } from './idle';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /** How often a busy session may write its activity stamp. */
-const ACTIVITY_STAMP_INTERVAL_MS = 60_000;
+const ACTIVITY_STAMP_INTERVAL_MS = MINUTE_MS;
 
 /**
  * Resolve a family's caller, ending the session when it has idled out or outlived the staff cap,

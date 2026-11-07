@@ -35,6 +35,7 @@ import {
 import { outboxConfig } from '@kernel/config';
 import { outboxRuleData } from './outbox.generated';
 import { withTransaction } from '@infrastructure/runtime/database';
+import { DAY_SECONDS } from '@domain-primitives/time';
 
 declare module './events' {
     interface DomainEventMap {
@@ -113,7 +114,7 @@ outboxEventSchema.index({ status: 1, createdAt: 1, _id: 1 });
  */
 outboxEventSchema.index(
     { publishedAt: 1 },
-    { expireAfterSeconds: outboxRetentionDays * 24 * 60 * 60 }
+    { expireAfterSeconds: outboxRetentionDays * DAY_SECONDS }
 );
 
 /** Outbox model entrypoint. Collection `outboxevents`. */

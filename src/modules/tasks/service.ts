@@ -10,7 +10,7 @@
 import type { ClientSession } from 'mongoose';
 import { Types } from 'mongoose';
 import { TaskCategory, TaskKind, TaskResolution, TaskSource } from '@types';
-import { oneCalendarMonthLaterUtc } from '@domain-primitives/time';
+import { HOUR_MS, oneCalendarMonthLaterUtc } from '@domain-primitives/time';
 import type {
     CallerContext,
     CreateContactTaskRequest,
@@ -55,7 +55,7 @@ import { remindDueSoon, remindOverdue } from './services/overdue';
 import { clearSystemTasks, openSystemTask } from './services/system';
 
 /** How long a contact message may wait before it is overdue, in milliseconds. */
-const contactSlaMs = (): number => tasksConfig().NODE_TASKS_CONTACT_SLA_HOURS * 3_600_000;
+const contactSlaMs = (): number => tasksConfig().NODE_TASKS_CONTACT_SLA_HOURS * HOUR_MS;
 
 /**
  * When a contact message is due. A privacy request owes an answer within one calendar month

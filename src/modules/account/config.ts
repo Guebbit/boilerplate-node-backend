@@ -10,7 +10,7 @@
 import { defineConfig } from '@infrastructure/config/define';
 import { email, int, text } from '@infrastructure/config/fields';
 import { frontendLink, FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
-import { DAY_MS, oneCalendarMonthLaterUtc } from '@domain-primitives/time';
+import { DAY_MS, HOUR_MS, oneCalendarMonthLaterUtc } from '@domain-primitives/time';
 
 /** The five token-bearing account links — one per kind of proof a link can carry. */
 export type AccountLinkKind = 'verify' | 'reset' | 'restore' | 'email-change' | 'email-undo';
@@ -34,7 +34,7 @@ export const accountConfig = defineConfig({
         NODE_FRONTEND_LINK_EMAIL_CHANGE: text({ default: FRONTEND_LINK_RULES.links.emailChange }),
         NODE_FRONTEND_LINK_EMAIL_UNDO: text({ default: FRONTEND_LINK_RULES.links.emailUndo }),
         NODE_FRONTEND_LINK_EXPORT: text({ default: FRONTEND_LINK_RULES.links.export }),
-        NODE_PASSWORD_RESET_TTL_MS: int({ default: 3_600_000, min: 1 }),
+        NODE_PASSWORD_RESET_TTL_MS: int({ default: HOUR_MS, min: 1 }),
         NODE_INACTIVE_ACCOUNT_DAYS: int({ default: 0, min: 0 }),
         NODE_INACTIVE_MINIMISE_DAYS: int({ default: 1095, min: 0 }),
         NODE_EMAIL_VERIFY_TTL_MS: int({ default: DAY_MS, min: 1 }),

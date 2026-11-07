@@ -24,6 +24,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { cacheRequestsTotal } from '@infrastructure/observability/metrics-cache';
 import { isRelaxedEnvironment } from '@infrastructure/runtime/config';
 import { responseCacheConfig } from '@infrastructure/http/config';
+import { HOUR_SECONDS } from '@domain-primitives/time';
 
 /**
  * Enough to replay an HTTP response verbatim, plus the refresh-ahead soft expiry.
@@ -595,7 +596,7 @@ export const searchCache = (
     entity: string,
     keyParameters: readonly string[],
     scopeKey: CacheOptions['scopeKey'],
-    seconds = 3600,
+    seconds = HOUR_SECONDS,
     keying: Pick<CacheOptions, 'keyValues' | 'orderedKeyParameters'> = {}
 ) =>
     setCache(seconds, {

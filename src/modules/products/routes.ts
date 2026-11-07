@@ -29,6 +29,7 @@ import { hasAnonymousReadScope } from '@kernel/access/query';
 import { productService } from './services';
 import { canSeeStock } from './services/stock-view';
 import { canSeeTranslations } from './services/translation-view';
+import { HOUR_SECONDS } from '@domain-primitives/time';
 
 /** Express router for product catalogue endpoints (public read, admin write). */
 export const router = Router();
@@ -103,7 +104,7 @@ router.post(
 // answer and there is nobody to bypass the cache for.
 router.get(
     '/facets',
-    setCache(3600, { tags: ['products'], keyParameters: [], scopeKey: () => true }),
+    setCache(HOUR_SECONDS, { tags: ['products'], keyParameters: [], scopeKey: () => true }),
     getCatalogFacets
 );
 
@@ -114,7 +115,7 @@ router.get(
     // `browserRevalidate`: the server keeps serving from Redis, but a browser must check first (a
     // 304 when nothing changed), because the page shows `available`, which a stock write changes
     // and no server-side clear can reach in someone's browser.
-    setCache(3600, {
+    setCache(HOUR_SECONDS, {
         tags: ['products'],
         keyParameters: [],
         scopeKey: cacheScopeKey,

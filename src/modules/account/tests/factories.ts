@@ -17,6 +17,7 @@ import type { VerificationTokenType } from '../token-types';
 import { SESSION_COOKIE } from '@kernel/cookies';
 import { activeStrategy, type IssueOptions, type SessionRequest } from '../session/strategy';
 import { AMR } from '../domain/session-proof';
+import { DAY_MS, HOUR_MS } from '@domain-primitives/time';
 
 /** What a test may pin on a planted one-time token. */
 export interface PlantedToken {
@@ -41,7 +42,7 @@ export const plantToken = (
     userId: string,
     type: VerificationTokenType,
     plaintext: string,
-    { ttlMs = 60 * 60 * 1000, sentAt = new Date(), amr }: PlantedToken = {}
+    { ttlMs = HOUR_MS, sentAt = new Date(), amr }: PlantedToken = {}
 ): Promise<void> =>
     verificationTokenRepository.issue({
         userId,
@@ -81,7 +82,7 @@ export const plantSession = (
     {
         familyId,
         mode = 'jwt',
-        ttlMs = 24 * 60 * 60 * 1000,
+        ttlMs = DAY_MS,
         startedAt = new Date(),
         supersededAt,
         lastUsedAt

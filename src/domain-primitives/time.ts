@@ -1,17 +1,27 @@
 /**
  * @module
- * The one place "a day in milliseconds" is spelled. Retention windows, cooldowns and lifetimes
- * across the codebase are written in terms of it, so a window reads as `7 * DAY_MS`. It lives here,
- * below every tier, so `domain/` files can count whole UTC days with it as well. The shop-day key
- * and the shop-zone day boundaries sit beside it for the same reason: a rule that groups by day, or
- * ends a deadline at the end of a printed day, needs them without importing a module.
+ * The one place a minute, an hour and a day are spelled, in milliseconds and in seconds.
+ * Retention windows, cooldowns and lifetimes are written in terms of them, so a window reads as
+ * `7 * DAY_MS` and a Mongo TTL as `days * DAY_SECONDS`. They live here, below every tier, so
+ * `domain/` files can use them too. The shop-day key and the shop-zone day boundaries sit beside
+ * them for the same reason: a rule that groups by day, or ends a deadline at the end of a printed
+ * day, needs them without importing a module.
  */
 
+/** One minute, in milliseconds. */
+export const MINUTE_MS = 60 * 1000;
+
 /** One hour, in milliseconds. */
-export const HOUR_MS = 60 * 60 * 1000;
+export const HOUR_MS = 60 * MINUTE_MS;
 
 /** One day, in milliseconds. */
 export const DAY_MS = 24 * HOUR_MS;
+
+/** One hour, in seconds: what a Mongo `expireAfterSeconds` or an HTTP cache TTL counts in. */
+export const HOUR_SECONDS = 60 * 60;
+
+/** One day, in seconds. */
+export const DAY_SECONDS = 24 * HOUR_SECONDS;
 
 /**
  * The last millisecond of the UTC day an instant falls in.

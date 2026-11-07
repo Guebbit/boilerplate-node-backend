@@ -36,6 +36,7 @@ import {
     replaceEntityTranslations,
     updateEntityTranslations
 } from './controllers/update-entity-translations';
+import { HOUR_SECONDS } from '@domain-primitives/time';
 
 /**
  * Express router mounted at `/locales` — see the module header for the ordering and guard rules.
@@ -46,7 +47,7 @@ export const router = Router();
  * `/:locale/messages` answers per `?app=` — a dictionary is an app's own — so the app
  * is part of its cache key where the other public reads have none.
  */
-const messagesCache = setCache(3600, {
+const messagesCache = setCache(HOUR_SECONDS, {
     tags: ['locales'],
     keyParameters: ['app'],
     browserRevalidate: true,
@@ -65,7 +66,7 @@ const messagesCache = setCache(3600, {
  * and the messages read do take `getAuth`, for the inactive languages staff may see — `hasAnonymousReadScope` is what
  * tells that caller apart from a guest and bypasses Redis for them, safe BY CONSTRUCTION.
  */
-const publicLocaleCache = setCache(3600, {
+const publicLocaleCache = setCache(HOUR_SECONDS, {
     tags: ['locales'],
     keyParameters: [],
     browserRevalidate: true,

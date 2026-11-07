@@ -43,6 +43,7 @@ import { accountExportRepository, type AccountExportRow } from '../repository';
 import { mailRecipientRefusal } from '../mail-budget';
 import { runExportJob } from './export-job';
 import { removeRow } from './export-rows';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /**
  * How long a `building` row is waited on. Past it the row counts as `failed`, so a build that died
@@ -50,7 +51,7 @@ import { removeRow } from './export-rows';
  * ever. The build itself is not killed at the limit: a late finish finds its row gone and deletes
  * its own file.
  */
-const EXPORT_BUILD_LIMIT_MS = 30 * 60 * 1000;
+const EXPORT_BUILD_LIMIT_MS = 30 * MINUTE_MS;
 
 /**
  * Builds running in this process because no broker took the job. Only tests wait for them: a

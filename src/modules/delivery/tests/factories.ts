@@ -19,6 +19,7 @@ import { deliveryService } from '../services';
 import { fulfillmentOrderRepository, shipmentRepository } from '../repository';
 import { fulfillmentOrderModel, shipmentModel } from '../model';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
+import { DAY_MS } from '@domain-primitives/time';
 
 /** What a test may pass to {@link shipEverything}. */
 export interface ShipEverythingOptions {
@@ -247,5 +248,5 @@ export const paidBackorderOrder = async (
  */
 export const backdateShipments = (daysAgo: number): Promise<unknown> =>
     shipmentModel
-        .updateMany({}, { $set: { shippedAt: new Date(Date.now() - daysAgo * 86_400_000) } })
+        .updateMany({}, { $set: { shippedAt: new Date(Date.now() - daysAgo * DAY_MS) } })
         .exec();

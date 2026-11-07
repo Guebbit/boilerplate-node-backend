@@ -14,6 +14,7 @@ import { reapInactiveAccounts, type InactiveReapCounts } from './services/reap-i
 import { reapLapsedPreviousEmails } from './services/previous-email-cleanup';
 import { reapExpiredExports } from './services/export-rows';
 import { purgeScheduledDeletions } from './services/purge-deletions';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /**
  * Minimise, then (opt in) warn and delete, accounts that have gone quiet. Both dials at 0 means
@@ -40,7 +41,7 @@ export const accountJobs: readonly JobDeclaration[] = [
         // Minimise and erase hooks are resolved from the manifests, and the warning mail renders
         // translated copy. Leased: it hard-deletes accounts, so "exactly one runner" earns its keep.
         needs: { subscriptions: true, i18n: true },
-        lease: { ttlMs: 15 * 60 * 1000 }
+        lease: { ttlMs: 15 * MINUTE_MS }
     },
     {
         ...accountJobData.reapPreviousEmails,
@@ -49,7 +50,7 @@ export const accountJobs: readonly JobDeclaration[] = [
                 logger.info({ message: 'Previous emails reaped.', previousEmailsCleared: cleared });
                 return { cleared };
             }),
-        lease: { ttlMs: 30 * 60 * 1000 }
+        lease: { ttlMs: 30 * MINUTE_MS }
     },
     {
         ...accountJobData.reapAccountExports,
@@ -65,6 +66,6 @@ export const accountJobs: readonly JobDeclaration[] = [
         // Erase hooks come from the manifests and the goodbye mail renders translated copy.
         // Leased: it hard-deletes accounts, so "exactly one runner" earns its keep.
         needs: { subscriptions: true, i18n: true },
-        lease: { ttlMs: 15 * 60 * 1000 }
+        lease: { ttlMs: 15 * MINUTE_MS }
     }
 ];

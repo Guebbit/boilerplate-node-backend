@@ -18,6 +18,7 @@ import { applyMarkerBlocks } from './marker-block';
 import { REPO_ROOT as ROOT } from '../modules-on-disk';
 import { hasFlag } from '../cli';
 import { failScript } from '../fail-script';
+import { DAY_MS, MINUTE_MS } from '../../src/domain-primitives/time';
 
 /** Report drift instead of rewriting the page — what `complete` runs. */
 const checkOnly = hasFlag('check');
@@ -28,10 +29,6 @@ const PAGE = path.join(ROOT, 'docs/theory/data-protection.md');
 /** Markers bounding the generated block inside the page. */
 const START = '<!-- cookie-inventory:start -->';
 const END = '<!-- cookie-inventory:end -->';
-
-/** Milliseconds in a minute and in a day, for the lifetime cell. */
-const MINUTE_MS = 60_000;
-const DAY_MS = 86_400_000;
 
 /**
  * A row's lifetime, in words.

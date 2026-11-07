@@ -18,9 +18,7 @@ import { reapSpooled } from '@infrastructure/adapters/mail-spool';
 import { reapOrphanedImages } from '@infrastructure/adapters/orphaned-images';
 import { enabledModules } from '../modules';
 import { appJobData } from './jobs.generated';
-
-/** One hour, in milliseconds. */
-const HOUR_MS = 60 * 60 * 1000;
+import { HOUR_MS } from '@domain-primitives/time';
 
 /**
  * How long a quarantine file is left alone before it counts as abandoned. 24 hours by default —

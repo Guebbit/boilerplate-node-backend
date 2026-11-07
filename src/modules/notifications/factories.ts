@@ -7,6 +7,7 @@
 
 import { Types } from 'mongoose';
 import type { NotificationBody, NotificationDocument } from './model';
+import { DAY_MS } from '@domain-primitives/time';
 
 /** What a caller may vary when building a notification; everything else takes a default. */
 export interface NotificationOverrides {
@@ -46,7 +47,7 @@ export const makeNotification = (
               tenantId: overrides.staff.tenantId,
               sets: overrides.staff.sets,
               dedupeKey: overrides.staff.dedupeKey ?? `test:${new Types.ObjectId().toHexString()}`,
-              expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+              expiresAt: new Date(Date.now() + 30 * DAY_MS)
           }
         : {}),
     ...(overrides.readAt === undefined ? {} : { readAt: overrides.readAt }),

@@ -34,6 +34,7 @@ import {
     orderedEntries,
     type TwoFactorMethodHandler
 } from '../two-factor';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /**
  * The error code a client branches on to render a resend countdown rather than a generic 429.
@@ -110,7 +111,7 @@ export const rejectWrongCode = (user: UserDocument): Promise<ResponseReject> =>
         .then(() => generateReject(422, [t('account.two-factor.wrong-code')]));
 
 /** The lock's length in minutes, for the notice's copy. */
-const MFA_LOCK_MINUTES = MFA_LOCK_MS / 60_000;
+const MFA_LOCK_MINUTES = MFA_LOCK_MS / MINUTE_MS;
 
 /**
  * The rejection a locked account earns: 429, before any code was compared. The lock is a

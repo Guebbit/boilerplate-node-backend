@@ -42,9 +42,10 @@ import type {
     SessionStrategy,
     SessionTransport
 } from './strategy';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /** How often a busy session may write its `lastUsedAt`. */
-const USE_STAMP_INTERVAL_MS = 60_000;
+const USE_STAMP_INTERVAL_MS = MINUTE_MS;
 
 /** The tier stored on a row, back as the enum — `undefined` for a browser-session login. */
 const rememberOf = (row: Pick<SessionRow, 'remember'>): RememberTier | undefined =>

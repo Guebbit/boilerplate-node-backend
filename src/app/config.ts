@@ -58,6 +58,7 @@ import { moduleConfigSlices } from '@kernel/module-config';
 import { outboxConfig, reauthConfig } from '@kernel/config';
 import type { AppModule } from '@kernel/registry';
 import { enabledModules } from '../modules';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /**
  * The app tier's own variables: request-parsing and connection bounds, the trust-proxy hop count,
@@ -68,7 +69,7 @@ export const appConfig = defineConfig({
     shape: {
         NODE_JSON_BODY_LIMIT: text({ default: '100kb' }),
         NODE_HTTP_HEADERS_TIMEOUT_MS: int({ default: 15_000, min: 1 }),
-        NODE_HTTP_REQUEST_TIMEOUT_MS: int({ default: 120_000, min: 1 }),
+        NODE_HTTP_REQUEST_TIMEOUT_MS: int({ default: 2 * MINUTE_MS, min: 1 }),
         NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS: int({ default: 5000, min: 1 }),
         NODE_TRUST_PROXY_HOPS: int({ default: 0, min: 0 }),
         NODE_SECURITY_CONTACT: text(),

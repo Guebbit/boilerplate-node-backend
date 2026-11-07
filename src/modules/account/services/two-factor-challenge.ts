@@ -22,13 +22,14 @@ import { issueToken, findLiveTokenEntry, findLiveToken, spendLiveToken } from '.
 import { MFA_CHALLENGE_TOKEN_TYPE } from '../token-types';
 import { armedEntries, audited, deliverArmedCode, summarize } from './two-factor-outcomes';
 import { verifyArmedFactor, settleVerdict } from './two-factor-lockout';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /**
  * How long an MFA login challenge lives when every armed factor is read off a device — long
  * enough to type six digits, no more. Exported for the deletion-restore claim check, which lives
  * as long.
  */
-export const MFA_CHALLENGE_TTL_MS = 300_000;
+export const MFA_CHALLENGE_TTL_MS = 5 * MINUTE_MS;
 
 /**
  * The same, for an account with a DELIVERED factor armed. Double, because the window now has to
@@ -39,7 +40,7 @@ export const MFA_CHALLENGE_TTL_MS = 300_000;
  * Exported for `../rate-limits.ts`, which windows the two MFA challenge budgets to this same
  * lifetime — a window can never end before the challenge it bounds.
  */
-export const MFA_CHALLENGE_DELIVERED_TTL_MS = 600_000;
+export const MFA_CHALLENGE_DELIVERED_TTL_MS = 10 * MINUTE_MS;
 
 /**
  * The `{ mfaRequired, challenge, ... }` body `POST /account/login` answers with, for an account

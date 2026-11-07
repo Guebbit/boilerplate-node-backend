@@ -11,9 +11,10 @@
 import { Counter, Gauge } from 'prom-client';
 import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
 import { webhookDeliveryRepository } from './repository';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /** A `pending` row this far overdue counts toward {@link _webhookDeliveriesOverdue} — see there. */
-const OVERDUE_THRESHOLD_MS = 10 * 60 * 1000;
+const OVERDUE_THRESHOLD_MS = 10 * MINUTE_MS;
 
 /**
  * Delivery attempts by outcome (success / failure).

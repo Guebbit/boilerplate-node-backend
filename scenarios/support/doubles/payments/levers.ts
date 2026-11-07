@@ -18,6 +18,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { rejectResponse } from '@infrastructure/http/response';
 import { connection } from '@infrastructure/runtime/database';
 import { setFakeDispute, setFakeRefundFailure } from './fake';
+import { DAY_MS } from '@domain-primitives/time';
 
 /**
  * The body of `POST /__test/payments/refund-failure`: the order, and the closed code every refund
@@ -88,7 +89,7 @@ const installDisputeLever = (app: Express): void => {
                     amount: wanted.amount?.toFixed(2) ?? String(payment.amount),
                     currency: payment.currency,
                     fundsWithdrawn: wanted.kind === 'chargeback' && wanted.status !== 'won',
-                    evidenceDueBy: new Date(now + wanted.evidenceInDays * 86_400_000).toISOString(),
+                    evidenceDueBy: new Date(now + wanted.evidenceInDays * DAY_MS).toISOString(),
                     observedAt: new Date(now).toISOString(),
                     dashboardUrl: `https://dashboard.fake-psp.example/disputes/${wanted.disputeId}`
                 });

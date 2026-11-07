@@ -26,6 +26,7 @@ import {
     refundReversedOpening,
     type ShopOpening
 } from '../domain/openings';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /** The payments page, on the tab of what needs a person. */
 const PAYMENTS_ATTENTION_WORK = `${FRONTEND_LINK_RULES.staffPages.salesPayments}?tab=attention`;
@@ -44,7 +45,7 @@ const orderWork = (orderId: string): string =>
  * @param now - the clock
  */
 const attentionDueAt = (now: Date): Date =>
-    new Date(now.getTime() + paymentAttentionMinutes() * 60_000);
+    new Date(now.getTime() + paymentAttentionMinutes() * MINUTE_MS);
 
 /**
  * Hand an opening to the tasks engine together with the screen that does its work.

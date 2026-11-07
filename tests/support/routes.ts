@@ -37,6 +37,7 @@
 import type { Router } from 'express';
 import { asStub } from '@tests/stub';
 import type { PermissionAction, PermissionSubject, StepUpTier } from '@kernel/permissions';
+import { HOUR_SECONDS } from '@domain-primitives/time';
 
 /** The action and subject a `requirePermission` guard asks for. */
 export interface PermissionAsk {
@@ -180,7 +181,7 @@ const mockSearchCache = (
     entity: string,
     keyParameters: readonly string[],
     _scopeKey: unknown,
-    seconds = 3600
+    seconds = HOUR_SECONDS
 ) => mockSetCache(seconds, { tags: [entity], keyParameters, keyAs: `${entity}:search` });
 
 /**

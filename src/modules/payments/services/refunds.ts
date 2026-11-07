@@ -78,6 +78,7 @@ import { rereadRefund } from './refund-sync';
 import { callerScope } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
 import { paymentNotFound, RefundLeftOpenError } from './errors';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /** What one refund is asked to do. */
 export interface RefundRequest {
@@ -551,7 +552,7 @@ const attemptKeepingGoing = (
     return paymentRepository
         .claimRefund(String(payment._id), String(refund._id), {
             now,
-            staleBefore: new Date(now.getTime() - paymentEffectRetryMinutes() * 60_000)
+            staleBefore: new Date(now.getTime() - paymentEffectRetryMinutes() * MINUTE_MS)
         })
         .then((claimed) => {
             const taken = claimed?.refunds.find(({ _id }) => String(_id) === String(refund._id));

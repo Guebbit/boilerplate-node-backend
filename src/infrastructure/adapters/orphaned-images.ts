@@ -19,9 +19,10 @@ import {
     publicRoot,
     thumbnailsDirectory
 } from '@infrastructure/adapters/image-store';
+import { HOUR_MS } from '@domain-primitives/time';
 
 /** A file younger than this is never swept: it may be promoted but not yet saved on its row. */
-const MIN_AGE_MS = 60 * 60 * 1000;
+const MIN_AGE_MS = HOUR_MS;
 
 /**
  * Every `imageUrl`/`thumbnailUrl` basename a live document currently names, across the given

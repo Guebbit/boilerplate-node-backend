@@ -11,6 +11,7 @@ import type { TenantCallerContext } from '@types';
 import { createUser } from '@modules/users/tests/factories';
 import { mint } from '@modules/api-keys/services/api-keys';
 import { armAuthenticator } from './authenticator';
+import { DAY_MS } from '@domain-primitives/time';
 
 /**
  * Mint a credential holding exactly `permissions` and return its plaintext secret.
@@ -43,7 +44,7 @@ export const credentialHolding = async (permissions: string[]): Promise<string> 
         {
             name: 'partner integration',
             permissions,
-            expiresAt: new Date(Date.now() + 7 * 24 * 3_600_000).toISOString()
+            expiresAt: new Date(Date.now() + 7 * DAY_MS).toISOString()
         },
         context
     );

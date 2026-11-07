@@ -14,6 +14,7 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
 import { WebhookDeliveryStatus } from '@types';
 import { getWebhookDeliveryRetentionDays } from './config';
 import { liveRingEntries, retiringRingSecrets } from './secrets';
+import { DAY_SECONDS } from '@domain-primitives/time';
 
 /**
  * One secret in a subscription's ring — see `./secrets` for encryption at rest and rotation.
@@ -307,7 +308,7 @@ webhookDeliverySchema.index({ status: 1, leaseExpiresAt: 1 });
  */
 webhookDeliverySchema.index(
     { createdAt: 1 },
-    { expireAfterSeconds: deliveryRetentionDays * 24 * 60 * 60 }
+    { expireAfterSeconds: deliveryRetentionDays * DAY_SECONDS }
 );
 
 /**

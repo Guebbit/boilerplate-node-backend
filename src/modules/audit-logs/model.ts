@@ -19,6 +19,7 @@ import {
 } from '@infrastructure/observability/audit';
 import { AUTHORIZATION_SCOPES } from '@types';
 import { auditLogsConfig } from './config';
+import { DAY_SECONDS } from '@domain-primitives/time';
 
 /**
  * A stored audit entry — `AuditEntry` from `@infrastructure/observability/audit`, as a document.
@@ -164,7 +165,7 @@ auditLogSchema.index({ targetId: 1, timestamp: -1 });
  * `autoIndex` asks for the new window and Mongo refuses the conflicting options. `npm run db:sync`
  * is what applies it, by dropping the index and rebuilding it.
  */
-auditLogSchema.index({ timestamp: 1 }, { expireAfterSeconds: retentionDays * 24 * 60 * 60 });
+auditLogSchema.index({ timestamp: 1 }, { expireAfterSeconds: retentionDays * DAY_SECONDS });
 
 /**
  * Serialized shape returned to the admin dashboard.

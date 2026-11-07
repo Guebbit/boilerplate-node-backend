@@ -10,6 +10,7 @@ import type { JobData } from '@infrastructure/config/shared-rules/jobs';
 import { shopTasksJobData } from './jobs.generated';
 import { logger } from '@infrastructure/adapters/logger';
 import { runStaffDigest, type DigestRun } from './services/digest';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /** One digest job: the run it does, its data from `module.yaml`, and how it logs. */
 const digestJob = (run: DigestRun, data: JobData): JobDeclaration => ({
@@ -20,7 +21,7 @@ const digestJob = (run: DigestRun, data: JobData): JobDeclaration => ({
         }),
     // Rendering the mail needs the translations; the rows need no subscriptions.
     needs: { i18n: true },
-    lease: { ttlMs: 30 * 60 * 1000 }
+    lease: { ttlMs: 30 * MINUTE_MS }
 });
 
 /** The jobs `shop-tasks` owns. */

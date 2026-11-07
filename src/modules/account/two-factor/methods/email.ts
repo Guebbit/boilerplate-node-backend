@@ -22,6 +22,7 @@ import {
     DELIVERED_CODE_TTL_MS
 } from '../delivered-codes';
 import { verifyDeliveredCode } from '../delivered-code-verify';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /**
  * `ada.lovelace@example.com` → `a***e@example.com`. Enough for the owner to recognise the
@@ -59,7 +60,7 @@ export const deliverEmailCode = (
         recipientLocale(user.locale, context),
         greetableName(user, user.email),
         code,
-        Math.round(DELIVERED_CODE_TTL_MS / 60_000)
+        Math.round(DELIVERED_CODE_TTL_MS / MINUTE_MS)
     );
 
     // High priority: someone is sitting on a login screen waiting for this, not reading a digest.

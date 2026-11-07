@@ -15,6 +15,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { databaseConfig, isRelaxedEnvironment } from '@infrastructure/runtime/config';
 import { applyMongooseDefaults } from '@infrastructure/runtime/mongoose-defaults';
 import { observeDatabaseCommands } from '@infrastructure/persistence/command-metrics';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /**
  * Connect option that makes the driver emit `commandStarted`, `commandSucceeded` and
@@ -58,7 +59,7 @@ export const isPermanentConnectError = (error: unknown): boolean => {
  * (`NODE_MONGO_MAX_TIME_MS`), but still a ceiling: a job stuck behind a hung query is not one that
  * can be noticed.
  */
-export const JOB_MAX_TIME_MS = 600_000;
+export const JOB_MAX_TIME_MS = 10 * MINUTE_MS;
 
 /**
  * Backoff delays should yield to the event loop instead of blocking the whole process.

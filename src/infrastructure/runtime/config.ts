@@ -11,6 +11,7 @@
 
 import { defineConfig, isRelaxedIn } from '../config/define';
 import { choice, flag, int, text } from '../config/fields';
+import { MINUTE_MS } from '../../domain-primitives/time';
 
 /** The log levels winston knows, lowest severity last. */
 const LOG_LEVELS = ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'] as const;
@@ -55,7 +56,7 @@ export const clusterConfig = defineConfig({
     shape: {
         NODE_ENABLE_CLUSTERING: flag({ default: false }),
         NODE_CLUSTER_WORKERS: int({ default: 0, min: 0 }),
-        NODE_CLUSTER_CRASH_WINDOW_MS: int({ default: 60_000, min: 1 }),
+        NODE_CLUSTER_CRASH_WINDOW_MS: int({ default: MINUTE_MS, min: 1 }),
         NODE_CLUSTER_CRASH_BACKOFF_BASE_MS: int({ default: 500, min: 1 }),
         NODE_CLUSTER_CRASH_BACKOFF_MAX_MS: int({ default: 30_000, min: 1 }),
         NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS: int({ default: 15_000, min: 1 }),

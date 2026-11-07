@@ -9,6 +9,7 @@ import type { JobDeclaration } from '@kernel/registry';
 import { usersJobData } from './jobs.generated';
 import { logger } from '@infrastructure/adapters/logger';
 import { reapExpiredPurchaseHolds } from './services/purchase-hold';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /** The jobs `users` owns. */
 export const usersJobs: readonly JobDeclaration[] = [
@@ -19,6 +20,6 @@ export const usersJobs: readonly JobDeclaration[] = [
                 logger.info({ message: 'Purchase holds reaped.', holdsReduced: reduced });
                 return { reduced };
             }),
-        lease: { ttlMs: 15 * 60 * 1000 }
+        lease: { ttlMs: 15 * MINUTE_MS }
     }
 ];

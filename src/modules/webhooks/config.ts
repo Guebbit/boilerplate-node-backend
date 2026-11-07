@@ -7,6 +7,7 @@
 import { defineConfig } from '@infrastructure/config/define';
 import { int, versionedKeyRing } from '@infrastructure/config/fields';
 import type { VersionedKey } from '@infrastructure/security/versioned-secret';
+import { HOUR_MS } from '@domain-primitives/time';
 
 /**
  * Webhook delivery configuration.
@@ -53,7 +54,7 @@ export const getWebhookSubscriptionCap = (): number =>
  * it was minted — the Standard Webhooks bounded overlap.
  */
 export const getWebhookSecretOverlapMs = (): number =>
-    webhooksConfig().NODE_WEBHOOK_SECRET_OVERLAP_HOURS * 3_600_000;
+    webhooksConfig().NODE_WEBHOOK_SECRET_OVERLAP_HOURS * HOUR_MS;
 
 /**
  * How long a delivery row survives, in days, before Mongo's TTL index removes it. Read at import

@@ -22,6 +22,7 @@ import type { Task } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { tasksConfig } from './config';
 import { CONTACT_ROUTE_SET } from './domain';
+import { DAY_SECONDS } from '@domain-primitives/time';
 
 /**
  * How long a CLOSED task survives, in days, before Mongo's TTL index removes it. Read at import time
@@ -268,7 +269,7 @@ taskSchema.index({ email: 1 }, { partialFilterExpression: { email: { $exists: tr
  * is what applies it, by dropping the index and rebuilding it. See `audit-logs/model.ts` for the
  * identical caveat on that module's own TTL index.
  */
-taskSchema.index({ closedAt: 1 }, { expireAfterSeconds: retentionDays * 24 * 60 * 60 });
+taskSchema.index({ closedAt: 1 }, { expireAfterSeconds: retentionDays * DAY_SECONDS });
 
 /*
  * A visitor's message is also deleted a retention window after it ARRIVED, closed or not: the
@@ -279,7 +280,7 @@ taskSchema.index({ closedAt: 1 }, { expireAfterSeconds: retentionDays * 24 * 60 
 taskSchema.index(
     { createdAt: 1 },
     {
-        expireAfterSeconds: retentionDays * 24 * 60 * 60,
+        expireAfterSeconds: retentionDays * DAY_SECONDS,
         partialFilterExpression: { source: TaskSource.visitor }
     }
 );

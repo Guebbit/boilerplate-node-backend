@@ -13,8 +13,7 @@
 
 import type { PermissionSetName } from '@api/permission-vocabulary';
 import { TaskKind, TaskLinkType } from '@types';
-
-const HOUR_MS = 3_600_000;
+import { HOUR_MS } from '@domain-primitives/time';
 
 /** How long a person has to look at an account flagged for review or a failed export. */
 const REVIEW_WINDOW_MS = 72 * HOUR_MS;

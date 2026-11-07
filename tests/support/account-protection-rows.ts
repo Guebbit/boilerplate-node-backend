@@ -12,6 +12,7 @@
 import { createUser } from '@modules/users/tests/factories';
 import type { UserDocument } from '@modules/users';
 import { seedMembership } from '@modules/access/tests/factories';
+import { DAY_MS } from '@domain-primitives/time';
 
 /** A person the request is aimed at: their account and the staff role they hold, if any. */
 export interface Owner {
@@ -76,7 +77,7 @@ export const PROTECTION_ROWS: readonly ProtectionRow[] = [
         route: 'users PUT /:id/purchase-hold',
         key: 'ban:User',
         prepare: onUser('put', '/purchase-hold', () => ({
-            until: new Date(Date.now() + 86_400_000).toISOString()
+            until: new Date(Date.now() + DAY_MS).toISOString()
         }))
     },
     {

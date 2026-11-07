@@ -12,6 +12,7 @@
  */
 
 import { TaskStatus } from '@types';
+import { DAY_MS } from '@domain-primitives/time';
 
 /** The facts a transition reads. */
 export interface TaskFacts {
@@ -40,7 +41,7 @@ export type Transition = { patch: TaskPatch } | { refusal: TaskRefusal };
  * How far ahead of a deadline the one "due soon" reminder is sent, and the shortest task life
  * that earns one: a task opened with less than this to live gets none (it would be told at once).
  */
-export const DUE_SOON_MS = 3 * 24 * 60 * 60_000;
+export const DUE_SOON_MS = 3 * DAY_MS;
 
 /** The statuses that still owe work. */
 export const OPEN_STATUSES: readonly TaskStatus[] = [TaskStatus.new, TaskStatus.in_progress];

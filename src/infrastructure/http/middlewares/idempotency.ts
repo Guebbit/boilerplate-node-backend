@@ -29,6 +29,7 @@ import {
     type IdempotencyRecordDocument
 } from '@infrastructure/http/middlewares/idempotency-model';
 import { ERROR_CODES } from '@api/error-codes';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /** The header this middleware reads. Express lower-cases header names on `request.header()`. */
 const IDEMPOTENCY_KEY_HEADER = 'idempotency-key';
@@ -139,7 +140,7 @@ const replayedHeadersOf = (response: Response): Record<string, string> =>
  *
  * Far above any real handler: a live request running this long is already past every timeout.
  */
-const IN_FLIGHT_LEASE_MS = 5 * 60_000;
+const IN_FLIGHT_LEASE_MS = 5 * MINUTE_MS;
 
 /**
  * Whether an 'in_flight' record outlived {@link IN_FLIGHT_LEASE_MS}.

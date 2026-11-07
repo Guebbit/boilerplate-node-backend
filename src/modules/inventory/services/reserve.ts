@@ -13,6 +13,7 @@ import { stockLevelRepository, reservationRepository } from '../repository';
 import type { ReservationDocument, StockLevelDocument } from '../model';
 import type { StockLine, StockShortfall, ReserveOutcome } from './types';
 import { applyTransition, refreshStockCache } from './transition';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /**
  * Give back every line already taken for a reserve that will not complete, and delete the hold
@@ -234,7 +235,7 @@ export const reserveForOrder = async (
     lines: readonly StockLine[],
     holdMinutes: number = reservationTtlMinutes()
 ): Promise<ReserveOutcome> => {
-    const expiresAt = new Date(Date.now() + holdMinutes * 60_000);
+    const expiresAt = new Date(Date.now() + holdMinutes * MINUTE_MS);
     const hold = await reservationRepository.insertHold(orderId, lines, expiresAt);
     // Already held — a retry, or a double-clicked button. The first call did the work; report
     // ITS expiry, not the fresh guess this attempt computed but never actually wrote.

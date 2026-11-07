@@ -12,6 +12,7 @@ import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { cartConfig } from './config';
+import { DAY_SECONDS } from '@domain-primitives/time';
 
 /**
  * A stored cart line.
@@ -149,7 +150,7 @@ const cartRetentionDays = cartConfig().NODE_CART_RETENTION_DAYS;
  */
 cartSchema.index(
     { updatedAt: 1 },
-    { name: 'carts_updatedAt_ttl', expireAfterSeconds: cartRetentionDays * 24 * 60 * 60 }
+    { name: 'carts_updatedAt_ttl', expireAfterSeconds: cartRetentionDays * DAY_SECONDS }
 );
 
 /**

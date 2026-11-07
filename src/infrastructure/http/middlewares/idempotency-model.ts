@@ -13,6 +13,7 @@
 import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { idempotencyConfig } from '@infrastructure/http/config';
+import { HOUR_SECONDS } from '@domain-primitives/time';
 
 /** Every state a record can be in — the schema's `enum`, and the source of {@link IdempotencyRecordState}. */
 const IDEMPOTENCY_RECORD_STATES = ['in_flight', 'done'] as const;
@@ -117,7 +118,7 @@ idempotencyRecordSchema.index(
  */
 idempotencyRecordSchema.index(
     { createdAt: 1 },
-    { expireAfterSeconds: retentionHours * 60 * 60, name: 'idempotency_createdAt_ttl' }
+    { expireAfterSeconds: retentionHours * HOUR_SECONDS, name: 'idempotency_createdAt_ttl' }
 );
 
 /** Idempotency ledger model entrypoint. Collection name `idempotencyrecords`. */

@@ -19,6 +19,7 @@
 import { addMoney, subtractMoney, toMinorUnits, type Money } from '@domain-primitives/money';
 import { RefundFailureReason, RefundStatus, type PaymentStatus } from '@types';
 import { hasDecidedDispute, lostChargebackCovers, type DisputablePayment } from './disputes';
+import { DAY_MS, MINUTE_MS } from '@domain-primitives/time';
 
 /**
  * The statuses `confirmPayment` may run from — a fresh intent, or one the provider previously
@@ -318,10 +319,10 @@ const WITHDRAWAL_REFUND_DAYS = 14;
 export const refundDueBy = (refund: { createdAt: Date; returnId?: string }): Date | undefined =>
     refund.returnId === undefined
         ? undefined
-        : new Date(refund.createdAt.getTime() + WITHDRAWAL_REFUND_DAYS * 24 * 60 * 60_000);
+        : new Date(refund.createdAt.getTime() + WITHDRAWAL_REFUND_DAYS * DAY_MS);
 
 /** The longest wait the growing retry delay reaches: a day. */
-const MAX_RETRY_DELAY_MS = 24 * 60 * 60_000;
+const MAX_RETRY_DELAY_MS = DAY_MS;
 
 /**
  * When a refund the provider just refused may be sent again: the base wait doubling with every
@@ -343,7 +344,7 @@ export const nextRefundAttemptAt = (
         : new Date(
               now.getTime() +
                   Math.min(
-                      baseMinutes * 60_000 * 2 ** Math.max(attempts - 1, 0),
+                      baseMinutes * MINUTE_MS * 2 ** Math.max(attempts - 1, 0),
                       MAX_RETRY_DELAY_MS
                   )
           );

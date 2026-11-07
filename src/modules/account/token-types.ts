@@ -1,4 +1,4 @@
-import { DAY_MS } from '@domain-primitives/time';
+import { DAY_MS, MINUTE_MS } from '@domain-primitives/time';
 /**
  * @module
  * The one-time token kinds this module stores in `verificationtokens` — a leaf, so the schema, the
@@ -60,7 +60,7 @@ export const DELETION_RESTORE_TOKEN_TYPE = 'deletion-restore';
 export const OAUTH_LINK_TOKEN_TYPE = 'oauth-link';
 
 /** How long a connect attempt may take at the provider — the same minutes-scale as the OAuth cookies. */
-export const OAUTH_LINK_TTL_MS = 5 * 60 * 1000;
+export const OAUTH_LINK_TTL_MS = 5 * MINUTE_MS;
 
 /** How long the undo link works — 7 days, long enough for someone who reads their mail weekly. */
 export const EMAIL_CHANGE_UNDO_TTL_MS = 7 * DAY_MS;

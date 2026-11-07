@@ -42,6 +42,7 @@ import type { PaymentDocument, RefundRecord } from '../model';
 import { paymentRepository, type RefundFilters, type RefundRow } from '../repository';
 import { callerScope } from './scope';
 import { withActions } from './view';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /** Most rows one needs-attention source contributes. */
 const ATTENTION_LIMIT = 100;
@@ -255,7 +256,7 @@ const disputeRows = (payments: PaymentDocument[]): PaymentAttentionItem[] =>
  * and is not here.
  */
 export const listAttention = (): Promise<{ items: PaymentAttentionItem[] }> => {
-    const cutoff = new Date(Date.now() - paymentAttentionMinutes() * 60_000);
+    const cutoff = new Date(Date.now() - paymentAttentionMinutes() * MINUTE_MS);
     return Promise.all([
         paymentRepository.findOpenRefundRows({
             manual: false,

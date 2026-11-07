@@ -5,6 +5,7 @@
  */
 
 import { returnModel } from '../model';
+import { DAY_MS } from '@domain-primitives/time';
 
 /** The few fields a count by status and age reads. */
 export interface BareReturn {
@@ -26,6 +27,6 @@ export const insertBareReturns = (rows: readonly BareReturn[]): Promise<unknown>
             status,
             kind: 'return',
             reason,
-            createdAt: new Date(Date.now() - daysAgo * 86_400_000)
+            createdAt: new Date(Date.now() - daysAgo * DAY_MS)
         }))
     );

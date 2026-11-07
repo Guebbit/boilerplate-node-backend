@@ -29,6 +29,7 @@ import {
     type ProviderRefundState,
     type ProviderWebhookEvent
 } from '@modules/payments/providers';
+import { DAY_MS } from '@domain-primitives/time';
 
 /**
  * The method references this provider recognises, and what each one does. Anything else succeeds
@@ -212,7 +213,7 @@ export const setFakeRefundTimeout = (providerRef: string, on: boolean): void => 
 };
 
 /** How long the fake remembers an idempotency key, as Stripe does: a day from its FIRST use. */
-const KEY_WINDOW_MS = 24 * 60 * 60_000;
+const KEY_WINDOW_MS = DAY_MS;
 
 /** What a key first produced: the refund it made (and how far it had got), or the definite error it got. */
 interface KeyedAnswer {

@@ -11,6 +11,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { scrubHoldNotes, scrubLostNotes } from './services/retention';
 import { runPreorderSweep } from './services/preorder-sweep';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /** The jobs `delivery` owns. */
 export const deliveryJobs: readonly JobDeclaration[] = [
@@ -32,6 +33,6 @@ export const deliveryJobs: readonly JobDeclaration[] = [
                 // heard every one before the connections close.
                 .then(() => settleOutboxNudges()),
         needs: { subscriptions: true, i18n: true },
-        lease: { ttlMs: 30 * 60 * 1000 }
+        lease: { ttlMs: 30 * MINUTE_MS }
     }
 ];

@@ -19,6 +19,7 @@ import { takeFromHold } from '../domain';
 import type { StockLine } from './types';
 import { applyToEveryLine, applyTransition, refreshStockCacheForProducts } from './transition';
 import { allocateWithin } from './allocate';
+import { HOUR_MS } from '@domain-primitives/time';
 
 /**
  * Units a hold gives back are sellable again: the paid buyers waiting for stock are served from
@@ -490,7 +491,7 @@ export const refreshStockCacheForOrder = (orderId: string): Promise<void> =>
  */
 export const extendHoldForOrder = (orderId: string, hours: number): Promise<void> =>
     reservationRepository
-        .extendExpiry(orderId, new Date(Date.now() + hours * 60 * 60_000))
+        .extendExpiry(orderId, new Date(Date.now() + hours * HOUR_MS))
         .then(() => undefined);
 
 /**

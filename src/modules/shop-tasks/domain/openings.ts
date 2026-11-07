@@ -11,6 +11,7 @@
 
 import { TaskKind, TaskLinkType } from '@types';
 import type { PermissionSetName } from '@api/permission-vocabulary';
+import { DAY_MS, HOUR_MS } from '@domain-primitives/time';
 
 /**
  * The first facts of a shop task: `tasks`' `SystemOpening` without `work` and `subjectId`.
@@ -33,12 +34,6 @@ export interface ShopOpening {
     /** Set for a wait on someone else: no "due soon" reminder, see `SystemOpening`. */
     noDueSoon?: true;
 }
-
-/** One hour in milliseconds. */
-const HOUR_MS = 3_600_000;
-
-/** One day in milliseconds. */
-const DAY_MS = 24 * HOUR_MS;
 
 /** How long a paid order without stock set aside may wait: the customer is already owed goods. */
 const ORPHAN_WINDOW_MS = 4 * HOUR_MS;

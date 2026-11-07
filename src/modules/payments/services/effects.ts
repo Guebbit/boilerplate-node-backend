@@ -12,6 +12,7 @@ import type { PaymentDocument } from '../model';
 import { paymentEffectRetryMinutes, paymentReconcileMinutes } from '../config';
 import { settleOpenRefunds } from './refunds';
 import { settleFromProvider } from './settlement';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /** How many payments one sweep pass retries before asking to be run again. */
 const SWEEP_BATCH_SIZE = 200;
@@ -33,7 +34,7 @@ const sweepDue = async (
     label: 'refund' | 'reconcile',
     graceMinutes: number
 ): Promise<number> => {
-    const cutoff = new Date(Date.now() - graceMinutes * 60_000);
+    const cutoff = new Date(Date.now() - graceMinutes * MINUTE_MS);
     const due = await find(cutoff, SWEEP_BATCH_SIZE);
 
     let settled = 0;

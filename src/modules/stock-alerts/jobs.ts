@@ -11,6 +11,7 @@ import { stockAlertsJobData } from './jobs.generated';
 import { logger } from '@infrastructure/adapters/logger';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { stockAlertService } from './service';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /** The jobs `stock-alerts` owns. */
 export const stockAlertsJobs: readonly JobDeclaration[] = [
@@ -26,6 +27,6 @@ export const stockAlertsJobs: readonly JobDeclaration[] = [
                 // heard every one before the connections close.
                 .then(() => settleOutboxNudges()),
         needs: { subscriptions: true, i18n: true },
-        lease: { ttlMs: 30 * 60 * 1000 }
+        lease: { ttlMs: 30 * MINUTE_MS }
     }
 ];

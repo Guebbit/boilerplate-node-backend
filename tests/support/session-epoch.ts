@@ -11,6 +11,7 @@ import { Types } from 'mongoose';
 import { decodeJwt } from 'jose';
 import { userRepository } from '@modules/users/tests/factories';
 import { sessionRepository } from '@modules/account/repository';
+import { HOUR_MS } from '@domain-primitives/time';
 
 /**
  * Clears every account's session epoch and restores the session family `bearer` names, so a bearer
@@ -33,7 +34,7 @@ export const forgetSessionEpoch = (bearer: string): Promise<unknown> => {
                       mode: 'jwt',
                       tokenHash: new Types.ObjectId().toHexString(),
                       startedAt: now,
-                      expiresAt: new Date(now.getTime() + 3_600_000)
+                      expiresAt: new Date(now.getTime() + HOUR_MS)
                   })
         );
 };

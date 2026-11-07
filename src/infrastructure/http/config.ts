@@ -12,6 +12,7 @@ import { defineConfig } from '@infrastructure/config/define';
 import { csv, int, text } from '@infrastructure/config/fields';
 import { sharedDefaults } from '@infrastructure/config/defaults.generated';
 import type { RateLimitBudget } from '@types';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /** Where this deployment and its paired frontend live. */
 export const siteConfig = defineConfig({
@@ -43,7 +44,7 @@ export const siteConfig = defineConfig({
 export const rateLimitConfig = defineConfig({
     name: 'rate-limit',
     shape: {
-        NODE_RATE_LIMIT_WINDOW_MS: int({ default: 60_000, min: 1 }),
+        NODE_RATE_LIMIT_WINDOW_MS: int({ default: MINUTE_MS, min: 1 }),
         NODE_RATE_LIMIT_REDIS_URL: text({ sensitive: true }),
         NODE_RATE_LIMIT_REDIS_PASSWORD: text({ sensitive: true }),
         NODE_RATE_LIMIT_REDIS_PREFIX: text({ default: 'rate-limit' })

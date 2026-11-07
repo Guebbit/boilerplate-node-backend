@@ -27,6 +27,7 @@ import {
 } from './model';
 import type { WebhookSubscription, WebhookDelivery } from '@types';
 import { setAndUnset } from '@infrastructure/persistence/changes';
+import { MINUTE_MS } from '@domain-primitives/time';
 
 /**
  * A stored subscription as the wire carries it, minus `actions`: those depend on the caller, so
@@ -222,7 +223,7 @@ const findDeliveryByIdInTenant = (
  * round trip and a GC pause, not so much that a worker that genuinely crashed mid-attempt strands
  * its row for long before the sweep's stranded-lease read picks it up again.
  */
-const LEASE_DURATION_MS = 60_000;
+const LEASE_DURATION_MS = MINUTE_MS;
 
 /** A fresh lease: who is claiming, and until when. */
 const lease = (): { leaseToken: string; leaseExpiresAt: Date } => ({

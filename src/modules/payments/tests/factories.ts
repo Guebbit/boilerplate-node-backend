@@ -19,6 +19,7 @@ import { buildReference } from '../domain';
 import { paymentService } from '../services';
 import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
+import { HOUR_MS } from '@domain-primitives/time';
 
 /**
  * The cancel listener's refund, for a sibling's test that needs a refunded order. Not on
@@ -74,7 +75,7 @@ export const transferOrder = async (
     const order = await createOrder(user, [toOrderItem(product, 1)], {
         id: id.toHexString(),
         paymentMethod: 'bank_transfer',
-        payBy: new Date(Date.now() + (options.holdHours ?? 168) * 3_600_000).toISOString()
+        payBy: new Date(Date.now() + (options.holdHours ?? 168) * HOUR_MS).toISOString()
     });
     await paymentService.openTransferPayment(id.toHexString());
     const payment = await paymentRepository.findByOrderId(id.toHexString());
