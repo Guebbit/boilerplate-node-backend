@@ -15,7 +15,7 @@ import {
     toObjectId,
     type Repository
 } from '@infrastructure/persistence/create-repository';
-import { TaskKind, TaskLinkType, TaskSource, TaskStatus } from '@types';
+import { TaskCategory, TaskKind, TaskLinkType, TaskSource, TaskStatus } from '@types';
 import type { StoredTask } from './presenter';
 import { DUE_SOON_MS, OPEN_STATUSES, type OwnTasksFilter, type TaskPatch } from './domain';
 
@@ -58,7 +58,7 @@ export interface TaskRepository extends Repository<TaskDocument, StoredTask> {
     /**
      * Claim ONE open task due within `DUE_SOON_MS` that was never reminded and had longer than
      * that to live when it opened: stamp `dueSoonNotifiedAt` and return it. A contact message and
-     * a task that opted out are never claimed. `null`: nothing is left to claim.
+     * a task that opted out are never claimed, except a privacy request (a month's deadline). `null`: nothing is left to claim.
      */
     claimDueSoon: (now: Date, session?: ClientSession) => Promise<TaskDocument | null>;
     /** Whether a system event already opened or touched a task (a redelivery). */
@@ -71,8 +71,8 @@ export interface TaskRepository extends Repository<TaskDocument, StoredTask> {
     findOpenSystem: (filter: Record<string, unknown>) => Promise<TaskDocument[]>;
     /** The open task currently holding a dedup key. */
     findOpenByKey: (openKey: string) => Promise<TaskDocument | null>;
-    /** Delete a person's visitor tasks, inside the erasure's transaction. */
-    deleteOwned: (filter: OwnTasksFilter, session: ClientSession) => Promise<number>;
+    /** Delete a person's visitor tasks, inside the erasure's transaction. Resolves to their ids. */
+    deleteOwned: (filter: OwnTasksFilter, session: ClientSession) => Promise<string[]>;
     /** Delete the system tasks whose subject is a record that goes with the person. */
     deleteSystemAbout: (userId: string, session: ClientSession) => Promise<number>;
     /** Detach the person from the system tasks that outlive them. */
@@ -195,7 +195,9 @@ export const taskRepository: TaskRepository = {
             .findOneAndUpdate(
                 {
                     status: { $in: OPEN_STATUSES },
-                    kind: { $ne: TaskKind.contact },
+                    // A contact message owes only a short SLA, so it is skipped; a privacy request
+                    // owes a month, so it gets the warning.
+                    $or: [{ kind: { $ne: TaskKind.contact } }, { category: TaskCategory.privacy }],
                     noDueSoon: { $exists: false },
                     dueAt: { $gt: now, $lte: new Date(now.getTime() + DUE_SOON_MS) },
                     $expr: { $gt: [{ $subtract: ['$dueAt', '$createdAt'] }, DUE_SOON_MS] },
@@ -258,10 +260,20 @@ export const taskRepository: TaskRepository = {
     deleteOwned: (filter, session) =>
         // Mongoose: Model.deleteMany(filter, { session }) joins the caller's transaction.
         // https://mongoosejs.com/docs/api/model.html#Model.deleteMany()
+        // Ids first, in the same transaction: `deleteMany` reports only a count.
         taskModel
-            .deleteMany(filter, { session })
+            .find(filter)
+            .select('_id')
+            .session(session)
+            .lean()
             .exec()
-            .then(({ deletedCount }) => deletedCount),
+            .then((rows) => rows.map(({ _id }) => String(_id)))
+            .then((ids) =>
+                taskModel
+                    .deleteMany({ _id: { $in: ids } }, { session })
+                    .exec()
+                    .then(() => ids)
+            ),
 
     deleteSystemAbout: (userId, session) =>
         taskModel

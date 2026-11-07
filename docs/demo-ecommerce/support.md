@@ -32,7 +32,7 @@ flowchart LR
 ```
 
 Four states, and that is the entire workflow. Private notes can be attached to a message; the person
-who sent it never sees them.
+who sent it never sees them on screen, but their data export includes them.
 
 ::: tip The form works without an account, and remembers one if there is one
 The form asks for an email rather than requiring a login, because the people most likely to need
@@ -52,7 +52,71 @@ task is the one to work: the message names it. Every note is kept with the time 
 write each as if the customer will read it, because their data export includes them (without your
 name). A task stays in the inbox for 24 months after it was closed, then goes.
 
-→ [`tasks`](../modules/tasks.md)
+### Answering from the support mailbox {#answering-a-message}
+
+Every message also lands in the support mailbox, and **Reply** there reaches the customer. The
+mailbox is where you answer; the task is how the team knows who is answering.
+
+1. Open the task first. The mail links to it, and the task shows its `#ref`, the same one as in the
+   mail subject.
+2. A name on it? It is theirs: ask before stepping in.
+3. Nobody's? Press **Take**.
+4. Reply from the mailbox. Keep the `[#…]` in the subject.
+5. Back on the task, add a note: what you answered, in a line or two.
+6. Press **Resolve**. They write back? **Reopen**.
+
+::: warning The customer can read your note
+Their data export includes every note, without your name. Write a summary, not a copy. No phone
+numbers, addresses or health details.
+:::
+
+::: tip Two people, one customer
+**Take** on someone else's task moves it to you, and they are not told: agree first. Two replies
+went out? Add a note. If they disagree, the second person sends one line saying which answer
+stands.
+:::
+
+### How long you have {#deadlines}
+
+| What the message is about | You have  |
+| ------------------------- | --------- |
+| Personal data             | one month |
+| Anything else             | 48 hours  |
+
+- A task shows **Due …**, and a red **Overdue since …** once it is late. In the inbox, filter
+  **Overdue only** or sort by **Due soonest**.
+- Late: one reminder, by bell and to the support mailbox.
+- A personal-data request warns **3 days before** it is due, by bell and to the mailbox. Its subject
+  carries `[privacy]`. Reminders arrive in the same thread as the first mail.
+
+::: warning The GDPR extension has a deadline too
+A personal-data request may take two more months only if you tell the person **within the first
+month**, and why. Write to them, then add a note with when and why: the shop's proof.
+:::
+
+::: warning "Cancellation" may be a withdrawal
+If the message clearly says so, record it on the order the same day
+([Record withdrawal](#withdraws-by-phone)), with the day they **sent** it. The money is owed within
+14 days of the shop **receiving** it.
+:::
+
+### Someone is erased: clean the mailbox {#mailbox-after-erasure}
+
+When an account is erased, the shop deletes their messages, to-dos and notes. It cannot delete the
+copies in the support mailbox, so it mails the mailbox ONE notice listing the `[#ref]`s of the
+deleted messages (no address, name or text). Do this the same week:
+
+1. Search the mailbox for each ref, and for the address if you know it.
+2. Delete every match in every folder: inbox, Sent, archive, your own folders. Then empty the Trash.
+3. Forwarded copies too.
+4. Move the notice to an **Erasures** folder, with the date and your initials. Never write the
+   address or name there.
+
+The provider's backups age out on its contract schedule.
+
+**Every month:** delete every mail older than 24 months in every folder (a mail rule can do it).
+
+→ [`tasks`](../modules/tasks.md) · [data retention](../theory/data-retention.md#the-support-mailbox)
 
 ## "I can't get in"
 
@@ -278,12 +342,12 @@ Worth knowing before promising anything to a customer:
 
 ## The words we used
 
-| Word             | In plain terms                                                                                                        |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------- |
-| **Triage**       | Deciding what a new message is and who deals with it. → [`tasks`](../modules/tasks.md)                                |
-| **Verified**     | Confirmed their email. Until then an account can shop but not check out.                                              |
-| **Session**      | One signed-in device. → [`account`](../modules/account.md)                                                            |
-| **Audit log**    | The 90-day record of staff actions, read by the moderator and the manager. → [`audit-logs`](../modules/audit-logs.md) |
-| **Health check** | A page that says whether the shop is running. → [`observability`](../modules/observability.md)                        |
-| **Delivery**     | One attempt to notify another system of one event. → [`webhooks`](../modules/webhooks.md)                             |
-| **Replay**       | Resending a delivery right now, instead of waiting for its next automatic retry. Manager only.                        |
+| Word             | In plain terms                                                                                         |
+| ---------------- | ------------------------------------------------------------------------------------------------------ |
+| **Triage**       | Deciding what a new message is and who deals with it. → [`tasks`](../modules/tasks.md)                 |
+| **Verified**     | Confirmed their email. Until then an account can shop but not check out.                               |
+| **Session**      | One signed-in device. → [`account`](../modules/account.md)                                             |
+| **Audit log**    | The 90-day record of staff actions, read by the admin only. → [`audit-logs`](../modules/audit-logs.md) |
+| **Health check** | A page that says whether the shop is running. → [`observability`](../modules/observability.md)         |
+| **Delivery**     | One attempt to notify another system of one event. → [`webhooks`](../modules/webhooks.md)              |
+| **Replay**       | Resending a delivery right now, instead of waiting for its next automatic retry. Manager only.         |

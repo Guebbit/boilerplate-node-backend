@@ -221,7 +221,7 @@ describe('mailMainMailbox', () => {
         const task = await taskService.create(makePayload());
 
         await taskService.mailMainMailbox(String(task._id));
-        await taskService.mailMainMailbox(String(task._id), true);
+        await taskService.mailMainMailbox(String(task._id), 'overdue');
 
         const [[first], [reminder]] = mockEnqueueEmail.mock.calls;
         expect(first.messageId).toBe(`<task-${String(task._id)}@example.com>`);

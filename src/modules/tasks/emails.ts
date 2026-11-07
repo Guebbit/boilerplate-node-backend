@@ -23,12 +23,23 @@ export interface ContactRequest {
     category?: string;
     orderNumber?: string;
     createdAt?: string;
-    /** The reminder for a message nobody answered in time, not the first announcement. */
-    overdue?: boolean;
+    /** Which reminder this is, when it is not the first announcement. */
+    reminder?: ContactReminder;
 }
 
+/** The two reminders a contact message can earn: it is late, or it is three days from late. */
+export type ContactReminder = 'overdue' | 'due-soon';
+
 /**
- * Operator-facing notification for a new contact request, or the reminder that it is overdue.
+ * The `[#ref]` of a task: the last eight characters of its id, in a mail subject and on the staff
+ * screens, so a mailbox thread can be matched to its task.
+ *
+ * @param id - the task's id
+ */
+export const taskRef = (id: string): string => id.slice(-8);
+
+/**
+ * Operator-facing notification for a new contact request, or one of its reminders.
  * Carries the plain-text part beside the HTML one.
  */
 export const contactRequestEmail = (
@@ -36,8 +47,8 @@ export const contactRequestEmail = (
     contact: ContactRequest
 ): EmailContent & { text: string } => {
     const t = translator(locale);
-    const wording = contact.overdue ? '-overdue' : '';
-    const ref = contact.id.slice(-8);
+    const wording = contact.reminder ? `-${contact.reminder}` : '';
+    const ref = taskRef(contact.id);
     const category = t(`tasks.task-category.${contact.category ?? 'none'}`);
     const link = frontendLink(FRONTEND_LINK_RULES.staffPages.task, locale, { id: contact.id });
     // `[privacy]`: a data-protection request owes an answer within a month, so it is findable
@@ -85,6 +96,29 @@ export const contactRequestEmail = (
             orderNumber,
             link,
             createdAt: contact.createdAt
+        }
+    };
+};
+
+/**
+ * Operator-facing notice that an erasure deleted contact messages: the `[#ref]`s of the deleted
+ * tasks and nothing else (no address, name or text), so the mailbox copies can be found and
+ * deleted. Goes to the main mailbox, in `NODE_DEFAULT_LOCALE`.
+ *
+ * @param locale - the mailbox's language
+ * @param ids - the ids of the deleted tasks
+ */
+export const erasureNoticeEmail = (locale: string, ids: readonly string[]): EmailContent => {
+    const t = translator(locale);
+    const references = ids.map((id) => `[#${taskRef(id)}]`).join(' ');
+    return {
+        template: 'tasks.erasure-notice',
+        subject: t('tasks.email-erasure.subject', { refs: references }),
+        data: {
+            locale,
+            pageMetaTitle: t('tasks.email-erasure.meta-title'),
+            title: t('tasks.email-erasure.title', { refs: references }),
+            explain: t('tasks.email-erasure.explain')
         }
     };
 };

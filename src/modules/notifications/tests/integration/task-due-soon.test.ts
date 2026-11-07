@@ -2,7 +2,8 @@
  * @module
  * The due-soon reminder, driven the way production drives it: a task whose deadline is two days
  * away, the tasks sweep run. Proves the same people as the opener hear of it once, by bell and by
- * mail, and that a contact message is never reminded early.
+ * mail; a privacy request (a month's deadline) is reminded too, and also mailed to the support
+ * mailbox, while any other contact message is not.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -100,23 +101,55 @@ describe('a task three days from its deadline', () => {
         expect(dueSoonMails()).toHaveLength(1);
     });
 
-    it('does not mail the main mailbox from the due-soon notice', async () => {
+    it('warns about a privacy request three days out: one bell, one mail in the first mail thread', async () => {
+        const person = await admin();
+        const task = await taskService.create({
+            name: 'Ada Lovelace',
+            email: 'ada@example.com',
+            subject: 'Erase me',
+            message: 'Please call me.',
+            category: 'privacy'
+        });
+        await giveLife(String(task._id), 2, 30);
+        await settleOutboxNudges();
+        mockEnqueueEmail.mockClear();
+
+        await taskService.remindDueSoon();
+        await settleOutboxNudges();
+        await taskService.remindDueSoon();
+        await settleOutboxNudges();
+
+        await expect(dueSoonBell(person.id)).resolves.toHaveLength(1);
+        const mailbox = mockEnqueueEmail.mock.calls.filter(
+            ([, template]) => template === 'tasks.contact'
+        );
+        expect(mailbox).toHaveLength(1);
+        const [envelope] = mailbox[0];
+        expect(envelope).toMatchObject({
+            to: 'desk@example.com',
+            subject: expect.stringContaining('Contact request due soon'),
+            inReplyTo: `<task-${String(task._id)}@example.com>`
+        });
+        expect(envelope.subject).toContain('[privacy]');
+    });
+
+    it('stays silent about an ordinary contact message three days out: it only has its short SLA', async () => {
+        const person = await admin();
         const task = await taskService.create({
             name: 'Ada Lovelace',
             email: 'ada@example.com',
             subject: 'Where is my parcel',
-            message: 'Please call me.'
+            message: 'Please call me.',
+            category: 'order'
         });
+        await giveLife(String(task._id), 2, 30);
         await settleOutboxNudges();
         mockEnqueueEmail.mockClear();
 
-        await notificationsService.onTaskDueSoon({
-            tenantId: DEPLOYMENT_TENANT_ID,
-            taskId: String(task._id),
-            kind: 'contact',
-            routeSet: 'TaskDisplay'
-        });
+        await taskService.remindDueSoon();
+        await settleOutboxNudges();
 
+        await expect(dueSoonBell(person.id)).resolves.toEqual([]);
         expect(
             mockEnqueueEmail.mock.calls.filter(([, template]) => template === 'tasks.contact')
         ).toEqual([]);

@@ -401,6 +401,18 @@ time and the operator must stop unless it shows compelling grounds. The mail nam
 paragraph (Art. 21(4)) and points to the contact page, which reaches staff who can lift the hold; the
 privacy notice names it too. The operator decides what a compelling ground is, with its lawyer.
 
+## The support mailbox
+
+A contact message is stored twice: as a task in the database, and as a mail in the support mailbox
+(`NODE_SUPPORT_EMAIL`). The task follows the rules above. The mailbox is the operator's own mail
+provider, outside the app, so the app cannot delete from it.
+
+| Question                           | Answer                                                                                                                                                                                                |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| How long is a mail kept?           | 24 months from arrival, the same window as a task. The operator deletes older mail every month (a mail rule can do it)                                                                                |
+| What happens at an erasure?        | The shop deletes the person's messages, then mails the mailbox ONE notice with their `[#ref]`s only. Staff delete the matching mails: [the guide](../demo-ecommerce/support.md#mailbox-after-erasure) |
+| What do the provider's backups do? | They age out on the provider's own schedule, which the Art. 28 processor contract states                                                                                                              |
+
 ## Backups and erasure
 
 A backup is a copy of everything, kept for as long as the keep knobs say (24 hourly, 7 daily, 4 weekly,

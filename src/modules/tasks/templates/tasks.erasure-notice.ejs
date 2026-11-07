@@ -1,0 +1,15 @@
+<!doctype html>
+<%#
+    Operator-facing, like `tasks.contact`: copy resolved in NODE_DEFAULT_LOCALE by
+    `modules/tasks/emails.ts`. Carries references only, never the erased person's data.
+%>
+<html lang="<%= locale %>">
+    <head>
+        <meta charset="UTF-8" />
+        <title><%= pageMetaTitle %></title>
+    </head>
+    <body>
+        <h2><%= title %></h2>
+        <p><%= explain %></p>
+    </body>
+</html>

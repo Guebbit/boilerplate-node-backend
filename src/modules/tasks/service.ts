@@ -19,7 +19,7 @@ import type {
     SearchTasksRequest,
     Task
 } from '@types';
-import type { PersonalDataSubject } from '@kernel/registry';
+import type { AfterErase, PersonalDataSubject } from '@kernel/registry';
 import type { TaskDocument } from './model';
 import { taskRepository } from './repository';
 import {
@@ -34,7 +34,7 @@ import { supportEmail } from '@infrastructure/adapters/config';
 import { announceInTransaction } from '@kernel/outbox';
 import { logger } from '@infrastructure/adapters/logger';
 import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
-import { contactRequestEmail } from './emails';
+import { contactRequestEmail, erasureNoticeEmail, type ContactReminder } from './emails';
 import {
     readAll,
     MAX_CONFIGURED_PAGE_SIZE,
@@ -143,9 +143,9 @@ const create = (payload: CreateContactTaskRequest, subjectId?: string): Promise<
  * `CallerContext`. A failed queue is logged, never raised: the task is already stored.
  *
  * @param taskId - the contact task
- * @param overdue - word it as the reminder that the message is late, not as a new one
+ * @param reminder - word it as that reminder, not as a new message
  */
-const mailMainMailbox = (taskId: string, overdue = false): Promise<void> => {
+const mailMainMailbox = (taskId: string, reminder?: ContactReminder): Promise<void> => {
     const mailbox = supportEmail();
 
     return taskRepository.findById(taskId).then((task) => {
@@ -160,7 +160,7 @@ const mailMainMailbox = (taskId: string, overdue = false): Promise<void> => {
             message: task.message,
             category: task.category,
             createdAt: task.createdAt?.toISOString(),
-            overdue
+            reminder
         });
 
         // The first mail's id is derived from the task, so the reminder can name it as its parent
@@ -176,9 +176,9 @@ const mailMainMailbox = (taskId: string, overdue = false): Promise<void> => {
                 subject: mail.subject,
                 text: mail.text,
                 replyTo: task.email,
-                ...(overdue
+                ...(reminder
                     ? {
-                          messageId: `<task-${String(task._id)}-overdue@${domain}>`,
+                          messageId: `<task-${String(task._id)}-${reminder}@${domain}>`,
                           inReplyTo: firstId
                       }
                     : { messageId: firstId })
@@ -193,6 +193,22 @@ const mailMainMailbox = (taskId: string, overdue = false): Promise<void> => {
                 // Stryker restore all
             });
     });
+};
+
+/**
+ * Tell the support mailbox which messages an erasure deleted, by `[#ref]` alone, so staff can
+ * delete the mailbox copies. Runs after the erasure's commit and rejects if the queue fails: the
+ * caller logs it and the erasure stands.
+ *
+ * @param ids - the deleted tasks' ids
+ */
+const mailErasureNotice = (ids: readonly string[]): Promise<void> => {
+    const mail = erasureNoticeEmail(getDefaultLocale(), ids);
+    return enqueueEmail(
+        { to: supportEmail(), subject: mail.subject },
+        mail.template,
+        mail.data
+    ).then(() => undefined);
 };
 
 /** What a search may filter on, past the repository's own text and address matching. */
@@ -465,16 +481,19 @@ const findSystemTasksForExport = (subject: PersonalDataSubject): Promise<ExportS
  *
  * @param subject - the erased account
  * @param session - the erasure's transaction
+ * @returns once the erasure commits, a notice to the support mailbox naming the deleted messages
+ * by `[#ref]`, because their mailbox copies are not ours to delete; nothing when there were none
  */
 const eraseOwnTasks = async (
     subject: PersonalDataSubject,
     session: ClientSession
-): Promise<void> => {
+): Promise<AfterErase | undefined> => {
     // Sequential: a `ClientSession` runs ONE operation at a time.
-    await taskRepository.deleteOwned(ownTasksFilter(subject), session);
+    const deletedIds = await taskRepository.deleteOwned(ownTasksFilter(subject), session);
     await taskRepository.deleteSystemAbout(subject.userId, session);
     await taskRepository.detachSubject(subject.userId, session);
     await taskRepository.forgetStaff(subject.userId, session);
+    return deletedIds.length > 0 ? () => mailErasureNotice(deletedIds) : undefined;
 };
 
 /** The module's barrel export — used by the controllers in `./controllers`. */

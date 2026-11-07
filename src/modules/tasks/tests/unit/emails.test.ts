@@ -6,7 +6,11 @@
  * rather than in the template, which can't choose between a value and a placeholder.
  */
 
-import { contactRequestEmail, type ContactRequest } from '@modules/tasks/emails';
+import {
+    contactRequestEmail,
+    erasureNoticeEmail,
+    type ContactRequest
+} from '@modules/tasks/emails';
 
 const REQUEST: ContactRequest = {
     id: '6ad69a48f753b902e5b98dfe',
@@ -34,12 +38,21 @@ describe('contactRequestEmail', () => {
 
     it('words the reminder for an overdue message differently from the first announcement', () => {
         const first = contactRequestEmail('en', REQUEST);
-        const reminder = contactRequestEmail('en', { ...REQUEST, overdue: true });
+        const reminder = contactRequestEmail('en', { ...REQUEST, reminder: 'overdue' });
 
         expect(reminder.subject).toMatch(/^Overdue/);
         expect(reminder.subject.endsWith(`: ${REQUEST.subject}`)).toBe(true);
         expect(reminder.data.title).not.toBe(first.data.title);
         expect(reminder.data.message).toBe(REQUEST.message);
+    });
+
+    it('words the due-soon reminder apart from the first mail and the overdue one', () => {
+        const dueSoon = contactRequestEmail('en', { ...REQUEST, reminder: 'due-soon' });
+        const overdue = contactRequestEmail('en', { ...REQUEST, reminder: 'overdue' });
+
+        expect(dueSoon.subject).toMatch(/^Contact request due soon/);
+        expect(dueSoon.subject).toContain(`[#${REQUEST.id.slice(-8)}]`);
+        expect(dueSoon.data.title).not.toBe(overdue.data.title);
     });
 
     it('passes the sender"s details through unchanged', () => {
@@ -66,7 +79,7 @@ describe('contactRequestEmail', () => {
 
     it('puts a stable [#ref] in the subject, the same for the first mail and the reminder', () => {
         const first = contactRequestEmail('en', REQUEST);
-        const reminder = contactRequestEmail('en', { ...REQUEST, overdue: true });
+        const reminder = contactRequestEmail('en', { ...REQUEST, reminder: 'overdue' });
 
         expect(first.subject).toContain(`[#${REQUEST.id.slice(-8)}]`);
         expect(reminder.subject).toContain(`[#${REQUEST.id.slice(-8)}]`);
@@ -90,7 +103,7 @@ describe('contactRequestEmail', () => {
     });
 
     it('words the reminder with the reference and the sender address', () => {
-        const { data } = contactRequestEmail('en', { ...REQUEST, overdue: true });
+        const { data } = contactRequestEmail('en', { ...REQUEST, reminder: 'overdue' });
 
         expect(data.title).toContain(`#${REQUEST.id.slice(-8)}`);
         expect(data.title).toContain(REQUEST.email);
@@ -131,5 +144,19 @@ describe('contactRequestEmail', () => {
         expect(english.data.locale).toBe('en');
         expect(italian.data.locale).toBe('it');
         expect(italian.data.title).not.toBe(english.data.title);
+    });
+});
+
+describe('erasureNoticeEmail', () => {
+    it('names the deleted messages by [#ref] alone', () => {
+        const mail = erasureNoticeEmail('en', [
+            '65dc8a99604c307b702aaaaa',
+            '65dc8a99604c307b702bbbbb'
+        ]);
+
+        expect(mail.subject).toBe(
+            'An account was erased: delete the mails for [#702aaaaa] [#702bbbbb]'
+        );
+        expect(JSON.stringify(mail.data)).not.toMatch(/@/);
     });
 });

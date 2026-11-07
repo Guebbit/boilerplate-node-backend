@@ -122,16 +122,21 @@ export const onTaskOpened = (opened: DomainEventMap['task.opened']): Promise<voi
  */
 export const onTaskOverdue = (overdue: DomainEventMap['task.overdue']): Promise<void> =>
     notifyTaskStaff('notifications.staff.task-overdue', 'task-overdue', overdue).then(() =>
-        overdue.kind === 'contact' ? taskService.mailMainMailbox(overdue.taskId, true) : undefined
+        overdue.kind === 'contact'
+            ? taskService.mailMainMailbox(overdue.taskId, 'overdue')
+            : undefined
     );
 
 /**
- * An open task is three days from its due date: the same people hear of it once, with no mailbox
- * copy (the sweep never claims a contact message, which gets its one reminder when overdue).
+ * An open task is three days from its due date: the same people hear of it once. The sweep claims
+ * a contact message only when it is a privacy request (a month's deadline), and that one also gets
+ * the main mailbox's reminder, in the same thread as the first mail.
  */
 export const onTaskDueSoon = (dueSoon: DomainEventMap['task.due_soon']): Promise<void> =>
-    notifyTaskStaff('notifications.staff.task-due-soon', 'task-due-soon', dueSoon).then(
-        () => undefined
+    notifyTaskStaff('notifications.staff.task-due-soon', 'task-due-soon', dueSoon).then(() =>
+        dueSoon.kind === 'contact'
+            ? taskService.mailMainMailbox(dueSoon.taskId, 'due-soon')
+            : undefined
     );
 
 /** A task was given to a colleague: the one who now holds it hears, and nobody else. */

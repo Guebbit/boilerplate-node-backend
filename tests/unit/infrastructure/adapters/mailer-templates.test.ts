@@ -35,7 +35,7 @@ import {
     exportFailedEmail,
     exportReadyEmail
 } from '@modules/account/emails';
-import { contactRequestEmail } from '@modules/tasks/emails';
+import { contactRequestEmail, erasureNoticeEmail } from '@modules/tasks/emails';
 import { examplePublishedEmail } from '@modules/example';
 import {
     orderConfirmEmail,
@@ -264,7 +264,8 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         subject: 'A subject',
         message: 'A message',
         createdAt: '2026-08-06T00:00:00.000Z'
-    })
+    }),
+    'tasks.erasure-notice': erasureNoticeEmail(locale, ['6ad69a48f753b902e5b98dfe'])
 });
 
 /**

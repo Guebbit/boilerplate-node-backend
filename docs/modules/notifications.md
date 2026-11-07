@@ -143,8 +143,8 @@ flowchart LR
   (`NODE_NOTIFICATIONS_STAFF_TTL_DAYS`), so a flood of them cannot push a person's own messages out.
 - **This module's codes.** `notifications.staff.webhook-disabled` (bell only),
   `notifications.staff.task-opened` (mail `now`: a person waits), `notifications.staff.task-due-soon`
-  (mail `now`, once, three days before the due date of an open task, never a contact message; the
-  same people), `notifications.staff.task-overdue`
+  (mail `now`, once, three days before the due date of an open task; the same people. Of the
+  contact messages only a privacy request: bell, plus one mail to the main mailbox), `notifications.staff.task-overdue`
   (mail `now`, once, when that task passes its due date unclosed; the same people),
   `notifications.staff.task-assigned` (bell only, the assignee alone) and
   `notifications.staff.outbox-dead` (bell only, administrators: the kernel's `outbox.event_dead`
@@ -156,8 +156,8 @@ flowchart LR
 - **Task notices.** The task codes name their sets per notice (`per-notice` in the route
   table): the set of the opened task's kind. Params are the task id, its kind and a contact
   message's category, nothing the visitor typed. A contact message is the bell's alone for each
-  person (`notifyTaskStaff` turns `email` off for the kind `contact`, on `task-opened` and
-  `task-overdue`): it is answered from the main mailbox, which the tasks module mails every time
+  person (`notifyTaskStaff` turns `email` off for the kind `contact`, on `task-opened`,
+  `task-due-soon` and `task-overdue`): it is answered from the main mailbox, which the tasks module mails every time
   ([`tasks`](./tasks.md#who-is-told)). Account-review and export-failed keep their mail. The
   words for a task's kind and category (`tasks.task-kind.*`, `tasks.task-category.*`) live in the
   `tasks` locales, contributed by `notifications` and `shop-tasks` for the kinds they add.

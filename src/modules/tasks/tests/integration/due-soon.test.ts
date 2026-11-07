@@ -103,7 +103,27 @@ describe('remindDueSoon', () => {
         await expect(taskService.remindOverdue()).resolves.toBe(1);
     });
 
-    it('never reminds a contact message, however long its life', async () => {
+    it('reminds a privacy request three days out, and never another contact message', async () => {
+        const privacy = await taskService.create({
+            email: 'ada@example.com',
+            subject: 'Erase me',
+            message: 'Hello',
+            category: 'privacy'
+        });
+        await giveLife(String(privacy._id), 2, 30);
+        const ordinary = await taskService.create({
+            email: 'bob@example.com',
+            subject: 'Parcel',
+            message: 'Hello',
+            category: 'order'
+        });
+        await giveLife(String(ordinary._id), 2, 30);
+
+        await expect(taskService.remindDueSoon()).resolves.toBe(1);
+        expect(heard.map(({ taskId }) => taskId)).toEqual([String(privacy._id)]);
+    });
+
+    it('never reminds an uncategorised contact message, however long its life', async () => {
         const task = await taskRepository.create({
             source: TaskSource.system,
             kind: TaskKind.contact,

@@ -3,9 +3,11 @@
         "email-contact": {
             "subject": "New contact request",
             "subject-overdue": "Overdue contact request",
+            "subject-due-soon": "Contact request due soon",
             "meta-title": "New contact request",
             "title": "New contact request",
             "title-overdue": "Contact message #{{ref}} from {{email}} is still unanswered: mark it answered when done",
+            "title-due-soon": "Contact message #{{ref}} from {{email}} is due in 3 days: answer it before then",
             "label-name": "Name",
             "label-email": "Email",
             "label-subject": "Subject",
@@ -15,6 +17,12 @@
             "not-available": "N/A",
             "label-order-number": "Order number",
             "label-link": "Open it"
+        },
+        "email-erasure": {
+            "subject": "An account was erased: delete the mails for {{refs}}",
+            "meta-title": "An account was erased",
+            "title": "An account was erased: delete the mails for {{refs}}",
+            "explain": "The shop deleted these messages. Their copies are still in the support mailbox: search each reference and delete it in every folder, then empty the trash."
         },
         "already-resolved": "This task is already resolved.",
         "already-spam": "This task is already marked as spam.",

@@ -3,8 +3,10 @@
         "email-contact": {
             "subject": "Nuova richiesta di contatto",
             "subject-overdue": "Richiesta di contatto in ritardo",
+            "subject-due-soon": "Richiesta di contatto in scadenza",
             "meta-title": "Nuova richiesta di contatto",
             "title": "Nuova richiesta di contatto",
+            "title-due-soon": "Il messaggio #{{ref}} di {{email}} scade tra 3 giorni: rispondi prima",
             "title-overdue": "Il messaggio #{{ref}} di {{email}} non ha ancora risposta: segnalo come risposto quando hai finito",
             "label-name": "Nome",
             "label-email": "Email",
@@ -15,6 +17,12 @@
             "not-available": "N/D",
             "label-order-number": "Numero d'ordine",
             "label-link": "Aprilo"
+        },
+        "email-erasure": {
+            "subject": "Un account è stato cancellato: elimina le email per {{refs}}",
+            "meta-title": "Un account è stato cancellato",
+            "title": "Un account è stato cancellato: elimina le email per {{refs}}",
+            "explain": "Il negozio ha eliminato questi messaggi. Le copie restano nella casella di supporto: cerca ogni riferimento ed eliminalo in ogni cartella, poi svuota il cestino."
         },
         "already-resolved": "Questo task è già risolto.",
         "already-spam": "Questo task è già segnato come spam.",
