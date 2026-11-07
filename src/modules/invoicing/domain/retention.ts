@@ -9,7 +9,7 @@
  * See: docs/theory/data-retention.md#invoices-the-tax-clock
  */
 
-import { DAY_MS, dayInZone, zonedStartOfDay } from '@domain-primitives/time';
+import { DAY_MS, yearInZone, zonedStartOfDay } from '@domain-primitives/time';
 
 /**
  * The instant a document's buyer block is due to go: local midnight of 1 January, N + 1 years
@@ -20,7 +20,7 @@ import { DAY_MS, dayInZone, zonedStartOfDay } from '@domain-primitives/time';
  * @param years - how many full years the buyer block is kept after the issue year ends
  */
 export const buyerRetentionEnd = (issuedAt: Date, timezone: string, years: number): Date => {
-    const issueYear = Number(dayInZone(issuedAt, timezone).slice(0, 4));
+    const issueYear = yearInZone(issuedAt, timezone);
     return zonedStartOfDay(issueYear + years + 1, 1, 1, timezone);
 };
 

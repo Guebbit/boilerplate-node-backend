@@ -3,9 +3,10 @@
  * The one place a minute, an hour and a day are spelled, in milliseconds and in seconds.
  * Retention windows, cooldowns and lifetimes are written in terms of them, so a window reads as
  * `7 * DAY_MS` and a Mongo TTL as `days * DAY_SECONDS`. They live here, below every tier, so
- * `domain/` files can use them too. The shop-day key and the shop-zone day boundaries sit beside
- * them for the same reason: a rule that groups by day, or ends a deadline at the end of a printed
- * day, needs them without importing a module.
+ * `domain/` files can use them too. The zone-calendar helpers (the day and year of an instant in a
+ * zone, a zone day's start, the end of a UTC day) sit beside them for the same reason: a rule that
+ * groups by day, numbers by year, or ends a deadline at the end of a printed day, needs them
+ * without importing a module.
  */
 
 /** One minute, in milliseconds. */
@@ -79,6 +80,18 @@ export const dayInZone = (instant: Date, timeZone: string): string => {
         parts.find((part) => part.type === type)?.value ?? '';
     return `${field('year')}-${field('month')}-${field('day')}`;
 };
+
+/**
+ * The calendar year an instant falls in, on the wall clock of `timeZone`.
+ *
+ * Why not `getUTCFullYear()`: 00:30 on 1 January in Rome is still 31 December in UTC, and a
+ * yearly number series must follow the shop's calendar, not the server's.
+ * @param instant - the moment
+ * @param timeZone - canonical IANA zone name, e.g. `Europe/Rome`
+ * @returns the four-digit year
+ */
+export const yearInZone = (instant: Date, timeZone: string): number =>
+    Number(dayInZone(instant, timeZone).slice(0, 4));
 
 /**
  * The wall-clock digits of an instant in a zone, read as if they were UTC. The difference between

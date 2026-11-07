@@ -89,9 +89,6 @@ export type { FulfillmentSummary, FulfillmentFilter } from './fulfillment';
 export { ORDER_STATUS_TRAITS, statusesWhere } from './status-traits';
 export type { OrderStatusTraits } from './status-traits';
 
-/** The shop-calendar year of an instant: the year every numbered series is cut at. */
-export { yearInZone } from './shop-time';
-
 /** What an order's timeline may say, and which audience each type is for. */
 export { TIMELINE_AUDIENCE, isBuyerVisible } from './timeline';
 export type { OrderTimelineEntryAudience, OrderTimelineType, TimelineEntryInput } from './timeline';

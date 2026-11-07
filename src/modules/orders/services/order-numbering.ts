@@ -7,7 +7,7 @@
  */
 
 import { formatYearlySequence } from '@infrastructure/persistence/yearly-counter';
-import { yearInZone } from '../domain/shop-time';
+import { yearInZone } from '@domain-primitives/time';
 import { orderRepository } from '../repository';
 import { shopTimezone } from '@modules/shop';
 

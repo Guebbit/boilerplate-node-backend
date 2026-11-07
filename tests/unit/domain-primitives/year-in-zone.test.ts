@@ -2,7 +2,7 @@
  * `yearInZone` — the year a numbered series is cut at. The subject is the boundary: the same
  * instant is two different years in UTC and in the shop's zone.
  */
-import { yearInZone } from '../../domain/shop-time';
+import { yearInZone } from '@domain-primitives/time';
 
 describe('yearInZone', () => {
     it('puts 00:30 on 1 January in Rome into the new year, while UTC is still in the old one', () => {

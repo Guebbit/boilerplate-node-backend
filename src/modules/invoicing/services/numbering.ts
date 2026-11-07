@@ -11,7 +11,7 @@
 import type { ClientSession } from 'mongoose';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { formatYearlySequence } from '@infrastructure/persistence/yearly-counter';
-import { yearInZone } from '@modules/orders';
+import { yearInZone } from '@domain-primitives/time';
 import { invoicingRepository } from '../repository';
 import { shopTimezone } from '@modules/shop';
 

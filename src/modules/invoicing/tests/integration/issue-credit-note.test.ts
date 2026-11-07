@@ -15,7 +15,7 @@ import inventoryModule from '@modules/inventory/module';
 import ordersModule from '@modules/orders/module';
 import paymentsModule from '@modules/payments/module';
 import invoicingModule from '@modules/invoicing/module';
-import { yearInZone } from '@modules/orders';
+import { yearInZone } from '@domain-primitives/time';
 import { paymentService } from '@modules/payments';
 import { refundForOrder, refundOrderPayment } from '@modules/payments/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';

@@ -97,7 +97,7 @@ The kernel knows what a module _is_. It never knows which modules exist.
 
 ## `src/domain-primitives/`
 
-| File                             | What it is                                                                                                                                                                                                                                 |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/domain-primitives/money.ts` | `Money`, an amount as a whole number of minor units, with the currency-aware conversions in and out (ISO 4217 exponents).                                                                                                                  |
-| `src/domain-primitives/time.ts`  | The unit constants (`MINUTE_MS`, `HOUR_MS`, `DAY_MS`, `HOUR_SECONDS`, `DAY_SECONDS`), the shop-day key and the shop-zone day boundaries (`endOfUtcDay`, `dayInZone`, `zonedStartOfDay`), below every tier so `domain/` files can use them. |
+| File                             | What it is                                                                                                                                                                                                                          |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/domain-primitives/money.ts` | `Money`, an amount as a whole number of minor units, with the currency-aware conversions in and out (ISO 4217 exponents).                                                                                                           |
+| `src/domain-primitives/time.ts`  | The unit constants (`MINUTE_MS`, `HOUR_MS`, `DAY_MS`, `HOUR_SECONDS`, `DAY_SECONDS`) and the zone-calendar helpers (`endOfUtcDay`, `dayInZone`, `yearInZone`, `zonedStartOfDay`), below every tier so `domain/` files can use them. |
