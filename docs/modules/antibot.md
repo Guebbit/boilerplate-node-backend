@@ -42,6 +42,11 @@ alone. Its `rungs` object adds rung 1's status (`identityBudgets`, always `true`
 active posture (`emailPolicy` — `off`/`disposable`/`mx`), so "what is active on this deployment" has
 one answer instead of three.
 
+**The `mx` policy refuses only on evidence of "no mail", never on a failed lookup.** Per RFC 5321 §5.1,
+a domain with no MX but an A or AAAA record is still a mail target. NXDOMAIN, a null MX (RFC 7505) and
+no MX with no address refuse. A DNS timeout or SERVFAIL allows, with a warning in the log: unknown is
+not refusal. The resolver stays at one try and two seconds.
+
 **The challenge endpoint answers only for a provider that issues one.** `GET /antibot/challenge`
 returns the work a self-hosted provider (`altcha`) hands its widget. For `none` and for
 vendor-hosted ones (`turnstile`) there is nothing to fetch, so it answers `404`

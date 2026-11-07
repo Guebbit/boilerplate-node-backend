@@ -14,6 +14,10 @@ import { setEnvironment } from '@tests/environment';
 /** The DNS lookup rung 2's `mx` policy makes — mocked, so no case reaches a real resolver. */
 const mockedResolveMx = jest.fn();
 
+/** The A and AAAA lookups of the RFC 5321 fallback — mocked for the same reason. */
+const mockedResolve4 = jest.fn();
+const mockedResolve6 = jest.fn();
+
 /*
  * The adapter builds its resolver at import, before this file's own `const`s exist — so the
  * options it was built with are kept inside the mock, and read back with `jest.requireMock`.
@@ -28,9 +32,16 @@ jest.mock('node:dns/promises', () => {
             }
 
             resolveMx = (domain: string): unknown => mockedResolveMx(domain);
+
+            resolve4 = (domain: string): unknown => mockedResolve4(domain);
+
+            resolve6 = (domain: string): unknown => mockedResolve6(domain);
         }
     };
 });
+
+/** A DNS failure the way Node reports it: an Error carrying a `code`. */
+const dnsError = (code: string): Error => Object.assign(new Error(code), { code });
 
 describe('checkEmailPolicy', () => {
     beforeEach(() => {
@@ -39,6 +50,8 @@ describe('checkEmailPolicy', () => {
     });
 
     afterEach(() => {
+        mockedResolve4.mockReset();
+        mockedResolve6.mockReset();
         mockedResolveMx.mockReset();
     });
 
@@ -100,16 +113,61 @@ describe('checkEmailPolicy', () => {
             await expect(checkEmailPolicy('someone@mailinator.com')).resolves.toBe('refused');
         });
 
-        it('refuses a domain whose lookup resolves no records', async () => {
-            mockedResolveMx.mockResolvedValue([]);
+        it('refuses a domain that does not exist (NXDOMAIN)', async () => {
+            mockedResolveMx.mockRejectedValue(dnsError('ENOTFOUND'));
 
             await expect(checkEmailPolicy('someone@example.com')).resolves.toBe('refused');
         });
 
-        it('refuses a domain whose lookup fails outright (NXDOMAIN, timeout, ...)', async () => {
-            mockedResolveMx.mockRejectedValue(new Error('ENOTFOUND'));
+        it('refuses a null MX (RFC 7505), even when the domain has an address', async () => {
+            mockedResolveMx.mockResolvedValue([{ exchange: '', priority: 0 }]);
+            mockedResolve4.mockResolvedValue(['192.0.2.1']);
 
             await expect(checkEmailPolicy('someone@example.com')).resolves.toBe('refused');
+        });
+
+        it('allows a domain with no MX but an A record', async () => {
+            mockedResolveMx.mockRejectedValue(dnsError('ENODATA'));
+            mockedResolve4.mockResolvedValue(['192.0.2.1']);
+            mockedResolve6.mockRejectedValue(dnsError('ENODATA'));
+
+            await expect(checkEmailPolicy('someone@example.com')).resolves.toBe('ok');
+        });
+
+        it('allows a domain with an empty MX answer but an AAAA record', async () => {
+            mockedResolveMx.mockResolvedValue([]);
+            mockedResolve4.mockRejectedValue(dnsError('ENODATA'));
+            mockedResolve6.mockResolvedValue(['2001:db8::1']);
+
+            await expect(checkEmailPolicy('someone@example.com')).resolves.toBe('ok');
+        });
+
+        it('refuses a domain with no MX and no address at all', async () => {
+            mockedResolveMx.mockRejectedValue(dnsError('ENODATA'));
+            mockedResolve4.mockRejectedValue(dnsError('ENODATA'));
+            mockedResolve6.mockRejectedValue(dnsError('ENOTFOUND'));
+
+            await expect(checkEmailPolicy('someone@example.com')).resolves.toBe('refused');
+        });
+
+        it('allows a domain when the MX lookup times out — unknown is not refusal', async () => {
+            mockedResolveMx.mockRejectedValue(dnsError('ETIMEOUT'));
+
+            await expect(checkEmailPolicy('someone@example.com')).resolves.toBe('ok');
+        });
+
+        it('allows a domain when the MX lookup answers SERVFAIL', async () => {
+            mockedResolveMx.mockRejectedValue(dnsError('ESERVFAIL'));
+
+            await expect(checkEmailPolicy('someone@example.com')).resolves.toBe('ok');
+        });
+
+        it('allows a domain when the fallback address lookup fails and finds nothing', async () => {
+            mockedResolveMx.mockResolvedValue([]);
+            mockedResolve4.mockRejectedValue(dnsError('ETIMEOUT'));
+            mockedResolve6.mockRejectedValue(dnsError('ENODATA'));
+
+            await expect(checkEmailPolicy('someone@example.com')).resolves.toBe('ok');
         });
 
         it('allows a domain with a real MX record', async () => {
