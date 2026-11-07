@@ -541,6 +541,69 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
 
+    /orders/{id}/timeline/notes:
+        post:
+            tags: [Orders]
+            summary: Leave a staff note on an order
+            description: >-
+                Appends a `note_added` row to the order's timeline: a call, an agreement, anything staff
+                want the next person to know. Needs `update:Order`. The row is staff-only (`audience:
+                staff`): the buyer's timeline never shows it, but it is the buyer's data and so it is in
+                their `POST /account/export`. The text is stored encrypted, unset when the order's personal
+                data is erased and after `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS`, and never written to the
+                audit log (only its length is). Answers the entry, with the `Location` of its `DELETE`.
+            operationId: addOrderNote
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateOrderNoteRequest'
+            responses:
+                '201':
+                    description: The note's timeline entry
+                    headers:
+                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OrderTimelineEntry'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
+
+    /orders/{id}/timeline/notes/{eventId}:
+        delete:
+            tags: [Orders]
+            summary: Remove the text of a wrong staff note
+            description: >-
+                Unsets the text of one `note_added` row: the row stays in the timeline, without its
+                text, so the history still shows that a note was written and withdrawn (GDPR Art. 16 and
+                17). Needs `update:Order`. An id that is not a note of this order is a 404. Writes an audit
+                row with the note's length, never its text. A second call on the same note is a 404.
+            operationId: deleteOrderNote
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                - name: eventId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: The note's timeline entry `id`, from `POST /orders/{id}/timeline/notes` or `GET /orders/{id}/timeline`
+            responses:
+                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+
     /orders/{id}/shipping-address:
         put:
             tags: [Orders]
@@ -676,6 +739,7 @@ components:
                 - release_date_moved
                 - delay_notice_sent
                 - address_corrected
+                - note_added
             description: >-
                 What happened. Order: `created`, `paid`, `processing`, `shipped`, `delivered`,
                 `canceled`, `status_overridden`. Payment: `payment_declined`, `refund_issued`,
@@ -683,7 +747,7 @@ components:
                 `shipment_delivered`, `shipment_lost`, `fulfillment_held`, `fulfillment_released`,
                 `remainder_canceled`. Returns: `return_requested`, `return_approved`,
                 `return_declined`, `return_received`, `return_closed`, `return_canceled`. Documents: `invoice_issued`,
-                `credit_note_issued`. Preorders: `release_date_moved`, `delay_notice_sent`.
+                `credit_note_issued`. Preorders: `release_date_moved`, `delay_notice_sent`. Staff: `note_added`.
                 Which of these a buyer sees is the row's own `audience` (`buyer` or `staff`), set per type by the server.
 
         # ---- The timeline's `data`: one shape per kind of entry, shared by the types that store it. ----
@@ -1148,6 +1212,24 @@ components:
                               Free text staff wrote with the change: the override's reason. Unset after
                               `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS`; the row stays.
 
+        OrderTimelineEntryNoteAdded:
+            unevaluatedProperties: false
+            allOf:
+                - $ref: '#/components/schemas/OrderTimelineEntryBase'
+                - type: object
+                  required: [type, data]
+                  properties:
+                      type:
+                          type: string
+                          enum: [note_added]
+                      data:
+                          $ref: '#/components/schemas/OrderTimelineDataNone'
+                      text:
+                          type: string
+                          description: >-
+                              What staff wrote. Absent once it was deleted, the order's personal data was
+                              erased, or `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS` passed; the row stays.
+
         OrderTimelineEntryPaid:
             unevaluatedProperties: false
             allOf:
@@ -1426,6 +1508,7 @@ components:
             oneOf:
                 - $ref: '#/components/schemas/OrderTimelineEntryPlain'
                 - $ref: '#/components/schemas/OrderTimelineEntryStatusOverridden'
+                - $ref: '#/components/schemas/OrderTimelineEntryNoteAdded'
                 - $ref: '#/components/schemas/OrderTimelineEntryPaid'
                 - $ref: '#/components/schemas/OrderTimelineEntryDelivered'
                 - $ref: '#/components/schemas/OrderTimelineEntryCanceled'
@@ -1455,6 +1538,7 @@ components:
                     shipped: '#/components/schemas/OrderTimelineEntryPlain'
                     address_corrected: '#/components/schemas/OrderTimelineEntryPlain'
                     status_overridden: '#/components/schemas/OrderTimelineEntryStatusOverridden'
+                    note_added: '#/components/schemas/OrderTimelineEntryNoteAdded'
                     paid: '#/components/schemas/OrderTimelineEntryPaid'
                     delivered: '#/components/schemas/OrderTimelineEntryDelivered'
                     canceled: '#/components/schemas/OrderTimelineEntryCanceled'
@@ -1513,6 +1597,24 @@ components:
                           description: >-
                               Free text staff wrote with the change: the override's reason. Unset after
                               `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS`; the row stays.
+
+        OrderTimelineExportEntryNoteAdded:
+            unevaluatedProperties: false
+            allOf:
+                - $ref: '#/components/schemas/OrderTimelineExportEntryBase'
+                - type: object
+                  required: [type, data]
+                  properties:
+                      type:
+                          type: string
+                          enum: [note_added]
+                      data:
+                          $ref: '#/components/schemas/OrderTimelineDataNone'
+                      text:
+                          type: string
+                          description: >-
+                              What staff wrote. Absent once it was deleted, the order's personal data was
+                              erased, or `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS` passed; the row stays.
 
         OrderTimelineExportEntryPaid:
             unevaluatedProperties: false
@@ -1792,6 +1894,7 @@ components:
             oneOf:
                 - $ref: '#/components/schemas/OrderTimelineExportEntryPlain'
                 - $ref: '#/components/schemas/OrderTimelineExportEntryStatusOverridden'
+                - $ref: '#/components/schemas/OrderTimelineExportEntryNoteAdded'
                 - $ref: '#/components/schemas/OrderTimelineExportEntryPaid'
                 - $ref: '#/components/schemas/OrderTimelineExportEntryDelivered'
                 - $ref: '#/components/schemas/OrderTimelineExportEntryCanceled'
@@ -1821,6 +1924,7 @@ components:
                     shipped: '#/components/schemas/OrderTimelineExportEntryPlain'
                     address_corrected: '#/components/schemas/OrderTimelineExportEntryPlain'
                     status_overridden: '#/components/schemas/OrderTimelineExportEntryStatusOverridden'
+                    note_added: '#/components/schemas/OrderTimelineExportEntryNoteAdded'
                     paid: '#/components/schemas/OrderTimelineExportEntryPaid'
                     delivered: '#/components/schemas/OrderTimelineExportEntryDelivered'
                     canceled: '#/components/schemas/OrderTimelineExportEntryCanceled'
@@ -1873,6 +1977,19 @@ components:
                         `false` cancels and releases the stock without returning the money — a
                         replacement going out, a correction, or a refund handled separately through
                         `POST /payments/{id}/refunds`.
+
+        CreateOrderNoteRequest:
+            type: object
+            additionalProperties: false
+            required: [text]
+            properties:
+                text:
+                    type: string
+                    minLength: 1
+                    maxLength: 2000
+                    description: >-
+                        What staff want recorded. Customers do not see it on their order, but it is included
+                        if they request their data: no phone numbers, addresses or health details.
 
         StatusOverrideRequest:
             type: object

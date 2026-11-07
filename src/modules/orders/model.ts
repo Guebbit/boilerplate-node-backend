@@ -681,7 +681,8 @@ export const orderNumberCounterModel = model<OrderNumberCounterDocument, OrderNu
 
 /**
  * One row of an order's timeline. Append-only by design — see `./repository`'s
- * `orderEventRepository` for the two sanctioned scrubs (an erased staff account, aged free text).
+ * `orderEventRepository` for the sanctioned scrubs (an erased staff account, aged free text, a
+ * deleted staff note, an erased order's text).
  */
 export interface OrderEventDocument extends Document {
     /** The order it belongs to. */
@@ -696,7 +697,10 @@ export interface OrderEventDocument extends Document {
      * unset again when that account is erased.
      */
     actor?: string;
-    /** Free text `orders` owns (an override's reason); unset on its own retention clock. */
+    /**
+     * Free text `orders` owns: an override's reason (plain) or a staff note (`note_added`, stored
+     * encrypted, see `./pii`). Unset on its own retention clock.
+     */
     text?: string;
     /** Ids, codes and numbers the type needs to say; never another module's free text. */
     data: Record<string, unknown>;

@@ -35,6 +35,7 @@ export type OrderTimelineEntryAudience = OrderTimelineEntry['audience'];
  *   refund_canceled: staff voided a refund that never moved money; nothing for the buyer to act on.
  *   refund_reversed: the provider took a refund back; the buyer is mailed, the row is staff's.
  *   dispute_opened / dispute_closed: the buyer's bank disputed the payment; the shop's file, not the buyer's.
+ *   note_added: what staff wrote for each other (a call, an agreement); the buyer reads it only in their data export.
  */
 export const TIMELINE_AUDIENCE: Readonly<Record<OrderTimelineType, OrderTimelineEntryAudience>> = {
     created: 'buyer',
@@ -68,7 +69,8 @@ export const TIMELINE_AUDIENCE: Readonly<Record<OrderTimelineType, OrderTimeline
     credit_note_issued: 'buyer',
     release_date_moved: 'buyer',
     delay_notice_sent: 'buyer',
-    address_corrected: 'staff'
+    address_corrected: 'staff',
+    note_added: 'staff'
 };
 
 /**

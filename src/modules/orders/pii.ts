@@ -9,6 +9,8 @@
  *
  * Writes go through `orderRepository.create` (encrypts); reads decrypt in `applyOrderTransform`'s
  * `after` hook. The AAD carries the order `_id`, so a field moved to another order fails its tag.
+ * A staff note's text on the timeline is the same codec: `appendTimeline` encrypts, the presenter
+ * decrypts.
  */
 
 import type { Types } from 'mongoose';
@@ -38,6 +40,9 @@ export const addressAad = (
 
 /** The associated data binding the notes to one order. */
 export const notesAad = (orderId: string): string => `orders:notes:${orderId}`;
+
+/** The associated data binding a staff note's text to the order it was written on. */
+export const timelineNoteAad = (orderId: string): string => `orders:timeline-note:${orderId}`;
 
 /**
  * Rewrites every present field of one address with `convert`. Absent fields stay absent — the

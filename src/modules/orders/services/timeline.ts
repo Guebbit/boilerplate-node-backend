@@ -15,14 +15,59 @@ import { logger } from '@infrastructure/adapters/logger';
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 import { callerForSubject } from '@kernel/permissions';
 import { heldRules } from '@kernel/ability';
-import type { AuthContext, OrderTimelineEntry } from '@types';
-import { orderEventRepository } from '../repository';
+import type { AuthContext, CallerContext, OrderTimelineEntry } from '@types';
+import { t } from '@infrastructure/i18n';
+import {
+    generateReject,
+    generateSuccess,
+    type ResponseReject,
+    type ResponseSuccess
+} from '@infrastructure/http/response';
+import { recordAudit } from '@infrastructure/observability/audit';
+import { withTransaction } from '@infrastructure/runtime/database';
+import { ordersAuditActions } from '../audit';
+import { orderEventRepository, orderRepository } from '../repository';
 import { ownOrderIds } from './read';
-import type { OrderDocument } from '../model';
+import type { OrderDocument, OrderEventDocument } from '../model';
+import { encryptPii, decryptPii } from '@infrastructure/security/pii-encryption';
+import { timelineNoteAad } from '../pii';
 import { orderEventTextRetentionDays } from '../config';
 import { presentTimeline, presentTimelineEntry } from '../presenter';
 import type { TimelineEntryInput } from '../domain';
 import { DAY_MS } from '@domain-primitives/time';
+
+/**
+ * Store one row and hand it back. A staff note's text is encrypted here, under the order's id, so no
+ * writer can leave one in plaintext; the presenter decrypts it.
+ *
+ * @param orderId - the order the row is about
+ * @param entry - what happened
+ * @param session - the caller's open transaction
+ */
+const insertRow = (
+    orderId: string,
+    entry: TimelineEntryInput,
+    session: ClientSession
+): Promise<OrderEventDocument> =>
+    orderEventRepository.create(
+        {
+            orderId: toObjectId(orderId),
+            at: entry.at ?? new Date(),
+            type: entry.type,
+            ...(entry.actor ? { actor: entry.actor } : {}),
+            // Only a variant that declares `text` has the key; `in` narrows the union to it.
+            ...('text' in entry && entry.text
+                ? {
+                      text:
+                          entry.type === 'note_added'
+                              ? encryptPii(entry.text, timelineNoteAad(orderId))
+                              : entry.text
+                  }
+                : {}),
+            data: { ...entry.data }
+        },
+        session
+    );
 
 /**
  * Append one row to an order's timeline, in the caller's transaction so the row commits with the
@@ -36,21 +81,7 @@ export const appendTimeline = (
     orderId: string,
     entry: TimelineEntryInput,
     session: ClientSession
-): Promise<void> =>
-    orderEventRepository
-        .create(
-            {
-                orderId: toObjectId(orderId),
-                at: entry.at ?? new Date(),
-                type: entry.type,
-                ...(entry.actor ? { actor: entry.actor } : {}),
-                // Only a variant that declares `text` has the key; `in` narrows the union to it.
-                ...('text' in entry && entry.text ? { text: entry.text } : {}),
-                data: { ...entry.data }
-            },
-            session
-        )
-        .then(() => undefined);
+): Promise<void> => insertRow(orderId, entry, session).then(() => undefined);
 
 /**
  * Append several rows in order, in the caller's transaction. One after another: a transaction's
@@ -86,6 +117,65 @@ export const withTimeline =
                 ? appendTimelineAll(String(order._id), rows(order), session).then(() => order)
                 : order
         );
+
+/**
+ * Leave a staff note on an order: one `note_added` row, written in its own transaction.
+ *
+ * @param orderId - the order
+ * @param text - what staff wrote (1..2000, checked at the door)
+ * @param context - the staff member, who holds `update:Order` (the route asked)
+ * @returns the entry with `201`, or a 404 for an order that is not there. The audit row names the
+ *   note's length, never its text.
+ */
+export const addNote = (
+    orderId: string,
+    text: string,
+    context: CallerContext
+): Promise<ResponseSuccess<OrderTimelineEntry> | ResponseReject> =>
+    orderRepository.findByIdScoped(orderId).then((order) => {
+        if (!order) return generateReject(404, [t('orders.not-found')]);
+
+        return withTransaction((session) =>
+            insertRow(orderId, { type: 'note_added', actor: context.caller.id, text }, session)
+        ).then((row) => {
+            recordAudit(context, {
+                action: ordersAuditActions.ADMIN_ORDER_NOTE_ADDED,
+                outcome: 'success',
+                targetType: 'order',
+                targetId: orderId,
+                metadata: { eventId: String(row._id), length: text.length }
+            });
+            return generateSuccess(presentTimelineEntry(row, 'staff'), 201);
+        });
+    });
+
+/**
+ * Withdraw a wrong staff note: its text is unset, the row stays. One conditional write, so an
+ * unknown id, a row of another order, another type and a note already withdrawn are all one 404.
+ *
+ * @param orderId - the order the note is on
+ * @param eventId - the note's entry id
+ * @param context - the staff member, who holds `update:Order` (the route asked)
+ * @returns `204`-shaped success, or a 404. The audit row names the withdrawn text's length.
+ */
+export const deleteNote = (
+    orderId: string,
+    eventId: string,
+    context: CallerContext
+): Promise<ResponseSuccess<undefined> | ResponseReject> =>
+    orderEventRepository.clearNoteText(orderId, eventId).then((before) => {
+        if (!before?.text) return generateReject(404, [t('orders.not-found')]);
+
+        const { length } = decryptPii(before.text, timelineNoteAad(orderId), 'order timeline note');
+        recordAudit(context, {
+            action: ordersAuditActions.ADMIN_ORDER_NOTE_DELETED,
+            outcome: 'success',
+            targetType: 'order',
+            targetId: orderId,
+            metadata: { eventId, length }
+        });
+        return generateSuccess(undefined, 204);
+    });
 
 /**
  * Whether the caller reads every order: the staff view of a timeline. By the held key, not by the

@@ -11,7 +11,9 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { keyVersionOf } from '@infrastructure/security/versioned-secret';
 import ordersModule from '../../module';
-import { orderModel } from '../../model';
+import { orderModel, orderEventModel } from '../../model';
+import { orderService } from '../../services';
+import { callerContextAs, asAdmin } from '@tests/callers';
 import { createOrder, toOrderItem } from '../factories';
 
 setupTestDb();
@@ -42,6 +44,26 @@ describe('orders reencrypt', () => {
             expect(keyVersionOf(raw?.notes as string)).toBe('v2');
             const reloaded = await orderModel.findById(order._id).exec();
             expect(reloaded?.toJSON().shippingAddress?.city).toBe('London');
+        });
+    });
+
+    it('moves a staff note on the timeline to v2 and it still reads back', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        const id = String(order._id);
+        await orderService.addNote(id, 'Called the buyer', callerContextAs('admin', 'admin-1'));
+
+        await withEnvironmentOverrides({ NODE_PII_ENCRYPTION_KEY: ROTATED_PII_KEY }, async () => {
+            const report = await ordersModule.reencrypt(false);
+
+            expect(report.rewritten).toBe(1);
+            const raw = await orderEventModel.collection.findOne({ type: 'note_added' });
+            expect(keyVersionOf(raw?.text as string)).toBe('v2');
+            const rows = await orderService.readTimeline(id, asAdmin());
+            expect(rows.find(({ type }) => type === 'note_added')).toMatchObject({
+                text: 'Called the buyer'
+            });
         });
     });
 });

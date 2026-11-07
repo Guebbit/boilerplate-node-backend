@@ -68,6 +68,8 @@ import { correctShippingAddress } from './address';
 import { openOrderExport } from './export';
 import {
     appendTimeline,
+    addNote,
+    deleteNote,
     readTimeline,
     collectTimelineOf,
     clearTimelineActor,
@@ -163,6 +165,8 @@ export const orderService = {
     correctShippingAddress,
     openOrderExport,
     appendTimeline,
+    addNote,
+    deleteNote,
     readTimeline,
     collectTimelineOf,
     clearTimelineActor,

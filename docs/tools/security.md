@@ -111,7 +111,7 @@ assuming `ring[0]`.
    field, how many values sit on each key version. Batched, and safe to repeat: a value already on
    `v2` is not touched, so a second run writes nothing. Each owning module declares its own walk
    on its manifest (`reencrypt` in `module.ts`: address books, user phones, order and invoice
-   addresses and notes, TOTP secrets, webhook secrets); `scripts/ops/reencrypt.ts` runs every
+   addresses and notes, order staff notes, TOTP secrets, webhook secrets); `scripts/ops/reencrypt.ts` runs every
    enabled module's, so it names none. Not scheduled: a rotation is an event, not a cadence.
    Until it finishes, both entries must stay in the ring.
 3. Once `npm run reencrypt -- --dry-run` reports nothing on `v1`, drop it from the ring and deploy
@@ -495,6 +495,7 @@ See [shared rules](../theory/shared-rules.md#rule-data-the-twin-will-need-yaml--
 | Example creation                             | `example`        | `NODE_EXAMPLE_RATE_LIMIT_MAX`               | 30      | `NODE_RATE_LIMIT_WINDOW_MS` | the authenticated account                                                                                                 | yes     | memory     |
 | Invoice / credit-note renders                | `invoicing`      | `NODE_INVOICING_RATE_LIMIT_MAX`             | 20      | `NODE_RATE_LIMIT_WINDOW_MS` | the authenticated account                                                                                                 | yes     | memory     |
 | Order CSV exports                            | `orders`         | `NODE_ORDER_EXPORT_RATE_LIMIT_MAX`          | 10      | `NODE_RATE_LIMIT_WINDOW_MS` | the authenticated account                                                                                                 | yes     | memory     |
+| Order staff notes                            | `orders`         | `NODE_ORDER_NOTE_RATE_LIMIT_MAX`            | 30      | `NODE_RATE_LIMIT_WINDOW_MS` | the authenticated account                                                                                                 | yes     | memory     |
 | Payment webhook deliveries                   | `payments`       | `NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX`       | 60      | `NODE_RATE_LIMIT_WINDOW_MS` | address (IPv6 /56)                                                                                                        | yes     | memory     |
 | Payment confirm attempts                     | `payments`       | `NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX`       | 5       | 3600000ms                   | the authenticated account                                                                                                 | yes     | memory     |
 | Payment confirm declines                     | `payments`       | `NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX`       | 3       | 3600000ms                   | the authenticated account                                                                                                 | yes     | memory     |

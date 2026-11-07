@@ -443,6 +443,7 @@ flowchart LR
         R[returns<br/>request to close]
         I[invoicing<br/>invoice, credit note]
     end
+    N[staff note<br/>note_added] -- own transaction --> E
     M -- same transaction --> E[(orderevents)]
     P -- appendTimeline with session --> E
     D -- appendTimeline with session --> E
@@ -472,6 +473,7 @@ keeping a copy of this table.
 | Order     | `created`, `paid`, `processing`, `shipped`, `delivered`, `canceled`                                             | yes        |
 | Order     | `status_overridden` (mode, from, to, and the staff's reason as `text`)                                          | no         |
 | Order     | `address_corrected` (staff-only)                                                                                | no         |
+| Order     | `note_added` (a staff note; the text is encrypted, see [staff notes](#staff-notes))                             | no         |
 | Payment   | `payment_declined`, `refund_issued`, `refund_settled`                                                           | yes        |
 | Payment   | `refund_failed` (a failure code, never the provider's wording)                                                  | no         |
 | Payment   | `refund_canceled` (a refund staff voided; ids and amount only)                                                  | no         |
@@ -491,6 +493,7 @@ everything.
 | Types                                                   | `data`                                                                            |
 | ------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | `created`, `processing`, `shipped`, `address_corrected` | `{}`                                                                              |
+| `note_added`                                            | `{}`; what staff wrote is the entry's `text`                                      |
 | `status_overridden`                                     | `mode` (`status`), `from`, `to` (`OrderStatus`); the reason is the entry's `text` |
 | `paid`                                                  | `method`, absent when unknown                                                     |
 | `delivered`                                             | `withdrawUntil` (date-time)                                                       |
@@ -516,12 +519,11 @@ everything.
 
 Money is a `DecimalAmount`. A code a sibling module owns (a refund's reason, a dispute's status, a
 hold's reason) is a plain string whose description names the owner's enum: `orders` cannot
-`$ref` a module that depends on it. `text` exists only on `status_overridden`; the staff-notes
-type adds it where it writes it.
+`$ref` a module that depends on it. `text` exists only on `status_overridden` and `note_added`.
 
 A row holds ids, codes and numbers in `data`. Never a sibling's free text: `returns`' `note` and
 `declineMessage`, `delivery`'s hold note are reaped on their own clocks, and a copy here would
-outlive the original. The one free text `orders` owns is an override's reason (`text`).
+outlive the original. The free text `orders` owns is an override's reason and a staff note (`text`).
 
 **GDPR.**
 
@@ -535,8 +537,31 @@ outlive the original. The one free text `orders` owns is an override's reason (`
   appears only when it is the exporting account itself; which staff member wrote a row stays in the
   audit log (CJEU Pankki S, C-579/21). Returns, holds and the purchase hold follow the same rule.
 - The buyer's own screen never shows `actor`: who at the shop did something is the shop's business.
+- A staff note's text also goes with the order's erasure (`scrubBatch` unsets every row's `text`).
 
-Not built: `note_added` (no staff-note door exists) and `email_sent`.
+### Staff notes
+
+Staff have somewhere on the order to record a call or an agreement (Shopify's staff-only comment,
+WooCommerce's and Magento's private order notes): `POST /orders/{id}/timeline/notes` with
+`{ "text": "..." }` (1 to 2000 characters), and a note box above the timeline on the order page for
+holders of `update:Order`.
+
+| Rule        | What it does                                                                                                                                                                           |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Answer      | `201` with the `note_added` entry and `Location: /orders/{id}/timeline/notes/{entryId}`, the URI of its `DELETE`. The entry's `id` is the timeline row's own id                        |
+| Audience    | `staff`: the buyer's timeline never lists it. It is the buyer's data, so `POST /account/export` carries it, without its author                                                         |
+| At rest     | `text` is AES-GCM under the PII key ring, bound to the order id (`orders:timeline-note:<orderId>`). `appendTimeline` encrypts, the presenter decrypts; `reencrypt` walks it too        |
+| Withdrawing | `DELETE .../notes/{entryId}` unsets the text in one conditional write; the row stays, without text (GDPR Art. 16 and 17). A second call, a non-note row or another order's id is `404` |
+| Audit       | `admin.order.note_added` and `admin.order.note_deleted`: the entry id and the text's LENGTH, never the text                                                                            |
+| Budget      | `NODE_ORDER_NOTE_RATE_LIMIT_MAX` per account, after the permission check                                                                                                               |
+| Text clock  | `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS`, like every other `text`                                                                                                                        |
+
+The form tells the writer that customers do not see a note on their order but receive it if they ask
+for their data, and not to put phone numbers, addresses or health details in it.
+
+Not built: `email_sent`. Mails are fire-and-forget (`enqueueEmail` never rejects), so a truthful row
+would mean moving every mail call inside the sender's transaction, and it would still only say
+"queued". A mailer-side log with the provider's delivery status is the honest shape, if it is ever wanted.
 
 ## The CSV export
 
@@ -846,9 +871,10 @@ when the shop offers a longer withdrawal period.
 | `NODE_WITHDRAWAL_PERIOD_DAYS`          | `30`    | Days a consumer has to withdraw. The legal 14 plus the margin in [the withdrawal window](#the-withdrawal-window) gives a floor of 21, so a smaller value is refused at read; the default is 30 |
 | `NODE_ORDER_PII_DAYS_AFTER_GUARANTEE`  | `0`     | Days after a delivered order's `conformityUntil` before `reap:orders` replaces its remaining personal data with placeholders (once the account is erased or minimised)                         |
 | `NODE_ORDER_PII_DAYS_UNDELIVERED`      | `540`   | The same for a paid order that ended without delivery, counted from `paidAt`                                                                                                                   |
-| `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS` | `1095`  | Days after a timeline row's own instant before `reap:orders` unsets the free text staff wrote on it (an override's reason). The row stays                                                      |
+| `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS` | `1095`  | Days after a timeline row's own instant before `reap:orders` unsets the free text staff wrote on it (an override's reason, a staff note). The row stays                                        |
 | `NODE_ORDER_EXPORT_MAX_ROWS`           | `20000` | Most orders one `GET /orders/export` may carry. Over it: `422` `ORDER_EXPORT_TOO_LARGE`, before any byte of the file                                                                           |
 | `NODE_ORDER_EXPORT_RATE_LIMIT_MAX`     | `10`    | Exports allowed per window, per ACCOUNT                                                                                                                                                        |
+| `NODE_ORDER_NOTE_RATE_LIMIT_MAX`       | `30`    | Staff notes allowed per window, per ACCOUNT                                                                                                                                                    |
 | `NODE_ADMIN_ORDER_MAX_LINES`           | `100`   | Most lines an admin-created order (`POST /orders`) may carry. Over it: `422` `ORDER_LINE_LIMIT_EXCEEDED`. The contract's own ceiling is 1000; a larger value has no effect                     |
 | `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`   | `99999` | Largest quantity on one line of an admin-created order. Same refusal. The contract's ceiling is 999999                                                                                         |
 | `NODE_PURCHASE_HOLD_CANCEL_COUNT`      | `3`     | How many of a buyer's unpaid cancels inside the window pause their checkout, and paid ones flag the account ([the purchase hold](#the-purchase-hold)). Minimum 2                               |

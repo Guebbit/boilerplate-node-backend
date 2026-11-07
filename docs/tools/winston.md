@@ -202,6 +202,8 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `locales`        | `ADMIN_TRANSLATION_UPDATED`                  | `admin.translation.updated`                  | —                      |
 | `observability`  | `SECURITY_METRICS_TOKEN_INVALID`             | `security.metrics_token.invalid`             | —                      |
 | `orders`         | `ADMIN_ORDER_ADDRESS_CORRECTED`              | `admin.order.address_corrected`              | `order`                |
+| `orders`         | `ADMIN_ORDER_NOTE_ADDED`                     | `admin.order.note_added`                     | `order`                |
+| `orders`         | `ADMIN_ORDER_NOTE_DELETED`                   | `admin.order.note_deleted`                   | `order`                |
 | `orders`         | `ADMIN_ORDER_VIEWED`                         | `admin.order.viewed`                         | `order`                |
 | `orders`         | `ADMIN_ORDERS_EXPORTED`                      | `admin.orders.exported`                      | `order`                |
 | `orders`         | `ORDER_CANCELED`                             | `order.canceled`                             | `order`                |

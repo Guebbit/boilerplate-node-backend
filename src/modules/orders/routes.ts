@@ -27,8 +27,9 @@ import { deleteOrders } from './controllers/delete-orders';
 import { restoreOrders } from './controllers/post-order-restore';
 import { getOrderItem } from './controllers/get-order';
 import { getOrdersExport } from './controllers/get-orders-export';
-import { ordersExportLimiter } from './rate-limits';
+import { ordersExportLimiter, ordersNoteLimiter } from './rate-limits';
 import { getOrderTimeline } from './controllers/get-order-timeline';
+import { postOrderNote, deleteOrderNote } from './controllers/order-notes';
 import { postCancelOrder } from './controllers/post-cancel-order';
 import { postOrderStatusOverride } from './controllers/post-order-status-override';
 import { invalidateCache, noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
@@ -109,6 +110,20 @@ router.put('/:id/shipping-address', requirePermission('update', 'Order'), putShi
 // GET /orders/:id/timeline — the order's history; scoped like the order itself, and what each
 // caller sees of it is decided per row (the audience table in the domain layer). Never Redis-cached.
 router.get('/:id/timeline', privateNoCache, getOrderTimeline);
+
+// POST /orders/:id/timeline/notes — staff leave a note: staff-only row, its text stored encrypted. The
+// permission check runs before the per-account budget is spent. DELETE withdraws a wrong note's text.
+router.post(
+    '/:id/timeline/notes',
+    requirePermission('update', 'Order'),
+    ordersNoteLimiter,
+    postOrderNote
+);
+router.delete(
+    '/:id/timeline/notes/:eventId',
+    requirePermission('update', 'Order'),
+    deleteOrderNote
+);
 
 // GET /orders/:id — never Redis-cached, same reasoning as the search routes above: this is the
 // caller's OWN order.

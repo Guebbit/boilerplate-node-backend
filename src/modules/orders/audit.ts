@@ -27,7 +27,11 @@ export const ordersAuditActions = {
     /* An admin skipped or corrected the normal lifecycle. `metadata` carries mode/from/to/reason. */
     ORDER_STATUS_OVERRIDDEN: 'order.status_overridden',
     /* Staff changed where an unshipped order ships. `metadata` never carries the address itself. */
-    ADMIN_ORDER_ADDRESS_CORRECTED: 'admin.order.address_corrected'
+    ADMIN_ORDER_ADDRESS_CORRECTED: 'admin.order.address_corrected',
+    /* Staff wrote a note on an order. `metadata` carries the entry id and the text's LENGTH, never the text. */
+    ADMIN_ORDER_NOTE_ADDED: 'admin.order.note_added',
+    /* Staff withdrew a note's text. `metadata` carries the entry id and the withdrawn text's LENGTH. */
+    ADMIN_ORDER_NOTE_DELETED: 'admin.order.note_deleted'
 } as const;
 
 /** Registers this module's actions into the app-wide `AuditActionMap` union. */

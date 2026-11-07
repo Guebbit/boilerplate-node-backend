@@ -35,6 +35,8 @@ describe('order routes — what is mounted', () => {
             'POST /:id/status-override',
             'PUT /:id/shipping-address',
             'GET /:id/timeline',
+            'POST /:id/timeline/notes',
+            'DELETE /:id/timeline/notes/:eventId',
             'GET /:id',
             'PUT /:id',
             'PATCH /:id',
@@ -114,6 +116,22 @@ describe('order routes — the export budget', () => {
         expect(chain.indexOf('requirePermissionGuard')).toBeLessThan(
             chain.indexOf('orders-export')
         );
+    });
+});
+
+describe('order routes — staff notes', () => {
+    it.each(['POST /:id/timeline/notes', 'DELETE /:id/timeline/notes/:eventId'])(
+        '%s needs update:Order',
+        (signature) => {
+            expect(guardsOn(router, signature)).toContain('requirePermissionGuard');
+        }
+    );
+
+    it('POST spends its budget after the permission check and before the controller', () => {
+        const chain = chainOf(router, 'POST /:id/timeline/notes');
+
+        expect(chain).toContain('orders-note');
+        expect(chain.indexOf('requirePermissionGuard')).toBeLessThan(chain.indexOf('orders-note'));
     });
 });
 

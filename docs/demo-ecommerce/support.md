@@ -160,6 +160,22 @@ silence means they keep waiting. Staff look at the **Late** list weekly
 and if they want out, a staff member cancels and refunds with the ordinary cancel.
 → [`delivery`](../modules/delivery.md#what-staff-do-about-a-late-order)
 
+## Leaving a note on an order {#order-notes}
+
+Spoke to a customer, or agreed something outside the shop? Write it on the order, so the next person
+sees it. Open the order, and in its history type the note in the box (anyone who may edit orders has
+it) and press **Add note**. The note shows in the history with your name and the time, marked as
+staff-only.
+
+- **The customer does not see it on their order.** They do get it if they ask for their data, so write
+  it as if they will read it. Do not write phone numbers, addresses or health details.
+- **Wrote the wrong thing?** The order page has no button to remove a note yet. The API can blank a note's
+  text (`DELETE /orders/{id}/timeline/notes/{entryId}`), and the line stays in the history.
+- **It goes by itself.** The text is removed after three years, and sooner if the customer's data is
+  erased.
+
+→ [`orders`](../modules/orders.md#staff-notes)
+
 ## "My checkout is paused"
 
 If a customer writes that they cannot place an order, the cause may be a **purchase pause**: the

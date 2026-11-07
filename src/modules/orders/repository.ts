@@ -718,6 +718,16 @@ const scrubBatch = (ids: Types.ObjectId[], cutoff: Date, window: PiiClaimWindow)
                             { session }
                         )
                         .exec()
+                        // The same erasure takes every timeline row's free text (a staff note names the customer).
+                        .then(() =>
+                            orderEventModel
+                                .updateMany(
+                                    { orderId: { $in: due.map(({ _id }) => _id) } },
+                                    { $unset: { text: 1 } },
+                                    { session }
+                                )
+                                .exec()
+                        )
                         .then(() => due.map(({ _id }) => String(_id)))
                 ),
         (scrubbedIds) =>
@@ -922,12 +932,15 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
 
 /**
  * The timeline's ledger. {@link AppendOnlyLedger} for the writes the app makes in the course of
- * business; the three removals below are the only edits a row ever sees, each for a reason the
+ * business; the removals below are the only edits a row ever sees, each for a reason the
  * law gives rather than the app:
  *
  * - `clearActor`: the staff account was erased.
  * - `scrubTextBefore`: the free text outlived its retention window; the row stays.
+ * - `clearNoteText`: staff withdrew a wrong note (GDPR Art. 16 and 17); the row stays.
  * - `deleteByOrderId`: the order itself was hard-deleted, so there is nothing left to narrate.
+ *
+ * The order's own erasure (`scrubBatch`) unsets every row's text too, inside its transaction.
  */
 export const orderEventRepository: AppendOnlyLedger<
     OrderEventDocument,
@@ -942,7 +955,12 @@ export const orderEventRepository: AppendOnlyLedger<
     ) => Promise<Date[]>;
     clearActor: (actor: string, session?: ClientSession) => Promise<number>;
     scrubTextBefore: (cutoff: Date) => Promise<number>;
+    clearNoteText: (orderId: string, eventId: string) => Promise<OrderEventDocument | null>;
     deleteByOrderId: (orderId: string) => Promise<number>;
+    reencrypt: (
+        spec: ReencryptSpec<OrderEventDocument>,
+        dryRun?: boolean
+    ) => Promise<ReencryptReport>;
 } = {
     ...createRepository<OrderEventDocument, Wire<OrderEventDocument>>(orderEventModel, {
         transform: applyOrderEventTransform
@@ -1025,6 +1043,30 @@ export const orderEventRepository: AppendOnlyLedger<
             .then(({ modifiedCount }) => modifiedCount),
 
     /**
+     * Unset the text of one staff note, in one conditional write, and hand back the row as it was
+     * (so the caller can audit the text's LENGTH). Only a `note_added` row of THIS order that still
+     * holds text matches, so an unknown id, another order's row, another type and a second delete
+     * are all `null`.
+     *
+     * @param orderId - the order the note is on
+     * @param eventId - the note's row id
+     */
+    clearNoteText: (orderId, eventId) =>
+        orderEventModel
+            .findOneAndUpdate(
+                {
+                    _id: toObjectId(eventId),
+                    orderId: toObjectId(orderId),
+                    type: 'note_added',
+                    text: { $exists: true }
+                },
+                { $unset: { text: 1 } },
+                // Answer the document as it was before the unset.
+                { returnDocument: 'before' }
+            )
+            .exec(),
+
+    /**
      * Remove every row of an order that no longer exists.
      *
      * @param orderId - the deleted order
@@ -1034,5 +1076,7 @@ export const orderEventRepository: AppendOnlyLedger<
         orderEventModel
             .deleteMany({ orderId: toObjectId(orderId) })
             .exec()
-            .then(({ deletedCount }) => deletedCount)
+            .then(({ deletedCount }) => deletedCount),
+
+    reencrypt: reencryptOf(orderEventModel)
 };

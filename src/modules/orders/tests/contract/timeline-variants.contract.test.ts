@@ -95,7 +95,30 @@ describe('the export mirrors the entry', () => {
     });
 });
 
+/** The variant names, per surface, whose own branch declares a `text` property. */
+const withText = (union: string): string[] =>
+    (schemas[union].oneOf ?? [])
+        .map((member) => nameOf(member.$ref))
+        .filter((name) => schemas[name].allOf?.[1].properties?.text !== undefined)
+        .toSorted();
+
+describe('`text` on the variants', () => {
+    it('lets only the staff-text variants carry it, the same on both surfaces', () => {
+        expect(withText('OrderTimelineEntry')).toEqual([
+            'OrderTimelineEntryNoteAdded',
+            'OrderTimelineEntryStatusOverridden'
+        ]);
+        expect(withText('OrderTimelineExportEntry')).toEqual(
+            withText('OrderTimelineEntry').map((name) => name.replace('Entry', 'ExportEntry'))
+        );
+    });
+});
+
 describe('the audience table', () => {
+    it('keeps staff notes private to staff', () => {
+        expect(TIMELINE_AUDIENCE.note_added).toBe('staff');
+    });
+
     it('decides every type the contract names, and no other', () => {
         expect(Object.keys(TIMELINE_AUDIENCE).toSorted()).toEqual(allTypes.toSorted());
     });

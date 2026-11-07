@@ -19,6 +19,7 @@ describe('the timeline audience table', () => {
             'dispute_opened',
             'fulfillment_held',
             'fulfillment_released',
+            'note_added',
             'refund_canceled',
             'refund_failed',
             'refund_reversed',
