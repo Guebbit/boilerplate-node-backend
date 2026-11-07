@@ -20,6 +20,8 @@ module.exports = {
     preset: base.preset,
     moduleNameMapper: base.moduleNameMapper,
     transform: base.transform,
+    // Same on-disk cache as the base config, see its comment.
+    cacheDirectory: base.cacheDirectory,
     testEnvironment: base.testEnvironment,
     roots: ['<rootDir>/tests/broker'],
     testMatch: ['**/tests/broker/**/*.test.ts'],

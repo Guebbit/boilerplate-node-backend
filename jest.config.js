@@ -99,6 +99,13 @@ const maxWorkers = fromEnvironment('JEST_WORKERS', DEFAULT_MAX_WORKERS);
 
 module.exports = {
     preset: 'ts-jest',
+    /*
+     * Transform cache, on disk under node_modules: no RAM cost, survives reboots.
+     * Lane slots share it through the node_modules symlink; entries are keyed by absolute file path,
+     * so slots do not collide. `npx jest --clearCache` (or deleting node_modules) resets it.
+     * https://jestjs.io/docs/configuration#cachedirectory-string
+     */
+    cacheDirectory: '<rootDir>/node_modules/.cache/jest',
     clearMocks: true,
     // `node`, plus clearing every timer a file leaves running — without it each file's whole module
     // graph stays alive, which a single-process run (Stryker's dry run) cannot survive.
