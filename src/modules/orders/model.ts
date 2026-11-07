@@ -23,6 +23,7 @@ import type { ProductSnapshot } from '@modules/products';
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
+import type { OrderTimelineType } from './domain/timeline';
 import { sumLineItems, orderTotal, type LineItem } from './domain/totals';
 import { orderTaxBreakdown, type TaxableLineItem } from './domain/tax';
 import { shopDayOf } from '@modules/shop';
@@ -37,7 +38,7 @@ import {
     type StampedReturnStatus
 } from './domain/projections';
 import { OrderStatus, PaymentMethodId, RateType } from '@types';
-import type { Order, OrderTimelineType } from '@types';
+import type { Order } from '@types';
 
 /**
  * `ProductSnapshot` minus `taxClass`, plus the resolved `taxRate` — same reasoning as

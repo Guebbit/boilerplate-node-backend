@@ -44,7 +44,8 @@ export const appendTimeline = (
                 at: entry.at ?? new Date(),
                 type: entry.type,
                 ...(entry.actor ? { actor: entry.actor } : {}),
-                ...(entry.text ? { text: entry.text } : {}),
+                // Only a variant that declares `text` has the key; `in` narrows the union to it.
+                ...('text' in entry && entry.text ? { text: entry.text } : {}),
                 data: { ...entry.data }
             },
             session

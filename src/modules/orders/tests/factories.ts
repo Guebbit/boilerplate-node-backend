@@ -9,6 +9,7 @@
 
 import { OrderStatus } from '@types';
 import type { OrderTimelineEntry } from '@types';
+import { GetOrderTimeline200Response } from '@api/schemas.zod';
 import { asAdmin } from '@tests/callers';
 import { readTimeline } from '../services/timeline';
 import type { OrderDocument } from '../model';
@@ -215,14 +216,16 @@ export const setWithdrawUntil = (orderId: string, withdrawUntil: Date | undefine
 
 /**
  * An order's timeline as an administrator reads it: every row, actor and staff text included.
+ * The rows are parsed through the contract's own response schema, so every test that reads a
+ * timeline also proves what the writers stored is what the contract says.
  *
  * @param orderId - the order
  * @param typePrefix - keeps only the types starting with it (`refund`, `return_`); every row when omitted
  */
 export const timelineOf = (orderId: string, typePrefix = ''): Promise<OrderTimelineEntry[]> =>
-    readTimeline(orderId, asAdmin()).then((rows) =>
-        rows.filter(({ type }) => type.startsWith(typePrefix))
-    );
+    readTimeline(orderId, asAdmin())
+        .then((items) => GetOrderTimeline200Response.parse({ items }).items)
+        .then((rows) => rows.filter(({ type }) => type.startsWith(typePrefix)));
 
 /**
  * The last `status_overridden` row of an order's timeline, as an administrator reads it.

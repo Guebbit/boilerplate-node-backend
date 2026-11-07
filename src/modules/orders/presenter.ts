@@ -21,21 +21,26 @@ export const presentOrder = (document: OrderDocument): Order => document.toJSON(
  * shop did something is the shop's business, and the row's own type says what happened. The row's
  * own `audience` is a fact of its type, whoever reads it.
  *
+ * The one `as` of the timeline's read side: storage holds `type` and `data` apart, and only
+ * `appendTimeline` writes them, from a `TimelineEntryInput` that pairs each type with its own
+ * `data`. The export builds on this, so neither reader casts again.
+ *
  * @param event - the stored row
  * @param reader - `staff` sees the actor, `buyer` never does
  */
 export const presentTimelineEntry = (
     event: OrderEventDocument,
     reader: 'buyer' | 'staff'
-): OrderTimelineEntry => ({
-    id: String(event._id),
-    at: event.at.toISOString(),
-    type: event.type,
-    audience: TIMELINE_AUDIENCE[event.type],
-    ...(reader === 'staff' && event.actor ? { actor: event.actor } : {}),
-    ...(event.text ? { text: event.text } : {}),
-    data: event.data
-});
+): OrderTimelineEntry =>
+    ({
+        id: String(event._id),
+        at: event.at.toISOString(),
+        type: event.type,
+        audience: TIMELINE_AUDIENCE[event.type],
+        ...(reader === 'staff' && event.actor ? { actor: event.actor } : {}),
+        ...(event.text ? { text: event.text } : {}),
+        data: event.data
+    }) as OrderTimelineEntry;
 
 /**
  * The rows of an order a given audience may read, in the order they were stored.

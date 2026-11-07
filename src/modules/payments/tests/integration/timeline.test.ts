@@ -125,7 +125,10 @@ describe('a refund', () => {
             },
             { type: 'refund_settled', actor: 'admin-1', data: { amount: '30.00' } }
         ]);
-        expect(rows[0].data.refundId).toBe(rows[1].data.refundId);
+        // `refundId` is on every refund variant; the union needs the `in` to say so.
+        const [issued, settled] = rows.map(({ data }) => ('refundId' in data ? data.refundId : ''));
+        expect(issued).not.toBe('');
+        expect(issued).toBe(settled);
     });
 
     it('writes the failure with a closed code and never the provider`s wording', async () => {

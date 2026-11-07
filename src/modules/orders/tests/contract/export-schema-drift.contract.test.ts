@@ -1,9 +1,11 @@
 /**
  * @module
- * `ExportOrder` and `OrderTimelineExportEntry` restate `Order` and `OrderTimelineEntry` flat
- * instead of composing them with `allOf`: two closed siblings can never validate together, and
- * the Zod generator cannot compose them. The two property lists exist twice, by hand, so this
+ * `ExportOrder` and `OrderTimelineExportEntryBase` restate `Order` and `OrderTimelineEntryBase`
+ * flat instead of composing them with `allOf`: two closed siblings can never validate together,
+ * and the Zod generator cannot compose them (the timeline bases are open for that reason, and the
+ * variants close the whole entry). The two property lists exist twice, by hand, so this
  * test is what keeps them in step. It reads the module's own `openapi.yaml`, never the bundle.
+ * The timeline's variants on top of those bases are `timeline-variants.contract.test.ts`.
  */
 
 import { readFileSync } from 'node:fs';
@@ -24,8 +26,8 @@ const spec = parse(readFileSync(path.resolve(__dirname, '../../openapi.yaml'), '
 const {
     Order: order,
     ExportOrder: exportOrder,
-    OrderTimelineEntry: timelineEntry,
-    OrderTimelineExportEntry: timelineExportEntry
+    OrderTimelineEntryBase: timelineEntry,
+    OrderTimelineExportEntryBase: timelineExportEntry
 } = spec.components.schemas;
 
 /**
@@ -44,7 +46,6 @@ const expectMirror = (
     const [bigger, smaller] = inSource ? [source, exported] : [exported, source];
     const skip = (names: string[]): string[] => names.filter((name) => name !== field);
 
-    expect(exported.additionalProperties).toBe(false);
     expect(Object.keys(bigger.properties)).toContain(field);
     expect(skip(Object.keys(bigger.properties)).toSorted()).toEqual(
         Object.keys(smaller.properties).toSorted()
@@ -59,6 +60,7 @@ const expectMirror = (
 
 describe('ExportOrder mirrors Order', () => {
     it('differs only by `actions`', () => {
+        expect(exportOrder.additionalProperties).toBe(false);
         expectMirror(order, exportOrder, 'actions', true);
     });
 
@@ -68,7 +70,7 @@ describe('ExportOrder mirrors Order', () => {
     });
 });
 
-describe('OrderTimelineExportEntry mirrors OrderTimelineEntry', () => {
+describe('OrderTimelineExportEntryBase mirrors OrderTimelineEntryBase', () => {
     it('differs only by `orderId`', () => {
         expectMirror(timelineEntry, timelineExportEntry, 'orderId', false);
     });

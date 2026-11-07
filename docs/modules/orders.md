@@ -461,8 +461,9 @@ write that lost its race leaves no row. `orders` cannot listen to them: they imp
 
 **Types and audience.** `domain/timeline.ts` decides, per type, whether the buyer may read it
 (Magento's `is_visible_on_front`, WooCommerce's `is_customer_note`); a private row is hidden whole,
-never stripped field by field. The set of types is the contract's `OrderTimelineType`, so a type
-added there without an audience row fails to compile. Each row carries its own `audience`
+never stripped field by field. The set of types is the contract's `OrderTimelineType` (a contract test
+holds it equal to the variants' own `type` enums), so a type added there without an audience row
+fails the test, and one added to a variant without it fails to compile. Each row carries its own `audience`
 (`buyer` or `staff`) on the wire, so a staff screen marks which rows the buyer cannot see without
 keeping a copy of this table.
 
@@ -479,6 +480,44 @@ keeping a copy of this table.
 | Returns   | `return_requested`, `return_approved`, `return_declined`, `return_received`, `return_closed`, `return_canceled` | yes        |
 | Documents | `invoice_issued`, `credit_note_issued`                                                                          | yes        |
 | Preorders | `release_date_moved`, `delay_notice_sent`                                                                       | yes        |
+
+**What `data` holds, per type.** The wire carries one `oneOf` variant per kind of row, told apart by
+`type` (a discriminator with a many-to-one `mapping`; the export's `OrderTimelineExportEntry` has
+the same variants over `OrderTimelineExportEntryBase`). The shapes below are what the writers
+store, and `TimelineEntryInput` is derived from them, so a writer that passes the wrong `data`
+for its `type` fails to compile. Every `data` is closed and required; `{}` where the type says
+everything.
+
+| Types                                                   | `data`                                                                            |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `created`, `processing`, `shipped`, `address_corrected` | `{}`                                                                              |
+| `status_overridden`                                     | `mode` (`status`), `from`, `to` (`OrderStatus`); the reason is the entry's `text` |
+| `paid`                                                  | `method`, absent when unknown                                                     |
+| `delivered`                                             | `withdrawUntil` (date-time)                                                       |
+| `canceled`                                              | `by`, `cause`, `refund`                                                           |
+| `payment_declined`                                      | `paymentId`                                                                       |
+| `refund_issued`, `refund_settled`, `refund_canceled`    | `refundId`, `amount`, `currency`, `reason`                                        |
+| `refund_failed`, `refund_reversed`                      | the same, plus `failureReason`                                                    |
+| `dispute_opened`, `dispute_closed`                      | `disputeId`, `kind`, `status`, `reason`, `amount`, `currency`                     |
+| `shipment_shipped`                                      | `shipmentId`, `fulfillmentOrderId`, `number`, `trackingCode` when given           |
+| `shipment_delivered`                                    | `shipmentId`, `fulfillmentOrderId`, `number`                                      |
+| `shipment_lost`                                         | the same, plus `reason`                                                           |
+| `fulfillment_held`                                      | `reason`, and `fulfillmentOrderId` except on a preorder's birth hold              |
+| `fulfillment_released`, `remainder_canceled`            | `fulfillmentOrderId`                                                              |
+| `return_requested`                                      | `returnId`, `reason`                                                              |
+| `return_approved`                                       | `returnId`, and `reason` when opened already approved                             |
+| `return_declined`, `return_canceled`                    | `returnId`                                                                        |
+| `return_received`                                       | `returnId`, `refundAmount`                                                        |
+| `return_closed`                                         | `returnId`, `refundAmount`, `currency`, `remedy` when chosen                      |
+| `invoice_issued`                                        | `invoiceId`, `number`                                                             |
+| `credit_note_issued`                                    | `creditNoteId`, `number`, `refundId`                                              |
+| `release_date_moved`                                    | `fulfillmentOrderId`, `from`, `to` (shop days, each absent when unset)            |
+| `delay_notice_sent`                                     | `fulfillmentOrderId`, `reason`, `expectedAt` (a shop day) when there is one       |
+
+Money is a `DecimalAmount`. A code a sibling module owns (a refund's reason, a dispute's status, a
+hold's reason) is a plain string whose description names the owner's enum: `orders` cannot
+`$ref` a module that depends on it. `text` exists only on `status_overridden`; the staff-notes
+type adds it where it writes it.
 
 A row holds ids, codes and numbers in `data`. Never a sibling's free text: `returns`' `note` and
 `declineMessage`, `delivery`'s hold note are reaped on their own clocks, and a copy here would

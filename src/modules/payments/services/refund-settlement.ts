@@ -8,7 +8,12 @@
 
 import type { ClientSession } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
-import { RefundFailureReason, RefundStatus, type CallerContext } from '@types';
+import {
+    RefundFailureReason,
+    RefundStatus,
+    type CallerContext,
+    type OrderTimelineDataRefund
+} from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { DomainEventMap } from '@kernel/events';
 import { announceInTransaction } from '@kernel/outbox';
@@ -51,7 +56,7 @@ export const remainingOf = (payment: PaymentDocument): Money =>
  */
 export const refundRow = (
     refund: Pick<RefundRecord, '_id' | 'amount' | 'currency' | 'reason'>
-): Record<string, string | number> => ({
+): OrderTimelineDataRefund => ({
     refundId: String(refund._id),
     amount: padDecimal(refund.amount, refund.currency),
     currency: refund.currency,

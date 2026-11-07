@@ -232,7 +232,9 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         expect(notes.filter((note) => note.refundId === 'refund-race')).toHaveLength(1);
         // The timeline row commits with the note, so the loser's row aborted with its insert.
         const issued = await timelineOf(orderId, 'credit_note_issued');
-        expect(issued.filter(({ data }) => data?.refundId === 'refund-race')).toHaveLength(1);
+        expect(
+            issued.filter(({ data }) => 'refundId' in data && data.refundId === 'refund-race')
+        ).toHaveLength(1);
         const counter = await creditNoteNumberCounterModel.findById(year).lean().exec();
         expect(counter?.seq).toBe(notes.length);
     });

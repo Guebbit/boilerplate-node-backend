@@ -221,12 +221,22 @@ describe('what the law lets go', () => {
         await withTransaction(async (session) => {
             await orderService.appendTimeline(
                 id,
-                { type: 'status_overridden', text: 'old', at: daysAgo(11) },
+                {
+                    type: 'status_overridden',
+                    text: 'old',
+                    data: { mode: 'status', from: 'paid', to: 'processing' },
+                    at: daysAgo(11)
+                },
                 session
             );
             await orderService.appendTimeline(
                 id,
-                { type: 'status_overridden', text: 'recent', at: daysAgo(9) },
+                {
+                    type: 'status_overridden',
+                    text: 'recent',
+                    data: { mode: 'status', from: 'paid', to: 'processing' },
+                    at: daysAgo(9)
+                },
                 session
             );
         });
@@ -235,7 +245,10 @@ describe('what the law lets go', () => {
         expect(await orderService.scrubTimelineText()).toBe(0);
 
         const rows = await timelineOf(id);
-        expect(rows.map((row) => row.text)).toEqual([undefined, 'recent']);
+        expect(rows.map((row) => ('text' in row ? row.text : undefined))).toEqual([
+            undefined,
+            'recent'
+        ]);
         expect(rows).toHaveLength(2);
     });
 
