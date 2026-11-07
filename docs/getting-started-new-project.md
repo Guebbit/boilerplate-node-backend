@@ -58,14 +58,6 @@ demo actually removable" is an enforced fact, not a claim.
 [The module index](./modules/index.md#every-module) lists every module under its group. It is
 generated from each module's own `module.yaml`, so it is never behind.
 
-`npm run measure:demo-strip` is the checked version of that claim: on every push and PR, CI copies
-the repo to a scratch directory, applies a removal recipe (`--recipe shop` runs the real
-`demo:remove`, the `example` module included; `--recipe locales` deletes the optional locales module), then runs `regenerate`,
-`ts-check`, the cross-cutting suite and `docs:build` against what's left. It runs on its own
-squares (`demo-strip-measure` in `.github/workflows/ci.yml`). The merge gate does not wait for them
-yet: they join it after their first green run on GitHub. It is the checked form of the promise:
-both recipes leave a repo that regenerates, type-checks and passes the cross-cutting suite.
-
 ## Removing it
 
 ```mermaid
@@ -89,7 +81,7 @@ npm run regenerate     # rebundle the contract, regenerate the typed client and 
 npm run ts-check        # see exactly what is left
 ```
 
-`demo:remove` is a real edit of your working tree, not a scratch-copy measurement — run it on a
+`demo:remove` is a real edit of your working tree — run it on a
 branch, or after committing whatever you had in progress. It touches:
 
 - **Every `group: shop` module folder and the `group: example` one**, deleted outright — routes,
@@ -126,7 +118,7 @@ branch, or after committing whatever you had in progress. It touches:
 ## What it does not do
 
 After `demo:remove`, `regenerate`, `ts-check` and the cross-cutting suite pass (and so does the
-unit suite) — `measure:demo-strip` checks the first three on every push. What goes with the shop is
+unit suite). What goes with the shop is
 coverage that only existed because the shop did: a test that imported it is deleted whole, and where
 that test also covered a foundation module the shop-dependent cases were already in a file of their
 own, so the foundation cases stay. The exceptions are the **system** tests that used the shop as sample data

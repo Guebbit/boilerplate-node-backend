@@ -230,10 +230,6 @@ nothing) and `example-cannot-reach-shop` (it uses the foundation and nothing of 
 either can be deleted without the other). `demo:remove` deletes both groups: `example` is mounted
 in production, so a deployment copies it first and then removes it.
 
-This is also the axis a CI job measures "is the demo shop removable" against: deleting every
-`group: shop` folder and seeing what still compiles and passes is a checked experiment now, not a
-manual walkthrough — see `npm run measure:demo-strip`.
-
 ## 5. Published language — the barrel
 
 `index.ts` is the one surface a sibling may import, and ESLint stops anyone reaching past it — every

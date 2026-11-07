@@ -8,8 +8,7 @@
  * and `regenerate` runs it.
  *
  * `demo-remove.ts` calls this with every `group: shop` module and then does the shop-only work
- * (the demo catalogue, the scenarios); `measure-demo-strip.ts` calls it with `locales` for its
- * second recipe. One function, so the two cannot drift.
+ * (the demo catalogue, the scenarios).
  */
 
 import { readRemovedMetrics, stripAlertRules } from './demo-remove-alert-rules';

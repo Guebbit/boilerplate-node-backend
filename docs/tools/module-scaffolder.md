@@ -96,8 +96,7 @@ It prints these instead of guessing:
 | A real scaffold into a scratch registry     | the same folder — writes to a temp directory, refuses twice | unit    |
 | The generated module passes the gate        | `npm run measure:scaffold`                                  | minutes |
 
-`measure:scaffold` copies the checkout to a scratch directory (like
-[`measure:demo-strip`](../getting-started-new-project.md)), scaffolds a module there and runs
+`measure:scaffold` copies the checkout to a scratch directory, scaffolds a module there and runs
 `regenerate`, `ts-check`, `lint`, the module's own tests, the cross-cutting suite and `docs:build`.
 It scaffolds two modules, one with the defaults and one with `--no-audit --group shop`, so both
 template variants compile. It is report-only and not part of the commit gate.

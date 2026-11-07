@@ -36,7 +36,6 @@
         "test:cross-cutting": "tsx scripts/testing/run-suite.ts cross-cutting",
         "scaffold:module": "tsx scripts/scaffold/scaffold-module.ts",
         "measure:scaffold": "tsx scripts/testing/measure-scaffold.ts",
-        "measure:demo-strip": "tsx scripts/testing/measure-demo-strip.ts",
         "demo:remove": "tsx scripts/scaffold/demo-remove.ts",
         "test:integration": "tsx scripts/testing/run-suite.ts integration",
         "test:contract": "tsx scripts/testing/run-suite.ts contract",

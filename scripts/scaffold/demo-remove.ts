@@ -1,7 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * `npm run demo:remove` — the actual one-command strip. `measure:demo-strip` is its measuring
- * twin: same recipe, run against a scratch copy.
+ * `npm run demo:remove` — the one-command strip.
  *
  * Deletes every `group: shop` and `group: example` module folder (its scheduled jobs go with it,
  * and `regenerate` rewrites the crontab), the seed images, and the demo
@@ -9,7 +8,7 @@
  * registries (`npm run regenerate`), the only central files that would otherwise stop the
  * repo compiling. See `docs/getting-started-new-project.md` for what this promises and does not.
  *
- * RUNS AGAINST THIS CHECKOUT, not a scratch copy — this is the real command, not the measurement.
+ * RUNS AGAINST THIS CHECKOUT, not a scratch copy.
  * A module-owned test under `src/modules/<name>/tests/` goes with its folder; any other test that
  * imports a removed module goes too (`demo-remove-tests.ts`), and the report lists each one.
  */

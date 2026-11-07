@@ -1,9 +1,9 @@
 /**
  * @module
  * One shared reader for "which module folders does `demo:remove` take today" — the `group: shop`
- * ones and the `group: example` one. The same question `measure-demo-strip.ts` (the scratch copy) and
- * `demo-remove.ts` (the real strip) both ask, off each module's own `module.yaml` rather than a
- * hand-kept list. A relabelled module changes both scripts without an edit to either.
+ * ones and the `group: example` one. What `demo-remove.ts` asks, off each module's own
+ * `module.yaml` rather than a hand-kept list. A relabelled module changes the script without an
+ * edit to it.
  */
 
 import path from 'node:path';
