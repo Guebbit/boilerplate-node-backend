@@ -36,6 +36,11 @@ const asMoney = (value: number): Money =>
  *
  * Exponent 2 is the rule; the other three lists are the exceptions. Codes are listed under the
  * exponent ISO publishes for them.
+ *
+ * Table source: SIX List One, published 2026-09-17.
+ *
+ * Funds codes: CLF, UYI and UYW are listed; no others are added.
+ * Withdrawn codes (ANG, BGN, HRK, ...) are absent, so {@link isIso4217Code} refuses them.
  */
 const ISO_4217_EXPONENTS: Readonly<Record<string, number>> = Object.fromEntries(
     (
@@ -45,7 +50,7 @@ const ISO_4217_EXPONENTS: Readonly<Record<string, number>> = Object.fromEntries(
             [4, 'CLF UYW'],
             [
                 2,
-                `AED AFN ALL AMD ANG AOA ARS AUD AWG AZN BAM BBD BDT BGN BMD BND BOB BRL BSD BTN BWP
+                `AED AFN ALL AMD AOA ARS AUD AWG AZN BAM BBD BDT BMD BND BOB BRL BSD BTN BWP
                 BYN BZD CAD CDF CHF CNY COP CRC CUP CVE CZK DKK DOP DZD EGP ERN ETB EUR FJD FKP GBP
                 GEL GHS GIP GMD GTQ GYD HKD HNL HTG HUF IDR ILS INR IRR JMD KES KGS KHR KPW KYD KZT
                 LAK LBP LKR LRD LSL MAD MDL MGA MKD MMK MNT MOP MRU MUR MVR MWK MXN MYR MZN NAD NGN
@@ -56,6 +61,14 @@ const ISO_4217_EXPONENTS: Readonly<Record<string, number>> = Object.fromEntries(
         ] as const
     ).flatMap(([exponent, codes]) => codes.split(/\s+/).map((code) => [code, exponent] as const))
 );
+
+/**
+ * Whether a code is in the pinned ISO 4217 table. A table lookup, not {@link minorUnitExponent}:
+ * that one falls back to 2 for any code and would accept everything.
+ * @param code - an upper-case code
+ * @returns true when the table lists it
+ */
+export const isIso4217Code = (code: string): boolean => code in ISO_4217_EXPONENTS;
 
 /**
  * How many decimal places a currency's minor unit represents — 2 for EUR/USD, 0 for JPY/KRW, 3

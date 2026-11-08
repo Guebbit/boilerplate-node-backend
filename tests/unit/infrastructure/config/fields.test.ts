@@ -212,7 +212,11 @@ describe('currency', () => {
         expect(currency().schema.parse(' JPY ')).toBe('JPY');
     });
 
-    it.each(['EURO', 'E1R', 'XYZ', '€'])('refuses %s', (raw) => {
+    it('accepts a current code Node does not list', () => {
+        expect(currency().schema.parse('ved')).toBe('VED');
+    });
+
+    it.each(['EURO', 'E1R', 'XYZ', 'HRK', 'ANG', '€'])('refuses %s', (raw) => {
         expect(currency().schema.safeParse(raw).success).toBe(false);
     });
 

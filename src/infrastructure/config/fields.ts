@@ -16,6 +16,7 @@
  */
 
 import { z } from 'zod';
+import { isIso4217Code } from '../../domain-primitives/money';
 import { parseVersionedKeyRing, type VersionedKey } from '../security/versioned-secret';
 import type { Environment } from './store';
 
@@ -388,8 +389,8 @@ export function timeZone(
 }
 
 /**
- * An ISO-4217 currency code, upper-cased. A well-formed but unknown code (`XYZ`) is refused too:
- * `Intl.NumberFormat` accepts it and prints it, so only the supported list catches it.
+ * An ISO-4217 currency code, upper-cased, checked against the table that also prices it (List
+ * One). A well-formed but unlisted or withdrawn code (`XYZ`, `HRK`) is refused too.
  *
  * @param options - `default` for an unset value; `required` for a boot-time presence rule
  */
@@ -400,10 +401,8 @@ export function currency(
 ): Field<string | undefined> {
     return build(
         z.string().transform((value, context) => {
-            // Intl: the codes the runtime has currency data for, upper-case.
-            // https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/supportedValuesOf
             const code = value.toUpperCase();
-            if (Intl.supportedValuesOf('currency').includes(code)) return code;
+            if (isIso4217Code(code)) return code;
             context.addIssue({ code: 'custom', message: 'ISO-4217 currency code, e.g. EUR' });
             return z.NEVER;
         }),
