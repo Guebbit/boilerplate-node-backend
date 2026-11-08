@@ -41,7 +41,7 @@ export interface LineItemTotals {
  * @param currency - the ISO-4217 code the line is priced in — decides the rounding scale
  */
 export const lineGross = (item: LineItem, currency: string): Money =>
-    scaleMoney(toMinorUnits(item.product?.price, currency), wholeCount(item.quantity));
+    scaleMoney(toMinorUnits(item.product?.price, currency), item.quantity);
 
 /**
  * Sum a list of priced line items. `toMinorUnits`/`wholeCount` absorb junk, so a line whose
