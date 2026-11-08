@@ -1,0 +1,41 @@
+/**
+ * `findAll` with no `limit` stops at 1000 rows: the backstop against an unbounded collection scan
+ * (docs/theory/defences/denial-of-service.md). Paging goes through `search`; this is what a
+ * caller that forgot to page still gets. A scratch model, so the property is the factory's, not
+ * any one module's.
+ */
+import { model, Schema, type Document } from 'mongoose';
+import { setupTestDb } from '@tests/setup-test-db';
+import { createRepository, type Wire } from '@infrastructure/persistence/create-repository';
+
+setupTestDb();
+
+/** One scalar is all a row needs. */
+interface Probe extends Document {
+    n: number;
+}
+
+const probeModel = model<Probe>('FindAllCapProbe', new Schema<Probe>({ n: Number }));
+const probes = createRepository<Probe, Wire<Probe>>(probeModel, {
+    transform: (item: Record<string, unknown>) => item,
+    searchable: {}
+});
+
+describe('findAll without a limit', () => {
+    it('returns at most 1000 rows, though more exist', async () => {
+        // One past the ceiling: a backstop that is off by one would hand back all of them.
+        await probeModel.insertMany(Array.from({ length: 1001 }, (_, n) => ({ n })));
+
+        const rows = await probes.findAll();
+
+        expect(rows).toHaveLength(1000);
+    });
+
+    it('honours a limit the caller names, over the ceiling', async () => {
+        await probeModel.insertMany(Array.from({ length: 1001 }, (_, n) => ({ n })));
+
+        const rows = await probes.findAll({}, { limit: 1001 });
+
+        expect(rows).toHaveLength(1001);
+    });
+});

@@ -303,6 +303,52 @@ const refundedOrder = async () => {
     return { orderId, creditNoteId: String(creditNote?._id), owner };
 };
 
+describe('credit notes of an order refunded more than once', () => {
+    it('lists them oldest first', async () => {
+        const { orderId, creditNoteId, owner } = await refundedOrder();
+        const second = await issueCreditNote({
+            orderId,
+            refundId: 'refund-3',
+            amount: '1.00',
+            full: false
+        });
+
+        const response = await api()
+            .get(`/orders/${orderId}/credit-notes`)
+            .set('Authorization', owner.bearer);
+
+        expect(response.status).toBe(200);
+        // Issued in this order, so the list reads in it: the first refund's note, then the second's.
+        expect(response.body.items.map(({ id }: { id: string }) => id)).toEqual([
+            creditNoteId,
+            String(second?._id)
+        ]);
+    });
+});
+
+describe('the name a downloaded document is saved under', () => {
+    it('is invoice-<number>.pdf for the invoice and credit-note-<number>.pdf for a credit note', async () => {
+        const { orderId, creditNoteId, owner } = await refundedOrder();
+        const invoice = await invoicingRepository.findInvoiceByOrderId(orderId);
+        const creditNotes = await invoicingRepository.findCreditNotesByOrderId(orderId);
+        const creditNote = creditNotes.find(({ _id }) => String(_id) === creditNoteId);
+
+        const invoiceResponse = await api()
+            .get(`/orders/${orderId}/invoice`)
+            .set('Authorization', owner.bearer);
+        const creditNoteResponse = await api()
+            .get(`/orders/${orderId}/credit-notes/${creditNoteId}`)
+            .set('Authorization', owner.bearer);
+
+        expect(invoiceResponse.headers['content-disposition']).toBe(
+            `inline; filename="invoice-${String(invoice?.number)}.pdf"`
+        );
+        expect(creditNoteResponse.headers['content-disposition']).toBe(
+            `inline; filename="credit-note-${String(creditNote?.number)}.pdf"`
+        );
+    });
+});
+
 describe('the credit notes of an order the caller may read but not its money', () => {
     it('lists none to the warehouse, which packs the order but may not read refunds', async () => {
         const { orderId } = await refundedOrder();

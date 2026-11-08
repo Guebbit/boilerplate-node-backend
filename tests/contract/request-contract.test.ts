@@ -56,7 +56,7 @@ setupTestDb();
 // ─── invalid QUERY parameters ──────────────────────────────────────────────────────────────────
 //
 // Everything above sends a bad BODY. This is the query-side counterpart: every `in: query`
-// parameter the spec constrains with an `enum` or a `pattern` gets one case here, an
+// parameter the spec constrains with an `enum`, a `pattern` or a numeric bound gets a case here, an
 // obviously-violating value against the real route, expecting 422.
 
 /** An admin-authenticated GET against `path`, with `query` appended as-is. */
@@ -84,7 +84,7 @@ const withRealLocale = async (): Promise<string> => {
     return 'qp';
 };
 
-/** One way to reach an operation with an enum/pattern query parameter, over real HTTP. */
+/** One way to reach an operation with a constrained (enum, pattern or numeric bound) query parameter, over real HTTP. */
 interface QueryFixture {
     request: (query: string) => Promise<Response>;
 }
@@ -144,11 +144,29 @@ const QUERY_FIXTURES: Partial<Record<string, QueryFixture>> = {
             ]);
             return api().get(`/locales/${tag}/entries?${query}`).set('Authorization', bearer);
         }
+    },
+    'GET /locales/{locale}/apps/{app}/entries': {
+        request: async (query) => {
+            const [tag, { bearer }] = await Promise.all([
+                withRealLocale(),
+                authenticateAs('admin')
+            ]);
+            return api()
+                .get(`/locales/${tag}/apps/demo-fe/entries?${query}`)
+                .set('Authorization', bearer);
+        }
+    },
+    'GET /api-keys': { request: adminQuery('/api-keys') },
+    'GET /inventory/levels': { request: adminQuery('/inventory/levels') },
+    'GET /inventory/preorders': { request: adminQuery('/inventory/preorders') },
+    'GET /webhooks/subscriptions': { request: adminQuery('/webhooks/subscriptions') },
+    'GET /stats/products': {
+        request: adminQueryWith('/stats/products', 'from=2026-03-01&to=2026-03-31')
     }
 };
 
 /**
- * (operation, parameter) pairs where a declared enum/pattern violation does NOT answer 422 today
+ * (operation, parameter) pairs where a declared enum/pattern/bound violation does NOT answer 422 today
  * — verified live, not assumed:
  *
  * - `GET /locales/{locale}/messages` `app`: NOT a bug — `services/messages.ts#readMessages`
@@ -159,9 +177,13 @@ const QUERY_FIXTURES: Partial<Record<string, QueryFixture>> = {
  */
 const KNOWN_GAPS = new Set(['GET /locales/{locale}/messages::app']);
 
-/** A value that violates `schema`'s `enum` or `pattern` — whichever the field declares. */
-const invalidQueryValue = (schema: SchemaNode): string => {
-    if (schema.enum) return 'not-a-declared-enum-value';
+/**
+ * Every value that violates `schema`: one for an `enum` or a `pattern`, and one past each numeric
+ * bound the field declares (`maximum + 1`, `minimum - 1`). The bound is our own code, a `.max()` in
+ * each list controller's schema, so only a walk over the real routes sees one that was never wired.
+ */
+const invalidQueryValues = (schema: SchemaNode): string[] => {
+    if (schema.enum) return ['not-a-declared-enum-value'];
     if (schema.pattern) {
         const regex = new RegExp(schema.pattern);
         // Deliberately not fenced by a range check for exactly-one-char patterns etc.: the goal
@@ -171,26 +193,42 @@ const invalidQueryValue = (schema: SchemaNode): string => {
         );
         if (candidate === undefined)
             throw new Error(
-                `invalidQueryValue: every candidate satisfies ${schema.pattern} — add a garbage string that doesn't.`
+                `invalidQueryValues: every candidate satisfies ${schema.pattern} — add a garbage string that doesn't.`
             );
-        return candidate;
+        return [candidate];
     }
-    throw new Error('invalidQueryValue: schema has neither enum nor pattern to violate');
+    const bounds = [
+        schema.maximum === undefined ? undefined : String(schema.maximum + 1),
+        schema.minimum === undefined ? undefined : String(schema.minimum - 1)
+    ].filter((value) => value !== undefined);
+    if (bounds.length === 0)
+        throw new Error('invalidQueryValues: schema has no enum, pattern or bound to violate');
+    return bounds;
 };
 
-/** Every (operation, parameter) pair this sweep can generate a violation for. */
+/** Whether the schema declares something a query value can violate. */
+const isConstrainedQuery = (schema: SchemaNode | undefined): schema is SchemaNode =>
+    schema !== undefined &&
+    (schema.enum !== undefined ||
+        schema.pattern !== undefined ||
+        schema.maximum !== undefined ||
+        schema.minimum !== undefined);
+
+/** Every (operation, parameter, violating value) this sweep can generate. */
 const QUERY_CASES = listOperations().flatMap((operation) =>
     operation.queryParameters
-        .filter((param) => param.schema?.enum !== undefined || param.schema?.pattern !== undefined)
-        .map((param) => ({
-            key: `${operation.method.toUpperCase()} ${operation.path}`,
-            paramName: param.name,
-            schema: param.schema!
-        }))
+        .filter((param) => isConstrainedQuery(param.schema))
+        .flatMap((param) =>
+            invalidQueryValues(param.schema!).map((value) => ({
+                key: `${operation.method.toUpperCase()} ${operation.path}`,
+                paramName: param.name,
+                value
+            }))
+        )
 );
 
 describe('invalid query parameters (contract-derived)', () => {
-    it('has a fixture for every operation with an enum/pattern query parameter', () => {
+    it('has a fixture for every operation with a constrained query parameter', () => {
         const missing = [...new Set(QUERY_CASES.map(({ key }) => key))].filter(
             (key) => !(key in QUERY_FIXTURES)
         );
@@ -198,10 +236,10 @@ describe('invalid query parameters (contract-derived)', () => {
     });
 
     it.each(QUERY_CASES.filter(({ key, paramName }) => !KNOWN_GAPS.has(`${key}::${paramName}`)))(
-        '$key rejects an invalid $paramName with 422',
-        async ({ key, paramName, schema }) => {
+        '$key rejects $paramName=$value with 422',
+        async ({ key, paramName, value }) => {
             const response = await QUERY_FIXTURES[key]!.request(
-                `${paramName}=${encodeURIComponent(invalidQueryValue(schema))}`
+                `${paramName}=${encodeURIComponent(value)}`
             );
 
             expect(response.status).toBe(422);

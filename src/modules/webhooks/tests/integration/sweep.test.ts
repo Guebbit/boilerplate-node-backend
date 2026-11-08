@@ -7,6 +7,9 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { WORKER_CHANNELS } from '@types';
+import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
+// Registers the overdue gauge with the registry, as the module does at boot.
+import '@modules/webhooks/metrics';
 import {
     webhookSubscriptionRepository,
     webhookDeliveryRepository
@@ -146,6 +149,36 @@ const createDue = (subscription: WebhookSubscriptionDocument, eventId: string) =
         status: 'pending',
         nextAttemptAt: new Date(Date.now() - 1000)
     });
+
+/** The overdue gauge as a scrape reads it: `collect` runs on every `get`. */
+const overdueNow = (): Promise<number | undefined> =>
+    metricsRegistry
+        .getSingleMetric('webhook_deliveries_overdue')
+        ?.get()
+        .then(({ values }) => values[0]?.value) ?? Promise.resolve(undefined);
+
+describe('the overdue gauge behind the WebhookRetriesStalled alert', () => {
+    it('counts a pending row more than ten minutes late, and not one that is merely due', async () => {
+        const subscription = await createSubscription();
+        const pendingSince = (minutes: number, eventId: string) =>
+            webhookDeliveryRepository.create({
+                tenant: TEST_TENANT_ID,
+                subscriptionId: subscription._id,
+                eventId,
+                eventType: 'order.paid',
+                payload: { orderId: eventId },
+                attempt: 1,
+                status: 'pending',
+                nextAttemptAt: new Date(Date.now() - minutes * 60_000)
+            });
+        await pendingSince(5, 'evt_late_a_little');
+        expect(await overdueNow()).toBe(0);
+
+        await pendingSince(11, 'evt_late');
+
+        expect(await overdueNow()).toBe(1);
+    });
+});
 
 describe('with no broker to take the message', () => {
     beforeEach(() => {
