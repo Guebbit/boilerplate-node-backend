@@ -30,6 +30,13 @@ export {
 export { bootI18n } from './boot';
 
 export {
+    baseLanguage,
+    canonicalLocale,
+    canonicalLocaleSetter,
+    isWellFormedLocale
+} from './locale-tag';
+
+export {
     applyLocaleOverlay,
     applyLocaleOverrides,
     getOverrideRefreshMs,

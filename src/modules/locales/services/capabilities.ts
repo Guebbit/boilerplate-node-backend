@@ -6,7 +6,12 @@
  */
 
 import { LocaleDirection, LocaleSource, type Language, type LocaleCapabilities } from '@types';
-import { getDefaultLocale, getFallbackLocale, listSupportedLocales } from '@infrastructure/i18n';
+import {
+    canonicalLocale,
+    getDefaultLocale,
+    getFallbackLocale,
+    listSupportedLocales
+} from '@infrastructure/i18n';
 import {
     generateSuccess,
     type ResponseReject,
@@ -253,7 +258,7 @@ export const readLanguage = (
     standing: LanguageStanding = NO_STANDING
 ): Promise<ResponseSuccess<Language> | ResponseReject> =>
     listCapabilities(scope, standing).then(({ locales }) => {
-        const language = locales.find((candidate) => candidate.tag === tag);
+        const language = locales.find((candidate) => candidate.tag === canonicalLocale(tag));
 
         return language ? generateSuccess(language) : languageNotFound();
     });
@@ -270,7 +275,7 @@ export const describeStoredLanguage = (
 ): Promise<Language> =>
     localeEntryRepository.countEntriesByLocale().then((entryCounts) => {
         const [row] = mergeCapabilities(
-            listSupportedLocales().filter((tag) => tag === document.tag),
+            listSupportedLocales().filter((tag) => canonicalLocale(tag) === document.tag),
             [document],
             entryCounts,
             new Set(),

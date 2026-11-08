@@ -10,6 +10,7 @@ import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { hashPassword } from '@infrastructure/security/password-hash';
 import { localeConfig } from '@infrastructure/i18n/config';
+import { canonicalLocaleSetter } from '@infrastructure/i18n';
 import { PurchaseHoldReason, type User } from '@types';
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
@@ -386,7 +387,8 @@ export const userSchema = new Schema<UserDocument, UserModel>(
          */
         locale: {
             type: String,
-            default: localeConfig().NODE_DEFAULT_LOCALE
+            default: localeConfig().NODE_DEFAULT_LOCALE,
+            set: canonicalLocaleSetter
         },
         // Self-service profile fields, no format enforced: a phone number's valid shapes vary too
         // widely by country to regex safely, and a website is free text the same way `imageUrl` is.

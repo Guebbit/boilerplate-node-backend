@@ -13,6 +13,7 @@ import path from 'node:path';
 import type { Resource } from 'i18next';
 import { isPlainObject } from '@infrastructure/object-guards';
 import { localeConfig } from '@infrastructure/i18n/config';
+import { baseLanguage, canonicalLocale } from './locale-tag';
 
 /**
  * Where the shared dictionaries live. Resolved from this file rather than from `process.cwd()`, so
@@ -20,6 +21,44 @@ import { localeConfig } from '@infrastructure/i18n/config';
  * migration.
  */
 const LOCALES_DIRECTORY = path.join(__dirname, '..', '..', '..', 'shared', 'locales');
+
+/**
+ * The dictionary files of one directory, keyed by the canonical tag each one names: `pt-br.json`
+ * is found as `pt-BR`, so a mis-cased file name is read rather than silently missing. Two files
+ * naming one language (`pt-br.json` and `pt-BR.json`) refuse boot: which one wins would be luck
+ * of the file system.
+ *
+ * @param directory - absolute path holding `<locale>.json` files
+ * @returns canonical tag -> the file's name without `.json`; empty when the directory is absent
+ * @throws {Error} when two files canonicalise to the same tag
+ */
+const dictionaryFilesIn = (directory: string): Map<string, string> => {
+    const files = new Map<string, string>();
+    if (!existsSync(directory)) return files;
+
+    for (const fileName of readdirSync(directory).filter((name) => name.endsWith('.json'))) {
+        const stem = path.basename(fileName, '.json');
+        const tag = canonicalLocale(stem);
+        const clash = files.get(tag);
+        if (clash !== undefined)
+            throw new Error(
+                `Dictionary files "${clash}.json" and "${stem}.json" in ${directory} are the same language (${tag}). Keep one.`
+            );
+        files.set(tag, stem);
+    }
+    return files;
+};
+
+/**
+ * The path of one language's dictionary file in a directory, or `undefined` when it has none.
+ *
+ * @param directory - absolute path holding `<locale>.json` files
+ * @param locale - the canonical tag
+ */
+const dictionaryPathIn = (directory: string, locale: string): string | undefined => {
+    const stem = dictionaryFilesIn(directory).get(locale);
+    return stem === undefined ? undefined : path.join(directory, `${stem}.json`);
+};
 
 /** The locale a request falls back to when it asks for none. Read lazily, so a test can set it after import. */
 export const getDefaultLocale = (): string => localeConfig().NODE_DEFAULT_LOCALE;
@@ -38,8 +77,10 @@ export const getFallbackLocale = (): string => localeConfig().NODE_FALLBACK_LOCA
  * (`kernel/authentication.ts`) would not move: a helper with no state and no module to answer it.
  */
 export const localeCandidatesFor = (locale: string): string[] => {
-    const base = locale.split('-', 1)[0];
-    return [...new Set([locale, base, getFallbackLocale()])].filter((tag) => tag.length > 0);
+    const canonical = canonicalLocale(locale);
+    return [...new Set([canonical, baseLanguage(canonical), getFallbackLocale()])].filter(
+        (tag) => tag.length > 0
+    );
 };
 
 /**
@@ -68,10 +109,7 @@ export const listSupportedLocales = (): string[] => {
     supportedLocalesCache =
         declared.length > 0
             ? declared
-            : readdirSync(LOCALES_DIRECTORY)
-                  .filter((fileName) => fileName.endsWith('.json'))
-                  .map((fileName) => path.basename(fileName, '.json'))
-                  .toSorted();
+            : [...dictionaryFilesIn(LOCALES_DIRECTORY).keys()].toSorted();
 
     return supportedLocalesCache;
 };
@@ -113,8 +151,8 @@ const readDictionaryFile = (
     directory: string,
     locale: string
 ): Record<string, unknown> | undefined => {
-    const file = path.join(directory, `${locale}.json`);
-    if (!existsSync(file)) return undefined;
+    const file = dictionaryPathIn(directory, locale);
+    if (file === undefined) return undefined;
     return JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
 };
 
@@ -150,7 +188,9 @@ const deepMerge = (
  * Read from disk once per locale and cached; every caller gets its own copy, so mutating the
  * result (the overrides layer does) never leaks into the next read.
  */
-export const readLocaleDictionary = (locale: string): Record<string, unknown> => {
+export const readLocaleDictionary = (tag: string): Record<string, unknown> => {
+    // Files are named by the canonical tag, so `pt-br` reads `pt-BR.json`.
+    const locale = canonicalLocale(tag);
     const cached = dictionaryCache.get(locale);
     // structuredClone: a copy per caller, so one caller's edits cannot reach the shared tree.
     // https://developer.mozilla.org/docs/Web/API/Window/structuredClone
@@ -158,7 +198,11 @@ export const readLocaleDictionary = (locale: string): Record<string, unknown> =>
 
     // Shared file first, module contributions layered on top — hence a module CAN shadow a key.
     const merged = JSON.parse(
-        readFileSync(path.join(LOCALES_DIRECTORY, `${locale}.json`), 'utf8')
+        readFileSync(
+            dictionaryPathIn(LOCALES_DIRECTORY, locale) ??
+                path.join(LOCALES_DIRECTORY, `${locale}.json`),
+            'utf8'
+        )
     ) as Record<string, unknown>;
 
     // Registration order decides who wins a collision, which is why nothing is allowed to collide.

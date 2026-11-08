@@ -142,6 +142,23 @@ describe('POST /users', () => {
         expect(response.status).toBe(422);
     });
 
+    it('stores a language in its canonical spelling and 422s on a malformed tag', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const created = await api()
+            .post('/users')
+            .set('Authorization', bearer)
+            .send({ email: 'lang-ok@example.com', username: 'langok', locale: 'PT-br' });
+        const refused = await api()
+            .post('/users')
+            .set('Authorization', bearer)
+            .send({ email: 'lang-bad@example.com', username: 'langbad', locale: 'en-a' });
+
+        expect(created.status).toBe(201);
+        expect(created.body.locale).toBe('pt-BR');
+        expect(refused.status).toBe(422);
+    });
+
     it('creates a user without a password, exposes no credentials, and mails the owner a setup link', async () => {
         markDomainEventsWired();
         const seen: string[] = [];
@@ -324,6 +341,27 @@ describe('PATCH /users/{id}', () => {
         expect(response.body.role).toBe('moderator');
         expect(response.body.email).toBe(target.email);
         expect(response.body.username).toBe(target.username);
+    });
+
+    it('canonicalises the language and 422s on a malformed tag', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser(
+            { username: 'patchlang', email: 'patchlang@example.com' },
+            'customer'
+        );
+
+        const saved = await api()
+            .patch(`/users/${String(target._id)}`)
+            .set('Authorization', bearer)
+            .send({ locale: 'ZH-hant-tw' });
+        const refused = await api()
+            .patch(`/users/${String(target._id)}`)
+            .set('Authorization', bearer)
+            .send({ locale: 'en-a' });
+
+        expect(saved.status).toBe(200);
+        expect(saved.body.locale).toBe('zh-Hant-TW');
+        expect(refused.status).toBe(422);
     });
 
     it('leaves an existing avatar untouched on a JSON edit that uploads no new image', async () => {

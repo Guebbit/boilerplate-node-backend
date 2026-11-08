@@ -122,6 +122,40 @@ describe('the merged dictionary cache', () => {
                 rmSync(directory, { recursive: true, force: true });
             }
         }));
+
+    it('finds a mis-cased dictionary file by its canonical tag', () =>
+        jest.isolateModulesAsync(async () => {
+            const catalog = await import('@infrastructure/i18n/catalog');
+            const directory = mkdtempSync(path.join(os.tmpdir(), 'catalog-'));
+            // `EN.json` names the language `en`: it must be read, not silently missing.
+            writeFileSync(path.join(directory, 'EN.json'), '{"miscased":{"key":"value"}}');
+
+            try {
+                catalog.registerLocaleDirectories([directory]);
+
+                expect(catalog.readLocaleDictionary('en')).toMatchObject({
+                    miscased: { key: 'value' }
+                });
+            } finally {
+                rmSync(directory, { recursive: true, force: true });
+            }
+        }));
+
+    it('refuses two files that name one language', () =>
+        jest.isolateModulesAsync(async () => {
+            const catalog = await import('@infrastructure/i18n/catalog');
+            const directory = mkdtempSync(path.join(os.tmpdir(), 'catalog-'));
+            writeFileSync(path.join(directory, 'en.json'), '{}');
+            writeFileSync(path.join(directory, 'EN.json'), '{}');
+
+            try {
+                catalog.registerLocaleDirectories([directory]);
+
+                expect(() => catalog.readLocaleDictionary('en')).toThrow(/same language \(en\)/);
+            } finally {
+                rmSync(directory, { recursive: true, force: true });
+            }
+        }));
 });
 
 describe('localeCandidatesFor', () => {
@@ -139,6 +173,10 @@ describe('localeCandidatesFor', () => {
 
     it('does not repeat the fallback when it is itself requested', () => {
         expect(localeCandidatesFor('en')).toEqual(['en']);
+    });
+
+    it('builds the chain from the canonical spelling of a tag', () => {
+        expect(localeCandidatesFor('IT-ch')).toEqual(['it-CH', 'it', 'en']);
     });
 
     it('does not repeat a region-tagged fallback locale', () => {

@@ -3,7 +3,7 @@
  * The locale schemas' contracts, and the base-language derivation in front of them. Two unique
  * indexes make the translation tier addressable: `locales_tag` gives one row per language tag,
  * and `localeEntries_locale_app_key` gives one value per (locale, app, key) — letting a
- * merge be an upsert. The `lowercase: true` flags guard the same index: `EN-gb` and `en-GB` must
+ * merge be an upsert. The canonical-tag setters guard the same index: `EN-gb` and `en-GB` must
  * not occupy two rows.
  */
 
@@ -17,6 +17,12 @@ import {
     optionsOf,
     requiredPaths
 } from '@tests/schema';
+
+/** What a string path's own `set:` makes of a value — the schema option, as `normalises` reads its flags. */
+const stored = (schema: Parameters<typeof optionsOf>[0], path: string, value: unknown): unknown =>
+    (schema.path(path) as { options?: { set?: (input: unknown) => unknown } }).options?.set?.(
+        value
+    );
 
 /** Whether a string path normalises case/whitespace before it is stored. */
 const normalises = (schema: Parameters<typeof optionsOf>[0], path: string) =>
@@ -35,10 +41,13 @@ describe('localeSchema', () => {
         expect(indexSpecs(localeSchema)).toEqual(['locales_tag: tag+1']);
     });
 
-    it('lower-cases and trims the tag, so the unique index cannot be evaded', () => {
+    it('stores the tag trimmed and canonical, so the unique index cannot be evaded', () => {
         // `EN-gb` and `en-GB` are the same language. Without normalisation they are two rows
         // under a unique index that believes it is doing its job.
-        expect(normalises(localeSchema, 'tag')).toMatchObject({ lowercase: true, trim: true });
+        expect(stored(localeSchema, 'tag', '  EN-gb ')).toBe('en-GB');
+        expect(stored(localeSchema, 'tag', 'zh-hant-tw')).toBe('zh-Hant-TW');
+        // Never throws: a malformed tag is stored as written and refused by validation.
+        expect(stored(localeSchema, 'tag', 'en-a')).toBe('en-a');
         expect(normalises(localeSchema, 'baseLanguage')).toMatchObject({
             lowercase: true,
             trim: true
@@ -97,11 +106,11 @@ describe('localeEntrySchema', () => {
         ]);
     });
 
-    it('normalises the locale and app but not the key', () => {
+    it('canonicalises the locale, lower-cases the app, and leaves the key alone', () => {
         // Locale and app are addresses and are case-insensitive; a KEY is not. `Cart.Empty`
         // and `cart.empty` are different keys, and lower-casing them would silently merge two
         // strings into one.
-        expect(normalises(localeEntrySchema, 'locale')).toMatchObject({ lowercase: true });
+        expect(stored(localeEntrySchema, 'locale', 'PT-br')).toBe('pt-BR');
         expect(normalises(localeEntrySchema, 'app')).toMatchObject({ lowercase: true });
         expect(normalises(localeEntrySchema, 'key').lowercase).toBeUndefined();
         expect(normalises(localeEntrySchema, 'key')).toMatchObject({ trim: true });

@@ -14,6 +14,7 @@ import { readInput, callerContextOf } from '@infrastructure/http/request';
 import { writeWithUploadedImage } from '@infrastructure/http/uploads';
 import { CreateUserBody } from '@api/schemas.zod';
 import type { CreateUserRequest, CreateUserRequestMultipart, User } from '@types';
+import { wellFormedLocale } from '@infrastructure/http/schemas';
 
 /**
  * POST /users — staff create.
@@ -38,7 +39,7 @@ export const createUser = (
      * docs/theory/request-input.md.
      */
     const body = parseBody(
-        CreateUserBody,
+        CreateUserBody.extend({ locale: wellFormedLocale(CreateUserBody.shape.locale) }),
         readInput(request, { surface: 'create', booleans: ['active'] }),
         response
     );

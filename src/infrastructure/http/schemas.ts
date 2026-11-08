@@ -9,6 +9,7 @@
 
 import { z } from 'zod';
 import { parseFormBoolean } from '@infrastructure/http/request';
+import { isWellFormedLocale } from '@infrastructure/i18n';
 
 /**
  * Largest `pageSize` a caller may request, declared here rather than imported from the generated
@@ -64,6 +65,21 @@ export const blankToUndefined = (value: unknown): unknown =>
 export const trimmedInto = <TField extends z.ZodType<string, string>>(field: TField) =>
     // Zod `.pipe`: the trimmed string is the input of `field`. https://zod.dev/api#pipes
     z.string().trim().pipe(field);
+
+/**
+ * A generated `Locale` field with the rule the contract's pattern cannot say: the tag is
+ * well-formed BCP 47 (`en-a` is not). The pattern owns the shape; this owns the grammar.
+ *
+ * Works on the field however the contract wraps it — optional, nullable, or both; an absent or
+ * `null` value passes, and a bare refinement answers the generic translated "is not valid".
+ *
+ * @param field - the generated schema for the `locale` / `tag` field
+ */
+export const wellFormedLocale = <TField extends z.ZodType<string | null | undefined>>(
+    field: TField
+) =>
+    // Zod `.refine`: a custom check on the parsed value. https://zod.dev/api#refine
+    field.refine((value) => typeof value !== 'string' || isWellFormedLocale(value));
 
 /**
  * The soft/hard delete switch.

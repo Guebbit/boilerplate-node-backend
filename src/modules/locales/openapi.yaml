@@ -1057,9 +1057,9 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
                 baseLanguage:
                     type: string
-                    pattern: ^[a-z]{2}$
+                    pattern: ^[a-z]{2,3}$
                     description: >-
-                        The ISO 639-1 code at the front of `tag` — the BCP 47 PRIMARY SUBTAG, with
+                        The ISO 639 language code at the front of `tag` (two or three letters, lower-case) — the BCP 47 PRIMARY SUBTAG, with
                         any region or script dropped. `pt-BR` and `pt-PT` are two languages here
                         and both answer `pt`.
 

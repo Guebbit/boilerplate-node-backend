@@ -11,6 +11,7 @@ import { writeWithUploadedImage } from '@infrastructure/http/uploads';
 import { createUpdateController } from '@infrastructure/surfaces/create-update-controller';
 import { ReplaceUserByIdBody, UpdateUserByIdBody } from '@api/schemas.zod';
 import { userService } from '../services';
+import { wellFormedLocale } from '@infrastructure/http/schemas';
 
 /**
  * `PUT /users/:id` and `PATCH /users/:id` — one handler pair over `userService.updateById`, which
@@ -21,8 +22,12 @@ export const { replace: replaceUser, update: updateUser } = createUpdateControll
     versioned: true,
     entity: 'user',
     notFoundKey: 'users.not-found',
-    replaceSchema: ReplaceUserByIdBody,
-    patchSchema: UpdateUserByIdBody,
+    replaceSchema: ReplaceUserByIdBody.extend({
+        locale: wellFormedLocale(ReplaceUserByIdBody.shape.locale)
+    }),
+    patchSchema: UpdateUserByIdBody.extend({
+        locale: wellFormedLocale(UpdateUserByIdBody.shape.locale)
+    }),
     // A client cannot send the current avatar back, so a PUT that omits it keeps it.
     keptWhenOmitted: ['imageUrl'],
     update: (id, changes, request) =>

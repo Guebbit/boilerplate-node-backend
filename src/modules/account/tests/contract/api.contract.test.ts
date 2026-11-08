@@ -510,6 +510,29 @@ describe('PATCH /account', () => {
         expect(response.body.username).toBe('self-renamed');
     });
 
+    it('saves the language in its canonical spelling', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api()
+            .patch('/account')
+            .set('Authorization', bearer)
+            .send({ locale: 'PT-br' });
+
+        expect(response.status).toBe(200);
+        expect(response.body.locale).toBe('pt-BR');
+    });
+
+    it('422s on a language tag the pattern accepts but BCP 47 does not', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api()
+            .patch('/account')
+            .set('Authorization', bearer)
+            .send({ locale: 'en-a' });
+
+        expect(response.status).toBe(422);
+    });
+
     it('holds a new address as pending rather than changing email immediately', async () => {
         const { user, bearer } = await authenticateAs('user');
 

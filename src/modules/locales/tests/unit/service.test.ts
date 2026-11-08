@@ -283,7 +283,7 @@ describe('isRightToLeft', () => {
         expect(localeService.isRightToLeft('ar-EG')).toBe(true);
     });
 
-    it.each(['en', 'es', 'pt-br'])('leaves %s left to right', (tag) => {
+    it.each(['en', 'es', 'pt-BR'])('leaves %s left to right', (tag) => {
         expect(localeService.isRightToLeft(tag)).toBe(false);
     });
 });

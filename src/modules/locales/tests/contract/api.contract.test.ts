@@ -369,6 +369,30 @@ describe('POST /locales', () => {
         expect(response.status).toBe(422);
     });
 
+    // The pattern accepts the shape of `en-a`; only the grammar check refuses it.
+    it('422s on a tag the pattern accepts but BCP 47 does not', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .post('/locales')
+            .set('Authorization', bearer)
+            .send({ tag: 'en-a', name: 'English', nativeName: 'English' });
+
+        expect(response.status).toBe(422);
+    });
+
+    it('stores a tag written in any casing as its canonical spelling', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .post('/locales')
+            .set('Authorization', bearer)
+            .send({ tag: 'PT-br', name: 'Portuguese (Brazil)', nativeName: 'Português' });
+
+        expect(response.status).toBe(201);
+        expect(response.body.tag).toBe('pt-BR');
+    });
+
     /*
      * Found by the fuzz suite: a single space satisfies `minLength: 1`, then trims to empty at a
      * column declared `required`, and Mongoose's ValidationError answered 500 for a stray space.

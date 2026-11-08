@@ -69,16 +69,17 @@ export const productsConfig = defineConfig({
 export const vatRateDefault = (): number => productsConfig().NODE_VAT_RATE_DEFAULT;
 ```
 
-| Builder                        | Reads                                                                |
-| ------------------------------ | -------------------------------------------------------------------- |
-| `int` / `decimal`              | A whole-string number, with `min` / `max` / `lessThan`               |
-| `flag`                         | `1 true yes on` and `0 false no off`, either case                    |
-| `choice`                       | One of a closed set (a function for a registry filled later)         |
-| `text` / `secret`              | Trimmed text; `secret` is never echoed and can carry a presence rule |
-| `timeZone`                     | An IANA zone name, stored canonical; a fixed offset is refused       |
-| `currency`                     | An ISO-4217 code, stored upper-case; an unknown code is refused      |
-| `csv`                          | A comma-separated list, blank members dropped                        |
-| `keyRing` / `versionedKeyRing` | A rotation ring, newest first; `version:key` for the second          |
+| Builder                        | Reads                                                                 |
+| ------------------------------ | --------------------------------------------------------------------- |
+| `int` / `decimal`              | A whole-string number, with `min` / `max` / `lessThan`                |
+| `flag`                         | `1 true yes on` and `0 false no off`, either case                     |
+| `choice`                       | One of a closed set (a function for a registry filled later)          |
+| `text` / `secret`              | Trimmed text; `secret` is never echoed and can carry a presence rule  |
+| `timeZone`                     | An IANA zone name, stored canonical; a fixed offset is refused        |
+| `currency`                     | An ISO-4217 code, stored upper-case; an unknown code is refused       |
+| `locale` / `locales`           | A BCP 47 tag (or list), stored canonical (`pt-BR`); malformed refused |
+| `csv`                          | A comma-separated list, blank members dropped                         |
+| `keyRing` / `versionedKeyRing` | A rotation ring, newest first; `version:key` for the second           |
 
 ## `.env-example`
 

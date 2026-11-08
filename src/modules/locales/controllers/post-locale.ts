@@ -16,6 +16,7 @@ import { createdResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
+import { wellFormedLocale } from '@infrastructure/http/schemas';
 
 /**
  * POST /locales (admin)
@@ -27,6 +28,7 @@ export const createLocale = (
 ) => {
     const body = parseBody(
         CreateLocaleBody.extend({
+            tag: wellFormedLocale(CreateLocaleBody.shape.tag),
             name: localeService.localeDisplayName,
             nativeName: localeService.localeDisplayName
         }),

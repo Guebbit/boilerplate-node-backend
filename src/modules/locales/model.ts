@@ -14,6 +14,7 @@ import type { Language, LocaleEntry, Translation } from '@types';
 import { CreateLocaleBody } from '@api/schemas.zod';
 import { trimmedInto } from '@infrastructure/http/schemas';
 import { applySerialization } from '@infrastructure/persistence/serialize';
+import { baseLanguage, canonicalLocale, canonicalLocaleSetter } from '@infrastructure/i18n';
 
 /**
  * A display name that survives being trimmed. Shared by `post-locale.ts` and `update-locale.ts`.
@@ -24,22 +25,22 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
 export const localeDisplayName = trimmedInto(CreateLocaleBody.shape.name);
 
 /**
- * A BCP 47 tag the way every lookup and write in this module compares it: trimmed, lowercased.
- * The one place that decision is made, so a caller reading a stray space or a mismatched case as
- * "unknown language" is a bug in the caller, not a second definition of "normalized" to keep in
- * sync with this one.
+ * A BCP 47 tag the way every lookup and write in this module compares it: trimmed, in its
+ * canonical spelling (`pt-br` -> `pt-BR`). The one place that decision is made, so a caller
+ * reading a stray space or a mismatched case as "unknown language" is a bug in the caller, not a
+ * second definition of "normalized" to keep in sync with this one.
+ *
+ * Never throws: a tag that cannot be parsed comes back trimmed, and validation refuses it.
  */
-export const normalizeTag = (tag: string): string => tag.trim().toLowerCase();
+export const normalizeTag = (tag: string): string => canonicalLocale(tag.trim());
 
 /**
- * The ISO 639-1 primary subtag of a BCP 47 tag: `pt-BR` → `pt`, `es` → `es`.
+ * The primary language subtag of a BCP 47 tag, lower-case: `pt-BR` → `pt`, `es` → `es`.
  *
  * Normalized here as well as by the schema, because the seeds call it directly and do not go
  * through a Mongoose setter.
  */
-export const deriveBaseLanguage = (tag: string): string =>
-    // `split` always yields at least one element, so index 0 needs no fallback arm.
-    normalizeTag(tag.split('-', 1)[0]);
+export const deriveBaseLanguage = (tag: string): string => baseLanguage(normalizeTag(tag));
 
 /**
  * Mongoose document type for a registered language. Overrides the generated `Language`'s dates and
@@ -80,14 +81,14 @@ export type TranslationModel = Model<TranslationDocument>;
 export const localeSchema = new Schema<LocaleDocument, LocaleModel>(
     {
         /*
-         * Lowercased on write, because BCP 47 is case-insensitive and Mongo is not: `pt-BR` and
-         * `pt-br` are one language and must not be two rows. The unique index below is what makes
-         * that a database guarantee rather than a hope, and it can only compare bytes.
+         * Canonical on write (`pt-BR`), because BCP 47 is case-insensitive and Mongo is not: `pt-BR`
+         * and `pt-br` are one language and must not be two rows. The unique index below is what
+         * makes that a database guarantee rather than a hope, and it can only compare bytes.
          */
         tag: {
             type: String,
             required: true,
-            lowercase: true,
+            set: canonicalLocaleSetter,
             trim: true
         },
         /*
@@ -174,7 +175,7 @@ export const localeEntrySchema = new Schema<LocaleEntryDocument, LocaleEntryMode
         locale: {
             type: String,
             required: true,
-            lowercase: true,
+            set: canonicalLocaleSetter,
             trim: true
         },
         /*
@@ -249,7 +250,7 @@ export const translationSchema = new Schema<TranslationDocument, TranslationMode
         locale: {
             type: String,
             required: true,
-            lowercase: true,
+            set: canonicalLocaleSetter,
             trim: true
         },
         /*

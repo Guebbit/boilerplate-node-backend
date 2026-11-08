@@ -22,6 +22,7 @@ import type { Document, Model } from 'mongoose';
 import type { ProductSnapshot } from '@modules/products';
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
+import { canonicalLocaleSetter } from '@infrastructure/i18n';
 import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
 import type { OrderTimelineType } from './domain/timeline';
 import { sumLineItems, orderTotal, type LineItem } from './domain/totals';
@@ -336,7 +337,8 @@ const orderItemSchema = new Schema(
         // frozen — see `OrderDocumentItem.locale`.
         locale: {
             type: String,
-            required: true
+            required: true,
+            set: canonicalLocaleSetter
         }
     },
     { _id: false }

@@ -68,6 +68,26 @@ describe("orderService.create freezes the snapshot in the buyer's stored locale"
         expect(String(order.items[0].product._id)).toBe(String(product._id));
     });
 
+    it('reads a buyer saved as `pt-br` as the canonical `pt-BR` row and freezes it under that tag', async () => {
+        // The tag is spelled three ways on the way in; one canonical row answers all of them.
+        await givenLocale('PT-br');
+        const user = await createUser({ locale: 'pt-br' });
+        const product = await createProduct({ title: 'Dog Bed' });
+        await givenTranslation(String(product._id), 'pt-BR', { title: 'Caminha' });
+
+        const result = await orderService.create(
+            String(user._id),
+            user.email,
+            [{ productId: String(product._id), quantity: 1 }],
+            { ...callerContextAs('admin'), locale: 'en' }
+        );
+
+        const order = asSuccess(result).data;
+        expect(user.locale).toBe('pt-BR');
+        expect(order.items[0].locale).toBe('pt-BR');
+        expect(order.items[0].product.title).toBe('Caminha');
+    });
+
     it("falls back to the source text, still framed as the buyer's locale", async () => {
         const user = await createUser({ locale: 'it' });
         const product = await createProduct({ title: 'Dog Bed' });

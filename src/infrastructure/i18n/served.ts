@@ -12,6 +12,7 @@
  */
 
 import { getFallbackLocale, listSupportedLocales } from './catalog';
+import { baseLanguage, canonicalLocale } from './locale-tag';
 
 /** The switched-on and switched-off tags of the registered languages, as of the last good refresh. */
 interface ServedLanguages {
@@ -58,29 +59,33 @@ export const listServedLocales = (): string[] => {
 
 /**
  * The registered draft a client's tag names: a language that is switched off (a deployed file the
- * shop switched off included), never the fallback. Case-insensitive, but the exact tag otherwise:
+ * shop switched off included), never the fallback. Case-blind (the tag is canonicalised), but the exact tag otherwise:
  * a regional tag is not its base language's draft.
  *
  * @param tag - a BCP-47 tag as a client sent it
  * @returns the registered spelling of the draft, or `undefined` when the tag is not a draft
  */
 export const draftLocaleFor = (tag: string): string | undefined => {
-    const wanted = tag.toLowerCase();
-    return [...served.inactive].find(
-        (draft) => draft.toLowerCase() === wanted && draft !== getFallbackLocale()
-    );
+    const wanted = canonicalLocale(tag);
+    return [...served.inactive].find((draft) => draft === wanted && draft !== getFallbackLocale());
 };
 
-/** Whether the tag is a language a request may be answered in — see {@link listServedLocales}. */
-export const isServedLocale = (tag: string): boolean => listServedLocales().includes(tag);
+/**
+ * Whether the tag is a language a request may be answered in — see {@link listServedLocales}.
+ * The tag is compared in its canonical form, so `pt-br` and `pt-BR` are one answer.
+ */
+export const isServedLocale = (tag: string): boolean =>
+    listServedLocales().includes(canonicalLocale(tag));
 
 /**
  * Whether the API has its own wording for the tag: a deployed dictionary file, and not switched off.
  * A registered language without a file is served but has no wording of its own, so its messages
  * fall back to the default language key by key.
  */
-export const hasServedDictionary = (tag: string): boolean =>
-    listSupportedLocales().includes(tag) && !served.inactive.has(tag);
+export const hasServedDictionary = (tag: string): boolean => {
+    const canonical = canonicalLocale(tag);
+    return listSupportedLocales().includes(canonical) && !served.inactive.has(canonical);
+};
 
 /**
  * The language a request, a mail or a snapshot runs in for a saved or negotiated tag.
@@ -91,10 +96,12 @@ export const hasServedDictionary = (tag: string): boolean =>
  *
  * @param locale - a BCP-47 tag, possibly regional
  */
-export const servedLocaleFor = (locale: string): string =>
-    isServedLocale(locale) || isServedLocale(locale.split('-', 1)[0])
-        ? locale
+export const servedLocaleFor = (locale: string): string => {
+    const canonical = canonicalLocale(locale);
+    return isServedLocale(canonical) || isServedLocale(baseLanguage(canonical))
+        ? canonical
         : getFallbackLocale();
+};
 
 /**
  * The language the API's own wording is read in for a tag: the tag when the API has a file for it
@@ -103,7 +110,8 @@ export const servedLocaleFor = (locale: string): string =>
  * @param locale - a BCP-47 tag, possibly regional
  */
 export const dictionaryLocaleFor = (locale: string): string => {
-    if (hasServedDictionary(locale)) return locale;
-    const base = locale.split('-', 1)[0];
+    const canonical = canonicalLocale(locale);
+    if (hasServedDictionary(canonical)) return canonical;
+    const base = baseLanguage(canonical);
     return hasServedDictionary(base) ? base : getFallbackLocale();
 };

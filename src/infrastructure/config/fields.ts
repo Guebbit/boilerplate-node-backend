@@ -1,7 +1,7 @@
 /**
  * @module
  * The field builders a configuration slice is written with: `int`, `decimal`, `flag`, `choice`,
- * `text`, `email`, `timeZone`, `currency`, `country`, `countries`, `secret`, `csv`, `keyRing`,
+ * `text`, `email`, `timeZone`, `currency`, `country`, `countries`, `locale`, `locales`, `secret`, `csv`, `keyRing`,
  * `versionedKeyRing`.
  *
  * One rule for all of them: a value is trimmed, and a blank one counts as unset (the same
@@ -17,6 +17,7 @@
 
 import { z } from 'zod';
 import { isIso4217Code } from '../../domain-primitives/money';
+import { canonicalLocale, isWellFormedLocale } from '../i18n/locale-tag';
 import { parseVersionedKeyRing, type VersionedKey } from '../security/versioned-secret';
 import type { Environment } from './store';
 
@@ -431,6 +432,45 @@ export const country = (options: CommonOptions = {}): Field<string | undefined> 
             return z.NEVER;
         }),
         options
+    );
+
+/** Refusal text shared by {@link locale} and {@link locales}. */
+const LOCALE_MESSAGE = 'BCP 47 language tag, e.g. pt-BR';
+
+/**
+ * A BCP 47 language tag, stored in its canonical spelling (`pt-br` -> `pt-BR`). A malformed tag
+ * (`en-a`, `en_US`) is refused.
+ *
+ * @param options - `default` for an unset value
+ */
+export function locale(options: CommonOptions & { default: string }): Field<string>;
+export function locale(options?: CommonOptions): Field<string | undefined>;
+export function locale(
+    options: CommonOptions & { default?: string } = {}
+): Field<string | undefined> {
+    return build(
+        z.string().transform((value, context) => {
+            if (isWellFormedLocale(value)) return canonicalLocale(value);
+            context.addIssue({ code: 'custom', message: LOCALE_MESSAGE });
+            return z.NEVER;
+        }),
+        options
+    );
+}
+
+/**
+ * A comma-separated list of BCP 47 language tags, each stored canonical, each checked. Unset is
+ * the empty list.
+ *
+ * @param options - `required` for a boot-time presence rule
+ */
+export const locales = (options: CommonOptions = {}): Field<string[]> =>
+    build(
+        listRule(canonicalLocale).superRefine((members, context) => {
+            if (members.every((member) => isWellFormedLocale(member))) return;
+            context.addIssue({ code: 'custom', message: LOCALE_MESSAGE });
+        }),
+        { ...options, default: [] }
     );
 
 /**

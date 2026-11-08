@@ -31,7 +31,7 @@ import type {
 } from '@types';
 import { frontendAppIds } from './apps';
 import { withTransaction } from '@infrastructure/runtime/database';
-import { getFallbackLocale } from '@infrastructure/i18n';
+import { canonicalLocale, getFallbackLocale } from '@infrastructure/i18n';
 
 /** One key and its translation, as a write supplies them. */
 export interface EntryInput {
@@ -424,7 +424,11 @@ const resolveEntityFields = (
                 .find({
                     entityType,
                     entityId: { $in: entityIds },
-                    locale: { $in: localeCandidates.filter((tag) => served.includes(tag)) }
+                    locale: {
+                        $in: localeCandidates
+                            .map((candidate) => canonicalLocale(candidate))
+                            .filter((tag) => served.includes(tag))
+                    }
                 })
                 .select({ entityId: 1, locale: 1, fields: 1, _id: 0 })
                 .lean<Pick<TranslationDocument, 'entityId' | 'locale' | 'fields'>[]>()
@@ -438,7 +442,9 @@ const resolveEntityFields = (
                 byEntity.set(row.entityId, byLocale);
             }
 
-            const leastSpecificFirst = localeCandidates.toReversed();
+            const leastSpecificFirst = localeCandidates
+                .map((tag) => canonicalLocale(tag))
+                .toReversed();
 
             const resolved = new Map<string, TranslationFields>();
             for (const [entityId, byLocale] of byEntity) {
@@ -476,7 +482,11 @@ const findEntityIdsByFieldMatch = (
             translationModel
                 .find({
                     entityType,
-                    locale: { $in: localeCandidates.filter((tag) => served.includes(tag)) },
+                    locale: {
+                        $in: localeCandidates
+                            .map((candidate) => canonicalLocale(candidate))
+                            .filter((tag) => served.includes(tag))
+                    },
                     $or: fields.map((field) => ({
                         [`fields.${field}`]: { $regex: pattern, $options: 'i' }
                     }))

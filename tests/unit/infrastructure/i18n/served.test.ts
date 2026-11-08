@@ -22,6 +22,8 @@ import {
     loadLocaleResources,
     refreshLocaleOverrides,
     resetServedLanguages,
+    servedLocaleFor,
+    dictionaryLocaleFor,
     registerLocaleOverrideProvider,
     resetLocaleOverrides,
     runWithLocale,
@@ -86,6 +88,24 @@ describe('the served languages', () => {
             setServedLanguages(['it', 'es'], []);
 
             expect(listServedLocales().filter((tag) => tag === 'it')).toHaveLength(1);
+        });
+    });
+
+    describe('tags compare case-blind', () => {
+        it('serves a registered pt-BR to a request that spells it pt-br', () => {
+            setServedLanguages(['pt-BR'], []);
+
+            expect(isServedLocale('pt-br')).toBe(true);
+            expect(servedLocaleFor('PT-br')).toBe('pt-BR');
+        });
+
+        it('follows the base language whatever the case of the saved tag', () => {
+            expect(servedLocaleFor('IT-ch')).toBe('it-CH');
+        });
+
+        it('finds the deployed file for a tag in another case', () => {
+            expect(hasServedDictionary('IT')).toBe(true);
+            expect(dictionaryLocaleFor('it-ch')).toBe('it');
         });
     });
 

@@ -843,14 +843,14 @@ describe('updateEntry and removeEntry', () => {
 });
 
 describe('createLanguage and updateLanguage', () => {
-    it('stores a tag lowercased, so one language cannot become two rows', async () => {
+    it('stores a tag canonical, so one language cannot become two rows', async () => {
         const result = await localeService.createLanguage({
             tag: 'PT-BR',
             name: 'Portuguese (Brazil)',
             nativeName: 'Português (Brasil)'
         });
 
-        expect(result.data?.tag).toBe('pt-br');
+        expect(result.data?.tag).toBe('pt-BR');
         expect(await localeRepository.findByTag('pt-br')).not.toBeNull();
     });
 

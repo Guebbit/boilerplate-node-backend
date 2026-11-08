@@ -16,6 +16,8 @@ import {
     flag,
     int,
     keyRing,
+    locale,
+    locales,
     secret,
     text,
     timeZone,
@@ -252,5 +254,37 @@ describe('countries', () => {
 
     it('reads an unset value as the empty list', () => {
         expect(countries().schema.parse(undefined)).toEqual([]);
+    });
+});
+
+describe('locale', () => {
+    it('stores the canonical spelling of a tag', () => {
+        expect(locale().schema.parse(' pt-br ')).toBe('pt-BR');
+    });
+
+    it.each(['en-a', 'en_US', 'e'])('refuses %s: not a BCP 47 tag', (raw) => {
+        expect(locale().schema.safeParse(raw).success).toBe(false);
+    });
+
+    it('reads a blank value as unset', () => {
+        expect(locale().schema.parse('  ')).toBeUndefined();
+    });
+});
+
+describe('locales', () => {
+    it('canonicalises and trims every member', () => {
+        expect(locales().schema.parse('en, pt-br,ZH-hant-tw')).toEqual([
+            'en',
+            'pt-BR',
+            'zh-Hant-TW'
+        ]);
+    });
+
+    it('refuses the list when one member is malformed', () => {
+        expect(locales().schema.safeParse('en,en_US').success).toBe(false);
+    });
+
+    it('reads an unset value as the empty list', () => {
+        expect(locales().schema.parse(undefined)).toEqual([]);
     });
 });

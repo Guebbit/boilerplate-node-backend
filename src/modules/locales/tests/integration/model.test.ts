@@ -43,14 +43,14 @@ describe('language serialization', () => {
         expect(language.revision).toBe(0);
     });
 
-    it('lowercases the tag on write, so one language cannot become two rows', async () => {
+    it('stores the tag canonical on write, so one language cannot become two rows', async () => {
         const language = await localeRepository.create({
             tag: '  PT-BR ',
             name: 'Portuguese',
             nativeName: 'Português'
         });
 
-        expect(language.tag).toBe('pt-br');
+        expect(language.tag).toBe('pt-BR');
     });
 });
 

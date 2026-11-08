@@ -15,6 +15,7 @@ import { createUpdateController } from '@infrastructure/surfaces/create-update-c
 import { ReplaceAccountBody, UpdateAccountBody } from '@api/schemas.zod';
 import { accountService } from '../services';
 import { userService } from '@modules/users';
+import { wellFormedLocale } from '@infrastructure/http/schemas';
 
 /**
  * `PUT /account` and `PATCH /account` — one handler pair over `accountService.updateProfile`,
@@ -24,8 +25,12 @@ import { userService } from '@modules/users';
 export const { replace: replaceAccount, update: updateAccount } = createUpdateController({
     versioned: true,
     entity: 'account',
-    replaceSchema: ReplaceAccountBody,
-    patchSchema: UpdateAccountBody,
+    replaceSchema: ReplaceAccountBody.extend({
+        locale: wellFormedLocale(ReplaceAccountBody.shape.locale)
+    }),
+    patchSchema: UpdateAccountBody.extend({
+        locale: wellFormedLocale(UpdateAccountBody.shape.locale)
+    }),
     // The one boolean an edit carrying an avatar (multipart) sends as a string.
     input: { booleans: ['analyticsConsent'] },
     // A client cannot send the current avatar back, so a PUT that omits it keeps it.
