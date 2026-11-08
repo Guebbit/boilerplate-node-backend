@@ -725,7 +725,7 @@ const sessionUserOf = (request: Request, resolution: Resolution<AuthContext | un
  * @param action - the action to check
  * @param subject - the subject it is asked about
  * @returns the resolved user when they hold the rule, otherwise `undefined`
- * @throws {Error} when the credential itself was refused
+ * @throws {Error} when the credential itself was refused, or resolved to nobody
  */
 const judgeRuleHolder = <TSubject extends PermissionSubject>(
     request: Request,
@@ -734,12 +734,14 @@ const judgeRuleHolder = <TSubject extends PermissionSubject>(
     subject: TSubject
 ) => {
     const user = sessionUserOf(request, resolution);
-    const allowed = user !== undefined && holds(callerForSubject(user, subject), action, subject);
+    // A cookie that resolves to nobody has no rule to lack: 401 like every other guard, never 403.
+    if (user === undefined) throw new Error('Session cookie resolved to nobody');
+    const allowed = holds(callerForSubject(user, subject), action, subject);
 
     if (!allowed) {
         auditRefusal(request, {
             action: coreAuditActions.SECURITY_FORBIDDEN,
-            actorUserId: user?.id ?? 'anonymous',
+            actorUserId: user.id,
             metadata: { reason: 'missing_permission', permission: ruleId(action, subject) }
         });
     }

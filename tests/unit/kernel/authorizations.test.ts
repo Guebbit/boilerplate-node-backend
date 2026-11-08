@@ -1091,7 +1091,7 @@ describe('requirePermissionViaCookie', () => {
         expect(next).not.toHaveBeenCalled();
     });
 
-    it('rejects with 403 when the token is valid but the user is gone', async () => {
+    it('rejects with 401 when the token is valid but the user is gone', async () => {
         // The resolver answers `undefined` — a deleted account holding a still-signed cookie.
         mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: undefined });
         const response = makeResponseStub();
@@ -1103,7 +1103,7 @@ describe('requirePermissionViaCookie', () => {
         );
         await new Promise((resolve) => setImmediate(resolve));
 
-        expect(response.status).toHaveBeenCalledWith(403);
+        expect(response.status).toHaveBeenCalledWith(401);
     });
 
     it('records a forbidden attempt in the audit trail', async () => {
