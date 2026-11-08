@@ -395,6 +395,34 @@ describe('updateEntityTranslations', () => {
         expect(result.status).toBe(422);
     });
 
+    it('refuses null on the fallback locale spelled in another casing, and keeps its row', async () => {
+        const product = await createProduct();
+        const id = String(product._id);
+        await localeService.updateEntityTranslations('product', id, {
+            [FALLBACK]: { fields: { title: 'Cozy Bed' } }
+        });
+
+        const result = await localeService.updateEntityTranslations('product', id, { EN: null });
+
+        expect(result.status).toBe(422);
+        expect(
+            await translationRepository.findEntityLocale('product', id, FALLBACK)
+        ).not.toBeNull();
+    });
+
+    it('writes a locale named in another casing under its canonical tag', async () => {
+        const product = await createProduct();
+        const id = String(product._id);
+        await givenLocale('pt-BR');
+
+        const result = await localeService.updateEntityTranslations('product', id, {
+            'PT-br': { fields: { title: 'Caminha' } }
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.data?.translations.map((row) => row.locale)).toContain('pt-BR');
+    });
+
     it('deletes a non-fallback locale row on null', async () => {
         const product = await createProduct();
         const id = String(product._id);
@@ -627,6 +655,22 @@ describe('replaceEntityTranslations', () => {
         expect(row?.fields).toEqual({ title: 'Cozy Bed XL' });
         const stored = await readProduct(id);
         expect(stored?.description).toBe('');
+    });
+
+    it('does not delete the fallback row when a PUT names it in another casing', async () => {
+        const product = await createProduct({ title: 'Old title' });
+        const id = String(product._id);
+        await localeService.updateEntityTranslations('product', id, {
+            [FALLBACK]: { fields: { title: 'Cozy Bed' } }
+        });
+
+        const result = await localeService.replaceEntityTranslations('product', id, {
+            EN: { fields: { title: 'Cozy Bed XL' } }
+        });
+
+        expect(result.success).toBe(true);
+        const row = await translationRepository.findEntityLocale('product', id, FALLBACK);
+        expect(row?.fields).toMatchObject({ title: 'Cozy Bed XL' });
     });
 
     it('still refuses an empty fields object instead of clearing everything', async () => {

@@ -8,7 +8,7 @@
 import type { ClientSession } from 'mongoose';
 import type { Translation, TranslationOrigin, ReplaceEntityTranslationsRequest } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
-import { getFallbackLocale, t } from '@infrastructure/i18n';
+import { canonicalLocale, getFallbackLocale, t } from '@infrastructure/i18n';
 import type { TranslatableTarget } from '@kernel/registry';
 import { fillOmittedWithNull } from '@infrastructure/object-guards';
 import type {
@@ -154,6 +154,17 @@ const isRejection = (value: unknown): value is ResponseReject =>
     typeof value === 'object' && value !== null && 'success' in value && !value.success;
 
 /**
+ * The body with every locale key in its canonical spelling, so `EN` is the fallback `en` and
+ * `pt-br` the stored `pt-BR` wherever a key is compared (RFC 4647: tags compare case-blind).
+ *
+ * @param payload - a PUT or PATCH body, or a port caller's batch, keyed by locale
+ */
+const withCanonicalKeys = <TValue>(payload: Record<string, TValue>): Record<string, TValue> =>
+    Object.fromEntries(
+        Object.entries(payload).map(([locale, value]) => [canonicalLocale(locale), value])
+    );
+
+/**
  * Validate a whole batch — the same `ReplaceEntityTranslationsRequest` shape PUT and PATCH both send —
  * against the `locales` collection, the registry's declared fields, and the fallback-locale delete
  * guard: the pre-flight half of a write, with no entity id at all. Every check here is about the
@@ -179,7 +190,7 @@ const planTranslationWrites = async (
     const fallbackLocale = getFallbackLocale();
     const planned: PlannedWrite[] = [];
 
-    for (const [locale, value] of Object.entries(payload)) {
+    for (const [locale, value] of Object.entries(withCanonicalKeys(payload))) {
         const result = await planSlot(entityType, target, fallbackLocale, locale, value);
         if (isRejection(result)) return result;
         planned.push(result);
@@ -417,18 +428,21 @@ export const replaceEntityTranslations = async (
     const target = translatableTarget(entityType);
     if (!target) return entityTypeUnknown(entityType);
 
+    const canonicalPayload = withCanonicalKeys(payload);
     const existing = await translationRepository.findEntityTranslations(entityType, entityId);
     const checkedLocales = new Set(existing.map((row) => row.locale));
     checkedLocales.add(getFallbackLocale());
 
     const deletions = Object.fromEntries(
-        [...checkedLocales].filter((locale) => !(locale in payload)).map((locale) => [locale, null])
+        [...checkedLocales]
+            .filter((locale) => !(locale in canonicalPayload))
+            .map((locale) => [locale, null])
     );
 
     return applyTranslationBatch(
         entityType,
         entityId,
-        { ...clearOmittedInPayload(payload, target.fields), ...deletions },
+        { ...clearOmittedInPayload(canonicalPayload, target.fields), ...deletions },
         context
     );
 };
