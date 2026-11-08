@@ -208,11 +208,11 @@ into `startSession` (a first session, guarded) and `continueSession` (a re-mint,
 what the call proved: a verified code adds `otp` to what the caller held, a password change claims
 `['pwd']` alone.
 
-::: warning Both are optional, and absent means infinitely old
-A token signed before these claims existed carries neither. Every reader treats a missing
-`auth_time` as `0` rather than trusting it, so a pre-existing session is asked to re-authenticate at
-its first sensitive action instead of reading as freshly authenticated. Fail-closed, in the only
-direction that is safe.
+::: warning A missing `auth_time` fails closed in both modes
+In jwt mode both claims are required: `carriesTokenClaims` refuses a token without `auth_time` or
+`amr` as `malformed`, so it never reaches a guard. In cookie mode `authTime` is an optional field on
+the session row, and a row without one reads as `0` (infinitely old), so the caller is asked to
+re-authenticate at the first sensitive action instead of reading as freshly authenticated.
 :::
 
 `POST /account/reauth` is how a caller refreshes `auth_time` without logging out — re-prove who you
