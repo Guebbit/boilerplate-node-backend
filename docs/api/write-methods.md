@@ -198,8 +198,8 @@ A row the caller may not see, an unknown id and a malformed one are the same 404
 
 A POST is not idempotent: sent twice, it may create twice. Every POST that moves money, stock or
 an account takes an `Idempotency-Key` — orders, checkout, payment moves, shipments, stock receipts
-and adjustments. That is a minimum: signup takes one too. The POSTs that move none and are left
-without are named, in four classes, in [Idempotency](../tools/idempotency.md#named-exceptions).
+and adjustments. That is a minimum: signup takes one too. The ones that take none are named, by
+class, in [Idempotency](../tools/idempotency.md#named-exceptions).
 
 ## PUT — replace
 

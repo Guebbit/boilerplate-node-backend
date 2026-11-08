@@ -55,8 +55,8 @@ password. See [Pseudonymised identifiers](./security.md#pseudonymised-identifier
 `src/infrastructure/http/middlewares/idempotency.ts` is the middleware; the schema lives beside
 it in `idempotency-model.ts`. Mounted per route — never globally, the same way
 `src/infrastructure/http/middlewares/cache.ts`'s `setCache` is — and a no-op when the caller
-sends no header at all: the feature is a courtesy the client opts into, not a requirement the
-server makes.
+sends no header at all: on most routes the feature is a courtesy the client opts into. Where a
+repeat would move money twice (the refund) the key is required, and no header is a 400.
 
 The lock is one atomic insert against a unique index on `(key, caller)`. Whoever's insert lands
 first runs the handler; every other insert collides with `E11000`, and that collision — not a
@@ -86,6 +86,7 @@ source of truth, so — like every other durable, TTL-bound collection in this r
 | `POST /payments/{id}/confirm`                                                                        | Charges the card.                                                                                                                                                                         |
 | `POST /orders/{id}/payments`                                                                         | An admin recording money by hand; a repeat must not record it twice.                                                                                                                      |
 | `POST /payments/{id}/refunds`                                                                        | Returns money — a double submit must refund once. The key is REQUIRED: no header, a 400.                                                                                                  |
+| `POST /payments/{id}/refunds/{refundId}/cancel`                                                      | Voids a refund; the key is optional, a second cancel is refused by the record (409).                                                                                                      |
 | `POST /payments/{id}/refunds/{refundId}/settle`                                                      | Books a refund the provider could not settle; a repeat must not book it twice.                                                                                                            |
 | `POST /delivery/fulfillment-orders/{id}/shipments`, `POST /delivery/fulfillment-orders/{id}/fulfill` | A partial ship creates a NEW shipment, so no state machine catches a retry: it would cut a second parcel and take the stock twice. Both shipment doors take the key so they answer alike. |
 | `POST /returns`, `POST /returns/{id}/receive`                                                        | A retried return request or receipt must replay, not open or receive twice.                                                                                                               |
@@ -105,13 +106,13 @@ The rule is a minimum: every POST that moves money, stock or an account takes a 
 (signup, the contact form). A POST that moves money, stock or an account and takes none belongs
 to one of these classes, and the IETF draft only asks that the exception be published:
 
-| Class                                 | Why a retry is safe                                   | Examples                                                                                                                                                |
-| ------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| a state-guarded transition            | the repeat is refused with a 409 by the state machine | `POST /orders/{id}/cancel`, `/shipments/{id}/deliver`, `/shipments/{id}/lost`                                                                           |
-| a secondary key                       | the domain refuses a duplicate (Zalando 231)          | `POST /users` (unique email)                                                                                                                            |
-| an answer carrying a one-time secret  | the ledger would store the secret and replay it       | `POST /payments` (`clientSecret`; asking again refreshes the same intent), `POST /api-keys`, `POST /webhooks/subscriptions`, 2FA setup and backup codes |
-| keyed on the provider's own reference | the provider's id is the key                          | `POST /payments/{id}/sync`, `POST /payments/webhook`                                                                                                    |
-| a repeat that is harmless             | running it twice leaves the same state                | password reset, email change, `DELETE /account`                                                                                                         |
+| Class                                 | Why a retry is safe                                   | Examples                                                                                                                                                                                                                                                                    |
+| ------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a state-guarded transition            | the repeat is refused with a 409 by the state machine | `POST /orders/{id}/cancel`, `/shipments/{id}/deliver`, `/shipments/{id}/lost`                                                                                                                                                                                               |
+| a secondary key                       | the domain refuses a duplicate (Zalando 231)          | `POST /users` (unique email)                                                                                                                                                                                                                                                |
+| an answer carrying a one-time secret  | the ledger would store the secret and replay it       | `POST /payments` (`clientSecret`; asking again refreshes the same intent), `POST /api-keys`, `POST /webhooks/subscriptions`, 2FA setup and backup codes, `POST /account/refresh` (its answer is a fresh token; a retry past the rotation grace is read as theft, by design) |
+| keyed on the provider's own reference | the provider's id is the key                          | `POST /payments/{id}/sync`, `POST /payments/webhook/{provider}`                                                                                                                                                                                                             |
+| a repeat that is harmless             | running it twice leaves the same state                | password reset, email change, `DELETE /account`                                                                                                                                                                                                                             |
 
 `POST /payments` and `POST /payments/{id}/sync` share one per-account hourly budget instead
 (`NODE_PAYMENT_INTENT_RATE_LIMIT_MAX`, 30).

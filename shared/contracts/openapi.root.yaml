@@ -334,11 +334,9 @@ components:
                 The token the active human-challenge provider issued to the client — see
                 `antibot` on `GET /config`. Absent when that provider is `none`.
 
-        # Opt-in per route (see `src/infrastructure/http/middlewares/idempotency.ts`) — never
-        # required at the contract level, since a caller not asking for replay protection must
-        # still be able to call the route.
-        # The twin for a route where a retry would move money twice: same shape, but absent is a 400
-        # (`IDEMPOTENCY_KEY_REQUIRED`), per the IETF Idempotency-Key header draft.
+        # The twin of `IdempotencyKeyHeader` for a route where a retry would move money twice: same
+        # shape, but absent is a 400 (`IDEMPOTENCY_KEY_REQUIRED`), per the IETF Idempotency-Key
+        # header draft (see `src/infrastructure/http/middlewares/idempotency.ts`).
         RequiredIdempotencyKeyHeader:
             name: Idempotency-Key
             in: header
@@ -356,6 +354,8 @@ components:
                 repeated write); the same key with a DIFFERENT body answers 422; a key still being
                 processed by another in-flight request answers 409.
 
+        # Optional: a caller without a key still writes, unprotected. The required twin is
+        # `RequiredIdempotencyKeyHeader`.
         IdempotencyKeyHeader:
             name: Idempotency-Key
             in: header

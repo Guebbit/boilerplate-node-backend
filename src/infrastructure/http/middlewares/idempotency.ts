@@ -5,8 +5,9 @@
  * already idempotent by construction (a provider callback keyed on its own reference, a
  * reservation keyed on a domain key, and so on) should not pay for a second mechanism.
  *
- * Opt-in at the HEADER level too: a caller who sends no `Idempotency-Key` gets no protection and
- * no refusal — the header is a courtesy the client asks for, not a requirement the server makes.
+ * Opt-in at the header level on most routes: a caller who sends no `Idempotency-Key` gets no
+ * protection and no refusal. A route where a repeat moves money twice uses `requireIdempotencyKey`
+ * and refuses a missing key with 400.
  *
  * The record lives in Mongo, not Redis: `docker-compose.yml` runs the cache with
  * `--maxmemory-policy allkeys-lru`, which can evict a live record under memory pressure and turn
