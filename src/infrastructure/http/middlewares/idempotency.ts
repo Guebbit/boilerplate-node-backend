@@ -35,11 +35,17 @@ import { MINUTE_MS } from '@domain-primitives/time';
 const IDEMPOTENCY_KEY_HEADER = 'idempotency-key';
 
 /**
- * What a legal key looks like: length and character class only, per the contract parameter
- * (`shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader`) — this
- * repo does not validate that it is a UUID, only that it is convention (a UUID happens to match).
+ * What a legal key looks like, in either form; group 1 is the quoted inner value, group 2 the bare
+ * one. Length and character class only, per the contract parameter
+ * (`shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader`) — a UUID
+ * happens to match, but nothing requires one.
+ *
+ * Both forms because the draft (§2.1) defines the value as a Structured Field String, quoted
+ * (RFC 9651 §3.3.3), while Stripe-style clients send it bare. RFC 9651 §2.2 lets a field narrow a
+ * String's format, so the inner value is limited to this class and no `\` escapes exist.
+ * https://www.ietf.org/archive/id/draft-ietf-httpapi-idempotency-key-header-08.txt
  */
-const KEY_PATTERN = /^[\w-]{1,200}$/;
+const KEY_PATTERN = /^(?:"([\w-]{1,200})"|([\w-]{1,200}))$/;
 
 /**
  * Whether `value`, or anything nested inside it, carries an OWN `__proto__` key. A JSON body
@@ -418,7 +424,10 @@ export const idempotencyKey: RequestHandler = (
         return;
     }
 
-    if (!KEY_PATTERN.test(raw)) {
+    const match = KEY_PATTERN.exec(raw);
+    // The inner value is the key, so `"abc"` and `abc` name one ledger record.
+    const key = match?.[1] ?? match?.[2];
+    if (!key) {
         rejectResponse(response, 422, [
             {
                 code: ERROR_CODES.VALIDATION_ERROR,
@@ -438,7 +447,7 @@ export const idempotencyKey: RequestHandler = (
         return;
     }
 
-    claimIdempotencyKey(raw, callerKeyOf(request), fingerprintOf(request), response, next, 1);
+    claimIdempotencyKey(key, callerKeyOf(request), fingerprintOf(request), response, next, 1);
 };
 
 /**

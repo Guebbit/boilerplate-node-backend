@@ -346,8 +346,8 @@ components:
             schema:
                 type: string
                 minLength: 1
-                maxLength: 200
-                pattern: '^[A-Za-z0-9_-]+$'
+                maxLength: 202
+                pattern: '^("[A-Za-z0-9_-]{1,200}"|[A-Za-z0-9_-]{1,200})$'
             description: >
                 An opaque, client-generated value (a UUID by convention) that makes a retried
                 write safe, and that this route REQUIRES: a request without it answers 400
@@ -363,8 +363,8 @@ components:
             schema:
                 type: string
                 minLength: 1
-                maxLength: 200
-                pattern: '^[A-Za-z0-9_-]+$'
+                maxLength: 202
+                pattern: '^("[A-Za-z0-9_-]{1,200}"|[A-Za-z0-9_-]{1,200})$'
             description: >
                 An opaque, client-generated value (a UUID by convention) that makes a retried
                 write safe. Repeating this request with the SAME key and the SAME body replays

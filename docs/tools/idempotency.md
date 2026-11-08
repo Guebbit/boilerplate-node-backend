@@ -40,6 +40,11 @@ sequenceDiagram
     end
 ```
 
+The key is accepted in two forms, and both name the same record: the draft's quoted String
+(`Idempotency-Key: "abc"`, §2.1 and RFC 9651 §3.3.3) and the bare token every Stripe-style client
+sends (`Idempotency-Key: abc`). The stored key is the inner value. It is 1-200 characters of
+`A-Za-z0-9_-`; anything else, an unclosed quote included, answers 422, never "ignored".
+
 The fingerprint is the method, the **concrete** path and the canonicalised body. The path, not
 the route template: two refunds of different orders share a template and an empty body, and must
 not share an answer.

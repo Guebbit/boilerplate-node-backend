@@ -171,6 +171,30 @@ describe('idempotencyKey', () => {
         expect(create).not.toHaveBeenCalled();
     });
 
+    it.each(['"abc', String.raw`"a\"b"`, '""', '"abc"x'])(
+        'refuses the malformed quoted key %s with 422, before touching the ledger',
+        (key) => {
+            const response = makeResponseStub();
+
+            idempotencyKey(makeRequest(key, { a: 1 }), response, jest.fn());
+
+            expect(response.status).toHaveBeenCalledWith(422);
+            expect(create).not.toHaveBeenCalled();
+        }
+    );
+
+    it("claims the draft's quoted form under its inner value, the same record as the bare form", async () => {
+        const next = jest.fn();
+
+        idempotencyKey(makeRequest('"abc"', { a: 1 }), makeResponseStub(), next);
+        idempotencyKey(makeRequest('abc', { a: 1 }), makeResponseStub(), next);
+        await flush();
+
+        expect(next).toHaveBeenCalledTimes(2);
+        const keys = create.mock.calls.map((call) => (call[0] as { key: string }).key);
+        expect(keys).toEqual(['abc', 'abc']);
+    });
+
     /**
      * `canonicalize` (`@guebbit/js-toolkit` 2.2.0) drops an own `__proto__` key instead of
      * carrying it into the fingerprint — see `hasProtoKey`'s own doc in `idempotency.ts`. Refused
