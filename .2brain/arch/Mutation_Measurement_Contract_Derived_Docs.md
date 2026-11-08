@@ -1,0 +1,508 @@
+---
+tags:
+  - 2brain
+  - 2brain/arch
+  - project/boilerplate-node-backend
+type: architecture
+component: Mutation_Measurement_Contract_Derived_Docs
+---
+
+```mermaid
+graph LR
+    Infrastructure_Adapters_Config_Definition_Framework["Infrastructure Adapters & Config Definition Framework"]
+    Mutation_Runner_Contract_Derived_Documentation_Pipeline["Mutation Runner & Contract-Derived Documentation Pipeline"]
+    Shard_Orchestration_Production_Config_Surface["Shard Orchestration & Production Config Surface"]
+    Infrastructure_Adapters_Config_Definition_Framework -- "calls" --> Mutation_Runner_Contract_Derived_Documentation_Pipeline
+    Mutation_Runner_Contract_Derived_Documentation_Pipeline -- "calls" --> Shard_Orchestration_Production_Config_Surface
+```
+
+## Details
+
+The measurement and documentation pipeline that keeps the scenario surface and module boundaries honest over time. On the measurement side, it runs Stryker mutation testing in bin-packed shards, banking each shard's report on disk and merging into a per-file ratchet baseline that never lowers a score. On the documentation side, it generates contract-derived tables and diagrams from the live module manifests and kernel registry: the rate-limit budget table, the role matrix, the module dependency graph, the scenario registries, the jobs catalogue, and the audit-actions table. The setup/required-keys module defines the fillable key set that environment-file operates on. App-level config slices (APP_CONFIG_SLICES) and the security.txt builder (buildSecurityTxt) are the production-side counterparts that the docs generators read from.
+
+### Infrastructure Adapters & Config Definition Framework
+The foundational adapter layer and configuration DSL that the entire subsystem builds upon. Provides concrete infrastructure primitives — image store with signature validation, PDF rendering with deadline enforcement, queue publish/consume options, filesystem operations, and SSRF guard — along with the defineConfig / ConfigSlice framework that every other component uses to declare and validate environment variables. It is the ports side of the hexagonal boundary: the docs generators and mutation runner consume its config-slice types to read the live environment contract, while the adapters themselves remain domain-agnostic.
+
+**Related Classes/Methods**:
+
+- `src.infrastructure.config.define.ConfigError`:77-83
+- `src.infrastructure.adapters.pdf.withDeadline`:180-202
+- `src.infrastructure.adapters.image-store.EXTENSION_OF`:144-146
+- `src.infrastructure.config.define.describeShape`:161-166
+
+**Source Files:**
+
+- `src/infrastructure/adapters/filesystem.ts`
+  - `src.infrastructure.adapters.filesystem.pruneUnreferenced.then() callback.orphaned` (L208-L208) - Class
+  - `src.infrastructure.adapters.filesystem.pruneUnreferenced.then() callback.orphaned.entries.filter() callback` (L208-L208) - Function
+  - `src.infrastructure.adapters.filesystem.pruneUnreferenced.then() callback.orphaned.map() callback` (L211-L225) - Function
+  - `src.infrastructure.adapters.filesystem.pruneUnreferenced.then() callback.orphaned.map() callback.then() callback` (L223-L223) - Function
+- `src/infrastructure/adapters/image-signatures.ts`
+  - `src.infrastructure.adapters.image-signatures.HEADER_LENGTH` (L72-L78) - Class
+  - `src.infrastructure.adapters.image-signatures.HEADER_LENGTH.SUPPORTED_IMAGE_FORMATS.flatMap() callback` (L73-L76) - Function
+  - `src.infrastructure.adapters.image-signatures.HEADER_LENGTH.SUPPORTED_IMAGE_FORMATS.flatMap() callback.map() callback` (L75-L75) - Function
+- `src/infrastructure/adapters/image-store.ts`
+  - `src.infrastructure.adapters.image-store.EXTENSION_OF` (L144-L146) - Class
+  - `src.infrastructure.adapters.image-store.EXTENSION_OF.imageRuleData.formats.map() callback` (L145-L145) - Function
+- `src/infrastructure/adapters/logger.ts`
+  - `src.infrastructure.adapters.logger.SENSITIVE_FIELDS` (L68-L74) - Class
+  - `src.infrastructure.adapters.logger.SENSITIVE_FIELDS.filter() callback` (L72-L72) - Function
+  - `src.infrastructure.adapters.logger.SENSITIVE_FIELDS.map() callback` (L73-L73) - Function
+- `src/infrastructure/adapters/orphaned-images.ts`
+  - `src.infrastructure.adapters.orphaned-images.referencedFilenames.rows` (L40-L47) - Class
+  - `src.infrastructure.adapters.orphaned-images.referencedFilenames.rows.collections.map() callback` (L41-L45) - Function
+  - `src.infrastructure.adapters.orphaned-images.OrphanSweep` (L58-L63) - Interface
+- `src/infrastructure/adapters/pdf.ts`
+  - `src.infrastructure.adapters.pdf.RenderTimeoutError` (L68-L73) - Class
+  - `src.infrastructure.adapters.pdf.RenderTimeoutError.constructor` (L69-L72) - Constructor
+  - `src.infrastructure.adapters.pdf.renderHtmlToPdf.render` (L134-L134) - Class
+  - `src.infrastructure.adapters.pdf.renderHtmlToPdf.render.withRenderSlot() callback` (L134-L134) - Function
+  - `src.infrastructure.adapters.pdf.renderOnce` (L164-L168) - Class
+  - `src.infrastructure.adapters.pdf.renderOnce.then() callback` (L168-L168) - Function
+  - `src.infrastructure.adapters.pdf.withDeadline` (L180-L202) - Class
+  - `src.infrastructure.adapters.pdf.withDeadline.deadline` (L183-L190) - Class
+  - `src.infrastructure.adapters.pdf.withDeadline.deadline.<function>` (L183-L190) - Function
+  - `src.infrastructure.adapters.pdf.withDeadline.deadline.<function>.setTimeout() callback` (L184-L189) - Function
+  - `src.infrastructure.adapters.pdf.withDeadline.deadline.<function>.setTimeout() callback.catch() callback` (L187-L187) - Function
+  - `src.infrastructure.adapters.pdf.withDeadline.finally() callback` (L197-L200) - Function
+  - `src.infrastructure.adapters.pdf.printIn` (L227-L264) - Class
+  - `src.infrastructure.adapters.pdf.printIn.then() callback` (L232-L262) - Function
+  - `src.infrastructure.adapters.pdf.then() callback.then() callback` (L240-L240) - Function
+  - `src.infrastructure.adapters.pdf.printIn.then() callback.then() callback` (L262-L262) - Function
+- `src/infrastructure/adapters/queue.ts`
+  - `src.infrastructure.adapters.queue.then() callback` (L568-L568) - Function
+  - `src.infrastructure.adapters.queue.PublishOptions` (L603-L610) - Interface
+  - `src.infrastructure.adapters.queue.publishToQueue.then() callback.<function>.timer` (L657-L661) - Class
+  - `src.infrastructure.adapters.queue.publishToQueue.then() callback.<function>.timer.setTimeout() callback` (L657-L661) - Function
+  - `src.infrastructure.adapters.queue.ConsumeOptions` (L697-L714) - Interface
+  - `src.infrastructure.adapters.queue.handleDelivery.issues.verdict.error.issues.map() callback` (L892-L892) - Function
+  - `src.infrastructure.adapters.queue.settled.then() callback` (L907-L907) - Function
+- `src/infrastructure/adapters/ssrf-guard.ts`
+  - `src.infrastructure.adapters.ssrf-guard.resolveSafeOutboundTarget.then() callback.then() callback.unsafe` (L285-L287) - Class
+  - `src.infrastructure.adapters.ssrf-guard.resolveSafeOutboundTarget.then() callback.then() callback.unsafe.addresses.find() callback` (L287-L287) - Function
+- `src/infrastructure/config/define.ts`
+  - `src.infrastructure.config.define.ConfigError` (L77-L83) - Class
+  - `src.infrastructure.config.define.ConfigError.constructor` (L79-L82) - Constructor
+  - `src.infrastructure.config.define.presenceBroken.members` (L148-L148) - Class
+  - `src.infrastructure.config.define.presenceBroken.members.filter() callback` (L148-L148) - Function
+  - `src.infrastructure.config.define.presenceBroken.members.some() callback` (L152-L155) - Function
+  - `src.infrastructure.config.define.describeShape` (L161-L166) - Class
+  - `src.infrastructure.config.define.describeShape.map() callback` (L162-L166) - Function
+- `src/infrastructure/config/fields.ts`
+  - `src.infrastructure.config.fields.CommonOptions` (L93-L98) - Interface
+  - `src.infrastructure.config.fields.BuildOptions` (L119-L124) - Interface
+  - `src.infrastructure.config.fields.build.rule` (L140-L140) - Class
+  - `src.infrastructure.config.fields.build.rule.transform() callback` (L140-L140) - Function
+  - `src.infrastructure.config.fields.RangeOptions` (L150-L157) - Interface
+  - `src.infrastructure.config.fields.TextOptions` (L309-L314) - Interface
+  - `src.infrastructure.config.fields.CsvOptions` (L459-L464) - Interface
+- `src/infrastructure/config/shared-rules/images.ts`
+  - `src.infrastructure.config.shared-rules.images.imagesSchema.images.refine() callback` (L50-L53) - Function
+  - `src.infrastructure.config.shared-rules.images.imagesSchema.images.refine() callback.mimes` (L51-L51) - Class
+  - `src.infrastructure.config.shared-rules.images.imagesSchema.images.refine() callback.mimes.formats.flatMap() callback` (L51-L51) - Function
+- `src/infrastructure/config/shared-rules/metrics.ts`
+  - `src.infrastructure.config.shared-rules.metrics.metricsSchema` (L44-L50) - Class
+  - `src.infrastructure.config.shared-rules.metrics.metricsSchema.refine() callback` (L45-L48) - Function
+- `src/infrastructure/http/controller.ts`
+  - `src.infrastructure.http.controller.parseBody.flagged` (L126-L126) - Class
+  - `src.infrastructure.http.controller.parseBody.flagged.refusals.map() callback` (L126-L126) - Function
+- `src/infrastructure/http/middlewares/content-type.ts`
+  - `src.infrastructure.http.middlewares.content-type.requireDeclaredContentType.<function>.operation` (L56-L58) - Class
+  - `src.infrastructure.http.middlewares.content-type.requireDeclaredContentType.<function>.operation.operations.find() callback` (L57-L57) - Function
+- `src/infrastructure/http/middlewares/method-not-allowed.ts`
+  - `src.infrastructure.http.middlewares.method-not-allowed.allowedMethods.methods` (L34-L43) - Class
+  - `src.infrastructure.http.middlewares.method-not-allowed.allowedMethods.methods.routes.filter() callback` (L37-L40) - Function
+  - `src.infrastructure.http.middlewares.method-not-allowed.allowedMethods.methods.flatMap() callback` (L42-L42) - Function
+- `src/infrastructure/http/middlewares/upload.ts`
+  - `src.infrastructure.http.middlewares.upload.UnsupportedUploadTypeError` (L130-L130) - Class
+  - `src.infrastructure.http.middlewares.upload.quarantineUploadedImages.then() callback.keys` (L413-L415) - Class
+  - `src.infrastructure.http.middlewares.upload.quarantineUploadedImages.then() callback.keys.results.map() callback` (L414-L414) - Function
+- `src/infrastructure/http/request.ts`
+  - `src.infrastructure.http.request.RequestInputDeclaration` (L126-L159) - Interface
+  - `src.infrastructure.http.request.readInput.sources.map() callback` (L250-L251) - Function
+  - `src.infrastructure.http.request.readInput.sources` (L250-L252) - Class
+  - `src.infrastructure.http.request.readInput.stated` (L282-L284) - Class
+  - `src.infrastructure.http.request.readInput.stated.sources.map() callback` (L283-L283) - Function
+  - `src.infrastructure.http.request.readInput.stated.filter() callback` (L284-L284) - Function
+- `src/infrastructure/http/response.ts`
+  - `src.infrastructure.http.response.retryAfterOf` (L284-L287) - Class
+  - `src.infrastructure.http.response.retryAfterOf.rejection.errors.map() callback` (L286-L286) - Function
+  - `src.infrastructure.http.response.retryAfterOf.find() callback` (L287-L287) - Function
+- `src/infrastructure/observability/audit.ts`
+  - `src.infrastructure.observability.audit.AuditActionMap` (L39-L39) - Interface
+  - `src.infrastructure.observability.audit.AuditEvent` (L61-L108) - Interface
+  - `src.infrastructure.observability.audit.AuditEntry` (L114-L119) - Interface
+- `src/infrastructure/persistence/changes.ts`
+  - `src.infrastructure.persistence.changes.setAndUnset.$set` (L34-L34) - Class
+  - `src.infrastructure.persistence.changes.setAndUnset.$set.entries.filter() callback` (L34-L34) - Function
+  - `src.infrastructure.persistence.changes.setAndUnset.$unset` (L35-L37) - Class
+  - `src.infrastructure.persistence.changes.setAndUnset.$unset.entries.filter() callback` (L36-L36) - Function
+  - `src.infrastructure.persistence.changes.setAndUnset.$unset.map() callback` (L36-L36) - Function
+- `src/infrastructure/persistence/create-repository.ts`
+  - `src.infrastructure.persistence.create-repository.FindAllOptions` (L55-L64) - Interface
+  - `src.infrastructure.persistence.create-repository.SearchSpec` (L74-L107) - Interface
+  - `src.infrastructure.persistence.create-repository.PaginatedResult` (L214-L217) - Interface
+  - `src.infrastructure.persistence.create-repository.RepositoryOptions` (L220-L229) - Interface
+  - `src.infrastructure.persistence.create-repository.createRepository.normalize.transformed.items.map() callback` (L354-L355) - Function
+  - `src.infrastructure.persistence.create-repository.createRepository.normalize.transformed` (L354-L356) - Class
+  - `src.infrastructure.persistence.create-repository.save` (L411-L414) - Class
+  - `src.infrastructure.persistence.create-repository.createRepository.save.fencedSave() callback` (L414-L414) - Function
+  - `src.infrastructure.persistence.create-repository.deleteOne` (L427-L432) - Class
+  - `src.infrastructure.persistence.create-repository.createRepository.deleteOne.checkedDelete() callback` (L431-L431) - Function
+  - `src.infrastructure.persistence.create-repository.search` (L443-L469) - Class
+  - `src.infrastructure.persistence.create-repository.createRepository.search.then() callback` (L458-L467) - Function
+  - `src.infrastructure.persistence.create-repository.createRepository.search.then() callback.then() callback` (L464-L467) - Function
+- `src/infrastructure/persistence/money-field.ts`
+  - `src.infrastructure.persistence.money-field.WalkableSchemaType` (L152-L155) - Interface
+  - `src.infrastructure.persistence.money-field.MoneyWalkableSchema` (L158-L160) - Interface
+- `src/infrastructure/persistence/revision-plugin.ts`
+  - `src.infrastructure.persistence.revision-plugin.stampsUpdatedAt` (L65-L70) - Class
+  - `src.infrastructure.persistence.revision-plugin.stampsUpdatedAt.setters.map() callback` (L66-L67) - Function
+  - `src.infrastructure.persistence.revision-plugin.stampsUpdatedAt.setters` (L66-L68) - Class
+  - `src.infrastructure.persistence.revision-plugin.stampsUpdatedAt.setters.some() callback` (L69-L69) - Function
+  - `src.infrastructure.persistence.revision-plugin.incrementOnUpdate` (L81-L97) - Function
+  - `src.infrastructure.persistence.revision-plugin.revisionPlugin` (L107-L120) - Class
+  - `src.infrastructure.persistence.revision-plugin.revisionPlugin.flagEdit` (L112-L116) - Function
+- `src/infrastructure/persistence/yearly-counter.ts`
+  - `src.infrastructure.persistence.yearly-counter.YearlyCounterDocument` (L12-L14) - Interface
+  - `src.infrastructure.persistence.yearly-counter.incrementYearlyCounter` (L26-L41) - Class
+  - `src.infrastructure.persistence.yearly-counter.incrementYearlyCounter.then() callback` (L41-L41) - Function
+- `src/modules/invoicing/repository.ts`
+  - `src.modules.invoicing.repository.DocumentBucketRow` (L31-L39) - Interface
+  - `src.modules.invoicing.repository.sumDocuments` (L48-L82) - Class
+  - `src.modules.invoicing.repository.sumDocuments.then() callback` (L76-L81) - Function
+  - `src.modules.invoicing.repository.sumDocuments.then() callback.rows.map() callback` (L77-L81) - Function
+  - `src.modules.invoicing.repository.WithId` (L88-L90) - Interface
+  - `src.modules.invoicing.repository.BuyerBearingDocument` (L163-L167) - Interface
+  - `src.modules.invoicing.repository.invoicingRepository` (L223-L242) - Class
+  - `src.modules.invoicing.repository.invoicingRepository.sumInvoices` (L229-L229) - Method
+  - `src.modules.invoicing.repository.invoicingRepository.sumCreditNotes` (L230-L230) - Method
+  - `src.modules.invoicing.repository.invoicingRepository.incrementInvoiceNumberCounter` (L238-L239) - Method
+  - `src.modules.invoicing.repository.invoicingRepository.incrementCreditNoteNumberCounter` (L240-L241) - Method
+- `src/modules/invoicing/services/issue-credit-note.ts`
+  - `src.modules.invoicing.services.issue-credit-note.issueCreditNote` (L123-L187) - Class
+  - `src.modules.invoicing.services.issue-credit-note.issueCreditNote.then() callback` (L124-L187) - Function
+  - `src.modules.invoicing.services.issue-credit-note.issueCreditNote.then() callback.withTransaction() callback` (L132-L185) - Function
+  - `src.modules.invoicing.services.issue-credit-note.issueCreditNote.then() callback.withTransaction() callback.then() callback` (L133-L184) - Function
+  - `src.modules.invoicing.services.issue-credit-note.issueCreditNote.then() callback.withTransaction() callback.then() callback.then() callback` (L169-L183) - Function
+  - `src.modules.invoicing.services.issue-credit-note.issueCreditNote.then() callback.withTransaction() callback.then() callback.then() callback.then() callback` (L183-L183) - Function
+  - `src.modules.invoicing.services.issue-credit-note.issueCreditNote.then() callback.readWinner() callback` (L186-L186) - Function
+- `src/modules/invoicing/services/issue-invoice.ts`
+  - `src.modules.invoicing.services.issue-invoice.frozenLines` (L41-L49) - Class
+  - `src.modules.invoicing.services.issue-invoice.frozenLines.order.items.map() callback` (L42-L49) - Function
+  - `src.modules.invoicing.services.issue-invoice.issueInvoice` (L62-L134) - Class
+  - `src.modules.invoicing.services.issue-invoice.issueInvoice.withTransaction() callback` (L79-L132) - Function
+  - `src.modules.invoicing.services.issue-invoice.issueInvoice.withTransaction() callback.then() callback` (L80-L131) - Function
+  - `src.modules.invoicing.services.issue-invoice.issueInvoice.withTransaction() callback.then() callback.then() callback` (L120-L130) - Function
+  - `src.modules.invoicing.services.issue-invoice.issueInvoice.withTransaction() callback.then() callback.then() callback.then() callback` (L130-L130) - Function
+  - `src.modules.invoicing.services.issue-invoice.issueInvoice.readWinner() callback` (L133-L133) - Function
+- `src/modules/invoicing/services/numbering.ts`
+  - `src.modules.invoicing.services.numbering.allocateInvoiceNumber` (L31-L36) - Class
+  - `src.modules.invoicing.services.numbering.allocateInvoiceNumber.then() callback` (L35-L35) - Function
+  - `src.modules.invoicing.services.numbering.allocateCreditNoteNumber` (L47-L55) - Class
+  - `src.modules.invoicing.services.numbering.allocateCreditNoteNumber.then() callback` (L54-L54) - Function
+  - `src.modules.invoicing.services.numbering.readWinner` (L66-L76) - Class
+  - `src.modules.invoicing.services.numbering.readWinner.<function>` (L68-L76) - Function
+  - `src.modules.invoicing.services.numbering.readWinner.<function>.then() callback` (L70-L75) - Function
+- `src/modules/invoicing/services/stats.ts`
+  - `src.modules.invoicing.services.stats.DocumentTotals` (L17-L27) - Interface
+  - `src.modules.invoicing.services.stats.MoneyBucket` (L30-L35) - Interface
+  - `src.modules.invoicing.services.stats.moneyBuckets` (L62-L82) - Class
+  - `src.modules.invoicing.services.stats.moneyBuckets.then() callback` (L66-L82) - Function
+
+### Mutation Runner & Contract-Derived Documentation Pipeline
+The core measurement-and-documentation engine. On the measurement side, runStryker spawns a Stryker child process with machine-resolved concurrency, heap caps, and an OOM-loop guard, banking each shard's report for later merge. On the documentation side, generate-rate-limit-budgets.rows reads every enabled module's manifest via resolveRateLimits plus INFRASTRUCTURE_RATE_LIMITS to produce the rate-limit budget table. The setup side (fillableKeys, fillPlaceholders) defines the exact set of environment keys npm run setup can fill, reading from allConfigSlices(enabledModules). Domain primitives and the kernel registry are the contract sources the docs generators read from.
+
+**Related Classes/Methods**:
+
+- `scripts.mutation.stryker-run.runStryker`:91-187
+- `scripts.docs.generate-rate-limit-budgets.rows`:35-40
+- `scripts.setup.required-keys.fillableKeys`:22-29
+- `scripts.setup.environment-file.fillPlaceholders`:31-48
+- `src.app.config.APP_CONFIG_SLICES`:102-137
+
+**Source Files:**
+
+- `scripts/docs/generate-rate-limit-budgets.ts`
+  - `scripts.docs.generate-rate-limit-budgets.rows` (L35-L40) - Class
+  - `scripts.docs.generate-rate-limit-budgets.rows.enabledModules.flatMap() callback` (L36-L37) - Function
+  - `scripts.docs.generate-rate-limit-budgets.rows.enabledModules.flatMap() callback.map() callback` (L37-L37) - Function
+  - `scripts.docs.generate-rate-limit-budgets.rows.INFRASTRUCTURE_RATE_LIMITS.map() callback` (L39-L39) - Function
+  - `scripts.docs.generate-rate-limit-budgets.then() callback` (L67-L69) - Function
+- `scripts/mutation/stryker-run.ts`
+  - `scripts.mutation.stryker-run.runStryker` (L91-L187) - Class
+  - `scripts.mutation.stryker-run.runStryker.then() callback` (L132-L185) - Function
+  - `scripts.mutation.stryker-run.runStryker.then() callback.<function>` (L133-L185) - Function
+  - `scripts.mutation.stryker-run.runStryker.then() callback.<function>.stryker.stdout.on('data') callback` (L161-L180) - Function
+  - `scripts.mutation.stryker-run.runStryker.then() callback.<function>.stryker.on('exit') callback` (L182-L183) - Function
+- `scripts/setup/environment-file.ts`
+  - `scripts.setup.environment-file.FillResult` (L16-L21) - Interface
+  - `scripts.setup.environment-file.fillPlaceholders` (L31-L48) - Class
+  - `scripts.setup.environment-file.fillPlaceholders.lines.map() callback` (L43-L43) - Function
+- `scripts/setup/required-keys.ts`
+  - `scripts.setup.required-keys.FillableKey` (L12-L15) - Interface
+  - `scripts.setup.required-keys.fillableKeys` (L22-L29) - Class
+  - `scripts.setup.required-keys.fillableKeys.map() callback` (L28-L28) - Function
+- `src/app/config.ts`
+  - `src.app.config.APP_CONFIG_SLICES` (L102-L137) - Class
+  - `src.app.config.APP_CONFIG_SLICES.map() callback` (L137-L137) - Function
+- `src/domain-primitives/money.ts`
+  - `src.domain-primitives.money.ISO_4217_EXPONENTS` (L40-L58) - Class
+  - `src.domain-primitives.money.ISO_4217_EXPONENTS.flatMap() callback` (L57-L57) - Function
+  - `src.domain-primitives.money.ISO_4217_EXPONENTS.flatMap() callback.map() callback` (L57-L57) - Function
+  - `src.domain-primitives.money.apportion` (L258-L273) - Class
+  - `src.domain-primitives.money.apportion.weights.map() callback` (L260-L260) - Function
+- `src/domain-primitives/time.ts`
+  - `src.domain-primitives.time.wallClockAsUtc.field` (L116-L117) - Class
+  - `src.domain-primitives.time.wallClockAsUtc.field.parts.find() callback` (L117-L117) - Function
+- `src/kernel/registry.ts`
+  - `src.kernel.registry.resolveRateLimits` (L732-L733) - Class
+  - `src.kernel.registry.resolveRateLimits.appModules.flatMap() callback` (L733-L733) - Function
+- `src/modules/delivery/domain/fulfillment.ts`
+  - `src.modules.delivery.domain.fulfillment.FulfillmentLine` (L20-L27) - Interface
+  - `src.modules.delivery.domain.fulfillment.GroupableLine` (L30-L53) - Interface
+  - `src.modules.delivery.domain.fulfillment.FulfillmentOrderDraft` (L56-L68) - Interface
+  - `src.modules.delivery.domain.fulfillment.Waiting` (L104-L111) - Interface
+  - `src.modules.delivery.domain.fulfillment.groupOrderLines.now` (L175-L175) - Class
+  - `src.modules.delivery.domain.fulfillment.groupOrderLines.now.parts.flatMap() callback` (L175-L175) - Function
+  - `src.modules.delivery.domain.fulfillment.groupOrderLines.waiting` (L176-L176) - Class
+  - `src.modules.delivery.domain.fulfillment.groupOrderLines.waiting.parts.flatMap() callback` (L176-L176) - Function
+  - `src.modules.delivery.domain.fulfillment.drafts.map() callback` (L205-L219) - Function
+  - `src.modules.delivery.domain.fulfillment.drafts.map() callback.lines` (L206-L206) - Class
+  - `src.modules.delivery.domain.fulfillment.ProductQuantity` (L251-L254) - Interface
+  - `src.modules.delivery.domain.fulfillment.checkShipLines.lines.map() callback` (L294-L294) - Function
+  - `src.modules.delivery.domain.fulfillment.withShipped.add` (L321-L321) - Class
+  - `src.modules.delivery.domain.fulfillment.withShipped.add.shipped.map() callback` (L321-L321) - Function
+  - `src.modules.delivery.domain.fulfillment.SummaryInputs` (L349-L359) - Interface
+  - `src.modules.delivery.domain.fulfillment.FulfillmentReport` (L362-L369) - Interface
+  - `src.modules.delivery.domain.fulfillment.summarize.awaitingStock.held.filter() callback` (L395-L395) - Function
+  - `src.modules.delivery.domain.fulfillment.summarize.undelivered.shipments.filter() callback` (L399-L399) - Function
+  - `src.modules.delivery.domain.fulfillment.ActionCandidate` (L405-L410) - Interface
+- `src/modules/delivery/domain/lost.ts`
+  - `src.modules.delivery.domain.lost.withLoss.lostBy` (L83-L83) - Class
+  - `src.modules.delivery.domain.lost.withLoss.lostBy.lost.map() callback` (L83-L83) - Function
+  - `src.modules.delivery.domain.lost.withRestoration.updated.lines.map() callback.found` (L156-L156) - Class
+  - `src.modules.delivery.domain.lost.withRestoration.updated.lines.map() callback.found.back.find() callback` (L156-L156) - Function
+- `src/modules/invoicing/domain/credit-shares.ts`
+  - `src.modules.invoicing.domain.credit-shares.CreditableInvoice` (L35-L43) - Interface
+  - `src.modules.invoicing.domain.credit-shares.RefundedGoods` (L46-L50) - Interface
+  - `src.modules.invoicing.domain.credit-shares.CreditLine` (L53-L60) - Interface
+  - `src.modules.invoicing.domain.credit-shares.goodsWeights` (L70-L90) - Class
+  - `src.modules.invoicing.domain.credit-shares.goodsWeights.weights` (L72-L72) - Class
+  - `src.modules.invoicing.domain.credit-shares.goodsWeights.weights.taxSummary.map() callback` (L72-L72) - Function
+  - `src.modules.invoicing.domain.credit-shares.goodsWeights.line` (L78-L78) - Class
+  - `src.modules.invoicing.domain.credit-shares.goodsWeights.line.lines.find() callback` (L78-L78) - Function
+  - `src.modules.invoicing.domain.credit-shares.goodsWeights.shippingShares` (L83-L86) - Class
+  - `src.modules.invoicing.domain.credit-shares.goodsWeights.shippingShares.shippingByRate.map() callback` (L85-L85) - Function
+  - `src.modules.invoicing.domain.credit-shares.goodsWeights.taxSummary.map() callback` (L89-L89) - Function
+  - `src.modules.invoicing.domain.credit-shares.creditShares` (L101-L126) - Class
+  - `src.modules.invoicing.domain.credit-shares.creditShares.everyRate` (L108-L108) - Class
+  - `src.modules.invoicing.domain.credit-shares.creditShares.everyRate.taxSummary.map() callback` (L108-L108) - Function
+  - `src.modules.invoicing.domain.credit-shares.creditShares.taxSummary.flatMap() callback` (L114-L124) - Function
+- `src/modules/invoicing/domain/tax-items.ts`
+  - `src.modules.invoicing.domain.tax-items.asTaxItems` (L12-L18) - Class
+  - `src.modules.invoicing.domain.tax-items.asTaxItems.lines.map() callback` (L15-L18) - Function
+- `src/modules/invoicing/emails.ts`
+  - `src.modules.invoicing.emails.DocumentVatRow` (L50-L60) - Interface
+  - `src.modules.invoicing.emails.DocumentTaxSummaryRow` (L63-L69) - Interface
+  - `src.modules.invoicing.emails.DocumentVatBlock` (L72-L100) - Interface
+  - `src.modules.invoicing.emails.buildVatBlock.shippingTaxAt` (L162-L162) - Class
+  - `src.modules.invoicing.emails.buildVatBlock.shippingTaxAt.document.shippingByRate.map() callback` (L162-L162) - Function
+  - `src.modules.invoicing.emails.buildVatBlock.goodsTaxByRate` (L163-L174) - Class
+  - `src.modules.invoicing.emails.buildVatBlock.goodsTaxByRate.document.taxSummary.map() callback` (L164-L173) - Function
+  - `src.modules.invoicing.emails.buildVatBlock.rows.document.lines.map() callback` (L177-L186) - Function
+  - `src.modules.invoicing.emails.rows` (L177-L186) - Class
+  - `src.modules.invoicing.emails.buildVatBlock.shipping.rows.shippingByRate.map() callback` (L217-L223) - Function
+  - `src.modules.invoicing.emails.buildVatBlock.summaryRows.taxSummary.map() callback` (L227-L231) - Function
+- `src/modules/invoicing/model.ts`
+  - `src.modules.invoicing.model.InvoiceLine` (L28-L46) - Interface
+  - `src.modules.invoicing.model.InvoiceParty` (L49-L55) - Interface
+  - `src.modules.invoicing.model.FrozenTaxDocument` (L70-L109) - Interface
+  - `src.modules.invoicing.model.InvoiceDocument` (L112-L112) - Interface
+  - `src.modules.invoicing.model.CreditNoteDocument` (L122-L129) - Interface
+  - `src.modules.invoicing.model.NumberCounterDocument` (L265-L267) - Interface
+- `src/modules/invoicing/repository.ts`
+  - `src.modules.invoicing.repository.insertInvoice` (L100-L106) - Class
+  - `src.modules.invoicing.repository.insertInvoice.then() callback` (L106-L106) - Function
+  - `src.modules.invoicing.repository.insertCreditNote` (L151-L160) - Class
+  - `src.modules.invoicing.repository.insertCreditNote.then() callback` (L160-L160) - Function
+  - `src.modules.invoicing.repository.buyerSweepOf` (L175-L192) - Class
+  - `src.modules.invoicing.repository.buyerSweepOf.findBefore` (L177-L182) - Method
+  - `src.modules.invoicing.repository.buyerSweepOf.erase` (L184-L191) - Method
+  - `src.modules.invoicing.repository.buyerSweepOf.erase.then() callback` (L191-L191) - Function
+- `src/modules/orders/domain/fulfillment.ts`
+  - `src.modules.orders.domain.fulfillment.fulfillmentStatusFilter.withValue` (L120-L127) - Class
+  - `src.modules.orders.domain.fulfillment.fulfillmentStatusFilter.withValue.statusesWhere() callback` (L123-L125) - Function
+  - `src.modules.orders.domain.fulfillment.fulfillmentStatusFilter.inFlight` (L129-L129) - Class
+  - `src.modules.orders.domain.fulfillment.fulfillmentStatusFilter.inFlight.statusesWhere() callback` (L129-L129) - Function
+- `src/modules/orders/domain/status-traits.ts`
+  - `src.modules.orders.domain.status-traits.OrderStatusTraits` (L26-L34) - Interface
+  - `src.modules.orders.domain.status-traits.statusesWhere` (L83-L86) - Class
+  - `src.modules.orders.domain.status-traits.statusesWhere.filter() callback` (L86-L86) - Function
+- `src/modules/orders/domain/tax.ts`
+  - `src.modules.orders.domain.tax.allocateLineTax.shares` (L187-L190) - Class
+  - `src.modules.orders.domain.tax.allocateLineTax.shares.indexes.map() callback` (L189-L189) - Function
+  - `src.modules.orders.domain.tax.orderTaxBreakdown.sumOf` (L258-L259) - Class
+  - `src.modules.orders.domain.tax.orderTaxBreakdown.sumOf.sortedGroups.map() callback` (L259-L259) - Function
+  - `src.modules.orders.domain.tax.orderTaxBreakdown.shippingNetTotal` (L283-L286) - Class
+  - `src.modules.orders.domain.tax.orderTaxBreakdown.shippingNetTotal.sumOf() callback` (L285-L285) - Function
+  - `src.modules.orders.domain.tax.netTotal` (L287-L290) - Class
+  - `src.modules.orders.domain.tax.netTotal.sumOf() callback` (L288-L288) - Function
+- `src/modules/orders/services/crud.ts`
+  - `src.modules.orders.services.crud.resolveItemProducts` (L85-L97) - Class
+  - `src.modules.orders.services.crud.resolveItemProducts.items.map() callback` (L92-L95) - Function
+  - `src.modules.orders.services.crud.resolveItemProducts.items.map() callback.then() callback` (L95-L95) - Function
+- `src/modules/orders/services/place.ts`
+  - `src.modules.orders.services.place.withOwedLines.items.map() callback.quantity` (L116-L116) - Class
+  - `src.modules.orders.services.place.withOwedLines.items.map() callback.quantity.owed.find() callback` (L116-L116) - Function
+- `src/modules/orders/services/stats.ts`
+  - `src.modules.orders.services.stats.pipeline` (L288-L333) - Class
+  - `src.modules.orders.services.stats.pipeline.then() callback` (L325-L333) - Function
+  - `src.modules.orders.services.stats.pipeline.then() callback.awaitingTransfers.facet.transfers.map() callback` (L326-L331) - Function
+- `src/modules/stats/services/breakdowns.ts`
+  - `src.modules.stats.services.breakdowns.getProductStats` (L30-L54) - Class
+  - `src.modules.stats.services.breakdowns.getProductStats.then() callback` (L37-L54) - Function
+  - `src.modules.stats.services.breakdowns.getProductStats.then() callback.reversed` (L38-L38) - Class
+  - `src.modules.stats.services.breakdowns.getProductStats.then() callback.reversed.returned.map() callback` (L38-L38) - Function
+  - `src.modules.stats.services.breakdowns.getProductStats.then() callback.products.sold.map() callback` (L41-L52) - Function
+
+### Shard Orchestration & Production Config Surface
+The execution-orchestration and production-facing surface of the subsystem. On the measurement side, run-shards.ts manages the bin-packed shard lifecycle and ci/merge.ts (tally) merges per-shard reports into the per-file ratchet baseline. On the production side, buildSecurityTxt renders the RFC 9116 security.txt body, and system-routes.ts exposes the /readyz health endpoint. Module model definitions and domain views are the contract surfaces that the docs generators read to render their tables. The audit shallow-candidates.ts script identifies code-shape candidates for the audit-actions documentation.
+
+**Related Classes/Methods**:
+
+- `scripts.mutation.run-shards.completed`
+- `scripts.mutation.ci.merge.tally`:327-341
+- `src.app.security-txt.buildSecurityTxt`:47-73
+- `src.modules.products.model.zodProductCreateSchema`:253-255
+
+**Source Files:**
+
+- `scripts/audit/code-shape/scripts/shallow-candidates.ts`
+  - `scripts.audit.code-shape.scripts.shallow-candidates.callArgumentsOf` (L144-L150) - Class
+  - `scripts.audit.code-shape.scripts.shallow-candidates.callArgumentsOf.call.arguments.some() callback` (L147-L147) - Function
+  - `scripts.audit.code-shape.scripts.shallow-candidates.collectUsage.record` (L180-L201) - Class
+  - `scripts.audit.code-shape.scripts.shallow-candidates.collectUsage.record.symbol.declarations.some() callback` (L187-L187) - Function
+- `scripts/mutation/ci/merge.ts`
+  - `scripts.mutation.ci.merge.mergeReports.remap` (L178-L178) - Class
+  - `scripts.mutation.ci.merge.mergeReports.remap.ids.map() callback` (L178-L178) - Function
+  - `scripts.mutation.ci.merge.mergeReports.files` (L180-L195) - Class
+  - `scripts.mutation.ci.merge.mergeReports.files.filter() callback` (L182-L182) - Function
+  - `scripts.mutation.ci.merge.mergeReports.files.map() callback` (L183-L194) - Function
+  - `scripts.mutation.ci.merge.mergeReports.files.map() callback.mutants.map() callback` (L187-L192) - Function
+  - `scripts.mutation.ci.merge.formatSummary.mutantCount` (L283-L283) - Class
+  - `scripts.mutation.ci.merge.formatSummary.mutantCount.reduce() callback` (L283-L283) - Function
+  - `scripts.mutation.ci.merge.tally` (L327-L341) - Class
+  - `scripts.mutation.ci.merge.tally.flatMap() callback` (L331-L331) - Function
+  - `scripts.mutation.ci.merge.tally.count` (L334-L335) - Class
+  - `scripts.mutation.ci.merge.tally.count.statuses.reduce() callback` (L335-L335) - Function
+- `scripts/mutation/run-shards.ts`
+  - `scripts.mutation.run-shards.completed` (L84-L84) - Class
+  - `scripts.mutation.run-shards.completed.filter() callback` (L84-L84) - Function
+  - `scripts.mutation.run-shards.completed.shards.map() callback` (L84-L84) - Function
+- `src/app/security-txt.ts`
+  - `src.app.security-txt.SecurityTxtSettings` (L13-L22) - Interface
+  - `src.app.security-txt.buildSecurityTxt` (L47-L73) - Class
+  - `src.app.security-txt.buildSecurityTxt.filter() callback` (L70-L70) - Function
+- `src/app/system-routes.ts`
+  - `src.app.system-routes.router.get('/readyz') callback` (L40-L42) - Function
+  - `src.app.system-routes.router.get('/.well-known/security.txt') callback` (L50-L58) - Function
+- `src/modules/cart/services/view.ts`
+  - `src.modules.cart.services.view.readCartLines.then() callback.byId` (L66-L66) - Class
+  - `src.modules.cart.services.view.readCartLines.then() callback.byId.products.map() callback` (L66-L66) - Function
+  - `src.modules.cart.services.view.buildView.joined` (L144-L144) - Class
+  - `src.modules.cart.services.view.buildView.joined.lines.filter() callback` (L144-L144) - Function
+- `src/modules/delivery/domain/fulfillment.ts`
+  - `src.modules.delivery.domain.fulfillment.groupOrderLines.nowOrdinary` (L177-L177) - Class
+  - `src.modules.delivery.domain.fulfillment.groupOrderLines.nowOrdinary.now.filter() callback` (L177-L177) - Function
+  - `src.modules.delivery.domain.fulfillment.summarize.last` (L388-L388) - Class
+  - `src.modules.delivery.domain.fulfillment.summarize.last.arrivals.toSorted() callback` (L388-L388) - Function
+- `src/modules/delivery/domain/lost.ts`
+  - `src.modules.delivery.domain.lost.sumOf` (L58-L66) - Class
+  - `src.modules.delivery.domain.lost.sumOf.orders.flatMap() callback` (L64-L64) - Function
+  - `src.modules.delivery.domain.lost.sumOf.filter() callback` (L65-L65) - Function
+  - `src.modules.delivery.domain.lost.sumOf.reduce() callback` (L66-L66) - Function
+  - `src.modules.delivery.domain.lost.planRestoration.linked` (L113-L113) - Class
+  - `src.modules.delivery.domain.lost.planRestoration.linked.orders.filter() callback` (L113-L113) - Function
+  - `src.modules.delivery.domain.lost.planRestoration.owedQuantity` (L117-L117) - Class
+  - `src.modules.delivery.domain.lost.planRestoration.owedQuantity.sumOf() callback` (L117-L117) - Function
+  - `src.modules.delivery.domain.lost.withRestoration.back` (L148-L153) - Class
+  - `src.modules.delivery.domain.lost.withRestoration.back.shipment.lines.map() callback` (L148-L153) - Function
+- `src/modules/products/domain/backorder.ts`
+  - `src.modules.products.domain.backorder.BackorderFacts` (L13-L22) - Interface
+- `src/modules/products/domain/buyable.ts`
+  - `src.modules.products.domain.buyable.BuyableFacts` (L14-L17) - Interface
+- `src/modules/products/domain/preorder.ts`
+  - `src.modules.products.domain.preorder.PreorderFacts` (L10-L17) - Interface
+- `src/modules/products/model.ts`
+  - `src.modules.products.model.ProductRecord` (L31-L63) - Interface
+  - `src.modules.products.model.ProductDocument` (L89-L99) - Interface
+  - `src.modules.products.model.checkProductTranslationFields` (L129-L140) - Class
+  - `src.modules.products.model.checkProductTranslationFields.parsed.error.issues.map() callback` (L135-L139) - Function
+  - `src.modules.products.model.zodProductCreateSchema` (L253-L255) - Class
+  - `src.modules.products.model.zodProductCreateSchema.CreateProductBody.superRefine() callback` (L253-L255) - Function
+  - `src.modules.products.model.zodProductReplaceSchema` (L262-L264) - Class
+  - `src.modules.products.model.zodProductReplaceSchema.ReplaceProductByIdBody.superRefine() callback` (L262-L264) - Function
+  - `src.modules.products.model.zodProductUpdateSchema` (L270-L272) - Class
+  - `src.modules.products.model.zodProductUpdateSchema.UpdateProductByIdBody.superRefine() callback` (L270-L272) - Function
+- `src/modules/returns/domain/accounting.ts`
+  - `src.modules.returns.domain.accounting.AccountedReturn` (L15-L23) - Interface
+  - `src.modules.returns.domain.accounting.OrderAccounts` (L26-L31) - Interface
+  - `src.modules.returns.domain.accounting.accountsOf.settled` (L54-L54) - Class
+  - `src.modules.returns.domain.accounting.accountsOf.settled.returns.filter() callback` (L54-L54) - Function
+- `src/modules/returns/domain/quantities.ts`
+  - `src.modules.returns.domain.quantities.ProductIdLike` (L14-L16) - Interface
+  - `src.modules.returns.domain.quantities.ProductIdLike.toString` (L15-L15) - Method
+  - `src.modules.returns.domain.quantities.lines` (L93-L95) - Class
+  - `src.modules.returns.domain.quantities.lines.map() callback` (L95-L95) - Function
+- `src/modules/returns/domain/refund-amount.ts`
+  - `src.modules.returns.domain.refund-amount.goodsOf` (L66-L74) - Class
+  - `src.modules.returns.domain.refund-amount.goodsOf.lines.map() callback` (L71-L72) - Function
+- `src/modules/returns/domain/restock.ts`
+  - `src.modules.returns.domain.restock.RestockRequest` (L11-L14) - Interface
+  - `src.modules.returns.domain.restock.ReturnedLine` (L17-L20) - Interface
+  - `src.modules.returns.domain.restock.resolveRestock.line` (L51-L51) - Class
+  - `src.modules.returns.domain.restock.resolveRestock.line.lines.find() callback` (L51-L51) - Function
+  - `src.modules.returns.domain.restock.resolveRestock.restocked.lines.map() callback` (L60-L60) - Function
+- `src/modules/returns/domain/status-projection.ts`
+  - `src.modules.returns.domain.status-projection.projectReturnStatus.holding` (L45-L51) - Class
+  - `src.modules.returns.domain.status-projection.projectReturnStatus.holding.returns.filter() callback` (L46-L50) - Function
+  - `src.modules.returns.domain.status-projection.projectReturnStatus.holding.some() callback` (L54-L54) - Function
+- `src/modules/returns/repository.ts`
+  - `src.modules.returns.repository.returnRepository.sumReceived` (L123-L140) - Method
+- `src/modules/returns/services/cancel-remainder.ts`
+  - `src.modules.returns.services.cancel-remainder.Canceled` (L60-L67) - Interface
+  - `src.modules.returns.services.cancel-remainder.createCancellation.then() callback.then() callback.option` (L303-L303) - Class
+  - `src.modules.returns.services.cancel-remainder.createCancellation.then() callback.then() callback.option.options.find() callback` (L303-L303) - Function
+- `src/modules/returns/services/cancellation-refund.ts`
+  - `src.modules.returns.services.cancellation-refund.cancellationRefundOn.price` (L36-L38) - Class
+  - `src.modules.returns.services.cancellation-refund.cancellationRefundOn.price.order.items.map() callback` (L37-L37) - Function
+- `src/modules/returns/services/digest.ts`
+  - `src.modules.returns.services.digest.ReturnsDigest` (L14-L19) - Interface
+  - `src.modules.returns.services.digest.returnsDigest` (L27-L38) - Class
+  - `src.modules.returns.services.digest.returnsDigest.then() callback` (L38-L38) - Function
+- `src/modules/returns/services/receive.ts`
+  - `src.modules.returns.services.receive.quote.ordered` (L165-L168) - Class
+  - `src.modules.returns.services.receive.quote.ordered.order.items.map() callback` (L165-L168) - Function
+  - `src.modules.returns.services.receive.receiveFor.then() callback.restockedTo` (L404-L407) - Class
+  - `src.modules.returns.services.receive.receiveFor.then() callback.restockedTo.received.lines.map() callback` (L404-L407) - Function
+  - `src.modules.returns.services.receive.receiveFor.then() callback.restockedTo.filter() callback` (L413-L413) - Function
+- `src/modules/returns/services/stats.ts`
+  - `src.modules.returns.services.stats.ReturnedBucket` (L12-L16) - Interface
+  - `src.modules.returns.services.stats.returnedBuckets` (L22-L34) - Class
+  - `src.modules.returns.services.stats.returnedBuckets.then() callback` (L28-L33) - Function
+  - `src.modules.returns.services.stats.returnedBuckets.then() callback.rows.map() callback` (L29-L33) - Function
+  - `src.modules.returns.services.stats.returnedByProduct` (L40-L48) - Class
+  - `src.modules.returns.services.stats.returnedByProduct.then() callback` (L48-L48) - Function
+  - `src.modules.returns.services.stats.returnedByProduct.then() callback.rows.map() callback` (L48-L48) - Function
+  - `src.modules.returns.services.stats.returnedSeries` (L55-L68) - Class
+  - `src.modules.returns.services.stats.returnedSeries.then() callback` (L68-L68) - Function
+  - `src.modules.returns.services.stats.returnedSeries.then() callback.rows.map() callback` (L68-L68) - Function
+- `src/modules/returns/services/withdraw.ts`
+  - `src.modules.returns.services.withdraw.withdrawEligibleGroups.eligible.groups.filter() callback` (L128-L129) - Function
+  - `src.modules.returns.services.withdraw.withdrawEligibleGroups.eligible` (L128-L130) - Class
+  - `src.modules.returns.services.withdraw.withdrawEligibleGroups.eligible.groups.filter() callback.lines.every() callback` (L129-L129) - Function
+- `src/modules/stats/services/breakdowns.ts`
+  - `src.modules.stats.services.breakdowns.getPaymentMix` (L102-L112) - Class
+  - `src.modules.stats.services.breakdowns.getPaymentMix.then() callback` (L103-L112) - Function
+  - `src.modules.stats.services.breakdowns.getPaymentMix.then() callback.rows.rows.map() callback` (L105-L111) - Function
