@@ -385,6 +385,38 @@ describe('listAttention', () => {
             expect(await attentionRows()).toEqual([]);
         }));
 
+    it('shows the legal deadline of a stale provider refund, and none for a goodwill one', () =>
+        withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
+            const dueBy = new Date(Date.now() + 5 * 86_400_000);
+            const stale = {
+                status: 'failed',
+                failureReason: 'provider_unavailable',
+                createdAt: new Date(Date.now() - 3 * 3_600_000)
+            };
+            const legal = await seedPayment({
+                amountRefunded: '10.00',
+                refunds: [refundRecord({ ...stale, dueBy, dueRule: 'withdrawal' })]
+            });
+            const goodwill = await seedPayment({
+                amountRefunded: '10.00',
+                refunds: [refundRecord(stale)]
+            });
+            await backdate(legal.payment, 180);
+            await backdate(goodwill.payment, 180);
+
+            const rows = await attentionRows();
+            const rowOf = (paymentId: unknown) =>
+                rows.find((row) => row.paymentId === String(paymentId));
+
+            expect(rowOf(legal.payment._id)).toMatchObject({
+                kind: 'stale_refund',
+                refundDueBy: dueBy.toISOString(),
+                refundDueRule: 'withdrawal'
+            });
+            expect(rowOf(goodwill.payment._id)).not.toHaveProperty('refundDueBy');
+            expect(rowOf(goodwill.payment._id)).not.toHaveProperty('refundDueRule');
+        }));
+
     it(
         'lists the oldest problem first, and no more than 100 from one source',
         () =>

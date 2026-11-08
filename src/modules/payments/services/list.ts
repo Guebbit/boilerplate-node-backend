@@ -146,21 +146,14 @@ export const listRefunds = (
         .then(({ items, meta }) => ({ items: items.map((row) => refundRow(row)), meta }));
 
 /**
- * The legal deadline of a refused refund, as the attention row's `refundDueBy` and `refundDueRule`
- * fields: nothing for any other kind of row, or for a refund the law sets no deadline for.
+ * The legal deadline of a refund, as the attention row's `refundDueBy` and `refundDueRule` fields.
+ * The deadline belongs to the refund, so every kind of row backed by one carries it; a refund the
+ * law sets no deadline for (goodwill) carries none.
  *
- * @param kind - which source found the row
  * @param refund - the open refund
  */
-const dueByOf = (
-    kind: PaymentAttentionKind,
-    refund: RefundRecord
-): { refundDueBy?: string; refundDueRule?: RefundDueRule } => {
-    const due =
-        kind === PaymentAttentionKind.refused_refund ||
-        kind === PaymentAttentionKind.reversed_refund
-            ? refundDueBy(refund)
-            : undefined;
+const dueByOf = (refund: RefundRecord): { refundDueBy?: string; refundDueRule?: RefundDueRule } => {
+    const due = refundDueBy(refund);
     return due && refund.dueRule
         ? { refundDueBy: due.toISOString(), refundDueRule: refund.dueRule }
         : {};
@@ -184,7 +177,7 @@ const refundAttention = (row: RefundRow, kind: PaymentAttentionKind): PaymentAtt
         ? row.refund.reversedAt
         : row.refund.createdAt
     ).toISOString(),
-    ...dueByOf(kind, row.refund)
+    ...dueByOf(row.refund)
 });
 
 /**

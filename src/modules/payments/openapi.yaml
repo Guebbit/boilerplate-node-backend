@@ -1365,7 +1365,7 @@ components:
                     format: date-time
                     description: >-
                         The legal deadline to give the money back, stamped on the refund when it opened,
-                        on a `refused_refund` that pays for a withdrawal or a return. For a withdrawal it
+                        on any row backed by a refund that pays for a withdrawal or a return. For a withdrawal it
                         is the end of the shop's day, 14 days after the shop was told (Consumer Rights
                         Directive Art. 13(1)), unless the goods or the proof of sending came later, which
                         makes it due the moment they did; for a faulty or wrong item it is the moment the

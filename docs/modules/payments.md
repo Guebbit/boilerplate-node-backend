@@ -942,7 +942,7 @@ method, provider and currency, for [`stats`](./stats.md).
 
 **Needs attention** lists three sources: a dispute the shop has to answer ([Disputes](#disputes)), and two that are an open refund record: a provider refund open longer
 than `NODE_PAYMENT_ATTENTION_MINUTES`, and a refund owed by hand on a `manual` payment (nothing but
-the operator finishes it, so it shows at any age). A `refused_refund` row that pays a withdrawal or
+the operator finishes it, so it shows at any age). Any row backed by a refund that pays a withdrawal or
 a return also carries `refundDueBy` and `refundDueRule` (`withdrawal` or `faulty`), the legal deadline
 and why it is that date, stamped on the record when it opened (`dueBy`, `dueRule`; Consumer Rights Directive Art. 13, [how it is set](./returns.md#the-refund-deadline)), so the
 page can show the days left; a refund the law sets no deadline for shows its age only. The listener
