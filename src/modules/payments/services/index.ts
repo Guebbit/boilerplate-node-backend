@@ -53,7 +53,7 @@ import {
 import { listPayments, listRefunds, listAttention } from './list';
 import { methodMix } from './stats';
 import { listPaymentMethods } from '../config';
-import { refundLegalDueAt } from './deadline';
+import { refundLegalDue } from './deadline';
 
 export { RefundLeftOpenError } from './errors';
 export type { OfflinePaymentInput } from './offline';
@@ -80,7 +80,7 @@ export const paymentService = {
     listForOrder,
     getRefund,
     refundOf,
-    refundLegalDueAt,
+    refundLegalDue,
     refundPayment,
     openReturnRefund,
     returnRefundState,

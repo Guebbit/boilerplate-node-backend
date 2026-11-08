@@ -171,3 +171,27 @@ describe('refund openings', () => {
         expect(reversed.message).not.toContain('cancel');
     });
 });
+
+describe('the legal deadline in a refund to-do', () => {
+    const refund = { refundId: 'r1', orderId: 'o1', failureReason: 'declined' };
+
+    it('names the withdrawal rule and the shop day', () => {
+        const opening = refundRefusedOpening(refund, NOW, {
+            rule: 'withdrawal',
+            day: '2030-05-15'
+        });
+
+        expect(opening.message).toContain('Legal refund deadline (withdrawal): 2030-05-15.');
+    });
+
+    it('says a faulty item is due now, with no date', () => {
+        const opening = refundReversedOpening(refund, NOW, { rule: 'faulty', day: '2030-05-01' });
+
+        expect(opening.message).toContain('Legal refund deadline (faulty item): refund now.');
+        expect(opening.message).not.toContain('2030-05-01');
+    });
+
+    it('adds nothing when the law sets no deadline', () => {
+        expect(refundRefusedOpening(refund, NOW).message).not.toContain('Legal refund deadline');
+    });
+});

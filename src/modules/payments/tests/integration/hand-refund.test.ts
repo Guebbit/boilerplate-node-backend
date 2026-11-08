@@ -232,7 +232,7 @@ describe('settleRefundByHand', () => {
     });
 });
 
-describe('refundLegalDueAt', () => {
+describe('refundLegalDue', () => {
     it('is nothing when the law sets no deadline', async () => {
         const { orderId } = await cashOrder();
         await refundForOrder(orderId);
@@ -240,24 +240,24 @@ describe('refundLegalDueAt', () => {
         const refund = payment.refunds[0];
 
         await expect(
-            paymentService.refundLegalDueAt(String(payment._id), String(refund._id))
+            paymentService.refundLegalDue(String(payment._id), String(refund._id))
         ).resolves.toBeUndefined();
     });
 
-    it('is the legal 14 days for a refund that pays for a return', async () => {
+    it('is the deadline and rule stamped on the refund when it opened', async () => {
         const { orderId } = await cashOrder();
         await refundForOrder(orderId);
         const payment = await paymentOf(orderId);
         const refund = payment.refunds[0];
+        const dueBy = new Date('2026-03-15T22:59:59.999Z');
         refund.returnId = 'return-1';
+        refund.dueBy = dueBy;
+        refund.dueRule = 'withdrawal';
         await payment.save();
 
-        const dueAt = await paymentService.refundLegalDueAt(
-            String(payment._id),
-            String(refund._id)
-        );
+        const due = await paymentService.refundLegalDue(String(payment._id), String(refund._id));
 
-        expect(dueAt?.getTime()).toBe(refund.createdAt.getTime() + 14 * 24 * 60 * 60_000);
+        expect(due).toEqual({ dueBy, dueRule: 'withdrawal' });
     });
 
     it('is nothing for a refund that is not there', async () => {
@@ -266,7 +266,7 @@ describe('refundLegalDueAt', () => {
         const payment = await paymentOf(orderId);
 
         await expect(
-            paymentService.refundLegalDueAt(String(payment._id), '65dc8a99604c307b702b5ccc')
+            paymentService.refundLegalDue(String(payment._id), '65dc8a99604c307b702b5ccc')
         ).resolves.toBeUndefined();
     });
 });

@@ -9,7 +9,7 @@
  * every staff member who holds the set, and the linked record has the rest.
  */
 
-import { TaskKind, TaskLinkType } from '@types';
+import { RefundDueRule, TaskKind, TaskLinkType } from '@types';
 import type { PermissionSetName } from '@api/permission-vocabulary';
 import { DAY_MS, HOUR_MS } from '@domain-primitives/time';
 
@@ -103,6 +103,28 @@ export const paidWithoutHoldOpening = (orderId: string, now: Date): ShopOpening 
     dueAt: new Date(now.getTime() + ORPHAN_WINDOW_MS)
 });
 
+/** The legal deadline of a refund, as the to-do says it: the rule and the shop's calendar day. */
+export interface LegalDeadline {
+    /** Which rule sets the date. */
+    rule: RefundDueRule;
+    /** The deadline's day in the shop's zone, `YYYY-MM-DD`. */
+    day: string;
+}
+
+/**
+ * The sentence that puts the rule beside the date, so staff see why it is due then. A faulty item
+ * is due the moment the goods or the proof came, so the date has already passed: "refund now".
+ *
+ * @param legal - the refund's legal deadline, when the law sets one
+ * @returns the sentence with its leading space, or an empty string
+ */
+const legalDeadlineNote = (legal: LegalDeadline | undefined): string => {
+    if (!legal) return '';
+    return legal.rule === RefundDueRule.withdrawal
+        ? ` Legal refund deadline (withdrawal): ${legal.day}.`
+        : ' Legal refund deadline (faulty item): refund now.';
+};
+
 /**
  * A refund the provider refused for good: the money has to go back another way.
  *
@@ -111,16 +133,18 @@ export const paidWithoutHoldOpening = (orderId: string, now: Date): ShopOpening 
  * @param refund.orderId - the order it pays back
  * @param refund.failureReason - the closed code of the refusal
  * @param dueAt - when it is overdue
+ * @param legal - the legal deadline and its rule, when the law sets one
  */
 export const refundRefusedOpening = (
     refund: { refundId: string; orderId: string; failureReason: string },
-    dueAt: Date
+    dueAt: Date,
+    legal?: LegalDeadline
 ): ShopOpening => ({
     kind: TaskKind.refund_refused,
     routeSet: 'PaymentRefunding',
     link: { type: TaskLinkType.refund, id: refund.refundId },
     subject: 'Refund refused by the provider',
-    message: `Refund ${refund.refundId} on order ${refund.orderId} was refused for good (${refund.failureReason}). Return the money another way, then mark the refund returned.`,
+    message: `Refund ${refund.refundId} on order ${refund.orderId} was refused for good (${refund.failureReason}). Return the money another way, then mark the refund returned.${legalDeadlineNote(legal)}`,
     dueAt
 });
 
@@ -132,16 +156,18 @@ export const refundRefusedOpening = (
  * @param refund.orderId - the order it pays back
  * @param refund.failureReason - the closed code the provider gave
  * @param dueAt - when it is overdue
+ * @param legal - the legal deadline and its rule, when the law sets one
  */
 export const refundReversedOpening = (
     refund: { refundId: string; orderId: string; failureReason: string },
-    dueAt: Date
+    dueAt: Date,
+    legal?: LegalDeadline
 ): ShopOpening => ({
     kind: TaskKind.refund_reversed,
     routeSet: 'PaymentRefunding',
     link: { type: TaskLinkType.refund, id: refund.refundId },
     subject: 'Refund sent back by the bank',
-    message: `Refund ${refund.refundId} on order ${refund.orderId} settled, but the bank returned it (${refund.failureReason}). Agree a way with the buyer, pay, then mark the refund returned.`,
+    message: `Refund ${refund.refundId} on order ${refund.orderId} settled, but the bank returned it (${refund.failureReason}). Agree a way with the buyer, pay, then mark the refund returned.${legalDeadlineNote(legal)}`,
     dueAt
 });
 

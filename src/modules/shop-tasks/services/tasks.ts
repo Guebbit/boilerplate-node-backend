@@ -12,8 +12,8 @@ import { RefundFailureReason, TaskKind } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import { fillPath, FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
 import type { DomainEventMap, DomainEventMeta } from '@kernel/events';
-import { paymentAttentionMinutes, paymentService } from '@modules/payments';
-import { shopCountry } from '@modules/shop';
+import { paymentAttentionMinutes, paymentService, type RefundDue } from '@modules/payments';
+import { shopCountry, shopTimezone } from '@modules/shop';
 import { taskService } from '@modules/tasks';
 import {
     amountMismatchOpening,
@@ -24,9 +24,10 @@ import {
     refundOwedOpening,
     refundRefusedOpening,
     refundReversedOpening,
+    type LegalDeadline,
     type ShopOpening
 } from '../domain/openings';
-import { MINUTE_MS } from '@domain-primitives/time';
+import { MINUTE_MS, dayInZone } from '@domain-primitives/time';
 
 /** The payments page, on the tab of what needs a person. */
 const PAYMENTS_ATTENTION_WORK = `${FRONTEND_LINK_RULES.staffPages.salesPayments}?tab=attention`;
@@ -70,6 +71,13 @@ const guarded = (name: string, work: () => Promise<void>): Promise<void> =>
         throw error;
     });
 
+/**
+ * The legal deadline as a to-do states it: the rule, and the day on the shop's calendar.
+ * @param due - the refund's stamped deadline, when the law sets one
+ */
+const legalDeadlineOf = (due: RefundDue | undefined): LegalDeadline | undefined =>
+    due && { rule: due.dueRule, day: dayInZone(due.dueBy, shopTimezone()) };
+
 /** The task handlers `module.ts` subscribes; each is `(payload, meta)`. */
 export const shopTasks = {
     /** `payment.refund_owed_by_hand`: money to send outside the app. */
@@ -94,10 +102,14 @@ export const shopTasks = {
         guarded('payment.refund_failed', () =>
             payload.final && payload.failureReason !== RefundFailureReason.disputed
                 ? paymentService
-                      .refundLegalDueAt(payload.paymentId, payload.refundId)
-                      .then((dueAt) =>
+                      .refundLegalDue(payload.paymentId, payload.refundId)
+                      .then((due) =>
                           open(
-                              refundRefusedOpening(payload, dueAt ?? attentionDueAt(new Date())),
+                              refundRefusedOpening(
+                                  payload,
+                                  due?.dueBy ?? attentionDueAt(new Date()),
+                                  legalDeadlineOf(due)
+                              ),
                               PAYMENTS_ATTENTION_WORK,
                               meta
                           )
@@ -116,10 +128,14 @@ export const shopTasks = {
             payload.failureReason === RefundFailureReason.disputed
                 ? Promise.resolve()
                 : paymentService
-                      .refundLegalDueAt(payload.paymentId, payload.refundId)
-                      .then((dueAt) =>
+                      .refundLegalDue(payload.paymentId, payload.refundId)
+                      .then((due) =>
                           open(
-                              refundReversedOpening(payload, dueAt ?? attentionDueAt(new Date())),
+                              refundReversedOpening(
+                                  payload,
+                                  due?.dueBy ?? attentionDueAt(new Date()),
+                                  legalDeadlineOf(due)
+                              ),
                               PAYMENTS_ATTENTION_WORK,
                               meta
                           )

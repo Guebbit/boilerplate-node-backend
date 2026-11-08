@@ -115,6 +115,8 @@ closes it). It is mailed on opening and gets a due-soon reminder like any other 
 left. Its date is the legal one only when the law sets one (a return refund's stamped legal deadline, which may
 already be past: then the opened and overdue mails both go, truthfully), never the refund's
 creation date.
+The `refund_refused` and `refund_reversed` to-dos say the rule beside the date: "Legal refund
+deadline (withdrawal): 2026-03-15" (a day on the shop's calendar), or "(faulty item): refund now".
 
 **A dispute is two to-dos.** `dispute` is the proof the shop owes; when the proof is sent
 (`under_review`) it is closed with the note "Proof sent; the bank is deciding" and one

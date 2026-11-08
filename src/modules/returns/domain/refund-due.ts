@@ -13,7 +13,7 @@
  */
 
 import { isGuaranteeReason } from './reasons';
-import type { ReturnReason } from '@types';
+import type { RefundDueRule, ReturnReason } from '@types';
 
 /** What {@link refundDueByOf} reads off a return. */
 export interface RefundDueInput {
@@ -35,7 +35,7 @@ export interface ReturnRefundDue {
     /** The last moment the refund may be paid without being late. */
     dueBy: Date;
     /** `withdrawal` is the 14-day rule, `faulty` is due when the goods or proof came. */
-    dueRule: 'withdrawal' | 'faulty';
+    dueRule: RefundDueRule;
 }
 
 /**

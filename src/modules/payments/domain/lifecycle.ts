@@ -17,7 +17,7 @@
  */
 
 import { addMoney, subtractMoney, toMinorUnits, type Money } from '@domain-primitives/money';
-import { RefundFailureReason, RefundStatus, type PaymentStatus } from '@types';
+import { RefundFailureReason, RefundStatus, type PaymentStatus, type RefundDueRule } from '@types';
 import { hasDecidedDispute, lostChargebackCovers, type DisputablePayment } from './disputes';
 import { DAY_MS, MINUTE_MS } from '@domain-primitives/time';
 
@@ -304,16 +304,6 @@ export const mayBeCanceled = (payment: RefundablePayment, refund: RefundFacts): 
         // A refund refused as `disputed` whose dispute is decided (the shop won) moved no money
         // and is owed no more: staff void it. While a chargeback is open it is left alone.
         (refund.failureReason === RefundFailureReason.disputed && hasDecidedDispute(payment)));
-
-/**
- * Why a refund has a legal deadline, as a closed code: `withdrawal` is the 14-day rule of the right
- * of withdrawal (Directive 2011/83/EU Art. 13), `faulty` is a defective or wrong item, refunded
- * once the goods or the proof of sending are in (Directive 2019/771 Art. 16(3)(b)).
- */
-export const REFUND_DUE_RULES = ['withdrawal', 'faulty'] as const;
-
-/** One of {@link REFUND_DUE_RULES}. */
-export type RefundDueRule = (typeof REFUND_DUE_RULES)[number];
 
 /** The legal deadline a refund is stamped with when it opens, and the rule behind that date. */
 export interface RefundDue {

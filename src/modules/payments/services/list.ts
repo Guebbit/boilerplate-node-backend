@@ -11,6 +11,7 @@ import type {
     AuthContext,
     Payment,
     PaymentAttentionItem,
+    RefundDueRule,
     RefundListItem,
     SearchPaymentsRequest
 } from '@types';
@@ -145,19 +146,24 @@ export const listRefunds = (
         .then(({ items, meta }) => ({ items: items.map((row) => refundRow(row)), meta }));
 
 /**
- * The legal deadline of a refused refund, as the attention row's `refundDueBy` field: nothing for
- * any other kind of row, or for a refund that pays no withdrawal or return.
+ * The legal deadline of a refused refund, as the attention row's `refundDueBy` and `refundDueRule`
+ * fields: nothing for any other kind of row, or for a refund the law sets no deadline for.
  *
  * @param kind - which source found the row
  * @param refund - the open refund
  */
-const dueByOf = (kind: PaymentAttentionKind, refund: RefundRecord): { refundDueBy?: string } => {
+const dueByOf = (
+    kind: PaymentAttentionKind,
+    refund: RefundRecord
+): { refundDueBy?: string; refundDueRule?: RefundDueRule } => {
     const due =
         kind === PaymentAttentionKind.refused_refund ||
         kind === PaymentAttentionKind.reversed_refund
             ? refundDueBy(refund)
             : undefined;
-    return due ? { refundDueBy: due.toISOString() } : {};
+    return due && refund.dueRule
+        ? { refundDueBy: due.toISOString(), refundDueRule: refund.dueRule }
+        : {};
 };
 
 /**

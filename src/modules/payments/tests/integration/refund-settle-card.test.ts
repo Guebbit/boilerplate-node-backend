@@ -183,12 +183,19 @@ describe('what needs attention', () => {
         const dueBy = new Date('2026-03-15T22:59:59.999Z');
         await paymentModel.collection.updateOne(
             { _id: payment._id },
-            { $set: { 'refunds.0.returnId': 'a-return', 'refunds.0.dueBy': dueBy } }
+            {
+                $set: {
+                    'refunds.0.returnId': 'a-return',
+                    'refunds.0.dueBy': dueBy,
+                    'refunds.0.dueRule': 'withdrawal'
+                }
+            }
         );
 
         const { items } = await paymentService.listAttention();
 
         expect(items[0].refundDueBy).toBe(dueBy.toISOString());
+        expect(items[0].refundDueRule).toBe('withdrawal');
     });
 
     it('shows no deadline on a refused refund that pays no return: only its age', async () => {

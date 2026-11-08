@@ -21,6 +21,8 @@ import { settleOutboxNudges } from '@kernel/outbox';
 import { registerModules } from '@kernel/registry';
 import { notificationsService } from '@modules/notifications';
 import { paymentService } from '@modules/payments';
+import { shopTimezone } from '@modules/shop';
+import { dayInZone } from '@domain-primitives/time';
 import { findAllTasks } from '@modules/tasks/tests/factories';
 import { RefundFailureReason, TaskKind, TaskResolution, TaskStatus } from '@types';
 import { enabledModules } from '../../../../modules';
@@ -620,14 +622,43 @@ describe('a refund sent back by the bank', () => {
         expect((dueAt?.getTime() ?? 0) - Date.now()).toBeGreaterThan(0);
     });
 
-    it('opens with the past legal date of a return refund reversed after day 14', async () => {
+    it('opens with the past legal date of a return refund reversed after day 14, and names the rule', async () => {
         const legal = new Date(Date.now() - 3 * DAY_MS);
-        jest.spyOn(paymentService, 'refundLegalDueAt').mockResolvedValue(legal);
+        jest.spyOn(paymentService, 'refundLegalDue').mockResolvedValue({
+            dueBy: legal,
+            dueRule: 'withdrawal'
+        });
 
         await emitDomainEvent('payment.refund_reversed', REVERSAL, { eventId: nextEventId() });
 
-        const { dueAt } = await onlyTask();
+        const { dueAt, message } = await onlyTask();
         expect(dueAt).toEqual(legal);
+        expect(message).toContain(
+            `Legal refund deadline (withdrawal): ${dayInZone(legal, shopTimezone())}.`
+        );
+    });
+
+    it('tells staff a faulty item is due now, on a refund refused for good', async () => {
+        jest.spyOn(paymentService, 'refundLegalDue').mockResolvedValue({
+            dueBy: new Date(Date.now() - DAY_MS),
+            dueRule: 'faulty'
+        });
+
+        await emitDomainEvent(
+            'payment.refund_failed',
+            { ...REFUND, failureReason: 'declined', final: true },
+            { eventId: nextEventId() }
+        );
+
+        const { message } = await onlyTask();
+        expect(message).toContain('Legal refund deadline (faulty item): refund now.');
+    });
+
+    it('says nothing of a deadline when the law sets none', async () => {
+        await emitDomainEvent('payment.refund_reversed', REVERSAL, { eventId: nextEventId() });
+
+        const { message } = await onlyTask();
+        expect(message).not.toContain('Legal refund deadline');
     });
 
     it('opens a refund refused late as refund_refused with a date still ahead, not overdue', async () => {

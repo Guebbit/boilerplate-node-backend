@@ -1364,10 +1364,16 @@ components:
                     type: string
                     format: date-time
                     description: >-
-                        The legal deadline to give the money back, on a `refused_refund` that pays for a
-                        withdrawal or a return: the refund's creation plus 14 days (Consumer Rights
-                        Directive Art. 13). Absent for any other refund, which shows its age only. The
-                        client shows the days left; a past date means the deadline has gone.
+                        The legal deadline to give the money back, stamped on the refund when it opened,
+                        on a `refused_refund` that pays for a withdrawal or a return. For a withdrawal it
+                        is the end of the shop's day, 14 days after the shop was told (Consumer Rights
+                        Directive Art. 13(1)), unless the goods or the proof of sending came later, which
+                        makes it due the moment they did; for a faulty or wrong item it is the moment the
+                        goods or the proof came. Absent for any other refund, which shows its age only.
+                        The client shows the days left; a past date means the deadline has gone.
+                refundDueRule:
+                    $ref: '#/components/schemas/RefundDueRule'
+                    description: Which rule `refundDueBy` follows. Present exactly when `refundDueBy` is.
 
         PaymentAttentionResponse:
             type: object
@@ -1378,6 +1384,15 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/PaymentAttentionItem'
+
+        RefundDueRule:
+            type: string
+            enum: [withdrawal, faulty]
+            description: >-
+                Why a refund has a legal deadline. `withdrawal` — the 14 days after the shop was told of
+                a withdrawal (Directive 2011/83/EU Art. 13(1)); `faulty` — a defective or wrong item,
+                refunded once the goods or the proof of sending are in (Directive 2019/771 Art.
+                16(3)(b)).
 
         RefundReason:
             type: string

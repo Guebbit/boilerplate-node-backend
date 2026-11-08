@@ -19,10 +19,10 @@ import {
     PaymentStatus,
     PaymentMethod,
     RefundFailureReason,
+    RefundDueRule,
     RefundReason,
     RefundStatus
 } from '@types';
-import { REFUND_DUE_RULES, type RefundDueRule } from './domain';
 
 /**
  * One returned product line a refund pays back — Shopify's `refund_line_items`, reduced to what a
@@ -66,7 +66,7 @@ export interface RefundRecord {
      * only: it reaches the wire through the attention row, never on the record.
      */
     dueBy?: Date;
-    /** Why `dueBy` is that date — see `REFUND_DUE_RULES`. Present exactly when `dueBy` is. */
+    /** Why `dueBy` is that date — see the contract's `RefundDueRule`. Present exactly when `dueBy` is. */
     dueRule?: RefundDueRule;
     /**
      * The goods this refund pays back, when it pays for specific ones (a return). Absent for a
@@ -242,7 +242,7 @@ const refundSchema = new Schema<RefundRecord>(
         idempotencyKey: { type: String, required: true },
         returnId: { type: String },
         dueBy: { type: Date },
-        dueRule: { type: String, enum: REFUND_DUE_RULES },
+        dueRule: { type: String, enum: Object.values(RefundDueRule) },
         lines: {
             type: [
                 new Schema<RefundLine>(
