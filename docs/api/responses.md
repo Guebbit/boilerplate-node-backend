@@ -25,7 +25,7 @@ contract names for it. A create answers `201`, the resource, and a `Location` he
 
 ```json
 200
-{ "id": "o1", "status": "paid", "total": 70 }
+{ "id": "o1", "status": "paid", "totalPrice": "70.00", "currency": "EUR" }
 ```
 
 ## A list
@@ -54,8 +54,9 @@ Every amount is a decimal string at its currency's own places: `"19.90"` EUR, `"
 `"1.500"` KWD. Two equal amounts are equal strings, and the text carries its own scale, so a
 client needs no currency table to show it. A request may spell an amount any plain way (`"71"`,
 `"71.00"`); more places than the currency has, or a JSON number, answers 422. Rates (`taxRate`) are
-the one exception and stay numbers. The sibling `currency` field names the unit; `GET /shop`
-publishes `minorUnits` for a price input that starts empty.
+the one exception and stay numbers. The resource's `currency` names the unit: on the same object,
+or on the nearest parent for a line inside it. `GET /shop` publishes `minorUnits` for a price
+input that starts empty.
 
 ## No content
 

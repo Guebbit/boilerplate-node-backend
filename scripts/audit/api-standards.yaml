@@ -434,7 +434,7 @@ rules:
       source: https://opensource.zalando.com/restful-api-guidelines/#173
       evidence: [openapi.yaml components.schemas.*Money*, docs/api/responses.md#money]
       lint: no
-      difference: money-string
+      difference: [money-string, money-resource-currency]
 
     - id: zalando-problem-json
       standard: zalando
