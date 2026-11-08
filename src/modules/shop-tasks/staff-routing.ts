@@ -52,10 +52,12 @@ export const SHOP_STAFF_ROUTES = {
         email: 'digest',
         severity: NotificationSeverity.warning
     },
-    'shop-tasks.staff.withdrawals-awaiting-goods': {
+    // Only the overdue ones: an approved return with neither goods nor proof of sending long after
+    // the buyer's days to send it ran out. Staff ask once for proof of posting and keep the refund on hold.
+    'shop-tasks.staff.returns-awaiting-goods': {
         sets: ['ReturnReceiving'],
-        email: 'none',
-        severity: NotificationSeverity.info
+        email: 'digest',
+        severity: NotificationSeverity.warning
     },
     'shop-tasks.staff.returns-undecided': {
         sets: ['ReturnManagement'],
@@ -96,7 +98,7 @@ export const SUMMARY_PAGES = {
     'shop-tasks.staff.transfers-due': PAGES.transfersDue,
     'shop-tasks.staff.preorders-late': PAGES.preordersLate,
     'shop-tasks.staff.delivery-holds-open': PAGES.deliveryHoldsOpen,
-    'shop-tasks.staff.withdrawals-awaiting-goods': PAGES.withdrawalsAwaitingGoods,
+    'shop-tasks.staff.returns-awaiting-goods': PAGES.returnsAwaitingGoods,
     'shop-tasks.staff.returns-undecided': PAGES.returnsUndecided,
     'shop-tasks.staff.low-stock': PAGES.lowStock,
     'shop-tasks.staff.unshipped': PAGES.unshipped,

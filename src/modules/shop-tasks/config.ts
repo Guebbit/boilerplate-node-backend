@@ -15,6 +15,7 @@ export const shopTasksConfig = defineConfig({
         NODE_STAFF_TRANSFER_DUE_HOURS: int({ default: 24, min: 1 }),
         NODE_STAFF_HOLD_OPEN_DAYS: int({ default: 3, min: 1 }),
         NODE_STAFF_RETURN_DECISION_DAYS: int({ default: 3, min: 1 }),
+        NODE_STAFF_RETURN_TRANSIT_DAYS: int({ default: 7, min: 0 }),
         NODE_STAFF_UNSHIPPED_DAYS: int({ default: 3, min: 1 }),
         NODE_STAFF_TRACKING_MISSING_HOURS: int({ default: 24, min: 1 }),
         NODE_DELIVERY_UNDELIVERED_REMINDER_DAYS: int({ default: 14, min: 1 })

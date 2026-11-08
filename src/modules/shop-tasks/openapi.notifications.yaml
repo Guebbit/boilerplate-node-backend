@@ -23,7 +23,7 @@ x-extends:
         - NotificationStaffTransfersDue
         - NotificationStaffPreordersLate
         - NotificationStaffDeliveryHoldsOpen
-        - NotificationStaffWithdrawalsAwaitingGoods
+        - NotificationStaffReturnsAwaitingGoods
         - NotificationStaffReturnsUndecided
         - NotificationStaffLowStock
         - NotificationStaffUnshipped
@@ -488,10 +488,10 @@ components:
                     type: string
                     format: date-time
 
-        NotificationStaffWithdrawalsAwaitingGoods:
+        NotificationStaffReturnsAwaitingGoods:
             type: object
             additionalProperties: false
-            description: Withdrawals after dispatch whose goods have not been received back.
+            description: Approved returns, withdrawals and faulty or wrong items, still with neither goods nor proof of sending long after the buyer's days to send them ran out.
             required: [id, audience, code, params, severity, createdAt]
             properties:
                 id:
@@ -500,7 +500,7 @@ components:
                     $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
                 code:
                     type: string
-                    enum: [shop-tasks.staff.withdrawals-awaiting-goods]
+                    enum: [shop-tasks.staff.returns-awaiting-goods]
                 params:
                     $ref: '#/components/schemas/WorkCountParams'
                 severity:

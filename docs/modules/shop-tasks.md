@@ -182,18 +182,25 @@ module that owns it; a count of zero removes the row, one that fell is updated q
 appeared or grew is unread again, pushed and, where the route says `digest`, mailed once per person
 per run.
 
-| Summary row                                   | Counts                                    | Run    | Set told              | Mail   |
-| --------------------------------------------- | ----------------------------------------- | ------ | --------------------- | ------ |
-| `shop-tasks.staff.transfers-due`              | bank transfers due soon                   | daily  | `PaymentRecording`    | bell   |
-| `shop-tasks.staff.unshipped`                  | paid orders not shipped                   | daily  | `DeliveryStart`       | digest |
-| `shop-tasks.staff.returns-undecided`          | return requests still undecided           | daily  | `ReturnManagement`    | digest |
-| `shop-tasks.staff.withdrawals-awaiting-goods` | withdrawals waiting for their goods       | daily  | `ReturnReceiving`     | bell   |
-| `shop-tasks.staff.delivery-holds-open`        | held orders open too long                 | daily  | `DeliveryManagement`  | digest |
-| `shop-tasks.staff.awaiting-tracking`          | shipped parcels with no tracking code     | daily  | `DeliveryManagement`  | bell   |
-| `shop-tasks.staff.undelivered`                | parcels shipped and never marked arrived  | daily  | `DeliveryManagement`  | digest |
-| `shop-tasks.staff.stale-refunds`              | refunds open past the attention threshold | daily  | `PaymentRefunding`    | digest |
-| `shop-tasks.staff.low-stock`                  | products low on stock                     | daily  | `InventoryManagement` | bell   |
-| `shop-tasks.staff.preorders-late`             | preorders past their date                 | weekly | `OrderEditing`        | digest |
+| Summary row                               | Counts                                    | Run    | Set told              | Mail   |
+| ----------------------------------------- | ----------------------------------------- | ------ | --------------------- | ------ |
+| `shop-tasks.staff.transfers-due`          | bank transfers due soon                   | daily  | `PaymentRecording`    | bell   |
+| `shop-tasks.staff.unshipped`              | paid orders not shipped                   | daily  | `DeliveryStart`       | digest |
+| `shop-tasks.staff.returns-undecided`      | return requests still undecided           | daily  | `ReturnManagement`    | digest |
+| `shop-tasks.staff.returns-awaiting-goods` | approved returns overdue for their goods  | daily  | `ReturnReceiving`     | digest |
+| `shop-tasks.staff.delivery-holds-open`    | held orders open too long                 | daily  | `DeliveryManagement`  | digest |
+| `shop-tasks.staff.awaiting-tracking`      | shipped parcels with no tracking code     | daily  | `DeliveryManagement`  | bell   |
+| `shop-tasks.staff.undelivered`            | parcels shipped and never marked arrived  | daily  | `DeliveryManagement`  | digest |
+| `shop-tasks.staff.stale-refunds`          | refunds open past the attention threshold | daily  | `PaymentRefunding`    | digest |
+| `shop-tasks.staff.low-stock`              | products low on stock                     | daily  | `InventoryManagement` | bell   |
+| `shop-tasks.staff.preorders-late`         | preorders past their date                 | weekly | `OrderEditing`        | digest |
+
+`returns-awaiting-goods` counts only what needs action: an approved return, a withdrawal or a
+faulty or wrong item, with neither goods nor proof of sending after `WITHDRAWAL_SEND_BACK_DAYS` (14)
+plus `NODE_STAFF_RETURN_TRANSIT_DAYS` days. The clock starts the day the buyer stated the withdrawal,
+or the day staff approved the faulty item. The text tells staff to ask the buyer once for proof of
+posting and to keep the refund on hold; one proof recorded takes the return out of the count. The
+returns list shows the ones still inside their days.
 
 Each row carries `params.work`: the filtered list path, from the `staffPages:` block of
 `shared/rules/frontend-links.yaml` (`SUMMARY_PAGES`). The bell opens it as it is, and the digest mail
@@ -279,12 +286,13 @@ flowchart LR
 
 ## Configuration
 
-| Variable                                                                                    | Default | Meaning                                       |
-| ------------------------------------------------------------------------------------------- | ------- | --------------------------------------------- |
-| `NODE_STAFF_TRANSFER_DUE_HOURS`                                                             | 24      | a transfer counts as due this many hours out  |
-| `NODE_STAFF_HOLD_OPEN_DAYS`, `NODE_STAFF_RETURN_DECISION_DAYS`, `NODE_STAFF_UNSHIPPED_DAYS` | 3       | days before a hold, a return, an order counts |
-| `NODE_STAFF_TRACKING_MISSING_HOURS`                                                         | 24      | hours before a missing tracking code counts   |
-| `NODE_DELIVERY_UNDELIVERED_REMINDER_DAYS`                                                   | 14      | days before an unmarked parcel counts         |
+| Variable                                                                                    | Default | Meaning                                                                |
+| ------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------- |
+| `NODE_STAFF_TRANSFER_DUE_HOURS`                                                             | 24      | a transfer counts as due this many hours out                           |
+| `NODE_STAFF_HOLD_OPEN_DAYS`, `NODE_STAFF_RETURN_DECISION_DAYS`, `NODE_STAFF_UNSHIPPED_DAYS` | 3       | days before a hold, a return, an order counts                          |
+| `NODE_STAFF_RETURN_TRANSIT_DAYS`                                                            | 7       | days of post added to the buyer's 14 before a return counts as overdue |
+| `NODE_STAFF_TRACKING_MISSING_HOURS`                                                         | 24      | hours before a missing tracking code counts                            |
+| `NODE_DELIVERY_UNDELIVERED_REMINDER_DAYS`                                                   | 14      | days before an unmarked parcel counts                                  |
 
 ## Related pages
 

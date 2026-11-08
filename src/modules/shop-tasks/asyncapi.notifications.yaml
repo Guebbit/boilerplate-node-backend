@@ -19,7 +19,7 @@ x-extends:
         - NotificationStaffTransfersDuePayload
         - NotificationStaffPreordersLatePayload
         - NotificationStaffDeliveryHoldsOpenPayload
-        - NotificationStaffWithdrawalsAwaitingGoodsPayload
+        - NotificationStaffReturnsAwaitingGoodsPayload
         - NotificationStaffReturnsUndecidedPayload
         - NotificationStaffLowStockPayload
         - NotificationStaffUnshippedPayload
@@ -669,8 +669,8 @@ components:
                     type: string
                     format: date-time
             additionalProperties: false
-        NotificationStaffWithdrawalsAwaitingGoodsPayload:
-            title: NotificationStaffWithdrawalsAwaitingGoodsPayload
+        NotificationStaffReturnsAwaitingGoodsPayload:
+            title: NotificationStaffReturnsAwaitingGoodsPayload
             type: object
             required:
                 - id
@@ -691,7 +691,7 @@ components:
                 code:
                     type: string
                     enum:
-                        - shop-tasks.staff.withdrawals-awaiting-goods
+                        - shop-tasks.staff.returns-awaiting-goods
                 params:
                     $ref: '#/components/schemas/WorkCountParamsPayload'
                 severity:

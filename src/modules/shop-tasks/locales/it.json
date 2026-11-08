@@ -14,7 +14,7 @@
                 "transfers-due": "{{n}} bonifici in scadenza",
                 "preorders-late": "{{n}} preordini oltre la data prevista",
                 "delivery-holds-open": "{{n}} ordini trattenuti da troppo tempo",
-                "withdrawals-awaiting-goods": "{{n}} recessi in attesa della merce",
+                "returns-awaiting-goods": "{{n}} resi in ritardo con la merce: chiedi una sola volta la prova di spedizione al cliente e tieni il rimborso in sospeso",
                 "returns-undecided": "{{n}} richieste di reso senza decisione",
                 "low-stock": "{{n}} prodotti con scorte basse",
                 "unshipped": "{{n}} ordini pagati non ancora spediti",

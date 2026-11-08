@@ -95,7 +95,7 @@
           "type": "string",
           "minLength": 1
         },
-        "withdrawalsAwaitingGoods": {
+        "returnsAwaitingGoods": {
           "type": "string",
           "minLength": 1
         },
@@ -133,7 +133,7 @@
         "transfersDue",
         "preordersLate",
         "deliveryHoldsOpen",
-        "withdrawalsAwaitingGoods",
+        "returnsAwaitingGoods",
         "returnsUndecided",
         "lowStock",
         "unshipped",

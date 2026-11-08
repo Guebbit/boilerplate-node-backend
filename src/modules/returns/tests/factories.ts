@@ -13,6 +13,8 @@ export interface BareReturn {
     reason: string;
     /** How long ago it was opened. */
     daysAgo: number;
+    /** A proof of sending is recorded on it. */
+    proof?: true;
 }
 
 /**
@@ -23,10 +25,16 @@ export interface BareReturn {
  */
 export const insertBareReturns = (rows: readonly BareReturn[]): Promise<unknown> =>
     returnModel.collection.insertMany(
-        rows.map(({ status, reason, daysAgo }) => ({
-            status,
-            kind: 'return',
-            reason,
-            createdAt: new Date(Date.now() - daysAgo * DAY_MS)
-        }))
+        rows.map(({ status, reason, daysAgo, proof }) => {
+            const opened = new Date(Date.now() - daysAgo * DAY_MS);
+            return {
+                status,
+                kind: 'return',
+                reason,
+                createdAt: opened,
+                requestedAt: opened,
+                decidedAt: opened,
+                ...(proof ? { proofOfSendingAt: opened } : {})
+            };
+        })
     );

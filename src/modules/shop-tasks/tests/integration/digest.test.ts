@@ -212,12 +212,12 @@ describe('the daily digest', () => {
         ]);
     });
 
-    it('counts a return request nobody decided, and an approved withdrawal waiting for goods', async () => {
+    it('counts a return request nobody decided, and an approved withdrawal overdue for its goods', async () => {
         const support = await staff('support', 'support@example.com');
         const warehouse = await staff('warehouse', 'warehouse@example.com');
         await insertBareReturns([
             { status: 'requested', reason: 'defective', daysAgo: 10 },
-            { status: 'approved', reason: 'withdrawal', daysAgo: 10 }
+            { status: 'approved', reason: 'withdrawal', daysAgo: 22 }
         ]);
 
         await runStaffDigest('daily');
@@ -226,9 +226,53 @@ describe('the daily digest', () => {
             ['shop-tasks.staff.returns-undecided', 1]
         ]);
         await expect(summariesOf('warehouse', warehouse.id)).resolves.toContainEqual([
-            'shop-tasks.staff.withdrawals-awaiting-goods',
+            'shop-tasks.staff.returns-awaiting-goods',
             1
         ]);
+    });
+});
+
+/** The counts the warehouse sees for the overdue-returns row. */
+const awaiting = (id: string) =>
+    summariesOf('warehouse', id).then((rows) =>
+        rows.filter(([code]) => code === 'shop-tasks.staff.returns-awaiting-goods')
+    );
+
+describe('returns overdue for their goods', () => {
+    it('counts nothing before 14 days plus the transit allowance have passed', async () => {
+        const warehouse = await staff('warehouse', 'warehouse@example.com');
+        await insertBareReturns([
+            { status: 'approved', reason: 'withdrawal', daysAgo: 20 },
+            { status: 'approved', reason: 'defective', daysAgo: 20 }
+        ]);
+
+        await runStaffDigest('daily');
+
+        await expect(awaiting(warehouse.id)).resolves.toEqual([]);
+    });
+
+    it('counts a withdrawal and a faulty item alike once overdue, and skips one with a proof', async () => {
+        const warehouse = await staff('warehouse', 'warehouse@example.com');
+        await insertBareReturns([
+            { status: 'approved', reason: 'withdrawal', daysAgo: 22 },
+            { status: 'approved', reason: 'wrong_item', daysAgo: 22 },
+            { status: 'approved', reason: 'withdrawal', daysAgo: 22, proof: true }
+        ]);
+
+        await runStaffDigest('daily');
+
+        await expect(awaiting(warehouse.id)).resolves.toEqual([
+            ['shop-tasks.staff.returns-awaiting-goods', 2]
+        ]);
+    });
+
+    it('mails the warehouse the overdue row once, as a digest line', async () => {
+        await staff('warehouse', 'warehouse@example.com');
+        await insertBareReturns([{ status: 'approved', reason: 'withdrawal', daysAgo: 22 }]);
+
+        const result = await runStaffDigest('daily');
+
+        expect(result.mailed).toBe(1);
     });
 });
 

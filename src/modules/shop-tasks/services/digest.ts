@@ -17,7 +17,7 @@ import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { PaymentAttentionKind } from '@types';
 import { deliveryService } from '@modules/delivery';
 import { inventoryService } from '@modules/inventory';
-import { orderService } from '@modules/orders';
+import { orderService, WITHDRAWAL_SEND_BACK_DAYS } from '@modules/orders';
 import { paymentService } from '@modules/payments';
 import { returnService } from '@modules/returns';
 import type { StaffContact } from '@modules/users';
@@ -59,9 +59,9 @@ const SUMMARIES: readonly Summary[] = [
         count: (f) => f.returns.undecided
     },
     {
-        code: 'shop-tasks.staff.withdrawals-awaiting-goods',
+        code: 'shop-tasks.staff.returns-awaiting-goods',
         run: 'daily',
-        count: (f) => f.returns.withdrawalsAwaitingGoods
+        count: (f) => f.returns.returnsAwaitingGoods
     },
     {
         code: 'shop-tasks.staff.delivery-holds-open',
@@ -91,7 +91,11 @@ const readFigures = (now: Date): Promise<Figures> => {
             transferHours: config.NODE_STAFF_TRANSFER_DUE_HOURS,
             unshippedDays: config.NODE_STAFF_UNSHIPPED_DAYS
         }),
-        returnService.returnsDigest(now, config.NODE_STAFF_RETURN_DECISION_DAYS),
+        returnService.returnsDigest(now, {
+            decisionDays: config.NODE_STAFF_RETURN_DECISION_DAYS,
+            // The buyer's days to send the goods, plus the post's: past that, ask for proof.
+            sendBackOverdueDays: WITHDRAWAL_SEND_BACK_DAYS + config.NODE_STAFF_RETURN_TRANSIT_DAYS
+        }),
         deliveryService.deliveryDigest(now, {
             holdDays: config.NODE_STAFF_HOLD_OPEN_DAYS,
             trackingHours: config.NODE_STAFF_TRACKING_MISSING_HOURS,

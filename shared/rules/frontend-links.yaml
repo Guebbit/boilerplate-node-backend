@@ -43,7 +43,7 @@ staffPages:
     transfersDue: sales/payments?tab=awaiting
     preordersLate: sales/preorders?tab=orders&fulfillment-late=true
     deliveryHoldsOpen: sales/orders?fulfillmentStatus=on_hold
-    withdrawalsAwaitingGoods: sales/returns?status=approved&reason=withdrawal
+    returnsAwaitingGoods: sales/returns?status=approved
     returnsUndecided: sales/returns?status=requested
     lowStock: inventory?levels-lowOnly=true
     unshipped: sales/orders?status=paid

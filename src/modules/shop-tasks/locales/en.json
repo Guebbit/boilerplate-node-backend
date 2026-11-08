@@ -14,7 +14,7 @@
                 "transfers-due": "{{n}} bank transfers are due soon",
                 "preorders-late": "{{n}} preorders are past their date",
                 "delivery-holds-open": "{{n}} held orders have waited too long",
-                "withdrawals-awaiting-goods": "{{n}} withdrawals are waiting for their goods",
+                "returns-awaiting-goods": "{{n}} returns are overdue for their goods: ask the buyer once for proof of posting, and keep the refund on hold",
                 "returns-undecided": "{{n}} return requests still need a decision",
                 "low-stock": "{{n}} products are low on stock",
                 "unshipped": "{{n}} paid orders have not shipped",
