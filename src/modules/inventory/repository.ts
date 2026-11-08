@@ -121,6 +121,15 @@ export interface StockLevelRow {
     backordered: number;
 }
 
+/**
+ * A lean read's cap, with the stored meaning restored: a missing field is 0 (closed), while only
+ * `null` is no cap. `??` would turn that `null` into 0, so the check is on `undefined` alone.
+ *
+ * @param backorderLimit - the field as a lean read returns it, `undefined` when never written
+ */
+const storedCap = (backorderLimit: number | null | undefined): number | null =>
+    backorderLimit === undefined ? 0 : backorderLimit;
+
 /** One row of the preorder board — counters only; the title and date are `products`' to give. */
 export interface PreorderLevelRow {
     productId: string;
@@ -383,7 +392,7 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
                 onHand: row.onHand,
                 reserved: row.reserved,
                 available: row.available,
-                backorderLimit: row.backorderLimit,
+                backorderLimit: storedCap(row.backorderLimit),
                 backordered: row.backordered
             })),
             totalItems
@@ -447,7 +456,7 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
                         const id = String(row.productId);
                         return {
                             productId: id,
-                            backorderLimit: row.backorderLimit,
+                            backorderLimit: storedCap(row.backorderLimit),
                             backordered: row.backordered,
                             ordered: ordered.get(id) ?? 0,
                             held: outstanding.get(id)?.held ?? 0,

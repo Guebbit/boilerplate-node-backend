@@ -10,6 +10,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
 import { MISSING_ID } from '@tests/ids';
+import { stockLevelModel } from '../../model';
 
 setupTestDb();
 
@@ -27,6 +28,21 @@ describe('GET /inventory/levels', () => {
             available: 7
         });
         expect(response.body.meta).toMatchObject({ totalItems: 1, totalPages: 1 });
+    });
+
+    it('shows a level whose cap was never written as closed (0), not as no cap', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct({ onHand: 3 });
+        // The raw driver, because the schema would put its default back.
+        await stockLevelModel.collection.updateOne(
+            { productId: product._id },
+            { $unset: { backorderLimit: '' } }
+        );
+
+        const response = await api().get('/inventory/levels').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.items[0]).toMatchObject({ backorderLimit: 0 });
     });
 
     it('matches the contract when narrowed to what needs ordering', async () => {
