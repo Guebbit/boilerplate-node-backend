@@ -30,17 +30,18 @@ const generatePlaintextSecret = (): string => `whsec_${randomBytes(32).toString(
 
 /**
  * The binding of a ring secret to its entry: the `webhook-secret` HKDF label and the entry's own
- * `id` as associated data. Also what a re-encryption job rewraps under.
+ * `id` as associated data, prefixed with where the ciphertext lives (`secrets[].ciphertext`).
+ * Also what a re-encryption job rewraps under.
  */
 export const ringSecretBinding = (entryId: string): SecretBinding => ({
     purpose: 'webhook-secret',
-    aad: entryId
+    aad: `webhooks:secrets.ciphertext:${entryId}`
 });
 
 /**
  * Encrypt a ring secret for storage. See `encryptVersionedSecret` for the wire format.
  *
- * @param entryId - the ring entry's own `id`, the AAD: the parent subscription has no `_id` yet
+ * @param entryId - the ring entry's own `id`, the tail of the AAD: the parent subscription has no `_id` yet
  *   when its first secret is minted, so the entry id is the only stable binding
  */
 export const encryptRingSecret = (plaintext: string, entryId: string): string =>
