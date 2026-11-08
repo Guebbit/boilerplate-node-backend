@@ -96,7 +96,21 @@ source of truth, so — like every other durable, TTL-bound collection in this r
 | `POST /examples`                                                                                     | The template's idempotent create: a retried create replays the first answer, not a second draft.                                                                                          |
 | `POST /tasks`                                                                                        | The public contact form has no other identity to dedupe a retry on.                                                                                                                       |
 | `POST /orders/{id}/timeline/notes`, `POST /tasks/{id}/notes`                                         | A retry after a lost answer must not write the same note twice. A task note has no delete door, so a duplicate would stay for good.                                                       |
+| `POST /products`                                                                                     | A product with no SKU has no other key: a retry would put a second live product in the shop, and the opening stock would land on the copy. See the limits below.                          |
 | `POST /account/addresses`                                                                            | A retry must not write a duplicate entry that burns a slot of the address cap.                                                                                                            |
+
+### The product create is multipart
+
+`POST /products` takes its key after `upload.image()`, because multipart fields exist only once
+multer has parsed them. Three limits come with that:
+
+- The image is not in the fingerprint (`fingerprintOf` hashes the method, the path and
+  `request.body`): the same key with a different image replays the first product.
+- `translations` arrive as one JSON string in a multipart body. A byte-identical retry matches; a
+  client that re-serialises it gets the mismatch refusal (422).
+- A replayed 201 leaves its upload behind: `releaseUnclaimedUpload` cleans only on a 4xx or 5xx. The
+  orphan sweep (files older than an hour) and the quarantine reaper (24 hours) remove it. The SKU
+  index stays the secondary key.
 
 The refund uses `requireIdempotencyKey`: the IETF Idempotency-Key draft makes a missing key on a
 non-idempotent write a client error, and a refund repeated by a retry returns the money twice. Its
@@ -104,10 +118,10 @@ contract parameter is `RequiredIdempotencyKeyHeader`, and the error code `IDEMPO
 
 ## Named exceptions
 
-The rule is a minimum: every POST that moves money, stock or an account takes a key
-([write methods](../api/write-methods.md#retrying-a-post)), and a few others take one on top
-(signup, the contact form). A POST that moves money, stock or an account and takes none belongs
-to one of these classes, and the IETF draft only asks that the exception be published:
+Every POST or PATCH whose repeat would write again accepts an optional key
+([write methods](../api/write-methods.md#retrying-a-post)). The ones that take none are listed
+here, each with the reason a repeat is safe, because the IETF draft asks that an exception be
+published:
 
 | Class                                 | Why a retry is safe                                   | Examples                                                                                                                                                                                                                                                                    |
 | ------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -115,7 +129,9 @@ to one of these classes, and the IETF draft only asks that the exception be publ
 | a secondary key                       | the domain refuses a duplicate (Zalando 231)          | `POST /users` (unique email)                                                                                                                                                                                                                                                |
 | an answer carrying a one-time secret  | the ledger would store the secret and replay it       | `POST /payments` (`clientSecret`; asking again refreshes the same intent), `POST /api-keys`, `POST /webhooks/subscriptions`, 2FA setup and backup codes, `POST /account/refresh` (its answer is a fresh token; a retry past the rotation grace is read as theft, by design) |
 | keyed on the provider's own reference | the provider's id is the key                          | `POST /payments/{id}/sync`, `POST /payments/webhook/{provider}`                                                                                                                                                                                                             |
-| a repeat that is harmless             | running it twice leaves the same state                | password reset, email change, `DELETE /account`                                                                                                                                                                                                                             |
+| the receiver's own key                | the partner de-duplicates on the same `webhook-id`    | webhook replay: the same delivery row and the same `webhook-id`; a replay already in flight answers 409                                                                                                                                                                     |
+| nothing is stored here                | the event is passed on as a count                     | `POST /analytics/events`: our client sends once and never retries, and a key would cost one ledger row per page view on a public route                                                                                                                                      |
+| a repeat that is harmless             | running it twice leaves the same state                | password reset, email change, `DELETE /account`; a cooldown send (a mail resend) answers its second call 429                                                                                                                                                                |
 
 `POST /payments` and `POST /payments/{id}/sync` share one per-account hourly budget instead
 (`NODE_PAYMENT_INTENT_RATE_LIMIT_MAX`, 30).

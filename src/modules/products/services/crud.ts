@@ -398,7 +398,7 @@ const applyUpdate = (
     // `null` clears it back to `standard` — $unset on save, same as taxClass.
     if (data.rateType !== undefined) product.rateType = clearedOrValue(data.rateType);
     // `null` clears the SKU back to unset — $unset on save, same as weight/taxClass. The unique
-    // sparse index (`sku_1` on `productSchema`) is what turns a collision into a 409, not this.
+    // sparse index (`products_sku` on `productSchema`) is what turns a collision into a 409, not this.
     if (data.sku !== undefined) product.sku = clearedOrValue(data.sku);
     if (data.requiresShipping !== undefined) product.requiresShipping = data.requiresShipping;
     if (data.noWithdrawal !== undefined) product.noWithdrawal = data.noWithdrawal;

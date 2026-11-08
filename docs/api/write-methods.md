@@ -196,10 +196,12 @@ A row the caller may not see, an unknown id and a malformed one are the same 404
 
 ### Retrying a POST
 
-A POST is not idempotent: sent twice, it may create twice. Every POST that moves money, stock or
-an account takes an `Idempotency-Key` — orders, checkout, payment moves, shipments, stock receipts
-and adjustments. That is a minimum: signup takes one too. The ones that take none are named, by
-class, in [Idempotency](../tools/idempotency.md#named-exceptions).
+A POST is not idempotent: sent twice, it may create twice. Every POST or PATCH whose repeat would
+write again accepts an optional `Idempotency-Key`. Where a repeat would move money twice the key is
+required (400 without it). A deliberate second click is a new intent with a new key, and acts
+again. A PATCH whose merge patch sets absolute values is idempotent by construction and needs
+none. Everything else is named, by class, in
+[Named exceptions](../tools/idempotency.md#named-exceptions).
 
 ## PUT — replace
 

@@ -12,6 +12,7 @@ import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { createProduct, productRepository } from '@modules/products/tests/factories';
 import { givenLocale } from '@modules/locales/tests/factories';
 import { translator } from '@infrastructure/i18n';
+import { sendTwice } from '@tests/replay';
 
 setupTestDb();
 
@@ -796,5 +797,67 @@ describe('product states: `purchasable`', () => {
             });
 
         expect(response.status).toBe(422);
+    });
+});
+
+/** How many products the catalogue lists for the caller. */
+const productCount = (bearer: string): Promise<number> =>
+    api()
+        .get('/products')
+        .set('Authorization', bearer)
+        .then((response) => (response.body.items as unknown[]).length);
+
+describe('POST /products with an Idempotency-Key', () => {
+    const TRANSLATIONS = { en: { title: 'Memory Foam Bed', description: 'Extra support' } };
+
+    it('creates one product for a retried JSON body and replays the first answer', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+
+        const { first, retry } = await sendTwice(() =>
+            api()
+                .post('/products')
+                .set('Authorization', bearer)
+                .set('Idempotency-Key', 'product-json-1')
+                .send({ price: '24.90', translations: TRANSLATIONS })
+        );
+
+        expect(first.status).toBe(201);
+        expect(retry.status).toBe(201);
+        expect(retry.headers['idempotent-replayed']).toBe('true');
+        expect(retry.body.id).toBe(first.body.id);
+        await expect(productCount(bearer)).resolves.toBe(1);
+    });
+
+    it('creates one product for a byte-identical multipart retry', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+
+        const { first, retry } = await sendTwice(() =>
+            api()
+                .post('/products')
+                .set('Authorization', bearer)
+                .set('Idempotency-Key', 'product-multipart-1')
+                .field('price', '24.90')
+                .field('translations', JSON.stringify(TRANSLATIONS))
+        );
+
+        expect(first.status).toBe(201);
+        expect(retry.headers['idempotent-replayed']).toBe('true');
+        expect(retry.body.id).toBe(first.body.id);
+        await expect(productCount(bearer)).resolves.toBe(1);
+    });
+
+    it('creates a second product for a new key', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const create = (key: string) =>
+            api()
+                .post('/products')
+                .set('Authorization', bearer)
+                .set('Idempotency-Key', key)
+                .send({ price: '24.90', translations: TRANSLATIONS });
+
+        await sendTwice(() => create('product-json-1'));
+        await create('product-json-2');
+
+        await expect(productCount(bearer)).resolves.toBe(2);
     });
 });
