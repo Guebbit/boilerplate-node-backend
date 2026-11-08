@@ -94,7 +94,12 @@ Object.values(TaskStatus);
 
 A shared enum is a named schema (`TaskStatus`) that every property `$ref`s, and the const keeps that name. An enum declared inline on a property is named schema name + property name, PascalCase. For example, `HealthPing.status` → `HealthPingStatus`.
 
-Enum values are lowercase snake_case, except JSON:API sort tokens (`-createdAt`) and i18n message keys.
+Enum values are lowercase snake_case. Four exceptions:
+
+- JSON:API sort tokens (`-createdAt`).
+- i18n message keys (`notifications.staff.webhook-disabled`).
+- Event names (`order.created`, and `*` for every event): [Internal event names](./asyncapi-workflow.md#internal-event-names).
+- A value another standard defines (`no-store` from RFC 9111, `about:blank` from RFC 9457).
 
 ## Commands used in this repo
 
