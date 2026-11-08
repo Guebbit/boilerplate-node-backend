@@ -49,6 +49,11 @@ Output is `tmp/reports/audit/api-zalando/<SCOPE>.md`, where `<SCOPE>` is:
 2. For each rule, check three sources and reach ONE verdict: the contract (the operation, its
    responses, its headers), the handler (controller, then service, never only the route), and the
    docs page that describes it.
+    - `zalando-money`: scan every amount in each response, starting from the `DecimalAmount` and
+      `NonNegativeDecimalAmount` schemas. Each one needs a `currency` on its own object or on an
+      ancestor in the same answer. Name the scan. A miss is a `VIOLATION` with fix side `contract`,
+      not a `LINT-CANDIDATE`: the rule is `lint: no`. Responses only: a request amount takes the
+      target's currency.
 3. A doc that contradicts the code: say which side is wrong, and cite the section.
 4. A finding a rule could catch mechanically: verdict `LINT-CANDIDATE` with the JSONPath. It is
    REPORTED only, never turned into a Spectral rule, and you change no file.

@@ -3,8 +3,9 @@
  * Sweep stored images that no current document names. The nightly `reap:orphaned-images` job's
  * work, kept here so it is a tested function and not a property of a cron script.
  *
- * Orphans come from two places:
+ * Orphans come from these places:
  * - a refused upload that never reached its close hook (a dropped connection)
+ * - a replayed `POST /products` (the ledger answers the first product; the retry's upload stays)
  * - a throwaway Mongo (`npm run demo`, e2e) that was reseeded under files on a persistent disk
  *
  * See: docs/reference/ops.md

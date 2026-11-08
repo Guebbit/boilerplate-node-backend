@@ -559,7 +559,7 @@ const bundleSteps = (errorCodes: Record<string, ErrorCodeEntry>): readonly Step[
         withVersionedResources,
         // The headers every answer carries.
         withAppLevelHeaders,
-        // `Idempotent-Replay` on idempotent writes.
+        // `Idempotent-Replayed` on idempotent writes.
         withIdempotentReplay,
         // The `x-module` each operation's owning fragment names, never hand-written.
         (document_) => {

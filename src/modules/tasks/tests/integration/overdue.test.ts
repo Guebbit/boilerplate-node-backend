@@ -8,7 +8,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
 import type { DomainEventMap } from '@kernel/events';
-import { taskService } from '../../service';
+import { taskService } from '../../services';
 import { taskModel } from '@modules/tasks/model';
 import { backdateDue, closeDirectly, createSystemTask } from '../factories';
 import { outboxEventModel, relayOutbox, settleOutboxNudges } from '@kernel/outbox';

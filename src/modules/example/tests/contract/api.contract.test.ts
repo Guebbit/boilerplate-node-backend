@@ -681,7 +681,7 @@ describe('POST /examples with an Idempotency-Key', () => {
         expect(first.status).toBe(201);
         expect(replay.status).toBe(201);
         expect(replay.body.id).toBe(first.body.id);
-        expect(replay.headers['idempotent-replay']).toBe('true');
+        expect(replay.headers['idempotent-replayed']).toBe('true');
         expect(changed.status).toBe(422);
     });
 });

@@ -11,7 +11,7 @@ import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import { requireId } from '@infrastructure/http/ids';
-import { taskService } from '../service';
+import { taskService } from '../services';
 
 /** DELETE /tasks/:id/assignee (staff) — give the task back. */
 export const deleteTaskAssignee = (request: Request<{ id: string }>, response: Response) => {

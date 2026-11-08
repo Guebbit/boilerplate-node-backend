@@ -9,6 +9,9 @@ tags:
       x-family: Catalogue
       description: Products a user saved for later.
 
+x-error-codes:
+    WISHLIST_LIMIT_REACHED: { status: 409, description: 'The wishlist already holds `NODE_WISHLIST_MAX` products (250 by default) — remove one before saving another. Saving a product already there is never refused.' }
+
 # This module's section of the account data export (`POST /account/export`): the bundler
 # adds it to `AccountExportResponse`. Removing the module removes the section.
 x-personal-data:
@@ -23,7 +26,11 @@ paths:
         get:
             tags: [Wishlist]
             summary: Get wishlist
-            description: Returns the authenticated user's saved products — ids only, like the cart's lines; clients render them from their own product store. Absence and emptiness are the same state, so this never answers 404.
+            description: >-
+                Returns the authenticated user's saved products — ids only, like the cart's lines;
+                clients render them from their own product store. Absence and emptiness are the same
+                state, so this never answers 404. Never paginated, a wishlist holds at most
+                `NODE_WISHLIST_MAX` products (250 by default).
             operationId: getWishlist
             security:
                 - bearerAuth: []
@@ -47,8 +54,11 @@ paths:
                 answers the same 200 and fires nothing a second time, because a double-clicked heart
                 icon is not an error. The product must be publicly visible; a hidden or soft-deleted
                 product answers 404 exactly as it would from the catalogue. A product taken off sale
-                (`purchasable: false`) is saved like any other.
+                (`purchasable: false`) is saved like any other. A NEW product is refused (409
+                `WISHLIST_LIMIT_REACHED`) once the list holds `NODE_WISHLIST_MAX` products.
             operationId: createWishlistItem
+            x-error-codes:
+                '409': [WISHLIST_LIMIT_REACHED]
             security:
                 - bearerAuth: []
             requestBody:
@@ -67,6 +77,8 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # Well-formed product id that matches no publicly visible product.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # The list is full and the product is not on it.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 # A missing or malformed `productId` in the body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
@@ -102,6 +114,7 @@ paths:
                 wishlist; read the cart for its own new state.
             operationId: moveWishlistItemToCart
             x-error-codes:
+                '409': [CART_LINE_LIMIT_REACHED]
                 '422': [CART_QUANTITY_LIMIT]
             security:
                 - bearerAuth: []
@@ -122,6 +135,8 @@ paths:
                 # whether a product may be in a basket is decided once, where every caller of the
                 # cart inherits it.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # The cart is full and does not hold the product; the line stays saved.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
 components:

@@ -146,16 +146,16 @@ rules:
       source: https://www.rfc-editor.org/rfc/rfc9457#section-3.2
       evidence: [openapi.yaml paths.*.*.x-error-codes, docs/api/errors.md#the-errors-extension]
       lint: possible
-      difference: null
+      difference: closed-problem-schema
 
     - id: rfc9457-type-about-blank
       standard: rfc9457
       section: type
-      rule: '`type` is `about:blank` when the status says all there is to say, and no other `type` URI is sent that does not resolve.'
+      rule: '`type` is `about:blank` only when the problem has nothing beyond its status; otherwise a problem type URI (RFC 9457 §4).'
       source: https://www.rfc-editor.org/rfc/rfc9457#section-4.2.1
       evidence: [src/infrastructure/http/response.ts, docs/api/errors.md#problem-details]
       lint: no
-      difference: null
+      difference: about-blank-with-codes
 
     # RFC 5789, PATCH.
     - id: rfc5789-patch-partial
@@ -434,7 +434,7 @@ rules:
       source: https://opensource.zalando.com/restful-api-guidelines/#173
       evidence: [openapi.yaml components.schemas.*Money*, docs/api/responses.md#money]
       lint: no
-      difference: money-string
+      difference: [money-string, money-resource-currency]
 
     - id: zalando-problem-json
       standard: zalando

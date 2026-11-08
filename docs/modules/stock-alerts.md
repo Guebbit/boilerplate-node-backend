@@ -57,6 +57,16 @@ refused with `STOCK_ALERT_PRODUCT_BUYABLE` when the product can be ordered now: 
 backorder open under its cap and date, or a preorder with allowance left. One rule, `isBuyable`,
 decides it here and decides when to fire.
 
+## The cap
+
+**An account holds at most `NODE_STOCK_ALERTS_MAX` requests** (default 100, at most 250).
+`GET /stock-alerts` is never paginated, so the list is bounded where a request is written. A request
+for a NEW product past it answers `409 STOCK_ALERT_LIMIT_REACHED`; asking again for one already
+waited for stays a 200. The write counts the account's rows for other products, then upserts, so two
+concurrent asks for different products can overshoot the cap by one. That is accepted: a transaction
+would not stop it either, and a counter document is not worth the second write. The inbox's own cap of
+100 is a different thing and is not the reason for this number.
+
 ## The signal
 
 `products` announces `product.buyable_again` through the outbox, in the transaction of the write that

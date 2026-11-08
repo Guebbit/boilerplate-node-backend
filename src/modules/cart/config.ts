@@ -1,7 +1,7 @@
 /**
  * @module
- * The cart's knobs: how long an untouched cart is kept, how many units one line may hold, and
- * how many unpaid orders one account may have open at checkout.
+ * The cart's knobs: how long an untouched cart is kept, how many units one line may hold, how many
+ * lines a cart may have, and how many unpaid orders one account may have open at checkout.
  *
  * See: docs/tools/configuration.md
  */
@@ -14,7 +14,10 @@ export const cartConfig = defineConfig({
     name: 'cart',
     shape: {
         NODE_CART_RETENTION_DAYS: int({ default: 365, min: 1 }),
-        NODE_CART_LINE_MAX: int({ default: 10, min: 1, max: 999 }),
+        NODE_CART_LINE_MAX_QUANTITY: int({ default: 10, min: 1, max: 999 }),
+        // `max: 500` is Shopify's own cart ceiling: the cart is never paginated, so the bound
+        // must hold whatever an operator sets.
+        NODE_CART_MAX_LINES: int({ default: 100, min: 1, max: 500 }),
         NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT: int({ default: 2, min: 1 })
     }
 });
@@ -28,7 +31,15 @@ export const cartConfig = defineConfig({
  * open-order cap and the reservation window it bounds how much of the shelf one account can hold.
  * @returns the per-line ceiling, 1 to 999
  */
-export const cartLineMax = (): number => cartConfig().NODE_CART_LINE_MAX;
+export const cartLineMax = (): number => cartConfig().NODE_CART_LINE_MAX_QUANTITY;
+
+/**
+ * The most lines (distinct products) one cart may hold. `GET /cart` is never paginated, so this is
+ * what keeps that read small; 100 matches the guest cart's own cap and Stripe Checkout's. A cart
+ * filled before a LOWER value keeps its lines: only a new line is refused.
+ * @returns the cap on lines per cart, 1 to 500
+ */
+export const cartMaxLines = (): number => cartConfig().NODE_CART_MAX_LINES;
 
 /**
  * How many of one account's orders may sit unpaid (`pending`) at once, whatever the payment method.

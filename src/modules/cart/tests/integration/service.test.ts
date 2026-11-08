@@ -74,15 +74,15 @@ const storedQuantity = async (userId: string, productId: string): Promise<number
 };
 
 /**
- * Runs `body` with the per-line ceiling (`NODE_CART_LINE_MAX`) at the shipped default. Pinned
+ * Runs `body` with the per-line ceiling (`NODE_CART_LINE_MAX_QUANTITY`) at the shipped default. Pinned
  * rather than left to the environment, so a developer's own `.env` value cannot move it.
  */
 const atDefault = (body: () => Promise<void>) =>
-    withEnvironmentOverrides({ NODE_CART_LINE_MAX: '10' }, body);
+    withEnvironmentOverrides({ NODE_CART_LINE_MAX_QUANTITY: '10' }, body);
 
 /** Runs `body` with the per-line ceiling at the contract's hard 999, for the cases about that bound. */
 const atHardCap = (body: () => Promise<void>) =>
-    withEnvironmentOverrides({ NODE_CART_LINE_MAX: '999' }, body);
+    withEnvironmentOverrides({ NODE_CART_LINE_MAX_QUANTITY: '999' }, body);
 
 /**
  * Gives a user a default address — the checkout rule requires one for `standard`/`express`
@@ -538,7 +538,7 @@ describe('updateItemQuantity', () => {
     });
 
     it('refuses a quantity past the per-line ceiling', () =>
-        withEnvironmentOverrides({ NODE_CART_LINE_MAX: '10' }, async () => {
+        withEnvironmentOverrides({ NODE_CART_LINE_MAX_QUANTITY: '10' }, async () => {
             const user = await createUser();
             const product = await createProduct();
             await cartService.addItemById(user.id, String(product._id), 1);
@@ -707,10 +707,10 @@ describe('reorderIntoCart', () => {
 });
 
 /*
- * The shop's own per-line ceiling (`NODE_CART_LINE_MAX`, default 10): one of the three knobs on
+ * The shop's own per-line ceiling (`NODE_CART_LINE_MAX_QUANTITY`, default 10): one of the three knobs on
  * denial of inventory.
  */
-describe('NODE_CART_LINE_MAX', () => {
+describe('NODE_CART_LINE_MAX_QUANTITY', () => {
     it('refuses a set past the ceiling, and writes nothing', () =>
         atDefault(async () => {
             const user = await createUser();

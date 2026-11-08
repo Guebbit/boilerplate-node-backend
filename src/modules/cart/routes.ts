@@ -66,14 +66,16 @@ router.post(
 // `mergeLimiter` first: a hundred lines per call is a hundredfold of what the global brake counts.
 router.post('/merge', mergeLimiter, idempotencyKey, postCartMerge);
 
-// POST /cart/reorder {orderId} — copy one of the caller's own orders back into the cart
-router.post('/reorder', postReorder);
+// POST /cart/reorder {orderId} — copy one of the caller's own orders back into the cart. Merge-shaped
+// like `/cart/merge`, so keyed for the same reason: a retry must not add the order's quantities twice.
+router.post('/reorder', idempotencyKey, postReorder);
 
 // GET /cart
 router.get('/', getCart);
 
-// POST /cart/items — add a line, or grow the one already there
-router.post('/items', postCartItems);
+// POST /cart/items — add a line, or grow the one already there. `idempotencyKey` so a retry after a
+// lost answer does not grow the line twice; a deliberate second click is a new key and still adds.
+router.post('/items', idempotencyKey, postCartItems);
 
 // DELETE /cart/items — clear every line
 router.delete('/items', clearCart);

@@ -64,6 +64,17 @@ A deleted product leaves a message behind: after the lines are pulled the module
 [`notifications`](./notifications.md) writes one row per owner. The wishlist itself never imports
 the inbox.
 
+## The cap
+
+**A wishlist holds at most `NODE_WISHLIST_MAX` products** (default 250, also the most it can be set
+to). `GET /wishlist` is never paginated, so the list is bounded where a product is saved; 250 is
+commercetools' own shopping-list limit and stays under Zalando's "a few hundred" (#159). A NEW product
+in a full list answers `409 WISHLIST_LIMIT_REACHED`; saving one already there stays a 200. The cap
+lives in the write's own update pipeline (append only when the product is absent AND the list has
+room), so a burst of saves cannot pass it, and the filter stays an equality on `userId` for the
+reason in [the pipeline](#the-pipeline). Moving a product into a full cart answers the cart's
+`409 CART_LINE_LIMIT_REACHED` and the product stays saved.
+
 ## Line availability
 
 Each line comes back as `{ productId, availability }`: the cart's own rule decides, so a wishlist

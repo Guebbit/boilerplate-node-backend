@@ -11,7 +11,7 @@ import { CreateContactTaskBody } from '@api/schemas.zod';
 import { trimmedInto } from '@infrastructure/http/schemas';
 import { acceptedResponse } from '@infrastructure/http/response';
 import type { CreateContactTaskRequest } from '@types';
-import { taskService } from '../service';
+import { taskService } from '../services';
 import { catchAs, parseBody } from '@infrastructure/http/controller';
 
 /**

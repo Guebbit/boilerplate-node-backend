@@ -167,13 +167,13 @@ describe('CORS', () => {
     /**
      * A credentialed cross-origin call can read only the headers named here (`*` does not work with
      * credentials). `Location` follows a create, `Content-Disposition` names a download, and
-     * `Idempotent-Replay` tells a replay from a fresh answer. The `Cache-Status` debug header stays
+     * `Idempotent-Replayed` tells a replay from a fresh answer. The `Cache-Status` debug header stays
      * off the list: devtools and curl see it anyway (RFC 9211 §6).
      */
     it.each([
         'location',
         'content-disposition',
-        'idempotent-replay',
+        'idempotent-replayed',
         'ratelimit',
         'ratelimit-policy'
     ])('exposes %s to a credentialed browser client', async (header) => {

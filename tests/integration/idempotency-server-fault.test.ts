@@ -43,7 +43,7 @@ describe('Idempotency-Key — a handler that faulted', () => {
 
         const retry = await send('fault-key-1');
         expect(retry.status).toBe(500);
-        expect(retry.headers['idempotent-replay']).toBe('true');
+        expect(retry.headers['idempotent-replayed']).toBe('true');
         // The handler did not run for the retry: the repository was reached once, by the first attempt.
         expect(create).toHaveBeenCalledTimes(1);
         expect(await idempotencyRecordModel.countDocuments({})).toBe(1);

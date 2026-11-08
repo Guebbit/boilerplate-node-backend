@@ -60,7 +60,7 @@ describe('R3 — concurrent writes of the SAME product', () => {
      * size is a knob, and a ceiling below it would turn the last adds into refusals.
      */
     it('leaves one cart holding one line, never the same product twice', () =>
-        withEnvironmentOverrides({ NODE_CART_LINE_MAX: String(RACE_SIZE) }, async () => {
+        withEnvironmentOverrides({ NODE_CART_LINE_MAX_QUANTITY: String(RACE_SIZE) }, async () => {
             const { user, bearer } = await authenticateAs();
             const product = await createProduct({ onHand: RACE_SIZE * 5 });
 

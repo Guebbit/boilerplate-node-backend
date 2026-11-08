@@ -11,6 +11,7 @@ import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewa
 import { previewDraftLanguage } from '@kernel/middlewares/locale-preview';
 import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { upload } from '@infrastructure/http/middlewares/upload';
+import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 import {
     getProducts,
     searchProductsKeyParameters,
@@ -86,6 +87,9 @@ router.get('/', previewDraftLanguage, cacheProductsSearch, getProducts);
 // `update:Translation` since the same write always carries every language's copy alongside it.
 // Both are required: neither key alone completes this write, which is what stops a rewording
 // from becoming a repricing.
+// `idempotencyKey` after `upload.image()`: multipart fields exist only once multer has parsed them,
+// so the ledger fingerprints the real body. A product with no SKU has no other key, so a retry
+// after a lost answer would put a second live product in the shop.
 router.post(
     '/',
     uploadLimiter,
@@ -94,6 +98,7 @@ router.post(
     requirePermission('update', 'Translation'),
     invalidateCache(['products']),
     upload.image(),
+    idempotencyKey,
     createProduct
 );
 

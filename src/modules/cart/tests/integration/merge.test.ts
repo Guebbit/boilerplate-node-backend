@@ -28,7 +28,7 @@ setupTestDb();
 
 // These cases fill a line up to the contract's 999 ceiling: lift the shop's own, lower, default.
 beforeEach(() => {
-    overrideEnvironment({ NODE_CART_LINE_MAX: '999' });
+    overrideEnvironment({ NODE_CART_LINE_MAX_QUANTITY: '999' });
 });
 
 afterEach(() => {

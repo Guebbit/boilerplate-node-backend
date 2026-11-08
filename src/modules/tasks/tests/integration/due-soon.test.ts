@@ -10,7 +10,7 @@ import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel
 import type { DomainEventMap } from '@kernel/events';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { TaskKind, TaskSource } from '@types';
-import { taskService } from '../../service';
+import { taskService } from '../../services';
 import { taskModel } from '../../model';
 import { taskRepository } from '../../repository';
 import { TASK_DUE_SOON } from '../../events';
@@ -120,6 +120,7 @@ describe('remindDueSoon', () => {
         await giveLife(String(ordinary._id), 2, 30);
 
         await expect(taskService.remindDueSoon()).resolves.toBe(1);
+        await settleOutboxNudges();
         expect(heard.map(({ taskId }) => taskId)).toEqual([String(privacy._id)]);
     });
 

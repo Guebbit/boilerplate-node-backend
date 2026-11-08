@@ -16,6 +16,7 @@ x-error-codes:
     CART_BILLING_ADDRESS_REQUIRED: { status: 422, description: 'No billing address could be resolved — none was named, nothing ships, and the address book has no default.' }
     CART_CHANGED: { status: 409, description: 'The cart changed between the request that read it and this write — reload and retry.' }
     CART_EMPTY: { status: 409, description: 'Checkout was attempted on a cart with no lines.' }
+    CART_LINE_LIMIT_REACHED: { status: 409, description: 'The cart already holds `NODE_CART_MAX_LINES` lines (100 by default), so a NEW product cannot be added — remove one first. Raising a line already there is never refused.' }
     CART_INSUFFICIENT_STOCK: { status: 409, description: 'One or more lines cannot be bought as they stand — see `errors[].details.lines`, one entry per refused line with its `productId`, `title`, the `requested` quantity and its `availability` (`insufficient_stock`, `out_of_stock` or `unavailable`, so the client picks the message). The number left is not part of the answer: exact stock is for callers who read it (`read:StockLevel`).' }
     CART_OPEN_ORDER_LIMIT_REACHED: { status: 409, description: 'The account already holds `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` unpaid orders, whatever their payment method — each holds stock. `errors[].details.orderIds` names them: pay one (`POST /payments`) or cancel one (`POST /orders/{id}/cancel`), then check out again.' }
     CART_PAYMENT_METHOD_NOT_AVAILABLE: { status: 409, description: 'The chosen payment method is not enabled for this deployment or this cart.' }
@@ -45,7 +46,10 @@ paths:
         get:
             tags: [Cart]
             summary: Get cart
-            description: Returns all items currently in the authenticated user's cart along with a computed summary
+            description: >-
+                Returns all items currently in the authenticated user's cart along with a computed
+                summary. Never paginated, a cart holds at most `NODE_CART_MAX_LINES` lines (100 by
+                default), so the read stays small.
             operationId: getCart
             security:
                 - bearerAuth: []
@@ -68,11 +72,19 @@ paths:
                 already there GROWS by `quantity` — pressing the button twice makes two (Shopify's
                 `/cart/add`, commercetools' `addLineItem`). A line is written through its parent, so
                 the answer is always 200 with the whole cart: no `Location`, no read of a line. The
-                line may not pass the per-line cap (422). To SET a quantity,
+                line may not pass the per-line cap (422), and a NEW product is refused (409
+                `CART_LINE_LIMIT_REACHED`) once the cart holds `NODE_CART_MAX_LINES` lines. A retry after a lost answer carries the SAME
+                `Idempotency-Key` and gets the first answer back; a deliberate second click is a new
+                intent with a new key, and adds again. To SET a quantity,
                 `PATCH /cart/items/{productId}`.
             operationId: addCartItem
+            x-error-codes:
+                '409': [IDEMPOTENCY_IN_FLIGHT, CART_LINE_LIMIT_REACHED]
+                '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
                 required: true
                 content:
@@ -90,6 +102,9 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # Well-formed product id that matches no product. 422 covers the malformed case.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # Also answered when `Idempotency-Key` names a request still in flight.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                # Also answered when `Idempotency-Key` was already used with a different body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
         delete:
             tags: [Cart]
@@ -266,7 +281,7 @@ paths:
                 product taken off sale), with the quantity left as the sum, so the answer never
                 says how many are for sale. The same rule runs at checkout, which refuses, and in
                 `GET /cart`, which flags, all three reading the stock ledger. Lines that could not be
-                added at all (`removed`: the product is deleted or hidden) are also written as ONE notification
+                added at all (`removed`: the product is deleted or hidden; `cart_full`: no line is left for it) are also written as ONE notification
                 (`shop-tasks.cart-merge-refused`); nothing is written when there are none. Safe to
                 retry with an `Idempotency-Key`: a lost answer replays instead of adding the same
                 quantities twice. The caller empties its local guest cart once this answers.
@@ -300,12 +315,15 @@ paths:
         post:
             tags: [Cart]
             summary: Reorder (refill cart from a past order)
-            description: Copies the lines of one of the authenticated user's own orders back into their cart — quantities from the order, added on top of what the cart already holds. The order stores product snapshots, so each line is re-resolved against the catalogue as it is today; products that have since been removed, deactivated or hidden are skipped, and the answer holds the cart as it now stands and ONE RESULT PER ORDER LINE, in the order's own order, by the same rule and in the same shape as `POST /cart/merge` (`requested`, `resulting`, `reason`, `availability`). A line that would pass the per-line ceiling (`NODE_CART_LINE_MAX`) is clamped to what room is left (`capped`), and adds nothing once there is none; an unavailable product is `removed`. Neither is a failure. Any signed-in account, staff included, reorders only its own orders — the cart being filled is the caller's.
+            description: Copies the lines of one of the authenticated user's own orders back into their cart — quantities from the order, added on top of what the cart already holds. The order stores product snapshots, so each line is re-resolved against the catalogue as it is today; products that have since been removed, deactivated or hidden are skipped, and the answer holds the cart as it now stands and ONE RESULT PER ORDER LINE, in the order's own order, by the same rule and in the same shape as `POST /cart/merge` (`requested`, `resulting`, `reason`, `availability`). A line that would pass the per-line ceiling (`NODE_CART_LINE_MAX_QUANTITY`) is clamped to what room is left (`capped`), and adds nothing once there is none; an unavailable product is `removed`. Neither is a failure. Any signed-in account, staff included, reorders only its own orders — the cart being filled is the caller's.
             operationId: reorder
             x-error-codes:
-                '409': [REORDER_UNAVAILABLE]
+                '409': [IDEMPOTENCY_IN_FLIGHT, REORDER_UNAVAILABLE, CART_LINE_LIMIT_REACHED]
+                '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
                 required: true
                 content:
@@ -325,6 +343,7 @@ paths:
                 # a 422 on `orderId`: the id is a body field, so it is an argument, not a URL.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                # Also answered when `Idempotency-Key` was already used with a different body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
 components:
@@ -409,12 +428,14 @@ components:
                 Why a merged guest line or a reordered order line did not land exactly as asked. Absent when it did.
 
                 - `summed`: the cart already held some of the product, so `resulting` is the sum.
-                - `capped`: the sum would pass the per-line cap (`NODE_CART_LINE_MAX`); `resulting` is the cap.
+                - `capped`: the sum would pass the per-line cap (`NODE_CART_LINE_MAX_QUANTITY`); `resulting` is the cap.
+                - `cart_full`: the product is new to the cart and the cart already holds
+                  `NODE_CART_MAX_LINES` lines; nothing was added, `resulting` is 0.
                 - `removed`: the product is not publicly visible any more (deleted or hidden);
                   nothing was added, `resulting` is what the cart already held (often 0). A product
                   that is merely sold out, or taken off sale, is NOT removed: it is added and
                   flagged through `availability`.
-            enum: [summed, capped, removed]
+            enum: [summed, capped, cart_full, removed]
 
         MergeLineResult:
             type: object
@@ -639,7 +660,7 @@ components:
                     type: boolean
                     description: >-
                         Whether the line can hold one more unit: `quantity` is below the shop's
-                        per-line ceiling (`NODE_CART_LINE_MAX`). Stock plays no part, as for
+                        per-line ceiling (`NODE_CART_LINE_MAX_QUANTITY`). Stock plays no part, as for
                         `POST /cart/items`. A client disables its "+" on `false` instead of copying
                         the ceiling.
 

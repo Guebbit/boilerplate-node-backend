@@ -38,7 +38,7 @@ Output is `tmp/reports/audit/api-rfc9110/<SCOPE>.md`, where `<SCOPE>` is:
       `application/problem+json`, the 2xx body is an object, replace is PUT and update is PATCH,
       operationId shape, schema names, camelCase parameters, `maxLength`, `names-in-us-english-*`)
     - a bundler step (`scripts/contracts/openapi-bundle.ts`) adds `ETag`, `If-Match`, 412 and 304
-    - `scripts/contracts/response-headers.ts` adds `Idempotent-Replay`
+    - `scripts/contracts/response-headers.ts` adds `Idempotent-Replayed`
     - `tests/support/response-contract.ts` and `tests/contract/write-methods.test.ts`: a 201 carries its `Location` (indirectly, `tests/support/spec-walk.ts:308-310`; directly `write-methods.test.ts`, the `a 201 names the new resource in Location` block)
     - `tests/cross-cutting/api-standards.test.ts`, `tests/contract/route-spec-parity.test.ts`, `tests/integration/conditional-writes.test.ts`, `tests/fuzz/endpoints.fuzz.test.ts`
       A guarded rule gets one line ("guarded by X") and no verdict hunt.

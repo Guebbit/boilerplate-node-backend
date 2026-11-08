@@ -16,11 +16,13 @@ import { PRODUCT_BUYABLE_AGAIN, PRODUCT_DELETED } from '@modules/products';
 import { stockAlertsJobs } from './jobs';
 import { router } from './routes';
 import { stockAlertService } from './service';
+import { stockAlertsConfig } from './config';
 
 /** This module's manifest entry: routes, event subscriptions, personal data, locales, templates. */
 export default {
     name: 'stock-alerts',
     mounts: [{ basePath: '/stock-alerts', routes: router }],
+    config: [stockAlertsConfig.slice],
     jobs: stockAlertsJobs,
     personalData: [
         {

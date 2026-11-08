@@ -9,7 +9,7 @@ import { callerContextAs } from '@tests/callers';
 import { setupTestDb } from '@tests/setup-test-db';
 import { taskRepository } from '@modules/tasks/repository';
 import { taskModel } from '@modules/tasks/model';
-import { taskService } from '@modules/tasks/service';
+import { taskService } from '@modules/tasks/services';
 
 setupTestDb();
 

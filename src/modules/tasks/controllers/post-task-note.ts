@@ -13,7 +13,7 @@ import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { requireId } from '@infrastructure/http/ids';
 import { trimmedInto } from '@infrastructure/http/schemas';
-import { taskService } from '../service';
+import { taskService } from '../services';
 
 /** The note body trimmed first, so whitespace alone is the field-level 422 an empty one is. */
 const createTrimmedNoteBody = CreateTaskNoteBody.extend({

@@ -9,6 +9,7 @@
 import { Router } from 'express';
 import { getAuth, isAuth } from '@kernel/middlewares/authorizations';
 import { noStore } from '@infrastructure/http/middlewares/cache';
+import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 import { getAddresses } from './controllers/get-addresses';
 import { getAddress } from './controllers/get-address';
 import { postAddress } from './controllers/post-address';
@@ -29,8 +30,10 @@ router.use(noStore);
 // GET /account/addresses — the caller's address book (requires auth)
 router.get('/addresses', isAuth, getAddresses);
 
-// POST /account/addresses — add an entry (requires auth)
-router.post('/addresses', isAuth, postAddress);
+// POST /account/addresses — add an entry (requires auth). `idempotencyKey` after the auth check:
+// a retry after a lost answer replays the entry instead of writing a duplicate and burning a slot
+// of the book's cap.
+router.post('/addresses', isAuth, idempotencyKey, postAddress);
 
 // GET /account/addresses/:addressId — one entry of the caller's own book (requires auth)
 router.get('/addresses/:addressId', isAuth, getAddress);

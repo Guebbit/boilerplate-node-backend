@@ -56,7 +56,7 @@ or return is sent from an outbox-event listener — see [outbox.md](outbox.md#cu
 
 Callers include `account/services/mail.ts` (reset, verification, restore links),
 `orders/services/notify.ts` and `cancel-mail.ts`, `payments/services/notify.ts`,
-`delivery/services/notify.ts`, `returns/services/notify.ts` and `tasks/service.ts`. `grep -rn enqueueEmail src` is the live list.
+`delivery/services/notify.ts`, `returns/services/notify.ts`, `tasks/services/contact.ts` and `tasks/services/personal-data.ts`. `grep -rn enqueueEmail src` is the live list.
 
 ### Invoice PDF rendering — NOT a queue
 

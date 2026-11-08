@@ -926,7 +926,7 @@ describe('POST /payments/{id}/refunds — the operator', () => {
 
         expect(first.status).toBe(201);
         expect(second.status).toBe(201);
-        expect(second.headers['idempotent-replay']).toBe('true');
+        expect(second.headers['idempotent-replayed']).toBe('true');
         const payment = await paymentRepository.findById(paymentId);
         expect(payment!.refunds).toHaveLength(1);
         expect(payment!.amountRefunded).toBe('5.00');

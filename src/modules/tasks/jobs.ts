@@ -9,7 +9,7 @@ import type { JobDeclaration } from '@kernel/registry';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { logger } from '@infrastructure/adapters/logger';
 import { tasksJobData } from './jobs.generated';
-import { taskService } from './service';
+import { taskService } from './services';
 import { MINUTE_MS } from '@domain-primitives/time';
 
 /** The jobs `tasks` owns. */

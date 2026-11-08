@@ -22,8 +22,9 @@ import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { wishlistAnalyticsEvents } from './analytics';
 import { WISHLIST_ITEMS_REMOVED } from './events';
+import { ERROR_CODES } from '@api/error-codes';
 import type { WishlistDocument } from './model';
-import { wishlistRepository } from './repository';
+import { wishlistRepository, WISHLIST_LIMIT_REACHED } from './repository';
 import { presentWishlist, savedProductIds, type WishlistView } from './presenter';
 
 /**
@@ -56,7 +57,8 @@ const exportLines = (userId: string): Promise<{ productId: string }[]> =>
  * The product must exist AND be publicly visible — saving a hidden or soft-deleted product from
  * a stale tab would otherwise plant a line the storefront can never render. Adding what is
  * already saved is idempotent (`$addToSet`), so a double-click answers the same 200 and fires no
- * second `WISHLIST_ITEM_ADDED`.
+ * second `WISHLIST_ITEM_ADDED`. A NEW product in a list already holding `NODE_WISHLIST_MAX` is
+ * refused: 409 `WISHLIST_LIMIT_REACHED`.
  */
 const add = (
     userId: string,
@@ -65,7 +67,12 @@ const add = (
 ): Promise<ResponseSuccess<WishlistView> | ResponseReject> =>
     productService.findPublicById(productId).then((product) => {
         if (!product) return generateReject(404, [t('wishlist.product-not-found')]);
-        return wishlistRepository.addLine(userId, productId).then(({ wishlist, added }) => {
+        return wishlistRepository.addLine(userId, productId).then((saved) => {
+            if (saved === WISHLIST_LIMIT_REACHED)
+                return generateReject(409, [
+                    { code: ERROR_CODES.WISHLIST_LIMIT_REACHED, message: t('wishlist.full') }
+                ]);
+            const { wishlist, added } = saved;
             // Only a product that was NOT already saved is an add — a repeated save is not one.
             if (added)
                 emitAnalyticsEvent({
@@ -126,9 +133,12 @@ const moveToCart = (
             // The line stays saved either way. A product genuinely gone from the catalogue reads
             // as this module's own 404 (a refusal to buy it now is not a reason to throw away the
             // fact that somebody wants it); the cart's own 422 — the line is already at
-            // per-line ceiling (`NODE_CART_LINE_MAX`) — says something the shopper needs to hear, so it passes through.
+            // per-line ceiling (`NODE_CART_LINE_MAX_QUANTITY`) — and 409 — the cart is full — say
+            // something the shopper needs to hear, so they pass through.
             if (!added.success)
-                return added.errors.some((error) => error.code === 'CART_QUANTITY_LIMIT')
+                return added.errors.some((error) =>
+                    ['CART_QUANTITY_LIMIT', 'CART_LINE_LIMIT_REACHED'].includes(error.code)
+                )
                     ? added
                     : generateReject(404, [t('wishlist.product-not-found')]);
 

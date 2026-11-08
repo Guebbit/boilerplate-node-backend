@@ -8,7 +8,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { taskService } from '@modules/tasks/service';
+import { taskService } from '@modules/tasks/services';
 import tasksModule from '@modules/tasks/module';
 import { taskRepository } from '@modules/tasks/repository';
 import { callerContextAs } from '@tests/callers';

@@ -12,7 +12,7 @@ import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { requireId } from '@infrastructure/http/ids';
-import { taskService } from '../service';
+import { taskService } from '../services';
 
 /** PUT /tasks/:id/assignee (staff) — hand the task to one person; taking it is assigning yourself. */
 export const putTaskAssignee = (

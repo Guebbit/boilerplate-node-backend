@@ -8,7 +8,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { callerContextAs } from '@tests/callers';
 import { observePort } from '@tests/ports';
-import { taskService } from '@modules/tasks/service';
+import { taskService } from '@modules/tasks/services';
 import { taskRepository } from '@modules/tasks/repository';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import * as auditPort from '@infrastructure/observability/audit';

@@ -513,7 +513,7 @@ everything.
 | `return_requested`                                                | `returnId`, `reason`                                                              |
 | `return_approved`                                                 | `returnId`, and `reason` when opened already approved                             |
 | `return_declined`, `return_canceled`, `proof_of_sending_recorded` | `returnId`                                                                        |
-| `return_received`                                                 | `returnId`, `refundAmount`                                                        |
+| `return_received`                                                 | `returnId`, `refundAmount`, `currency`                                            |
 | `return_closed`                                                   | `returnId`, `refundAmount`, `currency`, `remedy` when chosen                      |
 | `invoice_issued`                                                  | `invoiceId`, `number`                                                             |
 | `credit_note_issued`                                              | `creditNoteId`, `number`, `refundId`                                              |

@@ -147,7 +147,7 @@ describe('POST /cart/items', () => {
     });
 
     it('422s an add that would push a line past the per-line ceiling', () =>
-        withEnvironmentOverrides({ NODE_CART_LINE_MAX: '2' }, async () => {
+        withEnvironmentOverrides({ NODE_CART_LINE_MAX_QUANTITY: '2' }, async () => {
             const { bearer, product } = await authenticateWithCart(2);
 
             const response = await api()
@@ -160,7 +160,7 @@ describe('POST /cart/items', () => {
         }));
 
     it('422s an add whose new line is already past the per-line ceiling', () =>
-        withEnvironmentOverrides({ NODE_CART_LINE_MAX: '10' }, async () => {
+        withEnvironmentOverrides({ NODE_CART_LINE_MAX_QUANTITY: '10' }, async () => {
             const { bearer } = await authenticateAs('user');
             const product = await createProduct();
 
@@ -364,7 +364,7 @@ describe('POST /cart/merge', () => {
             const retry = await mergeOnce(bearer, 'merge-replay-key-1', 2, id);
 
             expect(retry.status).toBe(200);
-            expect(retry.headers['idempotent-replay']).toBe('true');
+            expect(retry.headers['idempotent-replayed']).toBe('true');
             expect(retry.body).toEqual(first.body);
             await expect(heldOf(bearer, id)).resolves.toBe(2);
         });
@@ -752,7 +752,7 @@ describe('POST /cart/checkout', () => {
         });
 
         expect(second.status).toBe(201);
-        expect(second.headers['idempotent-replay']).toBe('true');
+        expect(second.headers['idempotent-replayed']).toBe('true');
         expect(second.body).toEqual(first.body);
 
         // One order, not two.

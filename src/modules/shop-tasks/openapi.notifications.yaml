@@ -56,7 +56,7 @@ components:
             properties:
                 lines:
                     type: array
-                    description: The guest-cart lines `POST /cart/merge` could not add at all.
+                    description: The guest-cart lines `POST /cart/merge` could not add at all (`removed` or `cart_full`).
                     items:
                         type: object
                         additionalProperties: false
@@ -300,7 +300,7 @@ components:
         NotificationCartMergeRefused:
             type: object
             additionalProperties: false
-            description: Guest-cart lines `POST /cart/merge` could not add at all, because the product is no longer available.
+            description: Guest-cart lines `POST /cart/merge` could not add at all, because the product is no longer available or the cart was full.
             required: [id, audience, code, params, severity, createdAt]
             properties:
                 id:

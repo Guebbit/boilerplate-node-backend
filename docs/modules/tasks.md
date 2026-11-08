@@ -281,7 +281,7 @@ jurisdiction. `overdue` is read-time arithmetic (open and past `dueAt`): no swee
 **The honeypot.** `website` is a field a real browser always submits empty and a bot reliably
 fills — declared in the contract (so an undeclared field wouldn't 422 real browsers too) but never
 persisted or returned. A non-empty value — or an address the email policy `refused`
-(`checkEmailPolicy`, `service.ts`) — writes the row straight to `status: spam`, closed at birth, and
+(`checkEmailPolicy`, `services/contact.ts`) — writes the row straight to `status: spam`, closed at birth, and
 announces nothing; the caller still gets the same `202` a real submission gets, so a
 bot learns nothing from the response. That trades an email amplifier for a storage amplifier,
 which `contactLimiters` bounds and the TTL index expires.

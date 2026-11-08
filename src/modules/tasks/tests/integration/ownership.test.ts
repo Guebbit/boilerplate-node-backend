@@ -8,7 +8,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { Types } from 'mongoose';
 import { withTransaction } from '@infrastructure/runtime/database';
-import { taskService } from '@modules/tasks/service';
+import { taskService } from '@modules/tasks/services';
 import { taskRepository } from '@modules/tasks/repository';
 import { findAllTasks } from '../factories';
 import tasksModule from '@modules/tasks/module';

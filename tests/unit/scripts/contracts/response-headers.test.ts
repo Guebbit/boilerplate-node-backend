@@ -97,7 +97,7 @@ const writes = (created: Record<string, unknown>) =>
     });
 
 describe('withIdempotentReplay', () => {
-    it('declares Idempotent-Replay on the 2xx of an operation taking the key, and nowhere else', () => {
+    it('declares Idempotent-Replayed on the 2xx of an operation taking the key, and nowhere else', () => {
         const result = applied(
             withIdempotentReplay,
             writes({ description: 'made', headers: { Location: {} } })
@@ -105,7 +105,7 @@ describe('withIdempotentReplay', () => {
 
         expect(result.paths?.['/keyed']?.post?.responses?.['201']).toHaveProperty('headers', {
             Location: {},
-            'Idempotent-Replay': { $ref: '#/components/headers/Idempotent-Replay' }
+            'Idempotent-Replayed': { $ref: '#/components/headers/Idempotent-Replayed' }
         });
         expect(result.paths?.['/keyed']?.post?.responses?.['409']).toEqual({
             description: 'conflict'
@@ -132,7 +132,7 @@ describe('withIdempotentReplay', () => {
 
         expect(
             applied(withIdempotentReplay, required).paths?.['/pay']?.post?.responses?.['200']
-        ).toHaveProperty(['headers', 'Idempotent-Replay']);
+        ).toHaveProperty(['headers', 'Idempotent-Replayed']);
     });
 
     it('refuses a 2xx that is a $ref, which cannot take a header of its own', () => {

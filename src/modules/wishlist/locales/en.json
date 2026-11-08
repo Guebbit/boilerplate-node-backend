@@ -1,5 +1,6 @@
 {
     "wishlist": {
+        "full": "Your wishlist is full. Remove a product before saving another.",
         "not-found": "This product is not on your wishlist.",
         "product-not-found": "The requested product was not found"
     }

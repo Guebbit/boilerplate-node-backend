@@ -57,6 +57,10 @@ const sentEvents = () =>
         .exec()
         .then((rows) => rows.map(({ payload }) => payload));
 
+/** Ask for `productId` as `bearer`. */
+const ask = (bearer: string, productId: string) =>
+    api().post('/stock-alerts').set('Authorization', bearer).send({ productId });
+
 describe('POST /stock-alerts', () => {
     it('records a request for a product that cannot be ordered, and asking twice is the same request', async () => {
         const { bearer } = await shopper();
@@ -76,6 +80,33 @@ describe('POST /stock-alerts', () => {
         expect(second.body.items).toHaveLength(1);
         expect(second.body.items[0].productId).toBe(productId);
         expect(await stockAlertModel.countDocuments()).toBe(1);
+    });
+
+    describe('the cap', () => {
+        it('refuses a new product past the cap with a 409, and writes nothing', () =>
+            withEnvironmentOverrides({ NODE_STOCK_ALERTS_MAX: '2' }, async () => {
+                const { bearer } = await shopper();
+                const held = [await soldOut(), await soldOut()];
+                for (const productId of held) await ask(bearer, productId);
+
+                const refused = await ask(bearer, await soldOut());
+
+                expect(refused.status).toBe(409);
+                expect(refused.body.errors[0].code).toBe('STOCK_ALERT_LIMIT_REACHED');
+                expect(await stockAlertModel.countDocuments()).toBe(2);
+            }));
+
+        it('answers 200 when asking again for a product already waited for, even at the cap', () =>
+            withEnvironmentOverrides({ NODE_STOCK_ALERTS_MAX: '2' }, async () => {
+                const { bearer } = await shopper();
+                const held = [await soldOut(), await soldOut()];
+                for (const productId of held) await ask(bearer, productId);
+
+                const again = await ask(bearer, held[0]);
+
+                expect(again.status).toBe(200);
+                expect(await stockAlertModel.countDocuments()).toBe(2);
+            }));
     });
 
     it.each([

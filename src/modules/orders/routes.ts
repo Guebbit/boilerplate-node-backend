@@ -112,11 +112,13 @@ router.put('/:id/shipping-address', requirePermission('update', 'Order'), putShi
 router.get('/:id/timeline', privateNoCache, getOrderTimeline);
 
 // POST /orders/:id/timeline/notes — staff leave a note: staff-only row, its text stored encrypted. The
-// permission check runs before the per-account budget is spent. DELETE withdraws a wrong note's text.
+// permission check runs before the per-account budget is spent, and the budget before the
+// idempotency ledger, so a replayed note still counts. DELETE withdraws a wrong note's text.
 router.post(
     '/:id/timeline/notes',
     requirePermission('update', 'Order'),
     ordersNoteLimiter,
+    idempotencyKey,
     postOrderNote
 );
 router.delete(
