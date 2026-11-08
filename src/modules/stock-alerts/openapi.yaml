@@ -10,6 +10,7 @@ tags:
       description: Requests to be told once when a product the caller cannot order can be again.
 
 x-error-codes:
+    STOCK_ALERT_LIMIT_REACHED: { status: 409, description: 'The account already waits for `NODE_STOCK_ALERTS_MAX` products (100 by default) — cancel one request before adding another. Asking again for a product already waited for is never refused.' }
     STOCK_ALERT_PRODUCT_BUYABLE: { status: 409, description: 'The product can be ordered now, so there is nothing to wait for. The button is only offered while it cannot.' }
 
 # This module's section of the account data export (`POST /account/export`): the bundler
@@ -29,7 +30,8 @@ paths:
             description: >-
                 Returns the authenticated user's open requests, newest first. A request is used once:
                 when it is answered it is deleted, so an answered one never appears here. Absence and
-                emptiness are the same state, so this never answers 404.
+                emptiness are the same state, so this never answers 404. Never paginated: an account
+                holds at most `NODE_STOCK_ALERTS_MAX` requests (100 by default).
             operationId: listStockAlerts
             security:
                 - bearerAuth: []
@@ -52,10 +54,12 @@ paths:
                 request is deleted when it is answered. Asking twice is the same request and answers
                 the same 200; the answer is always the whole list (the list is the parent, a request has no
                 URL of its own). Refused with `409 STOCK_ALERT_PRODUCT_BUYABLE` while the product can be
-                ordered now; a hidden or deleted product answers 404.
+                ordered now, and with `409 STOCK_ALERT_LIMIT_REACHED` once the account already holds
+                `NODE_STOCK_ALERTS_MAX` requests for other products; a hidden or deleted product
+                answers 404.
             operationId: createStockAlert
             x-error-codes:
-                '409': [STOCK_ALERT_PRODUCT_BUYABLE]
+                '409': [STOCK_ALERT_PRODUCT_BUYABLE, STOCK_ALERT_LIMIT_REACHED]
             security:
                 - bearerAuth: []
             requestBody:

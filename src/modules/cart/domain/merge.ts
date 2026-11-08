@@ -20,6 +20,10 @@ export interface MergeLineFacts {
     listed: boolean;
     /** The per-line ceiling. */
     lineMax: number;
+    /** How many lines the cart holds now. */
+    lines: number;
+    /** The most lines a cart may hold. */
+    maxLines: number;
 }
 
 /** The rule's verdict for one line. */
@@ -37,13 +41,21 @@ export interface MergePlan {
  * caller through `fitsStock`; lowering the line to what is for sale would let a caller read exact
  * stock by merging 999 (`docs/theory/defences/authorization.md`, "Reading the shelf"). When several
  * reasons apply the one reported is the first that does: `removed` (nothing is added at all),
- * `capped`, `summed`. `capped` says the shopper got less than they asked for; `summed` is context.
+ * `cart_full` (a new product, and no line left for it: nothing is added either), `capped`, `summed`. `capped` says the shopper got less than they asked for; `summed` is context.
  *
- * @param facts - the line, what the cart holds, and whether the product is listed
+ * @param facts - the line, what the cart holds, how full it is, and whether the product is listed
  * @returns how many units to add, and the one reason to report
  */
-export const planMergeLine = ({ requested, held, listed, lineMax }: MergeLineFacts): MergePlan => {
+export const planMergeLine = ({
+    requested,
+    held,
+    listed,
+    lineMax,
+    lines,
+    maxLines
+}: MergeLineFacts): MergePlan => {
     if (!listed) return { add: 0, reason: 'removed' };
+    if (held === 0 && lines >= maxLines) return { add: 0, reason: 'cart_full' };
 
     const wanted = held + requested;
     const target = Math.min(wanted, lineMax);

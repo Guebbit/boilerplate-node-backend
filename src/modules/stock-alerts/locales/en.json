@@ -1,6 +1,7 @@
 {
     "stock-alerts": {
         "product-not-found": "The requested product was not found",
+        "full": "You are already waiting for too many products. Cancel one request before adding another.",
         "not-found": "You have no request for this product.",
         "already-buyable": "This product can be ordered now.",
         "email-back-in-stock": {

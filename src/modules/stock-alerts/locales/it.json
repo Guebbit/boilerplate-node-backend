@@ -1,6 +1,7 @@
 {
     "stock-alerts": {
         "product-not-found": "Il prodotto richiesto non è stato trovato",
+        "full": "Stai già aspettando troppi prodotti. Annulla una richiesta prima di aggiungerne un'altra.",
         "not-found": "Non hai una richiesta per questo prodotto.",
         "already-buyable": "Questo prodotto si può ordinare adesso.",
         "email-back-in-stock": {

@@ -10,6 +10,7 @@
             "unavailable": "Nessuno dei prodotti di questo ordine è ancora disponibile.",
             "order-not-found": "L'ordine richiesto non è stato trovato"
         },
+        "lines-full": "Il tuo carrello è pieno. Rimuovi un prodotto prima di aggiungerne un altro.",
         "quantity-limit": "Questo articolo ha già raggiunto la quantità massima consentita per ordine.",
         "insufficient-stock": "Alcuni articoli non sono più disponibili nella quantità richiesta — vedi `details.lines`.",
         "address-not-found": "L'indirizzo di spedizione selezionato non è stato trovato.",

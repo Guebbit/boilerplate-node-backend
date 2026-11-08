@@ -10,7 +10,7 @@
 import type { QueryFilter, ClientSession } from 'mongoose';
 import { Types } from 'mongoose';
 import { cartModel, applyCartTransform } from './model';
-import { cartLineMax } from './config';
+import { cartLineMax, cartMaxLines } from './config';
 import type { CartDocument } from './model';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import {
@@ -38,6 +38,12 @@ export interface LineWrite {
  */
 export const QUANTITY_LIMIT = 'quantity-limit';
 
+/**
+ * What a write that would add a NEW line resolves to when the cart already holds
+ * `cartMaxLines()` of them — nothing was written. A line the cart already holds is never refused.
+ */
+export const LINE_LIMIT = 'line-limit';
+
 /** What {@link upsertLine} resolves to in `'update'` mode when the cart holds no such line. */
 export const NO_LINE = 'no-line';
 
@@ -48,20 +54,45 @@ export const NO_LINE = 'no-line';
  * that read — see `clearLinesIfUnchanged` below. A write that skips this `$inc` is invisible to
  * that guard, so a line added here while a checkout is in flight would be silently dropped
  * instead of invalidating the race.
+ *
+ * The line cap is in the FILTER too: `items.<max-1>` must not exist, which mongod evaluates while
+ * holding the document, so a burst of adds cannot all read "room" and overshoot. A filter that
+ * misses on an existing cart makes the upsert collide with the unique `userId` index; one more
+ * read tells a full cart (`LINE_LIMIT`) from a lost race, which is rethrown for `upsertLine`'s
+ * own duplicate-key retry.
  */
 const pushNewLine = (
     owner: QueryFilter<CartDocument>,
     line: Types.ObjectId,
     quantity: number
-): Promise<LineWrite> =>
-    cartModel
+): Promise<LineWrite | typeof LINE_LIMIT> => {
+    const maxLines = cartMaxLines();
+
+    return cartModel
         .findOneAndUpdate(
-            { ...owner, 'items.productId': { $ne: line } },
+            {
+                ...owner,
+                'items.productId': { $ne: line },
+                [`items.${String(maxLines - 1)}`]: { $exists: false }
+            },
             { $push: { items: { productId: line, quantity } }, $inc: { __v: 1 } },
             { upsert: true, returnDocument: 'after' }
         )
         .exec()
-        .then((cart) => ({ cart, created: true }));
+        .then<LineWrite | typeof LINE_LIMIT>((cart) => ({ cart, created: true }))
+        .catch((error: unknown) => {
+            if (!isDuplicateKey(error)) throw error;
+            return cartModel
+                .findOne(owner)
+                .exec()
+                .then((existing) => {
+                    const holdsLine = existing?.items.some((item) => item.productId.equals(line));
+                    if (existing && !holdsLine && existing.items.length >= maxLines)
+                        return LINE_LIMIT;
+                    throw error;
+                });
+        });
+};
 
 /**
  * The `'set'` miss: the line already holds exactly `quantity` (a no-op — the cart comes back
@@ -73,7 +104,7 @@ const unchangedOrPushed = (
     owner: QueryFilter<CartDocument>,
     line: Types.ObjectId,
     quantity: number
-): Promise<LineWrite> =>
+): Promise<LineWrite | typeof LINE_LIMIT> =>
     cartModel
         .findOne({ ...owner, items: { $elemMatch: { productId: line, quantity } } })
         .exec()
@@ -111,7 +142,8 @@ const unchangedOrMissing = (
  * @param line - the product
  * @param quantity - units to add
  * @param lineMax - the per-line ceiling the caller's own filter used
- * @returns the pushed line, `QUANTITY_LIMIT` when there is genuinely no room, or `RETRY` when
+ * @returns the pushed line, `QUANTITY_LIMIT` when there is genuinely no room, `LINE_LIMIT` when the
+ *   cart is full of other products, or `RETRY` when
  *   room reappeared and the same convergence the duplicate-key branch uses should run
  */
 const resolveAddMiss = (
@@ -119,11 +151,11 @@ const resolveAddMiss = (
     line: Types.ObjectId,
     quantity: number,
     lineMax: number
-): Promise<LineWrite | typeof QUANTITY_LIMIT | typeof RETRY> =>
+): Promise<LineWrite | typeof QUANTITY_LIMIT | typeof LINE_LIMIT | typeof RETRY> =>
     cartModel
         .findOne({ ...owner, 'items.productId': line })
         .exec()
-        .then<LineWrite | typeof QUANTITY_LIMIT | typeof RETRY>((existing) => {
+        .then<LineWrite | typeof QUANTITY_LIMIT | typeof LINE_LIMIT | typeof RETRY>((existing) => {
             const currentQuantity = existing?.items.find((item) =>
                 item.productId.equals(line)
             )?.quantity;
@@ -155,7 +187,8 @@ const resolveAddMiss = (
  * Filter miss: ambiguous (no such line yet, or a concurrent write changed it), so one more read
  *              settles it. No line: push it. Room reappeared: retry the whole call. No room:
  *              QUANTITY_LIMIT.
- * New line:    refused the same way when `quantity` alone exceeds the ceiling.
+ * New line:    refused the same way when `quantity` alone exceeds the ceiling, and with
+ *              LINE_LIMIT when the cart already holds `cartMaxLines()` other products.
  */
 const upsertLine = (
     userId: string,
@@ -163,7 +196,7 @@ const upsertLine = (
     quantity: number,
     mode: CartLineMode,
     attemptsLeft = 3
-): Promise<LineWrite | typeof QUANTITY_LIMIT | typeof NO_LINE> => {
+): Promise<LineWrite | typeof QUANTITY_LIMIT | typeof LINE_LIMIT | typeof NO_LINE> => {
     const owner = { userId: toObjectId(userId) };
     const line = toObjectId(productId);
     // Read once per call: the filter and the retry decision below must agree on one ceiling.
@@ -210,18 +243,20 @@ const upsertLine = (
             // Explicit generic: without it, TS infers this callback's return type from the OUTER
             // function's declared return rather than its own body, and drops the `QUANTITY_LIMIT`
             // branch below.
-            .then<LineWrite | typeof QUANTITY_LIMIT | typeof NO_LINE>((cart) => {
-                if (cart) return { cart, created: false };
-                if (mode === 'set') return unchangedOrPushed(owner, line, quantity);
-                if (mode === 'update')
-                    return unchangedOrMissing(owner, line, quantity).then((resolved) =>
+            .then<LineWrite | typeof QUANTITY_LIMIT | typeof LINE_LIMIT | typeof NO_LINE>(
+                (cart) => {
+                    if (cart) return { cart, created: false };
+                    if (mode === 'set') return unchangedOrPushed(owner, line, quantity);
+                    if (mode === 'update')
+                        return unchangedOrMissing(owner, line, quantity).then((resolved) =>
+                            resolved === RETRY ? retried() : resolved
+                        );
+
+                    return resolveAddMiss(owner, line, quantity, lineMax).then((resolved) =>
                         resolved === RETRY ? retried() : resolved
                     );
-
-                return resolveAddMiss(owner, line, quantity, lineMax).then((resolved) =>
-                    resolved === RETRY ? retried() : resolved
-                );
-            })
+                }
+            )
             .catch((error: unknown) => {
                 if (attemptsLeft <= 1 || !isDuplicateKey(error)) throw error;
                 return upsertLine(userId, productId, quantity, mode, attemptsLeft - 1);
@@ -242,7 +277,7 @@ export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
         productId: string,
         quantity: number,
         mode: CartLineMode
-    ) => Promise<LineWrite | typeof QUANTITY_LIMIT | typeof NO_LINE>;
+    ) => Promise<LineWrite | typeof QUANTITY_LIMIT | typeof LINE_LIMIT | typeof NO_LINE>;
     removeLine: (userId: string, productId: string) => Promise<CartDocument | null>;
     clearLines: (userId: string) => Promise<CartDocument | null>;
     clearLinesIfUnchanged: (

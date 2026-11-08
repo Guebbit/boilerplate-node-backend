@@ -64,7 +64,7 @@ export type CartModel = Model<CartDocument>;
 /**
  * The hard ceiling on a stored cart line's quantity: what the contract (`CartQuantity`) and the
  * schema allow whatever a shop configures. The shop's own, lower, ceiling is `cartLineMax()`
- * (`NODE_CART_LINE_MAX`, `./config`), enforced where a line is written and again at checkout; this
+ * (`NODE_CART_LINE_MAX_QUANTITY`, `./config`), enforced where a line is written and again at checkout; this
  * one stays a constant because a stored line must stay valid if the knob is later raised and
  * lowered again.
  */

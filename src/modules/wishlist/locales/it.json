@@ -1,5 +1,6 @@
 {
     "wishlist": {
+        "full": "La tua lista dei desideri è piena. Rimuovi un prodotto prima di salvarne un altro.",
         "not-found": "Questo prodotto non è nella tua lista dei desideri.",
         "product-not-found": "Il prodotto richiesto non è stato trovato"
     }

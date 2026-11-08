@@ -16,11 +16,13 @@ import { onDomainEvent } from '@kernel/events';
 import { PRODUCT_DELETED, productService } from '@modules/products';
 import { router } from './routes';
 import { wishlistService } from './service';
+import { wishlistConfig } from './config';
 
 /** This module's manifest entry: routes, event subscriptions, and locales. */
 export default {
     name: 'wishlist',
     mounts: [{ basePath: '/wishlist', routes: router }],
+    config: [wishlistConfig.slice],
     personalData: [
         {
             section: 'wishlist',

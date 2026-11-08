@@ -23,7 +23,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartAuditActions } from '../audit';
 import { mergeLines, type MergeResult } from './merge';
-import { cartGetForBadge } from './items';
+import { cartGetForBadge, lineLimitReached } from './items';
 import { ERROR_CODES } from '@api/error-codes';
 
 /**
@@ -38,9 +38,10 @@ import { ERROR_CODES } from '@api/error-codes';
  *
  * The lines go through the merge's own rule ({@link mergeLines}), so the two cannot disagree and
  * the answer is the same per-line report: a vanished or hidden product is `removed`, a line past
- * `cartLineMax()` is `capped` to what room is left. None of that is a failure, unlike
- * `./items`' `upsertCartItem`; only an order with nothing addable at all answers 409
- * `REORDER_UNAVAILABLE` rather than an empty 200.
+ * `cartLineMax()` is `capped` to what room is left, a new product in a cart already holding
+ * `cartMaxLines()` is `cart_full`. None of that is a failure, unlike
+ * `./items`' `upsertCartItem`; only an order with nothing addable at all answers 409 rather than an
+ * empty 200: `CART_LINE_LIMIT_REACHED` if any line found the cart full, else `REORDER_UNAVAILABLE`.
  */
 export const reorderIntoCart = (
     authContext: AuthContext,
@@ -60,7 +61,14 @@ export const reorderIntoCart = (
             }));
 
             return mergeLines(userId, requested, context).then((lines) => {
-                if (lines.every(({ reason }) => reason === 'removed'))
+                // Nothing landed: every line is gone from the catalogue or found the cart full.
+                // A full cart is the news the shopper can act on, so it is the one named.
+                const unaddable = lines.every(
+                    ({ reason }) => reason === 'removed' || reason === 'cart_full'
+                );
+                if (unaddable && lines.some(({ reason }) => reason === 'cart_full'))
+                    return lineLimitReached();
+                if (unaddable)
                     return generateReject(409, [
                         {
                             code: ERROR_CODES.REORDER_UNAVAILABLE,

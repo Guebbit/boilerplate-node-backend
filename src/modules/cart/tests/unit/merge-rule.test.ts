@@ -12,9 +12,14 @@ import { planMergeLine, type MergeLineFacts } from '../../domain';
 /** The cart's per-line ceiling, as the model declares it. */
 const LINE_MAX = 999;
 
-/** Facts with the ceiling filled in and the product listed; each case names only what it is about. */
-const plan = (facts: Pick<MergeLineFacts, 'requested' | 'held'> & { listed?: boolean }) =>
-    planMergeLine({ listed: true, ...facts, lineMax: LINE_MAX });
+/** The most lines a cart may hold in these cases. */
+const MAX_LINES = 100;
+
+/** Facts with the ceilings filled in, the product listed and room for a new line; each case names only what it is about. */
+const plan = (
+    facts: Pick<MergeLineFacts, 'requested' | 'held'> &
+        Partial<Pick<MergeLineFacts, 'listed' | 'lines'>>
+) => planMergeLine({ listed: true, lines: 0, ...facts, lineMax: LINE_MAX, maxLines: MAX_LINES });
 
 describe('planMergeLine', () => {
     it('adds the whole line, with no reason, when nothing is held', () => {
@@ -48,7 +53,31 @@ describe('planMergeLine', () => {
         });
     });
 
-    describe('when several reasons apply, the first of removed, capped, summed wins', () => {
+    it('says "cart_full" and adds nothing for a new product when every line is taken', () => {
+        expect(plan({ requested: 2, held: 0, lines: MAX_LINES })).toEqual({
+            add: 0,
+            reason: 'cart_full'
+        });
+    });
+
+    it('still grows a line the full cart already holds', () => {
+        expect(plan({ requested: 2, held: 3, lines: MAX_LINES })).toEqual({
+            add: 2,
+            reason: 'summed'
+        });
+    });
+
+    describe('when several reasons apply, the first of removed, cart_full, capped, summed wins', () => {
+        it('removed beats cart_full', () => {
+            expect(plan({ requested: 1, held: 0, lines: MAX_LINES, listed: false }).reason).toBe(
+                'removed'
+            );
+        });
+
+        it('cart_full beats capped', () => {
+            expect(plan({ requested: 1000, held: 0, lines: MAX_LINES }).reason).toBe('cart_full');
+        });
+
         it('capped beats summed', () => {
             expect(plan({ requested: 10, held: 995 }).reason).toBe('capped');
         });

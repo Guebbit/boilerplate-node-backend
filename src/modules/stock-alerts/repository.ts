@@ -10,6 +10,7 @@
 import type { ClientSession } from 'mongoose';
 import { stockAlertModel, applyStockAlertTransform } from './model';
 import type { StockAlertDocument } from './model';
+import { stockAlertsMax } from './config';
 import {
     createRepository,
     toObjectId,
@@ -17,12 +18,38 @@ import {
     type Wire
 } from '@infrastructure/persistence/create-repository';
 
+/** What `ask` resolves to when the account already waits for the most products allowed. */
+export const STOCK_ALERT_LIMIT_REACHED = 'stock-alert-limit-reached';
+
+/**
+ * Upsert the (user, product) request and say whether this call created it.
+ * @param userId - the asking buyer
+ * @param productId - the product they wait for
+ */
+const upsertRequest = (
+    userId: string,
+    productId: string
+): Promise<{ alert: StockAlertDocument; added: boolean }> =>
+    stockAlertModel
+        .findOneAndUpdate(
+            { userId: toObjectId(userId), productId: toObjectId(productId) },
+            { $setOnInsert: { userId: toObjectId(userId), productId: toObjectId(productId) } },
+            // `rawResult`-free: `includeResultMetadata` tells an insert from a match.
+            // https://mongoosejs.com/docs/api/query.html#Query.prototype.findOneAndUpdate()
+            { upsert: true, returnDocument: 'after', includeResultMetadata: true }
+        )
+        .exec()
+        .then((result) => ({
+            alert: result.value!,
+            added: result.lastErrorObject?.updatedExisting === false
+        }));
+
+/** What `ask` answers: the request and whether it was new, or the refusal at the cap. */
+type Asked = typeof STOCK_ALERT_LIMIT_REACHED | { alert: StockAlertDocument; added: boolean };
+
 /** The factory's CRUD surface plus the request's own writes. */
 export const stockAlertRepository: Repository<StockAlertDocument, Wire<StockAlertDocument>> & {
-    ask: (
-        userId: string,
-        productId: string
-    ) => Promise<{ alert: StockAlertDocument; added: boolean }>;
+    ask: (userId: string, productId: string) => Promise<Asked>;
     cancel: (userId: string, productId: string) => Promise<boolean>;
     findByUserId: (userId: string) => Promise<StockAlertDocument[]>;
     findByProductId: (productId: string, session?: ClientSession) => Promise<StockAlertDocument[]>;
@@ -39,21 +66,23 @@ export const stockAlertRepository: Repository<StockAlertDocument, Wire<StockAler
      * Record the request, or find the one already there. `$setOnInsert` on an exact match of the
      * unique pair is the shape mongod resolves atomically, so asking twice (a double click) lands
      * one row and the second call says it was not new.
+     *
+     * The cap counts the account's rows for OTHER products first, so asking again at the cap is
+     * still a success. Two concurrent asks for different products may overshoot the cap by one:
+     * accepted, since a transaction would not stop it either and a counter document is not worth it.
      */
     ask: (userId, productId) =>
         stockAlertModel
-            .findOneAndUpdate(
-                { userId: toObjectId(userId), productId: toObjectId(productId) },
-                { $setOnInsert: { userId: toObjectId(userId), productId: toObjectId(productId) } },
-                // `rawResult`-free: `includeResultMetadata` tells an insert from a match.
-                // https://mongoosejs.com/docs/api/query.html#Query.prototype.findOneAndUpdate()
-                { upsert: true, returnDocument: 'after', includeResultMetadata: true }
-            )
+            .countDocuments({
+                userId: toObjectId(userId),
+                productId: { $ne: toObjectId(productId) }
+            })
             .exec()
-            .then((result) => ({
-                alert: result.value!,
-                added: result.lastErrorObject?.updatedExisting === false
-            })),
+            .then<Asked>((others) =>
+                others >= stockAlertsMax()
+                    ? STOCK_ALERT_LIMIT_REACHED
+                    : upsertRequest(userId, productId)
+            ),
 
     /** Drop the caller's own request; `false` when they had none. */
     cancel: (userId, productId) =>

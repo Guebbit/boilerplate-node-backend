@@ -25,7 +25,8 @@ declare module '@kernel/events' {
 
         /**
          * `POST /cart/merge` could not add some of a guest cart's lines at all, because the product
-         * is no longer publicly visible or none is for sale. One event per merge, with every such
+         * is no longer publicly visible, or because the cart already holds its most lines and the
+         * product is new to it. One event per merge, with every such
          * line in it, and never emitted for a merge that had none. A line that merely landed with
          * another quantity is not here: that is the answer's to show.
          *

@@ -80,12 +80,24 @@ Changing the window needs `npm run db:sync`.
 Field names match the contract's `CartItem` — `{ productId, quantity }` — so a stored line and a
 wire line are the same shape, and there is no mapper between them to keep in sync.
 
-**A line holds at most `NODE_CART_LINE_MAX` units** (default 10, the contract's hard ceiling is 999):
+**A line holds at most `NODE_CART_LINE_MAX_QUANTITY` units** (default 10, the contract's hard ceiling is 999):
 a `PUT` past it and an add that would push a line past it answer 422
 `CART_QUANTITY_LIMIT`, a reorder clamps to what room is left instead and reports it per line (`capped`), and checkout re-checks every line, so a basket
 filled before the ceiling was lowered is refused with the lines named rather than quietly trimmed.
 It is one of three caps on denial of inventory, with `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` and
 `NODE_RESERVATION_TTL_MINUTES` — see [checkout](./cart-checkout.md).
+
+**A cart holds at most `NODE_CART_MAX_LINES` lines** (default 100, at most 500). `GET /cart` is never
+paginated, so the number of lines is bounded where one is written: 100 is the guest cart's own cap
+(`MAX_GUEST_LINES` in the frontend), so a guest cart always merges, and Stripe Checkout's; 500 is
+Shopify's ceiling. A NEW product in a full cart answers `409 CART_LINE_LIMIT_REACHED`; raising a line
+already there is never refused. The cap is a condition in the push's filter (`items.99` must not
+exist), which mongod evaluates while holding the document, so a burst of adds cannot all see room. A
+filter that misses on an existing cart collides with the unique `userId` index; one more read tells a
+full cart from a lost race, which the write's own retry converges. A merge or reorder does not fail on
+it: the line is reported `cart_full` (see [merging](#merging-a-guest-cart)), and a reorder where
+no line fits answers the same 409. Lowering the cap leaves
+a bigger cart as it is: only a new line is refused.
 
 Mongo and not Redis, deliberately: Redis here is cache-only, with no persistence and `allkeys-lru`
 eviction. A cart in Redis would make concurrent writes race-free for nothing, paid for in
@@ -189,7 +201,7 @@ must not reveal that a hidden product exists. An off-sale product is accepted, a
 is. The states themselves are in [products](./products.md#product-states).
 
 The cart answers two flags so a client holds no copy of the rule: each line's `canIncrease`
-(`quantity` below `NODE_CART_LINE_MAX`) and the cart's `checkoutable` (not empty, every line
+(`quantity` below `NODE_CART_LINE_MAX_QUANTITY`) and the cart's `checkoutable` (not empty, every line
 `in_stock`, `preorder` or `backorder`: `isBuyable` in `domain/availability.ts`, the same test
 checkout's refusal uses). A shipping method and an address are separate steps and not part of it.
 
@@ -197,7 +209,7 @@ checkout's refusal uses). A shipping method and an address are separate steps an
 
 A cart built while signed out lives in the browser. At sign-in the client sends it in one call,
 `POST /cart/merge`, and the cart folds it in by `POST /cart/items`' own rule: a product held in both
-carts ends at the sum, capped at `NODE_CART_LINE_MAX`. The answer is the cart as it now stands plus
+carts ends at the sum, capped at `NODE_CART_LINE_MAX_QUANTITY`. The answer is the cart as it now stands plus
 **one result per submitted line, in request order**: what the guest asked for (`requested`), what the
 cart holds now (`resulting`), a `reason` when the two differ, and the line's `availability`.
 
@@ -214,19 +226,20 @@ sequenceDiagram
         API->>C: add what POST /cart/items would (sum, cap)
         API->>API: availability for what the cart now holds
     end
-    API-->>N: cart.merge_refused, only for hidden or deleted products
+    API-->>N: cart.merge_refused, only for hidden or deleted products and lines the full cart refused
     API-->>FE: cart + one result per line
     FE->>FE: alert for every line that is not as asked
 ```
 
-| Line                                           | Result                                                             |
-| ---------------------------------------------- | ------------------------------------------------------------------ |
-| a new product                                  | added; no `reason`                                                 |
-| already in the cart                            | added to the line, `reason: summed`                                |
-| the sum passes the ceiling                     | the line stops at the ceiling, `reason: capped`                    |
-| sold out, or short                             | added anyway, `availability: out_of_stock` or `insufficient_stock` |
-| taken off sale                                 | added anyway, `availability: unavailable`                          |
-| not shown by the catalogue (deleted or hidden) | nothing added, `reason: removed`, one notification                 |
+| Line                                             | Result                                                             |
+| ------------------------------------------------ | ------------------------------------------------------------------ |
+| a new product                                    | added; no `reason`                                                 |
+| already in the cart                              | added to the line, `reason: summed`                                |
+| the sum passes the ceiling                       | the line stops at the ceiling, `reason: capped`                    |
+| sold out, or short                               | added anyway, `availability: out_of_stock` or `insufficient_stock` |
+| taken off sale                                   | added anyway, `availability: unavailable`                          |
+| not shown by the catalogue (deleted or hidden)   | nothing added, `reason: removed`, one notification                 |
+| a new product, and the cart holds the most lines | nothing added, `reason: cart_full`, one notification               |
 
 One bad line is a result, never a failure: the call answers 200 and the rest still land. The
 request carries an `Idempotency-Key`, so a lost answer replays instead of adding twice (the server
@@ -266,7 +279,8 @@ flowchart LR
 | Variable                                  | Default | What it does                                                                                                                                                                                                   |
 | ----------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NODE_CART_RETENTION_DAYS`                | `365`   | Days an untouched cart survives before the TTL index drops it                                                                                                                                                  |
-| `NODE_CART_LINE_MAX`                      | `10`    | Most units one line may hold, 1 to 999. See [the story](#the-story)                                                                                                                                            |
+| `NODE_CART_LINE_MAX_QUANTITY`             | `10`    | Most units one line may hold, 1 to 999. See [the story](#the-story)                                                                                                                                            |
+| `NODE_CART_MAX_LINES`                     | `100`   | Most lines one cart may hold, 1 to 500. See [the story](#the-story)                                                                                                                                            |
 | `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` | `2`     | How many unpaid (`pending`) orders one account may hold, whatever the payment method; each holds stock. Checkout refuses the next with 409 `CART_OPEN_ORDER_LIMIT_REACHED`. Admin `POST /orders` is not capped |
 
 The open-order cap is a checkout rule, not an order rule: the error code, the message and the

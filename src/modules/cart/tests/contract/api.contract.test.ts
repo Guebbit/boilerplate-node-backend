@@ -147,7 +147,7 @@ describe('POST /cart/items', () => {
     });
 
     it('422s an add that would push a line past the per-line ceiling', () =>
-        withEnvironmentOverrides({ NODE_CART_LINE_MAX: '2' }, async () => {
+        withEnvironmentOverrides({ NODE_CART_LINE_MAX_QUANTITY: '2' }, async () => {
             const { bearer, product } = await authenticateWithCart(2);
 
             const response = await api()
@@ -160,7 +160,7 @@ describe('POST /cart/items', () => {
         }));
 
     it('422s an add whose new line is already past the per-line ceiling', () =>
-        withEnvironmentOverrides({ NODE_CART_LINE_MAX: '10' }, async () => {
+        withEnvironmentOverrides({ NODE_CART_LINE_MAX_QUANTITY: '10' }, async () => {
             const { bearer } = await authenticateAs('user');
             const product = await createProduct();
 

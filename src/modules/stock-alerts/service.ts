@@ -26,7 +26,7 @@ import { ERROR_CODES } from '@api/error-codes';
 import type { StockAlertsResponse } from '@types';
 import { backInStockEmail } from './emails';
 import { STOCK_ALERT_SENT } from './events';
-import { stockAlertRepository } from './repository';
+import { stockAlertRepository, STOCK_ALERT_LIMIT_REACHED } from './repository';
 import { presentStockAlerts } from './presenter';
 
 /** A user's own requests, newest first. */
@@ -37,7 +37,8 @@ const list = (userId: string): Promise<StockAlertsResponse> =>
  * Ask to be told when a product can be ordered again.
  *
  * Refused while the product can be ordered now: the button is only offered when it cannot, and a
- * mail for something already on sale would be noise. Asking twice is the same request.
+ * mail for something already on sale would be noise. Asking twice is the same request. Refused with
+ * 409 `STOCK_ALERT_LIMIT_REACHED` for a NEW product once the account holds `NODE_STOCK_ALERTS_MAX`.
  *
  * @param userId - the signed-in buyer
  * @param productId - the product they cannot order
@@ -56,10 +57,16 @@ const ask = (
                 }
             ]);
 
-        return stockAlertRepository
-            .ask(userId, productId)
-            .then(() => list(userId))
-            .then((view) => generateSuccess(view, 200));
+        return stockAlertRepository.ask(userId, productId).then((asked) =>
+            asked === STOCK_ALERT_LIMIT_REACHED
+                ? generateReject(409, [
+                      {
+                          code: ERROR_CODES.STOCK_ALERT_LIMIT_REACHED,
+                          message: t('stock-alerts.full')
+                      }
+                  ])
+                : list(userId).then((view) => generateSuccess(view, 200))
+        );
     });
 
 /**

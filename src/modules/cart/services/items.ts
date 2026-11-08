@@ -23,7 +23,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartAuditActions } from '../audit';
 import { basketWeight, needsShipping } from '../domain';
-import { cartRepository, QUANTITY_LIMIT, NO_LINE } from '../repository';
+import { cartRepository, QUANTITY_LIMIT, LINE_LIMIT, NO_LINE } from '../repository';
 import { cartLineMax } from '../config';
 import { readCartLines, toCartView, isJoined, type CartLine } from './view';
 import type { CartView } from '../presenter';
@@ -65,6 +65,16 @@ const quantityLimit = (): ResponseReject =>
     ]);
 
 /**
+ * The 409 for a NEW line in a cart already holding `NODE_CART_MAX_LINES`. A conflict with the
+ * cart's current state, as `ADDRESS_BOOK_LIMIT_REACHED` is for a full book. Exported for
+ * `./reorder`, which answers it when no line of the order fits.
+ */
+export const lineLimitReached = (): ResponseReject =>
+    generateReject(409, [
+        { code: ERROR_CODES.CART_LINE_LIMIT_REACHED, message: t('cart.lines-full') }
+    ]);
+
+/**
  * Shared logic for adding/setting a cart item quantity.
  *
  * The catalogue gate — may this product be in a cart — lives here, not in a controller, so every
@@ -79,10 +89,11 @@ const quantityLimit = (): ResponseReject =>
  *
  * `'update'` is `'set'` that never creates: a cart without the line answers 404.
  *
- * The per-line ceiling (`cartLineMax()`, `NODE_CART_LINE_MAX`) is enforced here for `'set'` — the
+ * The per-line ceiling (`cartLineMax()`, `NODE_CART_LINE_MAX_QUANTITY`) is enforced here for `'set'` — the
  * contract only bounds a request to its hard 999, so a shop's lower number is checked before
  * anything is written — and by the repository for `'add'`, a new line and an existing one alike,
- * since every caller that adds goes through it. Both answer 422 `CART_QUANTITY_LIMIT`.
+ * since every caller that adds goes through it. Both answer 422 `CART_QUANTITY_LIMIT`. A NEW line in
+ * a cart already holding `cartMaxLines()` is refused by the repository: 409 `CART_LINE_LIMIT_REACHED`.
  */
 const upsertCartItem = (
     userId: string,
@@ -96,6 +107,7 @@ const upsertCartItem = (
 
         return cartRepository.upsertLine(userId, id, quantity, mode).then((result) => {
             if (result === QUANTITY_LIMIT) return quantityLimit();
+            if (result === LINE_LIMIT) return lineLimitReached();
             if (result === NO_LINE) return generateReject(404, [t('cart.item-not-found')]);
 
             // 201 says a line was created; 200 that one already there changed or was left as it was.

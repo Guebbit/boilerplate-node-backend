@@ -10,12 +10,16 @@
 import type { ClientSession } from 'mongoose';
 import { wishlistModel, applyWishlistTransform } from './model';
 import type { WishlistDocument } from './model';
+import { wishlistMax } from './config';
 import {
     createRepository,
     toObjectId,
     type Repository,
     type Wire
 } from '@infrastructure/persistence/create-repository';
+
+/** What {@link wishlistRepository.addLine} resolves to when the list is full and lacks the product. */
+export const WISHLIST_LIMIT_REACHED = 'wishlist-limit-reached';
 
 /**
  * Every one of them is keyed by `userId` — `unique` on the schema makes that a complete address —
@@ -34,7 +38,7 @@ export const wishlistRepository: Repository<WishlistDocument, Wire<WishlistDocum
     addLine: (
         userId: string,
         productId: string
-    ) => Promise<{ wishlist: WishlistDocument; added: boolean }>;
+    ) => Promise<typeof WISHLIST_LIMIT_REACHED | { wishlist: WishlistDocument; added: boolean }>;
     removeLine: (userId: string, productId: string) => Promise<WishlistDocument | null>;
     deleteByUserId: (userId: string, session?: ClientSession) => Promise<void>;
     removeProductFromAll: (productId: string) => Promise<string[]>;
@@ -52,12 +56,15 @@ export const wishlistRepository: Repository<WishlistDocument, Wire<WishlistDocum
 
     /**
      * Add one product, creating the wishlist if the user has none, and say whether it was new.
+     * Resolves `WISHLIST_LIMIT_REACHED` when the list already holds `wishlistMax()` products and
+     * not this one. Saving a product already held stays a success at the cap.
      *
      * Two races, and neither needs the retry budget `../cart/repository`'s `upsertLine` carries.
      *
-     * Line:     `$addToSet` settles it outright — a set cannot hold the same member twice, so no
-     *           interleaving of saves puts one product on two lines, and saving what is already
-     *           saved is the state the caller asked for rather than an error.
+     * Line:     one update pipeline settles it outright — it appends only when the product is
+     *           absent AND the list has room, deciding on the document mongod holds, so no
+     *           interleaving of saves puts one product on two lines or past the cap, and saving
+     *           what is already saved is the state the caller asked for rather than an error.
      * Document: the filter is an exact equality on `userId`, the unique index's own key, and that
      *           is the shape mongod resolves atomically — the upsert cannot lose to itself and no
      *           E11000 reaches here. The cart's second step filters on
@@ -74,20 +81,44 @@ export const wishlistRepository: Repository<WishlistDocument, Wire<WishlistDocum
         // the product was already in it is the answer to "was this an add", and only the write
         // itself can say so atomically. `modifiedCount` cannot — the timestamp bump makes every
         // write a modification.
+        const max = wishlistMax();
+        const items = { $ifNull: ['$items', []] };
         const before = await wishlistModel
             .findOneAndUpdate(
                 owner,
-                { $addToSet: { items: { productId: line } } },
-                { upsert: true, returnDocument: 'before' }
+                // An aggregation pipeline, so the append can test the document it is about to
+                // change: keep the array when the product is held or the list is full, else append.
+                // https://www.mongodb.com/docs/manual/tutorial/update-documents-with-aggregation-pipeline/
+                [
+                    {
+                        $set: {
+                            items: {
+                                $cond: [
+                                    {
+                                        $or: [
+                                            { $in: [line, { $ifNull: ['$items.productId', []] }] },
+                                            { $gte: [{ $size: items }, max] }
+                                        ]
+                                    },
+                                    items,
+                                    { $concatArrays: [items, [{ productId: line }]] }
+                                ]
+                            }
+                        }
+                    }
+                ],
+                // `updatePipeline`: Mongoose refuses an array update without it.
+                // https://mongoosejs.com/docs/api/query.html#Query.prototype.setOptions()
+                { upsert: true, returnDocument: 'before', updatePipeline: true }
             )
             .exec();
+        const held = before?.items.some((item) => item.productId.equals(line)) ?? false;
+        if (before && !held && before.items.length >= max) return WISHLIST_LIMIT_REACHED;
+
         const wishlist = await wishlistModel.findOne(owner).exec();
 
         // Present: the upsert above guarantees the document exists.
-        return {
-            wishlist: wishlist!,
-            added: !before?.items.some((item) => item.productId.equals(line))
-        };
+        return { wishlist: wishlist!, added: !held };
     },
 
     /**

@@ -2,7 +2,7 @@
  * @module
  * Merge — a cart built while signed out, folded into the signed-in cart in one call.
  *
- * Lives in cart, not in the browser, for two reasons: a line the catalogue refuses has to become
+ * Lives in cart, not in the browser, for two reasons: a line that cannot be added has to become
  * a notification that stays until the user deletes it (`notifications` listens for
  * `cart.merge_refused`), and the answer — what each line became, and whether it is short — needs
  * the stock read and the cart's own cap in one place. A browser-side loop of `POST /cart/items` calls
@@ -13,12 +13,12 @@
 
 import { emitDomainEvent } from '@kernel/events';
 import { productService } from '@modules/products';
-import type { CallerContext, AddCartItemRequest, MergeLineResult } from '@types';
+import type { CallerContext, AddCartItemRequest, MergeLineReason, MergeLineResult } from '@types';
 import { planMergeLine } from '../domain';
 import { CART_MERGE_REFUSED } from '../events';
 import type { CartDocument } from '../model';
-import { cartLineMax } from '../config';
-import { cartRepository, QUANTITY_LIMIT, NO_LINE } from '../repository';
+import { cartLineMax, cartMaxLines } from '../config';
+import { cartRepository, QUANTITY_LIMIT, LINE_LIMIT, NO_LINE } from '../repository';
 import { cartGetForBadge, trackLineWrite } from './items';
 import { isListed, readShelf, shelfAvailability, type Shelf } from './shelf';
 import type { CartView } from '../presenter';
@@ -39,23 +39,29 @@ interface MergeStep {
 const heldIn = (cart: CartDocument | null, productId: string): number =>
     cart?.items.find((item) => String(item.productId) === productId)?.quantity ?? 0;
 
+/** What a lost race at a cap reports: the reason the rule would have given had it seen the cart. */
+type Raced = Extract<MergeLineReason, 'capped' | 'cart_full'>;
+
 /**
- * Write what the rule decided. The cart's own conditional write is the cap's real guard, so a
- * `QUANTITY_LIMIT` here means a concurrent add used the room since the rule looked: nothing was
- * written, and the cart is re-read so `resulting` still says what it holds.
+ * Write what the rule decided. The cart's own conditional write is the caps' real guard, so a
+ * `QUANTITY_LIMIT` or `LINE_LIMIT` here means a concurrent add used the room since the rule
+ * looked: nothing was written, and the cart is re-read so `resulting` still says what it holds.
  */
 const writeAdd = (
     userId: string,
     productId: string,
     quantity: number,
     context: CallerContext
-): Promise<{ cart: CartDocument | null; raced: boolean }> =>
+): Promise<{ cart: CartDocument | null; raced?: Raced }> =>
     cartRepository.upsertLine(userId, productId, quantity, 'add').then((write) => {
         // `NO_LINE` is `'update'` mode's answer; an add never meets it, but the type does.
-        if (write === QUANTITY_LIMIT || write === NO_LINE)
-            return cartRepository.findByUserId(userId).then((cart) => ({ cart, raced: true }));
+        if (write === QUANTITY_LIMIT || write === LINE_LIMIT || write === NO_LINE)
+            return cartRepository.findByUserId(userId).then((cart) => ({
+                cart,
+                raced: write === LINE_LIMIT ? ('cart_full' as const) : ('capped' as const)
+            }));
         trackLineWrite(context, productId, quantity, write.created);
-        return { cart: write.cart, raced: false };
+        return { cart: write.cart };
     });
 
 /**
@@ -76,17 +82,19 @@ const mergeLine = (
         requested: quantity,
         held,
         listed: isListed(shelf),
-        lineMax: cartLineMax()
+        lineMax: cartLineMax(),
+        lines: cart?.items.length ?? 0,
+        maxLines: cartMaxLines()
     });
 
     const written =
         plan.add > 0
             ? writeAdd(userId, productId, plan.add, context)
-            : Promise.resolve({ cart, raced: false });
+            : Promise.resolve<{ cart: CartDocument | null; raced?: Raced }>({ cart });
     return written.then(({ cart: after, raced }) => {
-        // A lost race at the cap is `capped` whatever the rule predicted: the line was not
-        // grown, so `summed` would claim a sum the cart does not hold.
-        const reason = raced ? 'capped' : plan.reason;
+        // A lost race at a cap is `capped` or `cart_full` whatever the rule predicted: the line
+        // was not grown, so `summed` would claim a sum the cart does not hold.
+        const reason = raced ?? plan.reason;
         const resulting = heldIn(after, productId);
         return {
             cart: after,
@@ -136,14 +144,15 @@ export const mergeLines = async (
 };
 
 /**
- * Announce the lines that could not be added at all (products the catalogue does not show), each with the product's
+ * Announce the lines that could not be added at all (products the catalogue does not show, and
+ * new ones that found the cart full), each with the product's
  * names — such a product may be gone by the time anyone reads the message, so the names are copied in now.
  * `titlesById` answers an empty map for one that no longer exists, which the reader sees as "a
  * product that is no longer available". Says nothing when there is no such line: a changed
  * quantity is the answer's to show, not the inbox's.
  */
 const announceRemoved = (userId: string, results: MergeLineResult[]): Promise<unknown> => {
-    const removed = results.filter(({ reason }) => reason === 'removed');
+    const removed = results.filter(({ reason }) => reason === 'removed' || reason === 'cart_full');
     if (removed.length === 0) return Promise.resolve();
 
     return Promise.all(

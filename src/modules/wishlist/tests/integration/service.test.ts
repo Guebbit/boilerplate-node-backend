@@ -8,12 +8,13 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironmentOverrides } from '@tests/environment';
+import { asReject, asSuccess } from '@tests/response';
 import { testCallerContext, callerContextAs } from '@tests/callers';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { wishlistService } from '@modules/wishlist/service';
-import { wishlistRepository } from '@modules/wishlist/repository';
+import { wishlistRepository, WISHLIST_LIMIT_REACHED } from '@modules/wishlist/repository';
 import { cartService } from '@modules/cart';
 import { productService } from '@modules/products';
 import { userService } from '@modules/users';
@@ -47,6 +48,8 @@ describe('wishlistRepository.addLine', () => {
         const first = await wishlistRepository.addLine(user.id, String(product._id));
         const second = await wishlistRepository.addLine(user.id, String(product._id));
 
+        if (first === WISHLIST_LIMIT_REACHED || second === WISHLIST_LIMIT_REACHED)
+            throw new Error('expected room in the list');
         expect([first.added, second.added]).toEqual([true, false]);
         expect(second.wishlist.items).toHaveLength(1);
     });
@@ -192,6 +195,78 @@ describe('add', () => {
         expect(result.status).toBe(404);
         expect(await savedIds(user.id)).toEqual([]);
     });
+});
+
+/** Run `body` with the cap at 3, so a case does not save two hundred and fifty products. */
+const withCap = (body: () => Promise<void>) =>
+    withEnvironmentOverrides({ NODE_WISHLIST_MAX: '3' }, body);
+
+/** Save `count` fresh products for `userId`; resolves their ids in save order. */
+const saveProducts = async (userId: string, count: number) => {
+    const ids: string[] = [];
+    for (let index = 0; index < count; index += 1) {
+        const product = await createProduct();
+        ids.push(String(product._id));
+        await wishlistService.add(userId, String(product._id), testCallerContext);
+    }
+    return ids;
+};
+
+/*
+ * `GET /wishlist` is never paginated, so the list is bounded where a product is saved. The cap is
+ * in the write's own update, so it holds under concurrency too.
+ */
+describe('the wishlist cap', () => {
+    it('refuses a new product past the cap with a 409, and saves nothing', () =>
+        withCap(async () => {
+            const user = await createUser();
+            const held = await saveProducts(user.id, 3);
+            const extra = await createProduct();
+
+            const result = await wishlistService.add(user.id, String(extra._id), testCallerContext);
+
+            expect(asReject(result).status).toBe(409);
+            expect(asReject(result).errors[0].code).toBe('WISHLIST_LIMIT_REACHED');
+            expect(await savedIds(user.id)).toEqual(held);
+        }));
+
+    it('answers 200 for a product already saved, even at the cap', () =>
+        withCap(async () => {
+            const user = await createUser();
+            const held = await saveProducts(user.id, 3);
+
+            const result = await wishlistService.add(user.id, held[0], testCallerContext);
+
+            expect(asSuccess(result).status).toBe(200);
+            expect(await savedIds(user.id)).toEqual(held);
+        }));
+
+    it('lets a product in again once one is removed', () =>
+        withCap(async () => {
+            const user = await createUser();
+            const held = await saveProducts(user.id, 3);
+            await wishlistService.remove(user.id, held[0], testCallerContext);
+            const extra = await createProduct();
+
+            const result = await wishlistService.add(user.id, String(extra._id), testCallerContext);
+
+            expect(asSuccess(result).status).toBe(200);
+            expect(await savedIds(user.id)).toEqual([held[1], held[2], String(extra._id)]);
+        }));
+
+    it('never lets a burst of saves past the cap', () =>
+        withCap(async () => {
+            const user = await createUser();
+            const products = await Promise.all(Array.from({ length: 8 }, () => createProduct()));
+
+            await Promise.all(
+                products.map(({ _id }) =>
+                    wishlistService.add(user.id, String(_id), testCallerContext)
+                )
+            );
+
+            expect(await savedIds(user.id)).toHaveLength(3);
+        }));
 });
 
 describe('remove', () => {
@@ -343,7 +418,7 @@ describe('moveToCart', () => {
      */
     // A ceiling of one unit fills the line with a single add, whatever the shop's own default.
     it('forwards the cart 422 once the existing line is already full, instead of a 404', () =>
-        withEnvironmentOverrides({ NODE_CART_LINE_MAX: '1' }, async () => {
+        withEnvironmentOverrides({ NODE_CART_LINE_MAX_QUANTITY: '1' }, async () => {
             const user = await createUser();
             const product = await createProduct();
             await cartService.addItemById(user.id, String(product._id), 1);
@@ -359,6 +434,27 @@ describe('moveToCart', () => {
             expect(result.status).toBe(422);
             // Still saved, same as the other refusals above — nothing was lost.
             expect(await savedIds(user.id)).toEqual([String(product._id)]);
+        }));
+});
+
+describe('moveToCart into a full cart', () => {
+    it('answers the cart 409 and keeps the product saved', () =>
+        withEnvironmentOverrides({ NODE_CART_MAX_LINES: '1' }, async () => {
+            const user = await createUser();
+            const inCart = await createProduct();
+            const saved = await createProduct();
+            await cartService.addItemById(user.id, String(inCart._id), 1);
+            await wishlistService.add(user.id, String(saved._id), testCallerContext);
+
+            const result = await wishlistService.moveToCart(
+                user.id,
+                String(saved._id),
+                testCallerContext
+            );
+
+            expect(asReject(result).status).toBe(409);
+            expect(asReject(result).errors[0].code).toBe('CART_LINE_LIMIT_REACHED');
+            expect(await savedIds(user.id)).toEqual([String(saved._id)]);
         }));
 });
 
