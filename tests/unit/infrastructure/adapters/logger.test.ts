@@ -341,21 +341,17 @@ describe('the sensitive-field policy, entry by entry', () => {
         expect(redacted[shouty]).toBe('[REDACTED]');
     });
 
-    it('redacts every secret cookie of the inventory, and the inventory has some', () => {
-        const secretNames = Object.values(cookieData)
-            .filter((cookie) => cookie.secret)
-            .map((cookie) => cookie.name);
+    it('redacts every secret cookie of the inventory and leaves the others readable', () => {
+        const cookies = Object.values(cookieData);
 
-        // Canary: an empty inventory would make the loop below pass without proving anything.
-        expect(secretNames.length).toBeGreaterThan(0);
-        for (const name of secretNames) expect(SENSITIVE_FIELDS.has(name)).toBe(true);
-    });
-
-    it('leaves the non-secret cookies readable', () => {
-        const readable = Object.values(cookieData).filter((cookie) => !cookie.secret);
-
-        expect(readable.length).toBeGreaterThan(0);
-        for (const cookie of readable) expect(SENSITIVE_FIELDS.has(cookie.name)).toBe(false);
+        // Canaries: an empty side would make the loop below pass without proving anything.
+        expect(cookies.some((cookie) => cookie.secret)).toBe(true);
+        expect(cookies.some((cookie) => !cookie.secret)).toBe(true);
+        // Through the public function, so a fragment match counts as well as an exact entry.
+        for (const { name, secret } of cookies)
+            expect((redactSensitiveFields({ [name]: 'v' }) as Record<string, unknown>)[name]).toBe(
+                secret ? '[REDACTED]' : 'v'
+            );
     });
 
     it.each(['resetToken', 'passwordPolicy', 'tokenCount', 'webhookSecret', 'x-hub-signature'])(

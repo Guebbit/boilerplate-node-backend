@@ -68,9 +68,7 @@ cases:
       }
     - { name: private 192.168/16 is refused, kind: address, address: 192.168.1.1, expect: refused }
     - {
-          name: link-local,
-          including the cloud metadata address,
-          is refused,
+          name: 'link-local, including the cloud metadata address, is refused',
           kind: address,
           address: 169.254.169.254,
           expect: refused

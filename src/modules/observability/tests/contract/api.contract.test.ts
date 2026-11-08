@@ -38,7 +38,7 @@ const pollUntilAudited = async (bearer: string, query: string) => {
 };
 
 describe('GET /observability/health', () => {
-    it('matches the contract for an admin', async () => {
+    it('matches the contract for an operator', async () => {
         const { bearer } = await authenticateAs('admin');
 
         const response = await api().get('/observability/health').set('Authorization', bearer);
@@ -143,7 +143,7 @@ describe('GET /observability/health', () => {
 });
 
 describe('GET /observability/metrics/overview', () => {
-    it('matches the contract for an admin', async () => {
+    it('matches the contract for an operator', async () => {
         const { bearer } = await authenticateAs('admin');
 
         const response = await api()
@@ -289,7 +289,7 @@ const sessionCookie = async (role: 'admin' | 'customer') => {
 };
 
 describe('GET /observability/events', () => {
-    it('matches the contract for an admin session: an event stream', async () => {
+    it('matches the contract for an operator session: an event stream', async () => {
         const response = await api()
             .get('/observability/events')
             .set('Cookie', await sessionCookie('admin'))

@@ -97,7 +97,7 @@ describe('reviving a dead invoice event', () => {
                 .then((notes) => notes.length === 2)
         );
         const notes = await invoicingRepository.findCreditNotesByOrderId(orderId);
-        expect(notes.map((note) => note.grandTotal).toSorted()).toEqual(['20.00', '30.00']);
+        expect(notes.map((note) => note.grandTotal)).toEqual(['30.00', '20.00']);
         expect(notes.every((note) => String(note.invoiceId) === String(invoice._id))).toBe(true);
     });
 

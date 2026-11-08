@@ -28,7 +28,7 @@ const cryptoCase = z.discriminatedUnion('kind', [
     }),
     caseBase.extend({
         kind: z.literal('decrypt'),
-        ring: z.array(z.object({ version: z.string(), key: z.string() })),
+        ring: z.array(z.strictObject({ version: z.string(), key: z.string() })),
         purpose: z.enum(['pii', 'totp', 'webhook-secret']),
         aad: z.string(),
         stored: z.string(),

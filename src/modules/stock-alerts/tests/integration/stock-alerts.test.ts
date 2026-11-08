@@ -209,7 +209,12 @@ describe('the signal', () => {
     it('answers the request of a locked account without mailing it', async () => {
         const { bearer, user } = await shopper();
         const productId = await soldOut();
-        await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
+        const asked = await api()
+            .post('/stock-alerts')
+            .set('Authorization', bearer)
+            .send({ productId });
+        expect(asked.status).toBe(200);
+        expect(await stockAlertModel.countDocuments()).toBe(1);
         // The owner asked to delete the account after asking for the alert.
         await userRepository.updateMany(
             { _id: user.id },

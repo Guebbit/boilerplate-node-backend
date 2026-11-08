@@ -116,7 +116,7 @@ describe('rates', () => {
         expect(findShippingMethod('teleport')).toBeUndefined();
     });
 
-    it('express is the one method that requires a tracking code', () => {
+    it('express is the one tracked method', () => {
         expect(SHIPPING_METHODS.filter((method) => method.tracked).map(({ id }) => id)).toEqual([
             'express'
         ]);

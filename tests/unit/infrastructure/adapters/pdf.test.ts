@@ -34,8 +34,6 @@ jest.mock('puppeteer-core', () => ({
 }));
 
 import {
-    MAX_WAITING_RENDERS,
-    RENDER_TIMEOUT_MS,
     RenderTimeoutError,
     refuseNonDataRequest,
     renderHtmlToPdf,
@@ -314,10 +312,8 @@ describe('the render bounds', () => {
 
     it('refuses a render once every slot is busy and the queue is full, starting nothing', async () => {
         holdLaunches();
-        // Two renders take the two slots, then MAX_WAITING_RENDERS wait behind them.
-        const queued = Array.from({ length: 2 + MAX_WAITING_RENDERS }, () =>
-            renderHtmlToPdf('<p>x</p>')
-        );
+        // Two renders take the two slots, then 20 wait behind them (docs/modules/invoicing.md: 20 waiting).
+        const queued = Array.from({ length: 2 + 20 }, () => renderHtmlToPdf('<p>x</p>'));
         await nextTick();
         launch.mockClear();
 
@@ -332,9 +328,7 @@ describe('the render bounds', () => {
 
     it('does not hand out a slot to a render it refused: the queue drains cleanly afterwards', async () => {
         holdLaunches();
-        const queued = Array.from({ length: 2 + MAX_WAITING_RENDERS }, () =>
-            renderHtmlToPdf('<p>x</p>')
-        );
+        const queued = Array.from({ length: 2 + 20 }, () => renderHtmlToPdf('<p>x</p>'));
         await expect(renderHtmlToPdf('<p>refused</p>')).rejects.toBeInstanceOf(ServiceBusyError);
         releaseLaunches();
         await Promise.all(queued);
@@ -345,13 +339,11 @@ describe('the render bounds', () => {
 
     it('queues up to the bound without refusing', async () => {
         holdLaunches();
-        const queued = Array.from({ length: 2 + MAX_WAITING_RENDERS }, () =>
-            renderHtmlToPdf('<p>x</p>')
-        );
+        const queued = Array.from({ length: 2 + 20 }, () => renderHtmlToPdf('<p>x</p>'));
 
         releaseLaunches();
 
-        await expect(Promise.all(queued)).resolves.toHaveLength(2 + MAX_WAITING_RENDERS);
+        await expect(Promise.all(queued)).resolves.toHaveLength(2 + 20);
     });
 
     describe('the total timeout', () => {
@@ -365,7 +357,7 @@ describe('the render bounds', () => {
 
             const render = renderHtmlToPdf('<p>hung</p>');
             const outcome = expect(render).rejects.toBeInstanceOf(RenderTimeoutError);
-            await jest.advanceTimersByTimeAsync(RENDER_TIMEOUT_MS + 1);
+            await jest.advanceTimersByTimeAsync(20_001);
 
             await outcome;
             // Closed once, by the deadline: never twice, which would reject and replace the answer.
@@ -379,7 +371,7 @@ describe('the render bounds', () => {
             const outcomes = hung.map((render) => expect(render).rejects.toBeDefined());
             const third = renderHtmlToPdf('<p>c</p>');
 
-            await jest.advanceTimersByTimeAsync(RENDER_TIMEOUT_MS + 1);
+            await jest.advanceTimersByTimeAsync(20_001);
             await Promise.all(outcomes);
 
             await expect(third).resolves.toBe(pdfBuffer);
@@ -389,7 +381,7 @@ describe('the render bounds', () => {
             close.mockClear();
 
             await expect(renderHtmlToPdf('<p>quick</p>')).resolves.toBe(pdfBuffer);
-            await jest.advanceTimersByTimeAsync(RENDER_TIMEOUT_MS * 2);
+            await jest.advanceTimersByTimeAsync(40_000);
 
             expect(close).toHaveBeenCalledTimes(1);
         });
@@ -397,9 +389,7 @@ describe('the render bounds', () => {
         it('hands the launch the same budget, so a browser that never starts is bounded too', async () => {
             await renderHtmlToPdf('<p>hello</p>');
 
-            expect((launch.mock.calls.at(-1)?.[0] as { timeout: number }).timeout).toBe(
-                RENDER_TIMEOUT_MS
-            );
+            expect((launch.mock.calls.at(-1)?.[0] as { timeout: number }).timeout).toBe(20_000);
         });
     });
 });

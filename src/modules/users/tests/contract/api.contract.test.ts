@@ -594,7 +594,7 @@ describe('POST /users/{id}/activate and /deactivate', () => {
         expect(await activeOf(admin.id)).toBe(true);
     });
 
-    it('no longer takes `active` in a PATCH or a PUT body', async () => {
+    it('refuses `active` in a PATCH body', async () => {
         const { bearer } = await authenticateAs('admin');
         const user = await createUser();
 

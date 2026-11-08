@@ -186,6 +186,8 @@ describe('cancelling a hand-paid refund that waits', () => {
     it('reads a payment with only a canceled refund as plainly succeeded, and refunded in full once the rest goes', async () => {
         const { orderId, payment, refundId } = await cashRefund();
         await cancel(String(payment._id), refundId);
+        const canceled = await paymentService.getForOrder(orderId, asAdmin());
+        expect(canceled.data?.displayStatus).toBe('succeeded');
         await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
             amount: '100.00'
         });

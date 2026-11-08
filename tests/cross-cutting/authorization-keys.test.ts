@@ -63,7 +63,7 @@ describe('the declared rules', () => {
         }
     });
 
-    it('imply only actions the vocabulary declares, and only on a subject that has the plain rule or none', () => {
+    it('has lower-case staff actions, each naming at least one implied action', () => {
         for (const [staff, plain] of Object.entries(IMPLIED_ACTIONS)) {
             expect(staff).toMatch(/^[a-z]+$/);
             expect(plain.length).toBeGreaterThan(0);
