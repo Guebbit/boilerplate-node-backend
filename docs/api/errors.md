@@ -26,11 +26,11 @@ details document, as `application/problem+json`. One shape, one media type, what
 
 | Member | Rule | Why |
 | --- | --- | --- |
-| `type` | always `about:blank`, sent explicitly | the status says what happened (RFC 9457 §4.2.1). The machine key stays `errors[].code`: one response can carry several codes, and a URI per code needs a page per code to resolve to |
+| `type` | always `about:blank`, sent explicitly | the status says what happened (RFC 9457 §4.2.1). The machine key stays `errors[].code`; why a type URI per code is not sent: [about-blank-with-codes](../theory/api-standards.md#where-we-differ-and-why) |
 | `title` | the English RFC 9110 phrase for the status (`Not Found`, `Content Too Large`, `Unprocessable Content`) | names the status class, so it is never translated (§3.1.3) |
 | `status` | the HTTP status, from the same variable | survives a proxy that rewrites the status line (§3.1.2) |
 | `detail` | the translated sentence: the one error's `message`, or the status's generic text when there are several | what a person reads (§3.1.4) |
-| `instance` | `urn:uuid:` and the request id, the id `x-request-id` carries | names this occurrence in a support task. Never the URL: an OAuth callback's query holds `code` and `state` (§5) |
+| `instance` | `urn:uuid:` and the request id. A replay keeps the original occurrence's `instance`; its `x-request-id` is new | names this occurrence in a support task. Never the URL: an OAuth callback's query holds `code` and `state` (§5) |
 | `errors` | the extension: `{ code, message, details? }` items, never empty | see [the errors extension](#the-errors-extension) |
 
 There is no `success` and no top-level `message` in an error body. A client tells a failure from a
