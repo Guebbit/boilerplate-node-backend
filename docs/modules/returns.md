@@ -91,9 +91,14 @@ stateDiagram-v2
     received --> closed: staff close it by hand
 ```
 
-Every move is one conditional write from the statuses that may precede it
-(`src/modules/returns/domain/lifecycle.ts`), so two staff members deciding the same request race in
-the database and exactly one wins — the loser is told it was already decided (409). The one move
+Every move is one conditional write from the statuses that may precede it. The moves are one table
+(`src/modules/returns/domain/lifecycle.ts`): `approve` and `decline` from `requested`, `receive` and
+`cancel` from `approved`, `close` from `received`. The writes and the `actions` flags both ask it, and
+a flag is the caller's permission key AND the table's answer for the return's status. The proof of
+sending is a stamp inside the receive window, not a move. The birth status is per door, not a move
+either.
+
+Two staff members deciding the same request race in the database and exactly one wins — the loser is told it was already decided (409). The one move
 that is not conditional is the first: a withdrawal before dispatch is written `closed` at birth.
 
 `declined` and `canceled` are final. A wrong decline is not undone: staff open a new return for the

@@ -27,7 +27,7 @@ import { ERROR_CODES } from '@api/error-codes';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
 import { returnsAuditActions } from '../audit';
-import { CANCELABLE_RETURN_STATUSES, PROOF_OPENS_REFUND_FOR, proofOpenedRefund } from '../domain';
+import { PROOF_OPENS_REFUND_FOR, proofOpenedRefund, returnLifecycle } from '../domain';
 import { syncReturnStatus } from './projection';
 
 /**
@@ -67,8 +67,8 @@ export const cancelReturn = (
         returnRepository
             .claimStatus(
                 id,
-                CANCELABLE_RETURN_STATUSES,
-                'canceled',
+                returnLifecycle.fromOf('cancel'),
+                returnLifecycle.toOf('cancel'),
                 { canceledAt: new Date() },
                 session,
                 // Atomic with the claim: a refund opened by the proof of sending is owed, so the return

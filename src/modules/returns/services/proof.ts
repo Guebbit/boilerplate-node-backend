@@ -31,7 +31,7 @@ import { ERROR_CODES } from '@api/error-codes';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
 import { returnsAuditActions } from '../audit';
-import { RECEIVABLE_RETURN_STATUSES, proofOpensRefund, wireLines } from '../domain';
+import { proofOpensRefund, returnLifecycle, wireLines } from '../domain';
 import { notReceivable, quote } from './receive';
 import { refundDueFor } from './refund-due';
 
@@ -177,7 +177,7 @@ export const recordProofOfSending = (
     returnRepository.findById(id).then((returned) => {
         if (input.sentAt.getTime() > Date.now()) return futureProof();
         if (!returned) return generateReject(404, [t('returns.not-found')]);
-        if (!RECEIVABLE_RETURN_STATUSES.includes(returned.status)) return notReceivable();
+        if (!returnLifecycle.allows('receive', returned.status)) return notReceivable();
         if (returned.proofOfSendingAt !== undefined) return alreadyRecorded();
 
         return orderService.getById(String(returned.orderId)).then((order) => {

@@ -21,13 +21,7 @@ import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
 import { presentReturn } from '../presenter';
 import { ownOrder } from './ownership';
-import {
-    CANCELABLE_RETURN_STATUSES,
-    CLOSABLE_RETURN_STATUSES,
-    DECIDABLE_RETURN_STATUSES,
-    RECEIVABLE_RETURN_STATUSES,
-    type ReturnStatus
-} from '../domain';
+import { returnLifecycle, type ReturnStatus } from '../domain';
 
 /** The filters `GET /returns` accepts. */
 export interface ReturnFilters {
@@ -63,19 +57,19 @@ const actionsForCaller = (authContext: AuthContext): ((returned: StatusOnly) => 
     const mayReceive = holds(caller, 'receive', 'Return');
 
     return (returned) => {
-        const decidable = DECIDABLE_RETURN_STATUSES.includes(returned.status) && mayDecide;
+        const { status } = returned;
 
         return {
-            approve: decidable,
-            decline: decidable,
-            receive: mayReceive && RECEIVABLE_RETURN_STATUSES.includes(returned.status),
+            approve: mayDecide && returnLifecycle.allows('approve', status),
+            decline: mayDecide && returnLifecycle.allows('decline', status),
+            receive: mayReceive && returnLifecycle.allows('receive', status),
             // The proof is recorded once, on a return still waiting for its goods.
             recordProof:
                 mayReceive &&
-                RECEIVABLE_RETURN_STATUSES.includes(returned.status) &&
+                returnLifecycle.allows('receive', status) &&
                 returned.proofOfSendingAt === undefined,
-            close: mayReceive && CLOSABLE_RETURN_STATUSES.includes(returned.status),
-            cancel: mayDecide && CANCELABLE_RETURN_STATUSES.includes(returned.status)
+            close: mayReceive && returnLifecycle.allows('close', status),
+            cancel: mayDecide && returnLifecycle.allows('cancel', status)
         };
     };
 };

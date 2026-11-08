@@ -9,7 +9,7 @@ import { updateStatusIfIn as conditionalStatus } from '@infrastructure/persisten
 import type { ClientSession, PipelineStage, Types } from 'mongoose';
 import { returnModel, returnOrderLockModel, applyReturnTransform } from './model';
 import type { ReturnDocument } from './model';
-import { RECEIVABLE_RETURN_STATUSES, type ReturnStatus } from './domain';
+import { BACK_RETURN_STATUSES, returnLifecycle, type ReturnStatus } from './domain';
 import {
     createRepository,
     toObjectId,
@@ -98,7 +98,8 @@ export const returnRepository: Repository<ReturnDocument, StoredReturn> & {
 
     /**
      * Stamp the proof of sending on an `approved` return that has none yet — atomically, so two
-     * staff recording it at once write it once and the loser gets `null`. The status stays `approved`.
+     * staff recording it at once write it once and the loser gets `null`. The status stays `approved`:
+     * a stamp guarded by the receive window, not a move.
      *
      * @param id - the return
      * @param stamp - the proof, and the refund quote when the proof opens one
@@ -109,7 +110,7 @@ export const returnRepository: Repository<ReturnDocument, StoredReturn> & {
         conditionalStatus(
             returnModel,
             { _id: toObjectId(id), proofOfSendingAt: { $exists: false } },
-            RECEIVABLE_RETURN_STATUSES,
+            returnLifecycle.fromOf('receive'),
             'approved',
             { set: stamp, session }
         ),
@@ -160,7 +161,7 @@ export const returnRepository: Repository<ReturnDocument, StoredReturn> & {
             .aggregate<TRow>([
                 {
                     $match: {
-                        status: { $in: ['received', 'closed'] },
+                        status: { $in: BACK_RETURN_STATUSES },
                         receivedAt: { $gte: window.from, $lt: window.to }
                     }
                 },

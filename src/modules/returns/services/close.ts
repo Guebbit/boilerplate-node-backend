@@ -27,7 +27,7 @@ import { ERROR_CODES } from '@api/error-codes';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
 import { returnsAuditActions } from '../audit';
-import { CLOSABLE_RETURN_STATUSES } from '../domain';
+import { returnLifecycle } from '../domain';
 import { returnClosedEvent } from './outcome';
 import { syncReturnStatus } from './projection';
 
@@ -46,7 +46,13 @@ const claimClosed = (
     session: ClientSession
 ): Promise<ReturnDocument | null> =>
     returnRepository
-        .claimStatus(id, CLOSABLE_RETURN_STATUSES, 'closed', { closedAt: new Date() }, session)
+        .claimStatus(
+            id,
+            returnLifecycle.fromOf('close'),
+            returnLifecycle.toOf('close'),
+            { closedAt: new Date() },
+            session
+        )
         .then((closed) =>
             closed
                 ? orderService

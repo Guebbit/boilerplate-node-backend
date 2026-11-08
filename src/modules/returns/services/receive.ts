@@ -48,7 +48,7 @@ import type { ReturnDocument } from '../model';
 import { returnsAuditActions } from '../audit';
 import { RETURN_RECEIVED } from '../events';
 import {
-    RECEIVABLE_RETURN_STATUSES,
+    returnLifecycle,
     accountsOf,
     isGuaranteeReason,
     proofOpenedRefund,
@@ -274,8 +274,8 @@ const claimAndRestock = (
             const receivedAt = new Date();
             const received = await returnRepository.claimStatus(
                 String(returned._id),
-                RECEIVABLE_RETURN_STATUSES,
-                'received',
+                returnLifecycle.fromOf('receive'),
+                returnLifecycle.toOf('receive'),
                 {
                     receivedAt,
                     remedy,
@@ -528,7 +528,7 @@ export const receiveReturn = (
 ): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> =>
     returnRepository.findById(id).then((returned) => {
         if (!returned) return generateReject(404, [t('returns.not-found')]);
-        if (!RECEIVABLE_RETURN_STATUSES.includes(returned.status)) return notReceivable();
+        if (!returnLifecycle.allows('receive', returned.status)) return notReceivable();
 
         return orderService.getById(String(returned.orderId)).then((order) => {
             if (!order) return generateReject(404, [t('returns.order-not-found')]);

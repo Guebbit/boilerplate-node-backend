@@ -5,17 +5,21 @@
  */
 
 export {
-    DECIDABLE_RETURN_STATUSES,
-    RECEIVABLE_RETURN_STATUSES,
-    CLOSABLE_RETURN_STATUSES,
-    CANCELABLE_RETURN_STATUSES,
+    RETURN_EVENTS,
+    returnLifecycle,
     QUANTITY_HOLDING_RETURN_STATUSES,
     BACK_RETURN_STATUSES,
     holdsReturnedGoods,
     handsUnitsBack,
     initialStatusFor
 } from './lifecycle';
-export type { ReturnStatus, ReturnReason, ReturnKind, ReturnRemedy } from './lifecycle';
+export type {
+    ReturnEvent,
+    ReturnStatus,
+    ReturnReason,
+    ReturnKind,
+    ReturnRemedy
+} from './lifecycle';
 
 export {
     returnableQuantities,

@@ -1,7 +1,7 @@
 /**
  * @module
  * Staff's answer to a return request: approve it, or decline it with a reason. Each is one
- * conditional write from `requested` (`DECIDABLE_RETURN_STATUSES`), so two staff members deciding
+ * conditional write from `requested` (the lifecycle's `approve` and `decline`), so two staff members deciding
  * the same request cannot both win — the loser is told the request was already decided.
  *
  * A withdrawal never reaches here: it is opened already approved, because nobody grants a right.
@@ -26,7 +26,7 @@ import { ERROR_CODES } from '@api/error-codes';
 import { returnRepository, type ReturnStamp } from '../repository';
 import type { ReturnDocument } from '../model';
 import { returnsAuditActions } from '../audit';
-import { DECIDABLE_RETURN_STATUSES } from '../domain';
+import { RETURN_EVENTS, returnLifecycle } from '../domain';
 import { RETURN_DECIDED } from '../events';
 import { syncReturnStatus } from './projection';
 
@@ -52,23 +52,26 @@ const notDecidable = (id: string): Promise<ResponseReject> =>
  * The shared shape of both decisions: the conditional move, then the audit row.
  *
  * @param id - the return being decided
- * @param to - `approved` or `declined`
+ * @param event - `approve` or `decline`
  * @param stamp - facts that belong to this decision, written in the same statement
  * @param context - the staff member, for audit
  */
 const decide = (
     id: string,
-    to: 'approved' | 'declined',
+    event: 'approve' | 'decline',
     stamp: ReturnStamp,
     context: CallerContext
-): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> =>
+): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> => {
+    // The table's literal, not `toOf`'s widened status: the event payload names only these two.
+    const { to } = RETURN_EVENTS[event];
+
     // The order's timeline row and `return.decided` commit with the decision; a lost race writes none. A
     // decline's reason stays on the return, where `reap:returns` owns its clock.
-    withTransaction((session) =>
+    return withTransaction((session) =>
         returnRepository
             .claimStatus(
                 id,
-                DECIDABLE_RETURN_STATUSES,
+                returnLifecycle.fromOf(event),
                 to,
                 { ...stamp, decidedAt: new Date() },
                 session
@@ -99,6 +102,7 @@ const decide = (
     ).then<ResponseSuccess<ReturnDocument> | ResponseReject>((decided) =>
         decided ? settleDecision(decided, to, id, context) : notDecidable(id)
     );
+};
 
 /**
  * What follows a won claim: the audit row and the order's projection. The customer's mail rides
@@ -158,7 +162,7 @@ const settleDecision = (
 export const approveReturn = (
     id: string,
     context: CallerContext
-): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> => decide(id, 'approved', {}, context);
+): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> => decide(id, 'approve', {}, context);
 
 /**
  * The 422 for `other` with nothing written: "other" alone tells the buyer nothing.
@@ -182,7 +186,7 @@ export const declineReturn = (
 
     return decide(
         id,
-        'declined',
+        'decline',
         {
             declineReason: decline.reason,
             ...(decline.message ? { declineMessage: decline.message } : {})

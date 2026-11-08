@@ -1,13 +1,16 @@
 /**
  * @module
- * The return lifecycle — which status each write may run FROM. Every set backs a conditional write
- * (`repository.ts`'s `claimStatus`), so membership here IS the guard, not a comment beside it: two
- * staff members approving and declining the same request race in the database and exactly one wins.
+ * The return lifecycle — which status each move may run FROM and where it lands. Every move backs a
+ * conditional write (`repository.ts`'s `claimStatus`), so the table IS the guard, not a comment
+ * beside it: two staff members approving and declining the same request race in the database and
+ * exactly one wins.
  *
  * See: docs/modules/returns.md#the-lifecycle
  */
 
 import { ReturnKind, ReturnStatus, ReturnReason, ReturnRemedy } from '@types';
+import { defineLifecycle } from '@domain-primitives/lifecycle';
+import type { LifecycleEvent } from '@domain-primitives/lifecycle';
 
 /**
  * Where a return stands (`ReturnStatus`) and why the goods come back (`ReturnReason`: `withdrawal`
@@ -16,23 +19,39 @@ import { ReturnKind, ReturnStatus, ReturnReason, ReturnRemedy } from '@types';
  */
 export type { ReturnStatus, ReturnReason, ReturnKind, ReturnRemedy } from '@types';
 
-/** What staff may decide: only a request nobody has answered yet. */
-export const DECIDABLE_RETURN_STATUSES: readonly ReturnStatus[] = [ReturnStatus.requested];
-
-/** What may be received: only a return that was approved (a withdrawal is born approved). */
-export const RECEIVABLE_RETURN_STATUSES: readonly ReturnStatus[] = [ReturnStatus.approved];
-
-/** What may be closed: goods received whose money has not gone back yet. */
-export const CLOSABLE_RETURN_STATUSES: readonly ReturnStatus[] = [ReturnStatus.received];
+/** One of a return's moves, named like the door that makes it. */
+export type ReturnEvent = 'approve' | 'decline' | 'receive' | 'cancel' | 'close';
 
 /**
- * What may be canceled: an approved return whose goods never came. Not a `requested` one (that is
- * declined, with a reason code) and not a `received` one (the goods are in; it is closed).
+ * The moves, one entry each: where it may start and where it lands.
+ *
+ * - `approve` / `decline`: only a request nobody has answered yet.
+ * - `receive`: only an approved return (a withdrawal is born approved).
+ * - `cancel`: an approved return whose goods never came. Not a `requested` one (that is declined,
+ *   with a reason code) and not a `received` one (the goods are in; it is closed).
+ * - `close`: goods received whose money has not gone back yet.
  */
-export const CANCELABLE_RETURN_STATUSES: readonly ReturnStatus[] = [ReturnStatus.approved];
+export const RETURN_EVENTS = {
+    approve: { from: [ReturnStatus.requested], to: ReturnStatus.approved },
+    decline: { from: [ReturnStatus.requested], to: ReturnStatus.declined },
+    receive: { from: [ReturnStatus.approved], to: ReturnStatus.received },
+    cancel: { from: [ReturnStatus.approved], to: ReturnStatus.canceled },
+    close: { from: [ReturnStatus.received], to: ReturnStatus.closed }
+} as const satisfies Record<ReturnEvent, LifecycleEvent<ReturnStatus>>;
 
 /**
- * The status a return is opened in. A withdrawal is a right the consumer exercises, not a favour
+ * The table, checked once at load. Every set it hands out backs a conditional write
+ * (`repository.ts`'s `claimStatus`), so the table IS the guard. `initial` is the status of a
+ * request; the birth status is per door (`initialStatusFor` below).
+ */
+export const returnLifecycle = defineLifecycle<ReturnStatus, ReturnEvent>(
+    Object.values(ReturnStatus),
+    { initial: ReturnStatus.requested, events: RETURN_EVENTS }
+);
+
+/**
+ * The status a return is opened in; it is per door (`create.ts`, `cancel-remainder.ts`,
+ * `withdraw.ts`), a birth and not a move. A withdrawal is a right the consumer exercises, not a favour
  * staff grant, so there is nothing to decide and it starts `approved`; every other reason waits
  * for an answer — unless staff opened it, when opening it IS the answer.
  * @param reason - why the goods come back
