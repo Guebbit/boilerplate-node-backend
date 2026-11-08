@@ -83,8 +83,15 @@ router.post('/:id/reopen', requirePermission('update', 'Task'), noStore, postTas
 router.put('/:id/assignee', requirePermission('update', 'Task'), noStore, putTaskAssignee);
 router.delete('/:id/assignee', requirePermission('update', 'Task'), noStore, deleteTaskAssignee);
 
-// POST /tasks/:id/notes — the staff thread, append-only.
-router.post('/:id/notes', requirePermission('update', 'Task'), noStore, postTaskNote);
+// POST /tasks/:id/notes — the staff thread, append-only. `idempotencyKey` after the permission
+// check: a note has no delete door, so a retry after a lost answer must replay, not append twice.
+router.post(
+    '/:id/notes',
+    requirePermission('update', 'Task'),
+    idempotencyKey,
+    noStore,
+    postTaskNote
+);
 
 // DELETE /tasks/:id — remove the entry
 router.delete('/:id', requirePermission('delete', 'Task'), deleteTask);

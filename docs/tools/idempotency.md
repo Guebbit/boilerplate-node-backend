@@ -94,6 +94,8 @@ source of truth, so — like every other durable, TTL-bound collection in this r
 | `POST /account/signup`                                                                               | Sybil accounts aside, a retried signup must not create two.                                                                                                                               |
 | `POST /examples`                                                                                     | The template's idempotent create: a retried create replays the first answer, not a second draft.                                                                                          |
 | `POST /tasks`                                                                                        | The public contact form has no other identity to dedupe a retry on.                                                                                                                       |
+| `POST /orders/{id}/timeline/notes`, `POST /tasks/{id}/notes`                                         | A retry after a lost answer must not write the same note twice. A task note has no delete door, so a duplicate would stay for good.                                                       |
+| `POST /account/addresses`                                                                            | A retry must not write a duplicate entry that burns a slot of the address cap.                                                                                                            |
 
 The refund uses `requireIdempotencyKey`: the IETF Idempotency-Key draft makes a missing key on a
 non-idempotent write a client error, and a refund repeated by a retry returns the money twice. Its
