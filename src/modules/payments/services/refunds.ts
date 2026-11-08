@@ -74,7 +74,8 @@ import {
     refundedPayload,
     refundRow,
     remainingOf,
-    settleRefund
+    settleRefund,
+    stampOrder
 } from './refund-settlement';
 import { rereadRefund } from './refund-sync';
 import { callerScope } from './scope';
@@ -992,8 +993,10 @@ const canceledPayload = (
 
 /**
  * Void one refund and release its share, in the caller's transaction: the conditional write, then
- * the order's staff-only timeline row. The order's `paymentStatus` stamp needs no recompute: it is
- * written only when a refund settles, and a record that never settled can neither raise nor lower it.
+ * the order's staff-only timeline row, then the order's `paymentStatus` stamp when a refund has
+ * settled. The stamp is recomputed because an open record blocks `refunded`: cancelling the last
+ * one (the rest of the money came back from the dashboard) is what lets it read `refunded`.
+ * With no settled refund the order is left alone: nothing moved, so there is nothing to stamp.
  *
  * @param payment - the payment as read
  * @param refund - the record being canceled, as read
@@ -1035,6 +1038,11 @@ const writeCancel = (
                               data: refundRow(refund)
                           },
                           session
+                      )
+                      .then(() =>
+                          final.refunds.some((record) => record.status === RefundStatus.succeeded)
+                              ? stampOrder(final, session)
+                              : undefined
                       )
                       .then(() => final)
                 : null

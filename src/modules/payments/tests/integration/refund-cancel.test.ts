@@ -9,7 +9,13 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
-import { createOrder, toOrderItem, timelineOf } from '@modules/orders/tests/factories';
+import { orderService } from '@modules/orders';
+import {
+    createOrder,
+    toOrderItem,
+    timelineOf,
+    markOrderPaidAt
+} from '@modules/orders/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { paymentService } from '@modules/payments/services';
@@ -17,6 +23,7 @@ import { paymentRepository } from '@modules/payments/repository';
 import { PAYMENT_REFUNDED, PAYMENT_REFUND_CANCELED } from '@modules/payments/events';
 import paymentsModule from '@modules/payments/module';
 import {
+    addFakeExternalRefund,
     fakePaymentProvider,
     setFakeRefundFailure
 } from '@scenarios/support/doubles/payments/fake';
@@ -83,6 +90,10 @@ const refusedRefund = async (reason: RefundFailureReason) => {
     const payment = await paymentOf(orderId);
     return { orderId, payment, refundId: String(payment.refunds[0]._id) };
 };
+
+/** The order's payment status as the API serializes it (stamp, else derived from `paidAt`). */
+const stampOf = (orderId: string) =>
+    orderService.getById(orderId).then((order) => order?.toJSON().paymentStatus);
 
 /** The operator's cancel. */
 const cancel = (paymentId: string, refundId: string, note = 'refunded in the dashboard too') =>
@@ -288,4 +299,44 @@ describe('cancelling against a racing sweep', () => {
             expect(after.refunds[0].status).toBe('pending');
             expect(after.amountRefunded).toBe('30.00');
         }));
+});
+
+describe('the order stamp after a cancel', () => {
+    it('reads refunded once the last open refund is canceled and the dashboard returned the rest', async () => {
+        const { user, order, orderId } = await freshOrder();
+        await payByCard(order, user);
+        await settleOutboxNudges();
+        const before = await paymentOf(orderId);
+        const providerRef = String(before.providerRef);
+        setFakeRefundFailure(providerRef, 'declined');
+        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
+            amount: '100.00'
+        });
+        setFakeRefundFailure(providerRef, undefined);
+        const refundRef = addFakeExternalRefund(providerRef, {
+            amount: '100.00',
+            currency: 'EUR',
+            status: 'succeeded'
+        });
+        await paymentService.applyWebhookDelivery({ id: 'evt', providerRef, refundRef }, 'fake');
+        expect(await stampOf(orderId)).toBe('partially_refunded');
+        const payment = await paymentOf(orderId);
+        const ours = payment.refunds.find((record) => record.reason !== 'external');
+
+        const result = await cancel(String(payment._id), String(ours?._id));
+
+        expect(result.success).toBe(true);
+        expect(await stampOf(orderId)).toBe('refunded');
+    });
+
+    it('leaves the order paid when nothing was ever settled', async () => {
+        const { orderId, payment, refundId } = await refusedRefund('declined');
+        await markOrderPaidAt(orderId, new Date());
+        expect(await stampOf(orderId)).toBe('paid');
+
+        const result = await cancel(String(payment._id), refundId);
+
+        expect(result.success).toBe(true);
+        expect(await stampOf(orderId)).toBe('paid');
+    });
 });

@@ -661,8 +661,10 @@ A canceled record is closed for good: the refund sweep never claims it (`cancele
 retryable), `isOpenRefund` is false for it, so it is on no attention list and does not make the
 payment read `refund_pending`, and it can be neither settled by hand nor canceled again. A claim by
 the sweep between the read and the write makes the conditional write miss: the check runs again
-against the record as it now stands. The order's `paymentStatus` stamp is written only when a
-refund settles, so a void, which never settled, leaves it as it is.
+against the record as it now stands. The order's `paymentStatus` stamp is recomputed by a cancel
+when the payment holds a settled refund, because an open record blocks `refunded`: cancelling the
+last one, after the rest came back from the dashboard, moves the order to `refunded`. A cancel with
+no settled refund leaves the stamp as it is.
 
 Every other refund dispatches to the provider named on the payment's own `provider` field — never
 the deployment's currently configured one — so a refund of an older payment still reaches the
