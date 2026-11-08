@@ -11,7 +11,7 @@ import { SearchTasksBody } from '@api/schemas.zod';
 import { optionalBooleanSchema, pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { callerContextOf } from '@infrastructure/http/request';
 import { createSearchController } from '@infrastructure/surfaces/create-search-controller';
-import { taskService } from '../service';
+import { taskService } from '../services';
 
 /**
  * Extends the orval-generated `SearchTasksBody`; `page`/`pageSize` and `overdue` are coerced

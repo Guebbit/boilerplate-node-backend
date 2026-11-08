@@ -16,7 +16,7 @@ import { router } from './routes';
 import { tasksJobs } from './jobs';
 import { systemTasks } from './services/system';
 import { tasksRateLimits } from './rate-limits';
-import { taskService } from './service';
+import { taskService } from './services';
 import { tasksConfig } from './config';
 
 /** This module's manifest entry: public contact form, keyed triage (`tasks.*`). */

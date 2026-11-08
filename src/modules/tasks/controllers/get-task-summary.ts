@@ -9,7 +9,7 @@ import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs } from '@infrastructure/http/controller';
-import { taskService } from '../service';
+import { taskService } from '../services';
 
 /** GET /tasks/summary (staff) */
 export const getTaskSummary = (request: Request, response: Response) =>

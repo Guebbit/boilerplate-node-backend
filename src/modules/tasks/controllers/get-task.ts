@@ -14,7 +14,7 @@ import { catchAs, refused } from '@infrastructure/http/controller';
 import { requireId } from '@infrastructure/http/ids';
 import { recordStaffRead } from '@kernel/staff-read';
 import { tasksAuditActions } from '../audit';
-import { taskService } from '../service';
+import { taskService } from '../services';
 
 /**
  * GET /tasks/:id (staff)

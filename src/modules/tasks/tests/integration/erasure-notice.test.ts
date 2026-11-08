@@ -16,7 +16,7 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { resetDomainEvents } from '@kernel/events';
 import { registerModules } from '@kernel/registry';
 import { enabledModules } from '../../../../modules';
-import { taskService } from '../../service';
+import { taskService } from '../../services';
 import { taskRef } from '../../emails';
 import { findAllTasks } from '../factories';
 

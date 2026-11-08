@@ -12,7 +12,7 @@ import { observePort } from '@tests/ports';
 import { callerContextAs } from '@tests/callers';
 import { asReject, asSuccess } from '@tests/response';
 import { createUser } from '@modules/users/tests/factories';
-import { taskService } from '@modules/tasks/service';
+import { taskService } from '@modules/tasks/services';
 import { taskRepository } from '@modules/tasks/repository';
 import { tasksAuditActions } from '@modules/tasks/audit';
 import { outboxEventModel } from '@kernel/outbox';

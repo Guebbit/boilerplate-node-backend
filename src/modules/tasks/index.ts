@@ -6,7 +6,7 @@
  * See: docs/modules/tasks.md
  */
 
-export * from './service';
+export * from './services';
 
 export * from './domain';
 
