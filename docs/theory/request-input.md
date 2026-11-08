@@ -239,12 +239,12 @@ Products, users and orders all do. Cart and tasks do not, and that is a decision
 omission — a cart line is session-scoped, so there is no record to keep, and `deleteCartItem`
 narrows its declaration to `['params']` to say so.
 
-Two helpers in `@infrastructure/http/ids` deliberately stay outside `readInput`:
+One helper in `@infrastructure/http/ids` deliberately stays outside `readInput`:
 
-- `isValidObjectId` — an `id is string` type guard, which is a different job from extraction.
 - `requireId` — it _responds_ as well as extracting: 404 for a malformed path id, 422 naming the
   field for a body or query one ([the rule](request-flow.md#a-malformed-id-has-one-answer-per-position)).
-  It is built on `readInput` internally.
+  It is built on `readInput` internally. The id check it uses, `isObjectIdString` (strict 24 hex),
+  lives in `@infrastructure/persistence/create-repository`.
 
 ## What is deliberately not done yet
 

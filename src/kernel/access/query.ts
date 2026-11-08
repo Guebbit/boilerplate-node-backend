@@ -19,6 +19,7 @@
 import { accessibleBy } from '@casl/mongoose';
 import { Types } from 'mongoose';
 import type { AuthContext, Caller } from '@types';
+import { isObjectIdString } from '@infrastructure/persistence/create-repository';
 import { buildAbility } from '@kernel/ability';
 import {
     anonymousCaller,
@@ -55,7 +56,7 @@ const NO_OWNER = new Types.ObjectId('000000000000000000000000');
  * @param value - the caller's id
  */
 const ownerObjectId = (value: string): Types.ObjectId =>
-    /^[0-9a-f]{24}$/i.test(value) ? new Types.ObjectId(value) : NO_OWNER;
+    isObjectIdString(value) ? new Types.ObjectId(value) : NO_OWNER;
 
 /** Fields whose VALUE has to be coerced on the way into a query. */
 const coerce: Record<string, (value: unknown) => unknown> = {

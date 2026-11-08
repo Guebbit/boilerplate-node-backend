@@ -10,12 +10,7 @@ import { z } from 'zod';
 import { asStub } from '@tests/stub';
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
-import {
-    CONTRACT_ID_PATTERN,
-    isValidObjectId,
-    malformedIdIssues,
-    requireId
-} from '@infrastructure/http/ids';
+import { CONTRACT_ID_PATTERN, malformedIdIssues, requireId } from '@infrastructure/http/ids';
 import { parseBody } from '@infrastructure/http/controller';
 
 /** A valid 24-hex ObjectId, used wherever the format has to pass. */
@@ -60,31 +55,6 @@ const makeResponse = () => {
 /** The `errors` array of whatever was sent. */
 const errorsOf = (sent: { payload?: unknown }) =>
     (sent.payload as { errors: { code: string; message: string; details?: unknown }[] }).errors;
-
-describe('isValidObjectId', () => {
-    it('accepts 24 hex characters, in either case', () => {
-        expect(isValidObjectId(OBJECT_ID)).toBe(true);
-        expect(isValidObjectId(OBJECT_ID.toUpperCase())).toBe(true);
-    });
-
-    it.each([
-        undefined,
-        null,
-        '',
-        'not-an-id',
-        'abcdefghijkl',
-        `${OBJECT_ID}0`,
-        OBJECT_ID.slice(1)
-    ])('rejects %p', (value) => {
-        expect(isValidObjectId(value)).toBe(false);
-    });
-
-    it('rejects a non-string that merely prints as an id', () => {
-        // `RegExp#test` stringifies its argument: an object with a hostile `toString` would pass.
-        expect(isValidObjectId({ toString: () => OBJECT_ID })).toBe(false);
-        expect(isValidObjectId([OBJECT_ID])).toBe(false);
-    });
-});
 
 describe('requireId', () => {
     it('returns a well-formed path id and sends nothing', () => {

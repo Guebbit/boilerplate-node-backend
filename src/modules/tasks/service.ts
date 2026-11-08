@@ -8,7 +8,6 @@
  */
 
 import type { ClientSession } from 'mongoose';
-import { Types } from 'mongoose';
 import { TaskCategory, TaskKind, TaskResolution, TaskSource } from '@types';
 import { HOUR_MS, oneCalendarMonthLaterUtc } from '@domain-primitives/time';
 import type {
@@ -40,7 +39,11 @@ import {
     MAX_CONFIGURED_PAGE_SIZE,
     type PaginatedMeta
 } from '@infrastructure/persistence/search';
-import { toObjectId, type Lean } from '@infrastructure/persistence/create-repository';
+import {
+    isObjectIdString,
+    toObjectId,
+    type Lean
+} from '@infrastructure/persistence/create-repository';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import { OPEN_STATUSES, initialTaskStatus, ownTasksFilter, CONTACT_ROUTE_SET } from './domain';
@@ -241,9 +244,7 @@ const scopeOf = (
         const who = filters.assignee === 'me' ? caller.id : filters.assignee;
         // `me` for a caller with no account (an API key), or an id that is not one, matches nothing.
         clauses.push(
-            who !== null && who !== undefined && Types.ObjectId.isValid(who)
-                ? { assigneeId: toObjectId(who) }
-                : { _id: { $in: [] } }
+            isObjectIdString(who) ? { assigneeId: toObjectId(who) } : { _id: { $in: [] } }
         );
     }
 

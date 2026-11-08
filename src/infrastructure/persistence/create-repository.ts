@@ -10,7 +10,7 @@
  * See: docs/tools/mongodb-mongoose.md
  */
 
-import { Types } from 'mongoose';
+import { isObjectIdOrHexString, Types } from 'mongoose';
 import type { ClientSession, Model, Document, QueryFilter } from 'mongoose';
 import {
     normalizePagination,
@@ -118,6 +118,20 @@ const isPresent = (value: unknown): boolean =>
  * rather than as the bad input it is.
  */
 export const toObjectId = (value: unknown): Types.ObjectId => new Types.ObjectId(String(value));
+
+/**
+ * Whether a value is a stored id: a string of exactly 24 hex characters, in either case.
+ * The one id check of the codebase; a non-string is not an id, however it prints.
+ *
+ * Mongoose `isObjectIdOrHexString`: true for an ObjectId instance or a 24-hex string. The strict
+ * rule excludes what the broad `isValid` castable check lets through: any 12-character string
+ * (the 12-byte binary form), a number, or an object with a `toString`.
+ * https://mongoosejs.com/docs/api/mongoose.html#Mongoose.prototype.isObjectIdOrHexString()
+ *
+ * @param id - the candidate, as the caller carried it
+ */
+export const isObjectIdString = (id: unknown): id is string =>
+    typeof id === 'string' && isObjectIdOrHexString(id);
 
 /**
  * A filter value as a `Date`, or `undefined` when it is absent or not an instant.

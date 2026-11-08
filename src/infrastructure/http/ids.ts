@@ -20,16 +20,10 @@ import type { Request, Response } from 'express';
 import type { ZodType } from 'zod';
 import { t } from '@infrastructure/i18n';
 import { isPlainObject } from '@infrastructure/object-guards';
+import { isObjectIdString } from '@infrastructure/persistence/create-repository';
 import { readInput, type RequestSurface } from '@infrastructure/http/request';
 import { fieldError, rejectResponse, type ResponseErrorItem } from '@infrastructure/http/response';
 import { attributeOf } from '@infrastructure/http/validation-messages';
-
-/**
- * The one spelling of an id this API issues: 24 hex characters.
- * Mongoose's own `isValid` also accepts any 12-character string (a 12-byte binary form), which no
- * route ever hands out, so it is not the check here.
- */
-const OBJECT_ID_PATTERN = /^[\da-f]{24}$/i;
 
 /**
  * The contract's shared `Id` pattern, as the generated Zod schemas carry it. It is how a request
@@ -37,18 +31,6 @@ const OBJECT_ID_PATTERN = /^[\da-f]{24}$/i;
  * `tests/cross-cutting/contract-scalars.test.ts` proves it still equals `openapi.yaml`'s.
  */
 export const CONTRACT_ID_PATTERN = '^[0-9A-Za-z_-]+$';
-
-/**
- * Check if a value is a well-formed MongoDB ObjectId string: exactly 24 hex characters.
- *
- * The `id is string` return type makes this a type guard: `if (isValidObjectId(x))` narrows `x`
- * to `string`, removing the need for a non-null assertion downstream. Anything that is not a
- * string is not an id, however it prints.
- *
- * @param id - the candidate, as the request carried it
- */
-export const isValidObjectId = (id: unknown): id is string =>
-    typeof id === 'string' && OBJECT_ID_PATTERN.test(id);
 
 /**
  * The 422 error item for one id field that is missing or malformed.
@@ -106,7 +88,7 @@ export const requireId = (
     { notFound, name = 'id', surface = 'path' }: RequiredId
 ): string | undefined => {
     const value: unknown = readInput(request, { surface, ids: [name] })[name];
-    if (isValidObjectId(value)) return value;
+    if (isObjectIdString(value)) return value;
 
     // A matched route template is the only way `request.params` holds `name`: the URL named it.
     if (Object.hasOwn(request.params, name)) rejectResponse(response, 404, notFoundCopy(notFound));
@@ -260,6 +242,6 @@ export const malformedIdIssues = (
         .flatMap((path) => carriedAt(input, path, []))
         .filter(
             ({ field, value }) =>
-                typeof value === 'string' && !isValidObjectId(value) && !flagged.has(field)
+                typeof value === 'string' && !isObjectIdString(value) && !flagged.has(field)
         )
         .map(({ field, value }) => fieldIdIssue(field, value));

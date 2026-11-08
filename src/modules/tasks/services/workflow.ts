@@ -8,7 +8,6 @@
  * See: docs/modules/tasks.md
  */
 
-import { Types } from 'mongoose';
 import type { CallerContext, Task, TaskSummary } from '@types';
 import { ERROR_CODES, type ErrorCode } from '@api/error-codes';
 import {
@@ -19,7 +18,7 @@ import {
 } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { toObjectId } from '@infrastructure/persistence/create-repository';
+import { isObjectIdString, toObjectId } from '@infrastructure/persistence/create-repository';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { announceInTransaction } from '@kernel/outbox';
 import { accessService } from '@modules/access';
@@ -329,8 +328,7 @@ const addNote = (
 
         // An API key has no account to name; its note carries no author.
         const callerId = context.caller.id;
-        const authorId =
-            callerId && Types.ObjectId.isValid(callerId) ? toObjectId(callerId) : undefined;
+        const authorId = isObjectIdString(callerId) ? toObjectId(callerId) : undefined;
         return taskRepository
             .appendNote(id, {
                 ...(authorId === undefined ? {} : { authorId }),

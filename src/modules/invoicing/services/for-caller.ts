@@ -15,7 +15,7 @@ import {
     type ResponseReject,
     type ResponseSuccess
 } from '@infrastructure/http/response';
-import { isValidObjectId } from '@infrastructure/http/ids';
+import { isObjectIdString } from '@infrastructure/persistence/create-repository';
 import { auditForbidden } from '@infrastructure/observability/forbidden';
 import { isBuyer, orderService, type OrderDocument } from '@modules/orders';
 import type { AuthContext, CallerContext } from '@types';
@@ -131,7 +131,7 @@ export const creditNoteForCaller = (
 ): Promise<ResponseSuccess<ReadFor<CreditNoteDocument>> | ResponseReject> =>
     orderService.getForCaller(orderId, authContext).then((order) => {
         if (!order) return generateReject(404, [t('orders.not-found')]);
-        if (!isValidObjectId(creditNoteId) || !mayReadCreditNotes(order, authContext, context))
+        if (!isObjectIdString(creditNoteId) || !mayReadCreditNotes(order, authContext, context))
             return creditNoteNotIssued();
 
         return findCreditNoteForOrderById(String(order._id), creditNoteId).then((creditNote) =>

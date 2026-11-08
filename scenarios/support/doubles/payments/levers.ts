@@ -15,6 +15,7 @@ import { ObjectId } from 'mongodb';
 import { DisputeKind, DisputeReason, DisputeStatus, RefundFailureReason } from '@types';
 import { paymentService } from '@modules/payments';
 import { logger } from '@infrastructure/adapters/logger';
+import { isObjectIdString } from '@infrastructure/persistence/create-repository';
 import { rejectResponse } from '@infrastructure/http/response';
 import { connection } from '@infrastructure/runtime/database';
 import { setFakeDispute, setFakeRefundFailure } from './fake';
@@ -25,7 +26,7 @@ import { DAY_MS } from '@domain-primitives/time';
  * on its payment should refuse with, or `null` to let refunds through again.
  */
 const REFUND_FAILURE_BODY = z.object({
-    orderId: z.string().refine((value) => ObjectId.isValid(value), 'not an order id'),
+    orderId: z.string().refine((value) => isObjectIdString(value), 'not an order id'),
     reason: z.enum(RefundFailureReason).nullable()
 });
 
@@ -36,7 +37,7 @@ const REFUND_FAILURE_BODY = z.object({
  * new `status` to move it along.
  */
 const DISPUTE_BODY = z.object({
-    orderId: z.string().refine((value) => ObjectId.isValid(value), 'not an order id'),
+    orderId: z.string().refine((value) => isObjectIdString(value), 'not an order id'),
     disputeId: z.string().min(1).max(200).default('dp_demo'),
     kind: z.enum(DisputeKind).default('chargeback'),
     status: z.enum(DisputeStatus).default('needs_response'),

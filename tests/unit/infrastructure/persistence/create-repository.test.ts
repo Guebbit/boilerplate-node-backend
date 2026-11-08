@@ -12,6 +12,7 @@ import { Types } from 'mongoose';
 import type { Model, Document } from 'mongoose';
 import {
     createRepository,
+    isObjectIdString,
     type SearchSpec,
     type Wire,
     withScope
@@ -262,5 +263,31 @@ describe('withScope', () => {
     it('is the filter alone when there is no scope, and the scope alone when there is no filter', () => {
         expect(withScope({ a: 1 }, {})).toEqual({ a: 1 });
         expect(withScope({}, { b: 2 })).toEqual({ b: 2 });
+    });
+});
+
+/** A valid 24-hex ObjectId, used wherever the format has to pass. */
+const OBJECT_ID = '65dc8a99604c307b702b5ccc';
+
+describe('isObjectIdString', () => {
+    it('accepts 24 hex characters, in either case', () => {
+        expect(isObjectIdString(OBJECT_ID)).toBe(true);
+        expect(isObjectIdString(OBJECT_ID.toUpperCase())).toBe(true);
+    });
+
+    it('refuses a 12-character string, which the broad castable check would let through', () => {
+        expect(isObjectIdString('abcdefghijkl')).toBe(false);
+    });
+
+    it.each([undefined, null, '', 'not-an-id', `${OBJECT_ID}0`, OBJECT_ID.slice(1)])(
+        'rejects %p',
+        (value) => {
+            expect(isObjectIdString(value)).toBe(false);
+        }
+    );
+
+    it('rejects a non-string that merely prints as an id', () => {
+        expect(isObjectIdString({ toString: () => OBJECT_ID })).toBe(false);
+        expect(isObjectIdString([OBJECT_ID])).toBe(false);
     });
 });
