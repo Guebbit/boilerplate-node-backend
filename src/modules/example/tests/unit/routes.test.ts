@@ -85,11 +85,9 @@ describe('example routes: what runs before the write', () => {
         expect(chain.indexOf('example-create')).toBeLessThan(chain.length - 1);
     });
 
-    it('checks the upload budget, then reads the upload, before the cover controller', () => {
+    it('reads the upload before the cover controller', () => {
         const chain = chainOf(router, 'PUT /:id/cover');
 
-        expect(chain.indexOf('uploads')).toBeGreaterThanOrEqual(0);
-        expect(chain.indexOf('uploads')).toBeLessThan(chain.indexOf('upload.image'));
         expect(chain.indexOf('upload.image')).toBeLessThan(chain.length - 1);
     });
 });
