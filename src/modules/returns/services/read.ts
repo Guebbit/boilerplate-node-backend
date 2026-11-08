@@ -39,9 +39,10 @@ export interface ReturnFilters {
     sort?: string[];
 }
 
-/** The one field of a return the actions read: where it is in its lifecycle. */
+/** What the actions read off a return: where it is in its lifecycle, and whether a proof is on it. */
 interface StatusOnly {
     status: ReturnStatus;
+    proofOfSendingAt?: Date | string | undefined;
 }
 
 /** Whether this caller works the returns queue — the wide read. */
@@ -68,6 +69,11 @@ const actionsForCaller = (authContext: AuthContext): ((returned: StatusOnly) => 
             approve: decidable,
             decline: decidable,
             receive: mayReceive && RECEIVABLE_RETURN_STATUSES.includes(returned.status),
+            // The proof is recorded once, on a return still waiting for its goods.
+            recordProof:
+                mayReceive &&
+                RECEIVABLE_RETURN_STATUSES.includes(returned.status) &&
+                returned.proofOfSendingAt === undefined,
             close: mayReceive && CLOSABLE_RETURN_STATUSES.includes(returned.status),
             cancel: mayDecide && CANCELABLE_RETURN_STATUSES.includes(returned.status)
         };

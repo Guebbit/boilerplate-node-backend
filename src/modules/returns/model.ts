@@ -90,8 +90,17 @@ export interface ReturnDocument extends Document {
      * when the goods were received. Decimal, in the return's currency.
      */
     handlingDeduction?: string;
-    /** What the customer is owed for this return, decided when the goods were received. */
+    /**
+     * What the customer is owed for this return, decided when the goods were received — or, for a
+     * withdrawal, when the proof of sending opened its refund.
+     */
     refundAmount?: string;
+    /** The date on the carrier's proof of sending. Absent until staff record one; recorded once. */
+    proofOfSendingAt?: Date;
+    /** The carrier named on the proof of sending. Present exactly when `proofOfSendingAt` is. */
+    proofCarrier?: string;
+    /** The carrier document's reference. Present exactly when `proofOfSendingAt` is. */
+    proofReference?: string;
     /**
      * The delivery inside {@link refundAmount}: non-zero on the one return or cancellation that took
      * the last unit of the order. Internal — what keeps shipping from being refunded twice. Never on
@@ -167,6 +176,9 @@ export const returnSchema = new Schema<ReturnDocument>(
         remedy: { type: String, enum: Object.values(ReturnRemedy) },
         handlingDeduction: moneyPath({ nonNegative: true }),
         refundAmount: moneyPath({ nonNegative: true }),
+        proofOfSendingAt: { type: Date },
+        proofCarrier: { type: String, maxlength: 200 },
+        proofReference: { type: String, maxlength: 200 },
         shippingRefund: moneyPath({ nonNegative: true }),
         closedAt: { type: Date },
         canceledAt: { type: Date }

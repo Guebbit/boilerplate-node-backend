@@ -5,7 +5,7 @@
  */
 
 import { withdrawalRefundDueBy } from '@modules/orders';
-import { refundDueByOf } from '../../domain';
+import { proofOpenedRefund, proofOpensRefund, refundDueByOf } from '../../domain';
 
 const ROME = 'Europe/Rome';
 
@@ -94,5 +94,32 @@ describe('refundDueByOf', () => {
             dueBy: END_OF_DAY_15_WINTER,
             dueRule: 'withdrawal'
         });
+    });
+});
+
+describe('proofOpensRefund', () => {
+    it.each([
+        ['withdrawal', true],
+        ['defective', false],
+        ['wrong_item', false],
+        ['other', false]
+    ] as const)('says %s: %s', (reason, opens) => {
+        expect(proofOpensRefund(reason)).toBe(opens);
+    });
+});
+
+describe('proofOpenedRefund', () => {
+    const proofOfSendingAt = new Date('2026-03-02T09:00:00.000Z');
+
+    it('holds for a withdrawal with a proof on it', () => {
+        expect(proofOpenedRefund({ reason: 'withdrawal', proofOfSendingAt })).toBe(true);
+    });
+
+    it('does not hold for a withdrawal with no proof yet', () => {
+        expect(proofOpenedRefund({ reason: 'withdrawal' })).toBe(false);
+    });
+
+    it('does not hold for a faulty item, whose proof only records', () => {
+        expect(proofOpenedRefund({ reason: 'defective', proofOfSendingAt })).toBe(false);
     });
 });

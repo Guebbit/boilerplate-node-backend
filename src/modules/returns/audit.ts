@@ -12,6 +12,8 @@ export const returnsAuditActions = {
     ADMIN_RETURN_APPROVED: 'admin.return.approved',
     ADMIN_RETURN_DECLINED: 'admin.return.declined',
     ADMIN_RETURN_RECEIVED: 'admin.return.received',
+    /** Staff recorded the carrier's proof of sending for an approved return. */
+    ADMIN_RETURN_PROOF_RECORDED: 'admin.return.proof_recorded',
     /** Staff closed a received return by hand, with the optional note saying why. */
     ADMIN_RETURN_CLOSED: 'admin.return.closed',
     /** Staff canceled an approved return whose goods never came, with the optional note saying why. */

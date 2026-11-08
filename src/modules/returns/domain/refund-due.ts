@@ -48,6 +48,25 @@ const earliestOf = (...instants: (Date | undefined)[]): Date | undefined =>
         .toSorted((first, second) => first.getTime() - second.getTime())[0];
 
 /**
+ * Whether the buyer's proof of sending opens the refund. Only a withdrawal's does: the shop may wait
+ * for the goods or the proof, whichever comes first (Directive 2011/83/EU Art. 13(3)). A defective or
+ * wrong item may be repaired or replaced instead, and that is decided when the goods are received.
+ * @param reason - why the goods come back
+ */
+export const proofOpensRefund = (reason: ReturnReason): boolean => reason === 'withdrawal';
+
+/**
+ * Whether the refund of this return was already opened by its proof of sending: a proof is on it
+ * and the reason is one a proof opens a refund for. Receiving the goods then neither quotes nor
+ * opens a refund again.
+ * @param returned - the return's reason and the date of its proof, when one was recorded
+ */
+export const proofOpenedRefund = (returned: {
+    reason: ReturnReason;
+    proofOfSendingAt?: Date | undefined;
+}): boolean => returned.proofOfSendingAt !== undefined && proofOpensRefund(returned.reason);
+
+/**
  * The legal deadline of a return's refund, with the rule behind it.
  *
  * | Reason                   | Due                                                              |

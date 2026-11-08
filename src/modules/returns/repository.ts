@@ -9,7 +9,7 @@ import { updateStatusIfIn as conditionalStatus } from '@infrastructure/persisten
 import type { ClientSession, PipelineStage, Types } from 'mongoose';
 import { returnModel, returnOrderLockModel, applyReturnTransform } from './model';
 import type { ReturnDocument } from './model';
-import type { ReturnStatus } from './domain';
+import { RECEIVABLE_RETURN_STATUSES, type ReturnStatus } from './domain';
 import {
     createRepository,
     toObjectId,
@@ -32,6 +32,9 @@ export type ReturnStamp = Partial<
         | 'remedy'
         | 'handlingDeduction'
         | 'refundAmount'
+        | 'proofOfSendingAt'
+        | 'proofCarrier'
+        | 'proofReference'
         | 'shippingRefund'
         | 'closedAt'
         | 'canceledAt'
@@ -47,6 +50,11 @@ export const returnRepository: Repository<ReturnDocument, StoredReturn> & {
         to: ReturnStatus,
         stamp?: ReturnStamp,
         session?: ClientSession
+    ) => Promise<ReturnDocument | null>;
+    claimProof: (
+        id: string,
+        stamp: ReturnStamp,
+        session: ClientSession
     ) => Promise<ReturnDocument | null>;
     findByOrderId: (orderId: string, session?: ClientSession) => Promise<ReturnDocument[]>;
     lockOrder: (orderId: string, session: ClientSession) => Promise<void>;
@@ -82,6 +90,24 @@ export const returnRepository: Repository<ReturnDocument, StoredReturn> & {
      */
     claimStatus: (id, from, to, stamp = {}, session) =>
         conditionalStatus(returnModel, { _id: toObjectId(id) }, from, to, { set: stamp, session }),
+
+    /**
+     * Stamp the proof of sending on an `approved` return that has none yet — atomically, so two
+     * staff recording it at once write it once and the loser gets `null`. The status stays `approved`.
+     *
+     * @param id - the return
+     * @param stamp - the proof, and the refund quote when the proof opens one
+     * @param session - the proof's transaction
+     * @returns the return as it now stands, or `null` when it was not `approved` or already had a proof
+     */
+    claimProof: (id, stamp, session) =>
+        conditionalStatus(
+            returnModel,
+            { _id: toObjectId(id), proofOfSendingAt: { $exists: false } },
+            RECEIVABLE_RETURN_STATUSES,
+            'approved',
+            { set: stamp, session }
+        ),
 
     /**
      * Every return on one order, oldest first.

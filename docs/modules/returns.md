@@ -84,6 +84,7 @@ stateDiagram-v2
     [*] --> requested: any other reason
     requested --> approved: staff approve
     requested --> declined: staff decline, with a reason
+    approved --> approved: staff record the proof of sending, once
     approved --> received: goods arrive
     approved --> canceled: staff cancel it, the goods never came
     received --> closed: the money has gone back
@@ -159,8 +160,10 @@ reason code) and no buyer-side cancel.
 
 Two things it is **not** for:
 
-- A parcel lost on its way back. The shop bears that risk, so the refund may be owed: receive it with
-  a restock count of 0 ([receive](#what-the-customer-gets-back)).
+- A parcel lost on its way back. This shop's policy is to bear that risk and refund on proof of
+  sending (the EU leaves the final risk to national law), so the refund may be owed: receive it with
+  a restock count of 0 ([receive](#what-the-customer-gets-back)), or record the proof first
+  ([proof of sending](#proof-of-sending)).
 - A withdrawal still inside the buyer's 14 days to send the goods (CRD Art. 14(1)). The guide says
   to wait; the server does not block it. Goods that turn up after a cancel are a new, staff-opened
   return with the original `requestedAt`.
@@ -320,19 +323,40 @@ one from `order.canceled`), is stamped with its legal deadline when the record o
 `dueRule` for why. The stamp is stored, not recomputed, so a later change of time zone or setting
 never moves a date a buyer was already owed.
 
-| Case                                          | `dueBy`                                                 | `dueRule`    | Stamped by            |
-| --------------------------------------------- | ------------------------------------------------------- | ------------ | --------------------- |
-| withdrawal return, goods in time              | end of the shop's day, 14 days after the shop was told  | `withdrawal` | `returns`, on receipt |
-| withdrawal return, goods after that date      | the moment they arrived: pay now                        | `withdrawal` | `returns`, on receipt |
-| remainder cancel (withdrawal)                 | as the first row; staff back-dating is honoured         | `withdrawal` | `returns`             |
-| withdrawal before dispatch, paid buyer cancel | as the first row, from `informedAt` on `order.canceled` | `withdrawal` | `payments`            |
-| defective or wrong item                       | the moment the goods arrived                            | `faulty`     | `returns`, on receipt |
-| goodwill (`other`), the shop's own cancel     | none                                                    | none         | none                  |
+| Case                                          | `dueBy`                                                 | `dueRule`    | Stamped by                               |
+| --------------------------------------------- | ------------------------------------------------------- | ------------ | ---------------------------------------- |
+| withdrawal return, goods or proof in time     | end of the shop's day, 14 days after the shop was told  | `withdrawal` | `returns`, on the proof, else on receipt |
+| withdrawal return, goods or proof after that  | the moment they arrived: pay now                        | `withdrawal` | `returns`, same                          |
+| remainder cancel (withdrawal)                 | as the first row; staff back-dating is honoured         | `withdrawal` | `returns`                                |
+| withdrawal before dispatch, paid buyer cancel | as the first row, from `informedAt` on `order.canceled` | `withdrawal` | `payments`                               |
+| defective or wrong item                       | the moment the goods or the proof came, the earlier     | `faulty`     | `returns`, on receipt                    |
+| goodwill (`other`), the shop's own cancel     | none                                                    | none         | none                                     |
 
 The table is `refundDueByOf` (`domain/refund-due.ts`); `services/refund-due.ts` adds the one thing a
 domain file cannot reach, the shop's calendar. The shop may wait for the goods, whichever comes
 first, but waiting never moves the last date (Directive 2011/83/EU Art. 13(3); guidance 2021/C
 525/01 §5.5.3). Nothing refunds by itself: the system computes, shows and reminds.
+
+### Proof of sending {#proof-of-sending}
+
+`POST /returns/{id}/proof-of-sending` (`services/proof.ts`) is staff recording the carrier's document
+for the parcel the buyer sent back: the date on it (`proofOfSendingAt`), the carrier and the
+reference. It needs `receive:Return`, the key that receives the goods, and an `approved` return; it
+is recorded **once** (a second call is a 409 `RETURN_PROOF_ALREADY_RECORDED`) and leaves the return
+`approved`. The return's `actions.recordProof` says whether it is offered.
+
+| Reason                  | What the proof does                                                                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| withdrawal              | opens the refund now, quoted with no handling deduction, so money can go back before the parcel arrives (Art. 13(3): goods or proof, the earlier) |
+| defective or wrong item | records the proof only: the remedy (refund, repair, replace) is decided at receipt; a refund picked then is due the earlier of goods and proof    |
+
+After a proof on a withdrawal, **receiving the goods** restocks as usual and opens no second refund.
+It also refuses a handling deduction above 0 with a 409 `RETURN_REFUND_OPENED_ON_PROOF`: the shop can
+no longer withhold the refund, so what the buyer damaged is claimed from them separately. If that
+refund already settled, the receipt closes the return in the same step; if it is still owed, the
+return stays `received` and the `PAYMENT_REFUNDED` listener closes it when it settles. A parcel lost
+after a proof is received with 0 on every line and follows the same path. The order's timeline gets a
+`proof_of_sending_recorded` row (the return's id only: the carrier and reference stay on the return).
 
 ## Goods with no right of withdrawal
 
@@ -439,7 +463,8 @@ sequenceDiagram
   `admin.return.received` names every line's count. An unknown or repeated product, or a count over
   the line, is a 422 `RETURN_RESTOCK_INVALID` on `lines.<i>.restock`, checked before anything is
   written. The refund never reads it. For a hard-deleted product nothing moves, count or no count.
-  A parcel lost on its way back is received with 0 on every line: the shop bears that risk, so the
+  A parcel lost on its way back is received with 0 on every line: this shop's policy is to bear
+  that risk and refund on proof of sending (the EU leaves the final risk to national law), so the
   money is owed and nothing goes on the shelf. `restocked` is staff's bookkeeping; the buyer's page
   does not show it.
 - **The amount** is the returned lines at the price the order froze, plus refundable delivery, less
@@ -603,7 +628,7 @@ is the one that never refunds twice and never splits it:
 ## The order timeline
 
 A return writes `return_requested`, `return_approved` (a withdrawal is opened already approved, so
-both at once), `return_declined`, `return_received` and `return_closed` on the order's
+both at once), `return_declined`, `return_received` and `return_closed`, and `proof_of_sending_recorded` when staff record a proof, on the order's
 [timeline](./orders.md#the-timeline), each in the transaction of the move it narrates. A row holds
 the return's id, the reason code and, for received and closed, the refund amount. A receipt and the
 close it leads to name the staff member who received the goods; a return the payment sweep closes
@@ -654,7 +679,7 @@ signed in, the way an order's own cancel works, and "own" is the ORDER's owner.
 | ---------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `read:Return`    | manager, warehouse, support, moderator, admin | reads every return                                                                                               |
 | `update:Return`  | manager, support, moderator, admin            | approves or declines a request                                                                                   |
-| `receive:Return` | manager, warehouse, admin                     | records the goods arriving (`stepUp: critical`)                                                                  |
+| `receive:Return` | manager, warehouse, admin                     | records the goods arriving, or the proof of sending (`stepUp: critical`)                                         |
 | `create:Refund`  | moderator, admin                              | cancels an unshipped remainder, as a refund (`stepUp: critical`) — see [above](#cancelling-what-has-not-shipped) |
 
 `receive` is narrower than `update` the way `start:Shipment` is narrower than
@@ -677,11 +702,11 @@ Every rule this module declares and who holds it, role by role. The rule is what
 
 <!-- permissions:start -->
 
-| Rule             | Set                | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                                                                                |
-| ---------------- | ------------------ | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read:Return`    | `ReturnDisplay`    | —       | —            | —          | ✅        | ✅          | ✅        | —        | ✅          | ✅      | —          | ✅         | Read every return in the shop — the queue staff work through.                                                                                                                       |
-| `update:Return`  | `ReturnManagement` | —       | —            | —          | ✅        | —           | ✅        | —        | ✅          | ✅      | —          | ✅         | Decide a return request — approve it, or decline it with a reason — cancel an approved return whose goods never came, and open a return or record a withdrawal on a buyer's behalf. |
-| `receive:Return` | `ReturnReceiving`  | —       | —            | —          | ✅ ⚡c    | ✅ ⚡c      | —         | —        | —           | ✅ ⚡c  | —          | —          | Record that the returned goods arrived — puts the units back on sale and returns the customer's money.                                                                              |
+| Rule             | Set                | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                                                                                   |
+| ---------------- | ------------------ | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read:Return`    | `ReturnDisplay`    | —       | —            | —          | ✅        | ✅          | ✅        | —        | ✅          | ✅      | —          | ✅         | Read every return in the shop — the queue staff work through.                                                                                                                          |
+| `update:Return`  | `ReturnManagement` | —       | —            | —          | ✅        | —           | ✅        | —        | ✅          | ✅      | —          | ✅         | Decide a return request — approve it, or decline it with a reason — cancel an approved return whose goods never came, and open a return or record a withdrawal on a buyer's behalf.    |
+| `receive:Return` | `ReturnReceiving`  | —       | —            | —          | ✅ ⚡c    | ✅ ⚡c      | —         | —        | —           | ✅ ⚡c  | —          | —          | Record that the returned goods arrived — puts the units back on sale and returns the customer's money — or the buyer's proof of sending, which on a withdrawal opens the refund first. |
 
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in

@@ -16,7 +16,7 @@ jest.mock('@kernel/middlewares/authorizations', () =>
 import { router } from '@modules/returns/routes';
 
 describe('returns routes — what is mounted', () => {
-    it('mounts the list, the open, the options, one read, the two decisions, the receipt, the hand close and the cancel', () => {
+    it('mounts the list, the open, the options, one read, the two decisions, the receipt, the proof of sending, the hand close and the cancel', () => {
         expect(routeSignatures(router)).toEqual([
             'GET /',
             'POST /',
@@ -25,6 +25,7 @@ describe('returns routes — what is mounted', () => {
             'POST /:id/approve',
             'POST /:id/decline',
             'POST /:id/receive',
+            'POST /:id/proof-of-sending',
             'POST /:id/close',
             'POST /:id/cancel'
         ]);
@@ -40,6 +41,7 @@ describe('returns routes — authorization', () => {
         'POST /:id/approve',
         'POST /:id/decline',
         'POST /:id/receive',
+        'POST /:id/proof-of-sending',
         'POST /:id/close',
         'POST /:id/cancel'
     ])('%s requires a logged-in caller', (signature) => {
@@ -57,6 +59,7 @@ describe('returns routes — authorization', () => {
         'POST /:id/approve',
         'POST /:id/decline',
         'POST /:id/receive',
+        'POST /:id/proof-of-sending',
         'POST /:id/close',
         'POST /:id/cancel'
     ])('%s is staff’s alone', (signature) => {

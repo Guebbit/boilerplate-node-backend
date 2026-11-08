@@ -21,7 +21,7 @@ rules:
       subject: Return
       module: returns
       scope: tenant
-      description: Record that the returned goods arrived — puts the units back on sale and returns the customer's money.
+      description: Record that the returned goods arrived — puts the units back on sale and returns the customer's money — or the buyer's proof of sending, which on a withdrawal opens the refund first.
       # Receiving pays the customer back. Same tier as `create:Refund`: a stolen access token
       # proves nothing about how recently its holder typed their password.
       stepUp: critical

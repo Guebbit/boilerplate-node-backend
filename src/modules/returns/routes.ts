@@ -32,6 +32,7 @@ import { getReturnById } from './controllers/get-return';
 import { getReturnOptions } from './controllers/get-return-options';
 import { postReturnApprove, postReturnDecline } from './controllers/post-return-decision';
 import { postReturnReceive } from './controllers/post-return-receive';
+import { postReturnProof } from './controllers/post-return-proof';
 import { postReturnClose } from './controllers/post-return-close';
 import { postReturnCancel } from './controllers/post-return-cancel';
 
@@ -108,6 +109,11 @@ router.post(
     idempotencyKey,
     postReturnReceive
 );
+
+// POST /returns/:id/proof-of-sending — staff recording the carrier's proof of sending. The same
+// `receive:Return` key (and so the same `stepUp`) as receiving: on a withdrawal it opens the refund,
+// as receiving would. No `Idempotency-Key`: a second call finds the proof recorded and answers 409.
+router.post('/:id/proof-of-sending', requirePermission('receive', 'Return'), postReturnProof);
 
 // POST /returns/:id/close — staff finishing a received return whose money will not follow the usual
 // way. The same `receive:Return` key (and so the same `stepUp`) as receiving: closing is the end

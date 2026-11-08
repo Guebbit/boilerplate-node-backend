@@ -734,6 +734,7 @@ components:
                 - return_received
                 - return_closed
                 - return_canceled
+                - proof_of_sending_recorded
                 - invoice_issued
                 - credit_note_issued
                 - release_date_moved
@@ -746,7 +747,7 @@ components:
                 `refund_settled`, `refund_failed`, `refund_canceled`, `refund_reversed`, `dispute_opened`, `dispute_closed`. Shipments: `shipment_shipped`,
                 `shipment_delivered`, `shipment_lost`, `fulfillment_held`, `fulfillment_released`,
                 `remainder_canceled`. Returns: `return_requested`, `return_approved`,
-                `return_declined`, `return_received`, `return_closed`, `return_canceled`. Documents: `invoice_issued`,
+                `return_declined`, `return_received`, `return_closed`, `return_canceled`, `proof_of_sending_recorded`. Documents: `invoice_issued`,
                 `credit_note_issued`. Preorders: `release_date_moved`, `delay_notice_sent`. Staff: `note_added`.
                 Which of these a buyer sees is the row's own `audience` (`buyer` or `staff`), set per type by the server.
 
@@ -1421,7 +1422,7 @@ components:
                   properties:
                       type:
                           type: string
-                          enum: [return_declined, return_canceled]
+                          enum: [return_declined, return_canceled, proof_of_sending_recorded]
                       data:
                           $ref: '#/components/schemas/OrderTimelineDataReturnRef'
 
@@ -1560,6 +1561,7 @@ components:
                     return_approved: '#/components/schemas/OrderTimelineEntryReturnApproved'
                     return_declined: '#/components/schemas/OrderTimelineEntryReturnRef'
                     return_canceled: '#/components/schemas/OrderTimelineEntryReturnRef'
+                    proof_of_sending_recorded: '#/components/schemas/OrderTimelineEntryReturnRef'
                     return_received: '#/components/schemas/OrderTimelineEntryReturnReceived'
                     return_closed: '#/components/schemas/OrderTimelineEntryReturnClosed'
                     invoice_issued: '#/components/schemas/OrderTimelineEntryInvoiceIssued'
@@ -1807,7 +1809,7 @@ components:
                   properties:
                       type:
                           type: string
-                          enum: [return_declined, return_canceled]
+                          enum: [return_declined, return_canceled, proof_of_sending_recorded]
                       data:
                           $ref: '#/components/schemas/OrderTimelineDataReturnRef'
 
@@ -1946,6 +1948,7 @@ components:
                     return_approved: '#/components/schemas/OrderTimelineExportEntryReturnApproved'
                     return_declined: '#/components/schemas/OrderTimelineExportEntryReturnRef'
                     return_canceled: '#/components/schemas/OrderTimelineExportEntryReturnRef'
+                    proof_of_sending_recorded: '#/components/schemas/OrderTimelineExportEntryReturnRef'
                     return_received: '#/components/schemas/OrderTimelineExportEntryReturnReceived'
                     return_closed: '#/components/schemas/OrderTimelineExportEntryReturnClosed'
                     invoice_issued: '#/components/schemas/OrderTimelineExportEntryInvoiceIssued'

@@ -230,6 +230,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `returns`        | `ADMIN_RETURN_CANCELED`                      | `admin.return.canceled`                      | `return`               |
 | `returns`        | `ADMIN_RETURN_CLOSED`                        | `admin.return.closed`                        | `return`               |
 | `returns`        | `ADMIN_RETURN_DECLINED`                      | `admin.return.declined`                      | `return`               |
+| `returns`        | `ADMIN_RETURN_PROOF_RECORDED`                | `admin.return.proof_recorded`                | `return`               |
 | `returns`        | `ADMIN_RETURN_RECEIVED`                      | `admin.return.received`                      | `return`               |
 | `returns`        | `ADMIN_RETURN_VIEWED`                        | `admin.return.viewed`                        | `return`               |
 | `returns`        | `RETURN_REQUESTED`                           | `return.requested`                           | `return`               |

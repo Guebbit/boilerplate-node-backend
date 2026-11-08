@@ -24,6 +24,7 @@ import {
 import {
     refundPayment,
     openReturnRefund,
+    returnRefundState,
     sendOpenedRefund,
     settleRefundByHand,
     cancelRefund,
@@ -82,6 +83,7 @@ export const paymentService = {
     refundLegalDueAt,
     refundPayment,
     openReturnRefund,
+    returnRefundState,
     sendOpenedRefund,
     settleRefundByHand,
     cancelRefund,

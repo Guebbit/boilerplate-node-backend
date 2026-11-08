@@ -1264,6 +1264,24 @@ export const openReturnRefund = (
     });
 
 /**
+ * Where the refund {@link openReturnRefund} opened for a return stands: what `returns` asks when
+ * goods arrive for a return whose refund the proof of sending opened earlier.
+ *
+ * @param orderId - the order
+ * @param returnId - the return the record pays for
+ * @returns `'settled'` once the money went back, `'open'` while it is owed, `'none'` when no record exists
+ */
+export const returnRefundState = (
+    orderId: string,
+    returnId: string
+): Promise<'none' | 'open' | 'settled'> =>
+    paymentRepository.findByOrderId(orderId).then((payment) => {
+        const refund = payment?.refunds.find((record) => record.returnId === returnId);
+        if (!refund) return 'none';
+        return refund.status === RefundStatus.succeeded ? 'settled' : 'open';
+    });
+
+/**
  * Send a refund {@link openReturnRefund} opened, now that the return has committed. A hand-paid
  * record is only put on file as owed. A card record goes to the provider; a refusal, like any
  * other error, is logged and left to the sweep, which finds the record by itself.

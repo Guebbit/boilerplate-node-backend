@@ -54,6 +54,7 @@ describe('POST /returns', () => {
             approve: false,
             decline: false,
             receive: false,
+            recordProof: false,
             close: false,
             cancel: false
         });
@@ -79,6 +80,7 @@ describe('POST /returns', () => {
             approve: false,
             decline: false,
             receive: false,
+            recordProof: false,
             close: false,
             cancel: false
         });
@@ -310,6 +312,86 @@ const withdrawn = async () => {
     const { bearer: warehouse } = await authenticateAsRole('warehouse');
     return { customer: bearer, warehouse, id: String(created.body.id) };
 };
+
+/** The carrier's document, as the body carries it. */
+const PROOF = { sentAt: '2026-03-02T09:00:00.000Z', carrier: 'Poste Italiane', reference: 'RR1IT' };
+
+describe('POST /returns/{id}/proof-of-sending', () => {
+    it('records the proof: 200, the return still approved and the action spent', async () => {
+        const { warehouse, id } = await withdrawn();
+
+        const response = await api()
+            .post(`/returns/${id}/proof-of-sending`)
+            .set('Authorization', warehouse)
+            .send(PROOF);
+
+        expect(response.status).toBe(200);
+        expect(response.body).toMatchObject({
+            status: 'approved',
+            proofOfSendingAt: PROOF.sentAt,
+            proofCarrier: PROOF.carrier,
+            proofReference: PROOF.reference
+        });
+        expect(response.body.actions).toMatchObject({ receive: true, recordProof: false });
+    });
+
+    it('answers 409 RETURN_PROOF_ALREADY_RECORDED to a second call', async () => {
+        const { warehouse, id } = await withdrawn();
+        await api()
+            .post(`/returns/${id}/proof-of-sending`)
+            .set('Authorization', warehouse)
+            .send(PROOF);
+
+        const response = await api()
+            .post(`/returns/${id}/proof-of-sending`)
+            .set('Authorization', warehouse)
+            .send(PROOF);
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('RETURN_PROOF_ALREADY_RECORDED');
+    });
+
+    it('refuses a body missing the carrier with 422', async () => {
+        const { warehouse, id } = await withdrawn();
+
+        const response = await api()
+            .post(`/returns/${id}/proof-of-sending`)
+            .set('Authorization', warehouse)
+            .send({ sentAt: PROOF.sentAt, reference: PROOF.reference });
+
+        expect(response.status).toBe(422);
+    });
+
+    it('refuses the buyer: only whoever receives returns records a proof', async () => {
+        const { customer, id } = await withdrawn();
+
+        const response = await api()
+            .post(`/returns/${id}/proof-of-sending`)
+            .set('Authorization', customer)
+            .send(PROOF);
+
+        expect(response.status).toBe(403);
+    });
+
+    describe('with a session past the critical window', () => {
+        afterEach(() => jest.useRealTimers());
+
+        it('answers 401 REAUTH_REQUIRED and records nothing', async () => {
+            const { id } = await withdrawn();
+            const stale = await staleBearerFor(await staffUser('warehouse'), 'critical');
+
+            const response = await api()
+                .post(`/returns/${id}/proof-of-sending`)
+                .set('Authorization', stale)
+                .send(PROOF);
+
+            expect(response.status).toBe(401);
+            expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
+            const stored = await returnRepository.findById(id);
+            expect(stored?.proofOfSendingAt).toBeUndefined();
+        });
+    });
+});
 
 describe('POST /returns/{id}/receive', () => {
     it('records the goods arriving: 200, and the return moves on', async () => {

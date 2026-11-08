@@ -57,5 +57,5 @@ export type {
 export { accountsOf } from './accounting';
 export type { AccountedReturn, OrderAccounts } from './accounting';
 
-export { refundDueByOf } from './refund-due';
+export { proofOpenedRefund, proofOpensRefund, refundDueByOf } from './refund-due';
 export type { RefundDueInput, ReturnRefundDue } from './refund-due';

@@ -297,8 +297,9 @@ Canceling is bookkeeping only: no money, no stock, no email. It is not a close, 
 not come back.
 
 ::: warning If the buyer has proof of posting, do not cancel
-A buyer who shows a posting receipt sent the goods; the shop bears the risk of the parcel on its way
-back and the refund is owed. See [The return parcel was lost](#return-parcel-lost).
+A buyer who shows a posting receipt sent the goods. This shop's policy is to bear the risk of the
+parcel on its way back and refund on proof of sending, so the refund is owed. Press **Proof of
+sending** and enter what the receipt says. See [The return parcel was lost](#return-parcel-lost).
 :::
 
 ::: warning A withdrawal has 14 days to send the goods
@@ -316,12 +317,27 @@ original date as `requestedAt` (the same fix as
 **What you see.** The buyer says they posted the goods back, and shows it. The carrier lost the
 parcel. A return is **approved** and nothing arrives.
 
-**What to do.** Do not cancel. Press **Goods received** and set the restock count of every line to **0**.
-The buyer is refunded, and the units count as back, but nothing goes on sale: there is nothing on
-the shelf.
+**What to do.** Do not cancel.
 
-The shop carries the risk of the parcel until it holds it, so the money is owed. If the parcel
-turns up later and the goods are sellable, use **Receive stock** with a note that it is a repaired or found return.
+1. Press **Proof of sending** on the return and enter the date on the carrier's document, the
+   carrier and its reference. You can do this once per return.
+2. On a **withdrawal** this opens the refund at once and the buyer is paid back, even though the
+   parcel never arrives. On a **faulty or wrong item** it only records the proof: you still decide
+   the remedy when you press **Goods received**, and a refund picked then is due immediately.
+3. Press **Goods received** with the restock count of every line set to **0**. The units count as
+   back, but nothing goes on sale: there is nothing on the shelf. After a proof on a withdrawal this
+   opens no second refund and closes the return once the refund has been paid.
+
+This shop's policy is to carry the risk of the parcel on its way back and to refund on proof of
+sending (the EU leaves the final risk to national law), so the money is owed; claim it from the
+carrier if you wish. If the parcel turns up later and the goods are sellable, use **Receive stock**
+with a note that it is a repaired or found return.
+
+::: warning After a proof on a withdrawal, no handling deduction
+Once the proof opened the refund you can no longer keep part of it back (CRD Art. 13(3)), so
+**Goods received** with a handling deduction is refused. If the goods arrive damaged, claim the
+amount from the buyer separately.
+:::
 
 **Whose job.** Whoever receives returns: the [warehouse](./warehouse.md) or the manager.
 → [`returns`](../modules/returns.md#what-the-customer-gets-back)

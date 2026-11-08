@@ -51,6 +51,7 @@ import {
     RECEIVABLE_RETURN_STATUSES,
     accountsOf,
     isGuaranteeReason,
+    proofOpenedRefund,
     refundAmountFor,
     resolveRestock,
     shippingStillOwed,
@@ -78,7 +79,7 @@ export interface ReceiveReturnInput {
 }
 
 /** The 409 for a return not waiting for its goods. */
-const notReceivable = (): ResponseReject =>
+export const notReceivable = (): ResponseReject =>
     generateReject(409, [
         { code: ERROR_CODES.RETURN_NOT_RECEIVABLE, message: t('returns.not-receivable') }
     ]);
@@ -97,6 +98,15 @@ const badRestock = (verdict: Extract<RestockVerdict, { ok: false }>): ResponseRe
 const badRemedyFor = (): ResponseReject =>
     generateReject(422, [
         fieldError('remedy', t('returns.remedy-invalid'), ERROR_CODES.RETURN_REMEDY_INVALID)
+    ]);
+
+/** The 409 for a handling deduction on a return whose refund the proof of sending already opened. */
+const refundOpenedOnProof = (): ResponseReject =>
+    generateReject(409, [
+        {
+            code: ERROR_CODES.RETURN_REFUND_OPENED_ON_PROOF,
+            message: t('returns.refund-opened-on-proof')
+        }
     ]);
 
 /** The 422 for a handling deduction on a defect or a wrong item: a guarantee remedy is free of charge. */
@@ -121,8 +131,10 @@ type Claimed =
           kind: 'received';
           received: ReturnDocument;
           breakdown: RefundBreakdown;
-          /** The refund record opened with the receipt, or `null` when nothing is owed. */
+          /** The refund record opened with the receipt, or `null` when nothing is owed or the proof opened it. */
           opened: OpenedReturnRefund | null;
+          /** Whether the proof of sending opened this return's refund before the goods came. */
+          openedOnProof: boolean;
       };
 
 /**
@@ -156,7 +168,7 @@ const restockedLines = (
  * @param earlier - every OTHER return on the order, as the transaction reads them
  * @param handlingDeduction - what staff keep back
  */
-const quote = (
+export const quote = (
     returned: ReturnDocument,
     order: OrderDocument,
     earlier: readonly ReturnDocument[],
@@ -246,10 +258,17 @@ const claimAndRestock = (
             const everyReturn = await returnRepository.findByOrderId(orderId, session);
             const others = everyReturn.filter(({ _id }) => String(_id) !== String(returned._id));
 
-            const verdict =
-                remedy === ReturnRemedy.refund
-                    ? quote(returned, order, others, handlingDeduction)
-                    : { ok: true as const, breakdown: NO_REFUND };
+            // The proof of sending opened and quoted the refund already: the goods arriving neither
+            // quote it again nor open a second record.
+            const openedOnProof = proofOpenedRefund(returned);
+            const verdict = openedOnProof
+                ? {
+                      ok: true as const,
+                      breakdown: { ...NO_REFUND, total: returned.refundAmount ?? '0' }
+                  }
+                : remedy === ReturnRemedy.refund
+                  ? quote(returned, order, others, handlingDeduction)
+                  : { ok: true as const, breakdown: NO_REFUND };
             if (!verdict.ok) return { kind: 'deduction-too-high' };
 
             const receivedAt = new Date();
@@ -260,11 +279,15 @@ const claimAndRestock = (
                 {
                     receivedAt,
                     remedy,
-                    refundAmount: verdict.breakdown.total,
-                    shippingRefund: verdict.breakdown.shipping,
-                    ...(toMinorUnits(handlingDeduction, returned.currency) > NO_MONEY
-                        ? { handlingDeduction }
-                        : {}),
+                    ...(openedOnProof
+                        ? {}
+                        : {
+                              refundAmount: verdict.breakdown.total,
+                              shippingRefund: verdict.breakdown.shipping,
+                              ...(toMinorUnits(handlingDeduction, returned.currency) > NO_MONEY
+                                  ? { handlingDeduction }
+                                  : {})
+                          }),
                     ...stampRestocked(restocked)
                 },
                 session
@@ -291,8 +314,12 @@ const claimAndRestock = (
                 session
             );
             // Nothing owed (a deduction ate it all, or zero-priced lines) opens no record.
-            const due = refundDueFor(received, { receivedAt });
+            const due = refundDueFor(received, {
+                receivedAt,
+                proofOfSendingAt: received.proofOfSendingAt
+            });
             const opened =
+                !openedOnProof &&
                 toMinorUnits(verdict.breakdown.total, returned.currency) > NO_MONEY
                     ? await paymentService.openReturnRefund(
                           orderId,
@@ -307,7 +334,13 @@ const claimAndRestock = (
                           session
                       )
                     : null;
-            return { kind: 'received', received, breakdown: verdict.breakdown, opened };
+            return {
+                kind: 'received',
+                received,
+                breakdown: verdict.breakdown,
+                opened,
+                openedOnProof
+            };
         },
         // Only a receipt is announced; a refused deduction or a lost race writes nothing.
         (claimed) =>
@@ -350,6 +383,36 @@ const refundAndClose = (
 };
 
 /**
+ * Finish a return whose refund the proof of sending opened: if the money already went back, close
+ * it in this step, which is what the `PAYMENT_REFUNDED` listener would have done had the goods
+ * come first. While it is still owed the return stays `received` and that listener closes it.
+ *
+ * @param received - the return, just received
+ * @param context - the staff member
+ * @returns the return as it now stands: `closed` when the refund settled or none was owed
+ */
+const closeAfterProofRefund = (
+    received: ReturnDocument,
+    context: CallerContext
+): Promise<ReturnDocument> =>
+    paymentService
+        .returnRefundState(String(received.orderId), String(received._id))
+        .then((state) =>
+            state === 'open'
+                ? received
+                : closeReturn(String(received._id), context.caller.id)
+                      // `null` means the `PAYMENT_REFUNDED` listener, still delivering the proof's
+                      // refund, closed it first: answer with the return as it now stands.
+                      .then(
+                          (closed) =>
+                              closed ??
+                              returnRepository
+                                  .findById(String(received._id))
+                                  .then((now) => now ?? received)
+                      )
+        );
+
+/**
  * {@link receiveReturn}'s body once the return is known to be receivable: quote, claim and restock,
  * then refund and close.
  *
@@ -375,6 +438,11 @@ const receiveFor = (
         toMinorUnits(input.handlingDeduction ?? '0', returned.currency) > NO_MONEY
     )
         return Promise.resolve(deductionOnGuarantee());
+    if (
+        proofOpenedRefund(returned) &&
+        toMinorUnits(input.handlingDeduction ?? '0', returned.currency) > NO_MONEY
+    )
+        return Promise.resolve(refundOpenedOnProof());
     const restock = resolveRestock(wireLines(returned.lines), input.lines);
     if (!restock.ok) return Promise.resolve(badRestock(restock));
 
@@ -404,7 +472,7 @@ const receiveFor = (
                     ]);
                 if (claimed.kind === 'lost') return notReceivable();
 
-                const { received, breakdown, opened } = claimed;
+                const { received, breakdown, opened, openedOnProof } = claimed;
                 const restockedTo = received.lines.map(({ productId, restocked }) => ({
                     productId: String(productId),
                     restocked: restocked ?? 0
@@ -436,7 +504,9 @@ const receiveFor = (
                                 ...ownOrderFlag(context, buyerIdOf(order))
                             }
                         });
-                        return refundAndClose(received, opened, context);
+                        return openedOnProof
+                            ? closeAfterProofRefund(received, context)
+                            : refundAndClose(received, opened, context);
                     })
                     .then((after) => generateSuccess(after, 200));
             })

@@ -14,6 +14,8 @@ x-error-codes:
     RETURN_REMEDY_INVALID: { status: 422, description: 'A remedy other than a refund is named for a reason that has no guarantee behind it (only a `defective` or `wrong_item` return can be repaired or replaced), or a preferred remedy is named for such a reason.' }
     RETURN_LINES_INVALID: { status: 422, description: 'A line names a product that is not on the order, asks for more than is left of it, is excluded from the right of withdrawal (Art. 16), or nothing on the order is left to return.' }
     RETURN_NOT_RECEIVABLE: { status: 409, description: 'The return is not an approved one awaiting its goods.' }
+    RETURN_PROOF_ALREADY_RECORDED: { status: 409, description: 'A proof of sending is already on this return; it is recorded once.' }
+    RETURN_REFUND_OPENED_ON_PROOF: { status: 409, description: 'The refund was opened when the proof of sending was recorded, so a handling deduction can no longer come out of it (Directive 2011/83/EU Art. 13(3)); claim it from the buyer separately.' }
     RETURN_NOT_CLOSABLE: { status: 409, description: 'The return is not one that was received and still awaits its money, so it cannot be closed by hand.' }
     RETURN_NOT_CANCELABLE: { status: 409, description: 'The return is not an approved one awaiting goods that never came, so it cannot be canceled.' }
     RETURN_RESTOCK_INVALID: { status: 422, description: 'A restock count names a product that is not on the return, names one twice, or is more than the line holds.' }
@@ -344,8 +346,10 @@ paths:
                 is not `approved` answers 409 `RETURN_NOT_CANCELABLE`: a `requested` one is
                 declined, a `received` one is closed.
 
-                A parcel lost on its way back is NOT canceled: the shop bears that risk, so the
-                refund may be owed. Receive it with a restock count of 0 instead. Needs
+                A parcel lost on its way back is NOT canceled: this shop's policy is to bear the risk
+                of a return lost in transit and to refund on proof of sending (the EU leaves the final
+                risk to national law), so the refund may be owed. Receive it with a restock count of 0
+                instead. Needs
                 `update:Return`; no fresh session, since nothing moves.
             operationId: cancelReturn
             x-error-codes:
@@ -399,8 +403,13 @@ paths:
                 2024/1799). Staff may pick a remedy other than the buyer's `preferredRemedy`. A withdrawal and
                 a goodwill return always refund (`RETURN_REMEDY_INVALID` otherwise), and a defect or a wrong
                 item never takes a `handlingDeduction`. A replacement the order cannot send again answers
-                409 `DELIVERY_NOT_REOPENABLE`. A parcel lost on its way back is received with 0 on every line: the shop bears
-                that risk, so the refund is owed, and nothing goes on sale. The amount is fixed
+                409 `DELIVERY_NOT_REOPENABLE`. On a withdrawal whose proof of sending was recorded the refund
+                was opened then (`POST /returns/{id}/proof-of-sending`), so receiving the goods opens no
+                second one and a `handlingDeduction` above 0 answers 409 `RETURN_REFUND_OPENED_ON_PROOF`
+                (Art. 13(3): the shop can no longer withhold it); the return closes in this step when
+                that refund already settled, and otherwise when it does. A parcel lost on its way back is received with 0 on every line: this shop's policy
+                is to bear that risk and refund on proof of sending (the EU leaves the final risk to
+                national law), so the refund is owed, and nothing goes on sale. The amount is fixed
                 when the goods are received and shown as `refundAmount`. If the payment provider
                 refuses, the return stays `received` and the refund is retried by the payment sweep;
                 the return closes when it lands. The answer is 200 either way: `received` means the
@@ -411,7 +420,7 @@ paths:
             operationId: receiveReturn
             x-error-codes:
                 '401': [REAUTH_REQUIRED]
-                '409': [DELIVERY_NOT_REOPENABLE, IDEMPOTENCY_IN_FLIGHT, RETURN_NOT_RECEIVABLE]
+                '409': [DELIVERY_NOT_REOPENABLE, IDEMPOTENCY_IN_FLIGHT, RETURN_NOT_RECEIVABLE, RETURN_REFUND_OPENED_ON_PROOF]
                 '422': [IDEMPOTENCY_KEY_MISMATCH, RETURN_DEDUCTION_INVALID, RETURN_REMEDY_INVALID, RETURN_RESTOCK_INVALID]
             security:
                 - bearerAuth: []
@@ -427,6 +436,53 @@ paths:
             responses:
                 '200':
                     description: The return — `closed` once the money went back, `received` while a refused refund waits for the sweep
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Return'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+
+    /returns/{id}/proof-of-sending:
+        post:
+            tags: [Returns]
+            summary: Record the buyer's proof of sending
+            description: >-
+                Staff note the carrier document the buyer showed for the parcel they sent back: the
+                date it was handed over, the carrier and the reference. Requires an `approved` return
+                (409 `RETURN_NOT_RECEIVABLE` otherwise) and is one-time: a second call answers 409
+                `RETURN_PROOF_ALREADY_RECORDED`.
+
+                On a `withdrawal` the proof opens the refund then, as receiving the goods would (the
+                shop may wait for the goods or the proof, whichever comes first, Directive 2011/83/EU
+                Art. 13(3)), so the money can go back before the parcel arrives: the amount is quoted
+                now, with no handling deduction. A later `POST /returns/{id}/receive` restocks as usual
+                and opens no second refund. On a `defective` or `wrong_item` return the remedy is only
+                decided at receipt, so the proof is recorded and nothing is refunded; if receipt then
+                refunds, that refund is due the moment the goods or the proof came, whichever is
+                earlier. This shop's policy is to refund on proof of sending, so a parcel lost on its
+                way back is still refunded (the EU leaves the final risk to national law). Needs
+                `receive:Return`, which carries a fresh-session requirement.
+            operationId: recordProofOfSending
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
+                '409': [RETURN_NOT_RECEIVABLE, RETURN_PROOF_ALREADY_RECORDED]
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RecordProofOfSendingRequest'
+            responses:
+                '200':
+                    description: The return, with its proof of sending
                     content:
                         application/json:
                             schema:
@@ -544,7 +600,7 @@ components:
         ReturnActions:
             type: object
             additionalProperties: false
-            required: [approve, decline, receive, close, cancel]
+            required: [approve, decline, receive, recordProof, close, cancel]
             description: >-
                 What the requesting caller may do to this return, decided by the server, so a client
                 renders its controls from this rather than re-implementing the lifecycle. Each needs
@@ -559,6 +615,9 @@ components:
                 receive:
                     type: boolean
                     description: Whether `POST /returns/{id}/receive` would be accepted.
+                recordProof:
+                    type: boolean
+                    description: Whether `POST /returns/{id}/proof-of-sending` would be accepted.
                 close:
                     type: boolean
                     description: Whether `POST /returns/{id}/close` would be accepted.
@@ -655,7 +714,23 @@ components:
                         entered when the goods were received. Absent when nothing was kept.
                 refundAmount:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
-                    description: What the customer is owed for this return, fixed when the goods were received.
+                    description: >-
+                        What the customer is owed for this return, fixed when the goods were received, or
+                        when the proof of sending opened the refund of a withdrawal.
+                proofOfSendingAt:
+                    type: string
+                    format: date-time
+                    description: >-
+                        The date on the carrier's proof of sending, as staff recorded it. Absent until a
+                        proof is recorded.
+                proofCarrier:
+                    type: string
+                    maxLength: 200
+                    description: The carrier named on the proof of sending. Present with `proofOfSendingAt`.
+                proofReference:
+                    type: string
+                    maxLength: 200
+                    description: The carrier document's reference (a tracking or receipt number). Present with `proofOfSendingAt`.
                 closedAt:
                     type: string
                     format: date-time
@@ -760,6 +835,26 @@ components:
                             restock:
                                 type: integer
                                 minimum: 0
+
+        RecordProofOfSendingRequest:
+            type: object
+            additionalProperties: false
+            required: [sentAt, carrier, reference]
+            properties:
+                sentAt:
+                    type: string
+                    format: date-time
+                    description: The date on the carrier's document, when the buyer handed the parcel over.
+                carrier:
+                    type: string
+                    minLength: 1
+                    maxLength: 200
+                    description: The carrier or postal provider named on the document. Plain text.
+                reference:
+                    type: string
+                    minLength: 1
+                    maxLength: 200
+                    description: The document's reference, a tracking or receipt number. Plain text.
 
         CloseReturnRequest:
             type: object

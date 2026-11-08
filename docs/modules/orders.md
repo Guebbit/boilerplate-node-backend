@@ -470,20 +470,20 @@ fails the test, and one added to a variant without it fails to compile. Each row
 (`buyer` or `staff`) on the wire, so a staff screen marks which rows the buyer cannot see without
 keeping a copy of this table.
 
-| Group     | Type                                                                                                            | Buyer sees |
-| --------- | --------------------------------------------------------------------------------------------------------------- | ---------- |
-| Order     | `created`, `paid`, `processing`, `shipped`, `delivered`, `canceled`                                             | yes        |
-| Order     | `status_overridden` (mode, from, to, and the staff's reason as `text`)                                          | no         |
-| Order     | `address_corrected` (staff-only)                                                                                | no         |
-| Order     | `note_added` (a staff note; the text is encrypted, see [staff notes](#staff-notes))                             | no         |
-| Payment   | `payment_declined`, `refund_issued`, `refund_settled`                                                           | yes        |
-| Payment   | `refund_failed` (a failure code, never the provider's wording)                                                  | no         |
-| Payment   | `refund_canceled` (a refund staff voided; ids and amount only)                                                  | no         |
-| Shipments | `shipment_shipped`, `shipment_delivered`, `shipment_lost`, `remainder_canceled`                                 | yes        |
-| Shipments | `fulfillment_held`, `fulfillment_released` (a hold's reason code)                                               | no         |
-| Returns   | `return_requested`, `return_approved`, `return_declined`, `return_received`, `return_closed`, `return_canceled` | yes        |
-| Documents | `invoice_issued`, `credit_note_issued`                                                                          | yes        |
-| Preorders | `release_date_moved`, `delay_notice_sent`                                                                       | yes        |
+| Group     | Type                                                                                                                                         | Buyer sees |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| Order     | `created`, `paid`, `processing`, `shipped`, `delivered`, `canceled`                                                                          | yes        |
+| Order     | `status_overridden` (mode, from, to, and the staff's reason as `text`)                                                                       | no         |
+| Order     | `address_corrected` (staff-only)                                                                                                             | no         |
+| Order     | `note_added` (a staff note; the text is encrypted, see [staff notes](#staff-notes))                                                          | no         |
+| Payment   | `payment_declined`, `refund_issued`, `refund_settled`                                                                                        | yes        |
+| Payment   | `refund_failed` (a failure code, never the provider's wording)                                                                               | no         |
+| Payment   | `refund_canceled` (a refund staff voided; ids and amount only)                                                                               | no         |
+| Shipments | `shipment_shipped`, `shipment_delivered`, `shipment_lost`, `remainder_canceled`                                                              | yes        |
+| Shipments | `fulfillment_held`, `fulfillment_released` (a hold's reason code)                                                                            | no         |
+| Returns   | `return_requested`, `return_approved`, `return_declined`, `return_received`, `return_closed`, `return_canceled`, `proof_of_sending_recorded` | yes        |
+| Documents | `invoice_issued`, `credit_note_issued`                                                                                                       | yes        |
+| Preorders | `release_date_moved`, `delay_notice_sent`                                                                                                    | yes        |
 
 **What `data` holds, per type.** The wire carries one `oneOf` variant per kind of row, told apart by
 `type` (a discriminator with a many-to-one `mapping`; the export's `OrderTimelineExportEntry` has
@@ -492,32 +492,32 @@ store, and `TimelineEntryInput` is derived from them, so a writer that passes th
 for its `type` fails to compile. Every `data` is closed and required; `{}` where the type says
 everything.
 
-| Types                                                   | `data`                                                                            |
-| ------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `created`, `processing`, `shipped`, `address_corrected` | `{}`                                                                              |
-| `note_added`                                            | `{}`; what staff wrote is the entry's `text`                                      |
-| `status_overridden`                                     | `mode` (`status`), `from`, `to` (`OrderStatus`); the reason is the entry's `text` |
-| `paid`                                                  | `method`, absent when unknown                                                     |
-| `delivered`                                             | `withdrawUntil` (date-time)                                                       |
-| `canceled`                                              | `by`, `cause`, `refund`                                                           |
-| `payment_declined`                                      | `paymentId`                                                                       |
-| `refund_issued`, `refund_settled`, `refund_canceled`    | `refundId`, `amount`, `currency`, `reason`                                        |
-| `refund_failed`, `refund_reversed`                      | the same, plus `failureReason`                                                    |
-| `dispute_opened`, `dispute_closed`                      | `disputeId`, `kind`, `status`, `reason`, `amount`, `currency`                     |
-| `shipment_shipped`                                      | `shipmentId`, `fulfillmentOrderId`, `number`, `trackingCode` when given           |
-| `shipment_delivered`                                    | `shipmentId`, `fulfillmentOrderId`, `number`                                      |
-| `shipment_lost`                                         | the same, plus `reason`                                                           |
-| `fulfillment_held`                                      | `reason`, and `fulfillmentOrderId` except on a preorder's birth hold              |
-| `fulfillment_released`, `remainder_canceled`            | `fulfillmentOrderId`                                                              |
-| `return_requested`                                      | `returnId`, `reason`                                                              |
-| `return_approved`                                       | `returnId`, and `reason` when opened already approved                             |
-| `return_declined`, `return_canceled`                    | `returnId`                                                                        |
-| `return_received`                                       | `returnId`, `refundAmount`                                                        |
-| `return_closed`                                         | `returnId`, `refundAmount`, `currency`, `remedy` when chosen                      |
-| `invoice_issued`                                        | `invoiceId`, `number`                                                             |
-| `credit_note_issued`                                    | `creditNoteId`, `number`, `refundId`                                              |
-| `release_date_moved`                                    | `fulfillmentOrderId`, `from`, `to` (shop days, each absent when unset)            |
-| `delay_notice_sent`                                     | `fulfillmentOrderId`, `reason`, `expectedAt` (a shop day) when there is one       |
+| Types                                                             | `data`                                                                            |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `created`, `processing`, `shipped`, `address_corrected`           | `{}`                                                                              |
+| `note_added`                                                      | `{}`; what staff wrote is the entry's `text`                                      |
+| `status_overridden`                                               | `mode` (`status`), `from`, `to` (`OrderStatus`); the reason is the entry's `text` |
+| `paid`                                                            | `method`, absent when unknown                                                     |
+| `delivered`                                                       | `withdrawUntil` (date-time)                                                       |
+| `canceled`                                                        | `by`, `cause`, `refund`                                                           |
+| `payment_declined`                                                | `paymentId`                                                                       |
+| `refund_issued`, `refund_settled`, `refund_canceled`              | `refundId`, `amount`, `currency`, `reason`                                        |
+| `refund_failed`, `refund_reversed`                                | the same, plus `failureReason`                                                    |
+| `dispute_opened`, `dispute_closed`                                | `disputeId`, `kind`, `status`, `reason`, `amount`, `currency`                     |
+| `shipment_shipped`                                                | `shipmentId`, `fulfillmentOrderId`, `number`, `trackingCode` when given           |
+| `shipment_delivered`                                              | `shipmentId`, `fulfillmentOrderId`, `number`                                      |
+| `shipment_lost`                                                   | the same, plus `reason`                                                           |
+| `fulfillment_held`                                                | `reason`, and `fulfillmentOrderId` except on a preorder's birth hold              |
+| `fulfillment_released`, `remainder_canceled`                      | `fulfillmentOrderId`                                                              |
+| `return_requested`                                                | `returnId`, `reason`                                                              |
+| `return_approved`                                                 | `returnId`, and `reason` when opened already approved                             |
+| `return_declined`, `return_canceled`, `proof_of_sending_recorded` | `returnId`                                                                        |
+| `return_received`                                                 | `returnId`, `refundAmount`                                                        |
+| `return_closed`                                                   | `returnId`, `refundAmount`, `currency`, `remedy` when chosen                      |
+| `invoice_issued`                                                  | `invoiceId`, `number`                                                             |
+| `credit_note_issued`                                              | `creditNoteId`, `number`, `refundId`                                              |
+| `release_date_moved`                                              | `fulfillmentOrderId`, `from`, `to` (shop days, each absent when unset)            |
+| `delay_notice_sent`                                               | `fulfillmentOrderId`, `reason`, `expectedAt` (a shop day) when there is one       |
 
 Money is a `DecimalAmount`. A code a sibling module owns (a refund's reason, a dispute's status, a
 hold's reason) is a plain string whose description names the owner's enum: `orders` cannot
