@@ -27,9 +27,8 @@ export const DAY_SECONDS = 24 * HOUR_SECONDS;
 /**
  * The last millisecond of the UTC day an instant falls in.
  *
- * A deadline that is printed as a date must not fall before the end of that date, or a buyer reading
- * "until the 5th" is cut off at the 5th's first hour. Withdrawal windows and answer deadlines both
- * end this way.
+ * A deadline that is printed as a date must not fall before the end of that date, or a reader of
+ * "until the 5th" is cut off at the 5th's first hour.
  * @param instant - any moment of the day
  * @returns `23:59:59.999` UTC of that day
  */
@@ -59,7 +58,7 @@ export const oneCalendarMonthLaterUtc = (instant: Date): Date => {
  * The calendar day an instant falls in, on the wall clock of `timeZone`, as `YYYY-MM-DD`.
  *
  * Why not `toISOString().slice(0, 10)`: 00:30 on the 5th in Rome is still the 4th in UTC, and a
- * day a staff member typed is the shop's day, not the server's.
+ * day a person typed is the day on their clock, not the server's.
  * @param instant - the moment
  * @param timeZone - canonical IANA zone name, e.g. `Europe/Rome`
  * @returns the day, sortable as text
@@ -85,7 +84,7 @@ export const dayInZone = (instant: Date, timeZone: string): string => {
  * The calendar year an instant falls in, on the wall clock of `timeZone`.
  *
  * Why not `getUTCFullYear()`: 00:30 on 1 January in Rome is still 31 December in UTC, and a
- * yearly number series must follow the shop's calendar, not the server's.
+ * yearly series must follow the zone's calendar, not the server's.
  * @param instant - the moment
  * @param timeZone - canonical IANA zone name, e.g. `Europe/Rome`
  * @returns the four-digit year
@@ -126,7 +125,8 @@ const wallClockAsUtc = (instant: Date, timeZone: string): number => {
 };
 
 /**
- * The instant a calendar day starts on the shop's wall clock: local midnight.
+ * The instant a calendar day starts on the wall clock of the zone the caller passes: local
+ * midnight.
  *
  * The offset is read twice, once at the UTC guess and once at the corrected instant, so a day
  * whose midnight sits on the far side of a DST change still lands on the right one. A midnight
@@ -162,7 +162,7 @@ export const zonedStartOfDay = (
 };
 
 /**
- * The instant a `YYYY-MM-DD` day starts on the wall clock of `timeZone`: how a day staff typed is
+ * The instant a `YYYY-MM-DD` day starts on the wall clock of `timeZone`: how a typed day is
  * stored. The reverse of {@link dayInZone}.
  * @param day - a plain calendar day, already checked as `format: date` by the request schema
  * @param timeZone - canonical IANA zone name

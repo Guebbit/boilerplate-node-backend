@@ -501,7 +501,8 @@ has no single owner, so it sits in its own tier, `src/domain-primitives/`.
 There is also a hard constraint. The domain layer may not import `@kernel/*`, `@infrastructure/*`,
 `@modules/*` or even `../*` — see the folder rule in `eslint.config.ts`. A jointly-owned value type
 therefore has to sit somewhere a `domain/` folder CAN reach, without loosening that rule. The
-`domain-primitives` tier does it: it imports npm and `@types` only, and every tier may import it.
+`domain-primitives` tier does it: it is the Shared Kernel (generic, npm only), and every tier may
+import it. See [the rulebook](./layers.md#the-rulebook-one-small-shared-kernel).
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%

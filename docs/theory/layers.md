@@ -39,9 +39,32 @@ The rule, enforced by `eslint-plugin-boundaries` in `eslint.config.ts`:
 - a module may import `infrastructure`, `kernel`, and **only the public barrel** of another module —
   `@modules/<name>`, never `@modules/<name>/service` — and never `app`;
 - `app` may import anything: it is the tier allowed to know which domains exist;
-- `domain-primitives` imports npm and `@types` only, and every tier — a module's `domain/` folder
-  included — may import it;
+- `domain-primitives` imports npm only (not `@types`, not a module), and every tier — a module's
+  `domain/` folder included — may import it;
 - nothing outside a module imports its internals.
+
+### The rulebook: one small shared kernel
+
+The rulebook is Domain-Driven Design as Evans (_DDD_, 2003; _DDD Reference_, 2015) and Vernon
+(_Implementing DDD_) write it, applied the way the reference modular monoliths do it.
+
+1. Each module owns its rules and its data. Others reach them only through its barrel or service.
+2. The only shared code is a **Shared Kernel** (Evans): small, at the bottom, no business words,
+   npm only.
+3. Test for entry (Milan Jovanović): if removing it breaks only one module, it does not belong there.
+4. Core's kernel is `src/domain-primitives/`. There is no second kernel; money stays in it.
+5. Same-looking code in two modules stays where it is unless it is the same knowledge (DRY).
+
+| Not here                                                        | Why                                                                                  |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `checkShipLines` (delivery) and `checkRequestedLines` (returns) | Same shape, different knowledge: each module owns its "what remains". A coincidence. |
+
+Three things share the word "kernel", and they are different:
+
+- `src/domain-primitives/` is what modular-monolith guides (Ardalis, Milan Jovanović) call the Shared Kernel.
+- `src/kernel/` is the module glue: the module system and the authn/authz every guard shares.
+- The account and users "shared kernel" is Evans' original two-context sense
+  ([Strategic DDD](./strategic-ddd.md)).
 
 The kernel is **Mongo-only**, on purpose: `kernel/access/query.ts` compiles a caller's rules into a
 Mongo filter (`@casl/mongoose`), and `kernel/outbox.ts` is a Mongoose model written inside a
@@ -88,16 +111,16 @@ flowchart TD
 
 ## Quick map
 
-| Tier              | Folder                  | Main job                                                                                                                                                                                                                                                                                  |
-| ----------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| App               | `src/app`               | assembles this application; the only tier allowed to know every domain                                                                                                                                                                                                                    |
-| Registry          | `src/modules.ts`        | the enabled module list — the one file that names every domain                                                                                                                                                                                                                            |
-| Modules           | `src/modules/*`         | one domain each, top to bottom; `index.ts` is its only public surface                                                                                                                                                                                                                     |
-| Kernel            | `src/kernel`            | the module system, PLUS the authn/authz every module's guard shares — most of its code, not a minor detail; see [Modules](./modules.md) for why each earns its place                                                                                                                      |
-| Domain primitives | `src/domain-primitives` | our own pure code every tier may import, `domain/` included — one file each: `money.ts` (amounts), `time.ts` (the unit constants and the zone-calendar helpers), `lifecycle.ts` (the status table), `postal-address.ts` (the address PII field list); npm and `@types` are all it imports |
-| Infrastructure    | `src/infrastructure`    | technical substrate, Express and Mongoose included — see below                                                                                                                                                                                                                            |
-| Types             | `src/types`             | the contract's generated types and the few shared type declarations; imports no tier, so every tier may import it                                                                                                                                                                         |
-| Scenarios         | `scenarios/`            | the demo records and the flow runner — outside `src/` entirely, see below                                                                                                                                                                                                                 |
+| Tier              | Folder                  | Main job                                                                                                                                                                                                                                                                    |
+| ----------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App               | `src/app`               | assembles this application; the only tier allowed to know every domain                                                                                                                                                                                                      |
+| Registry          | `src/modules.ts`        | the enabled module list — the one file that names every domain                                                                                                                                                                                                              |
+| Modules           | `src/modules/*`         | one domain each, top to bottom; `index.ts` is its only public surface                                                                                                                                                                                                       |
+| Kernel            | `src/kernel`            | the module system, PLUS the authn/authz every module's guard shares — most of its code, not a minor detail; see [Modules](./modules.md) for why each earns its place                                                                                                        |
+| Domain primitives | `src/domain-primitives` | our own pure code every tier may import, `domain/` included — one file each: `money.ts` (amounts), `time.ts` (the unit constants and the zone-calendar helpers), `lifecycle.ts` (the status table), `postal-address.ts` (the address PII field list); npm is all it imports |
+| Infrastructure    | `src/infrastructure`    | technical substrate, Express and Mongoose included — see below                                                                                                                                                                                                              |
+| Types             | `src/types`             | the contract's generated types and the few shared type declarations; imports no tier, so every tier may import it                                                                                                                                                           |
+| Scenarios         | `scenarios/`            | the demo records and the flow runner — outside `src/` entirely, see below                                                                                                                                                                                                   |
 
 Four tiers — app, modules, kernel, infrastructure — and two folders every tier may import because they depend on no tier: `domain-primitives` and `types`. One alias each — `@app/*`, `@modules/*`, `@kernel/*`, `@infrastructure/*`, `@domain-primitives/*`, `@types` — so every import
 line says which boundary it crosses. [Modules](./modules.md) has the full picture and the reasoning,

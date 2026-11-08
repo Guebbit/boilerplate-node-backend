@@ -80,6 +80,7 @@ export type LinesVerdict =
  * Decide a return's lines. No lines asked for means "everything that is still left" — the common
  * case, a withdrawal from the whole order. Lines asked for must each name a product on the order
  * and stay within what is left of it; the same product named twice counts once, summed.
+ * Alike on purpose; each module owns its "what remains"; free to diverge.
  *
  * @param remaining - {@link returnableQuantities}' answer
  * @param requested - the lines the customer sent, or `undefined` for all of what is left

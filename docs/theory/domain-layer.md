@@ -55,7 +55,7 @@ flowchart LR
 ```
 
 **The arrow points inward only.** The one thing outside itself `domain/` may import is
-`@domain-primitives/*` (`Money`): that tier takes npm and `@types` only. `domain/` may not import:
+`@domain-primitives/*` (`Money`): that tier is the Shared Kernel: generic, npm only. `domain/` may not import:
 
 | Forbidden                                  | Why                                               |
 | ------------------------------------------ | ------------------------------------------------- |
@@ -228,7 +228,8 @@ whole cents and converted back to a decimal exactly once, at the boundary. `open
 as a decimal string (`DecimalAmount`, padded to the currency's places) and keeps `number` only for rates; no site outside this
 file holds a rounding rule of its own. It lives in `src/domain-primitives/` because many modules do money
 arithmetic, and a domain folder may import that tier — the one thing outside itself it may reach, since
-the tier imports only npm and `@types`.
+the tier imports npm only. Why one small kernel and no second:
+[the rulebook](./layers.md#the-rulebook-one-small-shared-kernel).
 
 **`inventory/domain/transitions.ts` is the other kind of case: the folder holding the model
 itself.** It is one table (`counterDeltaFor`) mapping each stock movement reason to the

@@ -7,8 +7,8 @@
  *
  * A currency's minor unit is NOT always a hundredth: JPY/KRW have none (the yen IS its own minor
  * unit), KWD/BHD have a thousandth (the fils). The exponents are ISO 4217's, pinned below.
- * {@link toMinorUnits}/{@link toDecimalString} both take the currency they're converting FOR, so a caller pricing a JPY order never multiplies by
- * 100 where it should multiply by 1 — see Fowler's Money pattern, or Stripe's own "zero-decimal
+ * {@link toMinorUnits}/{@link toDecimalString} both take the currency they're converting FOR, so a
+ * caller working in JPY never multiplies by 100 where it should multiply by 1 — see Fowler's Money pattern, or Stripe's own "zero-decimal
  * currencies" table for the same rule under a different name.
  *
  * See `docs/theory/tactical-ddd.md` §3.
@@ -101,7 +101,7 @@ const minorUnitsOfText = (match: RegExpExecArray, exponent: number): number => {
 
 /**
  * Read a decimal amount as minor units, rounding to the nearest integer. `unknown` because
- * callers get raw aggregate output, where an unpopulated line carries no number at all.
+ * callers get raw aggregate output, where an unpopulated field carries no number at all.
  *
  * A `Decimal128` (or a numeric string) is read digit by digit, so a stored amount goes to minor
  * units without a float in between; a `number` is multiplied and rounded.
@@ -194,7 +194,7 @@ export const addMoney = (...amounts: readonly Money[]): Money => {
 };
 
 /**
- * The smallest of some amounts — a refund capped at what is left to refund.
+ * The smallest of some amounts — an amount capped at a limit.
  * @param first - one amount
  * @param rest - the others
  * @returns the smallest
@@ -213,7 +213,7 @@ export const wholeCount = (count: unknown): number => {
 };
 
 /**
- * Multiply an amount by a whole count — a line price by its quantity.
+ * Multiply an amount by a whole count.
  * @param amount - the unit amount
  * @param count - how many
  * @returns the amount repeated `count` times
@@ -222,8 +222,8 @@ export const scaleMoney = (amount: Money, count: unknown): Money =>
     asMoney(amount * wholeCount(count));
 
 /**
- * An amount shared evenly over a count, rounded half-up to the nearest minor unit — an average order
- * value. Nothing over zero orders: 0 rather than a division by nothing.
+ * An amount shared evenly over a count, rounded half-up to the nearest minor unit — an
+ * average. Nothing over a count of zero: 0 rather than a division by nothing.
  * @param amount - the total
  * @param count - how many it is shared over
  * @returns `amount / count` rounded, or `NO_MONEY` when `count` is not positive
@@ -241,13 +241,13 @@ export const subtractMoney = (minuend: Money, subtrahend: Money): Money =>
     asMoney(minuend - subtrahend);
 
 /**
- * Take a fractional share of an amount — a tax rate applied to a gross or net figure. Unlike
+ * Take a fractional share of an amount — a percentage rate applied to it. Unlike
  * {@link scaleMoney} (an exact whole-count repeat), a rate multiply is inherently fractional, so
- * this is the one place VAT arithmetic rounds: half-up, to the nearest minor unit.
+ * this is the one place a rate multiply rounds: half-up, to the nearest minor unit.
  *
  * Half-up rounds a negative result TOWARD +∞ (`Math.round(-0.5) === -0`, not `-1`) — harmless
- * today, since every amount here is `min: 0` and there are no refunds. Revisit this the day a
- * credit note needs to take a share of a negative amount.
+ * today, since every amount passed in is `min: 0`. Revisit this the day a share of a negative
+ * amount is needed.
  * @param amount - the amount to take a share of
  * @param rate - the share, as a decimal (0.22 for 22%)
  * @returns the share, rounded to the nearest minor unit
@@ -256,16 +256,15 @@ export const scaleMoneyByRate = (amount: Money, rate: number): Money =>
     asMoney(Math.round(amount * rate));
 
 /**
- * Splits an integer amount pro-rata across a set of weights (e.g. each order line's own gross
- * value), so the parts always sum EXACTLY to `total` — the one thing a plain division can't
+ * Splits an integer amount pro-rata across a set of weights (e.g. each part's own value), so the parts always sum EXACTLY to `total` — the one thing a plain division can't
  * promise once cents don't divide evenly. Flooring every share first guarantees no share
  * overshoots; the leftover unit(s) that flooring leaves behind go to the LARGEST weight — the
  * conventional choice — rather than an arbitrary one, or a share that silently vanishes.
  *
  * All weights zero (nothing to apportion onto) returns all-zero shares rather than dividing by
- * zero — there is no meaningful split of a shipping charge across lines that are themselves free.
+ * zero — there is no meaningful split of an amount across weights that are themselves zero.
  * @param total - the amount to split, in minor units
- * @param weights - each recipient's share weight, in the same units — e.g. a line's own gross value
+ * @param weights - each recipient's share weight, in the same units — e.g. a part's own value
  * @returns one share per weight, in the same order, summing exactly to `total`
  */
 export const apportion = (total: Money, weights: readonly Money[]): Money[] => {

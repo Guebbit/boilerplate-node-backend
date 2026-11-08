@@ -262,6 +262,7 @@ export type ShipLinesVerdict =
  * Decide which lines a shipment carries. No lines asked for means everything that remains; lines
  * asked for must each name a product on the fulfillment order and stay within what remains of it.
  * The same product named twice counts once, summed.
+ * Alike on purpose; each module owns its "what remains"; free to diverge.
  *
  * @param lines - the fulfillment order's lines
  * @param requested - the lines staff asked to ship, or `undefined` for all that remains

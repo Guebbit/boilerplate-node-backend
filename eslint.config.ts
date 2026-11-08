@@ -988,8 +988,8 @@ export default tseslint.config(
                             allow: { to: { element: { type: ['infrastructure', 'types'] } } }
                         },
                         {
-                            // `domain-primitives` is pure and generic, so every tier may take from it —
-                            // `domain` included, which is the reason it exists.
+                            // `domain-primitives` is the Shared Kernel: generic, npm only, so every tier
+                            // may take from it — `domain` included, which is the reason it exists.
                             from: {
                                 element: {
                                     type: [
@@ -1109,13 +1109,14 @@ export default tseslint.config(
                                             'kernel',
                                             'module',
                                             'domain',
-                                            'app'
+                                            'app',
+                                            'types'
                                         ]
                                     }
                                 }
                             },
                             message:
-                                'domain-primitives imports npm and @types only. It is below every tier so that domain/ can use it; one import of a tier would hand that reach back to whoever imports it.'
+                                'Shared Kernel: generic, npm only. domain-primitives is below every tier so that domain/ can use it; one import of a tier, of @types or of a module would hand that reach back to whoever imports it.'
                         },
                         {
                             from: { element: { type: 'infrastructure' } },

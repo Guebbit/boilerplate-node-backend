@@ -214,6 +214,7 @@ flowchart TD
 
 **One alias per tier**, so an import line states which tier it crosses: `@app/*`, `@modules/*`,
 `@kernel/*`, `@infrastructure/*`. Two leaf folders no tier forbids — `src/domain-primitives` (`@domain-primitives/*`) and `src/types` (`@types`) — import none of them.
+`src/domain-primitives` is the Shared Kernel (generic, npm only); `src/kernel` is module glue, a different thing — see [the rulebook](./layers.md#the-rulebook-one-small-shared-kernel).
 
 Two naming details worth knowing:
 
