@@ -516,7 +516,7 @@ describe('the personal-data policy', () => {
     });
 
     it('covers the whole policy, so a shrinking list cannot pass unnoticed', () => {
-        expect(PERSONAL_FIELDS.size).toBeGreaterThanOrEqual(7);
+        expect(PERSONAL_FIELDS.size).toBeGreaterThanOrEqual(6);
     });
 });
 

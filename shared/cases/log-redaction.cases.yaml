@@ -43,3 +43,9 @@ cases:
     - name: linkCount is NOT eaten by linkurl
       key: linkCount
       expect: keep
+    - name: a personal email is pseudonymised
+      key: email
+      expect: redact
+    - name: a transition's `to` stays readable
+      key: to
+      expect: keep
