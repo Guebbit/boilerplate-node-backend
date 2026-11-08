@@ -18,6 +18,15 @@ import { encryptPii, decryptPii } from '@infrastructure/security/pii-encryption'
 import { POSTAL_ADDRESS_FIELDS, type PostalAddressField } from '@domain-primitives/postal-address';
 import type { OrderAddress } from '@types';
 
+/**
+ * Every address field of the contract's `OrderAddress` that is personal data: the shared list,
+ * narrowed at compile time. A field added to the contract and not to the primitive turns the type
+ * into `never`, so it fails `tsc` instead of being stored as plaintext.
+ */
+const ORDER_ADDRESS_PII_FIELDS: [Exclude<keyof OrderAddress, PostalAddressField>] extends [never]
+    ? readonly (PostalAddressField & keyof OrderAddress)[]
+    : never = POSTAL_ADDRESS_FIELDS;
+
 /** The two embedded addresses an order carries. */
 export type OrderAddressPath = 'shippingAddress' | 'billingAddress';
 
@@ -53,7 +62,7 @@ const mapAddress = <T extends OrderAddress>(
     convert: (value: string, field: PostalAddressField) => string
 ): T => {
     const result: T = { ...address };
-    for (const field of POSTAL_ADDRESS_FIELDS) {
+    for (const field of ORDER_ADDRESS_PII_FIELDS) {
         const value = address[field];
         if (value !== undefined) result[field] = convert(value, field);
     }
