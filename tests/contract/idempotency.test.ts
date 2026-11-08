@@ -36,7 +36,7 @@ describe('Idempotency-Key — POST /tasks', () => {
             .send(PAYLOAD);
 
         expect(second.status).toBe(202);
-        expect(second.headers['idempotent-replay']).toBe('true');
+        expect(second.headers['idempotent-replayed']).toBe('true');
         expect(second.body).toEqual(first.body);
 
         // One ledger row, and — the point of the whole feature — one task, not two.
@@ -56,7 +56,7 @@ describe('Idempotency-Key — POST /tasks', () => {
 
         expect(first.status).toBe(422);
         expect(second.status).toBe(422);
-        expect(second.headers['idempotent-replay']).toBe('true');
+        expect(second.headers['idempotent-replayed']).toBe('true');
         expect(second.type).toBe('application/problem+json');
         expect(second.body).toEqual(first.body);
     });

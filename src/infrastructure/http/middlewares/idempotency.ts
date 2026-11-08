@@ -316,7 +316,7 @@ const respondToCollision = (
         ]);
 
     // Same key, same request: replay verbatim instead of running the handler a second time.
-    response.set('Idempotent-Replay', 'true');
+    response.set('Idempotent-Replayed', 'true');
     if (existing.location) response.location(existing.location);
     if (existing.contentType) response.type(existing.contentType);
     for (const [name, value] of Object.entries(existing.headers ?? {})) response.set(name, value);

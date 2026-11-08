@@ -120,7 +120,7 @@ describe('stock writes replay under an Idempotency-Key', () => {
         const second = await send();
 
         expect(first.status).toBe(200);
-        expect(second.headers['idempotent-replay']).toBe('true');
+        expect(second.headers['idempotent-replayed']).toBe('true');
         expect(second.body).toEqual(first.body);
         expect(first.body.onHand).toBe(10 + expectedDelta);
     });
@@ -140,7 +140,7 @@ describe('a bodiless 202 under an Idempotency-Key', () => {
 
         expect(first.status).toBe(202);
         expect(second.status).toBe(202);
-        expect(second.headers['idempotent-replay']).toBe('true');
+        expect(second.headers['idempotent-replayed']).toBe('true');
         expect(second.text).toBe('');
     });
 });

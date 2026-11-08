@@ -338,7 +338,7 @@ describe('POST /delivery/fulfillment-orders/{id}/shipments', () => {
 
         expect(first.status).toBe(201);
         expect(retry.status).toBe(201);
-        expect(retry.headers['idempotent-replay']).toBe('true');
+        expect(retry.headers['idempotent-replayed']).toBe('true');
         expect(retry.headers.location).toBe(first.headers.location);
         expect(retry.body.id).toBe(first.body.id);
         expect(await shipmentsOf(orderId)).toHaveLength(1);
@@ -413,7 +413,7 @@ describe('POST /delivery/fulfillment-orders/{id}/fulfill', () => {
         const retry = await fulfill();
 
         expect(retry.status).toBe(201);
-        expect(retry.headers['idempotent-replay']).toBe('true');
+        expect(retry.headers['idempotent-replayed']).toBe('true');
         expect(retry.body.id).toBe(first.body.id);
     });
 

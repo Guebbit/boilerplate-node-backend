@@ -673,7 +673,7 @@ describe('POST /orders — Idempotency-Key', () => {
 
         expect(first.status).toBe(201);
         expect(second.status).toBe(201);
-        expect(second.headers['idempotent-replay']).toBe('true');
+        expect(second.headers['idempotent-replayed']).toBe('true');
         expect(second.body).toEqual(first.body);
         expect(await orderModel.countDocuments({})).toBe(1);
     });

@@ -34,7 +34,7 @@ sequenceDiagram
     else duplicate key, in_flight, older (the attempt died)
         Middleware->>Handler: take the key over, next()
     else duplicate key, done, fingerprint matches
-        Middleware-->>Client: stored response, Idempotent-Replay: true
+        Middleware-->>Client: stored response, Idempotent-Replayed: true
     else duplicate key, done, fingerprint differs
         Middleware-->>Client: 422 — key reused with a different request
     end
@@ -119,7 +119,7 @@ to one of these classes, and the IETF draft only asks that the exception be publ
 ## What a failure stores
 
 Every finished attempt is stored, a server fault (5xx) included, and replayed for the
-[retention](#retention) window with `Idempotent-Replay: true`. So a retry under the same key
+[retention](#retention) window with `Idempotent-Replayed: true`. So a retry under the same key
 re-sends the failure without running the handler again; only a new key runs it.
 
 The replay carries the stored status, body, `Content-Type` and the `Location`, `Retry-After`,

@@ -6,7 +6,7 @@
  *
  * - {@link withAppLevelHeaders}: the headers every answer carries (`x-request-id`, `Cache-Control`,
  *   ...), listed once in the root's `x-app-level-headers`, onto every response.
- * - {@link withIdempotentReplay}: `Idempotent-Replay` onto the 2xx of every operation that takes an
+ * - {@link withIdempotentReplay}: `Idempotent-Replayed` onto the 2xx of every operation that takes an
  *   `Idempotency-Key`.
  *
  * Why stamped: the app sets these in middleware that runs before any route. A hand-copied list on
@@ -19,7 +19,7 @@ import type { OpenAPIV3_1 } from 'openapi-types';
 import { operationsOf, type Operation, type OpenApiDocument, type Step } from './openapi-document';
 
 /** The response header an idempotent operation's 2xx declares, and the component that describes it. */
-const REPLAY_HEADER = 'Idempotent-Replay';
+const REPLAY_HEADER = 'Idempotent-Replayed';
 
 /** The two `components/parameters` an operation takes its `Idempotency-Key` through. */
 const IDEMPOTENCY_PARAMETERS: ReadonlySet<string> = new Set([
@@ -82,7 +82,7 @@ const takesIdempotencyKey = (operation: Operation): boolean =>
     );
 
 /**
- * Hang `Idempotent-Replay` on every 2xx of one idempotent operation.
+ * Hang `Idempotent-Replayed` on every 2xx of one idempotent operation.
  *
  * @param operation - `METHOD /path`, for the message
  * @param target - the operation
@@ -103,7 +103,7 @@ const declareReplay = (operation: string, target: Operation): void => {
 };
 
 /**
- * Declare `Idempotent-Replay` on every 2xx of an operation that takes an `Idempotency-Key`.
+ * Declare `Idempotent-Replayed` on every 2xx of an operation that takes an `Idempotency-Key`.
  *
  * Marker is the parameter, not a hand-kept list: adding the key to a route is all it takes.
  *

@@ -364,7 +364,7 @@ describe('POST /cart/merge', () => {
             const retry = await mergeOnce(bearer, 'merge-replay-key-1', 2, id);
 
             expect(retry.status).toBe(200);
-            expect(retry.headers['idempotent-replay']).toBe('true');
+            expect(retry.headers['idempotent-replayed']).toBe('true');
             expect(retry.body).toEqual(first.body);
             await expect(heldOf(bearer, id)).resolves.toBe(2);
         });
@@ -752,7 +752,7 @@ describe('POST /cart/checkout', () => {
         });
 
         expect(second.status).toBe(201);
-        expect(second.headers['idempotent-replay']).toBe('true');
+        expect(second.headers['idempotent-replayed']).toBe('true');
         expect(second.body).toEqual(first.body);
 
         // One order, not two.

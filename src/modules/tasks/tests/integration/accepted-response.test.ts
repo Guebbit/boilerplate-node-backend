@@ -42,7 +42,7 @@ describe('POST /tasks 202', () => {
 
         expect(first.status).toBe(202);
         expect(replay.status).toBe(202);
-        expect(replay.headers['idempotent-replay']).toBe('true');
+        expect(replay.headers['idempotent-replayed']).toBe('true');
         expect(replay.headers).not.toHaveProperty('content-type');
         expect(replay.text).toBe('');
         expect(await findAllTasks()).toHaveLength(1);

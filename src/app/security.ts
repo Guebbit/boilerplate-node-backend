@@ -204,7 +204,7 @@ export const installSecurity = (app: Express): void => {
                 // cannot read it unless it is listed here.
                 'Content-Disposition',
                 // Whether an `Idempotency-Key` request was answered from its stored first answer.
-                'Idempotent-Replay'
+                'Idempotent-Replayed'
             ]
         })
     );

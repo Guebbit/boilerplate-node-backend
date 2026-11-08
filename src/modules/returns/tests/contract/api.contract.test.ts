@@ -849,7 +849,7 @@ describe('POST /returns — a staff cancellation asks a fresh session, the buyer
 
         expect(challenged.status).toBe(401);
         expect(retried.status).toBe(201);
-        expect(retried.headers['idempotent-replay']).toBeUndefined();
+        expect(retried.headers['idempotent-replayed']).toBeUndefined();
     });
 
     it('refuses staff naming withdrawal without the stated date and channel with 422, never 201', async () => {
