@@ -49,7 +49,8 @@ export const returnRepository: Repository<ReturnDocument, StoredReturn> & {
         from: readonly ReturnStatus[],
         to: ReturnStatus,
         stamp?: ReturnStamp,
-        session?: ClientSession
+        session?: ClientSession,
+        where?: Record<string, unknown>
     ) => Promise<ReturnDocument | null>;
     claimProof: (
         id: string,
@@ -86,10 +87,14 @@ export const returnRepository: Repository<ReturnDocument, StoredReturn> & {
      * @param stamp - facts that belong to this move, written in the SAME statement
      * @param session - the caller's transaction, when this move belongs to one (receiving goods
      *   moves the status and the stock together)
+     * @param where - more conditions the document must meet, in the same filter
      * @returns the return as it now stands, or `null` if it was not in `from`
      */
-    claimStatus: (id, from, to, stamp = {}, session) =>
-        conditionalStatus(returnModel, { _id: toObjectId(id) }, from, to, { set: stamp, session }),
+    claimStatus: (id, from, to, stamp = {}, session, where = {}) =>
+        conditionalStatus(returnModel, { _id: toObjectId(id), ...where }, from, to, {
+            set: stamp,
+            session
+        }),
 
     /**
      * Stamp the proof of sending on an `approved` return that has none yet — atomically, so two

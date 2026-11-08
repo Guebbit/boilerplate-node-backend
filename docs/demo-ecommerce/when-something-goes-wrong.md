@@ -334,6 +334,11 @@ sending (the EU leaves the final risk to national law), so the money is owed; cl
 carrier if you wish. If the parcel turns up later and the goods are sellable, use **Receive stock**
 with a note that it is a repaired or found return.
 
+::: warning After a proof on a withdrawal, the return cannot be canceled
+The proof opened a refund the buyer is owed, so **Cancel return** is refused. Press **Goods received**
+instead (with 0 on every line if the parcel was lost).
+:::
+
 ::: warning After a proof on a withdrawal, no handling deduction
 Once the proof opened the refund you can no longer keep part of it back (CRD Art. 13(3)), so
 **Goods received** with a handling deduction is refused. If the goods arrive damaged, claim the

@@ -13,6 +13,7 @@
 import { NO_MONEY, toMinorUnits } from '@domain-primitives/money';
 import { t } from '@infrastructure/i18n';
 import {
+    fieldError,
     generateReject,
     generateSuccess,
     type ResponseReject,
@@ -62,6 +63,16 @@ const lostRace = (id: string): Promise<ResponseReject> =>
     returnRepository
         .findById(id)
         .then((now) => (now?.proofOfSendingAt === undefined ? notReceivable() : alreadyRecorded()));
+
+/** The 422 for a proof dated in the future, on the field that carries it. */
+const futureProof = (): ResponseReject =>
+    generateReject(422, [
+        fieldError(
+            'sentAt',
+            t('returns.proof-date-in-future'),
+            ERROR_CODES.RETURN_PROOF_DATE_INVALID
+        )
+    ]);
 
 /** What the transaction decided: the stamped return and the refund it opened, or a lost race. */
 type Recorded = { returned: ReturnDocument; opened: OpenedReturnRefund | null } | null;
@@ -164,6 +175,7 @@ export const recordProofOfSending = (
     context: CallerContext
 ): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> =>
     returnRepository.findById(id).then((returned) => {
+        if (input.sentAt.getTime() > Date.now()) return futureProof();
         if (!returned) return generateReject(404, [t('returns.not-found')]);
         if (!RECEIVABLE_RETURN_STATUSES.includes(returned.status)) return notReceivable();
         if (returned.proofOfSendingAt !== undefined) return alreadyRecorded();

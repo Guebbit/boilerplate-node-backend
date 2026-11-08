@@ -47,13 +47,17 @@ const earliestOf = (...instants: (Date | undefined)[]): Date | undefined =>
         .filter((instant): instant is Date => instant !== undefined)
         .toSorted((first, second) => first.getTime() - second.getTime())[0];
 
+/** The reasons whose proof of sending opens the refund: for a query as much as for {@link proofOpensRefund}. */
+export const PROOF_OPENS_REFUND_FOR: readonly ReturnReason[] = ['withdrawal'];
+
 /**
  * Whether the buyer's proof of sending opens the refund. Only a withdrawal's does: the shop may wait
  * for the goods or the proof, whichever comes first (Directive 2011/83/EU Art. 13(3)). A defective or
  * wrong item may be repaired or replaced instead, and that is decided when the goods are received.
  * @param reason - why the goods come back
  */
-export const proofOpensRefund = (reason: ReturnReason): boolean => reason === 'withdrawal';
+export const proofOpensRefund = (reason: ReturnReason): boolean =>
+    PROOF_OPENS_REFUND_FOR.includes(reason);
 
 /**
  * Whether the refund of this return was already opened by its proof of sending: a proof is on it

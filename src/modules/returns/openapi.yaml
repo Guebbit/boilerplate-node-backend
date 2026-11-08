@@ -16,6 +16,8 @@ x-error-codes:
     RETURN_NOT_RECEIVABLE: { status: 409, description: 'The return is not an approved one awaiting its goods.' }
     RETURN_PROOF_ALREADY_RECORDED: { status: 409, description: 'A proof of sending is already on this return; it is recorded once.' }
     RETURN_REFUND_OPENED_ON_PROOF: { status: 409, description: 'The refund was opened when the proof of sending was recorded, so a handling deduction can no longer come out of it (Directive 2011/83/EU Art. 13(3)); claim it from the buyer separately.' }
+    RETURN_REFUND_OPEN: { status: 409, description: 'The return cannot be canceled: the proof of sending already opened its refund, which is owed and open, so a canceled return would no longer add up. Receive the goods (with 0 on every line if the parcel was lost) instead.' }
+    RETURN_PROOF_DATE_INVALID: { status: 422, description: 'The date on the proof of sending is in the future.' }
     RETURN_NOT_CLOSABLE: { status: 409, description: 'The return is not one that was received and still awaits its money, so it cannot be closed by hand.' }
     RETURN_NOT_CANCELABLE: { status: 409, description: 'The return is not an approved one awaiting goods that never came, so it cannot be canceled.' }
     RETURN_RESTOCK_INVALID: { status: 422, description: 'A restock count names a product that is not on the return, names one twice, or is more than the line holds.' }
@@ -344,7 +346,9 @@ paths:
                 customer is not mailed. The order's timeline and the audit row
                 `admin.return.canceled` say so, with the note in the audit row only. A return that
                 is not `approved` answers 409 `RETURN_NOT_CANCELABLE`: a `requested` one is
-                declined, a `received` one is closed.
+                declined, a `received` one is closed. A withdrawal whose proof of sending already
+                opened its refund answers 409 `RETURN_REFUND_OPEN`: that refund is owed, so the return
+                is received instead.
 
                 A parcel lost on its way back is NOT canceled: this shop's policy is to bear the risk
                 of a return lost in transit and to refund on proof of sending (the EU leaves the final
@@ -353,7 +357,7 @@ paths:
                 `update:Return`; no fresh session, since nothing moves.
             operationId: cancelReturn
             x-error-codes:
-                '409': [RETURN_NOT_CANCELABLE]
+                '409': [RETURN_NOT_CANCELABLE, RETURN_REFUND_OPEN]
             security:
                 - bearerAuth: []
             parameters:
@@ -454,7 +458,8 @@ paths:
                 Staff note the carrier document the buyer showed for the parcel they sent back: the
                 date it was handed over, the carrier and the reference. Requires an `approved` return
                 (409 `RETURN_NOT_RECEIVABLE` otherwise) and is one-time: a second call answers 409
-                `RETURN_PROOF_ALREADY_RECORDED`.
+                `RETURN_PROOF_ALREADY_RECORDED`. A `sentAt` in the future answers 422
+                `RETURN_PROOF_DATE_INVALID`.
 
                 On a `withdrawal` the proof opens the refund then, as receiving the goods would (the
                 shop may wait for the goods or the proof, whichever comes first, Directive 2011/83/EU
@@ -470,6 +475,7 @@ paths:
             x-error-codes:
                 '401': [REAUTH_REQUIRED]
                 '409': [RETURN_NOT_RECEIVABLE, RETURN_PROOF_ALREADY_RECORDED]
+                '422': [RETURN_PROOF_DATE_INVALID]
             security:
                 - bearerAuth: []
             parameters:
@@ -844,7 +850,9 @@ components:
                 sentAt:
                     type: string
                     format: date-time
-                    description: The date on the carrier's document, when the buyer handed the parcel over.
+                    description: >-
+                        The date on the carrier's document, when the buyer handed the parcel over. Not in
+                        the future (422 `RETURN_PROOF_DATE_INVALID`).
                 carrier:
                     type: string
                     minLength: 1

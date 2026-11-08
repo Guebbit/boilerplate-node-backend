@@ -26,6 +26,7 @@ import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import returnsModule from '../../module';
 import { returnService } from '../../services';
 import { returnRepository } from '../../repository';
+import { returnModel } from '../../model';
 
 setupTestDb();
 
@@ -169,7 +170,11 @@ describe('a proof of sending on a withdrawal', () => {
 
     it('makes the refund due the day on the proof when that is after the 14 days', async () => {
         const { orderId, returnId } = await approvedReturn('withdrawal');
-        const sentAt = new Date(Date.now() + 40 * 24 * 3_600_000);
+        await returnModel.updateOne(
+            { _id: returnId },
+            { requestedAt: new Date(Date.now() - 40 * 24 * 3_600_000) }
+        );
+        const sentAt = new Date(Date.now() - 1000);
 
         await returnService.recordProofOfSending(
             returnId,
@@ -180,6 +185,45 @@ describe('a proof of sending on a withdrawal', () => {
         expect(await storedRefundStamps(orderId)).toEqual([
             expect.objectContaining({ dueRule: 'withdrawal', dueBy: sentAt })
         ]);
+    });
+
+    it('refuses a date in the future with 422 on sentAt, and records nothing', async () => {
+        const { orderId, returnId } = await approvedReturn('withdrawal');
+
+        const result = await returnService.recordProofOfSending(
+            returnId,
+            proofOn(new Date(Date.now() + 24 * 3_600_000)),
+            callerContextAs('admin')
+        );
+
+        expect(asReject(result).status).toBe(422);
+        expect(asReject(result).errors[0]).toMatchObject({
+            code: 'RETURN_PROOF_DATE_INVALID',
+            details: { field: 'sentAt' }
+        });
+        const stored = await returnRepository.findById(returnId);
+        expect(stored?.proofOfSendingAt).toBeUndefined();
+        expect(await storedRefundStamps(orderId)).toEqual([]);
+    });
+
+    it('refuses staff canceling the return with 409 RETURN_REFUND_OPEN: its refund is owed', async () => {
+        const { returnId } = await approvedReturn('withdrawal');
+        await returnService.recordProofOfSending(
+            returnId,
+            proofOn(new Date()),
+            callerContextAs('admin')
+        );
+
+        const result = await returnService.cancelReturn(
+            returnId,
+            undefined,
+            callerContextAs('admin')
+        );
+
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('RETURN_REFUND_OPEN');
+        const stored = await returnRepository.findById(returnId);
+        expect(stored?.status).toBe('approved');
     });
 });
 
@@ -280,5 +324,22 @@ describe('a proof of sending on a faulty item', () => {
         expect(await storedRefundStamps(orderId)).toEqual([
             expect.objectContaining({ returnId, dueRule: 'faulty', dueBy: sentAt })
         ]);
+    });
+
+    it('still lets staff cancel the return: nothing was opened', async () => {
+        const { returnId } = await approvedReturn('defective');
+        await returnService.recordProofOfSending(
+            returnId,
+            proofOn(new Date()),
+            callerContextAs('admin')
+        );
+
+        const result = await returnService.cancelReturn(
+            returnId,
+            undefined,
+            callerContextAs('admin')
+        );
+
+        expect(result.success && result.data.status).toBe('canceled');
     });
 });

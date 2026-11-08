@@ -27,7 +27,7 @@ import { ERROR_CODES } from '@api/error-codes';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
 import { returnsAuditActions } from '../audit';
-import { CANCELABLE_RETURN_STATUSES } from '../domain';
+import { CANCELABLE_RETURN_STATUSES, PROOF_OPENS_REFUND_FOR, proofOpenedRefund } from '../domain';
 import { syncReturnStatus } from './projection';
 
 /**
@@ -36,16 +36,17 @@ import { syncReturnStatus } from './projection';
  * @param id - the return
  */
 const notCancelable = (id: string): Promise<ResponseReject> =>
-    returnRepository.findById(id).then((existing) =>
-        existing
-            ? generateReject(409, [
-                  {
-                      code: ERROR_CODES.RETURN_NOT_CANCELABLE,
-                      message: t('returns.not-cancelable')
-                  }
-              ])
-            : generateReject(404, [t('returns.not-found')])
-    );
+    returnRepository.findById(id).then((existing) => {
+        if (!existing) return generateReject(404, [t('returns.not-found')]);
+        // Still approved yet refused: the proof of sending opened a refund that is owed.
+        if (existing.status === 'approved' && proofOpenedRefund(existing))
+            return generateReject(409, [
+                { code: ERROR_CODES.RETURN_REFUND_OPEN, message: t('returns.refund-open') }
+            ]);
+        return generateReject(409, [
+            { code: ERROR_CODES.RETURN_NOT_CANCELABLE, message: t('returns.not-cancelable') }
+        ]);
+    });
 
 /**
  * Cancel an approved return. One conditional write plus the order's timeline row, in one
@@ -69,7 +70,17 @@ export const cancelReturn = (
                 CANCELABLE_RETURN_STATUSES,
                 'canceled',
                 { canceledAt: new Date() },
-                session
+                session,
+                // Atomic with the claim: a refund opened by the proof of sending is owed, so the return
+                // cannot be canceled out from under it.
+                {
+                    $nor: [
+                        {
+                            proofOfSendingAt: { $exists: true },
+                            reason: { $in: PROOF_OPENS_REFUND_FOR }
+                        }
+                    ]
+                }
             )
             .then((canceled) =>
                 canceled

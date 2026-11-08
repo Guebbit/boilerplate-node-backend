@@ -350,6 +350,11 @@ is recorded **once** (a second call is a 409 `RETURN_PROOF_ALREADY_RECORDED`) an
 | withdrawal              | opens the refund now, quoted with no handling deduction, so money can go back before the parcel arrives (Art. 13(3): goods or proof, the earlier) |
 | defective or wrong item | records the proof only: the remedy (refund, repair, replace) is decided at receipt; a refund picked then is due the earlier of goods and proof    |
 
+A `sentAt` in the future is a 422 `RETURN_PROOF_DATE_INVALID`. Staff **cannot cancel** a return whose
+proof opened its refund: that is a 409 `RETURN_REFUND_OPEN`, because the refund is owed and a canceled
+return would no longer add up (the check rides in the cancel's own conditional write). A proof on a
+faulty item opens nothing, so that return can still be canceled.
+
 After a proof on a withdrawal, **receiving the goods** restocks as usual and opens no second refund.
 It also refuses a handling deduction above 0 with a 409 `RETURN_REFUND_OPENED_ON_PROOF`: the shop can
 no longer withhold the refund, so what the buyer damaged is claimed from them separately. If that
