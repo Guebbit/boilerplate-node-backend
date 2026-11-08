@@ -27,6 +27,7 @@ import { inventoryCommitOrphanedTotal } from '../../services/orphan-counter';
 import * as auditPort from '@infrastructure/observability/audit';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { testCallerContext } from '@tests/callers';
+import { api, authenticateAs } from '@tests/http';
 
 /*
  * The audit port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
@@ -1102,6 +1103,34 @@ describe('runReservationSweep', () => {
         const staleHold = await reservationRepository.findByOrderId(stale);
         expect(freshHold?.status).toBe('held');
         expect(staleHold?.status).toBe('released');
+    });
+
+    it('leaves one audit row when an admin sweeps on demand, naming how many holds expired', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const admin = await authenticateAs('admin');
+        const product = await createProduct({ onHand: 20 });
+        await withoutWindow(async () => {
+            await inventoryService.reserveForOrder(anOrderId(), [
+                { productId: String(product._id), quantity: 1 }
+            ]);
+        });
+        auditSpy.mockClear();
+
+        // Over HTTP: the realistic break is the controller dropping the caller's context.
+        const response = await api()
+            .post('/inventory/reservations/sweep')
+            .set('Authorization', admin.bearer);
+
+        expect(response.status).toBe(200);
+        const swept = auditSpy.mock.calls
+            .map(([event]) => event)
+            .filter((event) => event.action === inventoryAuditActions.ADMIN_RESERVATIONS_SWEPT);
+        expect(swept).toEqual([
+            expect.objectContaining({
+                actorUserId: String(admin.user._id),
+                metadata: { expired: 1 }
+            })
+        ]);
     });
 
     // One batch per tick was 200 holds every five minutes, so anyone minting holds faster than
