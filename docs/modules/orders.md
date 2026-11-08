@@ -412,8 +412,9 @@ itself, and recording an arrival has no forced variant either.
 The status-only door announces `order.status_overridden {orderId, from, to, at}` through the outbox,
 in its own transaction, and [`delivery`](./delivery.md#the-status-override) listens: forward to
 `shipped` ships every remainder, forward to `delivered` delivers them too, all at `at` — the same
-instant `withdrawUntil` was counted from. It is **refused while any unit awaits stock**
-(`ORDER_OVERRIDE_AWAITING_STOCK`): it would ship goods the stock ledger never counted out.
+instant `withdrawUntil` was counted from. A forward move to `shipped` or `delivered` is **refused while any unit awaits stock**
+(`ORDER_OVERRIDE_AWAITING_STOCK`): it would ship goods the stock ledger never counted out. A move to
+`processing` ships nothing, so it is allowed.
 
 `PUT /orders/:id` carries no `status` field at all — the override's own doors are the only way
 to reach `processing`/`shipped`/`delivered` outside the ordinary sequence, override holder included.

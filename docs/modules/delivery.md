@@ -660,8 +660,9 @@ through the outbox, in the override's own transaction; this module listens:
 
 The shipments it cuts take no stock (the override already shipped what was left of the hold) and send
 no email and no webhook: nothing left that anyone recorded, which keeps the override's "no parcel, no
-email". The override is **refused while any unit awaits stock** (`ORDER_OVERRIDE_AWAITING_STOCK`): it would
-ship goods the ledger never counted out.
+email". A forward override to `shipped` or `delivered` is **refused while any unit awaits stock**
+(`ORDER_OVERRIDE_AWAITING_STOCK`): it would ship goods the ledger never counted out. A move to
+`processing` ships nothing and is allowed.
 
 ## Cancelling what has not shipped
 
