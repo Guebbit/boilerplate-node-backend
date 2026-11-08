@@ -62,7 +62,7 @@ paths:
                     description: Invoice PDF
                     headers:
                         Content-Disposition:
-                            description: '`inline; filename="invoice-<invoice number>.pdf"`, e.g. `invoice-2026-0042.pdf`.'
+                            description: '`inline; filename="invoice-<invoice number>.pdf"`, e.g. `invoice-2026-000042.pdf`.'
                             schema: { type: string }
                     content:
                         application/pdf:
@@ -132,7 +132,7 @@ paths:
                     description: Credit note PDF
                     headers:
                         Content-Disposition:
-                            description: '`inline; filename="credit-note-<credit note number>.pdf"`, e.g. `credit-note-2026-0007.pdf`.'
+                            description: '`inline; filename="credit-note-<credit note number>.pdf"`, e.g. `credit-note-2026-000007.pdf`.'
                             schema: { type: string }
                     content:
                         application/pdf:

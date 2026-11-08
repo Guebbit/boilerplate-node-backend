@@ -62,9 +62,9 @@ publishes `minorUnits` for a price input that starts empty.
 An answer with nothing to say is `204`, with no body and no `Content-Type`: logout, the delete
 routes, reset and confirm steps, mark-all-read. The client reads the status.
 
-A route behind `idempotencyKey` must not answer `204` through `noContentResponse`: the ledger
-captures a response through its JSON door, so a body-less answer would stay in flight. See
-[Idempotency](../tools/idempotency.md).
+A route behind `idempotencyKey` may answer `204` through `noContentResponse`: the ledger records a
+body-less answer through `end`, and a replay is body-less too. See
+[Idempotency](../tools/idempotency.md#a-body-less-answer-is-captured-too).
 
 ## Per-user parents
 

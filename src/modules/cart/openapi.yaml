@@ -29,7 +29,7 @@ x-error-codes:
     CART_TOTAL_CHANGED: { status: 409, description: 'The total the buyer was shown is not the total this checkout would charge — a price, a shipping cost or the cart itself changed. `errors[].details` carries `expected` (what the request named) and `actual` (what the order would cost now), each `{ amount, currency }` with the amount as a decimal string; show the new total and let the buyer confirm.' }
     CART_SHIP_TO_COUNTRY_NOT_SUPPORTED: { status: 422, description: 'The address''s country is outside this deployment''s configured ship-to list.' }
     EMAIL_NOT_VERIFIED: { status: 403, description: 'Checkout requires a verified email address — see `POST /account/email-verification/resend`.' }
-    REORDER_UNAVAILABLE: { status: 409, description: 'The past order named for reorder no longer has any purchasable lines.' }
+    REORDER_UNAVAILABLE: { status: 409, description: 'The past order named for reorder has no line left to add: every one was removed from the catalogue. An order with lines merely off sale answers 200, by the merge rule.' }
 
 # This module's section of the account data export (`POST /account/export`): the bundler
 # adds it to `AccountExportResponse`. Removing the module removes the section.
@@ -551,8 +551,8 @@ components:
                     description: >-
                         How the customer intends to pay (see `GET /payments/methods`). `card`
                         holds stock for `NODE_RESERVATION_TTL_MINUTES`; `bank_transfer` holds it
-                        for `NODE_BANK_TRANSFER_HOLD_HOURS` instead, and the response carries
-                        `transferInstructions`. A method this deployment does not offer refuses
+                        for `NODE_BANK_TRANSFER_HOLD_HOURS` instead, and the payment's `nextAction`
+                        carries the transfer instructions. A method this deployment does not offer refuses
                         the checkout with 409, `errors[].code` `CART_PAYMENT_METHOD_NOT_AVAILABLE`.
                         That includes the default: a request that names no method asks for `card`,
                         so a deployment with no card provider refuses it the same way.

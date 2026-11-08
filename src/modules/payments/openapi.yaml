@@ -561,7 +561,7 @@ paths:
                 - bearerAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
-                  description: The order the money arrived for. Must still be `pending`
+                  description: The order the money arrived for. Must still be `pending`, unless it was canceled with its bank transfer on file (a late transfer is recorded too)
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
                 required: true

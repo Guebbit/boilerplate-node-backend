@@ -37,7 +37,7 @@ paths:
             tags: [Sitemap]
             summary: Sitemap of the shop pages
             description: >-
-                The static pages (home, about, FAQ, terms, privacy, contact, the catalogue), one `url` per active
+                The static pages (`staticPages` in `shared/rules/frontend-links.yaml`), one `url` per active
                 language, each with `xhtml:link` alternates for every language and `x-default`. No `lastmod`:
                 nothing dates a prose page.
             operationId: getSitemapPages

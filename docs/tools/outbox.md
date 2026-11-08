@@ -252,7 +252,7 @@ mark rows published with nobody listening.
   exists makes the relay deliver the row again, and once it exists the record is the durable
   intent (the refund sweep finishes it with the same idempotency key), so a provider refusal is
   logged and the row is answered. A row that fails every attempt is parked `dead` and
-  `outbox_events_dead_total` pages: after about an hour of backoff the database or the code is
+  `outbox_events_dead_total` pages: after about 40 minutes of backoff with the defaults the database or the code is
   broken, which is worth a page.
 - **Delivery is after the response.** Every event above is published by the relay, not inside the
   request, so a listener sees it milliseconds later and a test that asserts the effect awaits

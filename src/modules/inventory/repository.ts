@@ -159,7 +159,7 @@ const toReservationItems = (
     }));
 
 /**
- * Lifetime preorder units per product, from the ledger's `preorder` rows. Counts every claim, given
+ * Lifetime preorder units per product, from the ledger's `backorder` rows. Counts every claim, given
  * back or not: this is "how many were ever ordered", where `backordered` is "how many are still owed".
  *
  * @param productIds - the products on the page

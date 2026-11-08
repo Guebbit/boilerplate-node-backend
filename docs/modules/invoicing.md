@@ -165,7 +165,7 @@ each year). The owner's own download records nothing.
 **Credit notes need the money, not only the order.** A credit note carries the refund amount and the billing
 address, so staff other than the buyer must hold `display:Payment` as well as the order read: the warehouse
 packs everyone's order and is refused the refund list for the same reason, so for it the credit-note list is
-empty and a download answers the `404` a stranger gets, with a `security.forbidden` audit row.
+empty and a download answers `404 ORDER_CREDIT_NOTE_NOT_ISSUED` (a stranger gets `ORDER_NOT_FOUND`), with a `security.forbidden` audit row.
 
 ```mermaid
 flowchart TD

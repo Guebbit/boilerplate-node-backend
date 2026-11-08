@@ -495,7 +495,7 @@ every "I may be compromised" event also moves `tokensValidAfter` on the user, an
 | Event                                 | Epoch moves                                                                      | The caller                                                                              |
 | ------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | logout everywhere                     | yes                                                                              | signed out too                                                                          |
-| password change or reset              | yes, and pending one-time tokens and MFA challenges are purged                   | survives: new session in the response                                                   |
+| password change or reset              | yes, and pending one-time tokens and MFA challenges are purged                   | signed out too                                                                          |
 | 2FA factor armed, removed or disabled | yes                                                                              | survives: refresh cookie re-minted, the client's next `/refresh` swaps the access token |
 | email change confirmed                | yes                                                                              | the confirming request is usually the mailbox, not a session                            |
 | email change undone ("not me")        | yes, FIRST, before the address is touched, and pending links purged              | n/a: the undo link is the credential                                                    |
@@ -567,6 +567,11 @@ flowchart TD
     class N ok;
     class F,X bad;
 ```
+
+Reuse is detected at the token endpoint only, as RFC 9700 §4.14.2 has it. A stale refresh token
+presented at `POST /account/logout`, or carried into a sign-in, deletes its own family and records
+no reuse, by design: that already ends the sign-in a thief could use, and logout answers `204` either
+way.
 
 The grace window (`NODE_TOKEN_ROTATION_GRACE_MS`, default 10s) exists for one reason: two requests
 racing on the SAME cookie — two tabs waking together, an interceptor retrying — both present the

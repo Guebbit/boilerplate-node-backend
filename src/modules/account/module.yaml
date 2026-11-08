@@ -126,7 +126,7 @@ rateLimits:
         defaultMax: 5
         windowMs: shared
         bounds:
-            '`postResetRequest` always answers 200, to prevent account enumeration — so, like signup,
+            '`postResetRequest` always answers 204, to prevent account enumeration — so, like signup,
             only a budget spent by SUCCESS bounds anything here.'
         audited: true
     resetAddress:

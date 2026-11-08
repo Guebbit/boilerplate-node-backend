@@ -386,8 +386,8 @@ paths:
             description: |
                 Switches a registered language off: it becomes invisible to every public route
                 (never picked for a request, 404 on its dictionary, its entity text not served)
-                while staff holding `display:Locale` still see it. This is the state a language
-                must be put into before it can be deleted.
+                while staff holding `display:Locale` still see it. A language need not be switched
+                off to be deleted: an active one deletes directly.
 
                 Refuses with 409 `LOCALE_LANGUAGE_IS_FALLBACK` for the deployment's fallback
                 language (every translatable row's source lives there), and with 409
@@ -833,8 +833,8 @@ paths:
                 on the fallback locale is a 422: deleting it would leave the entity with nothing to
                 fall back to.
 
-                422 equally when a named locale does not exist or is not `active` in the `locales`
-                collection, and when `fields` names a key the `translatables` registry does not
+                422 equally when a named locale does not exist in the `locales` collection (an
+                inactive one is accepted: that is where a draft is written), and when `fields` names a key the `translatables` registry does not
                 declare for this `entityType` — the pointer names the locale, e.g.
                 `translations.it.title`, so an editor with several tabs open can tell which one
                 failed.
@@ -1048,8 +1048,8 @@ components:
 
                 A language that exists only as a deployed file has no row, hence no `id` and no
                 timestamps, and every `actions` flag is `false`. Its existence means entries can
-                be translated into it and a client can download the result — whether the API can
-                answer a request in it is decided by a deployed file and nothing else.
+                be translated into it and a client can download the result. A language with a row
+                that is switched on is served too: a request in it is answered in it.
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -1087,7 +1087,7 @@ components:
                 # it knows to stop offering it. Staff holding `display:Locale` still see the row and
                 # the dictionary, can draft entity text into it, and are served its product text,
                 # uncached, when they ask for it first. It is the state a half-finished translation
-                # lives in, and the state a language must be put into before it can be deleted. Only
+                # lives in; a language need not be in it to be deleted. Only
                 # a deployed file with no row of its own is always true: it has no off switch.
                 active:
                     type: boolean

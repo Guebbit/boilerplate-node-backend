@@ -345,7 +345,8 @@ writes the row directly and calls `settlePayment`.
 
 The amount is always the order's own total; a partial or over-payment is out of scope, handled by
 hand and off-system. Recording is refused with `PAYMENT_ORDER_NOT_PAYABLE` once the order is no
-longer `pending` (including a second attempt at the same order), and with `PAYMENT_IN_FLIGHT` while
+longer `pending` (including a second attempt at the same order), except a late transfer on a
+canceled order, which is recorded and owed back, and with `PAYMENT_IN_FLIGHT` while
 a card charge on the same order is still `requires_action` or `processing` — the provider could
 still land that charge on its own, and recording money too would risk charging twice. A card
 attempt that never got that far (`requires_confirmation`, `declined`) is simply overwritten: the row

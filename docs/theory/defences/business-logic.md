@@ -87,7 +87,7 @@ built one — the three controls below are the whole reason it can be trusted.
 | Chargeback fraud         | goods kept, money returned, weak proof of delivery              | The application shows the dispute with its deadline, alerts staff and refuses to refund a payment the bank has taken back (refund and chargeback together pay twice). Fighting it is a commercial control done in the provider's dashboard, with proof of delivery — `payments/services/disputes.ts`, [Disputes](../../modules/payments.md#disputes).                 |
 
 A non-2xx tells a provider the delivery failed and it comes back harder, so only an _unverifiable_
-body answers 400 — an authentic event this module simply ignores still answers 200. That is why
+body answers 400 — an authentic event this module simply ignores still answers 204. That is why
 the signature check is the only thing allowed to refuse.
 
 ## Related

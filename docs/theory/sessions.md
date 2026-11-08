@@ -74,7 +74,7 @@ sequenceDiagram
     A-->>B: Set-Cookie: the new id
     B->>A: POST /account/logout
     A->>D: delete the row
-    A-->>B: 200, cookie cleared
+    A-->>B: 204, cookie cleared
 ```
 
 There is no refresh and nothing to rotate: `POST /account/refresh` answers 404. The id is replaced

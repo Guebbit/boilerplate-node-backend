@@ -4,7 +4,7 @@
 # `retentionDays`, `maxAttempts` and `leaseSeconds` is overridden by an environment variable
 # (`NODE_OUTBOX_*`); the backoff pair is fixed. Units are in the key name.
 outbox:
-    # Days a published row is kept before the sweep deletes it.
+    # Days a published row is kept before the TTL index on `publishedAt` expires it.
     retentionDays: 7
     # Failed dispatches before a row is parked as `dead`.
     maxAttempts: 10

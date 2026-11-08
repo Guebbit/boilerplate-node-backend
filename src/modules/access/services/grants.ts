@@ -138,7 +138,7 @@ export const validateGrant = (
 /**
  * The roles a granter may assign in a scope: every preset of that scope that the write path's own
  * rule ({@link validateGrant}) would accept. A client builds its role picker from this, so the
- * picker and the `409` can never disagree. It has no authority: the write re-checks.
+ * picker and the `403`/`422` refusal can never disagree. It has no authority: the write re-checks.
  *
  * @param scope - the scope the roles are assigned in
  * @param granter - the keys the person making the grant holds in that scope

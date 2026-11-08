@@ -171,10 +171,12 @@ flowchart TD
 **Scoping the incident** — the queries that establish who and what, both already indexed for
 exactly this:
 
-- `GET /observability/audit?actor=<id>` — everything one account did or had done to it.
-- `GET /observability/audit?action=<action>` — every occurrence of one action across accounts, for
+- `GET /audit?actor=<id>` — everything one account did or had done to it.
+- `GET /audit?action=<action>` — every occurrence of one action across accounts, for
   the audit vocabulary each module owns (`account/audit.ts`, `users/audit.ts`, …). `auth.login`,
   `admin.user.erased` and `auth.data_export.downloaded` are usually the first three worth checking.
+  `GET /observability/audit` is the incident feed only (security refusals, failed sign-ins), not
+  this full ledger.
 - The Winston log lines in Loki (the actor is `user.id`, the address `client.address`; see
   [Winston](../tools/winston.md#field-names-in-the-log-line)), same actor or time window, once the queryable collection's
   90-day window (`NODE_AUDIT_RETENTION_DAYS`) is not enough — Loki's own retention is longer or

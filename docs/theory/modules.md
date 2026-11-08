@@ -557,7 +557,7 @@ Note who emits: every one comes from a module low in the import graph telling a 
 something, because a module cannot import its own dependants. `inventory.reservation_expired` is the
 clearest case — the sweep releases the units itself and needs nobody's help for that, but cancelling
 the order behind the hold belongs to `orders`, which already imports `inventory`. An import back
-would be the cycle the registry refuses to boot, so it is announced instead.
+would be the cycle dependency-cruiser's `no-circular` refuses, so it is announced instead.
 
 There is deliberately **no** stock event. A ledger row written as a REACTION to a counter change
 would depend on every mover announcing it on every path, rollbacks included, and a counter change

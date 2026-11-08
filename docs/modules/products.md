@@ -89,7 +89,7 @@ creates the product and then receives the opening count with an `Idempotency-Key
 call fails the product stays at zero, a valid state, and the page says to add stock from Inventory.
 
 **An edit says what it changed.** `admin.product.updated` carries `metadata.changes` with `{ from, to }`
-for every non-text field an update (PUT or PATCH) actually moved, `null` meaning unset: `price`,
+for every non-text field an update (PUT or PATCH) actually moved, an absent key meaning unset: `price`,
 `taxClass`, `rateType`, `active`, `purchasable`, `allowBackorder`, `weight`, `requiresShipping`,
 `noWithdrawal`, `sku`, `categories`, `tags`, `releaseDate` and `restockDate`. Those decide what a
 buyer pays, what VAT is charged, what shipping weighs, the buyer's right of withdrawal and whether
