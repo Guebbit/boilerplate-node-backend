@@ -16,6 +16,7 @@ import {
     type Repository
 } from '@infrastructure/persistence/create-repository';
 import { TaskCategory, TaskKind, TaskLinkType, TaskSource, TaskStatus } from '@types';
+import { updateStatusIfIn as conditionalStatus } from '@infrastructure/persistence/conditional-status';
 import type { StoredTask } from './presenter';
 import { DUE_SOON_MS, OPEN_STATUSES, type OwnTasksFilter, type TaskPatch } from './domain';
 
@@ -125,24 +126,23 @@ export const taskRepository: TaskRepository = {
             .exec(),
 
     assign: (id, userId, session) =>
-        taskModel
-            .findOneAndUpdate(
-                { _id: toObjectId(id), status: TaskStatus.new },
-                { $set: { assigneeId: toObjectId(userId), status: TaskStatus.in_progress } },
-                { returnDocument: 'after', session }
-            )
-            .exec()
-            .then(
-                (moved) =>
-                    moved ??
-                    taskModel
-                        .findOneAndUpdate(
-                            { _id: toObjectId(id), status: TaskStatus.in_progress },
-                            { $set: { assigneeId: toObjectId(userId) } },
-                            { returnDocument: 'after', session }
-                        )
-                        .exec()
-            ),
+        conditionalStatus(
+            taskModel,
+            { _id: toObjectId(id) },
+            [TaskStatus.new],
+            TaskStatus.in_progress,
+            { set: { assigneeId: toObjectId(userId) }, session }
+        ).then(
+            (moved) =>
+                moved ??
+                taskModel
+                    .findOneAndUpdate(
+                        { _id: toObjectId(id), status: TaskStatus.in_progress },
+                        { $set: { assigneeId: toObjectId(userId) } },
+                        { returnDocument: 'after', session }
+                    )
+                    .exec()
+        ),
 
     unassign: (id) =>
         taskModel

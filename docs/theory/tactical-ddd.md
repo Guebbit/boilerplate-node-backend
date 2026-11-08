@@ -222,15 +222,15 @@ delta, refund/charge, tax) is a feature of its own.
 ### Deciding and enforcing stay separate
 
 The table decides. `updateStatusIfIn` (`src/infrastructure/persistence/conditional-status.ts`) enforces:
-it is the conditional write that makes exactly one racing writer win, and the nine places that move a
-status (orders, payments, returns, inventory, example, delivery) all call it, so none can forget
-`status` in its filter. The table only decides which `from` set that write is handed.
+it is the conditional write that makes exactly one racing writer win. A plain "move only from {A,B}"
+write uses it, so none can forget `status` in its filter. A write that needs more (`$unset`,
+`$min`/`$max`, a lease, an upsert, a revision, lean rows) writes its own guarded filter, and its
+docblock says why. The table only decides which `from` set that write is handed.
 
 The table itself is TypeScript, an event table (`{ initial, events: { name: { from[], to, actors? } } }`)
 built with `defineLifecycle` (`src/domain-primitives/lifecycle.ts`), which refuses at load a status that
 does not exist and an event that lands inside its own `from` — the self-move is illegal by
-construction. `example` and `orders` build theirs with it; payments, feedback, delivery fulfillment
-and webhook deliveries keep a header saying why a table does not fit them.
+construction.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
@@ -590,7 +590,9 @@ One tell that the pressure is real: `clearLinesIfUnchanged` in `cart/repository.
 conditionally on the `__v` it read the cart at. That is **aggregate versioning** with no aggregate to
 hang it on — the need exists, only the vocabulary is missing.
 
-It is the only one. `updateStatusIfIn` here and `claimStatus` in `inventory/repository.ts` look
+It is not the only versioned write: delivery's fulfillment-order `revision` claim
+(`delivery/repository.ts`) is the other, and the cart's `__v` is the only one on a document with no
+aggregate to hang it on. `updateStatusIfIn` here and `claimStatus` in `inventory/repository.ts` look
 similar and are a different pattern: they key on `status`, naming the state a move comes _from_ so
 that exactly one of N concurrent callers wins. That is an exactly-once primitive, correct as it
 stands, and an aggregate would not simplify it. Worth keeping straight, since it is the thing that

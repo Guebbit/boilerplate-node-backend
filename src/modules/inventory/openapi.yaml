@@ -17,7 +17,7 @@ paths:
         get:
             tags: [Inventory]
             summary: Stock levels
-            description: The stock board — every product with its two counters and the availability derived from them. Admin; a customer sees `available` on the product itself. Answers the question a catalogue listing cannot, which is WHY something is unbuyable — nothing on the shelf, or everything on it already spoken for.
+            description: The stock board — every product with its three counters and the availability derived from them. Admin; a customer sees `available` on the product itself. Answers the question a catalogue listing cannot, which is WHY something is unbuyable — nothing on the shelf, or everything on it already spoken for.
             operationId: listInventoryLevels
             security:
                 - bearerAuth: []
@@ -279,11 +279,11 @@ paths:
 components:
     schemas:
         # ── Inventory module ────────────────────────────────────────────────────
-        # Owned by src/modules/inventory. This module is the ONLY writer of the two counters
-        # `Product.onHand` and `Product.reserved`; `products` declares them because it owns the
+        # Owned by src/modules/inventory. This module is the ONLY writer of the three counters
+        # `Product.onHand`, `Product.reserved` and `backordered`; `products` declares them because it owns the
         # collection, and reads them like everyone else.
 
-        # Why the units moved. Each reason implies a fixed pair of deltas — see
+        # Why the units moved. Each reason implies a fixed set of three deltas — see
         # `domain/transitions.ts`, which is the one place that mapping is written.
         StockMovementReason:
             type: string

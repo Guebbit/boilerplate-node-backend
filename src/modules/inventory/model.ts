@@ -220,8 +220,9 @@ const RESERVATION_STATUSES = ['held', 'committed', 'shipped', 'released'] as con
 
 /**
  * The four states a hold can be in. `held` is claimed at checkout, `committed` once the order is
- * paid. `shipped` (the units left the shelf) and `released` (the claim was given up) are terminal;
- * a paid order canceled before dispatch moves `committed → released`.
+ * paid. `shipped` (the units left the shelf) is terminal. `released` (the claim was given up) is not:
+ * a payment landing on it takes the units again (`released → held`, `services/holds.ts`). A paid
+ * order canceled before dispatch moves `committed → released`.
  */
 export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
 

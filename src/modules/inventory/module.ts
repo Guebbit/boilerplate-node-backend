@@ -1,6 +1,6 @@
 /**
  * @module
- * Inventory: the two counters, the reservation lifecycle, and the ledger that explains both.
+ * Inventory: the stock counters, the reservation lifecycle, and the ledger that explains both.
  * Counters live in this module's own `stocklevels` collection — each transition is exactly-once
  * via a conditionally claimed status, so a cancel racing the sweep or a duplicate webhook still
  * resolves to one winner.

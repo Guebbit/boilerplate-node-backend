@@ -620,21 +620,15 @@ export const shipmentRepository: Repository<ShipmentDocument, Wire<ShipmentDocum
      * @param session - the act's transaction
      */
     markLost: (id, { lostAt, lostReason, lostNote, lostMessage }, session) =>
-        shipmentModel
-            .findOneAndUpdate(
-                { _id: toObjectId(id), status: 'shipped' },
-                {
-                    $set: {
-                        status: 'lost',
-                        lostAt,
-                        lostReason,
-                        ...(lostNote ? { lostNote } : {}),
-                        ...(lostMessage ? { lostMessage } : {})
-                    }
-                },
-                { returnDocument: 'after', session }
-            )
-            .exec(),
+        conditionalStatus(shipmentModel, { _id: toObjectId(id) }, ['shipped'], 'lost', {
+            set: {
+                lostAt,
+                lostReason,
+                ...(lostNote ? { lostNote } : {}),
+                ...(lostMessage ? { lostMessage } : {})
+            },
+            session
+        }),
 
     /**
      * Record that a lost parcel turned up, but only from `lost`. `lostAt` and `lostReason` stay as
@@ -644,13 +638,10 @@ export const shipmentRepository: Repository<ShipmentDocument, Wire<ShipmentDocum
      * @param session - the act's transaction
      */
     markFound: (id, deliveredAt, session) =>
-        shipmentModel
-            .findOneAndUpdate(
-                { _id: toObjectId(id), status: 'lost' },
-                { $set: { status: 'delivered', deliveredAt } },
-                { returnDocument: 'after', session }
-            )
-            .exec(),
+        conditionalStatus(shipmentModel, { _id: toObjectId(id) }, ['lost'], 'delivered', {
+            set: { deliveredAt },
+            session
+        }),
 
     /**
      * Unset the loss note on every shipment not changed since `cutoff` that still holds one. Like

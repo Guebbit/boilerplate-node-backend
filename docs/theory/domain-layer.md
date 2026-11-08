@@ -231,7 +231,7 @@ arithmetic, and a domain folder may import that tier — the one thing outside i
 the tier imports only npm and `@types`.
 
 **`inventory/domain/transitions.ts` is the other kind of case: the folder holding the model
-itself.** It is one table (`counterDeltaFor`) mapping each of the nine stock movement reasons to the
+itself.** It is one table (`counterDeltaFor`) mapping each stock movement reason to the
 three counter deltas (`onHand`, `reserved`, `backordered`) it implies, plus the subtraction that defines availability. Nothing about it
 needs a database, and everything that does — the conditional writes, the ledger row, the
 reservation lifecycle — reads the table rather than restating it;
