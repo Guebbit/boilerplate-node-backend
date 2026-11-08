@@ -755,7 +755,8 @@ const judgeRuleHolder = <TSubject extends PermissionSubject>(
  * caller and the stream's recheck on the request.
  *
  * @param name - the middleware's function name; the route-table tests read it back to tell the two guards apart
- * @param judge - returns the admitted user, or `undefined` to answer 403; may throw to answer 401
+ * @param judge - returns the admitted user, or `undefined` to answer 403; throws to answer 401. A
+ * resolver failure (an outage) never reaches it: it goes to the error handler (503).
  * @returns an Express middleware
  */
 const cookieGuard = (
@@ -777,9 +778,13 @@ const cookieGuard = (
                 return;
             }
 
+            // `.then(onWatch, next)`: a resolver that REJECTS is an outage (the database), which the
+            // central handler answers 503; a bad cookie never rejects, it resolves to a miss.
+            // The trailing `.catch` is the judge's deliberate throw: no user, so 401.
             watchCookie(sessionToken)
                 .then((watch) => {
                     const user = judge(request, 'miss' in watch ? watch : { ok: watch.ok.context });
+                    // `'miss' in watch` only narrows the type: the judge already threw for a miss.
                     if (!user || 'miss' in watch) {
                         rejectResponse(response, 403, [t('generic.error-forbidden')]);
                         return;
@@ -790,7 +795,7 @@ const cookieGuard = (
                     request.caller = callerInScope(user, 'tenant');
                     request.sessionRecheck = watch.ok.recheck;
                     next();
-                })
+                }, next)
                 .catch(() => {
                     refuseUnauthenticated(request, response, cookieUnauthorizedErrors());
                 });

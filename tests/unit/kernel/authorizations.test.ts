@@ -1125,8 +1125,8 @@ describe('requirePermissionViaCookie', () => {
         );
     });
 
-    it('names the anonymous actor when the user could not be loaded', async () => {
-        // `user?.id ?? 'anonymous'` — an audit row with an empty actor is a row nobody can act on.
+    it('audits a cookie that resolves to nobody as an unauthorized attempt by the anonymous actor', async () => {
+        // An audit row with an empty actor is a row nobody can act on.
         mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: undefined });
 
         requirePermissionViaCookie(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
@@ -1137,7 +1137,10 @@ describe('requirePermissionViaCookie', () => {
         await new Promise((resolve) => setImmediate(resolve));
 
         expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
-            expect.objectContaining({ actorUserId: 'anonymous' })
+            expect.objectContaining({
+                action: coreAuditActions.SECURITY_UNAUTHORIZED,
+                actorUserId: 'anonymous'
+            })
         );
     });
 
@@ -1175,20 +1178,24 @@ describe('requirePermissionViaCookie', () => {
         );
     });
 
-    it('rejects with 401 when the user lookup itself fails', async () => {
-        // The `.catch()` covers the whole chain, not just the token verification — a database
-        // outage must not become an unhandled rejection in a middleware.
-        mockedVerifyRefreshToken.mockRejectedValueOnce(new Error('mongo is down'));
+    it('hands a failed user lookup to the error handler: no answer, no audit row', async () => {
+        // An outage is not "your credentials are wrong": the central handler answers 503 and the
+        // security trail records nothing.
+        const outage = new Error('mongo is down');
+        mockedVerifyRefreshToken.mockRejectedValueOnce(outage);
         const response = makeResponseStub();
+        const next = jest.fn();
 
         requirePermissionViaCookie(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
             makeCookieRequest('cookie.jwt'),
             response,
-            asStub<NextFunction>(jest.fn())
+            asStub<NextFunction>(next)
         );
         await new Promise((resolve) => setImmediate(resolve));
 
-        expect(response.status).toHaveBeenCalledWith(401);
+        expect(next).toHaveBeenCalledWith(outage);
+        expect(response.status).not.toHaveBeenCalled();
+        expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
     });
 });
 
