@@ -68,11 +68,18 @@ paths:
                 already there GROWS by `quantity` — pressing the button twice makes two (Shopify's
                 `/cart/add`, commercetools' `addLineItem`). A line is written through its parent, so
                 the answer is always 200 with the whole cart: no `Location`, no read of a line. The
-                line may not pass the per-line cap (422). To SET a quantity,
+                line may not pass the per-line cap (422). A retry after a lost answer carries the SAME
+                `Idempotency-Key` and gets the first answer back; a deliberate second click is a new
+                intent with a new key, and adds again. To SET a quantity,
                 `PATCH /cart/items/{productId}`.
             operationId: addCartItem
+            x-error-codes:
+                '409': [IDEMPOTENCY_IN_FLIGHT]
+                '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
                 required: true
                 content:
@@ -90,6 +97,9 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # Well-formed product id that matches no product. 422 covers the malformed case.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # Also answered when `Idempotency-Key` names a request still in flight.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                # Also answered when `Idempotency-Key` was already used with a different body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
         delete:
             tags: [Cart]
@@ -303,9 +313,12 @@ paths:
             description: Copies the lines of one of the authenticated user's own orders back into their cart — quantities from the order, added on top of what the cart already holds. The order stores product snapshots, so each line is re-resolved against the catalogue as it is today; products that have since been removed, deactivated or hidden are skipped, and the answer holds the cart as it now stands and ONE RESULT PER ORDER LINE, in the order's own order, by the same rule and in the same shape as `POST /cart/merge` (`requested`, `resulting`, `reason`, `availability`). A line that would pass the per-line ceiling (`NODE_CART_LINE_MAX`) is clamped to what room is left (`capped`), and adds nothing once there is none; an unavailable product is `removed`. Neither is a failure. Any signed-in account, staff included, reorders only its own orders — the cart being filled is the caller's.
             operationId: reorder
             x-error-codes:
-                '409': [REORDER_UNAVAILABLE]
+                '409': [IDEMPOTENCY_IN_FLIGHT, REORDER_UNAVAILABLE]
+                '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
                 required: true
                 content:
@@ -325,6 +338,7 @@ paths:
                 # a 422 on `orderId`: the id is a body field, so it is an argument, not a URL.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                # Also answered when `Idempotency-Key` was already used with a different body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
 components:
