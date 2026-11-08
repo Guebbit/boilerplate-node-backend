@@ -1023,9 +1023,8 @@ components:
                     type: string
                 website:
                     type: string
-                # "Never asked" and "denied" are the same answer, arrived at differently — the
-                # gate is opt-in, so only `true` captures anything
-                # (`observability/analytics/index.ts`).
+                # Absent: never asked; `false`: declined. The gate treats both as no capture,
+                # since only `true` captures anything (`observability/analytics/index.ts`).
                 analyticsConsent:
                     type: boolean
                 # When the visitor chose, for the record GDPR Art. 7(1) asks a controller to be able

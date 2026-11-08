@@ -285,7 +285,26 @@ describe('signup', () => {
 
         const stored = await userRepository.findOne({ email: 'unasked@example.com' });
         expect(stored?.termsVersion).toBe('2026-10');
+        expect(stored?.analyticsConsent).toBeUndefined();
         expect(stored?.analyticsConsentAt).toBeUndefined();
+    });
+
+    it('records a declined consent as false with a date, unlike never asked', async () => {
+        await accountService.signup(
+            {
+                email: 'declined@example.com',
+                username: 'declineduser',
+                password: PLAIN_PASSWORD,
+                passwordConfirm: PLAIN_PASSWORD,
+                analyticsConsent: false,
+                termsAccepted: true
+            },
+            testCallerContext
+        );
+
+        const stored = await userRepository.findOne({ email: 'declined@example.com' });
+        expect(stored?.analyticsConsent).toBe(false);
+        expect(stored?.analyticsConsentAt).toBeInstanceOf(Date);
     });
 });
 
