@@ -58,6 +58,12 @@ scoping artefact, and filing it as a gap is how this audit wastes someone's day.
 Mark each rule `covered` / `partially covered` / `not covered`. For "partially",
 say precisely which half is missing.
 
+File a rule as `not covered` only when it passes the three tests of
+`docs/reference/tests.md#what-earns-a-test`: our own code enforces it today, a break would be
+silent, and someone is hurt. Otherwise the verdict is `holds by absence` (true only because
+something does not exist, or because the value is read back as stored) or `loud` (a break fails
+at once elsewhere). Neither gets a Given/When/Then.
+
 ### 4 — write the missing case
 
 For every `not covered` rule, give the minimal input that would exercise it, as

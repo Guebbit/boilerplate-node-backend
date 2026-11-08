@@ -139,6 +139,30 @@ history, not as an absolute grade.
 See [Mutation Testing](../tools/mutation-testing.md) for the run itself, its baseline ratchet and
 what the `high`/`low`/`break` thresholds mean.
 
+### What earns a test
+
+A documented rule gets a test when all three hold:
+
+1. **A line of our own code enforces it today** — a branch, comparison, sort, constant, check
+   order, event emit or route mount, so a change to existing code can break it.
+    - Skip a rule that holds **by absence** (no middleware, no second caller, no emit call) or
+      **by construction** (a value read back from the stored row, or a check made once at placement
+      and not repeated). Breaking it means writing new code on purpose.
+    - Exception: a security or money stop that a **dependency** provides gets one learning test.
+      Dependabot bumps dependencies weekly, unasked.
+2. **A break would be silent** — nothing fails at boot, no type error, no other suite goes red.
+3. **Someone is hurt by the break** — security, money or stock, a state or precedence rule, a
+   promise to a client (retry semantics included), or a metric behind an alert.
+
+How to build what passes:
+
+- If a sweep already owns the family, extend the sweep; do not add a per-route copy.
+- Put the test in a suite Stryker runs (unit, integration or cross-cutting). Use the contract
+  suite only when the claim is about the response shape, or about per-route wiring that a mutant
+  cannot reach.
+- Read [Coverage & Confidence](../tools/coverage-and-confidence.md) for what a surviving or
+  `NoCoverage` mutant means.
+
 ---
 
 ## `tests/cross-cutting/` — rules that hold across every module
@@ -313,6 +337,7 @@ Boots the application against an in-memory MongoDB and drives it as a client wou
 | `tests/integration/cookie-json-forgery.test.ts`                                                                  | A `j:`-prefixed cookie never reaches a controller as an object.                                                                                                                                                  | [Authentication defences](../theory/defences/authentication.md)                      |
 | `tests/integration/cors.test.ts`                                                                                 | A disallowed origin gets the CORS header omitted, not an error.                                                                                                                                                  | [Security](../tools/security.md)                                                     |
 | `tests/integration/create-app-env.test.ts`<br>`tests/integration/create-app-extension.test.ts`                   | `createApp({ env })` and `createApp({ extension })`: an injected environment is what config reads, and an extension mounts before the 404 catch-all.                                                             | [Demo profile](../tools/demo-profile.md)                                             |
+| `tests/integration/idempotency-caller-scope.test.ts`                                                             | An `Idempotency-Key` is scoped per caller: the same key from someone else is a fresh run, never a replay.                                                                                                        |
 | `tests/integration/image-acl.test.ts`                                                                            | A client may never name a path in the image store.                                                                                                                                                               | [Image Processing](../tools/image-processing.md)                                     |
 | `tests/integration/kernel/outbox.test.ts`<br>`tests/integration/kernel/outbox-bus-failure.test.ts`               | The transactional outbox against a real database, and the relay when the event bus itself rejects.                                                                                                               | [Outbox](../tools/outbox.md)                                                         |
 | `tests/integration/order-snapshot-locale.test.ts`                                                                | An order line snapshot freezes the buyer's language, never re-resolved later.                                                                                                                                    | [orders](../modules/orders.md)                                                       |
