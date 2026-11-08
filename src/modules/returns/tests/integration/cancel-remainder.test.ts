@@ -930,6 +930,24 @@ describe('the delivery, across several cancels and returns', () => {
         expect(result.success && result.data.status).toBe('succeeded');
     });
 
+    it('is refunded by exactly one of a cancel and a receipt that run at the same time', async () => {
+        const fixture = await partlyShipped();
+
+        await Promise.all([buyerCancels(fixture), returnShippedGoods(fixture)]);
+
+        // Whichever path was last took the delivery: 60.00 + 15.00, or 10.00 + 65.00. Both taking
+        // it would refund 80.00 and neither 70.00, so the sum alone tells the three apart.
+        const amounts = await refundsOf(fixture.orderId).then((all) =>
+            all.map(({ amount }) => amount).toSorted()
+        );
+        expect([
+            ['15.00', '60.00'],
+            ['10.00', '65.00']
+        ]).toContainEqual(amounts);
+        const result = await paymentService.getForOrder(fixture.orderId, asAdmin());
+        expect(result.success && result.data.status).toBe('succeeded');
+    });
+
     it('reads the order as returned once what could come back has, a cancel taking the rest out of the count', async () => {
         const fixture = await partlyShipped();
         await buyerCancels(fixture);
