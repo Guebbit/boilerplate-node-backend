@@ -20,7 +20,8 @@ import {
     type StockLevelDocument,
     type StockMovementDocument,
     type ReservationDocument,
-    type ReservationStatus
+    type ReservationStatus,
+    OPEN_RESERVATION_STATUSES
 } from './model';
 import {
     createRepository,
@@ -183,7 +184,7 @@ const outstandingByProduct = (
         }>([
             {
                 $match: {
-                    status: { $in: ['held', 'committed'] },
+                    status: { $in: OPEN_RESERVATION_STATUSES },
                     'items.productId': { $in: productIds }
                 }
             },
@@ -616,7 +617,7 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
      */
     findOpenByOrderId: (orderId: string, session: ClientSession) =>
         reservationModel
-            .findOne({ orderId: toObjectId(orderId), status: { $in: ['held', 'committed'] } })
+            .findOne({ orderId: toObjectId(orderId), status: { $in: OPEN_RESERVATION_STATUSES } })
             .session(session)
             .exec(),
 
@@ -634,7 +635,7 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
     replaceItems: (orderId, items, endsAs, session) =>
         reservationModel
             .findOneAndUpdate(
-                { orderId: toObjectId(orderId), status: { $in: ['held', 'committed'] } },
+                { orderId: toObjectId(orderId), status: { $in: OPEN_RESERVATION_STATUSES } },
                 {
                     $set: {
                         items: toReservationItems(items),
@@ -678,7 +679,7 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
                             { session }
                         )
                         .then(() => true);
-                const open = hold.status === 'held' || hold.status === 'committed';
+                const open = OPEN_RESERVATION_STATUSES.includes(hold.status);
                 const items = withAdded(
                     open
                         ? hold.items.map(({ productId, quantity, kind }) => ({

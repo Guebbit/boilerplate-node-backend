@@ -10,6 +10,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import { systemCallerContext } from '@kernel/permissions';
+import { OPEN_RESERVATION_STATUSES } from '../model';
 import type { ReservationStatus } from '../model';
 import { reservationRepository } from '../repository';
 import { inventoryAuditActions } from '../audit';
@@ -520,4 +521,4 @@ export const isHoldReleased = (orderId: string): Promise<boolean> =>
 export const isStockBoundToOrder = (orderId: string): Promise<boolean> =>
     reservationRepository
         .findByOrderId(orderId)
-        .then((hold) => hold?.status === 'held' || hold?.status === 'committed');
+        .then((hold) => hold !== null && OPEN_RESERVATION_STATUSES.includes(hold.status));

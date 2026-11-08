@@ -227,6 +227,12 @@ const RESERVATION_STATUSES = ['held', 'committed', 'shipped', 'released'] as con
 export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
 
 /**
+ * The states in which a hold still sets units aside: `held` at checkout, `committed` once paid.
+ * `shipped` and `released` have left the shelf or given the claim back.
+ */
+export const OPEN_RESERVATION_STATUSES: readonly ReservationStatus[] = ['held', 'committed'];
+
+/**
  * Deliberately not derived from a contract type, because there is none: a reservation is never
  * serialized to a client. The customer already has a better view of it — their order — and
  * publishing this would invite a frontend to read stock state from two places.
