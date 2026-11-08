@@ -1,7 +1,8 @@
 /**
  * @module
  * The field builders a configuration slice is written with: `int`, `decimal`, `flag`, `choice`,
- * `text`, `email`, `timeZone`, `currency`, `secret`, `csv`, `keyRing`, `versionedKeyRing`.
+ * `text`, `email`, `timeZone`, `currency`, `country`, `countries`, `secret`, `csv`, `keyRing`,
+ * `versionedKeyRing`.
  *
  * One rule for all of them: a value is trimmed, and a blank one counts as unset (the same
  * "empty string is not a value" rule t3-env calls `emptyStringAsUndefined`). A value that is set
@@ -410,6 +411,29 @@ export function currency(
     );
 }
 
+/** Whole-string ISO 3166-1 alpha-2 shape, after upper-casing. */
+const COUNTRY_CODE = /^[A-Z]{2}$/;
+
+/** Refusal text shared by {@link country} and {@link countries}. */
+const COUNTRY_MESSAGE = 'ISO 3166-1 alpha-2 country code, e.g. IT';
+
+/**
+ * An ISO 3166-1 alpha-2 country code, upper-cased. Only the shape is checked: a well-formed but
+ * unassigned or wrong code (`UK`) is the administrator's choice, `Italy` is not.
+ *
+ * @param options - `required` for a boot-time presence rule
+ */
+export const country = (options: CommonOptions = {}): Field<string | undefined> =>
+    build(
+        z.string().transform((value, context) => {
+            const code = value.toUpperCase();
+            if (COUNTRY_CODE.test(code)) return code;
+            context.addIssue({ code: 'custom', message: COUNTRY_MESSAGE });
+            return z.NEVER;
+        }),
+        options
+    );
+
 /**
  * Free text that is a credential: never echoed into an error, and (through `required`) checked for
  * length and for still being the `.env-example` placeholder at boot.
@@ -463,6 +487,21 @@ export const csv = (options: CsvOptions = {}): Field<string[]> =>
     build(
         listRule((member) => applyCase(member, options.case)),
         { ...options, default: [...(options.default ?? [])] }
+    );
+
+/**
+ * A comma-separated list of ISO 3166-1 alpha-2 country codes, upper-cased, each member checked.
+ * Unset is the empty list.
+ *
+ * @param options - `required` for a boot-time presence rule
+ */
+export const countries = (options: CommonOptions = {}): Field<string[]> =>
+    build(
+        listRule((member) => member.toUpperCase()).superRefine((members, context) => {
+            if (members.every((member) => COUNTRY_CODE.test(member))) return;
+            context.addIssue({ code: 'custom', message: COUNTRY_MESSAGE });
+        }),
+        { ...options, default: [] }
     );
 
 /**

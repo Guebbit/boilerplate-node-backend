@@ -7,6 +7,8 @@
  */
 import {
     choice,
+    countries,
+    country,
     csv,
     currency,
     decimal,
@@ -217,5 +219,34 @@ describe('currency', () => {
     it('is unset when blank, and takes a default when it has one', () => {
         expect(currency().schema.parse('  ')).toBeUndefined();
         expect(currency({ default: 'EUR' }).schema.parse(undefined)).toBe('EUR');
+    });
+});
+
+describe('country', () => {
+    it('upper-cases and trims a two-letter code', () => {
+        expect(country().schema.parse('it')).toBe('IT');
+        expect(country().schema.parse(' it ')).toBe('IT');
+    });
+
+    it.each(['Italy', 'I1', 'ITA', 'I'])('refuses %s: not two letters', (raw) => {
+        expect(country().schema.safeParse(raw).success).toBe(false);
+    });
+
+    it('reads a blank value as unset', () => {
+        expect(country().schema.parse('  ')).toBeUndefined();
+    });
+});
+
+describe('countries', () => {
+    it('upper-cases and trims every member', () => {
+        expect(countries().schema.parse('it, fr')).toEqual(['IT', 'FR']);
+    });
+
+    it('refuses the list when one member is not two letters', () => {
+        expect(countries().schema.safeParse('it,ITA').success).toBe(false);
+    });
+
+    it('reads an unset value as the empty list', () => {
+        expect(countries().schema.parse(undefined)).toEqual([]);
     });
 });

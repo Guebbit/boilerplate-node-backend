@@ -388,7 +388,8 @@ version is stored beside the date the Terms were accepted. `GET /config` prints 
 
 ## Operator identity {#operator-identity}
 
-Who runs the site: `NODE_LEGAL_NAME`, `_STREET`, `_CITY`, `_ZIP`, `_COUNTRY` (required at boot),
+Who runs the site: `NODE_LEGAL_NAME`, `_STREET`, `_CITY`, `_ZIP`, `_COUNTRY` (required at boot; an ISO 3166-1
+alpha-2 code in any case, upper-cased, refused unless two letters),
 `_EMAIL` (default `NODE_SUPPORT_EMAIL`), `_PHONE`, `_VAT_NUMBER`, `_TRADE_REGISTER`,
 `_REGISTRATION_NUMBER` (optional). `operatorIdentity()` reads them live and `GET /config` serves
 them as `operator`.

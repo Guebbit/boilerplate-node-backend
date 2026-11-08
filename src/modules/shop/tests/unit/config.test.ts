@@ -115,6 +115,13 @@ describe('shipToCountries', () => {
         expect(shipToCountries()).toEqual(['IT']);
     });
 
+    it('upper-cases a lower-case legal country when no list is set', () => {
+        configure();
+        setEnvironment({ NODE_LEGAL_COUNTRY: 'it' });
+
+        expect(shipToCountries()).toEqual(['IT']);
+    });
+
     it('reads the configured list over the shop country, upper-cased and trimmed', () => {
         configure();
         setEnvironment({ NODE_SHIP_TO_COUNTRIES: 'it, fr ,de' });

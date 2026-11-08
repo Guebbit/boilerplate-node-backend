@@ -120,10 +120,9 @@ export const returnPostagePayer = (): ReturnPostagePayer => shopConfig().NODE_RE
 /**
  * Which ISO-3166 countries this deployment will ship a physical order to — checkout refuses
  * (422) any method that `requiresAddress` once the resolved address's country falls outside it.
- * Comma-separated; each code is upper-cased so a deployment typing `it` still matches an address
- * stored as `IT`. Defaults to the operator's country alone: ship only where the VAT assumption in
+ * Comma-separated; the config has already upper-cased and shape-checked each code. Defaults to the operator's country alone: ship only where the VAT assumption in
  * {@link shopCountry}'s docblock already holds, until a deployment explicitly widens it.
- * @returns the configured list, upper-cased; the shop's own country alone when none is set
+ * @returns the configured list; the shop's own country alone when none is set
  */
 export const shipToCountries = (): string[] => {
     const configured = shopConfig().NODE_SHIP_TO_COUNTRIES;

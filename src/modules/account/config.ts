@@ -8,7 +8,7 @@
  */
 
 import { defineConfig } from '@infrastructure/config/define';
-import { email, int, text } from '@infrastructure/config/fields';
+import { country, email, int, text } from '@infrastructure/config/fields';
 import { frontendLink, FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
 import { DAY_MS, HOUR_MS, oneCalendarMonthLaterUtc } from '@domain-primitives/time';
 
@@ -54,7 +54,7 @@ export const accountConfig = defineConfig({
         NODE_LEGAL_STREET: text({ required: { minLength: 1 } }),
         NODE_LEGAL_CITY: text({ required: { minLength: 1 } }),
         NODE_LEGAL_ZIP: text({ required: { minLength: 1 } }),
-        NODE_LEGAL_COUNTRY: text({ required: { minLength: 1 } }),
+        NODE_LEGAL_COUNTRY: country({ required: { minLength: 1 } }),
         // Optional for the site; the `shop` module's own check requires it (CRD Art. 6(1)(c)).
         NODE_LEGAL_PHONE: text(),
         // The legal-notice address; unset means the support address (`NODE_SUPPORT_EMAIL`).
