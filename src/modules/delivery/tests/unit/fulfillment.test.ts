@@ -336,13 +336,13 @@ describe('checkShipLines', () => {
         });
     });
 
-    it('accepts named lines within what remains, summing a product named twice', () => {
+    it('refuses a product named twice, even when the total would fit', () => {
         expect(
             checkShipLines(lines, [
                 { productId: 'a', quantity: 1 },
                 { productId: 'a', quantity: 1 }
             ])
-        ).toEqual({ ok: true, lines: [{ productId: 'a', quantity: 2 }] });
+        ).toEqual({ ok: false, reason: 'duplicate' });
     });
 
     it('refuses a product that is not on the fulfillment order, and more than remains of one', () => {
@@ -354,13 +354,6 @@ describe('checkShipLines', () => {
             ok: false,
             reason: 'too-many'
         });
-        // Twice over what remains, summed, is more than remains.
-        expect(
-            checkShipLines(lines, [
-                { productId: 'b', quantity: 1 },
-                { productId: 'b', quantity: 1 }
-            ])
-        ).toEqual({ ok: false, reason: 'too-many' });
     });
 });
 

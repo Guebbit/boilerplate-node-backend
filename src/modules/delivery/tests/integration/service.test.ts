@@ -366,7 +366,7 @@ describe('shipping in parts', () => {
         ]);
     });
 
-    it('refuses more than remains, a product that is not there, and the same product twice over remaining', async () => {
+    it('refuses more than remains, a product that is not there, and the same product twice even within what remains', async () => {
         const { order, products } = await processingOrderOf([2]);
         const orderId = String(order._id);
         const productId = String(products[0]._id);
@@ -377,7 +377,7 @@ describe('shipping in parts', () => {
         });
         const twice = await shipFrom(orderId, {
             lines: [
-                { productId, quantity: 2 },
+                { productId, quantity: 1 },
                 { productId, quantity: 1 }
             ]
         });
