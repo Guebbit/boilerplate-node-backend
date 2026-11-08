@@ -149,7 +149,7 @@ describe('a refund the provider refused for good', () => {
     });
 });
 
-describe.each(['provider_unavailable', 'unknown', 'insufficient_funds'] as const)(
+describe.each(['provider_unavailable', 'unknown', 'insufficient_funds', 'disputed'] as const)(
     'a refund refused as %s',
     (reason) => {
         it('mails nobody: it says nothing about the buyer card', async () => {

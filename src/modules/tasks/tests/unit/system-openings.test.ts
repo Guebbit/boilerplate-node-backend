@@ -46,6 +46,10 @@ describe('the openings', () => {
         expect(exportFailedOpening({ userId: 'u1', exportId: 'e1' }, NOW).subjectId).toBe('u1');
     });
 
+    it.each(all)('%s falls due 72 hours after it opens', (_name, opening) => {
+        expect(opening.dueAt.getTime() - NOW.getTime()).toBe(72 * 60 * 60 * 1000);
+    });
+
     it('carries ids only, never an address or a name', () => {
         for (const [, opening] of all) expect(opening.message).not.toMatch(/@/);
     });

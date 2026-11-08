@@ -9,7 +9,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { eventually } from '@tests/eventually';
-import { resetDomainEvents } from '@kernel/events';
+import { emitDomainEvent, resetDomainEvents } from '@kernel/events';
 import { asAdmin, asCustomer, callerContextAs } from '@tests/callers';
 import { registerAuditSink, type AuditEntry } from '@infrastructure/observability/audit';
 import { createUser } from '@modules/users/tests/factories';
@@ -20,7 +20,7 @@ import { deliveryService } from '@modules/delivery';
 import { inventoryService } from '@modules/inventory';
 import { OrderStatus } from '@types';
 import paymentsModule from '@modules/payments/module';
-import { paymentService } from '@modules/payments';
+import { paymentService, PAYMENT_REFUNDED } from '@modules/payments';
 import returnsModule from '../../module';
 import { returnService } from '../../services';
 import { returnRepository } from '../../repository';
@@ -122,6 +122,35 @@ describe('a received return on a cash-paid order', () => {
             return stored?.status === 'closed';
         });
         expect(owedRows()).toHaveLength(1);
+    });
+});
+
+describe('a refund that pays for no return', () => {
+    it('closes nothing: the return waiting for its own refund stays received', async () => {
+        const fixture = await paidInCash();
+        await carryOrderTo(fixture.orderId, 'delivered');
+        const created = await returnService.createReturn(
+            { orderId: fixture.orderId, reason: 'withdrawal' },
+            asCustomer(fixture.user.id),
+            callerContextAs('customer', fixture.user.id)
+        );
+        if (!created.success) throw new Error('expected a return');
+        const returnId = String(created.data._id);
+        await returnService.receiveReturn(returnId, {}, callerContextAs('warehouse'));
+        const payment = await paymentOf(fixture.orderId);
+
+        // An ordinary goodwill refund on the same order: the event carries no `returnId`.
+        await emitDomainEvent(PAYMENT_REFUNDED, {
+            paymentId: payment.id,
+            orderId: fixture.orderId,
+            refundId: payment.refunds[0].id,
+            amount: '1.00',
+            currency: 'EUR',
+            full: false
+        });
+
+        const stored = await returnRepository.findById(returnId);
+        expect(stored?.status).toBe('received');
     });
 });
 
