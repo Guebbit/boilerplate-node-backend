@@ -42,7 +42,7 @@ describe('stockMovementSchema — the ledger', () => {
         expect(refOf(stockMovementSchema, 'productId')).toBe('Product');
     });
 
-    it('defaults both deltas to zero, so a row is always summable', () => {
+    it('defaults every delta to zero, so a row is always summable', () => {
         // The replayability rule: summing each column over a product's rows must reproduce its
         // counter. An absent delta breaks that sum — `undefined` is not zero to `$sum`.
         expect(defaultOf(stockMovementSchema, 'onHandDelta')).toBe(0);

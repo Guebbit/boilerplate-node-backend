@@ -52,10 +52,10 @@ export const stockMovementSchema = new Schema<StockMovementDocument>(
             required: true
         },
         /*
-         * Both deltas on every row, either possibly zero. Storing the pair rather than one signed
-         * number is what makes the ledger replayable — summing each column over a product's rows
-         * reproduces the counter it describes. `default: 0` because most transitions move only
-         * one column.
+         * Every delta on every row, any possibly zero. Storing one column per counter rather than
+         * one signed number is what makes the ledger replayable — summing each column over a
+         * product's rows reproduces the counter it describes. `default: 0` because most
+         * transitions move only some of the columns.
          */
         onHandDelta: {
             type: Number,
@@ -65,7 +65,7 @@ export const stockMovementSchema = new Schema<StockMovementDocument>(
             type: Number,
             default: 0
         },
-        // The third column, for units that do not exist yet. Same reasoning as the other two.
+        // The third column, for units that do not exist yet. Same reasoning as the others.
         backorderedDelta: {
             type: Number,
             default: 0

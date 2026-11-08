@@ -83,7 +83,7 @@ Shipping rates as pure domain rules (flat rates, free-above thresholds), priced 
 
 The only writer of stock in the application. A product's stock level carries three counters — `onHand` (units that exist), `reserved` (units an open order has claimed) and `backordered` (units promised that do not exist yet) — and what a customer may buy is the difference, published as the derived `available`. All three live in this module's own `stocklevels` collection, the only place they are written; `products` keeps a read-only mirror of them on its own document so a catalogue read needs no join.
 
-Nine ledger reasons move them, each a conditional write paired with the ledger row that explains it, so the ledger cannot have gaps (a payment's commit moves nothing and writes no row):
+The transitions below move them, each a conditional write paired with the ledger row that explains it, so the ledger cannot have gaps (a payment's commit moves nothing and writes no row):
 
 | Transition | When                         | `onHand` | `reserved` |
 | ---------- | ---------------------------- | -------- | ---------- |
@@ -95,6 +95,7 @@ Nine ledger reasons move them, each a conditional write paired with the ledger r
 | `adjust`   | stocktake correction         | `±q`     | —          |
 | `restock`  | returned goods received      | `+q`     | —          |
 | `backorder`| preorder / owed units claimed | —       | — (`backordered` `+q`) |
+| `owed`     | a lost parcel's units the shelf could not cover | — | — (`backordered` `+q`) |
 | `allocate` | a delivery serves a waiting claim | —   | `+q` (`backordered` `−q`) |
 
 A checkout is **all-or-nothing** — the shop never silently ships fewer units than were ordered, because an order is what the customer agreed to buy. What it does do is say exactly what blocked it: a refusal carries `errors[0].details.lines`, one entry per short line with `productId`, `title`, `requested` and `availability` (sold out, short, off sale), never the number left, so a basket is fixed in one pass rather than one refusal per line. A staff order's refusal adds `available` for a caller who reads stock. That holds on both refusal paths — the pre-flight, and the conditional reserve that decides a race, where the reported figure is read back at the moment the write refused.

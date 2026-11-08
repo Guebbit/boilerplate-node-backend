@@ -166,7 +166,7 @@ describe('GET /inventory/movements', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.items).toHaveLength(1);
-        // Both deltas on the row, which is what makes the ledger replayable.
+        // Every delta on the row, which is what makes the ledger replayable.
         expect(response.body.items[0]).toMatchObject({
             reason: 'receive',
             onHandDelta: 5,

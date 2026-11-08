@@ -136,7 +136,7 @@ paths:
         get:
             tags: [Inventory]
             summary: List stock movements
-            description: A page of the ledger, newest first — one row per counter change, with both deltas and the reason attached. Every row was written by the same call that moved the counter, so the ledger cannot have gaps. Paged rather than capped, and `meta.totalItems` counts everything matching the filters — this is the record an audit works through, and a read that returned only the newest rows would misreport history as complete.
+            description: A page of the ledger, newest first — one row per counter change, with every counter delta and the reason attached. Every row was written by the same call that moved the counter, so the ledger cannot have gaps. Paged rather than capped, and `meta.totalItems` counts everything matching the filters — this is the record an audit works through, and a read that returned only the newest rows would misreport history as complete.
             operationId: listStockMovements
             security:
                 - bearerAuth: []
@@ -315,8 +315,8 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 reason:
                     $ref: '#/components/schemas/StockMovementReason'
-                # Both deltas on every row, both signed, either possibly zero. Recording the
-                # PAIR rather than one number is what makes the ledger replayable: summing
+                # Every delta on every row, all signed, any possibly zero. Recording each
+                # counter's column rather than one number is what makes the ledger replayable: summing
                 # each column over a product's rows reproduces the counter it describes, which
                 # is asserted as a property in the module's tests.
                 onHandDelta:

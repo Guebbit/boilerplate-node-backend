@@ -108,7 +108,7 @@ language is kept per context rather than shared.
 | **Available**      | On hand minus reserved, clamped at zero — what a customer may buy. Stored and kept in step by `applyTransition`, the one writer.                                                                                                                  |
 | **Reservation**    | One order’s hold on its units, with a deadline. Ends as a commit, a release or an expiry — never by being deleted.                                                                                                                                |
 | **Transition**     | One of the ways a counter may move (`reserve`, `ship`, `release`, `expire`, `receive`, `adjust`, `restock`, `backorder`, `owed`, `allocate`). Each implies three counter deltas (`domain/transitions.ts`) and each writes exactly one ledger row. |
-| **Stock movement** | A ledger row: which product, which transition, and both signed deltas. Written by the same call that moved the counter, so it cannot be missing.                                                                                                  |
+| **Stock movement** | A ledger row: which product, which transition, and its signed delta on each counter. Written by the same call that moved the counter, so it cannot be missing.                                                                                    |
 | **Sweep**          | The expiry tick (`sweep:reservations`, every 5 minutes). The `cron` service runs it from `docker/crontab`; the application process owns no timer.                                                                                                 |
 
 ## `invoicing`

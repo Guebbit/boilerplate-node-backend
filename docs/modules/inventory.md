@@ -1,7 +1,7 @@
 # inventory
 
 ::: tip At a glance
-**Owns** — the two stock counters (its own `stocklevels` collection), the reservation lifecycle,
+**Owns** — the stock counters (its own `stocklevels` collection), the reservation lifecycle,
 and the ledger that explains both.
 **Depends on** — [`products`](./products.md), whose document keeps a read-only mirror of the
 counters this module writes, so a catalogue read needs no join.

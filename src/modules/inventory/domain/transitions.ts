@@ -34,7 +34,7 @@ export interface CounterDelta {
 }
 
 /**
- * The ten transitions, as a total map from reason to what it does. `receive`, `adjust`, `ship`
+ * The transitions, as a total map from reason to what it does. `receive`, `adjust`, `ship`
  * and `restock` change how many units are on the shelf; `ship` moves both columns together so a
  * dispatch doesn't change availability; `release` and `expire` are the same arithmetic under
  * two names, as are `backorder` and `owed`, kept separate because the ledger records which story it was.

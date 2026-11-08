@@ -1,7 +1,7 @@
 /**
  * @module
  * GET /inventory/levels
- * A page of the stock board — both counters and availability, scarcest first.
+ * A page of the stock board — every counter and availability, scarcest first.
  */
 
 import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
