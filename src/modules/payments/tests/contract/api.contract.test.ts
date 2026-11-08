@@ -288,18 +288,26 @@ describe('POST /payments/{id}/confirm', () => {
         expect(response.status).toBe(404);
     });
 
-    it('matches the error contract for a method reference the contract does not allow', async () => {
-        const { bearer, paymentId } = await authenticateWithIntent();
+    it.each([
+        '4242 4242 4242 4242',
+        '4242424242424242',
+        '4242-4242-4242-4242',
+        '4242_4242_4242_4242'
+    ])(
+        'matches the error contract for a card number as the method reference (%s)',
+        async (paymentMethodRef) => {
+            const { bearer, paymentId } = await authenticateWithIntent();
 
-        const response = await api()
-            .post(`/payments/${paymentId}/confirm`)
-            .set('Authorization', bearer)
-            // Spaces are exactly what a card number typed into a form carries — and the contract
-            // now refuses that shape, which is the point of the field being a provider handle.
-            .send({ paymentMethodRef: '4242 4242 4242 4242' });
+            const response = await api()
+                .post(`/payments/${paymentId}/confirm`)
+                .set('Authorization', bearer)
+                // The contract wants a provider handle, which always holds a letter: every
+                // spelling of a card number (spaces, digits only, dashes, underscores) is a 422.
+                .send({ paymentMethodRef });
 
-        expect(response.status).toBe(422);
-    });
+            expect(response.status).toBe(422);
+        }
+    );
 
     it.each([
         ['too short', 'ab'],

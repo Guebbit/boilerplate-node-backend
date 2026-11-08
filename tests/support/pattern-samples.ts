@@ -29,7 +29,8 @@ const PATTERN_SAMPLES: Record<string, string> = {
     '^[a-z0-9][a-z0-9-]*$': 'abc',
     '^[a-z]{2}$': 'it',
     '^[A-Za-z0-9_-]+$': 'abc',
-    '^[\\w-]+$': 'abc',
+    // `paymentMethodRef`: a provider handle must contain a letter, so a card number is refused.
+    '^[\\d_-]*[A-Za-z][\\w-]*$': 'pm_card_visa',
     // DecimalAmount and NonNegativeDecimalAmount — money as text. One sample serves both: a plain
     // amount any currency's places accept.
     '^-?\\d+(\\.\\d+)?$': '1.00',

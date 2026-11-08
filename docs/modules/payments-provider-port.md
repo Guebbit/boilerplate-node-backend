@@ -22,7 +22,10 @@ iframe the provider owns, and hands the browser an opaque handle (`pm_…`). A s
 a real card number is in the heavyweight PCI DSS bracket — the full questionnaire, quarterly
 external scans, an annual attestation — rather than the light one a tokenised integration gets.
 That is why `confirm` takes a **method reference**, and why there is no `CardDetails` type anywhere
-in this module.
+in this module. The contract's pattern requires at least one letter, so a card number in any
+spelling (digits, dashes, underscores) is a `422` and is never forwarded to the provider. An adapter
+whose tokens are all digits, or that needs another character set (Square's `cnon:…`, Adyen's
+drop-in state), widens the pattern in its own change.
 
 **The answer is not always immediate.** A European card can come back needing a 3-D Secure
 challenge answered in the browser, and some methods settle over days. `requires_action` and
