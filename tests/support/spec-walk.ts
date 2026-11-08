@@ -481,6 +481,18 @@ const visitSchemaNodes = (
 };
 
 /**
+ * `unevaluatedProperties` closes an `allOf` composition: no property beyond the composed ones.
+ * The builder draws declared properties only, so `false` holds by construction and is honoured.
+ * Any other value (a schema, or `true`) would constrain extra properties and stays unsupported.
+ * https://json-schema.org/draft/2020-12/json-schema-core#name-unevaluatedproperties
+ *
+ * @param key - the keyword
+ * @param value - its value in the schema
+ */
+const isHonouredWhenFalse = (key: string, value: unknown): boolean =>
+    key === 'unevaluatedProperties' && value === false;
+
+/**
  * Keywords present in the spec's schemas that this walk does not understand.
  * @returns the offending keywords, sorted; empty when the spec stays inside this walk's vocabulary
  */
@@ -488,7 +500,8 @@ export const unsupportedKeywords = (spec: SpecDocument = readSpec()): string[] =
     const found = new Set<string>();
 
     visitSchemaNodes(spec, (node) => {
-        for (const key of Object.keys(node)) if (!SUPPORTED_KEYWORDS.has(key)) found.add(key);
+        for (const [key, value] of Object.entries(node))
+            if (!SUPPORTED_KEYWORDS.has(key) && !isHonouredWhenFalse(key, value)) found.add(key);
     });
 
     return [...found].toSorted();
