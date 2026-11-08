@@ -16,6 +16,7 @@ import {
     toMinorUnits
 } from '@domain-primitives/money';
 import { lineTaxFromRateTotals } from '@modules/orders';
+import { addressLine } from '@modules/shop';
 import type { EInvoicingDocument } from './providers';
 import type { InvoiceLine } from './model';
 import { asTaxItems } from './domain';
@@ -92,9 +93,9 @@ export interface DocumentVatBlock {
     grandTotalLabel: string;
     grandTotal: string;
     supplier: {
-        legalName?: string;
+        legalName: string;
         vatNumberLine: string;
-        address?: string;
+        address: string;
     };
 }
 
@@ -196,14 +197,6 @@ const buildVatBlock = (
     });
 
     const { seller, shippingByRate, taxSummary, netTotal, taxTotal, grandTotal } = document;
-    const addressLine = [
-        seller.street,
-        [seller.zip, seller.city].filter(Boolean).join(' '),
-        seller.country
-    ]
-        .filter(Boolean)
-        .join(', ');
-
     return {
         columns: {
             description: t('invoicing.document.vat.column-description'),
@@ -248,7 +241,7 @@ const buildVatBlock = (
             vatNumberLine: seller.vatNumber
                 ? t('invoicing.document.vat.vat-number', { number: seller.vatNumber })
                 : t('invoicing.document.vat.vat-number-missing'),
-            address: addressLine || undefined
+            address: addressLine(seller)
         }
     };
 };

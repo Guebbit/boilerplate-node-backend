@@ -1,8 +1,8 @@
 /**
  * @module
  * How an invoice document is issued. The seller's own identity (legal name, VAT number, address)
- * lives in `@modules/orders`' `config.ts`: the withdrawal notice prints it too, and `orders` cannot
- * import this module. Read per call, so a test can vary it per case.
+ * lives in `account` (`services/operator-identity.ts`). Read per call, so a test can vary it per
+ * case.
  */
 
 import { defineConfig } from '@infrastructure/config/define';

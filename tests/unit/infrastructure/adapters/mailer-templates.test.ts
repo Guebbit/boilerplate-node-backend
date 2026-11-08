@@ -431,7 +431,13 @@ describe('email templates render in every supported locale', () => {
                 currency: 'EUR',
                 locale,
                 orderNumber: '2026-000007',
-                seller: {},
+                seller: {
+                    legalName: 'Acme S.r.l.',
+                    street: 'Via Roma 1',
+                    city: 'Milano',
+                    zip: '20100',
+                    country: 'IT'
+                },
                 lines: [{ title: 'A product', quantity: 2, unitPrice: '10.00', taxRate: 0.22 }],
                 netTotal: '16.39',
                 taxTotal: '3.61',

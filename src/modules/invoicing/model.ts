@@ -56,9 +56,12 @@ export interface InvoiceParty {
 
 /**
  * The seller's own legal identity, frozen onto the document at issue — Art. 226(d)/(f)/(g). The
- * shop's identity less the contact fields an invoice does not carry, every field optional.
+ * shop's identity less the fields an invoice does not carry; only the VAT number may be absent.
  */
-export type InvoiceSeller = Partial<Omit<Operator, 'email' | 'phone'>>;
+export type InvoiceSeller = Pick<
+    Operator,
+    'legalName' | 'vatNumber' | 'street' | 'city' | 'zip' | 'country'
+>;
 
 /**
  * Fields an invoice and a credit note both freeze — everything Art. 226 and EN 16931's BR-CO-17
@@ -140,15 +143,15 @@ const partySchema = new Schema<InvoiceParty>(
     { _id: false }
 );
 
-/** The seller's identity, embedded — every field optional, since a demo deployment may set none of them. */
+/** The seller's identity, embedded — everything but the VAT number is required at boot, so it is required here. */
 const sellerSchema = new Schema<InvoiceSeller>(
     {
-        legalName: { type: String },
+        legalName: { type: String, required: true },
         vatNumber: { type: String },
-        street: { type: String },
-        city: { type: String },
-        zip: { type: String },
-        country: { type: String }
+        street: { type: String, required: true },
+        city: { type: String, required: true },
+        zip: { type: String, required: true },
+        country: { type: String, required: true }
     },
     { _id: false }
 );

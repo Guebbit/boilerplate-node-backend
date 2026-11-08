@@ -5,7 +5,17 @@
  * it, adapted from `orders/tests/unit/emails.test.ts`'s own retired `invoiceDocument` suite.
  */
 import { buildDocumentView, taxCategoryCode } from '@modules/invoicing/emails';
+import { addressLine } from '@modules/shop';
 import type { EInvoicingDocument } from '@modules/invoicing/providers';
+
+/** The shop's own identity as an invoice freezes it; the VAT number is the one optional field. */
+const SELLER: EInvoicingDocument['seller'] = {
+    legalName: 'Acme S.r.l.',
+    street: 'Via Roma 1',
+    city: 'Milano',
+    zip: '20100',
+    country: 'IT'
+};
 
 /** A single-line, single-rate document — anything simpler risks masking a bug. */
 const DOCUMENT: EInvoicingDocument = {
@@ -16,7 +26,7 @@ const DOCUMENT: EInvoicingDocument = {
     currency: 'EUR',
     locale: 'en',
     orderNumber: '2026-000007',
-    seller: {},
+    seller: SELLER,
     lines: [{ title: 'Widget', quantity: 5, unitPrice: '19.99', taxRate: 0.22 }],
     netTotal: '81.93',
     taxTotal: '18.02',
@@ -193,7 +203,7 @@ describe('buildDocumentView — the VAT block', () => {
     it('prints the VAT number line, or says plainly that none is configured', () => {
         const withVat = buildDocumentView('en', {
             ...DOCUMENT,
-            seller: { vatNumber: 'IT12345678901' }
+            seller: { ...SELLER, vatNumber: 'IT12345678901' }
         }).vat as { supplier: { vatNumberLine: string } };
         const withoutVat = buildDocumentView('en', DOCUMENT).vat as {
             supplier: { vatNumberLine: string };
@@ -201,6 +211,17 @@ describe('buildDocumentView — the VAT block', () => {
 
         expect(withVat.supplier.vatNumberLine).toContain('IT12345678901');
         expect(withoutVat.supplier.vatNumberLine).toMatch(/not configured/i);
+    });
+});
+
+describe('buildDocumentView — the supplier block', () => {
+    it('prints the seller exactly as the shop prints its own address', () => {
+        const { supplier } = buildDocumentView('en', DOCUMENT).vat as {
+            supplier: { legalName: string; address: string };
+        };
+
+        expect(supplier.legalName).toBe(SELLER.legalName);
+        expect(supplier.address).toBe(addressLine(SELLER));
     });
 });
 

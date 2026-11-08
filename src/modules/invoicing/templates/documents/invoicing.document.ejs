@@ -40,12 +40,8 @@
     <p><strong><%= vat.grandTotalLabel %>: <%= vat.grandTotal %></strong></p>
 
     <address>
-        <% if (vat.supplier.legalName) { %>
-            <div><%= vat.supplier.legalName %></div>
-        <% } %>
-        <% if (vat.supplier.address) { %>
-            <div><%= vat.supplier.address %></div>
-        <% } %>
+        <div><%= vat.supplier.legalName %></div>
+        <div><%= vat.supplier.address %></div>
         <div><%= vat.supplier.vatNumberLine %></div>
     </address>
 </main>

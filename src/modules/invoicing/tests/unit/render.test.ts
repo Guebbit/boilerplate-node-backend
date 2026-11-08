@@ -57,13 +57,22 @@ afterEach(() => rm(root, { recursive: true, force: true }));
 /** The names in the store, sorted. */
 const storedNames = (): Promise<string[]> => readdir(root).then((names) => names.toSorted());
 
+/** The seller block a frozen document carries. */
+const SELLER = {
+    legalName: 'Acme S.r.l.',
+    street: 'Via Roma 1',
+    city: 'Milano',
+    zip: '20100',
+    country: 'IT'
+} as const;
+
 /** A frozen invoice, as far as the renderer reads one. */
 const anInvoice = (id: string) =>
     asStub<InvoiceDocument>({
         _id: id,
         number: 'INV-1',
         lines: [],
-        seller: {},
+        seller: SELLER,
         taxSummary: []
     });
 
@@ -74,7 +83,7 @@ const aCreditNote = (id: string) =>
         number: 'CN-1',
         invoiceNumber: 'INV-1',
         lines: [],
-        seller: {},
+        seller: SELLER,
         taxSummary: []
     });
 
