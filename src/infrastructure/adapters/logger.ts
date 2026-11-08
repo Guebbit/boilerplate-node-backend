@@ -175,10 +175,31 @@ const applyPersonalFieldMode = (value: string): string => {
 export const redactSensitiveFields = (
     input: unknown,
     ancestors: WeakSet<object> = new WeakSet()
+): unknown => redactWalk(input, ancestors, true);
+
+/**
+ * The credential half of {@link redactSensitiveFields}: same walk, but personal fields are left
+ * as they are. For a store that keeps `ip` readable on purpose (the audit row) yet must never
+ * hold a password or a token.
+ */
+export const redactCredentials = (input: unknown): unknown =>
+    redactWalk(input, new WeakSet(), false);
+
+/**
+ * The shared walk behind {@link redactSensitiveFields} and {@link redactCredentials}.
+ *
+ * @param input - the value to copy
+ * @param ancestors - the objects on the path to this one
+ * @param scrubPersonal - also apply the personal-field mode (log line) or leave them (stored row)
+ */
+const redactWalk = (
+    input: unknown,
+    ancestors: WeakSet<object>,
+    scrubPersonal: boolean
 ): unknown => {
     // An Error's fields are non-enumerable, so the walk below would turn one into `{}`: nested
     // anywhere (`{ cause: error }`, `{ errors: [...] }`), it is serialised first.
-    if (input instanceof Error) return redactSensitiveFields(serializeError(input), ancestors);
+    if (input instanceof Error) return redactWalk(serializeError(input), ancestors, scrubPersonal);
 
     if (input === null || typeof input !== 'object') return input;
 
@@ -190,8 +211,8 @@ export const redactSensitiveFields = (
     // Arrays first: `typeof [] === 'object'`, so without this branch an array would be
     // rebuilt as an object with numeric string keys.
     const result = Array.isArray(input)
-        ? input.map((item) => redactSensitiveFields(item, ancestors))
-        : redactEntries(input as Record<string, unknown>, ancestors);
+        ? input.map((item) => redactWalk(item, ancestors, scrubPersonal))
+        : redactEntries(input as Record<string, unknown>, ancestors, scrubPersonal);
 
     // Only the current path counts: the same object reached twice by different routes is
     // shared, not circular.
@@ -200,14 +221,16 @@ export const redactSensitiveFields = (
 };
 
 /**
- * One object's entries, each redacted, hashed or walked — see {@link redactSensitiveFields}.
+ * One object's entries, each redacted, hashed or walked — see {@link redactWalk}.
  *
  * @param input - the object to copy
  * @param ancestors - the objects on the path to this one
+ * @param scrubPersonal - whether personal fields get the mode treatment
  */
 const redactEntries = (
     input: Record<string, unknown>,
-    ancestors: WeakSet<object>
+    ancestors: WeakSet<object>,
+    scrubPersonal: boolean
 ): Record<string, unknown> => {
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(input)) {
@@ -217,11 +240,11 @@ const redactEntries = (
         // a nested object under a personal-sounding key (unlikely, but not impossible) still
         // gets walked normally rather than silently skipped.
         if (isSensitiveKey(normalized)) result[key] = REDACTED;
-        else if (PERSONAL_FIELDS.has(normalized) && typeof value === 'string')
+        else if (scrubPersonal && PERSONAL_FIELDS.has(normalized) && typeof value === 'string')
             result[key] = applyPersonalFieldMode(value);
         // Otherwise recurse so nested secrets (`{ user: { credentials: { password } } }`) and
         // nested personal data are caught too.
-        else result[key] = redactSensitiveFields(value, ancestors);
+        else result[key] = redactWalk(value, ancestors, scrubPersonal);
     }
     return result;
 };

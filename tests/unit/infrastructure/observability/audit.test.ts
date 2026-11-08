@@ -130,6 +130,25 @@ describe('registerAuditSink', () => {
         expect(entry.actorUserId).toBe('user-123');
     });
 
+    it('scrubs credentials from the stored metadata but keeps the ip raw', () => {
+        const sink = jest.fn();
+        registerAuditSink(sink);
+
+        emitAuditEvent({
+            ...event,
+            ip: '203.0.113.9',
+            metadata: { token: 'x', nested: { password: 'y' }, entryKey: 'cart.title' }
+        });
+
+        const entry = sink.mock.calls[0][0] as AuditEntry;
+        expect(entry.metadata).toEqual({
+            token: '[REDACTED]',
+            nested: { password: '[REDACTED]' },
+            entryKey: 'cart.title'
+        });
+        expect(entry.ip).toBe('203.0.113.9');
+    });
+
     it('stamps the entry with a Date timestamp and the outcome-derived level', () => {
         const sink = jest.fn();
         registerAuditSink(sink);

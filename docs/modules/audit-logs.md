@@ -131,6 +131,8 @@ is returned as a keyed digest (`hmac:…`): the operator can correlate "this add
 incidents" and never read the address. An operator watching an installation needs the incidents,
 and holding no shop key was never meant to include reading a shop's customers.
 
+The stored row's `metadata` is credential-scrubbed before it is written (a `password` or `token` key becomes `[REDACTED]`), exactly as the log line's is; `ip` stays raw in the row on purpose.
+
 ## What an update records
 
 Every `*.updated` audit row says what the edit moved, through one pure helper,
@@ -155,7 +157,7 @@ returns no previous value (the backorder limit), it reads first.
 | `order.updated`                              |                                                          | email                                  |
 | `admin.task.status_updated`                  | status                                                   | admin notes                            |
 | `admin.locale.updated`                       | name, native name, direction, active                     |                                        |
-| `admin.locale_entry.updated`                 |                                                          | value (the key rides along)            |
+| `admin.locale_entry.updated`                 |                                                          | value (`entryKey` rides along)         |
 | `admin.backorder.limit.set`                  | backorder limit                                          |                                        |
 | `example.updated`                            |                                                          | title, body                            |
 

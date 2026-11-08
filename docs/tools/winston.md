@@ -310,7 +310,7 @@ why `db:bootstrap` syncs before the server starts.
 
 ## Redaction
 
-`redactSensitiveFields` replaces values of well-known sensitive keys (`password`, `token`, `cookie`, `authorization`, …) with `[REDACTED]` before logging. It runs on every log entry and on every audit event.
+`redactSensitiveFields` replaces values of well-known sensitive keys (`password`, `token`, `cookie`, `authorization`, …) with `[REDACTED]` before logging. It runs on every log entry. An audit event's `metadata` is scrubbed of credentials once, before both copies: the log line and the stored row. Personal fields (below) are handled on the line only; the stored row keeps `ip` readable.
 
 ## Personal data
 
