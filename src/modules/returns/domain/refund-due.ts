@@ -67,7 +67,8 @@ export const proofOpensRefund = (reason: ReturnReason): boolean =>
  */
 export const proofOpenedRefund = (returned: {
     reason: ReturnReason;
-    proofOfSendingAt?: Date | undefined;
+    // Only its presence is read, so a wire row's ISO string counts as much as a stored Date.
+    proofOfSendingAt?: Date | string | undefined;
 }): boolean => returned.proofOfSendingAt !== undefined && proofOpensRefund(returned.reason);
 
 /**

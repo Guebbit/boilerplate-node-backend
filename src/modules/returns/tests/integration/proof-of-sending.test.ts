@@ -155,6 +155,22 @@ describe('a proof of sending on a withdrawal', () => {
         expect(returnService.withActions(after!, asAdmin()).actions.recordProof).toBe(false);
     });
 
+    it('turns the cancel action off once the proof opened the refund, and only then', async () => {
+        const withdrawal = await approvedReturn('withdrawal');
+        const faulty = await approvedReturn('defective');
+        for (const { returnId } of [withdrawal, faulty])
+            await returnService.recordProofOfSending(
+                returnId,
+                proofOn(new Date()),
+                callerContextAs('admin')
+            );
+        const afterWithdrawal = await returnRepository.findById(withdrawal.returnId);
+        const afterFaulty = await returnRepository.findById(faulty.returnId);
+
+        expect(returnService.withActions(afterWithdrawal!, asAdmin()).actions.cancel).toBe(false);
+        expect(returnService.withActions(afterFaulty!, asAdmin()).actions.cancel).toBe(true);
+    });
+
     it('refuses a return that is not waiting for its goods', async () => {
         const { returnId } = await approvedReturn('withdrawal');
         await returnService.receiveReturn(returnId, {}, callerContextAs('admin'));

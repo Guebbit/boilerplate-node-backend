@@ -21,7 +21,12 @@ import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
 import { presentReturn } from '../presenter';
 import { ownOrder } from './ownership';
-import { returnLifecycle, type ReturnStatus } from '../domain';
+import {
+    proofOpenedRefund,
+    returnLifecycle,
+    type ReturnReason,
+    type ReturnStatus
+} from '../domain';
 
 /** The filters `GET /returns` accepts. */
 export interface ReturnFilters {
@@ -36,6 +41,7 @@ export interface ReturnFilters {
 /** What the actions read off a return: where it is in its lifecycle, and whether a proof is on it. */
 interface StatusOnly {
     status: ReturnStatus;
+    reason: ReturnReason;
     proofOfSendingAt?: Date | string | undefined;
 }
 
@@ -69,7 +75,11 @@ const actionsForCaller = (authContext: AuthContext): ((returned: StatusOnly) => 
                 returnLifecycle.allows('receive', status) &&
                 returned.proofOfSendingAt === undefined,
             close: mayReceive && returnLifecycle.allows('close', status),
-            cancel: mayDecide && returnLifecycle.allows('cancel', status)
+            // The same refusal the cancel door makes: a refund the proof opened is owed.
+            cancel:
+                mayDecide &&
+                returnLifecycle.allows('cancel', status) &&
+                !proofOpenedRefund(returned)
         };
     };
 };
