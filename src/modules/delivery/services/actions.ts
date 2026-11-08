@@ -11,7 +11,7 @@ import { holds } from '@kernel/ability';
 import { canRecordArrival, isAwaitingGoods } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { isOpenForShipment } from './ship-gate';
-import { FulfillmentOrderKind, ShipmentStatus } from '@types';
+import { FulfillmentOrderKind } from '@types';
 import type {
     AuthContext,
     FulfillmentOrder,
@@ -24,7 +24,8 @@ import {
     isFulfillable,
     isHoldable,
     isReleasable,
-    isShippable
+    isShippable,
+    shipmentLifecycle
 } from '../domain';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
 import { presentFulfillmentOrder, presentShipment } from '../presenter';
@@ -87,15 +88,15 @@ export const shipmentActions = (
     // A `lost` parcel may still arrive while every unit on it is open: the caller says whether.
     const open =
         mayAct &&
-        (shipment.status === ShipmentStatus.shipped ||
-            (shipment.status === ShipmentStatus.lost && restorable));
+        (shipmentLifecycle.allows('deliver', shipment.status) ||
+            (shipmentLifecycle.allows('find', shipment.status) && restorable));
     return {
         deliver: open,
         // The tracking code is a record staff may fix at any time, once and after arrival, on a parcel.
         update: standing.staff && shipment.kind === FulfillmentOrderKind.physical,
         markLost:
             mayAct &&
-            shipment.status === ShipmentStatus.shipped &&
+            shipmentLifecycle.allows('lose', shipment.status) &&
             shipment.kind === FulfillmentOrderKind.physical
     };
 };

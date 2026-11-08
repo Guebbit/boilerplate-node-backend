@@ -20,7 +20,12 @@ import {
     applyShipmentTransform
 } from './model';
 import type { FulfillmentOrderDocument, ShipmentDocument } from './model';
-import { DUE_NOTICE_LEAD_MS, type FulfillmentOrderDraft, type WaitCause } from './domain';
+import {
+    DUE_NOTICE_LEAD_MS,
+    shipmentLifecycle,
+    type FulfillmentOrderDraft,
+    type WaitCause
+} from './domain';
 import type { ListPreorderFulfillmentOrdersCause } from '@types';
 import {
     FulfillmentHoldReason,
@@ -607,10 +612,16 @@ export const shipmentRepository: Repository<ShipmentDocument, Wire<ShipmentDocum
      * @param session - the act's transaction
      */
     markDelivered: (id, deliveredAt, session) =>
-        conditionalStatus(shipmentModel, { _id: toObjectId(id) }, ['shipped'], 'delivered', {
-            set: { deliveredAt },
-            session
-        }),
+        conditionalStatus(
+            shipmentModel,
+            { _id: toObjectId(id) },
+            shipmentLifecycle.fromOf('deliver'),
+            shipmentLifecycle.toOf('deliver'),
+            {
+                set: { deliveredAt },
+                session
+            }
+        ),
 
     /**
      * Report a shipment lost, but only from `shipped` — atomically, in the filter, so two reports
@@ -620,15 +631,21 @@ export const shipmentRepository: Repository<ShipmentDocument, Wire<ShipmentDocum
      * @param session - the act's transaction
      */
     markLost: (id, { lostAt, lostReason, lostNote, lostMessage }, session) =>
-        conditionalStatus(shipmentModel, { _id: toObjectId(id) }, ['shipped'], 'lost', {
-            set: {
-                lostAt,
-                lostReason,
-                ...(lostNote ? { lostNote } : {}),
-                ...(lostMessage ? { lostMessage } : {})
-            },
-            session
-        }),
+        conditionalStatus(
+            shipmentModel,
+            { _id: toObjectId(id) },
+            shipmentLifecycle.fromOf('lose'),
+            shipmentLifecycle.toOf('lose'),
+            {
+                set: {
+                    lostAt,
+                    lostReason,
+                    ...(lostNote ? { lostNote } : {}),
+                    ...(lostMessage ? { lostMessage } : {})
+                },
+                session
+            }
+        ),
 
     /**
      * Record that a lost parcel turned up, but only from `lost`. `lostAt` and `lostReason` stay as
@@ -638,10 +655,16 @@ export const shipmentRepository: Repository<ShipmentDocument, Wire<ShipmentDocum
      * @param session - the act's transaction
      */
     markFound: (id, deliveredAt, session) =>
-        conditionalStatus(shipmentModel, { _id: toObjectId(id) }, ['lost'], 'delivered', {
-            set: { deliveredAt },
-            session
-        }),
+        conditionalStatus(
+            shipmentModel,
+            { _id: toObjectId(id) },
+            shipmentLifecycle.fromOf('find'),
+            shipmentLifecycle.toOf('find'),
+            {
+                set: { deliveredAt },
+                session
+            }
+        ),
 
     /**
      * Unset the loss note on every shipment not changed since `cutoff` that still holds one. Like

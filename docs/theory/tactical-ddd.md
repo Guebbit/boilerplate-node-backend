@@ -192,6 +192,9 @@ lifecycle edge of its own, they all ask.
 Every cancel door asks as its cause's actor, because the table answers differently for each: a customer
 may cancel from `pending` and `paid`, an operator also from `processing`.
 
+A stored status with named action endpoints uses the table where it fits: each move is one event,
+and the write, the `actions` flag and the test all read it.
+
 ### Action endpoints execute; `update` does not decide
 
 Whether a flip is an action or a field is one test, written once in

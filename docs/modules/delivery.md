@@ -160,6 +160,9 @@ stateDiagram-v2
 - A shipment is born `shipped` and becomes `delivered`, or `lost` when staff report it will not arrive
   ([Lost in transit](#lost-in-transit)); a **digital** fulfilment is born delivered, in the same write
   (Shopify fulfils digital goods without shipping them too).
+- The moves are one table, `domain/lifecycle.ts`: `deliver` and `lose` from `shipped`, `find` from
+  `lost`. The repository writes and the `actions` flags both ask it. A digital shipment's birth as
+  `delivered` is not a move, so the table does not list it.
 
 ### The grouping rule
 

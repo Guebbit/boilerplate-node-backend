@@ -4,6 +4,9 @@
  * See `docs/theory/domain-layer.md`.
  */
 
+export { shipmentLifecycle, SHIPMENT_EVENTS } from './lifecycle';
+export type { ShipmentEvent } from './lifecycle';
+
 export { holdNoticeOf, holdNeedsBuyerNotice } from './hold-notice';
 
 export {
