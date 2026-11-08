@@ -35,7 +35,9 @@ import {
     timelineOf,
     toOrderItem
 } from '@modules/orders/tests/factories';
-import { withdrawUntilFrom } from '@modules/orders';
+import { withdrawUntilFrom, withdrawalRefundDueBy } from '@modules/orders';
+import { shopTimezone } from '@modules/shop';
+import { storedRefundStamps } from '@modules/payments/tests/factories';
 import {
     deliverEverything,
     fulfillmentOrdersOf,
@@ -220,6 +222,19 @@ describe('the buyer cancelling what has not shipped', () => {
             reserved: 0,
             available: 8
         });
+    });
+
+    it('stamps the refund with the end of the shop day 14 days after the request', async () => {
+        const fixture = await partlyShipped();
+
+        const cancellation = created(await buyerCancels(fixture));
+
+        expect(await storedRefundStamps(fixture.orderId)).toEqual([
+            expect.objectContaining({
+                dueRule: 'withdrawal',
+                dueBy: withdrawalRefundDueBy(cancellation.requestedAt, shopTimezone())
+            })
+        ]);
     });
 
     it('closes the fulfillment order, reports nothing left, and moves the order to shipped while a shipment is out', async () => {

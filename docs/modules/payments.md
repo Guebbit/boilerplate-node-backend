@@ -943,8 +943,10 @@ method, provider and currency, for [`stats`](./stats.md).
 **Needs attention** lists three sources: a dispute the shop has to answer ([Disputes](#disputes)), and two that are an open refund record: a provider refund open longer
 than `NODE_PAYMENT_ATTENTION_MINUTES`, and a refund owed by hand on a `manual` payment (nothing but
 the operator finishes it, so it shows at any age). A `refused_refund` row that pays a withdrawal or
-a return also carries `refundDueBy`, the refund's creation plus 14 days (Consumer Rights Directive,
-Art. 13), so the page can show the days left; any other refund shows its age only. A refund is never owed without a record: a cancel
+a return also carries `refundDueBy`, the legal deadline stamped on the record when it opened
+(`dueBy`; Consumer Rights Directive Art. 13, [how it is set](./returns.md#the-refund-deadline)), so the
+page can show the days left; a refund the law sets no deadline for shows its age only. The listener
+for `order.canceled` stamps it from `informedAt` for a withdrawal or a buyer's own cancel. A refund is never owed without a record: a cancel
 or a refund opens it before anything is asked of a provider. An amount mismatch is not a stored state (an
 audit row `payment.amount_mismatch`, a counter, a log), so the page links to the audit log instead.
 Each source is capped at 100 rows.

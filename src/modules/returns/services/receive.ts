@@ -62,6 +62,7 @@ import {
 } from '../domain';
 import { closeReturn } from './close';
 import { syncReturnStatus } from './projection';
+import { refundDueFor } from './refund-due';
 
 /** What staff may enter when the goods arrive. */
 export interface ReceiveReturnInput {
@@ -251,12 +252,13 @@ const claimAndRestock = (
                     : { ok: true as const, breakdown: NO_REFUND };
             if (!verdict.ok) return { kind: 'deduction-too-high' };
 
+            const receivedAt = new Date();
             const received = await returnRepository.claimStatus(
                 String(returned._id),
                 RECEIVABLE_RETURN_STATUSES,
                 'received',
                 {
-                    receivedAt: new Date(),
+                    receivedAt,
                     remedy,
                     refundAmount: verdict.breakdown.total,
                     shippingRefund: verdict.breakdown.shipping,
@@ -289,6 +291,7 @@ const claimAndRestock = (
                 session
             );
             // Nothing owed (a deduction ate it all, or zero-priced lines) opens no record.
+            const due = refundDueFor(received, { receivedAt });
             const opened =
                 toMinorUnits(verdict.breakdown.total, returned.currency) > NO_MONEY
                     ? await paymentService.openReturnRefund(
@@ -297,7 +300,8 @@ const claimAndRestock = (
                               returnId: String(received._id),
                               amount: verdict.breakdown.total,
                               lines: wireLines(received.lines),
-                              shipping: verdict.breakdown.shipping
+                              shipping: verdict.breakdown.shipping,
+                              ...(due ? { due } : {})
                           },
                           context,
                           session

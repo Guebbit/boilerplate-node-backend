@@ -178,20 +178,17 @@ describe('what needs attention', () => {
         expect(items.map(({ kind }) => kind)).toEqual(['refused_refund']);
     });
 
-    it('carries the 14-day legal deadline on a refused refund that pays a return', async () => {
-        const { orderId, payment } = await refusedRefund('lost_or_stolen_card');
+    it('carries the deadline stamped on a refused refund that pays a return', async () => {
+        const { payment } = await refusedRefund('lost_or_stolen_card');
+        const dueBy = new Date('2026-03-15T22:59:59.999Z');
         await paymentModel.collection.updateOne(
             { _id: payment._id },
-            { $set: { 'refunds.0.returnId': 'a-return' } }
+            { $set: { 'refunds.0.returnId': 'a-return', 'refunds.0.dueBy': dueBy } }
         );
 
         const { items } = await paymentService.listAttention();
 
-        const stored = await paymentRepository.findByOrderId(orderId);
-        const created = stored?.refunds[0].createdAt;
-        expect(new Date(items[0].refundDueBy ?? 0).getTime() - (created?.getTime() ?? 0)).toBe(
-            14 * 24 * 3_600_000
-        );
+        expect(items[0].refundDueBy).toBe(dueBy.toISOString());
     });
 
     it('shows no deadline on a refused refund that pays no return: only its age', async () => {

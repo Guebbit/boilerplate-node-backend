@@ -8,7 +8,7 @@
  * the window has no end yet, which is why `withdrawUntil` is absent until then.
  */
 
-import { DAY_MS, endOfUtcDay } from '@domain-primitives/time';
+import { DAY_MS, dayInZone, endOfUtcDay, startOfDayInZone } from '@domain-primitives/time';
 import { OrderStatus, WithdrawBlockedReason } from '@types';
 import type { FulfillmentSummary } from './fulfillment';
 import { ORDER_STATUS_TRAITS } from './status-traits';
@@ -84,6 +84,41 @@ export const withdrawUntilFrom = (start: Date, days: number): Date =>
  */
 export const withdrawalClosesAt = (withdrawUntil: Date): Date =>
     new Date(withdrawUntil.getTime() + DAY_MS);
+
+/** Days the buyer has to send the goods back after telling the shop (Directive 2011/83/EU Art. 14(1)). */
+export const WITHDRAWAL_SEND_BACK_DAYS = 14;
+
+/** Days the shop has to refund after being told of a withdrawal (Directive 2011/83/EU Art. 13(1)). */
+export const WITHDRAWAL_REFUND_DAYS = 14;
+
+/**
+ * The last moment the shop may refund a withdrawal without being late: the end of the shop-zone day
+ * that is {@link WITHDRAWAL_REFUND_DAYS} days after the one the shop was told.
+ *
+ * Why the day itself does not count: Regulation 1182/71 Art. 3(1) and 3(2)(b). Why the shop's clock:
+ * the refund is the shop's action (Art. 2(1)). Why no weekend or holiday roll-over: Art. 3(4) only
+ * moves a deadline LATER, and an earlier date is always lawful. The law is a number in this file:
+ * when it changes, edit the constant.
+ *
+ * @param informedAt - when the shop was told (or the buyer's own cancel happened)
+ * @param timeZone - the shop's canonical IANA zone, e.g. `Europe/Rome`
+ * @returns the last millisecond of the due day, in the shop's zone
+ */
+export const withdrawalRefundDueBy = (informedAt: Date, timeZone: string): Date => {
+    const informedDay = dayInZone(informedAt, timeZone);
+    // Date.UTC rolls the month and the year over; the day after the due day starts the next zone day.
+    const dayAfterDue = dayInZone(
+        new Date(
+            Date.UTC(
+                Number(informedDay.slice(0, 4)),
+                Number(informedDay.slice(5, 7)) - 1,
+                Number(informedDay.slice(8, 10)) + WITHDRAWAL_REFUND_DAYS + 1
+            )
+        ),
+        'UTC'
+    );
+    return new Date(startOfDayInZone(dayAfterDue, timeZone).getTime() - 1);
+};
 
 /** The statutory guarantee of conformity, in years (Directive 2019/771 Art. 10(1), 2019/770 Art. 11(2)). */
 const CONFORMITY_YEARS = 2;

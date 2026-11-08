@@ -64,6 +64,8 @@ const giveBackStock = async (orderId: string, session: ClientSession): Promise<v
  * @param refund - whether the cancel owes the customer their money, carried on the announcement
  * @param cause - why it was canceled: names who did it on the timeline, and whether the hold ran out
  * @param actorId - the account that canceled, when a person did
+ * @param informedAt - when the shop was told, for a cancel that is the buyer's own act; carried on
+ *   the announcement as the start of the refund deadline
  * @returns the canceled order, or `null` when the conditional move matched nothing
  */
 const moveToCanceled = (
@@ -72,7 +74,8 @@ const moveToCanceled = (
     scope: Record<string, unknown> | undefined,
     refund: boolean,
     cause: CancelCause,
-    actorId: string | undefined
+    actorId: string | undefined,
+    informedAt: Date | undefined
 ): Promise<OrderDocument | null> =>
     announceInTransaction(
         async (session) => {
@@ -95,7 +98,12 @@ const moveToCanceled = (
         },
         () => ({
             name: ORDER_CANCELED,
-            payload: { orderId: id, refund, cause },
+            payload: {
+                orderId: id,
+                refund,
+                cause,
+                ...(informedAt ? { informedAt: informedAt.toISOString() } : {})
+            },
             aggregateId: id
         })
     ).then((order) =>
@@ -248,6 +256,8 @@ export const afterCancel = (
  * @param context - omitted by every system-initiated caller, which is not a request
  * @param onBuyersBehalf - staff recording a withdrawal the buyer stated outside the shop: the write
  *   then runs on the operator's scope instead of the buyer's own orders
+ * @param statedAt - the day the buyer stated that withdrawal, when staff record a back-dated one;
+ *   absent, the shop was told now
  */
 const cancel = (
     id: string,
@@ -255,7 +265,8 @@ const cancel = (
     authContext: AuthContext,
     refundChoice?: boolean,
     context?: CallerContext,
-    onBuyersBehalf = false
+    onBuyersBehalf = false,
+    statedAt?: Date
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
     const rules: CauseRules = CANCEL_CAUSES[cause];
     const refund = rules.refundIsChoice ? (refundChoice ?? true) : true;
@@ -279,7 +290,9 @@ const cancel = (
         refund,
         cause,
         // A system cancel has no account behind it.
-        rules.by === 'system' ? undefined : authContext.id
+        rules.by === 'system' ? undefined : authContext.id,
+        // Only the buyer's own act starts the refund clock; the shop's cancels have no such date.
+        cause === 'customer' || cause === 'withdrawal' ? (statedAt ?? new Date()) : undefined
     ).then((order) =>
         order
             ? afterCancel(order, cause, refund, context)
@@ -350,13 +363,15 @@ export const withdrawById = (
  * @param id - the order being withdrawn from
  * @param authContext - the staff member
  * @param context - the staff member's context, audited
+ * @param statedAt - the day the buyer stated it: the refund deadline counts from there
  */
 export const withdrawOnBuyersBehalfById = (
     id: string,
     authContext: AuthContext,
-    context?: CallerContext
+    context?: CallerContext,
+    statedAt?: Date
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
-    cancel(id, 'withdrawal', authContext, undefined, context, true);
+    cancel(id, 'withdrawal', authContext, undefined, context, true, statedAt);
 
 /**
  * A checkout hold that timed out: the units are already released, so the shop cancels the order

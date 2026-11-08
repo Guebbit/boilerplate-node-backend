@@ -128,16 +128,13 @@ describe('exceedsRemaining', () => {
 });
 
 describe('refundDueBy', () => {
-    const createdAt = new Date('2026-03-01T10:00:00.000Z');
-
-    it('is 14 days after creation for a refund that pays a return or a remainder cancel', () => {
-        expect(refundDueBy({ createdAt, returnId: 'r1' })?.toISOString()).toBe(
-            '2026-03-15T10:00:00.000Z'
-        );
+    it('is the deadline stamped on the record when it opened', () => {
+        const dueBy = new Date('2026-03-15T22:59:59.999Z');
+        expect(refundDueBy({ dueBy })).toBe(dueBy);
     });
 
-    it('is absent for a refund that pays no return', () => {
-        expect(refundDueBy({ createdAt })).toBeUndefined();
+    it('is absent for a refund the law sets no deadline for', () => {
+        expect(refundDueBy({})).toBeUndefined();
     });
 });
 

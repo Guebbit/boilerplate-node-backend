@@ -204,7 +204,12 @@ export const withdrawBeforeDispatch = (
 
     const orderId = String(order._id);
     const cancelling = byStaff
-        ? orderService.withdrawOnBuyersBehalfById(orderId, authContext, context)
+        ? orderService.withdrawOnBuyersBehalfById(
+              orderId,
+              authContext,
+              context,
+              opener.statement.requestedAt
+          )
         : orderService.withdrawById(orderId, authContext, context);
     return cancelling.then((canceled) => {
         if (!canceled.success)

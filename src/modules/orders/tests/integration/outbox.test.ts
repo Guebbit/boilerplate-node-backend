@@ -181,10 +181,12 @@ describe('cancelling an order', () => {
 
         const rows = await rowsNamed(ORDER_CANCELED);
         expect(rows).toHaveLength(1);
+        // `informedAt` is the day the buyer's own cancel started the 14-day refund clock.
         expect(rows[0].payload).toEqual({
             orderId: String(order._id),
             refund: true,
-            cause: 'customer'
+            cause: 'customer',
+            informedAt: expect.any(String)
         });
     });
 

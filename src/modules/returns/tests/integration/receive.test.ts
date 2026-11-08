@@ -6,7 +6,10 @@
  * refund that finally lands — not left stuck.
  */
 
-import { refundOrderPayment } from '@modules/payments/tests/factories';
+import { refundOrderPayment, storedRefundStamps } from '@modules/payments/tests/factories';
+import { withdrawalRefundDueBy } from '@modules/orders';
+import { shopTimezone } from '@modules/shop';
+import { DAY_MS } from '@domain-primitives/time';
 import { setupTestDb } from '@tests/setup-test-db';
 import { observePort } from '@tests/ports';
 import * as auditPort from '@infrastructure/observability/audit';
@@ -29,6 +32,7 @@ import { asReject } from '@tests/response';
 import { returnService } from '../../services';
 import { RETURN_CLOSED, RETURN_RECEIVED } from '../../events';
 import { returnRepository } from '../../repository';
+import { returnModel } from '../../model';
 import { invoicingService, type CreditNoteDocument } from '@modules/invoicing';
 import { eventually } from '@tests/eventually';
 import { settleOutboxNudges } from '@kernel/outbox';
@@ -241,6 +245,48 @@ describe('receiving a return', () => {
         });
         await eventually(() => events.length === 2);
         expect(events.toSorted()).toEqual(['closed', 'received']);
+    });
+
+    it('stamps the refund of a withdrawal with the end of the shop day 14 days after the request', async () => {
+        const fixture = await paidAndDelivered();
+        const id = await approvedReturn(fixture);
+        const returned = await returnRepository.findById(id);
+
+        await returnService.receiveReturn(id, {}, callerContextAs('admin'));
+
+        expect(await storedRefundStamps(fixture.orderId)).toEqual([
+            expect.objectContaining({
+                returnId: id,
+                dueRule: 'withdrawal',
+                dueBy: withdrawalRefundDueBy(returned!.requestedAt, shopTimezone())
+            })
+        ]);
+    });
+
+    it('makes the refund due the moment the goods arrive when they come after the 14 days', async () => {
+        const fixture = await paidAndDelivered();
+        const id = await approvedReturn(fixture);
+        await returnModel.updateOne(
+            { _id: id },
+            { requestedAt: new Date(Date.now() - 20 * DAY_MS) }
+        );
+
+        await returnService.receiveReturn(id, {}, callerContextAs('admin'));
+
+        const [stamp] = await storedRefundStamps(fixture.orderId);
+        const { receivedAt: received } = (await returnRepository.findById(id)) ?? {};
+        expect(stamp).toMatchObject({ dueRule: 'withdrawal', dueBy: received });
+    });
+
+    it('makes the refund of a faulty item due when the goods arrive', async () => {
+        const fixture = await paidAndDelivered();
+        const id = await approvedReturn(fixture, 'defective');
+
+        await returnService.receiveReturn(id, {}, callerContextAs('admin'));
+
+        const [stamp] = await storedRefundStamps(fixture.orderId);
+        const { receivedAt: received } = (await returnRepository.findById(id)) ?? {};
+        expect(stamp).toMatchObject({ dueRule: 'faulty', dueBy: received });
     });
 
     it('records one restock movement per line, naming the return', async () => {

@@ -25,7 +25,9 @@ import { asAdmin, asCustomer, testCallerContext } from '@tests/callers';
 import { returnService } from '../../services';
 import { returnRepository } from '../../repository';
 import { eventually } from '@tests/eventually';
-import { payByCard } from '@modules/payments/tests/factories';
+import { payByCard, storedRefundStamps } from '@modules/payments/tests/factories';
+import { withdrawalRefundDueBy } from '@modules/orders';
+import { shopTimezone } from '@modules/shop';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -93,6 +95,26 @@ describe('a withdrawal before dispatch on a paid order', () => {
         expect(refunds[0].returnId).toBeUndefined();
         const notes = await invoicingService.findCreditNotesForOrder(orderId);
         expect(notes).toHaveLength(1);
+    });
+
+    it('stamps the refund with the end of the shop day 14 days after the shop was told', async () => {
+        const { user, orderId } = await paidOrder();
+
+        const outcome = await returnService.createReturn(
+            { orderId, reason: 'withdrawal' },
+            asCustomer(user.id),
+            testCallerContext
+        );
+        await settleOutboxNudges();
+
+        const [written] = await returnRepository.findByOrderId(orderId);
+        expect(outcome.success).toBe(true);
+        expect(await storedRefundStamps(orderId)).toEqual([
+            expect.objectContaining({
+                dueRule: 'withdrawal',
+                dueBy: withdrawalRefundDueBy(written.requestedAt, shopTimezone())
+            })
+        ]);
     });
 
     it('sends one mail from returns — the acknowledgement, never the return-closed notice', async () => {

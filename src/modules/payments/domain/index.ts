@@ -22,6 +22,7 @@ export {
     isOpenRefund,
     mayBeCanceled,
     refundDueBy,
+    REFUND_DUE_RULES,
     FINAL_REFUND_FAILURES,
     UNCLEAR_REFUND_FAILURES,
     isFinalFailure,
@@ -33,6 +34,7 @@ export {
     mayBeSettledByHand,
     nextRefundAttemptAt
 } from './lifecycle';
+export type { RefundDue, RefundDueRule } from './lifecycle';
 
 /** The dispute rules: what an open or lost chargeback allows. */
 export {

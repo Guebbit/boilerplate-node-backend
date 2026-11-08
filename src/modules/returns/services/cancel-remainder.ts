@@ -39,6 +39,7 @@ import type { ProductQuantity, Statement } from '../domain';
 import { cancelRefusalOf } from './cancel-right';
 import { cancellationRefundOn } from './cancellation-refund';
 import { syncReturnStatus } from './projection';
+import { refundDueFor } from './refund-due';
 import {
     badCancellation,
     badLines,
@@ -165,6 +166,8 @@ const cancelUnderLock = (
         await enqueueRequested(created, session);
         await enqueueClosed(created, session);
         const owed = created.refundAmount ?? '0';
+        // Goods never left, so only the withdrawal's 14 days can date it; a goodwill cancel has none.
+        const due = refundDueFor(created, {});
         const opened =
             toMinorUnits(owed, created.currency) > NO_MONEY
                 ? await paymentService.openReturnRefund(
@@ -174,7 +177,8 @@ const cancelUnderLock = (
                           amount: owed,
                           lines: canceled.lines,
                           shipping: created.shippingRefund ?? '0',
-                          reason: 'cancellation'
+                          reason: 'cancellation',
+                          ...(due ? { due } : {})
                       },
                       context,
                       session

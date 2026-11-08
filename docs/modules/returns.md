@@ -313,6 +313,27 @@ arrives broken is still the shop's to put right. A reason past its deadline is a
 `reasonsOpenAt` (`domain/reasons.ts`) is the one rule; the door and [the options
 read](#the-options-read) both ask it.
 
+## The refund deadline {#the-refund-deadline}
+
+Every refund `returns` opens, and the refund of a withdrawal before dispatch (`payments` opens that
+one from `order.canceled`), is stamped with its legal deadline when the record opens: `dueBy`, and
+`dueRule` for why. The stamp is stored, not recomputed, so a later change of time zone or setting
+never moves a date a buyer was already owed.
+
+| Case                                          | `dueBy`                                                 | `dueRule`    | Stamped by            |
+| --------------------------------------------- | ------------------------------------------------------- | ------------ | --------------------- |
+| withdrawal return, goods in time              | end of the shop's day, 14 days after the shop was told  | `withdrawal` | `returns`, on receipt |
+| withdrawal return, goods after that date      | the moment they arrived: pay now                        | `withdrawal` | `returns`, on receipt |
+| remainder cancel (withdrawal)                 | as the first row; staff back-dating is honoured         | `withdrawal` | `returns`             |
+| withdrawal before dispatch, paid buyer cancel | as the first row, from `informedAt` on `order.canceled` | `withdrawal` | `payments`            |
+| defective or wrong item                       | the moment the goods arrived                            | `faulty`     | `returns`, on receipt |
+| goodwill (`other`), the shop's own cancel     | none                                                    | none         | none                  |
+
+The table is `refundDueByOf` (`domain/refund-due.ts`); `services/refund-due.ts` adds the one thing a
+domain file cannot reach, the shop's calendar. The shop may wait for the goods, whichever comes
+first, but waiting never moves the last date (Directive 2011/83/EU Art. 13(3); guidance 2021/C
+525/01 §5.5.3). Nothing refunds by itself: the system computes, shows and reminds.
+
 ## Goods with no right of withdrawal
 
 Art. 16(c)–(d) of the Consumer Rights Directive takes the right away from some goods — those made

@@ -142,9 +142,9 @@ export default {
         // nobody finished, still open at the provider (closed best-effort, never rethrown), and —
         // when `refund` says so — the money already taken. The refund is the durable half: its
         // event is an outbox row, and a rejection here makes the relay deliver it again.
-        onDomainEvent(ORDER_CANCELED, ({ orderId, refund, cause }) =>
+        onDomainEvent(ORDER_CANCELED, ({ orderId, refund, cause, informedAt }) =>
             cancelOpenIntentForOrder(orderId, cause === 'reservation_expired').then(() =>
-                refund ? refundForOrder(orderId) : undefined
+                refund ? refundForOrder(orderId, { cause, informedAt }) : undefined
             )
         );
         // A bank-transfer order is owed money from the moment it is placed: its payment, with the

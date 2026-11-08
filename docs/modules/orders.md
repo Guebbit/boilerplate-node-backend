@@ -867,6 +867,23 @@ Lines excluded under Art. 16 are named when others are not. The model form (Anne
 row filled with the shop. The refund and return legs always say 14 days, the statutory figure, even
 when the shop offers a longer withdrawal period.
 
+### The two statutory 14-day figures {#the-statutory-14-days}
+
+`domain/withdrawal.ts` is the one home of the numbers the law fixes, whatever withdrawal period the
+shop offers. Neither is a setting: when the law changes, the line changes.
+
+| Constant                    | Law                             | Counts                                             |
+| --------------------------- | ------------------------------- | -------------------------------------------------- |
+| `WITHDRAWAL_SEND_BACK_DAYS` | Directive 2011/83/EU Art. 14(1) | the buyer's days to send the goods back            |
+| `WITHDRAWAL_REFUND_DAYS`    | Directive 2011/83/EU Art. 13(1) | the shop's days to refund, from the day it is told |
+
+`withdrawalRefundDueBy(informedAt, timeZone)` is the refund deadline: the end of the **shop's** day
+that is 14 days after the day the shop was told. The day itself does not count (Regulation 1182/71
+Art. 3), and the shop's calendar is used because the refund is the shop's action (Art. 2(1)).
+There is no weekend roll-over on purpose: Art. 3(4) only moves a deadline later, and paying
+earlier is always lawful. `returns` and `payments` stamp the result on the refund record, see
+[the refund deadline](./returns.md#the-refund-deadline).
+
 ## Configuration
 
 | Variable                               | Default | Meaning                                                                                                                                                                                        |

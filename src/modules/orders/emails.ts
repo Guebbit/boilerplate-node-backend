@@ -10,7 +10,13 @@ import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
 import { formatMoney } from '@domain-primitives/money';
 import { orderFrontendLink, withdrawalPeriodDays } from './config';
-import { isExcludedFromWithdrawal, isShippedItem, orderTotal } from './domain';
+import {
+    WITHDRAWAL_REFUND_DAYS,
+    WITHDRAWAL_SEND_BACK_DAYS,
+    isExcludedFromWithdrawal,
+    isShippedItem,
+    orderTotal
+} from './domain';
 import { operatorIdentity } from '@modules/account';
 import {
     addressLine,
@@ -55,9 +61,6 @@ export interface OrderLines {
     /** The order's own frozen currency. */
     currency: string;
 }
-
-/** Days the law gives to hand goods back and to reimburse, whatever longer window the shop offers. */
-const STATUTORY_DAYS = 14;
 
 /** What the withdrawal notice says, as finished strings; `effects` and `form` are empty when they do not apply. */
 export interface WithdrawalNotice {
@@ -110,7 +113,7 @@ const goodsEffects = (t: ReturnType<typeof translator>): string[] => [
     t('orders.email-withdrawal.withhold'),
     t('orders.email-withdrawal.send-back', {
         recipient: addressLine(returnAddress()),
-        returnDays: STATUTORY_DAYS
+        returnDays: WITHDRAWAL_SEND_BACK_DAYS
     }),
     t(
         returnPostagePayer() === 'shop'
@@ -180,7 +183,7 @@ export const withdrawalNotice = (
         ],
         effectsHeading: t('orders.email-withdrawal.effects-heading'),
         effects: [
-            t('orders.email-withdrawal.effects', { refundDays: STATUTORY_DAYS }),
+            t('orders.email-withdrawal.effects', { refundDays: WITHDRAWAL_REFUND_DAYS }),
             ...(kind === 'goods' ? goodsEffects(t) : [])
         ],
         formHeading: t('orders.email-withdrawal.form-heading'),

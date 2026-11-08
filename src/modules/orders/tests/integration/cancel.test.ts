@@ -214,7 +214,12 @@ describe('cancelOnRequestById — who gets their money back', () => {
         await settleOutboxNudges();
 
         expect(cancellations).toEqual([
-            { orderId: String(order._id), refund: true, cause: 'customer' }
+            {
+                orderId: String(order._id),
+                refund: true,
+                cause: 'customer',
+                informedAt: expect.any(String)
+            }
         ]);
     });
 

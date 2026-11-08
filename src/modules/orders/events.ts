@@ -26,8 +26,17 @@ declare module '@kernel/events' {
          * `cause` says why: it picks the buyer's mail (`orders` sends it from this event, see
          * `./services/cancel-mail.ts`), and `reservation_expired` is the cancel a transfer nobody
          * sent is answered for by `payments`, a card hold by `orders`.
+         *
+         * `informedAt` (ISO 8601) is when the shop was told, on the two causes that are the buyer's
+         * own act (`customer`, `withdrawal`): the day the 14-day refund deadline counts from. A
+         * withdrawal the buyer stated by phone or letter carries the stated day. Never published.
          */
-        'order.canceled': { orderId: string; refund: boolean; cause: CancelCause };
+        'order.canceled': {
+            orderId: string;
+            refund: boolean;
+            cause: CancelCause;
+            informedAt?: string;
+        };
 
         /**
          * An order's status moved, whoever moved it — a status-only admin override

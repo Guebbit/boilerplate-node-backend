@@ -305,21 +305,32 @@ export const mayBeCanceled = (payment: RefundablePayment, refund: RefundFacts): 
         // and is owed no more: staff void it. While a chargeback is open it is left alone.
         (refund.failureReason === RefundFailureReason.disputed && hasDecidedDispute(payment)));
 
-/** Days the trader has to give the money back after a withdrawal (Directive 2011/83/EU, Art. 13). */
-const WITHDRAWAL_REFUND_DAYS = 14;
+/**
+ * Why a refund has a legal deadline, as a closed code: `withdrawal` is the 14-day rule of the right
+ * of withdrawal (Directive 2011/83/EU Art. 13), `faulty` is a defective or wrong item, refunded
+ * once the goods or the proof of sending are in (Directive 2019/771 Art. 16(3)(b)).
+ */
+export const REFUND_DUE_RULES = ['withdrawal', 'faulty'] as const;
+
+/** One of {@link REFUND_DUE_RULES}. */
+export type RefundDueRule = (typeof REFUND_DUE_RULES)[number];
+
+/** The legal deadline a refund is stamped with when it opens, and the rule behind that date. */
+export interface RefundDue {
+    /** The last moment the refund may be paid without being late. */
+    dueBy: Date;
+    /** Why that date. */
+    dueRule: RefundDueRule;
+}
 
 /**
- * The legal deadline to pay a refund back, when it pays for a withdrawal or a return: its creation
- * plus 14 days. A goodwill or late-payment refund, or the shop's own cancellation of an order, has
- * no such deadline.
+ * The legal deadline to pay a refund back, as it was stamped when the refund opened. A goodwill or
+ * late-payment refund, or the shop's own cancellation of an order, was stamped with none.
  *
- * @param refund - the refund's `createdAt` and the return it pays for, if any
+ * @param refund - the refund record
  * @returns the deadline, or `undefined` when the law sets none
  */
-export const refundDueBy = (refund: { createdAt: Date; returnId?: string }): Date | undefined =>
-    refund.returnId === undefined
-        ? undefined
-        : new Date(refund.createdAt.getTime() + WITHDRAWAL_REFUND_DAYS * DAY_MS);
+export const refundDueBy = (refund: { dueBy?: Date }): Date | undefined => refund.dueBy;
 
 /** The longest wait the growing retry delay reaches: a day. */
 const MAX_RETRY_DELAY_MS = DAY_MS;

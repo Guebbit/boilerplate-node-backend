@@ -13,6 +13,7 @@ import {
     isBeforeDispatch,
     isExcludedFromWithdrawal,
     withdrawalClosesAt,
+    withdrawalRefundDueBy,
     withdrawalRefusalOf,
     withdrawalStartFor,
     withdrawUntilFrom
@@ -300,5 +301,47 @@ describe('repairedConformityUntil', () => {
         expect(repairedConformityUntil(new Date('2028-03-08T23:59:59.999Z')).toISOString()).toBe(
             '2029-03-08T23:59:59.999Z'
         );
+    });
+});
+
+describe('withdrawalRefundDueBy', () => {
+    const ROME = 'Europe/Rome';
+
+    it('is the last millisecond of the shop day 14 days after the one the shop was told', () => {
+        // Told on 1 March: the day itself does not count, so the 15th is the due day (UTC+1).
+        expect(
+            withdrawalRefundDueBy(new Date('2026-03-01T10:00:00.000Z'), ROME).toISOString()
+        ).toBe('2026-03-15T22:59:59.999Z');
+    });
+
+    it('counts the shop day, not the UTC day: 00:30 in Rome on the 2nd is still the 1st in UTC', () => {
+        expect(
+            withdrawalRefundDueBy(new Date('2026-03-01T23:30:00.000Z'), ROME).toISOString()
+        ).toBe('2026-03-16T22:59:59.999Z');
+    });
+
+    it('ends on the right local midnight across the spring change (29 March 2026)', () => {
+        expect(
+            withdrawalRefundDueBy(new Date('2026-03-20T10:00:00.000Z'), ROME).toISOString()
+        ).toBe('2026-04-03T21:59:59.999Z');
+    });
+
+    it('ends on the right local midnight across the autumn change (25 October 2026)', () => {
+        expect(
+            withdrawalRefundDueBy(new Date('2026-10-20T10:00:00.000Z'), ROME).toISOString()
+        ).toBe('2026-11-03T22:59:59.999Z');
+    });
+
+    it('rolls the month and the year over', () => {
+        expect(
+            withdrawalRefundDueBy(new Date('2026-12-25T10:00:00.000Z'), ROME).toISOString()
+        ).toBe('2027-01-08T22:59:59.999Z');
+    });
+
+    it('does not roll a due day on a weekend to Monday: earlier is always lawful', () => {
+        // 14 March 2026 is a Saturday: 28 February told -> due on Sat 14 March at the end of day.
+        expect(
+            withdrawalRefundDueBy(new Date('2026-02-28T10:00:00.000Z'), ROME).toISOString()
+        ).toBe('2026-03-14T22:59:59.999Z');
     });
 });

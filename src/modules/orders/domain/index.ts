@@ -49,6 +49,8 @@ export type { OrderTaxBreakdown, LineTaxBreakdown, TaxableLineItem, TaxRateSumma
 export {
     canCorrectAddress,
     canWithdraw,
+    WITHDRAWAL_REFUND_DAYS,
+    WITHDRAWAL_SEND_BACK_DAYS,
     isBeforeDispatch,
     conformityUntilFrom,
     repairedConformityUntil,
@@ -56,6 +58,7 @@ export {
     isExcludedFromWithdrawal,
     withdrawUntilFrom,
     withdrawalClosesAt,
+    withdrawalRefundDueBy,
     withdrawalRefusalOf,
     withdrawalStartFor
 } from './withdrawal';

@@ -112,7 +112,7 @@ The dedup, the replay rules and the overdue sweep are the engine's: see
 the shop owes the money again. `payment.refund_reversed` opens a `refund_reversed` to-do, "Refund
 sent back by the bank": agree a way with the buyer, pay, then mark the refund returned (which
 closes it). It is mailed on opening and gets a due-soon reminder like any other to-do with time
-left. Its date is the legal one only when the law sets one (a return refund's 14 days, which may
+left. Its date is the legal one only when the law sets one (a return refund's stamped legal deadline, which may
 already be past: then the opened and overdue mails both go, truthfully), never the refund's
 creation date.
 

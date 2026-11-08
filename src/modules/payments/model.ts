@@ -22,6 +22,7 @@ import {
     RefundReason,
     RefundStatus
 } from '@types';
+import { REFUND_DUE_RULES, type RefundDueRule } from './domain';
 
 /**
  * One returned product line a refund pays back — Shopify's `refund_line_items`, reduced to what a
@@ -59,6 +60,14 @@ export interface RefundRecord {
      * not a reference: `payments` knows nothing of `returns`.
      */
     returnId?: string;
+    /**
+     * The legal deadline, stamped when the record opened: the last moment the refund may be paid
+     * without being late. Absent when the law sets none (goodwill, the shop's own cancel). Staff
+     * only: it reaches the wire through the attention row, never on the record.
+     */
+    dueBy?: Date;
+    /** Why `dueBy` is that date — see `REFUND_DUE_RULES`. Present exactly when `dueBy` is. */
+    dueRule?: RefundDueRule;
     /**
      * The goods this refund pays back, when it pays for specific ones (a return). Absent for a
      * goodwill or cancellation refund. `invoicing` credits these lines at their own VAT rates.
@@ -232,6 +241,8 @@ const refundSchema = new Schema<RefundRecord>(
         reason: { type: String, enum: Object.values(RefundReason), required: true },
         idempotencyKey: { type: String, required: true },
         returnId: { type: String },
+        dueBy: { type: Date },
+        dueRule: { type: String, enum: REFUND_DUE_RULES },
         lines: {
             type: [
                 new Schema<RefundLine>(
@@ -384,7 +395,9 @@ const REFUND_INTERNAL_KEYS = [
     'attemptedAt',
     'nextAttemptAt',
     'lines',
-    'shipping'
+    'shipping',
+    'dueBy',
+    'dueRule'
 ] as const;
 
 /**

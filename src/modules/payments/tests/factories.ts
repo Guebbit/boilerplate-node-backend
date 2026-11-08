@@ -139,3 +139,19 @@ export const providerRefOf = (orderId: string): Promise<string> =>
         if (!payment?.providerRef) throw new Error('the order has no provider intent');
         return payment.providerRef;
     });
+
+/**
+ * An order's refund records as stored, with the staff-only deadline stamp the wire never carries.
+ *
+ * @param orderId - the order
+ * @returns each record's `reason`, `returnId`, `dueBy` and `dueRule`; empty when it has no payment
+ */
+export const storedRefundStamps = (orderId: string) =>
+    paymentRepository.findByOrderId(orderId).then((payment) =>
+        (payment?.refunds ?? []).map(({ reason, returnId, dueBy, dueRule }) => ({
+            reason,
+            returnId,
+            dueBy,
+            dueRule
+        }))
+    );

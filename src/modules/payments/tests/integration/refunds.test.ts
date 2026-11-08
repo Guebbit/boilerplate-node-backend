@@ -30,7 +30,13 @@ import { asReject } from '@tests/response';
 import { observePort } from '@tests/ports';
 import * as auditPort from '@infrastructure/observability/audit';
 import { asCustomer, asAdmin, callerContextAs } from '@tests/callers';
-import { payByCard, refundForOrder, refundForReturn } from '@modules/payments/tests/factories';
+import {
+    payByCard,
+    refundForOrder,
+    refundForReturn,
+    storedRefundStamps
+} from '@modules/payments/tests/factories';
+import { withdrawalRefundDueBy } from '@modules/orders';
 
 /* Replaced, not spied on — see `tests/support/ports.ts` for why. */
 jest.mock('@infrastructure/observability/audit', () =>
@@ -395,6 +401,39 @@ const refuseRefundsOf = (amount: string) => {
                 : providerRefund(ref, charge, options)
         );
 };
+
+describe('the legal deadline a cancel stamps on its refund', () => {
+    const informedAt = '2026-03-01T10:00:00.000Z';
+
+    it.each(['customer', 'withdrawal'] as const)(
+        'is 14 days after the shop was told, when the buyer caused it (%s)',
+        async (cause) => {
+            const { orderId } = await paidOrder();
+
+            await refundForOrder(orderId, { cause, informedAt });
+
+            expect(await storedRefundStamps(orderId)).toEqual([
+                expect.objectContaining({
+                    dueRule: 'withdrawal',
+                    dueBy: withdrawalRefundDueBy(new Date(informedAt), 'Europe/Rome')
+                })
+            ]);
+        }
+    );
+
+    it.each(['operator', 'payment_mismatch'] as const)(
+        'is absent when the shop or the system caused it (%s)',
+        async (cause) => {
+            const { orderId } = await paidOrder();
+
+            await refundForOrder(orderId, { cause });
+
+            const [stamp] = await storedRefundStamps(orderId);
+            expect(stamp.dueBy).toBeUndefined();
+            expect(stamp.dueRule).toBeUndefined();
+        }
+    );
+});
 
 describe('a refund after one the provider keeps refusing', () => {
     it('is opened and sent by a cancel, and the refused one is left to the sweep', async () => {

@@ -45,10 +45,11 @@ import {
     subtractMoney,
     padDecimal
 } from '@domain-primitives/money';
-import { orderService } from '@modules/orders';
+import { orderService, withdrawalRefundDueBy } from '@modules/orders';
 import { holds } from '@kernel/ability';
 import { auditForbidden } from '@infrastructure/observability/forbidden';
 import { ownOrderFlag } from '@modules/access';
+import { shopTimezone } from '@modules/shop';
 import { paymentsAuditActions } from '../audit';
 import { PaymentProviderError } from '../providers';
 import { paymentProviderRegistry } from '../providers/registry';
@@ -64,7 +65,8 @@ import {
     mayBeCanceled,
     mayBeSettledByHand,
     OPEN_REFUND_STATUSES,
-    REFUNDABLE_PAYMENT_STATUS
+    REFUNDABLE_PAYMENT_STATUS,
+    type RefundDue
 } from '../domain';
 import {
     isFullyRefunded,
@@ -101,6 +103,8 @@ export interface RefundRequest {
      * write then refunds the rest, not nothing.
      */
     capAtRemaining?: boolean;
+    /** The legal deadline this record is stamped with when it opens; absent when the law sets none. */
+    due?: RefundDue;
 }
 
 /** The request the automatic callers make: everything left, for a cancellation. */
@@ -293,6 +297,7 @@ export const openRefund = (
         createdAt: new Date(),
         reason: request.reason,
         ...(request.returnId ? { returnId: request.returnId } : {}),
+        ...request.due,
         ...(request.lines ? { lines: request.lines, shipping: request.shipping ?? '0' } : {}),
         // One key per RECORD, not per payment: two different partial refunds must not be taken
         // for one by the provider, while a retry of this one must be.
@@ -1099,6 +1104,30 @@ export const cancelRefund = (
         );
     });
 
+/** What {@link refundForOrder} reads off the `order.canceled` fact. */
+type CanceledOrder = Pick<DomainEventMap['order.canceled'], 'cause' | 'informedAt'>;
+
+/**
+ * The refund request of a cancel, stamped with its legal deadline when the buyer's own act caused
+ * it: a withdrawal before dispatch, or a paid order the buyer canceled, is due 14 days after the
+ * shop was told (Directive 2011/83/EU Art. 13(1)). The shop's own cancels, and every system cause,
+ * carry no legal deadline.
+ *
+ * @param canceled - the `order.canceled` fact
+ */
+const cancellationRequestOf = (canceled: CanceledOrder | undefined): RefundRequest => {
+    if (!canceled) return CANCELLATION_REQUEST;
+    const buyersOwnAct = canceled.cause === 'withdrawal' || canceled.cause === 'customer';
+    if (!buyersOwnAct || canceled.informedAt === undefined) return CANCELLATION_REQUEST;
+    return {
+        ...CANCELLATION_REQUEST,
+        due: {
+            dueBy: withdrawalRefundDueBy(new Date(canceled.informedAt), shopTimezone()),
+            dueRule: 'withdrawal'
+        }
+    };
+};
+
 /**
  * The `order.canceled` listener's refund: give the money back if any was taken. The event is the
  * only promise of it, delivered by the outbox until this resolves.
@@ -1112,11 +1141,12 @@ export const cancelRefund = (
  * A hand-paid order opens its record and waits for an operator (`leaveForOperator`).
  *
  * @param orderId - the order that was canceled
+ * @param canceled - why it was canceled and when the buyer told the shop, from the `order.canceled` fact
  * @internal The `order.canceled` listener's refund, which has no caller of its own to check: only
  *   this module's `subscribe` may run it, so it is not on `paymentService`.
  */
-export const refundForOrder = (orderId: string): Promise<void> =>
-    performRefund(orderId)
+export const refundForOrder = (orderId: string, canceled?: CanceledOrder): Promise<void> =>
+    performRefund(orderId, undefined, cancellationRequestOf(canceled))
         .then(() => undefined)
         .catch((error: unknown) => {
             if (!(error instanceof RefundLeftOpenError)) throw error;
@@ -1170,7 +1200,8 @@ export interface OpenedReturnRefund {
  * @param orderId - the returned order
  * @param input - which return this pays for, whether it is a `return` (the default) or a
  *   remainder `cancellation`, how much (a decimal in the payment's currency), and which goods
- *   and delivery that amount covers — what the credit note credits at their own rates
+ *   and delivery that amount covers — what the credit note credits at their own rates; and the
+ *   legal deadline to stamp on the record, when the law sets one
  * @param context - the staff member who received the goods
  * @param session - the return's transaction
  * @returns the opened record, or `null` when nothing is owed: no succeeded payment, nothing left
@@ -1187,6 +1218,7 @@ export const openReturnRefund = (
         lines: RefundLine[];
         shipping: string;
         reason?: Extract<RefundReason, 'return' | 'cancellation'>;
+        due?: RefundDue;
     },
     context: CallerContext,
     session: ClientSession
@@ -1217,7 +1249,8 @@ export const openReturnRefund = (
                 reason,
                 returnId: input.returnId,
                 lines: input.lines,
-                shipping: input.shipping
+                shipping: input.shipping,
+                ...(input.due ? { due: input.due } : {})
             },
             context.caller.id,
             session
