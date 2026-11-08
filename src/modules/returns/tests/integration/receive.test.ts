@@ -667,6 +667,7 @@ describe('the order timeline of a return', () => {
             ['return_closed', 'admin-2']
         ]);
         expect(rows[0].data).toEqual({ returnId: id, reason: 'defective' });
+        expect(rows[2].data).toEqual({ returnId: id, refundAmount: '70.00', currency: 'EUR' });
         expect(rows[3].data).toMatchObject({
             returnId: id,
             refundAmount: '70.00',

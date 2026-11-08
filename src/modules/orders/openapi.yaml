@@ -1035,7 +1035,7 @@ components:
         OrderTimelineDataReturnReceived:
             type: object
             additionalProperties: false
-            required: [returnId, refundAmount]
+            required: [returnId, refundAmount, currency]
             description: >-
                 The returned goods were checked in.
             properties:
@@ -1043,6 +1043,8 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 refundAmount:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/DecimalAmount'
+                currency:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode'
 
         OrderTimelineDataReturnClosed:
             type: object

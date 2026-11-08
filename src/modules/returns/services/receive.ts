@@ -23,7 +23,7 @@
 
 import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
-import { NO_MONEY, toMinorUnits } from '@domain-primitives/money';
+import { NO_MONEY, padDecimal, toMinorUnits } from '@domain-primitives/money';
 import {
     fieldError,
     generateReject,
@@ -309,7 +309,11 @@ const claimAndRestock = (
                 {
                     type: 'return_received',
                     actor: context.caller.id,
-                    data: { returnId: String(received._id), refundAmount: verdict.breakdown.total }
+                    data: {
+                        returnId: String(received._id),
+                        refundAmount: padDecimal(verdict.breakdown.total, returned.currency),
+                        currency: returned.currency
+                    }
                 },
                 session
             );

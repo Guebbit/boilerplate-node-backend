@@ -299,6 +299,12 @@ describe('receiving with a repair', () => {
         expect(order?.returnStatus).toBeUndefined();
         const timeline = await timelineOf(opened.orderId, 'return_closed');
         expect(timeline[0]?.data).toMatchObject({ remedy: 'repair', refundAmount: '0.00' });
+        const received = await timelineOf(opened.orderId, 'return_received');
+        expect(received[0]?.data).toEqual({
+            returnId: opened.id,
+            refundAmount: '0.00',
+            currency: 'EUR'
+        });
     });
 });
 
