@@ -3,7 +3,7 @@
  * The cart route table. Every route is authenticated at the router level and needs no rule
  * (every signed-in account shops); `/checkout` alone also
  * needs `checkout:Cart`, since an unproven address must not be able to spend, see
- * `shared/authorization-keys.yaml`. A line is written under `/items`, so no root parameter route
+ * `shared/authorization-keys.generated.yaml`. A line is written under `/items`, so no root parameter route
  * competes with a literal segment.
  */
 

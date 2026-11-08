@@ -980,7 +980,7 @@ components:
                 username:
                     type: string
                 # The STAFF role this person holds inside the shop, by name — one of the presets in
-                # `shared/authorization-roles.yaml`. Absent for a plain customer: `guest`,
+                # `shared/rules/authorization-roles.yaml`. Absent for a plain customer: `guest`,
                 # `unverified` and `customer` are computed per request, never stored or granted.
                 # A NAME rather than a key list: roles are data a deployment may edit, and
                 # publishing the keys would freeze each account at the permissions its role held on

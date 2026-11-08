@@ -12,7 +12,7 @@
  *             kernel code and they are what it asks — this module is the domain those files ask
  *             about, not the asking itself.
  * Roles data: ROLES ARE DATA, PERMISSIONS ARE CODE — but the DATA half lives in
- *             `shared/authorization-roles.yaml`, not in this database: a role's permissions are
+ *             `shared/rules/authorization-roles.yaml`, not in this database: a role's permissions are
  *             the same for every deployment, and a Mongo row editable at runtime would be a
  *             second definition of the same fact, at risk of drifting silently out of sync with
  *             the file the PHP twin reads byte-for-byte. `memberships` is the part that genuinely

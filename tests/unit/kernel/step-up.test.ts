@@ -1,7 +1,7 @@
 /**
  * @module
  * Step-up, demanded by the KEY rather than by the route — `requirePermission` reading `stepUp`
- * off `shared/authorization-keys.yaml`.
+ * off `shared/authorization-keys.generated.yaml`.
  *
  * Two properties are worth asserting and neither is obvious from the code:
  *

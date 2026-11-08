@@ -437,7 +437,7 @@ export const userSchema = new Schema<UserDocument, UserModel>(
         /*
          * WHEN the address was confirmed via the verify flow, or `null` until it is.
          * Enforcement is the membership role (`unverified` holds no `checkout:Cart`, see
-         * `shared/authorization-keys.yaml`) — this is the record of fact, kept separately because
+         * `shared/authorization-keys.generated.yaml`) — this is the record of fact, kept separately because
          * the role can be reassigned: the moment an operator grants a staff role to an unproven
          * address, that grant would otherwise be the only evidence the address was never proven.
          * Set by `completeEmailVerification`/`completeEmailChange`/`completePasswordReset` — every

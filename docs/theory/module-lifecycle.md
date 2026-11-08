@@ -92,8 +92,8 @@ What still names modules by hand, and why it is not a table a new module edits (
 schema is not one: each module declares its own section as `x-personal-data` in its `openapi.yaml`,
 and the bundler assembles `AccountExportResponse` from them):
 
-- **Role grants** in `shared/authorization-roles.yaml` and the cases in
-  `shared/authorization-conformance.yaml`. A module that introduces permission rules decides which
+- **Role grants** in `shared/rules/authorization-roles.yaml`. The cases in
+  `shared/cases/authorization.cases.yaml` name a role, never its rules. A module that introduces permission rules decides which
   roles list its sets; the rules and sets themselves live in the module's own `authorization.yaml`.
 - **`WRITE_EXCEPTIONS`** in `tests/cross-cutting/write-routes-are-guarded.test.ts`, only for a
   module whose write route deliberately needs no permission rule. A module whose writes all sit
@@ -451,9 +451,9 @@ invalidate the claim — and some of them are **supposed** to break:
 - **A test that imports a removed module is deleted**, and so is every test that imports one of
   those — `tests/support` helpers included. A test may also say `// requires-module: a, b` on a line
   of its own when it drives the kernel through a module's subjects without importing it.
-- **The shared authorization files lose the module's keys.** `shared/authorization-roles.yaml` drops
-  the grants, and `shared/authorization-conformance.yaml` drops the module's keys from every caller
-  and every case about a subject only that module declared.
+- **The shared authorization files lose the module's keys.** `shared/rules/authorization-roles.yaml` drops
+  the grants, and `shared/cases/authorization.cases.yaml` drops every case about a subject only that
+  module declared.
 - **The alert rules on the module's own metrics go**, with their `promtool` cases
   (`docker/observability/prometheus.alert-rules*.yaml`). A metric is the module's when only its
   folder registers it.

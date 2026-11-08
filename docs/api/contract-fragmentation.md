@@ -25,7 +25,7 @@ compares nothing across repos, so it isn't part of that lockstep guarantee.
 `openapi.yaml` is not a special case. Seven documents are produced here from per-module
 sources; two of them — `openapi` and `asyncapi-public` — also exist in
 `boilerplate-vue-frontend` as byte-identical copies, because the frontend's toolchain reads them.
-Four more shared files travel with them (`shared/authorization-keys.yaml` and three webhook-sink TLS
+Four more shared files travel with them (`shared/authorization-keys.generated.yaml` and three webhook-sink TLS
 PEMs); the full list is `SHARED_FILES` in `scripts/pairing/spec-identity.ts`.
 The four client collections stay in this repo only — they are derived from `openapi.yaml`, so a
 frontend copy could never disagree without the spec disagreeing first, and nothing there reads

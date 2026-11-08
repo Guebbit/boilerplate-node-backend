@@ -52,7 +52,7 @@ router.patch('/levels/:productId', requirePermission('update', 'StockLevel'), pa
 router.get('/movements', requirePermission('read', 'StockLevel'), getStockMovements);
 
 // POST /inventory/levels/:productId/receive — a supplier delivery lands. `create:StockMovement`: the key stock never
-// moves without — see `shared/authorization-keys.yaml`. `idempotencyKey`: a retried receipt must
+// moves without — see `shared/authorization-keys.generated.yaml`. `idempotencyKey`: a retried receipt must
 // replay, not count the delivery twice.
 router.post(
     '/levels/:productId/receive',
@@ -75,5 +75,5 @@ router.post(
 // in-process and never reaching this route at all; this is for an operator, or a platform
 // scheduler that prefers HTTP over a cron container. `sweep`, not `manage`: no preset role is
 // meant to reach it directly, and CRUD has no verb for "clear expired holds on demand" — see
-// `shared/authorization-keys.yaml`.
+// `shared/authorization-keys.generated.yaml`.
 router.post('/reservations/sweep', requirePermission('sweep', 'StockLevel'), postReservationsSweep);

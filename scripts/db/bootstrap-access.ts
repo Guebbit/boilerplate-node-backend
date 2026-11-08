@@ -8,7 +8,7 @@
  * database changes nothing, unlike `scenario:apply`'s demo accounts. No `NODE_ENV` guard is needed
  * for that reason — `scenario:apply` refuses under production precisely because IT is not idempotent
  * in the way this is. The preset roles need no bootstrap step of their own: they are read straight
- * from `shared/authorization-roles.yaml` at import, never stored.
+ * from `shared/rules/authorization-roles.yaml` at import, never stored.
  *
  * Run before `app`/`cron` start — see `docker-compose.production.yml`'s `setup` service.
  *

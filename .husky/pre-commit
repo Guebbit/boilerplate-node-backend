@@ -30,7 +30,7 @@
 # `npm run regenerate` by itself, when you mean to.
 #
 # What stays committed and is therefore checked: `shared/rules/schemas/*.json`,
-# `shared/authorization-keys.yaml`, `docker/crontab`, `docker/Dockerfile.dockerignore` and the
+# `shared/authorization-keys.generated.yaml`, `docker/crontab`, `docker/Dockerfile.dockerignore` and the
 # tables inside `docs/`. Everything else `regenerate` writes (`openapi.yaml`, both asyncapi
 # bundles, `api/`, every `*.generated.ts`) is gitignored: postinstall rebuilds it, and the gates
 # below read it off disk.

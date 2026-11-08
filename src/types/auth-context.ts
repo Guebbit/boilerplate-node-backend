@@ -10,7 +10,7 @@
 
 /**
  * The two worlds a caller can act in, and which of them one acts in — generated from the `scopes:`
- * of `shared/authorization-keys.yaml`, so the YAML is the only place they are spelled.
+ * of `shared/authorization-keys.generated.yaml`, so the YAML is the only place they are spelled.
  */
 export { AUTHORIZATION_SCOPES, type AuthorizationScope } from '@api/permission-vocabulary';
 
@@ -227,7 +227,7 @@ export interface CallerContext {
  * Exists so a tenant-only module's services can take `context.caller.tenantId` as a `string` and
  * state that requirement in their signature, instead of each one narrowing the union back at
  * runtime. `api-keys` and `webhooks` are entirely tenant-scoped — every key either declares
- * `scope: tenant` in `shared/authorization-keys.yaml` — so both would otherwise need their own
+ * `scope: tenant` in `shared/authorization-keys.generated.yaml` — so both would otherwise need their own
  * identical `tenantOf()` helper to do exactly that.
  */
 export interface TenantCallerContext extends CallerContext {

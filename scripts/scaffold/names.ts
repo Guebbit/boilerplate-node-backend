@@ -136,14 +136,6 @@ export const deriveNames = (kebab: string, entityOverride?: string): ModuleNames
 export const RULE_ACTIONS = ['read', 'create', 'update', 'delete'] as const;
 
 /**
- * The permission rules a scaffolded module introduces.
- * @param names - the module's spellings
- * @returns one rule id per action, e.g. `read:FieldNote`
- */
-export const permissionRules = (names: ModuleNames): string[] =>
-    RULE_ACTIONS.map((action) => `${action}:${names.entity}`);
-
-/**
  * The one permission set a scaffolded module introduces, bundling all its rules.
  * @param names - the module's spellings
  * @returns the set's name, e.g. `FieldNoteManagement`

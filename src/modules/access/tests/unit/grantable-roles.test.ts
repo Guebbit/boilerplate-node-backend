@@ -2,7 +2,7 @@
  * @module
  * `grantableRoles` in isolation: which tenant roles each preset caller may hand out, by the same
  * rule `validateGrant` applies on the write path. The table is the model — a role added to
- * `shared/authorization-roles.yaml` that changes who may grant what shows up here as a row to
+ * `shared/rules/authorization-roles.yaml` that changes who may grant what shows up here as a row to
  * review.
  */
 

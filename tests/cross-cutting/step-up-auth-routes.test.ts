@@ -11,7 +11,7 @@
  * THE OTHER HALF LIVES ON THE KEYS. A route mounts this guard when freshness is a property of the
  * ROUTE — checking out, changing your own address, ending every session — and those are about the
  * caller's own record, which no permission key names. Where freshness is a property of the ACTION,
- * `shared/authorization-keys.yaml` says so with `stepUp:` and `requirePermission` enforces it:
+ * `shared/authorization-keys.generated.yaml` says so with `stepUp:` and `requirePermission` enforces it:
  * `delete:User` and `create:Refund` are both there, and neither route mounts anything.
  * `tests/unit/kernel/step-up.test.ts` covers that path; the sweep below covers this one.
  */

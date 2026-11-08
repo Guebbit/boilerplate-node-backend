@@ -3,7 +3,7 @@
  * Credential CRUD: list, mint (validates the subset, mints, audits), revoke (soft, audits).
  * Tenant-scoped throughout — every read and write narrows to `context.caller.tenantId`, which any
  * `apikeys.*` caller always carries (every key in the family is `scope: tenant` in
- * `shared/authorization-keys.yaml`, and `Caller.tenantId` is null only in platform scope).
+ * `shared/authorization-keys.generated.yaml`, and `Caller.tenantId` is null only in platform scope).
  */
 
 import type { ClientSession } from 'mongoose';

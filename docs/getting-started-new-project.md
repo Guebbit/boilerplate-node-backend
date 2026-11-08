@@ -100,9 +100,9 @@ branch, or after committing whatever you had in progress. It touches:
   them (jobs run through `npm run job <name>`; there are no per-job `package.json` scripts).
 - **The removed modules' test doubles** (`scenarios/support/doubles/<module>/`, such as the fake
   payment provider) and the lines that register them. See [Test doubles](./tools/test-doubles.md).
-- **The removed modules' permission sets** in `shared/authorization-roles.yaml` (every role's sets)
-  and `shared/authorization-conformance.yaml` (the callers' rules, and every case about a subject only
-  a removed module declared).
+- **The removed modules' permission sets** in `shared/rules/authorization-roles.yaml` (every role's sets)
+  and every case in `shared/cases/authorization.cases.yaml` about a subject only a removed module
+  declared.
 - **Every test that imports a removed module** — or says `// requires-module: <name>` — along with any
   test helper or test that imported one of those. The report lists each file it deleted.
 - **The demo catalogue's own scenario data** (`scenarios/products.ts`, `scenarios/wishlist.ts`, the

@@ -43,7 +43,7 @@ flowchart LR
     R -->|no| D["docs/modules/&lt;name&gt;.md<br/><i>graph markers included</i>"]
     R -->|no| E["central edits"]
     E --> E1["src/modules.ts"]
-    E --> E2["shared/authorization-roles.yaml<br/>shared/authorization-conformance.yaml<br/><i>admin holds every key by name</i>"]
+    E --> E2["shared/rules/authorization-roles.yaml<br/><i>admin holds every key by name</i>"]
     E --> E3["tests/cross-cutting/<br/>replace-patch-parity.test.ts"]
     M --> G["regenerate --no-sync<br/><i>bundles the fragment, generates the types</i>"]
     D --> G
@@ -68,13 +68,12 @@ instead of leaving a half-written module.
 
 [The lifecycle page](../theory/module-lifecycle.md) promises one registration. That holds for
 routing, seeding, i18n, contracts and the docs index. One registration (`src/modules.ts`) is
-always needed. Three hand-kept lists also name a module, each only when it applies, each edited by
+always needed. Two hand-kept lists also name a module, each only when it applies, each edited by
 the scaffolder, and each a candidate for deletion rather than for more tooling:
 
 | File                                               | When                  | Why the module is named there                                                        |
 | -------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------ |
-| `shared/authorization-roles.yaml`                  | the module has a set  | `admin` lists every tenant key by name; `system` aliases that list                   |
-| `shared/authorization-conformance.yaml`            | the module has a set  | its fixture copy of the same list, kept identical by hand                            |
+| `shared/rules/authorization-roles.yaml`            | the module has a set  | `admin` lists every tenant key by name; `system` aliases that list                   |
 | `tests/cross-cutting/replace-patch-parity.test.ts` | a Replace/Update pair | the exact set of PUT/PATCH pairs, so a renamed schema cannot empty the sweep quietly |
 
 ## What it does not decide

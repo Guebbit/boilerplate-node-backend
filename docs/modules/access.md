@@ -57,7 +57,7 @@ flowchart LR
 **Routeless on purpose.** Nothing in the boilerplate creates a shop or grants a role over the
 wire — a deployment ships with one tenant, fixed at build time (`DEPLOYMENT_TENANT_ID`, which
 stays in `kernel/access/tenant.ts`, imported directly rather than looked up), and every role a
-person can hold comes from `shared/authorization-roles.yaml`, never from a request. So there is no
+person can hold comes from `shared/rules/authorization-roles.yaml`, never from a request. So there is no
 URL for this module to answer, and none of the route-guarding code — `kernel/permissions.ts`,
 `kernel/ability.ts`, `kernel/access/query.ts` — moved here with the data; those stay in the kernel
 because the guard itself is kernel code, and this module is the domain they ask about, not the
@@ -72,7 +72,7 @@ case here: `mounts` is optional on the manifest (see
 omits both.
 
 ::: tip Roles are data, permissions are code
-A role's PERMISSIONS live in `shared/authorization-roles.yaml` alone — the same file the PHP twin
+A role's PERMISSIONS live in `shared/rules/authorization-roles.yaml` alone — the same file the PHP twin
 reads byte-for-byte — never in this module's own collection. What this module stores is the other
 half: WHO holds a role, in which shop, at which scope. `assignRole` validates a name against the
 presets before writing a membership, so a role that exists nowhere can never be silently assigned;
@@ -160,7 +160,7 @@ Every rule this module declares and who holds it, role by role. The rule is what
 
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
-`src/modules/*/authorization.yaml` and the roles in `shared/authorization-roles.yaml`, asked of the
+`src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
 evaluator — [Authorization](../theory/authorization.md) explains the model.
 
 <!-- permissions:end -->

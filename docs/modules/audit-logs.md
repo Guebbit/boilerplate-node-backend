@@ -41,7 +41,7 @@ flowchart LR
 shop's own staff.
 
 This module owns the tenant-facing door onto the same collection: `GET /audit`, gated on
-`read:AuditLog` — held by `admin` only in `shared/authorization-roles.yaml`.
+`read:AuditLog` — held by `admin` only in `shared/rules/authorization-roles.yaml`.
 Same rows, same shape, different audience: `observability`'s route answers "what happened across
 every shop", this module's own route answers "what happened in mine". Enabling this module without
 `observability` gives a working `GET /audit` and no platform-wide view — a legitimate build, just a
@@ -179,7 +179,7 @@ Every rule this module declares and who holds it, role by role. The rule is what
 
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
-`src/modules/*/authorization.yaml` and the roles in `shared/authorization-roles.yaml`, asked of the
+`src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
 evaluator — [Authorization](../theory/authorization.md) explains the model.
 
 <!-- permissions:end -->

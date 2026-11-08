@@ -402,7 +402,7 @@ describe('PATCH /products/{id}', () => {
 
     // The write route stacks `update:Product` AND `update:Translation`. No preset role
     // holds one without the other, so the "one key alone refuses" half of this cannot be
-    // exercised over HTTP today — `shared/authorization-conformance.yaml` asserts it at the
+    // exercised over HTTP today — `shared/cases/authorization.cases.yaml` asserts it at the
     // ability layer instead ("the dictionary keys do not update a price, even together").
     it('lets the editor change a price', async () => {
         const { bearer } = await authenticateAsRole('editor');

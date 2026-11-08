@@ -100,7 +100,7 @@ router.post(
 // is REQUIRED: a retried refund would otherwise return the money twice.
 /*
  * No `requireFreshAuth` here: `create:Refund` carries `stepUp: critical` in
- * `shared/authorization-keys.yaml`, so the guard demands the fresh session and audits that it did.
+ * `shared/authorization-keys.generated.yaml`, so the guard demands the fresh session and audits that it did.
  * The tier belongs to the ACTION — money leaving the shop — rather than to this one route, and a
  * second route reaching the same key would otherwise have to remember.
  */

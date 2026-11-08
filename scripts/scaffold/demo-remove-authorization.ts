@@ -1,10 +1,10 @@
 /**
  * @module
  * The two shared authorization files that name a removed module's permissions by hand:
- * `shared/authorization-roles.yaml` (every role lists its permission sets) and
- * `shared/authorization-conformance.yaml` (callers hold rules, cases ask about subjects).
+ * `shared/rules/authorization-roles.yaml` (every role lists its permission sets) and
+ * `shared/cases/authorization.cases.yaml` (callers hold rules, cases ask about subjects).
  *
- * The bundle (`shared/authorization-keys.yaml`) drops a module's rules and sets on its own, because it is
+ * The bundle (`shared/authorization-keys.generated.yaml`) drops a module's rules and sets on its own, because it is
  * assembled from the fragments that were deleted with the folder. These two are edited FROM the
  * fragments, so they are read BEFORE the folders go: {@link readRemovedAuthorization}.
  *
@@ -62,11 +62,11 @@ export const readRemovedAuthorization = (
 const NAME_LINE = /^\s*-\s+([\w.:-]+)\s*$/;
 
 /**
- * Drop each removed set's list item from `shared/authorization-roles.yaml`; a role left with no
+ * Drop each removed set's list item from `shared/rules/authorization-roles.yaml`; a role left with no
  * set at all keeps an explicit empty list so the file still parses.
  */
 export const stripRoleGrants = (repoRoot: string, removed: RemovedAuthorization): RemovalNote => {
-    const file = path.join(repoRoot, 'shared', 'authorization-roles.yaml');
+    const file = path.join(repoRoot, 'shared', 'rules', 'authorization-roles.yaml');
     const lines = readFileSync(file, 'utf8')
         .split('\n')
         .filter((line) => !removed.sets.has(NAME_LINE.exec(line)?.[1] ?? ''));
@@ -79,7 +79,7 @@ export const stripRoleGrants = (repoRoot: string, removed: RemovedAuthorization)
     });
     writeFileSync(file, out.join('\n'));
     return {
-        file: 'shared/authorization-roles.yaml',
+        file: 'shared/rules/authorization-roles.yaml',
         detail: 'removed the removed modules’ grants'
     };
 };
@@ -120,29 +120,24 @@ const pruneCase = (chunk: string, removed: RemovedAuthorization): string | undef
 };
 
 /**
- * Edit `shared/authorization-conformance.yaml`: drop the shared admin rule list's removed rules,
- * every case about a removed subject, and every case whose caller held only removed rules.
+ * Edit `shared/cases/authorization.cases.yaml`: drop every case about a removed subject, and every case whose caller held only removed rules.
  */
 export const stripConformanceCases = (
     repoRoot: string,
     removed: RemovedAuthorization
 ): RemovalNote => {
-    const file = path.join(repoRoot, 'shared', 'authorization-conformance.yaml');
+    const file = path.join(repoRoot, 'shared', 'cases', 'authorization.cases.yaml');
     const content = readFileSync(file, 'utf8');
     const [head, cases] = content.split(/^cases:\n/m, 2);
 
-    const headKept = head
-        .split('\n')
-        .filter((line) => !removed.rules.has(NAME_LINE.exec(line)?.[1] ?? ''))
-        .join('\n');
     const casesKept = splitCases(cases)
         .map((chunk) => pruneCase(chunk, removed))
         .filter((chunk): chunk is string => chunk !== undefined)
         .join('\n');
 
-    writeFileSync(file, `${headKept}cases:\n${casesKept}`);
+    writeFileSync(file, `${head}cases:\n${casesKept}`);
     return {
-        file: 'shared/authorization-conformance.yaml',
+        file: 'shared/cases/authorization.cases.yaml',
         detail: 'removed the removed modules’ cases'
     };
 };

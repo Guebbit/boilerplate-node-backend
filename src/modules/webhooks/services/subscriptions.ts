@@ -4,7 +4,7 @@
  * and event filter only), the two on/off actions (`enable`/`disable`), the two secret-ring
  * actions (`createSecret`/`removeSecret`), remove. Tenant-scoped throughout —
  * every read and write narrows to `context.caller.tenantId`, which any `webhooks.*` caller always
- * carries (every key in the family is `scope: tenant` in `shared/authorization-keys.yaml`, and
+ * carries (every key in the family is `scope: tenant` in `shared/authorization-keys.generated.yaml`, and
  * `Caller.tenantId` is null only in platform scope — see its own doc comment).
  */
 

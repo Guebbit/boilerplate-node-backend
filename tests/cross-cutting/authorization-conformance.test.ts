@@ -1,5 +1,5 @@
 /**
- * The cases the PHP twin must answer identically — `shared/authorization-conformance.yaml`, run
+ * The cases the PHP twin must answer identically — `shared/cases/authorization.cases.yaml`, run
  * against this repository's own evaluator.
  *
  * The file is committed with identical bytes in both backends and nothing copies it between them,
@@ -20,11 +20,27 @@ import { parse } from 'yaml';
 import { subject } from '@casl/ability';
 import type { Caller } from '@types';
 import { buildAbility } from '@kernel/ability';
+import { AUDIENCE_ROLES, assembleCaller, permissionsOfRole } from '@kernel/permissions';
+import type { AudienceName } from '@kernel/permissions';
 import { isDeployed } from '@tests/paths';
 
+/**
+ * A caller as the YAML writes it. `role` and `audience` are expanded from the roles file; raw
+ * `permissions` stays for cases about the model itself.
+ */
+interface CaseCaller {
+    id: string | null;
+    scope: Caller['scope'];
+    tenantId: string | null;
+    permissions?: string[];
+    role?: string;
+    audience?: AudienceName;
+}
+
+/** One row of the shared cases file. */
 interface ConformanceCase {
     name: string;
-    caller: Caller;
+    caller: CaseCaller;
     action: string;
     subject: string;
     resource: Record<string, unknown>;
@@ -33,10 +49,25 @@ interface ConformanceCase {
 
 const { cases } = parse(
     readFileSync(
-        path.join(__dirname, '..', '..', 'shared', 'authorization-conformance.yaml'),
+        path.join(__dirname, '..', '..', 'shared', 'cases', 'authorization.cases.yaml'),
         'utf8'
     )
 ) as { cases: ConformanceCase[] };
+
+/**
+ * The rules a case's caller holds: its role's expansion, its audience's, and any raw list, so a
+ * role change in the roles file reaches every case that names it.
+ */
+const callerOf = (declared: CaseCaller): Caller =>
+    assembleCaller(declared.id, declared.tenantId, declared.scope, [
+        ...new Set([
+            ...(declared.role === undefined ? [] : permissionsOfRole(declared.role)),
+            ...(declared.audience === undefined
+                ? []
+                : AUDIENCE_ROLES[declared.audience].permissions),
+            ...(declared.permissions ?? [])
+        ])
+    ]);
 
 /**
  * The shop's cases are more than half the file. A checkout without the shop (`demo:remove` drops
@@ -68,7 +99,7 @@ describe('the shared conformance suite', () => {
              * about and the shape a query filter takes — these cases describe rows, not
              * instances.
              */
-            const allowed = buildAbility(one.caller).can(
+            const allowed = buildAbility(callerOf(one.caller)).can(
                 one.action,
                 subject(one.subject, { ...one.resource })
             );

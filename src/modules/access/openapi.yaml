@@ -45,7 +45,7 @@ components:
                 the hand-maintained guess these rules exist to abolish.
 
                 The two lists never merge. A tenant rule can never satisfy a platform key and the
-                reverse is equally impossible (`shared/authorization-keys.yaml`'s one invariant),
+                reverse is equally impossible (`shared/authorization-keys.generated.yaml`'s one invariant),
                 so a client builds ONE ABILITY PER SCOPE and asks the one that owns the subject.
 
                 The client's copy has NO AUTHORITY: it decides what to render, never what is
@@ -67,7 +67,7 @@ components:
                     items: { type: string }
                     description: |
                         The tenant-scope roles this caller may assign through `POST`/`PUT`/`PATCH
-                        /users`, in the order `shared/authorization-roles.yaml` declares them.
+                        /users`, in the order `shared/rules/authorization-roles.yaml` declares them.
                         Computed by the same rule as the `403`/`422` those writes answer, so a role
                         picker built from it offers exactly what the write accepts. Empty for a
                         caller who may grant nothing. It has NO

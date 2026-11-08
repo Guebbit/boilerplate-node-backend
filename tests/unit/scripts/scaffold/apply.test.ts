@@ -27,8 +27,7 @@ const COPIED = [
     '.prettierrc',
     '.prettierignore',
     'src/modules.ts',
-    'shared/authorization-roles.yaml',
-    'shared/authorization-conformance.yaml',
+    'shared/rules/authorization-roles.yaml',
     'tests/cross-cutting/replace-patch-parity.test.ts'
 ];
 
@@ -73,9 +72,9 @@ describe('applyScaffold', () => {
         expect(readFileSync(path.join(root, 'src/modules.ts'), 'utf8')).toContain(
             "import scaffoldProbe from './modules/scaffold-probe/module';"
         );
-        expect(readFileSync(path.join(root, 'shared/authorization-roles.yaml'), 'utf8')).toContain(
-            '- ScaffoldProbeManagement'
-        );
+        expect(
+            readFileSync(path.join(root, 'shared/rules/authorization-roles.yaml'), 'utf8')
+        ).toContain('- ScaffoldProbeManagement');
     });
 
     it('refuses a second scaffold of the same name, listing why, and writes nothing more', async () => {
@@ -89,7 +88,7 @@ describe('applyScaffold', () => {
     });
 
     it('refuses before writing anything when a central file has changed shape', async () => {
-        writeFileSync(path.join(root, 'shared/authorization-roles.yaml'), 'roles: []\n');
+        writeFileSync(path.join(root, 'shared/rules/authorization-roles.yaml'), 'roles: []\n');
 
         await expect(applyScaffold(root, OPTIONS, identity)).rejects.toThrow(/anchor/);
         expect(existsSync(path.join(root, 'src/modules/scaffold-probe'))).toBe(false);

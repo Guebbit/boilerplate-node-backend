@@ -8,7 +8,7 @@
  * Each factory returns a full `AuthContext` because that is what services take — the identity
  * fields are filler, and only `roles`/`tenantId` are ever read by an authorization decision.
  *
- * Roles come from `shared/authorization-roles.yaml`, so a preset renamed there fails here rather
+ * Roles come from `shared/rules/authorization-roles.yaml`, so a preset renamed there fails here rather
  * than in one route's integration test three layers down.
  */
 

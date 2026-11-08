@@ -2,7 +2,7 @@
 /**
  * Everything `regenerate` derives from the shared rules files, in one step:
  *
- * - `shared/<folder>/schemas/<name>.schema.json`: each file's Zod schema as JSON Schema. The PHP
+ * - `shared/<folder>/schemas/<name>.generated.schema.json`: each file's Zod schema as JSON Schema. The PHP
  *   twin has no Zod, so it validates with any JSON Schema library.
  * - `<out>.generated.ts`: for a rules file that types a union or holds plain numbers, the
  *   committed `as const` TypeScript code imports instead of reading the YAML.
@@ -26,6 +26,7 @@ import { renderGenerated } from './shared-rules-render';
 import type { GenerateSpec } from '../../src/infrastructure/config/shared-rules/generate-spec';
 import { SHARED_RULES } from '../../src/infrastructure/config/shared-rules/registry';
 import { personasSchema } from '../../scenarios/personas-schema';
+import { rolesDocumentSchema } from '../../src/kernel/permissions';
 import { jobsBlockSchema } from '../../src/infrastructure/config/shared-rules/jobs';
 import { stepUpDocumentSchema } from '../../src/infrastructure/config/shared-rules/step-up';
 import { rateLimitsBlockSchema } from '../../src/infrastructure/config/shared-rules/rate-limits';
@@ -43,10 +44,12 @@ interface GeneratedSource {
 
 /**
  * Every schema and the folder it is committed in. The demo accounts' schema lives in `scenarios/`
- * because infrastructure must not import it, so it is listed here, not in the registry.
+ * because infrastructure must not import it, so it is listed here, not in the registry. The roles
+ * file's schema lives in the kernel, which loads it at boot, for the same reason.
  */
 const SCHEMA_EXPORTS: readonly (readonly [folder: string, name: string, schema: z.ZodType])[] = [
     ...Object.entries(SHARED_RULES).map(([name, entry]) => ['rules', name, entry.schema] as const),
+    ['rules', 'authorization-roles', rolesDocumentSchema],
     ['scenarios', 'personas', personasSchema]
 ];
 
@@ -57,9 +60,9 @@ const writeSchemas = (): void => {
         const document = JSON.stringify(z.toJSONSchema(schema), undefined, 2);
 
         writeOrCheck(
-            path.join(SHARED_DIRECTORY, folder, 'schemas', `${name}.schema.json`),
+            path.join(SHARED_DIRECTORY, folder, 'schemas', `${name}.generated.schema.json`),
             `${document}\n`,
-            `shared/${folder}/schemas/${name}.schema.json`,
+            `shared/${folder}/schemas/${name}.generated.schema.json`,
             'npm run regenerate'
         );
     }
@@ -159,7 +162,7 @@ const collectBlockSources = (block: ModuleBlock): GeneratedSource[] =>
  * are listed here rather than in the registry (which is `shared/rules/<name>.yaml` only).
  */
 const STEP_UP_SOURCE: GeneratedSource = {
-    source: 'shared/authorization-keys.yaml',
+    source: 'shared/authorization-keys.generated.yaml',
     schema: stepUpDocumentSchema,
     spec: {
         out: 'src/kernel/step-up.generated.ts',

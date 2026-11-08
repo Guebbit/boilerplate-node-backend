@@ -3,11 +3,14 @@ import path from 'node:path';
 import { parse } from 'yaml';
 import { PERSONA_NAMES, personas } from '@scenarios/personas-schema';
 
-/** The roles `shared/authorization-roles.yaml` defines, as `scope:name`. */
+/** The roles `shared/rules/authorization-roles.yaml` defines, as `scope:name`. */
 const definedRoles = new Set(
     (
         parse(
-            readFileSync(path.join(process.cwd(), 'shared', 'authorization-roles.yaml'), 'utf8')
+            readFileSync(
+                path.join(process.cwd(), 'shared', 'rules', 'authorization-roles.yaml'),
+                'utf8'
+            )
         ) as { roles: { name: string; scope: string }[] }
     ).roles.map(({ scope, name }) => `${scope}:${name}`)
 );

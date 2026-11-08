@@ -63,21 +63,21 @@ const STEPS: readonly Step[] = [
         command: ['tsx', 'scripts/contracts/authorization-bundle.ts'],
         checks: true,
         because:
-            'shared/authorization-keys.yaml, from one fragment per module — read by kernel/permissions.ts at boot, so this runs before anything below that boots the app to read docs off it'
+            'shared/authorization-keys.generated.yaml, from one fragment per module — read by kernel/permissions.ts at boot, so this runs before anything below that boots the app to read docs off it'
     },
     {
         name: 'gen:permission-vocabulary',
         command: ['npm', 'run', 'gen:permission-vocabulary'],
         checks: false,
         because:
-            'api/permission-vocabulary.ts, from shared/authorization-keys.yaml — kernel/permissions.ts imports it, and the bundler below loads the kernel, so it must exist before the first bundle on a clean checkout'
+            'api/permission-vocabulary.ts, from shared/authorization-keys.generated.yaml — kernel/permissions.ts imports it, and the bundler below loads the kernel, so it must exist before the first bundle on a clean checkout'
     },
     {
         name: 'shared rules',
         command: ['tsx', 'scripts/contracts/generate-shared-rule-schemas.ts'],
         checks: true,
         because:
-            'shared/rules/schemas/*.schema.json (the PHP twin validates with them) and every committed *.generated.ts built from a rules file — the kernel imports audit-actions.generated.ts, and the bundler below loads the kernel, so it must exist before the first bundle on a clean checkout'
+            'shared/rules/schemas/*.generated.schema.json (the PHP twin validates with them) and every committed *.generated.ts built from a rules file — the kernel imports audit-actions.generated.ts, and the bundler below loads the kernel, so it must exist before the first bundle on a clean checkout'
     },
     {
         name: 'contracts:bundle',
@@ -90,7 +90,7 @@ const STEPS: readonly Step[] = [
         command: ['npm', 'run', 'gen:api'],
         checks: false,
         because:
-            'api/ — the typed client, zod schemas and error codes from openapi.yaml, and the permission actions from shared/authorization-keys.yaml; the app itself imports them'
+            'api/ — the typed client, zod schemas and error codes from openapi.yaml, and the permission actions from shared/authorization-keys.generated.yaml; the app itself imports them'
     },
     {
         name: 'gen:asyncapi',

@@ -7,7 +7,7 @@
  * spent stock — and requires a FRESH session holding
  * `checkout:Cart` on top of `isAuth` (`requireFreshAuth`,
  * `requirePermission('checkout', 'Cart')`): it is where this app's money actually moves. That
- * is the only key this module declares — see `shared/authorization-keys.yaml`.
+ * is the only key this module declares — see `shared/authorization-keys.generated.yaml`.
  * A line is written through the parent's `/items` collection (docs/api/write-methods.md#a-line-is-written-through-its-parent):
  * 200 + the whole cart, no `Location`, no read of a line.
  */

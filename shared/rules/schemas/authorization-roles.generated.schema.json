@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "number"
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "tenant",
+              "platform"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "sets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "assignable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "scope",
+          "title",
+          "description",
+          "sets"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "audience": {
+      "type": "object",
+      "properties": {
+        "guest": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "sets": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "title",
+            "description",
+            "sets"
+          ],
+          "additionalProperties": false
+        },
+        "unverified": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "sets": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "title",
+            "description",
+            "sets"
+          ],
+          "additionalProperties": false
+        },
+        "customer": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "sets": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "title",
+            "description",
+            "sets"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "guest",
+        "unverified",
+        "customer"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "version",
+    "roles",
+    "audience"
+  ],
+  "additionalProperties": false
+}

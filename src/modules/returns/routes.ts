@@ -101,7 +101,7 @@ router.post('/:id/approve', requirePermission('update', 'Return'), postReturnApp
 router.post('/:id/decline', requirePermission('update', 'Return'), postReturnDecline);
 
 // POST /returns/:id/receive — the goods arrived. `receive:Return` carries `stepUp: critical` in
-// `shared/authorization-keys.yaml`: receiving pays the customer back. The `Idempotency-Key` makes a
+// `shared/authorization-keys.generated.yaml`: receiving pays the customer back. The `Idempotency-Key` makes a
 // retried receipt land once, though the conditional move already guarantees the restock does.
 router.post(
     '/:id/receive',
