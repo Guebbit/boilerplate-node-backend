@@ -21,7 +21,8 @@ import { resetDomainEvents } from '@kernel/events';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
-import { paymentService } from '@modules/payments/services';
+import { paymentService, WebhookProviderUnknownError } from '@modules/payments/services';
+import { deliver } from '@modules/payments/tests/deliver';
 import { paymentRepository } from '@modules/payments/repository';
 import { paymentModel } from '@modules/payments/model';
 import { PAYMENT_SUCCEEDED } from '@modules/payments/events';
@@ -32,7 +33,8 @@ import * as auditPort from '@infrastructure/observability/audit';
 import {
     FAKE_DECLINE_METHOD,
     fakePaymentProvider,
-    setFakeOutcome
+    setFakeOutcome,
+    signFakeDelivery
 } from '@scenarios/support/doubles/payments/fake';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
@@ -1297,7 +1299,7 @@ describe('applyWebhookSettlement', () => {
  * The ledger that makes a redelivery idempotent must not also make a FAILED delivery permanent —
  * the money bug this fix closes.
  */
-describe('applyWebhookDelivery', () => {
+describe('receiveWebhook', () => {
     it('settles on the redelivery of a delivery whose first settlement failed', async () => {
         const { user, order } = await orderFor();
         await paymentService.createIntent(String(order._id), auth(user));
@@ -1312,13 +1314,11 @@ describe('applyWebhookDelivery', () => {
             .spyOn(paymentRepository, 'updateStatusIfIn')
             .mockRejectedValueOnce(new Error('transient failure'));
 
-        await expect(paymentService.applyWebhookDelivery(event, 'fake')).rejects.toThrow(
-            'transient failure'
-        );
+        await expect(deliver(event)).rejects.toThrow('transient failure');
         updateSpy.mockRestore();
 
         // The provider's redelivery of the SAME event id is what settles it for real.
-        await paymentService.applyWebhookDelivery(event, 'fake');
+        await deliver(event);
 
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('succeeded');
@@ -1334,22 +1334,38 @@ describe('applyWebhookDelivery', () => {
         setFakeOutcome(providerRef, { status: 'succeeded' });
         const event = { id: 'evt_twice', providerRef };
 
-        await Promise.all([
-            paymentService.applyWebhookDelivery(event, 'fake'),
-            paymentService.applyWebhookDelivery(event, 'fake')
-        ]);
-        await paymentService.applyWebhookDelivery(event, 'fake');
+        await Promise.all([deliver(event), deliver(event)]);
+        await deliver(event);
 
         expect((await orderService.getById(String(order._id)))!.status).toBe('paid');
         expect(await outboxEventModel.countDocuments({ name: 'payment.succeeded' })).toBe(1);
     });
 
+    it('refuses a delivery whose signature does not verify, flagged as a signature failure', async () => {
+        const settleSpy = jest.spyOn(paymentRepository, 'findByProviderRef');
+        const { body, headers } = signFakeDelivery({ id: 'evt_signed', providerRef: 'pi_x' });
+
+        const forged = paymentService.receiveWebhook(
+            'fake',
+            Buffer.from(body.replace('evt_signed', 'evt_forged')),
+            headers
+        );
+
+        await expect(forged).rejects.toMatchObject({ signatureFailure: true });
+        expect(settleSpy).not.toHaveBeenCalled();
+        settleSpy.mockRestore();
+    });
+
+    it('refuses a provider name no adapter is installed under', async () => {
+        await expect(deliver({ id: 'evt_nobody' }, 'nobody')).rejects.toBeInstanceOf(
+            WebhookProviderUnknownError
+        );
+    });
+
     it('does nothing for a delivery that names no intent', async () => {
         const retrieveSpy = jest.spyOn(fakePaymentProvider, 'retrieve');
 
-        await expect(
-            paymentService.applyWebhookDelivery({ id: 'evt_no_intent' }, 'fake')
-        ).resolves.toBeUndefined();
+        await expect(deliver({ id: 'evt_no_intent' })).resolves.toBeUndefined();
 
         expect(retrieveSpy).not.toHaveBeenCalled();
         retrieveSpy.mockRestore();
@@ -1368,9 +1384,9 @@ describe('applyWebhookDelivery', () => {
     ])('refuses an adapter event carrying %s before any lookup', async (_name, event) => {
         const lookupSpy = jest.spyOn(paymentRepository, 'findByProviderRef');
 
-        await expect(
-            paymentService.applyWebhookDelivery(asStub<ProviderWebhookEvent>(event), 'fake')
-        ).rejects.toBeInstanceOf(WebhookRejected);
+        await expect(deliver(asStub<ProviderWebhookEvent>(event))).rejects.toBeInstanceOf(
+            WebhookRejected
+        );
 
         expect(lookupSpy).not.toHaveBeenCalled();
         lookupSpy.mockRestore();

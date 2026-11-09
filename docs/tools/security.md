@@ -438,12 +438,14 @@ else the address block. A session behind a proxy pool does not get 20 per addres
 one office NAT do not share 20.
 
 **A fifth, on the one unauthenticated WRITE.** `webhookLimiter` guards `POST /payments/webhook/{provider}`.
-The signature check is the actual defence — an unsigned flood costs one HMAC each, then a `400` —
-so this budget is not bounding an attack, it is closing the gap that every other route already had
-a stated ceiling and this one didn't. Shaped like `submissionLimiter`: `skipSuccessfulRequests` off,
-keyed on the caller's address, since a genuine delivery is the traffic being bounded here too.
-Default `NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX=60` — sized for a burst of real deliveries (several
-events per order, a sale driving many orders at once), not the one-per-order steady state.
+The signature check is the actual defence, so only an unverified delivery needs a bound:
+`skipSuccessfulRequests` refunds a verified one, and the budget counts refusals (a `400` or a
+`404`) per address BLOCK, the key every other anonymous budget uses. A forgery costs one HMAC per
+secret, two log lines and a security event; it is bounded per block, not in total, since a proxy
+pool spans many blocks. The budget is `audited: false`: a forged flood would bury the audit trail
+in `security.rate-limit.hit` rows, and the refusal metric (`RateLimitRefusals`) and the
+signature-failure alert (`PaymentWebhookSignatureFailures`) still fire.
+Default `NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX=60` per window.
 
 **The last two are keyed on a credential, not an address.** `mfaChallengeLimiter`
 (`POST /account/login/2fa`) and `mfaSendLimiter` (`POST /account/login/2fa/send`) both bucket on a
@@ -518,7 +520,7 @@ See [shared rules](../theory/shared-rules.md#rule-data-the-twin-will-need-yaml--
 | Invoice / credit-note renders                | `invoicing`      | `NODE_INVOICING_RATE_LIMIT_MAX`             | 20      | `NODE_RATE_LIMIT_WINDOW_MS` | the authenticated account                                                                                                 | yes     | memory     |
 | Order CSV exports                            | `orders`         | `NODE_ORDER_EXPORT_RATE_LIMIT_MAX`          | 10      | `NODE_RATE_LIMIT_WINDOW_MS` | the authenticated account                                                                                                 | yes     | memory     |
 | Order staff notes                            | `orders`         | `NODE_ORDER_NOTE_RATE_LIMIT_MAX`            | 30      | `NODE_RATE_LIMIT_WINDOW_MS` | the authenticated account                                                                                                 | yes     | memory     |
-| Payment webhook deliveries                   | `payments`       | `NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX`       | 60      | `NODE_RATE_LIMIT_WINDOW_MS` | address (IPv6 /56)                                                                                                        | yes     | memory     |
+| Payment webhook deliveries                   | `payments`       | `NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX`       | 60      | `NODE_RATE_LIMIT_WINDOW_MS` | address block (IPv4 /24, IPv6 /48)                                                                                        | no      | memory     |
 | Payment confirm attempts                     | `payments`       | `NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX`       | 5       | 3600000ms                   | the authenticated account                                                                                                 | yes     | memory     |
 | Payment confirm declines                     | `payments`       | `NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX`       | 3       | 3600000ms                   | the authenticated account                                                                                                 | yes     | memory     |
 | Payment confirm declines per address block   | `payments`       | `NODE_PAYMENT_DECLINE_BLOCK_RATE_LIMIT_MAX` | 10      | 3600000ms                   | address block (IPv4 /24, IPv6 /48)                                                                                        | yes     | memory     |

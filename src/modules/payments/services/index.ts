@@ -15,12 +15,7 @@
  */
 
 import { createIntent } from './intent';
-import {
-    confirmPayment,
-    syncPayment,
-    applyWebhookDelivery,
-    applyWebhookSettlement
-} from './settlement';
+import { confirmPayment, syncPayment, receiveWebhook, applyWebhookSettlement } from './settlement';
 import {
     refundPayment,
     openReturnRefund,
@@ -55,16 +50,16 @@ import { methodMix } from './stats';
 import { listPaymentMethods } from '../config';
 import { refundLegalDue } from './deadline';
 
-export { RefundLeftOpenError } from './errors';
+export { RefundLeftOpenError, WebhookProviderUnknownError } from './errors';
 export type { OfflinePaymentInput } from './offline';
 export type { OpenedReturnRefund } from './refunds';
 export type { MixRow } from './stats';
 export type { PaymentMethodInfo } from '../config';
 
 /*
- * `settlePayment` and `performRefund` are NOT published: each is the choreography beneath a door
+ * `settlePayment`, `applyWebhookDelivery` and `performRefund` are NOT published: each is the choreography beneath a door
  * that carries the guards (scope, own-money rule, order gate), so a caller going round the door
- * would skip them. `confirmPayment`/`syncPayment`/`applyWebhookSettlement` and
+ * would skip them. `confirmPayment`/`syncPayment`/`receiveWebhook`/`applyWebhookSettlement` and
  * `refundPayment`/`openReturnRefund`/`sendOpenedRefund` are the doors. `refundForOrder` and `cancelOpenIntentForOrder` act for the `order.canceled` listener alone, so they stay off the object too.
  */
 
@@ -73,7 +68,7 @@ export const paymentService = {
     createIntent,
     confirmPayment,
     syncPayment,
-    applyWebhookDelivery,
+    receiveWebhook,
     applyWebhookSettlement,
     getById,
     getForOrder,

@@ -402,7 +402,7 @@ rules:
               - src/modules/cart/services/checkout.ts (the only door that asks)
               - src/modules/users/emails.ts (the buyer's mail when a hold is placed)
               - src/modules/antibot/**, src/infrastructure/http/middlewares/human-challenge.ts, rate-limit.ts
-              - src/modules/payments/services/settlement.ts (settlePayment, applyWebhookSettlement, applyWebhookDelivery)
+              - src/modules/payments/services/settlement.ts (settlePayment, applyWebhookSettlement, receiveWebhook, applyWebhookDelivery)
               - src/modules/account/jobs.ts
           frontend:
               - boilerplate-vue-frontend src/modules/account/components/PurchaseHoldNotice.vue (reason, end date, contact link)

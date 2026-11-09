@@ -18,7 +18,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { isObjectIdString } from '@infrastructure/persistence/create-repository';
 import { rejectResponse } from '@infrastructure/http/response';
 import { connection } from '@infrastructure/runtime/database';
-import { setFakeDispute, setFakeRefundFailure } from './fake';
+import { setFakeDispute, setFakeRefundFailure, signFakeDelivery } from './fake';
 import { DAY_MS } from '@domain-primitives/time';
 
 /**
@@ -63,7 +63,7 @@ const providerRefOf = (orderId: string): Promise<string | undefined> =>
 
 /**
  * Mount the dispute lever: store the provider's report in the fake and deliver it through the
- * service, as the webhook route would after verifying the signature.
+ * service's webhook door, signed as the provider would.
  * @param app - the application being assembled
  */
 const installDisputeLever = (app: Express): void => {
@@ -94,8 +94,11 @@ const installDisputeLever = (app: Express): void => {
                     observedAt: new Date(now).toISOString(),
                     dashboardUrl: `https://dashboard.fake-psp.example/disputes/${wanted.disputeId}`
                 });
+                // Signed and delivered through the same door the route uses: the lever gets no
+                // shortcut past the signature check.
+                const { body: signed, headers } = signFakeDelivery(delivery);
                 return paymentService
-                    .applyWebhookDelivery(delivery, 'fake')
+                    .receiveWebhook('fake', Buffer.from(signed), headers)
                     .then(() => response.status(204).end());
             })
             .catch((error: unknown) => {

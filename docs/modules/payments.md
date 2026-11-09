@@ -749,8 +749,8 @@ fundsWithdrawn, evidenceDueBy?}`.
 | Adyen         | `CHARGEBACK_REVERSED`                                                                    | chargeback, `won`                                    |
 
 The fake provider's lever is `setFakeDispute(providerRef, state)` (`scenarios/support/doubles/payments/fake.ts`):
-it returns the delivery to hand to `applyWebhookDelivery`, and `signFakeDelivery` signs it for the
-real route. The demo profile's `POST /__test/payments/dispute` does it for an order.
+it returns the delivery; `signFakeDelivery` signs it, and `paymentService.receiveWebhook` (or the
+real route) takes it from there. The demo profile's `POST /__test/payments/dispute` does it for an order.
 
 ## Bank transfer
 
@@ -1132,7 +1132,7 @@ The delivery's own claim about the outcome is never used: the settlement calls `
 late or reordered event is harmless. Throw `WebhookRejected` for anything that does not
 authenticate or parse; the route answers 400.
 
-The port checks your work: `applyWebhookDelivery` parses the event you return against the
+The port checks your work: `receiveWebhook` (through `applyWebhookDelivery`) parses the event you return against the
 contract's schema (`ReceivePaymentWebhookBody`) before any lookup, so an operator object such as
 `{ "$ne": null }` where a `providerRef` string belongs is refused with the same 400, even from an
 adapter that validated nothing. Do not rely on that: refuse a body you cannot make sense of

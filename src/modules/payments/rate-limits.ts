@@ -1,6 +1,6 @@
 /**
  * @module
- * Payments' own rate-limit budgets: the webhook's own ceiling (`webhookLimiter`), the pooled one for
+ * Payments' own rate-limit budgets: the webhook's forgery ceiling (`webhookLimiter`), the pooled one for
  * intents and syncs (`paymentIntentLimiter`), and the three
  * card-testing budgets on `POST /:id/confirm` (`paymentConfirmAttemptLimiter`,
  * `paymentConfirmDeclineLimiter`, `paymentConfirmDeclineBlockLimiter`) plus the gate built on the
@@ -20,7 +20,6 @@ import {
     priorHits,
     accountIdOf,
     addressBlockOf,
-    KEYED_BY_ADDRESS,
     KEYED_BY_ADDRESS_BLOCK,
     KEYED_BY_AUTHENTICATED_ACCOUNT
 } from '@infrastructure/http/middlewares/rate-limit';
@@ -28,17 +27,18 @@ import { humanChallengeGate } from '@infrastructure/http/middlewares/human-chall
 import { paymentsRateLimitData } from './rate-limits.generated';
 
 /**
- * Payment webhook deliveries allowed per window, per ADDRESS.
+ * Refused payment webhook deliveries allowed per window, per ADDRESS BLOCK; a verified one is
+ * refunded.
  *
- * The provider is one caller, but its address is not this application's to size a global budget
- * around. A signature check is what actually authenticates a delivery — this budget exists
- * because the route is otherwise unbounded, and every route this application answers deserves a
- * stated ceiling rather than a silent one. Sized for a burst of genuine deliveries (several events
- * per order, a sale driving many orders at once), not the one-per-order steady state.
+ * The signature is what authenticates a delivery, so only unverified traffic needs a bound. A block,
+ * not one address, because a forger rotating addresses inside it would otherwise get a fresh budget
+ * each. Sized for a burst of forgeries from one network, not for real deliveries: those never spend it.
  */
 const WEBHOOK_BUDGET: RateLimitBudget = {
     ...paymentsRateLimitData.paymentWebhook,
-    keyedBy: KEYED_BY_ADDRESS
+    keyedBy: KEYED_BY_ADDRESS_BLOCK,
+    keyGenerator: addressBlockOf,
+    skipSuccessfulRequests: true
 };
 
 /**
