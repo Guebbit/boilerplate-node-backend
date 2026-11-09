@@ -277,8 +277,9 @@ changes — Shopify's `PUT …/addresses/{id}/default.json` is the same shape. A
 **A PUT never creates.** A PUT on an id that does not exist is a 404 (a PUT that creates MUST
 answer 201, RFC 9110 §9.3.4, and nothing here has a URL the client may name).
 
-**Offer a PUT only when the body can be the whole resource.** A route that sets two fields of a
-bigger record is a PATCH alone (`PATCH /users/{id}`), never a PUT that clears the rest.
+**Offer a PUT only when the body can be the whole resource.** A route that changes part of a
+bigger record is a PATCH alone (`PATCH /delivery/shipments/{id}` changes only the tracking code),
+never a PUT that clears the rest.
 
 **A server may transform.** RFC 9110 lets the stored state differ from the body. No route does
 today: the one that did, an email held as `pendingEmail` until proven, is its own door now
@@ -631,6 +632,7 @@ A new date filter picks one of the three; a fourth spelling needs a card.
 | `PUT /cart/shipping-method`, `PUT /locales/{locale}/apps/{app}/entries/{entryId}`, `PUT /account/addresses/{id}/default` | no PATCH | one field, or none; a PATCH would say exactly what the PUT says |
 | `POST /payments`, `POST /orders/{id}/payments` | 200 when they refresh or convert the order's one payment row | one payment per order is a database fact |
 | `PUT`/`PATCH /locales/{locale}/apps/{app}/entries` | the app is a path segment; the body is `{ entries: { <key>: text } }`, and under PATCH a `null` deletes its key | a PUT replaces exactly what the GET on the same URI lists; the map is a real merge patch (RFC 7396) |
+| `PATCH /locales/translations/{entityType}/{id}` | an empty `fields` for a locale is a 422 | a locale with no fields is not a translation; deleting one is the locale's own `null` |
 
 ## How it is kept true
 

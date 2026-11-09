@@ -11,6 +11,7 @@
  */
 
 import type { ClientSession, Document, Model, QueryFilter, UpdateQuery } from 'mongoose';
+import { clearedOrValue, setAndUnset } from './changes';
 import { toObjectId } from './create-repository';
 import { EDIT_REVISION } from './revision-plugin';
 import { PreconditionFailedError, preconditionFilter } from './versioning';
@@ -21,8 +22,8 @@ export interface TranslatableColumns {
     revisionOf: (entityId: string) => Promise<number | undefined>;
     /**
      * Copies the fallback locale's fields onto the document's own columns, so a search or a list
-     * never resolves a translation for the language the row is already in. A cleared field is an
-     * empty column. `timestamps: false`: a derived copy is not an edit anybody made.
+     * never resolves a translation for the language the row is already in. A cleared field is no
+     * field (`$unset`), the same as its translation row. `timestamps: false`: a derived copy is not an edit anybody made.
      */
     writeDerived: (
         entityId: string,
@@ -64,12 +65,12 @@ export const translatableColumnsOf = <TDocument extends Document>(
             .updateOne(
                 { _id: toObjectId(entityId) } as QueryFilter<TDocument>,
                 // `as`: the column names arrive as data (the port's `fields`), which a generic
-                // `TDocument` cannot show the compiler.
-                {
-                    $set: Object.fromEntries(
-                        Object.entries(fields).map(([name, value]) => [name, value ?? ''])
+                // `TDocument` cannot show the compiler. A `null` becomes an `$unset`.
+                setAndUnset(
+                    Object.fromEntries(
+                        Object.entries(fields).map(([name, value]) => [name, clearedOrValue(value)])
                     )
-                } as UpdateQuery<TDocument>,
+                ) as UpdateQuery<TDocument>,
                 // `session` joins the caller's transaction; `undefined` stands alone.
                 { timestamps: false, session }
             )

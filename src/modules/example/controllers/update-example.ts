@@ -11,6 +11,7 @@ import { ReplaceExampleByIdBody, UpdateExampleByIdBody } from '@api/schemas.zod'
 import { callerContextOf } from '@infrastructure/http/request';
 import { trimmedInto } from '@infrastructure/http/schemas';
 import { createUpdateController } from '@infrastructure/surfaces/create-update-controller';
+import { trimmedExampleTitle } from '../title-rule';
 import { exampleService } from '../services';
 
 /** `PUT`'s body with `title` and `body` trimmed first: `"   "` is a field-level 422, not a blank column. */
@@ -21,7 +22,7 @@ const replaceTrimmedBody = ReplaceExampleByIdBody.extend({
 
 /** `PATCH`'s body, trimmed the same way; an omitted field stays omitted. */
 const updateTrimmedBody = UpdateExampleByIdBody.extend({
-    title: trimmedInto(UpdateExampleByIdBody.shape.title.unwrap()).optional(),
+    title: trimmedExampleTitle.optional(),
     body: trimmedInto(UpdateExampleByIdBody.shape.body.unwrap()).optional()
 });
 

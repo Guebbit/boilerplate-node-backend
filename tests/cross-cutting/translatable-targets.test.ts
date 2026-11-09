@@ -2,7 +2,7 @@
  * Every `translatables` manifest entry names a real Mongoose collection and real fields on it.
  *
  * A stale entry here is invisible until a translation write actually happens: nothing else reads
- * `collection`/`fields` before the write path does, so a typo or a renamed field would otherwise
+ * `collection`/`fieldRules` before the write path does, so a typo or a renamed field would otherwise
  * surface as a 500 on someone's first translation edit rather than as a failing test.
  */
 import mongoose from 'mongoose';
@@ -37,7 +37,7 @@ describe('the translatables registry', () => {
                 const registeredModel = modelsByCollection.get(target!.collection);
                 expect(registeredModel).toBeDefined();
 
-                for (const field of target!.fields)
+                for (const field of Object.keys(target!.fieldRules.shape))
                     expect(registeredModel!.schema.path(field)).toBeDefined();
             }
         );

@@ -605,7 +605,7 @@ describe('updateEntityTranslations, field by field (RFC 7396)', () => {
         const row = await translationRepository.findEntityLocale('product', id, FALLBACK);
         expect(row?.fields).toEqual({ title: 'Cozy Bed' });
         const stored = await readProduct(id);
-        expect(stored?.description).toBe('');
+        expect(stored?.description).toBeUndefined();
     });
 
     it('refuses a value the product itself would refuse, naming the locale and field', async () => {
@@ -665,7 +665,7 @@ describe('replaceEntityTranslations', () => {
         const row = await translationRepository.findEntityLocale('product', id, FALLBACK);
         expect(row?.fields).toEqual({ title: 'Cozy Bed XL' });
         const stored = await readProduct(id);
-        expect(stored?.description).toBe('');
+        expect(stored?.description).toBeUndefined();
     });
 
     it('does not delete the fallback row when a PUT names it in another casing', async () => {
