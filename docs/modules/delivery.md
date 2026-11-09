@@ -406,11 +406,11 @@ every order see every row; anyone else sees only their own orders' fulfillment o
 
 ### When they are made
 
-| Path       | What                                                                                                                                                                                                                                    |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Normal     | this module listens to `order.status_changed {to: paid}` through the outbox, as `invoicing` does. Idempotent on `{ orderId, number }`                                                                                                   |
-| Safety net | `ensureFulfillmentOrders` runs the same idempotent create on every fulfillment-orders list read and every `process` of a paid order: the outbox gives up after its last retry, and a missing fulfillment order would leave no ship door |
-| Not paid   | `GET /orders/{id}/fulfillment-orders` and `/shipments` answer `200` with `items: []`                                                                                                                                                    |
+| Path       | What                                                                                                                                                                                                                         |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Normal     | this module listens to `order.status_changed {to: paid}` through the outbox, as `invoicing` does. Idempotent on `{ orderId, number }`                                                                                        |
+| Safety net | `ensureFulfillmentOrders` runs the same idempotent create on every `process` of a paid order, and an operator reviving a dead `paid` event makes them too. A read never does: a just-paid order may answer `[]` for a moment |
+| Not paid   | `GET /orders/{id}/fulfillment-orders` and `/shipments` answer `200` with `items: []`                                                                                                                                         |
 
 ## One transaction per act
 

@@ -199,6 +199,8 @@ describe('the fulfillment orders of a paid order', () => {
             String(pending._id),
             buyer
         );
+        // Made as the `paid` listener would: a read only lists them.
+        await fulfillmentOrdersOf(String(order._id));
         const own = await deliveryService.listFulfillmentOrdersForOrder(
             String(order._id),
             asAdmin()

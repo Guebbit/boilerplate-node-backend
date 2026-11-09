@@ -215,8 +215,7 @@ interface FulfillmentData {
 }
 
 /**
- * The order's fulfillment orders and shipments, as staff read them. The plan is read first: that
- * read makes the fulfillment orders of a paid order that has none yet.
+ * The order's fulfillment orders and shipments, as staff read them.
  */
 const readFulfillment = (owner: Caller, orderId: string): Promise<FulfillmentData> =>
     owner

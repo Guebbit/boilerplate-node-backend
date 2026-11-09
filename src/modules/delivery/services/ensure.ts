@@ -1,9 +1,9 @@
 /**
  * @module
  * Making an order's fulfillment orders: by rule, when the order is paid. The `paid` listener is the
- * normal path; {@link ensureFulfillmentOrders} is the same idempotent create, run again on every read
- * and `start` of a paid order, because the outbox gives up after its last retry and a missing
- * fulfillment order would leave no ship door at all.
+ * normal path; {@link ensureFulfillmentOrders} is the same idempotent create, also run by `start`,
+ * by a preorder allocation and by an operator reviving a dead `paid` event, because the outbox
+ * gives up after its last retry. A read never makes them.
  *
  * See: docs/modules/delivery.md#when-they-are-made
  */
@@ -45,8 +45,8 @@ const groupableLinesOf = (order: OrderDocument): GroupableLine[] =>
 
 /**
  * Make the order's fulfillment orders if it has none yet, and report the summary — in one
- * transaction. Idempotent on `{ orderId, number }`: a retried listener, a read racing it, or the
- * safety net running after the listener all leave exactly one set.
+ * transaction. Idempotent on `{ orderId, number }`: a retried listener, or `start` running
+ * after the listener, leaves exactly one set.
  *
  * @param orderId - the order
  * @returns settles once the order has its fulfillment orders; does nothing for an order that is

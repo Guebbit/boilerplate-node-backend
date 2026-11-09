@@ -124,7 +124,8 @@ export default {
     /*
      * None of the first three requests a fact — each reacts to one `orders` already recorded and
      * announced. A failure is logged by `emitDomainEvent`, and the outbox retries it; the missing
-     * fulfillment orders a lost `paid` would leave are made again by the next read or `start`.
+     * fulfillment orders a lost `paid` would leave are made again by `start`, a preorder allocation,
+     * or the operator reviving the dead event.
      */
     subscribe: () => {
         onDomainEvent(ORDER_STATUS_CHANGED, ({ orderId, to }) =>
