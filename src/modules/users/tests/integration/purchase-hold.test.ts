@@ -232,6 +232,8 @@ describe('liftPurchaseHold', () => {
         expect(recorded).not.toHaveBeenCalledWith(
             auditedAction(usersAuditActions.ADMIN_USER_PURCHASE_HOLD_LIFTED)
         );
+        const stored = await storedUser(buyer.id);
+        expect(stored?.purchaseHoldResetAt).toBeUndefined();
     });
 
     it('audits a lift of a hold that has already ended, as a review with no hold in force', async () => {
