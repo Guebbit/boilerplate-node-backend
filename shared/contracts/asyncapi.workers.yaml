@@ -69,8 +69,11 @@ operations:
         description: >-
             The consumer acknowledges only after the transport accepts the message, so a worker
             that dies mid-send returns the job to the queue rather than losing it. A rendering
-            failure is not retried — the template is broken for every redelivery, and requeueing
-            it forever would starve the queue behind a job that cannot succeed.
+            failure is retried like any other error, up to `NODE_QUEUE_MAX_ATTEMPTS`, then parked
+            in the dead queue. The render reads the template and the spooled attachments from
+            disk, and a name the running worker has not yet registered (a deploy in progress) can
+            still resolve, so a failure is not provably permanent. The cap keeps a broken template
+            from starving the queue, and no mail is sent before the render succeeds.
         messages:
             - $ref: '#/channels/worker.email.send/messages/EmailJobMessage'
     workerImageDigestPublish:
