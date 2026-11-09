@@ -10,7 +10,11 @@ import type { Express, Request, Response, NextFunction } from 'express';
 import { MulterError } from 'multer';
 import { logger, auditLogger } from '@infrastructure/adapters/logger';
 import { fieldError, rejectResponse } from '@infrastructure/http/response';
-import { databaseErrorInterpreter, rejectServiceUnavailable } from '@infrastructure/http/errors';
+import {
+    databaseErrorInterpreter,
+    loggableDatabaseError,
+    rejectServiceUnavailable
+} from '@infrastructure/http/errors';
 import {
     getActiveSpanContext,
     recordErrorOnActiveSpan
@@ -74,19 +78,11 @@ const resolveStatus = (error: Error): number => {
 };
 
 /**
- * Names of the driver and ODM errors, by `name` rather than `instanceof`: `mongodb` and `bson`
- * are transitive dependencies and a second copy would make `instanceof` answer false.
- */
-const DATABASE_ERROR_NAME =
-    /^(?:Mongo\w*Error|Mongoose\w*Error|ValidationError|CastError|BSONError)$/;
-
-/**
  * What of an error may reach the log: the identifying fields, never the message.
  *
  * - a body-parser error: `type` only. Its message quotes the request body (`Unexpected token ...
  *   in JSON`), and a client controls that body.
- * - a Mongo/Mongoose error: name and code only. Its message carries the offending values (a
- *   duplicate-key error names the email).
+ * - a Mongo/Mongoose error: name and code only, via the shared `loggableDatabaseError`.
  * - anything else: unchanged, the logger's own serializer decides.
  *
  * @param error - the unhandled error
@@ -95,9 +91,7 @@ const DATABASE_ERROR_NAME =
 const loggableError = (error: Error, declaredClientError: boolean): unknown => {
     if (declaredClientError && 'type' in error && typeof error.type === 'string')
         return { type: error.type };
-    if (DATABASE_ERROR_NAME.test(error.name))
-        return { name: error.name, code: 'code' in error ? error.code : undefined };
-    return error;
+    return loggableDatabaseError(error);
 };
 
 /**

@@ -118,6 +118,30 @@ export const rejectServiceUnavailable = (response: Response) => {
 };
 
 /**
+ * Names of the driver and ODM errors, by `name` rather than `instanceof`: `mongodb` and `bson`
+ * are transitive dependencies and a second copy would make `instanceof` answer false.
+ */
+const DATABASE_ERROR_NAME =
+    /^(?:Mongo\w*Error|Mongoose\w*Error|ValidationError|CastError|BSONError)$/;
+
+/**
+ * What of a failure may reach the log. A Mongo/Mongoose error keeps its name and code only: its
+ * message carries the offending values (a duplicate-key error names the email, a
+ * `ValidationError` quotes what was rejected), and log redaction reads key names, never message
+ * text. The stack is left out too, since its first line IS the message. Anything else is
+ * returned unchanged for the logger's own serializer.
+ *
+ * Shared by the global error handler and {@link logDatabaseFailure}, so both paths scrub alike.
+ *
+ * @param error - whatever was caught
+ * @returns the scrubbed shape for a database error, otherwise `error` itself
+ */
+export const loggableDatabaseError = (error: unknown): unknown => {
+    if (!(error instanceof Error) || !DATABASE_ERROR_NAME.test(error.name)) return error;
+    return { name: error.name, code: 'code' in error ? error.code : undefined };
+};
+
+/**
  * Log a database-derived failure at the severity it deserves: `warn` for a 4xx (the request's
  * fault — a duplicate key, a bad id, a refused write), `error` for a 5xx (the server's). Without
  * the split, an ordinary 409/422 — the everyday case `unique: true` and a bad id exist to turn
@@ -139,7 +163,10 @@ const logDatabaseFailure = (
     // client. `error` under its own key, not folded into the message string, is what lets the
     // logger's own serializer attach a stack trace — see `adapters/logger.ts`'s `serializeError`.
     // Stryker disable next-line all
-    logger[status < 500 ? 'warn' : 'error'](`${context} - ${detail}`, { status, error });
+    logger[status < 500 ? 'warn' : 'error'](`${context} - ${detail}`, {
+        status,
+        error: loggableDatabaseError(error)
+    });
 };
 
 /**
