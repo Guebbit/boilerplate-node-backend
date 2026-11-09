@@ -53,7 +53,7 @@ export const ORDER_EVENTS = {
     ship: { from: [OrderStatus.processing], to: OrderStatus.shipped, actors: ['system'] },
     /**
      * A shipment was reported lost while the order was `shipped`: its units are open again, so the
-     * order is back to being fulfilled. The one backward move in the table, and `system`-only —
+     * order is back to being fulfilled. One of two backward moves in the table, and `system`-only —
      * `canOverrideTo` stays forward-only, so an admin never makes it by hand.
      */
     reopen: { from: [OrderStatus.shipped], to: OrderStatus.processing, actors: ['system'] },

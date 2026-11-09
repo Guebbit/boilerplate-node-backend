@@ -67,7 +67,7 @@ describe("the table names only the contract's statuses", () => {
         expect(events.filter((event) => event.from.includes(event.to))).toEqual([]);
     });
 
-    it('leaves a terminal status through no event', () => {
+    it('leaves canceled through no event, and delivered only through reship', () => {
         expect(events.filter((event) => event.from.includes(OrderStatus.canceled))).toEqual([]);
         // `delivered` is left only by a replacement's `reship`, which the system alone makes.
         expect(events.filter((event) => event.from.includes(OrderStatus.delivered))).toEqual([

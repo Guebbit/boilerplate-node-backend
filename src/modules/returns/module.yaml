@@ -3,7 +3,7 @@ subdomain: supporting
 group: shop
 dependsOn:
     - access # ownOrderFlag: the audit flag of an approve or receive on the caller's own order
-    - delivery # the return address, and the cheapest standard delivery a withdrawal refunds
+    - delivery # what shipped and what remains of each line, the cheapest standard delivery a withdrawal refunds; reopens units for a replacement and cancels a remainder
     - inventory # putting received goods back on sale
     - orders # the order a return is about: its lines, its owner, and the cancel a pre-dispatch withdrawal becomes
     - payments # the refund for received goods, and PAYMENT_REFUNDED — the fact that closes a return

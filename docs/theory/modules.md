@@ -69,22 +69,24 @@ So `kernel` holds only what would lose its reason to exist if modules did — wh
 just the module system machinery (`registry.ts`, `events.ts`): most of its code is the authn/authz surface every module's guard shares. That is a real weight,
 not an oversight — the table below is what earns each file its place, module system or not:
 
-| File                            | Why it cannot be infrastructure                                                                           |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `registry.ts`                   | it _is_ the module system — `AppModule`, `registerModules`                                                |
-| `events.ts`                     | it exists so two modules can talk without importing each other                                            |
-| `authentication.ts`             | the socket `account` plugs into, so guards need no module import                                          |
-| `middlewares/authorizations.ts` | the guard that consumes that socket                                                                       |
-| `permissions.ts`                | the declared keys and preset roles, read off the shared YAML the PHP twin reads                           |
-| `ability.ts`                    | a resolved caller's rules, built once per request from what `permissions.ts` declares                     |
-| `access/query.ts`               | a caller's rules turned into the Mongo filter that enforces them, so no module writes its own             |
-| `access/tenant.ts`              | the one shop's pinned `_id`, needed by `permissions.ts` before `@modules/access` can be imported          |
-| `module-config.ts`              | the boot-time gate collecting every module's — and no module's — configuration slices                     |
-| `config.ts`                     | the kernel's own variables: step-up windows and the outbox retry policy                                   |
-| `cookies.ts`                    | the session cookie's name and reader, which the auth port and the SSE-only path both consume              |
-| `outbox.ts`                     | the transactional outbox: an event written with the state change it announces, published after by a relay |
-| `staff-read.ts`                 | the audit entry for staff reading someone else's record, shared by every module's detail reads            |
-| `translation.ts`                | the hook `modules/locales` answers, so a decorator can resolve content without importing `src/modules/*`  |
+| File                            | Why it cannot be infrastructure                                                                                     |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `registry.ts`                   | it _is_ the module system — `AppModule`, `registerModules`                                                          |
+| `events.ts`                     | it exists so two modules can talk without importing each other                                                      |
+| `authentication.ts`             | the socket `account` plugs into, so guards need no module import                                                    |
+| `middlewares/authorizations.ts` | the guard that consumes that socket                                                                                 |
+| `permissions.ts`                | the declared keys and preset roles, read off the shared YAML the PHP twin reads                                     |
+| `ability.ts`                    | a resolved caller's rules, built once per request from what `permissions.ts` declares                               |
+| `access/query.ts`               | a caller's rules turned into the Mongo filter that enforces them, so no module writes its own                       |
+| `access/tenant.ts`              | the one shop's pinned `_id`, needed by `permissions.ts` before `@modules/access` can be imported                    |
+| `module-config.ts`              | the boot-time gate collecting every module's — and no module's — configuration slices                               |
+| `config.ts`                     | the kernel's own variables: step-up windows and the outbox retry policy                                             |
+| `cookies.ts`                    | the session cookie's name and reader, which the auth port and the SSE-only path both consume                        |
+| `outbox.ts`                     | the transactional outbox: an event written with the state change it announces, published after by a relay           |
+| `staff-read.ts`                 | the audit entry for staff reading someone else's record, shared by every module's detail reads                      |
+| `translation.ts`                | the hook `modules/locales` answers, so a decorator can resolve content without importing `src/modules/*`            |
+| `middlewares/locale-preview.ts` | the staff preview of a draft language's product text, needing the caller the auth socket resolved                   |
+| `*.generated.ts`                | `outbox.generated.ts` and `step-up.generated.ts`, written from the shared rules ([shared rules](./shared-rules.md)) |
 
 The seed accounts' ids and credentials — the two demo identities `users`, `orders`, `cart` and
 `wishlist` each point at — are NOT here: they are pure scenario data, owned by none of the modules
@@ -266,7 +268,7 @@ flowchart TD
 | File                                                 | Required?                                                                          | What it is                                                                                                                                                                                                                                                                             |
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `module.ts`                                          | **yes**                                                                            | the manifest — the only file `src/modules.ts` imports                                                                                                                                                                                                                                  |
-| `index.ts`                                           | **yes**                                                                            | the public barrel, even when empty (`antibot`)                                                                                                                                                                                                                                         |
+| `index.ts`                                           | **yes**                                                                            | the public barrel                                                                                                                                                                                                                                                                      |
 | `routes.ts` + `controllers/`                         | only if the domain serves HTTP                                                     | only `access` has neither                                                                                                                                                                                                                                                              |
 | `service.ts` · `repository.ts` · `model.ts`          | only if it owns data                                                               | `observability` owns none — it serves URLs over other domains' data                                                                                                                                                                                                                    |
 | `services/`                                          | when `service.ts` outgrows one file                                                | see [Layers](./layers.md#when-service-ts-becomes-services)                                                                                                                                                                                                                             |
@@ -530,12 +532,14 @@ Every arrow is an import across a module boundary, through the target's barrel. 
 busiest node on the graph — its edges are on [the map](../modules/index.md#the-map) — and that is not
 a smell to refactor away: a checkout is the one operation that genuinely needs the catalogue, the
 customer, the order it becomes, the method and address it ships to, and the payment that settles it.
-`access` and `shop` sit at the opposite end: reached by several modules, reaching none.
+`access` and `shop` sit at the opposite end: reached by several modules, `access` reaching none and
+`shop` only `account`.
 
 `inventory` is worth reading as a shape rather than a node. It sits one level above `products`, and
-`orders`, `payments`, `delivery` and `returns` depend on it, because it owns the only writes to the
-three stock counters (`onHand`, `reserved`, `backordered`): `orders` asks it to hold units,
-`payments` asks it to turn a hold into a sale.
+`cart`, `orders`, `delivery`, `returns` and `shop-tasks` depend on it, because it owns the only
+writes to the three stock counters (`onHand`, `reserved`, `backordered`): `cart` reads what can be
+sold, `orders` holds, commits (inside `markPaid`), ships and releases units, `returns` puts received
+goods back, and `delivery` and `shop-tasks` listen to its events.
 
 The reverse direction is domain events, and it is a **separate** graph on purpose — an event edge is
 exactly the edge that would have made the import graph a cycle:

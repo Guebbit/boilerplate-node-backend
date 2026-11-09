@@ -205,9 +205,9 @@ repository to re-derive it.
 amend), `remove.ts` (soft and hard delete, restore), `place.ts`, `status.ts`, `cancel.ts` and
 `override.ts`, among others.
 
-`locales` is another, and it carries the constraint worth knowing before a split like it: an i18n
-admin is a solved problem, so there are no rules here worth a `domain/` folder and the pure ones
-have nowhere below `services/` to go. `keys.ts` is where they live instead — the internal file, in
+`locales` is another, and it carries the constraint worth knowing before a split like it: its rules
+answer with a rejection, not a verdict, so they stay in `services/` and the pure ones have nowhere
+below it to go. `keys.ts` is where they live instead — the internal file, in
 `view.ts`'s role.
 
 | File              | What is in it                                                         |
