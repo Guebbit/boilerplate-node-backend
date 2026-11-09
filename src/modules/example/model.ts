@@ -7,6 +7,8 @@
  */
 
 import { model, Schema, type Document, type Model, type Types } from 'mongoose';
+import { z } from 'zod';
+import { trimmedExampleTitle } from './title-rule';
 import { ExampleStatus, type Example } from '@types';
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
@@ -83,3 +85,11 @@ export const applyExampleTransform = applySerialization(exampleSchema, {
 
 /** Example model entrypoint. */
 export const exampleModel = model<ExampleDocument, ExampleModel>('Example', exampleSchema);
+
+/**
+ * The rules for the one translatable field, as the `translatables` registry's `fieldRules`: not
+ * nullable, so the fallback title can never be cleared through the translator's door.
+ */
+export const exampleTranslationFieldRules = z.strictObject({
+    title: trimmedExampleTitle.optional()
+});

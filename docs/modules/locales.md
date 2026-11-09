@@ -182,7 +182,7 @@ fallback locale.
 
 | field          | what it is                                                                                                                                                                                                                              |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `entityType`   | A `translatables` registry key — `product` in V1, generic beyond it.                                                                                                                                                                    |
+| `entityType`   | A `translatables` registry key — generic over whatever modules register.                                                                                                                                                                |
 | `entityId`     | The translated document's id.                                                                                                                                                                                                           |
 | `fields`       | `Record<string, string>` — `{ title, description }` for a product.                                                                                                                                                                      |
 | `sourceDigest` | Hash of the fallback row's `fields` at the moment THIS row was translated. Absent on the fallback row itself — it can't be stale relative to its own content. A mismatch means the source changed since; nothing recomputes it on read. |
@@ -208,6 +208,8 @@ deleted, and the fallback locale is required), PATCH merges — the same replace
 nothing; an empty PATCH map is a 422). A product also has its own write
 surface, [`POST /products` / `PUT`/`PATCH /products/{id}`](./products.md#writing-translated-content),
 which writes the SAME rows but alongside price, stock flags and the image, in one request.
+The generic door applies the entity's own `fieldRules` (its write contract's rules for one locale's
+fields), and stores the parsed value, so it cannot land what the entity's own door would refuse.
 
 Both doors stay, on purpose:
 
@@ -275,7 +277,7 @@ evaluator — [Authorization](../theory/authorization.md) explains the model.
 ## Related pages
 
 - [Internationalisation](../tools/i18n.md) — the mechanism both tiers, and the translations collection, run on
-- [`products`](./products.md) — the one entity translatable today, and its own write surface
+- [`products`](./products.md) — a translatable entity, and its own write surface
 - [Modules overview](./index.md) — the whole context map
 - [The Flow Runner](../tools/flow-runner.md) — the seeded languages and which square of the grid each covers
 - [Request Input](../theory/request-input.md) — how a locale is negotiated
