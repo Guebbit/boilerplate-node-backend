@@ -87,10 +87,10 @@ export const applyServerTimeouts = (server: Server): void => {
     server.requestTimeout = appConfig().NODE_HTTP_REQUEST_TIMEOUT_MS;
 
     /*
-     * Node's own 5s default, exposed rather than changed. RAISE it above the idle timeout of
-     * whatever proxy terminates TLS: if the proxy holds a socket this server has already closed,
-     * it sends the next request into a dead connection and answers 502 to a caller who did
-     * nothing wrong.
+     * Node's own 5s default, exposed rather than changed. The proxy closes idle connections
+     * first: its idle-to-app timeout must stay below this. If the proxy holds a socket this server
+     * has already closed, it sends the next request into a dead connection and answers 502 to a
+     * caller who did nothing wrong.
      *
      * See: docs/tools/security.md
      */
