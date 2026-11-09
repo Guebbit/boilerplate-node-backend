@@ -90,7 +90,7 @@ spec-derived expectation. That is the drift: implementation and test share one
 wrong reading, and CI is green anyway.
 
 Also flag the inverse — a spec rule with no test at all is NOT this audit's
-finding, it belongs to `/audit:spec-gaps`. The row gets `NOT-COVERED`; a code divergence seen on it
+finding, it belongs to `spec-gaps`. The row gets `NOT-COVERED`; a code divergence seen on it
 goes to Leads.
 
 ## Verdicts
@@ -104,7 +104,7 @@ the test(s). A row pass 2 corrects is graded against the correction and marked a
 | `TAUTOLOGY`     | the expected value comes from the code under test. A finding                   |
 | `SPEC-CONFLICT` | two spec sources disagree: name both and the side code and test took. Beats OK |
 | `SPEC-SILENT`   | no spec line decides it                                                        |
-| `NOT-COVERED`   | no test; belongs to `/audit:spec-gaps`                                         |
+| `NOT-COVERED`   | no test; belongs to `spec-gaps`                                                |
 | `OK`            | they agree. A count, never a row                                               |
 
 `fix side` is `contract`, `docs`, `shared` (`shared/**` YAML), `code` or `test`.
@@ -128,7 +128,7 @@ Leads are not verdicts. This is where spec-gaps' `contradicted` rows land; do no
 
 A code the code sends (seen in pass 2, asserted by a test or not) that its operation's
 `x-error-codes` does not list is not drift: it is `rfc9457-errors-extension`, owned by
-`/audit:api-rfc9457`. The omission alone never makes a row SPEC-CONFLICT. Grade the row on its other
+`api-rfc9457`. The omission alone never makes a row SPEC-CONFLICT. Grade the row on its other
 merits and note the code in one line (operation, status, code, file:line).
 
 Rules:

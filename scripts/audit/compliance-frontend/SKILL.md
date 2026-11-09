@@ -49,7 +49,8 @@ For `--diff` the branch is the frontend repo's (`git -C ../boilerplate-vue-front
     - `responsibility: both` rules: if this side's own evidence already fails the rule, verdict
       `VIOLATION` — that's actionable here regardless of the backend. If this side is fine but the
       rule's overall intent cannot close without the backend half, verdict `NEEDS-BOTH-SIDES` and
-      note "backend half: see /audit:compliance-backend, same id". Never restate the rule's `rule:`
+      note "backend half: see the `compliance-backend` audit's report
+      (`scripts/audit/compliance-backend/`), same id". Never restate the rule's `rule:`
       text in the note — cite it by `id` only; the backend prompt's report is meant to be read
       alongside this one, not duplicated into it.
 
@@ -75,9 +76,17 @@ Rules:
 
 ## Reading the output
 
-| Verdict              | Means                                                                                                                              |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| **VIOLATION**        | The rule applies and this side's evidence fails it — including a `both` rule broken on this side alone.                            |
-| **SATISFIED**        | The rule applies and this side's evidence meets it in full.                                                                        |
-| **NOT-APPLICABLE**   | `applies_when` evaluates false for this app today, reason cited.                                                                   |
-| **NEEDS-BOTH-SIDES** | A `both` rule whose own-side half is fine but whose closure depends on `/audit:compliance-backend` — see that report by rule `id`. |
+| Verdict              | Means                                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **VIOLATION**        | The rule applies and this side's evidence fails it — including a `both` rule broken on this side alone.                               |
+| **SATISFIED**        | The rule applies and this side's evidence meets it in full.                                                                           |
+| **NOT-APPLICABLE**   | `applies_when` evaluates false for this app today, reason cited.                                                                      |
+| **NEEDS-BOTH-SIDES** | A `both` rule whose own-side half is fine but whose closure depends on the `compliance-backend` audit — see that report by rule `id`. |
+
+## Never carry
+
+Every in-scope rule is judged fresh, so `carried` is not used. A rule out of this run's scope is
+`not re-checked`. In _Since the previous run_ (RULES.md rule 8) the _why_ is one of: a fix sha, new
+code, rule text changed (`git diff <prev-sha> -- scripts/audit/compliance-rules.yaml`), or a
+re-judgement. A re-judgement (evidence paths unchanged since the previous sha) names the registry
+text that caused it, so the rule can be tightened.

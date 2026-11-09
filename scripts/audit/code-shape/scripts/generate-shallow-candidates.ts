@@ -5,7 +5,7 @@
  * run's report folder (`scripts/audit/RULES.md` rule 4).
  *
  * Usage: `npm run audit:shallow -- --out <dir> [path...]` — repo-relative prefixes, `src scripts
- * scenarios` by default. Kept apart from `./shallow-candidates.ts` so its unit test can import the counting
+ * scenarios tests/support` by default. Kept apart from `./shallow-candidates.ts` so its unit test can import the counting
  * without running this.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -15,8 +15,8 @@ import ts from 'typescript';
 import { findShallowCandidates } from './shallow-candidates';
 import { REPO_ROOT } from '../../../modules-on-disk';
 
-/** Scanned when no path is given: the code that ships or builds what ships. */
-const DEFAULT_SCOPE = ['src', 'scripts', 'scenarios'];
+/** Scanned when no path is given: the code that ships, builds what ships, or every suite shares. */
+const DEFAULT_SCOPE = ['src', 'scripts', 'scenarios', 'tests/support'];
 
 /** Position of `--out` on the command line, or -1. */
 const outIndex = process.argv.indexOf('--out');
