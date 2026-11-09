@@ -13,6 +13,7 @@ import { createProduct, productRepository } from '@modules/products/tests/factor
 import { givenLocale } from '@modules/locales/tests/factories';
 import { translator } from '@infrastructure/i18n';
 import { sendTwice } from '@tests/replay';
+import { credentialHolding } from '@tests/credentials';
 
 setupTestDb();
 
@@ -859,5 +860,134 @@ describe('POST /products with an Idempotency-Key', () => {
         await create('product-json-2');
 
         await expect(productCount(bearer)).resolves.toBe(2);
+    });
+});
+
+/** A body a PUT accepts, in both languages the shared product carries. */
+const REPLACEMENT = {
+    price: '15.00',
+    active: true,
+    purchasable: true,
+    requiresShipping: true,
+    allowBackorder: false,
+    noWithdrawal: false,
+    categories: [],
+    tags: [],
+    translations: { en: { title: 'Dog Bed, replaced' }, it: { title: 'Cuccia, sostituita' } }
+};
+
+/**
+ * The four writes that answer a product, each as one call against an existing one. Restore needs a
+ * deleted product, so it deletes first.
+ */
+const PRODUCT_WRITES = {
+    create: (bearer: string, language: string) =>
+        api()
+            .post('/products')
+            .set('Authorization', bearer)
+            .set('Accept-Language', language)
+            .send({
+                price: '24.90',
+                translations: { en: { title: 'Memory Foam Bed' }, it: { title: 'Letto in memory' } }
+            }),
+    put: (bearer: string, language: string, id: string) =>
+        api()
+            .put(`/products/${id}`)
+            .set('Authorization', bearer)
+            .set('Accept-Language', language)
+            .send(REPLACEMENT),
+    patch: (bearer: string, language: string, id: string) =>
+        api()
+            .patch(`/products/${id}`)
+            .set('Authorization', bearer)
+            .set('Accept-Language', language)
+            .send({ price: '12.00' }),
+    restore: (bearer: string, language: string, id: string) =>
+        api()
+            .delete(`/products/${id}`)
+            .set('Authorization', bearer)
+            .then(() =>
+                api()
+                    .post(`/products/${id}/restore`)
+                    .set('Authorization', bearer)
+                    .set('Accept-Language', language)
+            )
+};
+
+/** A product in both languages, made by an editor. */
+const seedBilingual = (bearer: string): Promise<string> =>
+    api()
+        .post('/products')
+        .set('Authorization', bearer)
+        .send({
+            price: '10.00',
+            translations: { en: { title: 'Dog Bed' }, it: { title: 'Cuccia' } }
+        })
+        .then((created) => String(created.body.id));
+
+describe('a product write answers the product as its own GET reads it (AIP-133/134/164)', () => {
+    beforeEach(async () => {
+        await givenLocale('it');
+    });
+
+    it.each(['create', 'put', 'patch', 'restore'] as const)(
+        '%s: an editor reading in Italian gets the body a GET right after gets',
+        async (write) => {
+            const { bearer } = await authenticateAsRole('editor');
+            const id = await seedBilingual(bearer);
+
+            const written = await PRODUCT_WRITES[write](bearer, 'it', id);
+            await settleOutboxNudges();
+            const read = await api()
+                .get(`/products/${String(written.body.id)}`)
+                .set('Authorization', bearer)
+                .set('Accept-Language', 'it');
+
+            expect(written.status).toBe(write === 'create' ? 201 : 200);
+            expect(written.body.translations).toHaveProperty('it');
+            expect(written.body).toEqual(read.body);
+        }
+    );
+
+    it.each(['create', 'put', 'patch', 'restore'] as const)(
+        '%s: without read:Translation or read:StockLevel the body has neither, as the GET',
+        async (write) => {
+            const { bearer: editor } = await authenticateAsRole('editor');
+            const id = await seedBilingual(editor);
+            const bearer = await credentialHolding([
+                'create:Product',
+                'update:Product',
+                'delete:Product',
+                'display:Product',
+                'update:Translation'
+            ]).then((secret) => `Bearer ${secret}`);
+
+            const written = await PRODUCT_WRITES[write](bearer, 'it', id);
+            const read = await api()
+                .get(`/products/${String(written.body.id)}`)
+                .set('Authorization', bearer)
+                .set('Accept-Language', 'it');
+
+            expect(written.status).toBe(write === 'create' ? 201 : 200);
+            expect(written.body).not.toHaveProperty('translations');
+            for (const counter of ['onHand', 'reserved', 'available'])
+                expect(written.body).not.toHaveProperty(counter);
+            expect(written.body).toEqual(read.body);
+        }
+    );
+
+    // PATCH only: a PUT's answer may carry no tag, and create/restore carry Express's content tag.
+    it('patch: the answer carries the ETag a GET right after answers', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const id = await seedBilingual(bearer);
+
+        const written = await PRODUCT_WRITES.patch(bearer, 'it', id);
+        const read = await api()
+            .get(`/products/${id}`)
+            .set('Authorization', bearer)
+            .set('Accept-Language', 'it');
+
+        expect(written.headers.etag).toBeDefined();
+        expect(written.headers.etag).toBe(read.headers.etag);
     });
 });
