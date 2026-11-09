@@ -276,8 +276,9 @@ changes — Shopify's `PUT …/addresses/{id}/default.json` is the same shape. A
 **A PUT never creates.** A PUT on an id that does not exist is a 404 (a PUT that creates MUST
 answer 201, RFC 9110 §9.3.4, and nothing here has a URL the client may name).
 
-**Offer a PUT only when the body can be the whole resource.** A route that sets two fields of a
-bigger record is a PATCH alone (`PATCH /users/{id}`), never a PUT that clears the rest.
+**Offer a PUT only when the body can be the whole resource.** A route that changes part of a
+bigger record is a PATCH alone (`PATCH /delivery/shipments/{id}` changes only the tracking code),
+never a PUT that clears the rest.
 
 **A server may transform.** RFC 9110 lets the stored state differ from the body. No route does
 today: the one that did, an email held as `pendingEmail` until proven, is its own door now

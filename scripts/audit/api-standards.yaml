@@ -197,6 +197,21 @@ rules:
       lint: possible
       difference: null
 
+    - id: rfc5789-accept-patch-options
+      standard: rfc5789
+      section: advertising support in OPTIONS
+      rule: An OPTIONS on a resource that supports PATCH SHOULD answer Accept-Patch, listing the media types its PATCH declares (§3.1).
+      source: https://www.rfc-editor.org/rfc/rfc5789#section-3.1
+      evidence:
+          [
+              src/app/security.ts,
+              src/infrastructure/http/middlewares/method-not-allowed.ts,
+              openapi.yaml paths.*.patch.requestBody.content,
+              docs/api/write-methods.md#a-known-path-with-the-wrong-method
+          ]
+      lint: no
+      difference: null
+
     # RFC 7396, JSON Merge Patch.
     - id: rfc7396-null-deletes
       standard: rfc7396
