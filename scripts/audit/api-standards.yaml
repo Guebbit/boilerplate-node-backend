@@ -359,7 +359,7 @@ rules:
       source: https://google.aip.dev/136
       evidence: [openapi.yaml paths.*.post, docs/api/write-methods.md#action-or-field]
       lint: no
-      difference: null
+      difference: [pointer-put, line-answers-parent]
 
     - id: aip-custom-method-uri
       standard: google-aip
@@ -386,7 +386,7 @@ rules:
       source: https://google.aip.dev/158
       evidence: [openapi.yaml paths.*.get.parameters, docs/api/responses.md#pagination]
       lint: no
-      difference: offset-paging
+      difference: [offset-paging, page-size-strict, bounded-list-unpaged]
 
     - id: aip-error-model
       standard: google-aip
@@ -409,7 +409,7 @@ rules:
               docs/api/write-methods.md#repeating-an-action-409
           ]
       lint: no
-      difference: [revoke-keeps-row, conflict-409]
+      difference: [revoke-keeps-row, soft-delete-204, hard-delete-path, conflict-409]
 
     # Zalando RESTful API guidelines.
     - id: zalando-snake-case-properties

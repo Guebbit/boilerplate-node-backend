@@ -416,6 +416,8 @@ paths:
                 `asyncapi.webhooks.yaml` — the same files `asyncapi.public.yaml` is generated from —
                 so this list and what can actually fire can never drift apart. A module that is
                 not deployed lists nothing. See `docs/api/asyncapi-workflow.md`.
+
+                Unpaged: the event catalogue of the deployed modules.
             operationId: listWebhookEvents
             security:
                 - bearerAuth: []

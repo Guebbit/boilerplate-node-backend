@@ -545,6 +545,8 @@ paths:
                 In `cookie` mode each also carries a coarse `device` label such as "Firefox on
                 Linux", read from the User-Agent at the sign-in. A staff session that has idled out is
                 not listed: it no longer signs anyone in.
+
+                Unpaged: only live sign-ins are listed, and each ends when it expires.
             operationId: listSessions
             security:
                 - bearerAuth: []
@@ -897,7 +899,7 @@ paths:
         get:
             tags: [Auth]
             summary: List the caller's connected accounts
-            description: The sign-in providers linked to the authenticated account (Google, GitHub), with when each was connected. Never carries a provider's own identifier. An empty list means the account signs in with a password alone.
+            description: 'The sign-in providers linked to the authenticated account (Google, GitHub), with when each was connected. Never carries a provider''s own identifier. An empty list means the account signs in with a password alone. Unpaged: at most one per provider.'
             operationId: listOAuthLinks
             security:
                 - bearerAuth: []
