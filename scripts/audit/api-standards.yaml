@@ -60,13 +60,13 @@ rules:
               tests/support/spec-walk.ts
           ]
       lint: no
-      difference: line-answers-parent
+      difference: [line-answers-parent, signup-refusal-201]
 
     - id: rfc9110-conditional-requests
       standard: rfc9110
       section: conditional requests
       rule: An origin server that receives `If-Match` MUST evaluate it before performing the method, using the strong comparison (§13.1.1), and one that receives `If-None-Match` on a request that selects a representation MUST evaluate it, answering a GET or HEAD whose tag matches with 304 (§13.1.2).
-      house: Every read the contract declares a `304` on (`x-cache` other than `no-store`) sends an `ETag` (RFC 9110 §8.8.3 SHOULD), the two-part `"<editRevision>.<digest>"` one on a versioned item read, and the versioned-resources table lists exactly the `x-versioned` paths (docs/api/write-methods.md#conditional-writes-etag-and-if-match).
+      house: Every read the contract declares a `304` on (`x-cache` other than `no-store`) sends an `ETag` (RFC 9110 §8.8.3 SHOULD), the two-part `"<editRevision>.<digest>"` one on a versioned item read, and the versioned-resources table lists exactly the `x-versioned` paths (docs/api/write-methods.md#conditional-writes-etag-and-if-match). A PUT answer carries no validator (§9.3.4).
       source:
           [
               https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1,
@@ -374,7 +374,7 @@ rules:
       source: https://google.aip.dev/136
       evidence: [openapi.yaml paths.*.post, docs/api/write-methods.md#action-or-field]
       lint: no
-      difference: null
+      difference: [pointer-put, line-answers-parent]
 
     - id: aip-custom-method-uri
       standard: google-aip
@@ -401,7 +401,7 @@ rules:
       source: https://google.aip.dev/158
       evidence: [openapi.yaml paths.*.get.parameters, docs/api/responses.md#pagination]
       lint: no
-      difference: offset-paging
+      difference: [offset-paging, page-size-strict, bounded-list-unpaged]
 
     - id: aip-error-model
       standard: google-aip
@@ -424,7 +424,7 @@ rules:
               docs/api/write-methods.md#repeating-an-action-409
           ]
       lint: no
-      difference: [revoke-keeps-row, conflict-409]
+      difference: [revoke-keeps-row, soft-delete-204, hard-delete-path, conflict-409]
 
     # Zalando RESTful API guidelines.
     - id: zalando-snake-case-properties

@@ -6,7 +6,7 @@
  * ```
  * save()        → pre-save hook flags the write → Mongoose sends  { $inc: { editRevision: 1 } }
  * updateOne …   → pre-update hook adds           →                { $inc: { editRevision: 1 } }
- * timestamps:false (stock mirror, digest, session tokens)  →  no stamp, so no increment
+ * timestamps:false (stock mirror, digest, session tokens, password change)  →  no stamp, so no increment
  * ```
  *
  * The rule is "the counter moves wherever `updatedAt` moves": a write that is not an editor's

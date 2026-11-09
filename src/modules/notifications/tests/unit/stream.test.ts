@@ -96,7 +96,7 @@ describe('the notifications stream', () => {
         const fake = open('user-1');
 
         expect(fake.headers['Content-Type']).toBe('text/event-stream');
-        expect(fake.headers['Cache-Control']).toBe('no-cache, no-transform');
+        expect(fake.headers['Cache-Control']).toBe('no-store, no-transform');
         expect(fake.headers.Connection).toBe('keep-alive');
     });
 

@@ -32,7 +32,8 @@ contract names for it. A create answers `201`, the resource, and a `Location` he
 
 A list is always an object, never a top-level array: a field can be added later without breaking a
 reader. A paginated list is `{ items, meta }`; a list that is not paged is `{ items }` or names its
-resource (`{ methods }`, `{ sessions }`).
+resource (`{ methods }`, `{ sessions }`), and its description names the bound that excuses it
+([`bounded-list-unpaged`](../theory/api-standards.md#where-we-differ-and-why)).
 
 ```json
 200
@@ -61,7 +62,7 @@ input that starts empty.
 ## No content
 
 An answer with nothing to say is `204`, with no body and no `Content-Type`: logout, the delete
-routes, reset and confirm steps, mark-all-read. The client reads the status.
+routes (a soft delete too: [`soft-delete-204`](../theory/api-standards.md#where-we-differ-and-why)), reset and confirm steps, mark-all-read. The client reads the status.
 
 A route behind `idempotencyKey` may answer `204` or `202` with no body: the ledger records a
 body-less answer through `end` and replays it body-less. See

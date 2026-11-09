@@ -51,7 +51,8 @@ falls back to a guest by itself.
 The exemption is read from the contract, not listed by hand: the generated `OPERATION_ROUTES`
 carries `securityOpenMethods` per path, and `getAuth` matches method and path against it. A new
 open operation is exempt the moment its contract says `security: []`. A request that matches no
-contract operation is not exempt. A 401 is never cached: `getAuth` runs before any cache layer.
+contract operation is not exempt. A 401 is never cached: `getAuth` runs before any cache layer, and so its dead-cookie clear
+never reaches a shared cache (`setCache` answers a response that sets a cookie `private, no-cache`).
 Tested in `tests/cross-cutting/stale-bearer-on-open-operations.test.ts`.
 
 **A failure while resolving a token is not "invalid credentials".** `getAuth` tells a _miss_ from a

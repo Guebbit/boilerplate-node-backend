@@ -27,6 +27,8 @@ import { webhookSubscriptionModel } from '@modules/webhooks/model';
 import { webhookSubscriptionRepository } from '@modules/webhooks/repository';
 import { userModel } from '@modules/users/model';
 import { userRepository } from '@modules/users/repository';
+import { setPassword } from '@modules/users/services/credentials';
+import type { UserDocument } from '@modules/users/model';
 import {
     PreconditionFailedError,
     runWithPrecondition,
@@ -407,6 +409,20 @@ describe('PUT', () => {
         const stored = await readOrder(String(order._id));
         expect(stored?.email).toBe('fresh@example.com');
     });
+
+    it('answers no validator, neither a tag nor a modification date (RFC 9110 §9.3.4)', async () => {
+        const { bearer, user } = await authenticateAs('admin');
+        const order = await createOrder(user, [toOrderItem(await createProduct(), 1)]);
+
+        const put = await api()
+            .put(`/orders/${String(order._id)}`)
+            .set('Authorization', bearer)
+            .send({ email: 'put@example.com' });
+
+        expect(put.status).toBe(200);
+        expect(put.headers).not.toHaveProperty('etag');
+        expect(put.headers).not.toHaveProperty('last-modified');
+    });
 });
 
 describe('a product edited through its translations', () => {
@@ -629,6 +645,30 @@ describe('a save is fenced, not only checked', () => {
     });
 });
 
+/** Loads a fresh target, reads its tag, applies `change`, then PATCHes with the old tag. */
+const patchAfter = async (change: (id: string) => Promise<unknown>) => {
+    const { bearer } = await authenticateAs('admin');
+    const target = await createUser({ email: 'target@example.com', username: 'target' });
+    const id = String(target._id);
+    const path = `/users/${id}`;
+    const tag = etagOf(await api().get(path).set('Authorization', bearer));
+
+    await change(id);
+    return api()
+        .patch(path)
+        .set('Authorization', bearer)
+        .set('If-Match', tag)
+        .send({ username: 'after-change' });
+};
+
+/** Runs the account's password write on a freshly loaded document. */
+const setPasswordOf = async (id: string, extra?: (user: UserDocument) => void) => {
+    const loaded = await userRepository.findById(id);
+    if (!loaded) throw new Error('seeded user missing');
+    extra?.(loaded);
+    return setPassword(loaded, 'A-new-Passw0rd!x');
+};
+
 describe('writes that are not an edit leave the tag alone', () => {
     it('lets a product edit through after the stock mirror moved', async () => {
         const { bearer } = await authenticateAs('admin');
@@ -644,6 +684,32 @@ describe('writes that are not an edit leave the tag alone', () => {
             .send({ tags: ['after-stock'] });
 
         expect(write.status).toBe(200);
+    });
+
+    describe('on a user', () => {
+        it('keeps the tag through a password change', async () => {
+            const write = await patchAfter((id) => setPasswordOf(id));
+
+            expect(write.status).toBe(200);
+        });
+
+        it('moves the tag when the same write re-stamps the verified address (a reset)', async () => {
+            const write = await patchAfter((id) =>
+                setPasswordOf(id, (user) => {
+                    user.verifiedAt = new Date();
+                })
+            );
+
+            expect(write.status).toBe(412);
+        });
+
+        it('keeps the tag through the reaper warning', async () => {
+            const write = await patchAfter((id) =>
+                userRepository.markInactivityWarned(id, new Date())
+            );
+
+            expect(write.status).toBe(200);
+        });
     });
 });
 

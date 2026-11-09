@@ -106,7 +106,8 @@ side in [`tactical-ddd.md`](../theory/tactical-ddd.md#action-endpoints-execute-u
 
 A **line** is a part of a per-user parent with no life of its own: a cart line, a saved product, a
 back-in-stock request, an OAuth link, a webhook subscription's secret. It is written through the
-parent, never on a URL of its own.
+parent. It has no read of its own: where a line has a URL, that URL only adds, changes or removes
+the line.
 
 | Parent                    | Line collection         | Add                                  | Change                              | Remove                                            |
 | ------------------------- | ----------------------- | ------------------------------------ | ----------------------------------- | ------------------------------------------------- |
@@ -126,7 +127,7 @@ parent, never on a URL of its own.
 - Names: a line add is `create*` (`add*` for a cart line, which may grow instead), its removal
   `delete*` or `remove*`, its change `update*`.
 
-Why: a 201 says a resource was created at a URL, and a line has none (RFC 9110 §9.3.3 makes the
+Why: a 201 says a resource was created at a URL, and a line has no read of its own to name (RFC 9110 §9.3.3 makes the
 `Location` of a 201 a SHOULD; §9.3.4 makes a PUT that creates a MUST-201). The parent is what the
 client re-renders, so the parent is the answer (§15.3.1: a 200 carries "the result of the
 action"). Medusa v2 (`POST`/`DELETE /store/carts/{id}/line-items[/{line_id}]`), BigCommerce
@@ -452,6 +453,9 @@ sequenceDiagram
 ### Which resources are versioned
 
 A resource is versioned when its item read hands out an `ETag` **and** its write honours `If-Match`.
+A PUT answer never carries a validator: every PUT here transforms what it stores, and RFC 9110 §9.3.4
+forbids a validator on the answer then. `dropPutValidators` (`http/preconditions.ts`) strips it
+whatever the controller or Express set.
 The contract says so with one marker on the path item — `x-versioned: [get, put, patch, delete]` —
 and the bundler adds the header parameter, the 412 and the response header from it.
 
@@ -511,7 +515,7 @@ edit form.
   plugin (`persistence/revision-plugin.ts`) adds the `$inc` beside that stamp — through `save()`,
   `updateOne`, `updateMany` and `findOneAndUpdate`, pipeline updates included. A write that is NOT
   an editor's edit passes `timestamps: false` and so never touches either: the stock mirror, the
-  image digest, a session token. An admin's form is never invalidated by a customer logging in.
+  image digest, a session token, a password change, the reaper's warning. An admin's form is never invalidated by a customer logging in.
 - **Where the counter lives.** It is the schema's Mongoose version key (`editRevision`, replacing
   `__v` on every versioned schema). It is not called `revision` because `locales` owns a wire
   field of that name with another meaning. It is stripped from every response and carried beside
@@ -534,7 +538,7 @@ edit form.
 | Header | Result |
 | --- | --- |
 | absent | the write runs unconditionally |
-| `"<tag>"` whose edit part matches the stored version | the write runs; the response carries the **new** `ETag` |
+| `"<tag>"` whose edit part matches the stored version | the write runs; a PATCH's response carries the **new** `ETag`, a PUT's carries none |
 | `"<tag>"` whose edit part is old, or the row is gone | **412** `PRECONDITION_FAILED`, nothing written |
 | several tags, `"a", "b"` | matches if any edit part does |
 | `*` | matches any row that exists |
@@ -571,7 +575,8 @@ edit form.
 ### For a client
 
 1. Keep the `ETag` of the record the form loaded.
-2. Send it back as `If-Match` on the save; take the new `ETag` from the 200.
+2. Send it back as `If-Match` on the save; take the new `ETag` from a PATCH's 200. After a PUT, re-read
+   with GET: a PUT answer carries no `ETag` or `Last-Modified` (RFC 9110 §9.3.4).
 3. On 412 the record changed under you: re-read it, show the user what is different, resend.
 
 ## Date filters

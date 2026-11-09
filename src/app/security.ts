@@ -22,6 +22,7 @@ import { limitJsonDepth, JSON_BODY_TYPES } from '@infrastructure/http/middleware
 import { requireJsonObjectBody } from '@infrastructure/http/middlewares/json-object';
 import { REQUEST_CONTENT_TYPES } from '@api/request-content-types';
 import { isAllowedOrigin } from '@infrastructure/http/origins';
+import { dropPutValidators } from '@infrastructure/http/preconditions';
 import { appConfig } from './config';
 import { enabledModules } from '../modules';
 
@@ -107,6 +108,9 @@ export const installSecurity = (app: Express): void => {
     // Strong rather than Express's default weak ETags: a weak comparison can answer 304 for content
     // that did change, serving stale data.
     app.set('etag', 'strong');
+
+    // No validator on any PUT answer (RFC 9110 §9.3.4), the content tag above included.
+    app.use(dropPutValidators);
 
     /*
      * How many reverse proxies sit in front of this process — the COUNT, never `true`, so Express

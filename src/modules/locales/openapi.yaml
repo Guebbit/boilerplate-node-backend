@@ -99,6 +99,8 @@ paths:
                 caller who holds `display:Locale` is answered outside the shared cache, so only
                 such a caller gets a flag set to `true`; everyone else's answer is the cached one,
                 with every flag `false`.
+
+                Unpaged: one row per language this deployment offers.
             operationId: listLocales
             security:
                 - {}
@@ -165,6 +167,8 @@ paths:
                 `GET /locales/{locale}/messages?app=`.
 
                 Public and cacheable, like every other locale read.
+
+                Unpaged: the apps come from the API's configuration.
             operationId: listLocaleApps
             security: []
             responses:

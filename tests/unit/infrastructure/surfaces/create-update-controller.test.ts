@@ -67,9 +67,11 @@ const makeRequest = (
     body: unknown,
     id: string | undefined = VALID_ID,
     multipart = false,
-    ifMatch?: string
+    ifMatch?: string,
+    method = 'PATCH'
 ) =>
     asStub<Request>({
+        method,
         params: { id },
         query: {},
         body,
@@ -307,6 +309,16 @@ describe('createUpdateController — conditional writes', () => {
 
         expect(response.status).toHaveBeenCalledWith(200);
         expect(write).toHaveBeenCalledTimes(1);
+    });
+
+    it('answers a PUT with no ETag: only a PATCH stamps one', async () => {
+        const response = makeResponse();
+        const saved = generateSuccess({ title: 'x', editRevision: LOADED_REVISION });
+        const { replace } = makeController({ update: jest.fn().mockResolvedValue(saved) });
+
+        await replace(makeRequest({ title: 'x' }, VALID_ID, false, undefined, 'PUT'), response);
+
+        expect(response.setHeader).not.toHaveBeenCalled();
     });
 
     it("answers the saved row's new ETag, edit part first", async () => {

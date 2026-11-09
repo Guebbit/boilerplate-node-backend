@@ -42,7 +42,7 @@ paths:
         get:
             tags: [Delivery]
             summary: List shipping methods
-            description: Every shipping method this shop offers — flat rates and free-above thresholds, unfiltered. Public, because what shipping costs is pre-purchase information; the authoritative pricing and weight-fit check happen server-side, against the caller's real basket, at `PUT /cart/shipping-method` and again at checkout — this list is a catalogue, not a quote.
+            description: 'Every shipping method this shop offers — flat rates and free-above thresholds, unfiltered. Public, because what shipping costs is pre-purchase information; the authoritative pricing and weight-fit check happen server-side, against the caller''s real basket, at `PUT /cart/shipping-method` and again at checkout — this list is a catalogue, not a quote. Unpaged: the shop''s configured catalogue.'
             operationId: listShippingMethods
             security: []
             responses:

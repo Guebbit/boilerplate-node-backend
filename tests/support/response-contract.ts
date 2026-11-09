@@ -148,6 +148,23 @@ export const isPackedRuleOperand = (operationId: string, path: string): boolean 
     /^(account\.)?abilities\.(tenant|platform)\.\d+\.2\.deletedAt$/.test(path);
 
 /**
+ * Throws when a PUT answer carries a validator. RFC 9110 §9.3.4 allows one only when the stored
+ * bytes are what the client sent, which no PUT here can promise; `dropPutValidators` strips them.
+ * Judged for every PUT the suite makes, so a new route cannot slip past the app-level hook.
+ *
+ * @param response - a real response from `supertest(app)`
+ * @throws {Error} when a PUT answer has an `ETag` or `Last-Modified` header
+ */
+const assertNoPutValidator = (response: Response): void => {
+    if (response.request.method !== 'PUT') return;
+    const present = ['etag', 'last-modified'].filter((name) => name in response.headers);
+    if (present.length > 0)
+        throw new Error(
+            `PUT ${new URL(response.request.url).pathname} answered ${String(response.status)} with ${present.join(' and ')}: a PUT answer carries no validator (RFC 9110 §9.3.4)`
+        );
+};
+
+/**
  * Checks one captured response against `openapi.yaml`, throwing a plain `Error` on a mismatch.
  *
  * An undeclared path is not this function's job — that's the 404-envelope contract test's own
@@ -159,6 +176,7 @@ export const isPackedRuleOperand = (operationId: string, path: string): boolean 
  */
 export const assertResponseMatchesContract = (response: Response): void => {
     assertProblemMediaType(response);
+    assertNoPutValidator(response);
 
     const { pathname } = new URL(response.request.url);
     // Node's http reports the verb upper-case; `HttpMethod` (and the spec walk) is lower-case —

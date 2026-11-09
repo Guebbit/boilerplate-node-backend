@@ -8,7 +8,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import type { Request, Response } from 'express';
+import type { Request, RequestHandler, Response } from 'express';
 import {
     etagOf,
     runWithPrecondition,
@@ -93,4 +93,34 @@ export const setEtag = (response: Response, row: unknown): void => {
         response.setHeader('ETag', etagOf(version, digestOf(body)));
         return responseJson(body);
     }) as Response['json'];
+};
+
+/**
+ * Strips `ETag` and `Last-Modified` from every PUT answer, whoever set them.
+ *
+ * RFC 9110 §9.3.4: a validator on a successful PUT answer is allowed only when the stored bytes
+ * are exactly what the client sent. Every PUT here transforms what it stores (ids, timestamps,
+ * fields outside the representation), so that never holds; §15.3.1 makes the 200 "the result of
+ * the action", not a representation to cache. A client re-reads with GET for the next tag.
+ *
+ * Wrapping `writeHead` is what catches Express's own content tag too: `res.send` stamps it just
+ * before the head is written. Hand-written because `on-headers` is not a dependency.
+ * An `If-Match` is still honoured on the way in; only the answer loses its validators.
+ *
+ * @param request - the request; only a PUT is touched
+ * @param response - the response whose head is about to be written
+ * @param next - continues the chain
+ */
+export const dropPutValidators: RequestHandler = (request, response, next) => {
+    if (request.method === 'PUT') {
+        const writeHead = response.writeHead.bind(response);
+        // Node's `ServerResponse#writeHead` has several overloads; the wrapper forwards whichever
+        // one was called. https://nodejs.org/api/http.html#responsewriteheadstatuscode-statusmessage-headers
+        response.writeHead = ((...arguments_: Parameters<Response['writeHead']>) => {
+            response.removeHeader('ETag');
+            response.removeHeader('Last-Modified');
+            return writeHead(...arguments_);
+        }) as Response['writeHead'];
+    }
+    next();
 };
