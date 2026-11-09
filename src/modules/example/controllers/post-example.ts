@@ -9,6 +9,7 @@
 import type { Request, Response } from 'express';
 import { CreateExampleBody } from '@api/schemas.zod';
 import { createdResponse } from '@infrastructure/http/response';
+import { answerAsResource } from '@infrastructure/http/preconditions';
 import { trimmedInto } from '@infrastructure/http/schemas';
 import { callerContextOf, readInput } from '@infrastructure/http/request';
 import { catchAs, namedHandler, parseBody, refused } from '@infrastructure/http/controller';
@@ -29,7 +30,10 @@ export const postExample = namedHandler('postExample', (request: Request, respon
         .create(body, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            createdResponse(response, result.data, `/examples/${result.data.id}`);
+            const location = `/examples/${result.data.id}`;
+            // The new example's real tag, and the resource it belongs to (RFC 9110 §8.8.3).
+            answerAsResource(response, result.data, location);
+            createdResponse(response, result.data, location);
         })
         .catch(catchAs(response, 'postExample'));
 });

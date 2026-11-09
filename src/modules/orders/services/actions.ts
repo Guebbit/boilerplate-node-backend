@@ -30,6 +30,7 @@ import {
 import type { OrderActor } from '../domain';
 import { toObjectId, type Lean } from '@infrastructure/persistence/create-repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
+import { carryVersion } from '@infrastructure/persistence/versioning';
 import { resolveCurrentImages } from './current';
 import { presentOrder } from '../presenter';
 import { actorOf } from './scope';
@@ -212,10 +213,14 @@ export const orderActionsOf = (
  * @returns the serialized order carrying its `actions` and each line's live `current` picture
  */
 export const withActions = (order: OrderDocument, authContext?: AuthContext): Promise<Order> =>
-    resolveCurrentImages([presentOrder(order)]).then(([resolved]) => ({
-        ...resolved,
-        actions: orderActionsOf(order, authContext)
-    }));
+    resolveCurrentImages([presentOrder(order)]).then(([resolved]) =>
+        // Carries the edit counter onto the wire shape, so a write that answers with it (a restore)
+        // can stamp the real `ETag`.
+        carryVersion(order, {
+            ...resolved,
+            actions: orderActionsOf(order, authContext)
+        })
+    );
 
 /**
  * A page of list rows, each carrying what this caller may do to it. The rows are already wire

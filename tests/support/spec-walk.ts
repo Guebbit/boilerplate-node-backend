@@ -272,17 +272,19 @@ interface HeaderReference {
 }
 
 /**
- * The response headers an operation's documented status MUST send — `required: true`, `$ref`
- * resolved — as lower-case names, which is how Node reports them.
+ * The response headers an operation's documented status declares, `$ref` resolved, as lower-case
+ * names, which is how Node reports them.
  *
  * @param operation - the operation object as the spec writes it
  * @param status - the response status to look up
  * @param spec - the document the references point into
+ * @param requiredOnly - keep only the headers marked `required: true`, which the answer MUST send
  */
-const requiredHeadersOf = (
+const headersOf = (
     operation: Record<string, unknown>,
     status: string,
-    spec: SpecDocument
+    spec: SpecDocument,
+    requiredOnly: boolean
 ): string[] => {
     const written = (
         operation.responses as Record<string, ResponseObject | undefined> | undefined
@@ -298,17 +300,15 @@ const requiredHeadersOf = (
             const resolved = header.$ref
                 ? spec.components?.headers?.[header.$ref.replace('#/components/headers/', '')]
                 : header;
-            return resolved?.required === true;
+            return !requiredOnly || resolved?.required === true;
         })
         .map(([name]) => name.toLowerCase());
 };
 
-/**
- * Every response header the spec requires, per operation and status: `{ createProduct: { '201':
- * ['location'] } }`. What lets the shared `afterEach` fail a 201 that forgot its `Location`.
- */
-export const requiredResponseHeaders = (
-    spec: SpecDocument = readSpec()
+/** The walk behind {@link requiredResponseHeaders} and {@link declaredResponseHeaders}. */
+const responseHeaders = (
+    spec: SpecDocument,
+    requiredOnly: boolean
 ): Record<string, Record<string, string[]>> => {
     const byOperation: Record<string, Record<string, string[]>> = {};
 
@@ -319,12 +319,28 @@ export const requiredResponseHeaders = (
 
             const statuses = Object.keys((operation.responses as object | undefined) ?? {});
             byOperation[operation.operationId] = Object.fromEntries(
-                statuses.map((status) => [status, requiredHeadersOf(operation, status, spec)])
+                statuses.map((status) => [status, headersOf(operation, status, spec, requiredOnly)])
             );
         }
 
     return byOperation;
 };
+
+/**
+ * Every response header the spec requires, per operation and status: `{ createProduct: { '201':
+ * ['location'] } }`. What lets the shared `afterEach` fail a 201 that forgot its `Location`.
+ */
+export const requiredResponseHeaders = (
+    spec: SpecDocument = readSpec()
+): Record<string, Record<string, string[]>> => responseHeaders(spec, true);
+
+/**
+ * Every response header the spec declares, required or not, in `requiredResponseHeaders`' shape.
+ * What lets the shared `afterEach` fail an answer that sends a header its operation never documents.
+ */
+export const declaredResponseHeaders = (
+    spec: SpecDocument = readSpec()
+): Record<string, Record<string, string[]>> => responseHeaders(spec, false);
 
 /**
  * Whether one alternative of a `security` list is the empty object `{}`: the "no credential"

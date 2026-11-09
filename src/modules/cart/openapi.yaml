@@ -224,6 +224,8 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
 
     /cart/checkout:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Orders]
             summary: Checkout (place order from cart)

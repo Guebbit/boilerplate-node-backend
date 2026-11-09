@@ -8,6 +8,7 @@
 import type { Request, Response } from 'express';
 import { productService } from '../services';
 import { rejectResponse, createdResponse } from '@infrastructure/http/response';
+import { answerAsResource } from '@infrastructure/http/preconditions';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { parseBody } from '@infrastructure/http/controller';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
@@ -79,11 +80,12 @@ export const createProduct = (
                 rejectResponse(response, result.status, result.errors);
                 return;
             }
-            return productService
-                .presentForCaller(result.data, request.caller)
-                .then((product) =>
-                    createdResponse<Product>(response, product, `/products/${product.id}`)
-                );
+            return productService.presentForCaller(result.data, request.caller).then((product) => {
+                const location = `/products/${product.id}`;
+                // The new product's real tag, and the resource it belongs to (RFC 9110 §8.8.3).
+                answerAsResource(response, product, location);
+                createdResponse<Product>(response, product, location);
+            });
         })
         .catch((error: unknown) => {
             rejectDatabaseError(response, 'createProduct', error);

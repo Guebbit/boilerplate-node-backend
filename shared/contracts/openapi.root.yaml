@@ -456,15 +456,25 @@ components:
                 A strong entity-tag over this exact answer (RFC 9110 §8.8.3). Send it back as
                 `If-None-Match` for a `304`, or as `If-Match` on `PUT`, `PATCH` or `DELETE`, which
                 compares only its edit part, so a stock or price change never refuses your edit.
-                Opaque: compare it, never parse it.
+                On a create or an action it is the tag of the resource `Content-Location` names, so
+                the next edit needs no read first. Opaque: compare it, never parse it.
+            schema:
+                type: string
+
+        ContentLocation:
+            required: true
+            description: >-
+                The resource the answer's body is a representation of, as a path on this API (RFC 9110
+                section 6.4.2), in the form `Location` uses. A create or an action answers it beside
+                its `ETag`: the tag is that resource's, and a `GET` on it reads the same body.
             schema:
                 type: string
 
         EntityTag:
             required: false
             description: >-
-                The strong entity-tag Express computes for any answer that has a body (RFC 9110
-                section 8.8.3). A client may send it back as `If-None-Match` on a read the app lets
+                The strong entity-tag Express computes for any read that has a body (RFC 9110
+                section 8.8.3); a write answer never carries it. A client may send it back as `If-None-Match` on a read the app lets
                 it keep, and a `GET` that declares `304` answers that way when it still matches. Only
                 a resource marked versioned promises it (the `ETag` header) and takes it as `If-Match`.
             schema:

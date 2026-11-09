@@ -51,13 +51,18 @@ const inlineResponsesOf = (document_: OpenApiDocument): OpenAPIV3_1.ResponseObje
     ].filter((response): response is OpenAPIV3_1.ResponseObject => !('$ref' in response));
 
 /**
- * Every response written inline on a `PUT`. A PUT answer carries no validator (RFC 9110 §9.3.4,
- * enforced by `dropPutValidators`), so the `ETag` the root stamps everywhere else is left off these.
+ * Every response written inline on a write (anything but GET and HEAD). A write answer carries only
+ * an `ETag` the API made itself, and a PUT answer none at all (RFC 9110 §8.8.3, §9.3.4, enforced by
+ * `dropUnownedValidators`), so the optional `ETag` the root stamps on every read is left off these.
+ * A write that does answer a real tag (`x-versioned`) declares it by hand, which wins.
  */
-const putResponsesOf = (document_: OpenApiDocument): Set<unknown> =>
+const writeResponsesOf = (document_: OpenApiDocument): Set<unknown> =>
     new Set(
         operationsOf(document_)
-            .filter(({ method }) => OpenAPIV3.HttpMethods.PUT === method)
+            .filter(
+                ({ method }) =>
+                    method !== OpenAPIV3.HttpMethods.GET && method !== OpenAPIV3.HttpMethods.HEAD
+            )
             .flatMap(({ operation }) => Object.values(operation.responses ?? {}))
     );
 
@@ -74,11 +79,11 @@ export const withAppLevelHeaders: Step = (document_) => {
     if (!isHeaderMap(headerMap))
         throw new Error('[openapi] the root declares no `x-app-level-headers` map.');
 
-    const onPut = putResponsesOf(document_);
+    const onWrite = writeResponsesOf(document_);
     for (const response of inlineResponsesOf(document_)) {
         const headers = response.headers ?? {};
         for (const [name, component] of Object.entries(headerMap))
-            if (!declares(headers, name) && !(onPut.has(response) && name === 'ETag'))
+            if (!declares(headers, name) && !(onWrite.has(response) && name === 'ETag'))
                 headers[name] = { $ref: `#/components/headers/${component}` };
         response.headers = headers;
     }

@@ -110,6 +110,8 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
 
     /orders/{id}/process:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Delivery]
             summary: Process a paid order
