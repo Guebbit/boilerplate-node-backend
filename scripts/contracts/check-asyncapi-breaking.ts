@@ -17,7 +17,6 @@
  *   npx tsx scripts/contracts/check-asyncapi-breaking.ts --base=HEAD~3
  */
 
-import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -27,6 +26,7 @@ import { mergeBase } from '../git-base';
 import { breakingChanges } from './asyncapi-breaking';
 import { REPO_ROOT } from '../modules-on-disk';
 import { flagValue } from '../cli';
+import { CommandTimeoutError, runWithTimeout } from './run-with-timeout';
 
 /** The only bundle this gate cares about: the one a webhook subscriber actually reads. */
 const BUNDLE = 'asyncapi.public.yaml';
@@ -45,7 +45,7 @@ const bundleAt = (ref: string): string | undefined => {
     const scratch = mkdtempSync(path.join(tmpdir(), 'asyncapi-base-'));
     try {
         // `git archive`: a tar of the tree at `ref`, without `.git`. `-o` writes it to a file.
-        execFileSync(
+        runWithTimeout(
             'git',
             ['archive', '--format=tar', '-o', path.join(scratch, 'tree.tar'), ref],
             {
@@ -54,15 +54,17 @@ const bundleAt = (ref: string): string | undefined => {
         );
         const tree = path.join(scratch, 'tree');
         mkdirSync(tree);
-        execFileSync('tar', ['-xf', path.join(scratch, 'tree.tar'), '-C', tree]);
+        runWithTimeout('tar', ['-xf', path.join(scratch, 'tree.tar'), '-C', tree]);
         symlinkSync(path.join(REPO_ROOT, 'node_modules'), path.join(tree, 'node_modules'));
         // The base's own bundler, narrowed to the one bundle this gate reads (`asyncapi-public`).
-        execFileSync('npx', ['tsx', 'scripts/contracts/build-bundles.ts', 'asyncapi-public'], {
+        runWithTimeout('npx', ['tsx', 'scripts/contracts/build-bundles.ts', 'asyncapi-public'], {
             cwd: tree,
             stdio: 'ignore'
         });
         return readFileSync(path.join(tree, BUNDLE), 'utf8');
-    } catch {
+    } catch (error) {
+        // A hung child must fail the gate loudly, not read as "base cannot build" (which passes).
+        if (error instanceof CommandTimeoutError) throw error;
         return undefined;
     } finally {
         rmSync(scratch, { recursive: true, force: true });
