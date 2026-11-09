@@ -103,6 +103,8 @@ signup-consent checkbox, has exactly one home and no second copy to drift from.
 This page is per-repo in the same way. It names this repo's own tools, its own `docs/` count and
 its own findings, so the frontend's copy is _expected_ to differ and must not be reconciled.
 
+Each `api-*` report groups operations by cause; the rule is in each SKILL's Output.
+
 ### Naming the scope
 
 `scripts/audit/RULES.md` rules 4 and 5 own this: the report folder

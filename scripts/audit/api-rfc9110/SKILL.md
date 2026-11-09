@@ -8,9 +8,10 @@ disagree, RULES.md wins.
 
 ROLE: HTTP-semantics reviewer: Spectral and the tests proved the shape, you judge the meaning.
 
-GOAL: For every rule in `scripts/audit/api-standards.yaml` whose `standard` is `rfc9110`, give one
-verdict per rule per operation in scope, each with a citation. The audit judges whether each operation's MEANING fits the method and the status codes it uses.
-It reports against RFC 9110 HTTP semantics ONLY. Other standards disagree with it in places; that is
+GOAL: For every rule in `scripts/audit/api-standards.yaml` whose `standard` is `rfc9110`, give every
+operation in scope one verdict per rule, each with a citation. Operations that share a verdict and its
+cause share one row (see Output). The audit judges whether each operation's MEANING fits the method and the status codes it uses.
+It reports against RFC 9110 HTTP semantics ONLY, plus the `house` clauses the registry pins to its rules. Other standards disagree with it in places; that is
 not this audit's business.
 
 SCOPE: the argument you were given: a module name (`orders`), a path, `--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5). Empty means
@@ -30,7 +31,8 @@ Output goes to `tmp/reports/audit-<run>/api-rfc9110/<SCOPE>…`. `<run>` and `<S
    `difference` names a row there gets the verdict `KNOWN-DIFFERENCE` when the difference is what
    you found, with the row `id`.
 3. Read the rules of this standard in `scripts/audit/api-standards.yaml`. Open each `source` and
-   re-read the clause: the `rule` sentence is a summary, the standard is the authority.
+   re-read the clause: the `rule` sentence is a summary, the standard is the authority. Check `house`
+   as well; its docs page is the authority for it.
 4. Name the existing guard and move on for anything already guarded mechanically. Name each guard by
    file and function or test title, never by line. Here:
     - Spectral `shared/contracts/spectral.yaml` (security on every operation, no `nullable`, errors are
@@ -73,6 +75,10 @@ Output goes to `tmp/reports/audit-<run>/api-rfc9110/<SCOPE>…`. `<run>` and `<S
 | `SATISFIED`        | checked, and it holds                                                                 |
 | `NOT-APPLICABLE`   | the rule does not touch this scope; one line saying what you checked                  |
 
+A missed `house` clause is a `VIOLATION` with `section` = `house`; the evidence cites the docs page and
+the fix side is `code`, `contract` or `docs` (withdraw the promise), never `standard`. A MAY in `rule`
+never yields a `VIOLATION`.
+
 A difference explained only on another page, or by a theory row the rule does not name, is still a
 `VIOLATION`: fix side `docs`, the evidence cites that page, and the fix is a theory row linking to it,
 named in the rule's `difference`.
@@ -81,10 +87,25 @@ named in the rule's `difference`.
 
 Write `tmp/reports/audit-<run>/api-rfc9110/<SCOPE>.md`: the bundle's mtime, the scope, then a table of
 
-| rule id | operation | verdict | evidence (file:line) | section | fix side |
+| # | rule id | operation | verdict | evidence (file:line) | section | fix side |
+
+**One row per cause.** Same rule, same verdict, same cause: one row. The cause is the one place the
+fix lands: a code path, a schema, a theory row.
+
+- `operation`: the members and their count. List them, or give the selector that finds them (a
+  JSONPath over the bundle, a mount line), so a reader can re-run it.
+- `evidence`: the cause, why every member reaches it (the mount, the `$ref`), and the grep that found
+  no member overriding it.
+- Split the row the moment one member differs: its own override, a bypass, another verdict.
+- `NOT-APPLICABLE`: one row per rule, naming the JSONPath checked and the count.
+- Under the table, one totals line per rule: its rows' counts add up to the operations in scope (or the declared sample, where step 1 allows one).
+- A `whole-repo` run adds an appendix: every operation, one column per rule, each cell the `#` of the
+  row that judged it.
 
 `fix side` is `contract`, `code`, `docs` or `standard` (the standard is the one that fits worse).
-Then list the `VIOLATION` and `LINT-CANDIDATE` rows again, worst first.
+Then list the `VIOLATION` and `LINT-CANDIDATE` rows again, worst first, by impact. On a tie: MUST,
+then house, then SHOULD. A row is one rule, one side (a standard clause or `house`), one verdict and
+one cause; the per-rule totals give house apart (`VIOLATION 4 (house 3)`).
 
 No citation, no finding: an absence claim names the grep that found
 nothing. Three real violations over thirty maybes. The report is disposable; see

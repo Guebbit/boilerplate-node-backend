@@ -7,10 +7,14 @@
 #   standard    rfc9110 | rfc9111 | rfc9457 | rfc5789 | rfc7396 | rfc6585 | ratelimit-headers |
 #               idempotency-key | google-aip | zalando
 #   section     the part of the standard the rule comes from (a name, not a number).
-#   rule        one testable sentence about THIS API.
-#   house       optional: what this API adds on top of the standard (a house choice, not the RFC).
-#   source      the clause, as a URL, or a list of URLs when the rule joins several clauses. The
-#               audit re-reads each; the sentence above is a summary.
+#   rule        what the standard says here, with its BCP 14 keyword in capitals (MAY included: a
+#               MAY clause cannot fail). A clause the standard states without a keyword (a definition,
+#               RFC 7396's algorithm) is written as the standard states it and is judged as a MUST.
+#   house       null, or one sentence this API promises beyond `rule`, ending with the `docs/…#anchor`
+#               that promises it. No page, no house clause. Never takes a `difference`: write the
+#               exceptions into the sentence. Not counted in the budget.
+#   source      the clause, as a URL or a list of URLs (the clause that holds the MUST comes first).
+#               The audit re-reads each one; the sentence above is a summary.
 #   evidence    where to look: contract JSONPaths (root openapi.yaml), code paths, docs pages.
 #   lint        possible = a mechanical finding is REPORTED only, never turned into a Spectral rule.
 #               no = judgement only.
@@ -102,26 +106,53 @@ rules:
     - id: rfc9111-no-store-on-errors
       standard: rfc9111
       section: cache-control
-      rule: An error answer is never stored by a cache, and a personal answer is `private` or `no-store`.
+      rule: 'An error a cache could otherwise reuse (heuristically cacheable, RFC 9110 §15.1) carries `Cache-Control`; with `no-store` a cache MUST NOT store any part of it.'
+      house: 'Every error answer is `no-store`, on every route (docs/api/errors.md, "Headers on an error").'
       source: https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.5
       evidence:
           [
-              src/infrastructure/http/middlewares/cache.ts,
               src/infrastructure/http/response.ts,
-              docs/theory/defences/http-and-caches.md
+              src/app/routes.ts,
+              src/infrastructure/http/middlewares/cache.ts,
+              docs/api/errors.md
           ]
       lint: possible
+      difference: null
+
+    - id: rfc9111-personal-is-private
+      standard: rfc9111
+      section: sensitive information
+      rule: 'An answer meant for one recipient (it depends on the caller, or it carries `Set-Cookie`, which alone does not stop caching) carries `Cache-Control` that keeps shared caches from storing it; `private` means a shared cache MUST NOT store it.'
+      house: 'Such an answer is never `public`; it is `private` or `no-store` (docs/tools/redis-cache.md#response-headers).'
+      source:
+          [
+              https://www.rfc-editor.org/rfc/rfc9111#section-7.3,
+              https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.7
+          ]
+      evidence:
+          [
+              src/infrastructure/http/middlewares/cache.ts,
+              src/kernel/middlewares/authorizations.ts,
+              src/app/routes.ts,
+              src/modules/account/routes.ts,
+              src/modules/account/session/cookies.ts,
+              src/modules/account/oauth,
+              docs/tools/redis-cache.md#response-headers,
+              docs/theory/defences/http-and-caches.md
+          ]
+      lint: no
       difference: null
 
     - id: rfc9111-read-declares-cache
       standard: rfc9111
       section: freshness
-      rule: Every GET declares its cache answer, and a cached answer names what varies it (`Vary`).
+      rule: 'Every GET declares its cache answer, and a cached answer names what varies it (`Vary`), including `Cookie` where a cookie can pick the caller.'
       source: https://www.rfc-editor.org/rfc/rfc9111#section-4.1
       evidence:
           [
               openapi.yaml paths.*.get.responses.*.headers,
-              src/infrastructure/http/middlewares/cache.ts
+              src/infrastructure/http/middlewares/cache.ts,
+              src/kernel/middlewares/authorizations.ts
           ]
       lint: possible
       difference: null
@@ -129,11 +160,16 @@ rules:
     - id: rfc9111-validators-and-304
       standard: rfc9111
       section: validation
-      rule: A read that sends an `ETag` answers a matching `If-None-Match` with 304 and no body, and keeps the headers a 200 would carry.
-      source: https://www.rfc-editor.org/rfc/rfc9111#section-4.3.4
+      rule: 'A server generating a 304 MUST send the `ETag`, `Vary`, `Cache-Control`, `Date`, `Content-Location` and `Expires` that a 200 to the same request would carry, so a cache can freshen its stored copy from them.'
+      source:
+          [
+              https://www.rfc-editor.org/rfc/rfc9110#section-15.4.5,
+              https://www.rfc-editor.org/rfc/rfc9111#section-4.3.4
+          ]
       evidence:
           [
               src/infrastructure/http/middlewares/cache.ts,
+              src/infrastructure/http/preconditions.ts,
               docs/api/write-methods.md#conditional-writes-etag-and-if-match
           ]
       lint: no
@@ -252,7 +288,8 @@ rules:
     - id: rfc6585-429-retry-after
       standard: rfc6585
       section: 429
-      rule: A 429 is answered only for rate limiting and carries `Retry-After`; every operation declares it.
+      rule: 'A 429 is answered only for too many requests in a time window, its body SHOULD explain the condition, and it MUST NOT be stored by a cache (§4).'
+      house: 'Every 429 carries `Retry-After` in whole seconds (docs/api/errors.md#headers-on-an-error).'
       source: https://www.rfc-editor.org/rfc/rfc6585#section-4
       evidence:
           [src/infrastructure/http/middlewares/rate-limit.ts, openapi.yaml paths.*.*.responses.429]
@@ -262,7 +299,7 @@ rules:
     - id: rfc6585-428-required-precondition
       standard: rfc6585
       section: 428
-      rule: 428 is answered when a write needs a condition (`If-Match`) the request did not send, and for nothing else.
+      rule: '428 is answered only when a write needs a condition (`If-Match`) the request did not send, and for nothing else; a 428 MUST NOT be stored by a cache (§3).'
       source: https://www.rfc-editor.org/rfc/rfc6585#section-3
       evidence:
           [
@@ -275,7 +312,7 @@ rules:
     - id: rfc6585-431-511-not-misused
       standard: rfc6585
       section: 431 and 511
-      rule: 431 and 511 are either answered as defined or never answered; no other status stands in for an oversize header or a network-auth wall.
+      rule: '431 and 511 are answered only as defined, or never; no other status stands in for an oversize header or a network-auth wall; an origin SHOULD NOT generate 511 (§6); neither MUST be stored by a cache (§5, §6).'
       source: https://www.rfc-editor.org/rfc/rfc6585#section-5
       evidence:
           [

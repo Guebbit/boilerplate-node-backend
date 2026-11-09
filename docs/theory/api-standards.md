@@ -81,6 +81,13 @@ When someone asks for several audits at once, they state the **order of preceden
 (for example "RFC 9110 > Google AIP > Zalando"). Each conflict is then reported once, under the
 winning standard, and the losing standards' view is a note. The agent never picks the order.
 
+## Stricter than the standard
+
+A rule in the registry can carry a `house` clause: something this API promises beyond the standard,
+and the docs page that promises it. A house clause is stricter but compliant, so it never takes a
+row in the table below: a clause that would contradict a standard is a difference, not a house rule.
+The audits check house clauses too, and label a miss as ours, not the standard's.
+
 ## Where we differ, and why
 
 This is information, not a rule the audits obey. Each row has an `id` that a rule in the registry
