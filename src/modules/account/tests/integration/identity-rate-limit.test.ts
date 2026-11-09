@@ -32,21 +32,21 @@ const asAccount: RequestHandler = (request, _response, next) => {
     next();
 };
 
-describe('sessionCredentialLimiters on an authenticated route', () => {
+describe('signedInCredentialLimiters on an authenticated route', () => {
     afterEach(() => jest.resetModules());
 
     it('spends one budget per ACCOUNT, however many address blocks the guesses come from', async () => {
-        const sessionCredentialLimiters = await withAccountRateLimits(
+        const signedInCredentialLimiters = await withAccountRateLimits(
             {
-                NODE_AUTH_RATE_LIMIT_SESSION_MAX: '2',
+                NODE_AUTH_RATE_LIMIT_SIGNED_IN_MAX: '2',
                 NODE_AUTH_RATE_LIMIT_ADDRESS_MAX: '50',
                 NODE_AUTH_RATE_LIMIT_BLOCK_MAX: '50'
             },
-            (module) => module.sessionCredentialLimiters
+            (module) => module.signedInCredentialLimiters
         );
 
-        // 401: a wrong password, the only answer that spends `skipSuccessfulRequests` budgets.
-        const app = appAnswering(401, true, asAccount, ...sessionCredentialLimiters);
+        // 401 stands in for any refusal: every status >= 400 spends a `skipSuccessfulRequests` budget.
+        const app = appAnswering(401, true, asAccount, ...signedInCredentialLimiters);
         const guess = (account: string, ip: string) =>
             supertest(app).post('/route').set('X-Forwarded-For', ip).set('x-test-account', account);
 

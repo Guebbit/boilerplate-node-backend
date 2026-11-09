@@ -74,13 +74,15 @@ const CREDENTIAL_IDENTITY_BUDGET: RateLimitBudget = {
 
 /**
  * Failed attempts a SIGNED-IN caller makes on the routes that re-prove them (`POST /account/password`,
- * `/reauth`, `/email-verification/resend`, `/email-change/resend`). Those bodies name no account, so the key
- * is the session's own: a hijacked session guessing the password cannot spread across addresses.
- * Never keyed on a body field — those routes validate after their limiter, so an injected `email`
- * would rotate the bucket — and never excused by a device cookie: the session is the proof here.
+ * `/reauth`). One bucket per ACCOUNT, shared by every session: the account's password is what is guessed.
+ *
+ * Trade-off: a stolen session that spends it refuses the owner's other sessions too.
+ * Way out:   a fresh login, not counted here, is fresh enough for `DELETE /account/sessions`.
+ * Keying:    never a body field (validated after the limiter, so an injected `email` would rotate the
+ *            bucket); never excused by a device cookie (the session is the proof here).
  */
-const SESSION_CREDENTIAL_BUDGET: RateLimitBudget = {
-    ...accountRateLimitData.credentialsSession,
+const SIGNED_IN_CREDENTIAL_BUDGET: RateLimitBudget = {
+    ...accountRateLimitData.credentialsSignedIn,
     keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
     keyGenerator: accountIdOf,
     skipSuccessfulRequests: true
@@ -143,10 +145,10 @@ export const credentialLimiters: RequestHandler[] = [
 
 /**
  * {@link credentialLimiters} for the routes that run `isAuth` FIRST and re-prove the signed-in
- * caller: the per-account budget is the session's own, not a body field.
+ * caller: the per-account budget is the signed-in account's, never a body field.
  */
-export const sessionCredentialLimiters: RequestHandler[] = [
-    buildRateLimiter(SESSION_CREDENTIAL_BUDGET),
+export const signedInCredentialLimiters: RequestHandler[] = [
+    buildRateLimiter(SIGNED_IN_CREDENTIAL_BUDGET),
     ...SHARED_CREDENTIAL_LIMITERS
 ];
 
@@ -348,7 +350,7 @@ export const accountRateLimits: readonly RateLimitBudget[] = [
     CREDENTIAL_DEVICE_BUDGET,
     CREDENTIAL_ADDRESS_BUDGET,
     CREDENTIAL_BLOCK_BUDGET,
-    SESSION_CREDENTIAL_BUDGET,
+    SIGNED_IN_CREDENTIAL_BUDGET,
     PASSWORD_CHECK_BUDGET,
     PASSWORD_CHECK_BLOCK_BUDGET,
     SIGNUP_IDENTITY_BUDGET,
