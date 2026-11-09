@@ -12,6 +12,7 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { paymentService } from '@modules/payments/services';
+import { deliver } from '@modules/payments/tests/deliver';
 import { paymentRepository } from '@modules/payments/repository';
 import { PAYMENT_REFUNDED } from '@modules/payments/events';
 import paymentsModule from '@modules/payments/module';
@@ -101,8 +102,8 @@ describe('a refund the provider accepts but has not settled', () => {
         const { orderId, providerRef, refundRef } = await pendingRefund();
         setFakeRefundOutcome(refundRef, { status: 'succeeded' });
 
-        await paymentService.applyWebhookDelivery({ id: 'evt_1', providerRef, refundRef }, 'fake');
-        await paymentService.applyWebhookDelivery({ id: 'evt_1', providerRef, refundRef }, 'fake');
+        await deliver({ id: 'evt_1', providerRef, refundRef });
+        await deliver({ id: 'evt_1', providerRef, refundRef });
 
         const payment = await paymentRepository.findByOrderId(orderId);
         expect(payment?.refunds[0]).toMatchObject({ status: 'succeeded' });

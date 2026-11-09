@@ -30,8 +30,7 @@ import { callerContextOf } from '@infrastructure/http/request';
 import { recordSecurityEvent } from '@infrastructure/observability/security-events';
 import { paymentsAuditActions } from '../audit';
 import { WebhookRejected } from '../providers';
-import { paymentProviderRegistry } from '../providers/registry';
-import { paymentService } from '../services';
+import { paymentService, WebhookProviderUnknownError } from '../services';
 
 /** Handles `POST /payments/webhook/:provider`. */
 export const postPaymentWebhook = (request: Request, response: Response) => {
@@ -49,21 +48,16 @@ export const postPaymentWebhook = (request: Request, response: Response) => {
         return;
     }
 
-    return Promise.resolve()
-        .then(() => paymentProviderRegistry.resolve(String(request.params.provider)))
-        .then((provider) => {
-            if (!provider) {
+    return paymentService
+        .receiveWebhook(String(request.params.provider), rawBody, headers)
+        .then(() => {
+            noContentResponse(response);
+        })
+        .catch((error: unknown) => {
+            if (error instanceof WebhookProviderUnknownError) {
                 rejectResponse(response, 404, [t('payments.webhook-not-configured')]);
                 return;
             }
-            return provider
-                .parseWebhook(rawBody, headers)
-                .then((event) => paymentService.applyWebhookDelivery(event, provider.name))
-                .then(() => {
-                    noContentResponse(response);
-                });
-        })
-        .catch((error: unknown) => {
             if (error instanceof WebhookRejected) {
                 // `error.message` IS the reason — 'Malformed signature header', 'Signature
                 // timestamp outside tolerance', 'Signature does not match', 'Body is not valid
