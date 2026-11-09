@@ -104,6 +104,9 @@ opt-in was forgotten. An error answer is `no-store` too, whatever the route set 
   [the scope-key rule above](#no-caching-depends-on-who-is-asking) — answers `private, no-cache`
   regardless of `browserRevalidate`: `serveOrArm` is about to bypass Redis for this same request,
   and a shared/browser cache must not store this ONE caller's wider answer as if it were generic.
+- A response that already carries a `Set-Cookie` (the dead-session clear `getAuth` writes in cookie
+  mode) is answered `private, no-cache` and skips Redis too: RFC 9111 §7.3 lets a shared cache store
+  and replay a cookie, which would log everyone out. Only a cookie set before `setCache` is seen.
 
 **The two `Vary` headers:** `Authorization`, because `getAuth` derives `authContext` from it alone
 — without this, a shared cache could serve one anonymous response back to an admin, the same class
