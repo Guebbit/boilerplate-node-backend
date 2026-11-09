@@ -410,7 +410,8 @@ const replay = (response: Response, cached: CachedResponse): void => {
  * @param response - headers are set on this response; `noStore` is read from it too
  * @param options - the route's declared cache identity — see {@link CacheOptions}
  * @param ttl - the resolved (possibly dev-clamped) TTL used to build `max-age`
- * @param cacheable - `options.scopeKey(request)`'s answer — see {@link CacheOptions.scopeKey}
+ * @param cacheable - `options.scopeKey(request)`'s answer, `false` when the response sets a cookie —
+ *   see {@link CacheOptions.scopeKey}
  * @returns whether this request is a GET — reused by {@link serveOrArm}
  * @throws {Error} on either mounting mistake described above
  */
@@ -585,7 +586,14 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
         // A draft preview wins over `scopeKey`: a caller can hold the staff read of a draft
         // language and still read the guest scope of the catalogue, so the scope alone would
         // share the visitors' entry with a draft answer.
-        const cacheable = !isDraftPreview(response) && options.scopeKey(request);
+        // A response that already carries a `Set-Cookie` (a dead-session clear from `getAuth`) must
+        // not reach a shared cache either: RFC 9111 §7.3 lets one store and replay it to everyone.
+        // Only a cookie set BEFORE this middleware is seen, so a cookie writer mounts ahead of it.
+        // https://www.rfc-editor.org/rfc/rfc9111.html#section-7.3
+        const cacheable =
+            !isDraftPreview(response) &&
+            response.getHeader('Set-Cookie') === undefined &&
+            options.scopeKey(request);
         const cacheableRead = applyCacheHeaders(request, response, options, ttl, cacheable);
         return serveOrArm(
             request,

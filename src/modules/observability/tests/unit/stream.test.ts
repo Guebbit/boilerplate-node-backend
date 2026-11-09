@@ -202,7 +202,7 @@ describe('the SSE metrics stream', () => {
             expect(fake.status).toHaveBeenCalledWith(200);
             expect(fake.headers).toEqual({
                 'Content-Type': 'text/event-stream',
-                'Cache-Control': 'no-cache, no-transform',
+                'Cache-Control': 'no-store, no-transform',
                 Connection: 'keep-alive'
             });
         });

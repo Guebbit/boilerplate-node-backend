@@ -34,6 +34,7 @@ export type ResponseStub = Response & {
     hasHeader: jest.Mock;
     getHeader: jest.Mock;
     removeHeader: jest.Mock;
+    vary: jest.Mock;
 };
 
 /**
@@ -57,7 +58,8 @@ export const makeResponseStub = (): ResponseStub => {
         hasHeader: jest.fn((name: string) => headers.has(name.toLowerCase())),
         removeHeader: jest.fn((name: string) => {
             headers.delete(name.toLowerCase());
-        })
+        }),
+        vary: jest.fn()
     });
 
     response.status.mockReturnValue(response);
