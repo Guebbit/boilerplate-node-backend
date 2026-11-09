@@ -8,6 +8,8 @@ x-error-codes:
     USER_ERASURE_DUE: { status: 409, description: 'The account owner asked for its deletion and the grace has run out, so it is erased by the next purge run and can no longer be restored.' }
     USER_ALREADY_ACTIVE: { status: 409, description: 'The account is active already: `POST /users/{id}/activate` has nothing to do.' }
     USER_ALREADY_INACTIVE: { status: 409, description: 'The account is deactivated already: `POST /users/{id}/deactivate` has nothing to do.' }
+    USER_ROLE_ALREADY_ASSIGNED: { status: 409, description: 'The account already holds the role named, so `POST /users/{id}/assign-role` has nothing to do.' }
+    USER_ROLE_NOT_ASSIGNED: { status: 409, description: 'The account holds no staff role, so `POST /users/{id}/revoke-role` has nothing to take away.' }
     USER_NOT_WARNED: { status: 409, description: 'The inactivity reaper tried to delete an account that was never warned first. Raised by the reaper, never by a route.' }
     USER_STAFF_NOT_REAPABLE: { status: 409, description: 'The inactivity reaper met an account holding a staff role and left it alone. Raised by the reaper, never by a route.' }
     USER_NOT_REAPER_DELETED: { status: 409, description: 'The reaper may only erase an account it soft-deleted itself. Raised by the reaper, never by a route.' }
@@ -237,7 +239,7 @@ paths:
         delete:
             tags: [Users]
             summary: Delete user
-            description: Deletes the user identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. A soft delete is one-way and safe to repeat — undo it with `POST /users/{id}/restore`. Functionally equivalent to `DELETE /users`.
+            description: Deletes the user identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. A soft delete is one-way and safe to repeat — undo it with `POST /users/{id}/restore`.
             operationId: deleteUserById
             security:
                 - bearerAuth: []
@@ -250,6 +252,73 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+
+    /users/{id}/assign-role:
+        post:
+            tags: [Users]
+            summary: Assign a staff role to a user
+            description: >-
+                Gives the account the staff role named, replacing the one it holds (an account holds at
+                most one). Naming the role it holds already answers 409 `USER_ROLE_ALREADY_ASSIGNED` and
+                writes and audits nothing; two callers naming different roles both succeed, the last
+                write wins. The only way a role is handed to an existing account. Needs `assign:Role`,
+                with a critically fresh session, and only a session: an API key is refused 401. A name
+                nobody can be given is a 422 naming `role`.
+                Audited as `access.role.assigned`.
+            operationId: assignUserRole
+            x-error-codes:
+                '403': [ROLE_MANAGEMENT_REQUIRED]
+                '409': [USER_ROLE_ALREADY_ASSIGNED]
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AssignUserRoleRequest'
+            responses:
+                '200':
+                    description: The user, now holding the role
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/User'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+
+    /users/{id}/revoke-role:
+        post:
+            tags: [Users]
+            summary: Take a user's staff role away
+            description: >-
+                Takes the account's staff role away, leaving a plain customer. An account that holds
+                none answers 409 `USER_ROLE_NOT_ASSIGNED`. Needs `assign:Role`, with a critically fresh
+                session, and only a session: an API key is refused 401. Audited as `access.role.revoked`.
+            operationId: revokeUserRole
+            x-error-codes:
+                '403': [ROLE_MANAGEMENT_REQUIRED]
+                '409': [USER_ROLE_NOT_ASSIGNED]
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The user, now holding no staff role
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/User'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     # A protective pause on checkout for one account: placed by hand here, or by the shop after
     # repeated buyer cancellations. Both actions need `ban:User`. A hold never blocks paying an
@@ -574,6 +643,18 @@ components:
                         Shown to the buyer with the refusal, so write it as if they read it
                         (GDPR Art. 22(3): the reason and how to contest it).
 
+        # `POST /users/{id}/assign-role`. A name from `grantableRoles` (`abilities` on `GET /account`);
+        # any other name is a `422` naming `role`.
+        AssignUserRoleRequest:
+            type: object
+            additionalProperties: false
+            required: [role]
+            properties:
+                role:
+                    type: string
+                    maxLength: 64
+                    minLength: 1
+
         CreateUserRequest:
             type: object
             additionalProperties: false
@@ -641,14 +722,6 @@ components:
                     type: string
                     minLength: 3
                     maxLength: 50
-                # A staff role by name from `grantableRoles`; `null` takes it away, leaving a plain customer.
-                # Naming a role, or taking one away, needs `assign:Role` (403
-                # `ROLE_MANAGEMENT_REQUIRED`) and a critically fresh session; any other name is a
-                # `422` naming `role`.
-                role:
-                    type: [string, 'null']
-                    maxLength: 64
-                    minLength: 1
                 # `null` removes the image. Omitted leaves it unchanged; `''` is
                 # invalid (`ImageUrl`'s own `minLength: 1`), never a third spelling of "no image".
                 imageUrl:
@@ -676,10 +749,6 @@ components:
                     type: string
                     minLength: 3
                     maxLength: 50
-                role:
-                    type: string
-                    maxLength: 64
-                    minLength: 1
                 imageUpload:
                     type: string
                     format: binary
@@ -703,18 +772,12 @@ components:
         ReplaceUserByIdRequest:
             type: object
             additionalProperties: false
-            required: [username, role]
+            required: [username]
             properties:
                 username:
                     type: string
                     minLength: 3
                     maxLength: 50
-                # A staff role by name from `grantableRoles`; `null` is a plain customer. Same rules as
-                # the PATCH body: `assign:Role`, a critically fresh session, a `422` for any other name.
-                role:
-                    type: [string, 'null']
-                    maxLength: 64
-                    minLength: 1
                 imageUrl:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageRemoval'
                 locale:
@@ -734,16 +797,12 @@ components:
         ReplaceUserByIdRequestMultipart:
             type: object
             additionalProperties: false
-            required: [username, role]
+            required: [username]
             properties:
                 username:
                     type: string
                     minLength: 3
                     maxLength: 50
-                role:
-                    type: string
-                    maxLength: 64
-                    minLength: 1
                 imageUpload:
                     type: string
                     format: binary

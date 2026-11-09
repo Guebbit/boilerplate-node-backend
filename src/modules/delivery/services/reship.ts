@@ -11,7 +11,7 @@
 
 import type { ClientSession } from 'mongoose';
 import { orderService } from '@modules/orders';
-import { FulfillmentOrderKind, FulfillmentOrderStatus, OrderStatus } from '@types';
+import { FulfillmentOrderKind, FulfillmentOrderStatus } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { planReopening, shareOwed, statusOfLines, withLoss } from '../domain';
 import type { ProductQuantity, Reopening } from '../domain';
@@ -51,30 +51,6 @@ const reopenLines = async (
         );
         if (!claimed) refuse(409, ERROR_CODES.DELIVERY_NOT_REOPENABLE, 'delivery.not-reopenable');
     }
-};
-
-/**
- * Put the order back to being fulfilled: a `delivered` one steps back to `processing`, a `shipped`
- * one likewise; a `processing` one is already there. A canceled or unpaid order cannot be sent to.
- * @param status - the order's status
- * @param orderId - the order
- * @param session - the caller's transaction
- * @param actor - the staff member whose receipt this is
- */
-const reopenOrder = async (
-    status: OrderStatus,
-    orderId: string,
-    session: ClientSession,
-    actor: string | null | undefined
-): Promise<void> => {
-    if (status === OrderStatus.processing) return;
-    const moved =
-        status === OrderStatus.delivered
-            ? await orderService.markReshipped(orderId, session, actor)
-            : status === OrderStatus.shipped
-              ? await orderService.markReopened(orderId, session, actor)
-              : null;
-    if (!moved) refuse(409, ERROR_CODES.DELIVERY_NOT_REOPENABLE, 'delivery.not-reopenable');
 };
 
 /**
@@ -130,5 +106,7 @@ export const reopenForReplacement = async (
 
     // Units are open again, so the order is being fulfilled once more.
     await reportProgress(orderId, session);
-    await reopenOrder(order.status, orderId, session, actor);
+    // A `delivered` one steps back to `processing`, a `shipped` one likewise; any other cannot be sent to.
+    const processing = await orderService.reopenForFulfillment(orderId, session, actor);
+    if (!processing) refuse(409, ERROR_CODES.DELIVERY_NOT_REOPENABLE, 'delivery.not-reopenable');
 };

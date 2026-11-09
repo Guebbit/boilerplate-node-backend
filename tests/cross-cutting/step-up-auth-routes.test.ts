@@ -95,12 +95,11 @@ const STEP_UP_ROUTES: Record<string, string[]> = {
     // An operator's cancel can keep or refund a paid order's money; a customer's own is never
     // prompted (the predicate asks `update:Order`).
     'orders POST /:id/cancel': [`requireFreshAuthWhen(critical)`],
-    // Handing a staff role out, or taking one away, widens or narrows a person's powers: the same
-    // critical tier minting an API key asks. A write that names no role is never prompted. So is
-    // activating or deactivating an account, since the role stays and the power comes or goes.
+    // Creating an account with a role widens a person's powers: the same critical tier minting an
+    // API key asks, and a create that names none is never prompted. So is activating or
+    // deactivating an account, since the role stays and the power comes or goes. The role door
+    // (`assign-role`, `revoke-role`) is the other half: `assign:Role` carries its own `stepUp`.
     'users POST /': [`requireFreshAuthWhen(critical)`],
-    'users PUT /:id': [`requireFreshAuthWhen(critical)`],
-    'users PATCH /:id': [`requireFreshAuthWhen(critical)`],
     'users POST /:id/activate': [`requireFreshAuthWhen(critical)`],
     'users POST /:id/deactivate': [`requireFreshAuthWhen(critical)`]
 };

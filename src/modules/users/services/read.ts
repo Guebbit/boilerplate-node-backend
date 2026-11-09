@@ -91,7 +91,12 @@ export const toUserContract = (user: UserDocument, caller: Caller): Promise<User
             presentUser(
                 user,
                 roles.tenant,
-                userActionsFor(user, roles.tenant !== null || roles.platform !== null, caller)
+                userActionsFor(
+                    user,
+                    roles.tenant !== null || roles.platform !== null,
+                    roles.tenant !== null,
+                    caller
+                )
             )
         );
 
@@ -114,7 +119,12 @@ export const toUserContracts = (rows: readonly UserWire[], caller: Caller): Prom
             presentUser(
                 user,
                 roles.get(user.id) ?? null,
-                userActionsFor(user, staff.has(user.id), caller)
+                userActionsFor(
+                    user,
+                    staff.has(user.id),
+                    (roles.get(user.id) ?? null) !== null,
+                    caller
+                )
             )
         )
     );

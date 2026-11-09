@@ -52,10 +52,7 @@ export const PROTECTION_ROWS: readonly ProtectionRow[] = [
     {
         route: 'users PUT /:id',
         key: 'update:User',
-        prepare: onUser('put', '', (owner) => ({
-            username: 'protection-check',
-            role: owner.role
-        }))
+        prepare: onUser('put', '', () => ({ username: 'protection-check' }))
     },
     {
         route: 'users PATCH /:id',
@@ -103,7 +100,9 @@ export const PROTECTION_ROWS: readonly ProtectionRow[] = [
  */
 export const UNOWNED_WRITES: Readonly<Record<string, string>> = {
     'users POST /search': 'a read wearing a POST',
-    'users POST /': 'creates an account; there is no account yet'
+    'users POST /': 'creates an account; there is no account yet',
+    'users POST /:id/assign-role': 'judged by the grant (`assign:Role`), which no one else holds',
+    'users POST /:id/revoke-role': 'judged by the grant (`assign:Role`), which no one else holds'
 };
 
 /** Creates an owner holding `role` in the shop (or nothing, when `role` is `null`). */

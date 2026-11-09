@@ -100,7 +100,7 @@ above is the forward path, the one no override is involved in. Two system-only b
 
 Two rules, and they are different rules. **Only `orders` writes a `status` field** — every other
 module that causes a move (`payments` on settlement, `delivery` on a parcel event) asks `orders` to
-make it, through `markPaid`/`markShipped`/`markDelivered`, and never touches the document itself.
+make it, through `markPaid` (payments) or `settleFulfillment`/`reopenForFulfillment` (delivery), and never touches the document itself.
 That is a placement rule: it says WHERE the write happens. **The table above is a permission rule:**
 it says WHO may ask for which move, `admin`/`customer`/`system` on each edge.
 
@@ -130,16 +130,18 @@ sequenceDiagram
     W->>D: POST /delivery/fulfillment-orders/{id}/shipments<br/>{ trackingCode }
     D->>D: claim the fulfillment order, write the shipment
     D->>O: recordFulfillmentProgress(summary)
-    D->>O: markShipped(orderId, session) — only if nothing remains
+    D->>O: settleFulfillment(orderId, at, session) — orders picks the edge from the summary
     O->>O: canTransition(processing, shipped, 'system')
     O->>O: conditional write — updateStatusIfIn
     O->>L: emit order.status_changed { from, to } — after the commit
     L-->>D: shipped email queued
 ```
 
-`delivery` never assigns `order.status` itself — `markShipped`/`markDelivered`/`markFulfillmentComplete`
-(`services/status.ts`) are the ordinary doors, each taking the act's own session so the move commits with
-the shipment. A second door, `overrideStatus`, moves the status alone and
+`delivery` never assigns `order.status` itself, and never picks the edge either: it states the fact (the
+summary is written) and `settleFulfillment` (`services/status.ts`) decides from the order's own status and
+that summary whether it ships, delivers, completes in one act or cancels as lost. `reopenForFulfillment`
+puts a `shipped` or `delivered` order back to `processing`. Both take the act's own session, so the move
+commits with the shipment; the six `mark*` steps beneath them are not on the barrel. A second door, `overrideStatus`, moves the status alone and
 announces it, so `delivery` keeps its records in step — see
 [Who writes the status](../modules/orders.md#who-writes-the-status) for both.
 
@@ -184,13 +186,13 @@ lifecycle edge of its own, they all ask.
 
 ### How it is enforced
 
-| Call site                                                                               | Question asked                                                                                                                                  |
-| --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `orders/services/cancel.ts` — the cancel doors                                          | `statusesLeadingTo(canceled, cause.by)`                                                                                                         |
-| `orders/services/status.ts` — `markPaid`/`markProcessing`/`markShipped`/`markDelivered` | the named event's own `from` and `to` (`ORDER_EVENTS.ship`, ...), read off the table rather than restated as a literal                          |
-| `payments/services/intent.ts`/`offline.ts`/`settlement.ts`/`view.ts`                    | `isPayable(status)` — asks `orders` the one question every payment door needs, never the table directly (see "One function, three doors" below) |
-| `delivery/services/*`, `returns/services/{cancel-right,withdraw}.ts`                    | `canProcessOrder`, `canShip`, `canRecordArrival`, `isAwaitingGoods`, `hasShopStarted`                                                           |
-| `orders/services/override.ts`                                                           | `canOverrideTo(from, to)` — its OWN rule, deliberately not `canTransition`: an override exists to skip the gate the ordinary table enforces     |
+| Call site                                                                     | Question asked                                                                                                                                  |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `orders/services/cancel.ts` — the cancel doors                                | `statusesLeadingTo(canceled, cause.by)`                                                                                                         |
+| `orders/services/status.ts` — `markPaid`/`markProcessing`/`settleFulfillment` | the named event's own `from` and `to` (`ORDER_EVENTS.ship`, ...), read off the table rather than restated as a literal                          |
+| `payments/services/intent.ts`/`offline.ts`/`settlement.ts`/`view.ts`          | `isPayable(status)` — asks `orders` the one question every payment door needs, never the table directly (see "One function, three doors" below) |
+| `delivery/services/*`, `returns/services/{cancel-right,withdraw}.ts`          | `canProcessOrder`, `canShip`, `canRecordArrival`, `isAwaitingGoods`, `hasShopStarted`                                                           |
+| `orders/services/override.ts`                                                 | `canOverrideTo(from, to)` — its OWN rule, deliberately not `canTransition`: an override exists to skip the gate the ordinary table enforces     |
 
 Every cancel door asks as its cause's actor, because the table answers differently for each: a customer
 may cancel from `pending` and `paid`, an operator also from `processing`.
@@ -216,7 +218,7 @@ never do that — a paid order set to `canceled` by assignment would end with th
 kept and the stock held until the sweep.
 
 `shipped`/`delivered` are never a field an admin assigns either — they follow a parcel event
-`delivery` records, through `markShipped`/`markDelivered` (see "Who writes the status" above).
+`delivery` records, through `settleFulfillment` (see "Who writes the status" above).
 `paid → processing` follows a fulfillment-start fact the same way, through `markProcessing`.
 The admin override (`POST /orders/{id}/status-override`) is the door for a mis-scanned parcel or a
 manual correction. `items`/`userId` are not in

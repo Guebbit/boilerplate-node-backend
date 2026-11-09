@@ -24,7 +24,6 @@ import {
 import { recordAudit } from '@infrastructure/observability/audit';
 import { announceInTransaction } from '@kernel/outbox';
 import { ERROR_CODES } from '@api/error-codes';
-import { accessService } from '@modules/access';
 import type { CallerContext } from '@types';
 import type { PurchaseHoldRecord, UserDocument } from '../model';
 import { usersAuditActions } from '../audit';
@@ -32,6 +31,7 @@ import { contactFrontendLink, privacyFrontendLink } from '../config';
 import { purchaseHoldPlacedEmail } from '../emails';
 import { USER_REVIEW_CLEARED, USER_REVIEW_FLAGGED } from '../events';
 import { userRepository } from '../repository';
+import { withClearedAccount } from './cleared-account';
 
 /** What a checkout (or a banner) needs to know about a hold in force. */
 export type ActivePurchaseHold = Pick<PurchaseHoldRecord, 'until' | 'reason' | 'note' | 'setAt'>;
@@ -181,55 +181,47 @@ export const setPurchaseHold = (
     input: { until: Date; note?: string },
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    userRepository.findById(id).then((user) => {
-        if (!user) return generateReject(404, [t('users.not-found')]);
+    withClearedAccount(id, context, (user) => {
+        const now = new Date();
+        if (input.until.getTime() <= now.getTime())
+            return generateReject(422, [fieldError('until', t('users.purchase-hold-until-past'))]);
 
-        return accessService.roleProtectedRefusal(context, id).then((refusal) => {
-            if (refusal) return refusal;
+        const note = input.note?.trim() || undefined;
+        // The same staff hold already in force: a repeat, refused before it mails or audits.
+        const inForce = activeHoldOf(user, now);
+        if (
+            inForce?.reason === 'staff' &&
+            inForce.until.getTime() === input.until.getTime() &&
+            inForce.note === note
+        )
+            return generateReject(409, [
+                {
+                    code: ERROR_CODES.USER_PURCHASE_HOLD_ALREADY_SET,
+                    message: t('users.purchase-hold-already-set')
+                }
+            ]);
 
-            const now = new Date();
-            if (input.until.getTime() <= now.getTime())
-                return generateReject(422, [
-                    fieldError('until', t('users.purchase-hold-until-past'))
-                ]);
-
-            const note = input.note?.trim() || undefined;
-            // The same staff hold already in force: a repeat, refused before it mails or audits.
-            const inForce = activeHoldOf(user, now);
-            if (
-                inForce?.reason === 'staff' &&
-                inForce.until.getTime() === input.until.getTime() &&
-                inForce.note === note
-            )
-                return generateReject(409, [
-                    {
-                        code: ERROR_CODES.USER_PURCHASE_HOLD_ALREADY_SET,
-                        message: t('users.purchase-hold-already-set')
-                    }
-                ]);
-
-            const hold: PurchaseHoldRecord = {
-                until: input.until,
-                reason: 'staff',
-                ...(note ? { note } : {}),
-                setBy: context.caller.id ?? undefined,
-                setAt: now
-            };
-            const wasFlagged = user.purchaseHoldFlaggedAt !== undefined;
-            user.purchaseHold = hold;
-            // Placing a hold is acting on a flagged account, so the flag has done its job.
-            user.purchaseHoldFlaggedAt = undefined;
-            return saveAnnouncingReview(user, wasFlagged).then((saved) => {
-                notifyBuyer(saved, hold);
-                recordAudit(context, {
-                    action: usersAuditActions.ADMIN_USER_PURCHASE_HOLD_SET,
-                    outcome: 'success',
-                    targetType: 'user',
-                    targetId: id,
-                    metadata: { until: input.until.toISOString() }
-                });
-                return generateSuccess(saved, 200);
+        const hold: PurchaseHoldRecord = {
+            until: input.until,
+            reason: 'staff',
+            ...(note ? { note } : {}),
+            setBy: context.caller.id ?? undefined,
+            setAt: now
+        };
+        const wasFlagged = user.purchaseHoldFlaggedAt !== undefined;
+        user.purchaseHold = hold;
+        // Placing a hold is acting on a flagged account, so the flag has done its job.
+        user.purchaseHoldFlaggedAt = undefined;
+        return saveAnnouncingReview(user, wasFlagged).then((saved) => {
+            notifyBuyer(saved, hold);
+            recordAudit(context, {
+                action: usersAuditActions.ADMIN_USER_PURCHASE_HOLD_SET,
+                outcome: 'success',
+                targetType: 'user',
+                targetId: id,
+                metadata: { until: input.until.toISOString() }
             });
+            return generateSuccess(saved, 200);
         });
     });
 
@@ -248,35 +240,30 @@ export const liftPurchaseHold = (
     id: string,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    userRepository.findById(id).then((user) => {
-        if (!user) return generateReject(404, [t('users.not-found')]);
+    withClearedAccount(id, context, (user) => {
+        if (!hasPurchaseHoldToClear(user))
+            return generateReject(409, [
+                {
+                    code: ERROR_CODES.USER_PURCHASE_HOLD_NOT_SET,
+                    message: t('users.purchase-hold-not-set')
+                }
+            ]);
 
-        return accessService.roleProtectedRefusal(context, id).then((refusal) => {
-            if (refusal) return refusal;
-            if (!hasPurchaseHoldToClear(user))
-                return generateReject(409, [
-                    {
-                        code: ERROR_CODES.USER_PURCHASE_HOLD_NOT_SET,
-                        message: t('users.purchase-hold-not-set')
-                    }
-                ]);
-
-            const now = new Date();
-            const wasInForce = activeHoldOf(user, now) !== undefined;
-            const wasFlagged = user.purchaseHoldFlaggedAt !== undefined;
-            user.purchaseHold = undefined;
-            user.purchaseHoldFlaggedAt = undefined;
-            user.purchaseHoldResetAt = now;
-            return saveAnnouncingReview(user, wasFlagged).then((saved) => {
-                recordAudit(context, {
-                    action: usersAuditActions.ADMIN_USER_PURCHASE_HOLD_LIFTED,
-                    outcome: 'success',
-                    targetType: 'user',
-                    targetId: id,
-                    metadata: { inForce: wasInForce }
-                });
-                return generateSuccess(saved, 200);
+        const now = new Date();
+        const wasInForce = activeHoldOf(user, now) !== undefined;
+        const wasFlagged = user.purchaseHoldFlaggedAt !== undefined;
+        user.purchaseHold = undefined;
+        user.purchaseHoldFlaggedAt = undefined;
+        user.purchaseHoldResetAt = now;
+        return saveAnnouncingReview(user, wasFlagged).then((saved) => {
+            recordAudit(context, {
+                action: usersAuditActions.ADMIN_USER_PURCHASE_HOLD_LIFTED,
+                outcome: 'success',
+                targetType: 'user',
+                targetId: id,
+                metadata: { inForce: wasInForce }
             });
+            return generateSuccess(saved, 200);
         });
     });
 

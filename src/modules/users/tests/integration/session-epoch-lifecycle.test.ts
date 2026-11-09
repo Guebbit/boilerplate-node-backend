@@ -69,7 +69,7 @@ describe('deactivating an account', () => {
         await api()
             .put(`/users/${target.id}`)
             .set('Authorization', admin)
-            .send({ username: 'renamed', role: null });
+            .send({ username: 'renamed' });
 
         expect(await statusWith(held)).toBe(200);
     });

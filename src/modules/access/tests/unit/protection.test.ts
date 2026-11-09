@@ -9,7 +9,8 @@
 import { callerContextAs, testCallerContext } from '@tests/callers';
 import { systemCallerContext } from '@kernel/permissions';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-import { accessService, mayChangeAccount, ownOrderFlag } from '../../services';
+import { accessService } from '../../services';
+import { mayChangeAccount, ownOrderFlag } from '../../domain';
 
 /** One membership row, as the repository returns it. */
 interface Row {

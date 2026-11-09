@@ -16,7 +16,6 @@ import {
 } from '@kernel/middlewares/authorizations';
 import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { upload } from '@infrastructure/http/middlewares/upload';
-import { roleChangeRequested } from './services/update';
 import { getUsers } from './controllers/get-users';
 import { createUser } from './controllers/post-user';
 import { replaceUser, updateUser } from './controllers/update-user';
@@ -30,34 +29,26 @@ import { noStore, privateNoCache } from '@infrastructure/http/middlewares/cache'
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 
 /**
- * Whether this write changes who holds powers, and the caller manages staff: a role that
- * actually changes (handing one out, taking it away with `role: null`), or an account created
- * deactivated. Changing a person's powers
- * is the one admin act a stolen session must not do quietly, so it asks for a fresh session at the
- * tier minting an API key does.
+ * Whether this create changes who holds powers, and the caller manages staff: an account created
+ * with a role, or deactivated. Changing a person's powers is the one admin act a stolen session
+ * must not do quietly, so it asks for a fresh session at the tier minting an API key does. (An
+ * existing account's role has its own door, `assign-role`, which asks it of every call.)
  *
  * Only a caller holding `assign:Role` is asked. Anyone else is refused by the service with an
  * audited 403 `ROLE_MANAGEMENT_REQUIRED`, which is the better answer than a login they could
- * never use. A PUT carries `role` every time, so "named" is not "changed": the stored role is
- * compared, as the service does.
+ * never use.
  *
  * Read from the body, so this guard comes after `upload.image()`, which populates it for a
- * multipart request.
+ * multipart request. A multipart body is read before validation turns its string into a boolean.
  */
 const changesPowers = (request: Request): Promise<boolean> => {
     if (!request.caller || !holds(request.caller, 'assign', 'Role')) return Promise.resolve(false);
 
-    const body = request.body as { role?: string | null; active?: boolean | string } | undefined;
+    const body = request.body as { role?: string; active?: boolean | string } | undefined;
 
-    // No stored account to compare on a create: naming a role, or creating it deactivated (a
-    // multipart body is read before validation turns its string into a boolean), is the change.
-    if (typeof request.params.id !== 'string')
-        return Promise.resolve(
-            body?.role != null || body?.active === false || body?.active === 'false'
-        );
-
-    // A failed read cannot prove "no change", so it asks.
-    return roleChangeRequested(request.params.id, body?.role).catch(() => true);
+    return Promise.resolve(
+        body?.role != null || body?.active === false || body?.active === 'false'
+    );
 };
 
 /**
@@ -103,14 +94,7 @@ router.post(
 router.get('/:id', requirePermission('read', 'User'), privateNoCache, getUserItem);
 
 // PUT /users/:id — replace the user.
-router.put(
-    '/:id',
-    requirePermission('update', 'User'),
-    uploadLimiter,
-    upload.image(),
-    requireFreshAuthWhen(changesPowers, 'critical'),
-    replaceUser
-);
+router.put('/:id', requirePermission('update', 'User'), uploadLimiter, upload.image(), replaceUser);
 
 // PATCH /users/:id — merge the fields sent.
 router.patch(
@@ -118,7 +102,6 @@ router.patch(
     requirePermission('update', 'User'),
     uploadLimiter,
     upload.image(),
-    requireFreshAuthWhen(changesPowers, 'critical'),
     updateUser
 );
 

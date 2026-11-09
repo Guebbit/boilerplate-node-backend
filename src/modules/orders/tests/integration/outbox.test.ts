@@ -23,6 +23,7 @@ import { callerContextAs, asCustomer } from '@tests/callers';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { orderService } from '../../services';
 import { overrideStatus } from '../../services/override';
+import { markShipped, markDelivered, markFulfillmentComplete } from '../../services/status';
 import { ORDER_CANCELED, ORDER_CREATED, ORDER_STATUS_CHANGED } from '../../events';
 import { OrderStatus } from '@types';
 
@@ -87,19 +88,13 @@ describe('a status move reported to orders', () => {
     it.each([
         ['markPaid', OrderStatus.pending, (id: string) => orderService.markPaid(id)],
         ['markProcessing', OrderStatus.paid, (id: string) => orderService.markProcessing(id)],
-        ['markShipped', OrderStatus.processing, (id: string) => orderService.markShipped(id)],
-        [
-            'markDelivered',
-            OrderStatus.shipped,
-            (id: string) => orderService.markDelivered(id, new Date())
-        ],
+        ['markShipped', OrderStatus.processing, (id: string) => markShipped(id)],
+        ['markDelivered', OrderStatus.shipped, (id: string) => markDelivered(id, new Date())],
         [
             'markFulfillmentComplete',
             OrderStatus.processing,
             (id: string) =>
-                withTransaction((session) =>
-                    orderService.markFulfillmentComplete(id, new Date(), session)
-                )
+                withTransaction((session) => markFulfillmentComplete(id, new Date(), session))
         ]
     ])(
         '%s leaves the order where it was when its event cannot be written',

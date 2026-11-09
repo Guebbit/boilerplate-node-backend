@@ -132,7 +132,8 @@ membership row survives the user it points at.
 
 A key says what kind of thing; it never said whose. An account that holds a staff role may be
 changed only by a holder of `assign:Role`, or it is a `403 ROLE_MANAGEMENT_REQUIRED`.
-`mayChangeAccount` is the rule as a pure function (`users` asks it of a whole page of rows for the
+`mayChangeAccount` is the rule as a pure function in `domain/protection.ts`, beside `isOwnThing` and
+`ownOrderFlag`, and published through the barrel (`users` asks it of a whole page of rows for the
 `actions` block); `canChangeAccount` answers it for a user id after a lookup, `roleProtectedRefusal` wraps it into the envelope the
 services return, and `holdsStaffRole` / `staffHoldersAmong` read from the memberships whether an
 account holds a role in either scope. A role has no level and nothing ranks. The rule, its
@@ -156,7 +157,7 @@ Every rule this module declares and who holds it, role by role. The rule is what
 
 | Rule          | Set              | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                              |
 | ------------- | ---------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `assign:Role` | `RoleManagement` | —       | —            | —          | —         | —           | —         | —        | —           | ✅      | —          | —          | Hand a staff role to an account or take it away, and change an account that holds one — edit, ban, erase. Held by administrators. |
+| `assign:Role` | `RoleManagement` | —       | —            | —          | —         | —           | —         | —        | —           | ✅ ⚡c  | —          | —          | Hand a staff role to an account or take it away, and change an account that holds one — edit, ban, erase. Held by administrators. |
 
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in

@@ -84,9 +84,10 @@ export {
     NO_FULFILLMENT,
     fulfillmentStatusOf,
     fulfillmentStatusFilter,
-    shipsAwaitedStock
+    shipsAwaitedStock,
+    settlementFor
 } from './fulfillment';
-export type { FulfillmentSummary, FulfillmentFilter } from './fulfillment';
+export type { FulfillmentSummary, FulfillmentFilter, SettlementMove } from './fulfillment';
 
 /** What each status means, declared once and total over the contract's statuses. */
 export { ORDER_STATUS_TRAITS, statusesWhere } from './status-traits';

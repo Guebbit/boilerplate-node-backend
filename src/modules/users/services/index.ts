@@ -24,6 +24,7 @@ import { activate, deactivate } from './activation';
 import { enqueueIfPending } from './image';
 import { create } from './create';
 import { updateById } from './update';
+import { assignUserRole, revokeUserRole } from './role';
 import { restoreById, removeById } from './remove';
 import {
     purchaseHoldOf,
@@ -104,7 +105,8 @@ export type { StaffContact } from './read';
 
 /**
  * The service's public surface — the controllers call through this, never the bare functions.
- * `updateById`, `activate`, `deactivate` and `removeById` load by id and ask the staff-role question first. The
+ * `updateById`, `activate`, `deactivate` and `removeById` load by id and ask the staff-role question first;
+ * `assignUserRole` and `revokeUserRole` are the role door and ask the grant itself. The
  * named doors take an already-loaded document for the one caller that holds the record and the
  * right to change it: the owner (`updateOwnProfile`, `scheduleOwnDeletion`, `restoreOwnAccount`), the
  * scheduled purge (`eraseScheduledDeletion`) and the inactivity reaper (`softDeleteInactive`,
@@ -120,6 +122,8 @@ export const userService = {
     registerFromOAuth,
     buildSignupDecoy,
     updateById,
+    assignUserRole,
+    revokeUserRole,
     activate,
     deactivate,
     removeById,

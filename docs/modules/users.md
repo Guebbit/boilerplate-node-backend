@@ -87,7 +87,8 @@ One collection, two services over it: `/users` (admin) and `/account` (signup, l
 write through `userService`, never the collection directly.
 
 `PUT /users/{id}` replaces the record (a field left out reverts to its default); `PATCH /users/{id}`
-merges (a field left out keeps its current value) — the same replace/merge split
+merges (a field left out keeps its current value). Neither carries the role: that has its own door
+([The role door](#the-role-door)). The same replace/merge split
 [`request-flow.md`](../theory/request-flow.md) documents for the rest of the API, through the same
 shared factory.
 
@@ -97,11 +98,9 @@ shared factory.
 | Rule                           | Refusal                                            | Why                                                   |
 | ------------------------------ | -------------------------------------------------- | ----------------------------------------------------- |
 | the account holds a staff role | `403 ROLE_MANAGEMENT_REQUIRED`                     | [R1](../theory/authorization.md#protecting-people)    |
-| handing a role out             | `403 ROLE_MANAGEMENT_REQUIRED`, or `422` on `role` | only a holder of `assign:Role` hands out a staff role |
+| handing a role out (create)    | `403 ROLE_MANAGEMENT_REQUIRED`, or `422` on `role` | only a holder of `assign:Role` hands out a staff role |
 
-A role is asked only when it **changes**: a `PUT` resends `role` on every save, and resending what
-the account already has is no role change (`role: null` is a plain customer). The same protection
-covers soft delete, hard delete, restore, the purchase hold and the activate / deactivate switch. A
+The same protection covers soft delete, hard delete, restore, the purchase hold and the activate / deactivate switch. A
 refused attempt on a staff account is audited as `security.forbidden` with
 `metadata.reason: role_protected`.
 
@@ -111,20 +110,20 @@ A product's `active` has no such effect and stays a field
 (the [action-or-field test](../api/write-methods.md#action-or-field)).
 
 **The fresh-login step-up** asks only a caller holding `assign:Role`, and only when the write changes
-who holds powers: a role that differs from the stored one, an account created deactivated, or a
-call to `activate` / `deactivate`. A `PUT` that resends what is stored is not challenged. A caller without `assign:Role` is never asked, and
-the service refuses a role change with the audited `403 ROLE_MANAGEMENT_REQUIRED` instead. An API
-key can never step up, so a key reaching a step-up guard is refused `403 FORBIDDEN` (audited as
+who holds powers: a create that names a role or starts deactivated, a call to `activate` /
+`deactivate`, or any call to the role door (which carries its own, on the key). A caller without
+`assign:Role` is never asked, and is refused with the audited `403 ROLE_MANAGEMENT_REQUIRED` instead.
+An API key can never step up, so a key reaching a step-up guard is refused `403 FORBIDDEN` (audited as
 `credential_cannot_step_up`), not told to log in again.
 
-### Creating and updating with a role
+### Creating with a role
 
 An account and its role live in two collections (`users`, and `access`' memberships), and an admin
-write touches both. It is **one transaction**, with the grant checked first:
+create touches both. It is **one transaction**, with the grant checked first:
 
 ```mermaid
 sequenceDiagram
-    participant A as admin write
+    participant A as admin create
     participant X as access (grant check)
     participant D as database
     A->>X: grantRefusalAudited(role)
@@ -138,11 +137,40 @@ sequenceDiagram
   `assign:Role`) and a refusal is audited as `access.role.assigned` / `failure`, even though no account
   exists yet to point at.
 - **One commit.** A failure of the role write rolls the account write back: no row left holding an
-  email with no role, and no half-applied update (a ban, a rename) under a request that failed.
+  email with no role.
 - **Audit after commit.** The success row for the grant is written once the transaction has
   committed, because it is not true before.
 - **Self-service and OAuth signup follow the same shape** (see [`account`](./account.md)): the row
   and its starting role commit together or not at all.
+
+### The role door
+
+`POST /users/{id}/assign-role {role}` and `POST /users/{id}/revoke-role` are the only way an existing
+account is given a staff role or loses one (`services/role.ts`, public as `userService.assignUserRole`
+and `revokeUserRole`). Each is a state change with its own check and audit row, so it is a POST pair
+([a toggle is a pair of actions](../api/write-methods.md#a-toggle-is-a-pair-of-actions)):
+
+| Call                                   | Answers                                                                              |
+| -------------------------------------- | ------------------------------------------------------------------------------------ |
+| `assign-role`, a role the account has  | `409 USER_ROLE_ALREADY_ASSIGNED`, nothing written or audited                         |
+| `assign-role`, a different role        | 200: it replaces the one held; two callers naming different roles, the last one wins |
+| `assign-role`, a name nobody can have  | `422` on `role`, audited as a failed `access.role.assigned`                          |
+| `revoke-role`, an account with no role | `409 USER_ROLE_NOT_ASSIGNED`                                                         |
+| a caller without `assign:Role`         | `403 ROLE_MANAGEMENT_REQUIRED` (the rule's own `deniedCode`)                         |
+| an API key                             | `401`, from `isAuth`: the door is session-only, before any permission is asked       |
+| a stale session                        | `401 REAUTH_REQUIRED`: `assign:Role` is `stepUp: critical`, asked of a repeat too    |
+
+- **Session only.** The door is its own router (`role-routes.ts`), mounted after the rest of `/users`
+  behind `getAuth, isAuth` instead of `isAuthOrCredential`: `assign:Role` is `credential: false`, so a
+  key is never let in. `isAuth` refuses a caller with no session `401`, and the contract lists only
+  `bearerAuth` on both operations.
+- **Judged by the grant, not the protection.** The door is not a row of the account-protection list:
+  a holder of `assign:Role` passes that anyway, and nobody else reaches the door.
+- **No `If-Match`.** Last write wins between two different roles. The write still moves the row's
+  `editRevision` (the role lives in a membership, so the stamp is touched on purpose), so an edit
+  holding an older tag is refused.
+- **One commit, audit after.** The stamp and the membership write share one transaction; the
+  `access.role.assigned` / `access.role.revoked` row is written once it has committed.
 
 **Credentials are the owner's alone.** `POST /users` takes no password: the account is created
 without one and always mails a setup link (`USER_SETUP_REQUESTED`, handled in
@@ -171,27 +199,29 @@ lookups it needs (the caller's keys, who holds a staff role) made once per reque
 The presenter only maps the finished block. `/account` serves a different schema, `Account`, which
 has no `actions` and no review flag: a person's own record has no one to protect.
 
-| Flag                | Endpoint                               | The caller needs            | And the account must be         |
-| ------------------- | -------------------------------------- | --------------------------- | ------------------------------- |
-| `update`            | `PUT` / `PATCH /users/{id}`            | `update:User`               | reachable (below)               |
-| `assignRole`        | the `role` field of those              | `update`, and `assign:Role` | reachable                       |
-| `delete`            | `DELETE /users/{id}`                   | `delete:User`               | not soft-deleted                |
-| `hardDelete`        | `DELETE /users/{id}/hard`              | `delete:User`               | reachable                       |
-| `restore`           | `POST /users/{id}/restore`             | `delete:User`               | soft-deleted                    |
-| `placePurchaseHold` | `POST /users/{id}/place-purchase-hold` | `ban:User`                  | reachable                       |
-| `liftPurchaseHold`  | `POST /users/{id}/lift-purchase-hold`  | `ban:User`                  | holding a hold or a review flag |
-| `activate`          | `POST /users/{id}/activate`            | `ban:User`                  | deactivated                     |
-| `deactivate`        | `POST /users/{id}/deactivate`          | `ban:User`                  | active                          |
+| Flag                | Endpoint                               | The caller needs | And the account must be         |
+| ------------------- | -------------------------------------- | ---------------- | ------------------------------- |
+| `update`            | `PUT` / `PATCH /users/{id}`            | `update:User`    | reachable (below)               |
+| `assignRole`        | `POST /users/{id}/assign-role`         | `assign:Role`    | not soft-deleted                |
+| `revokeRole`        | `POST /users/{id}/revoke-role`         | `assign:Role`    | holding a tenant role           |
+| `delete`            | `DELETE /users/{id}`                   | `delete:User`    | not soft-deleted                |
+| `hardDelete`        | `DELETE /users/{id}/hard`              | `delete:User`    | reachable                       |
+| `restore`           | `POST /users/{id}/restore`             | `delete:User`    | soft-deleted                    |
+| `placePurchaseHold` | `POST /users/{id}/place-purchase-hold` | `ban:User`       | reachable                       |
+| `liftPurchaseHold`  | `POST /users/{id}/lift-purchase-hold`  | `ban:User`       | holding a hold or a review flag |
+| `activate`          | `POST /users/{id}/activate`            | `ban:User`       | deactivated                     |
+| `deactivate`        | `POST /users/{id}/deactivate`          | `ban:User`       | active                          |
 
 "Reachable" is `access`'s one pure rule, `mayChangeAccount`: an account that holds no staff role, or
-is the caller's own, or the caller holds `assign:Role`. The service's `canChangeAccount` asks the
+the caller holds `assign:Role` (the caller's own account is judged like any other). The role door's
+two flags are the grant alone, not this rule. The service's `canChangeAccount` asks the
 same function after a lookup, so the flag and the refusal cannot disagree. `ban:User` is the key of
 every ban-class move: deactivating is a ban today, and [support](../demo-ecommerce/support.md) keeps none of it.
 
 ```mermaid
 flowchart LR
     REQ["GET /users"] --> L["one lookup per page:<br/>roles + staff holders"]
-    L --> F["userActionsFor(row, holdsRole, caller)<br/><i>pure</i>"]
+    L --> F["userActionsFor(row, holdsRole, tenantRole, caller)<br/><i>pure</i>"]
     M["access.mayChangeAccount<br/><i>pure</i>"] --> F
     F --> P["presentUser(row, role, actions)<br/><i>maps only</i>"]
     M --> C["canChangeAccount<br/>(a refusal, after a lookup)"]
@@ -323,10 +353,10 @@ it. There is no reason field: the audit row records who.
 Erasing or rectifying a person tells connected tools (GDPR Art. 19). Ids and field names only, never
 a value, so the delivery log never holds a fresh copy of the person's data.
 
-| Webhook        | `data`                  | Fires on                                                                                                                               | Does not fire on                                                                                                                                                             |
-| -------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `user.erased`  | `{ userId }`            | admin hard delete, the purge after the grace, the inactivity erase (same commit)                                                       | the lock, the grace starting, a soft delete, a restore that wins the claim                                                                                                   |
-| `user.updated` | `{ userId, changed[] }` | a username, phone, website or picture that really moved (admin or owner edit); an email-change confirmation and its undo (`['email']`) | a resent value, an email-change request not yet confirmed, locale or consent, the address book, a role-only edit. A phone is compared as plaintext, not as stored ciphertext |
+| Webhook        | `data`                  | Fires on                                                                                                                               | Does not fire on                                                                                                                                                                      |
+| -------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user.erased`  | `{ userId }`            | admin hard delete, the purge after the grace, the inactivity erase (same commit)                                                       | the lock, the grace starting, a soft delete, a restore that wins the claim                                                                                                            |
+| `user.updated` | `{ userId, changed[] }` | a username, phone, website or picture that really moved (admin or owner edit); an email-change confirmation and its undo (`['email']`) | a resent value, an email-change request not yet confirmed, locale or consent, the address book, a role change at the door. A phone is compared as plaintext, not as stored ciphertext |
 
 `user.updated` is projected from the outbox event `user.profile_changed`, written in the save's own
 transaction (`services/update.ts`, `services/credentials.ts`). A recipient that syncs customers
@@ -359,13 +389,13 @@ Every rule this module declares and who holds it, role by role. The rule is what
 
 <!-- permissions:start -->
 
-| Rule          | Set            | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                                                               |
-| ------------- | -------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `read:User`   | `UserDisplay`  | —       | —            | —          | —         | —           | ✅        | —        | ✅          | ✅      | —          | ✅         | Read other people's accounts. Reading your own is `account`, not a key.                                                                                            |
-| `create:User` | `UserCreation` | —       | —            | —          | —         | —           | —         | —        | ✅          | ✅      | —          | ✅         | Create an account for someone else.                                                                                                                                |
-| `update:User` | `UserEditing`  | —       | —            | —          | —         | —           | ✅        | —        | ✅          | ✅      | —          | ✅         | Change someone else's profile: username, image, locale, phone, website, and the role (only for a holder of `assign:Role`). Never a credential, and never `active`. |
-| `ban:User`    | `UserBanning`  | —       | —            | —          | —         | —           | —         | —        | ✅          | ✅      | —          | ✅         | Deactivate someone else's account, or lift the deactivation; pause someone's checkout, or lift the pause.                                                          |
-| `delete:User` | `UserErasure`  | —       | —            | —          | —         | —           | —         | —        | ✅ ⚡c      | ✅ ⚡c  | —          | —          | Erase someone else's account.                                                                                                                                      |
+| Rule          | Set            | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                                                    |
+| ------------- | -------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read:User`   | `UserDisplay`  | —       | —            | —          | —         | —           | ✅        | —        | ✅          | ✅      | —          | ✅         | Read other people's accounts. Reading your own is `account`, not a key.                                                                                 |
+| `create:User` | `UserCreation` | —       | —            | —          | —         | —           | —         | —        | ✅          | ✅      | —          | ✅         | Create an account for someone else.                                                                                                                     |
+| `update:User` | `UserEditing`  | —       | —            | —          | —         | —           | ✅        | —        | ✅          | ✅      | —          | ✅         | Change someone else's profile: username, image, locale, phone, website. Never a credential, never `active`, and never the role (that is `assign:Role`). |
+| `ban:User`    | `UserBanning`  | —       | —            | —          | —         | —           | —         | —        | ✅          | ✅      | —          | ✅         | Deactivate someone else's account, or lift the deactivation; pause someone's checkout, or lift the pause.                                               |
+| `delete:User` | `UserErasure`  | —       | —            | —          | —         | —           | —         | —        | ✅ ⚡c      | ✅ ⚡c  | —          | —          | Erase someone else's account.                                                                                                                           |
 
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in

@@ -1179,6 +1179,7 @@ components:
                 [
                     update,
                     assignRole,
+                    revokeRole,
                     delete,
                     hardDelete,
                     restore,
@@ -1204,9 +1205,15 @@ components:
                 assignRole:
                     type: boolean
                     description: >-
-                        Whether the `role` field of `PUT`/`PATCH /users/{id}` would be accepted —
-                        `update` AND the caller holds `assign:Role`. The caller's own account is
-                        judged like any other.
+                        Whether `POST /users/{id}/assign-role` would be accepted — the caller holds
+                        `assign:Role` and the account is not deleted. The role already held is the
+                        client's to hide: naming it answers 409. The caller's own account is judged
+                        like any other.
+                revokeRole:
+                    type: boolean
+                    description: >-
+                        Whether `POST /users/{id}/revoke-role` would be accepted — the caller holds
+                        `assign:Role`, the account is not deleted, and it holds a staff role to take away.
                 delete:
                     type: boolean
                     description: >-

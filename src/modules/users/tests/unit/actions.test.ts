@@ -22,9 +22,10 @@ const callerOf = (role: string, id = 'caller') => callerContextAs(role, id).call
 
 describe('userActionsFor — the keys', () => {
     it('gives a moderator every move a live customer allows, but not the role', () => {
-        expect(userActionsFor(liveAccount, false, callerOf('moderator'))).toEqual({
+        expect(userActionsFor(liveAccount, false, false, callerOf('moderator'))).toEqual({
             update: true,
             assignRole: false,
+            revokeRole: false,
             delete: true,
             hardDelete: true,
             restore: false,
@@ -36,7 +37,7 @@ describe('userActionsFor — the keys', () => {
     });
 
     it('gives support the edit alone: ban:User and delete:User are not its keys', () => {
-        const actions = userActionsFor(liveAccount, false, callerOf('support'));
+        const actions = userActionsFor(liveAccount, false, false, callerOf('support'));
 
         expect(Object.entries(actions).filter(([, allowed]) => allowed)).toEqual([
             ['update', true]
@@ -44,23 +45,53 @@ describe('userActionsFor — the keys', () => {
     });
 
     it('adds assignRole for a holder of assign:Role', () => {
-        expect(userActionsFor(liveAccount, false, callerOf('admin')).assignRole).toBe(true);
+        expect(userActionsFor(liveAccount, false, false, callerOf('admin')).assignRole).toBe(true);
     });
 
     it('offers the role on the caller’s own account to a holder of assign:Role', () => {
-        expect(userActionsFor({ id: 'me' }, true, callerOf('admin', 'me')).assignRole).toBe(true);
+        expect(userActionsFor({ id: 'me' }, true, true, callerOf('admin', 'me')).assignRole).toBe(
+            true
+        );
+    });
+
+    it('offers revokeRole only where there is a tenant role to take away', () => {
+        const admin = callerOf('admin');
+
+        expect(userActionsFor(liveAccount, false, false, admin).revokeRole).toBe(false);
+        expect(userActionsFor(liveAccount, true, true, admin).revokeRole).toBe(true);
+        // A platform role is not the tenant door's to take.
+        expect(userActionsFor(liveAccount, true, false, admin).revokeRole).toBe(false);
+    });
+
+    it('offers neither role move on a deleted account', () => {
+        const actions = userActionsFor(
+            { id: 'owner', deletedAt: new Date() },
+            true,
+            true,
+            callerOf('admin')
+        );
+
+        expect(actions).toMatchObject({ assignRole: false, revokeRole: false });
+    });
+
+    it('offers a staff caller without assign:Role neither role move, even on itself', () => {
+        const actions = userActionsFor(liveAccount, true, true, callerOf('support'));
+
+        expect(actions).toMatchObject({ assignRole: false, revokeRole: false });
     });
 });
 
 describe('userActionsFor — the protection of staff accounts', () => {
     it('is all false for a staff account the caller cannot manage', () => {
-        const actions = userActionsFor(liveAccount, true, callerOf('moderator'));
+        const actions = userActionsFor(liveAccount, true, true, callerOf('moderator'));
 
         expect(Object.values(actions).every((allowed) => !allowed)).toBe(true);
     });
 
     it('judges the caller’s own account like any other', () => {
-        expect(userActionsFor({ id: 'me' }, true, callerOf('moderator', 'me')).update).toBe(false);
+        expect(userActionsFor({ id: 'me' }, true, true, callerOf('moderator', 'me')).update).toBe(
+            false
+        );
     });
 });
 
@@ -76,11 +107,13 @@ describe('userActionsFor — the account’s state', () => {
         const inside = userActionsFor(
             scheduled('2026-06-20T00:00:00Z'),
             false,
+            false,
             callerOf('moderator'),
             now
         );
         const past = userActionsFor(
             scheduled('2026-06-15T00:00:00Z'),
+            false,
             false,
             callerOf('moderator'),
             now
@@ -94,6 +127,7 @@ describe('userActionsFor — the account’s state', () => {
         const actions = userActionsFor(
             { id: 'owner', deletedAt: new Date() },
             false,
+            false,
             callerOf('moderator')
         );
 
@@ -102,12 +136,12 @@ describe('userActionsFor — the account’s state', () => {
 
     it('offers activate, not deactivate, on a deactivated account', () => {
         expect(
-            userActionsFor({ id: 'owner', active: false }, false, callerOf('moderator'))
+            userActionsFor({ id: 'owner', active: false }, false, false, callerOf('moderator'))
         ).toMatchObject({ activate: true, deactivate: false });
     });
 
     it('reads a missing `active` as active', () => {
-        expect(userActionsFor(liveAccount, false, callerOf('moderator'))).toMatchObject({
+        expect(userActionsFor(liveAccount, false, false, callerOf('moderator'))).toMatchObject({
             activate: false,
             deactivate: true
         });
@@ -118,14 +152,19 @@ describe('userActionsFor — the account’s state', () => {
         ['a review flag', { purchaseHoldFlaggedAt: new Date() }]
     ])('offers liftPurchaseHold when there is %s to clear', (_what, extra) => {
         expect(
-            userActionsFor({ id: 'owner', ...extra }, false, callerOf('moderator')).liftPurchaseHold
+            userActionsFor({ id: 'owner', ...extra }, false, false, callerOf('moderator'))
+                .liftPurchaseHold
         ).toBe(true);
     });
 
     it('still offers placePurchaseHold on an account that is held, to extend it', () => {
         expect(
-            userActionsFor({ id: 'owner', purchaseHold: holdInForce }, false, callerOf('moderator'))
-                .placePurchaseHold
+            userActionsFor(
+                { id: 'owner', purchaseHold: holdInForce },
+                false,
+                false,
+                callerOf('moderator')
+            ).placePurchaseHold
         ).toBe(true);
     });
 });

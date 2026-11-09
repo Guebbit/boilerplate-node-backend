@@ -31,12 +31,14 @@ export type ActionsSubject = Pick<
  *
  * @param user - the account being described
  * @param ownerHoldsRole - whether it holds a staff role, in the shop or over the installation
+ * @param ownerHoldsTenantRole - whether it holds one in the shop: the only role `revoke-role` takes
  * @param caller - `request.caller`
  * @param now - the moment a scheduled erasure is judged against
  */
 export const userActionsFor = (
     user: ActionsSubject,
     ownerHoldsRole: boolean,
+    ownerHoldsTenantRole: boolean,
     caller: Caller,
     now: Date = new Date()
 ): UserActions => {
@@ -51,7 +53,10 @@ export const userActionsFor = (
 
     return {
         update: mayUpdate,
-        assignRole: mayUpdate && holdsAssignRole,
+        // The role door is the grant, not the protection of staff accounts: whoever holds
+        // `assign:Role` passes that protection anyway, and nobody else reaches the door.
+        assignRole: holdsAssignRole && !deleted,
+        revokeRole: holdsAssignRole && !deleted && ownerHoldsTenantRole,
         delete: mayDelete && !deleted,
         hardDelete: mayDelete,
         // An owner-scheduled row past `purgeAt` waits only for the purge job: no restore.

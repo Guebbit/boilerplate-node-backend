@@ -30,8 +30,8 @@ import { markSessionsEnded } from './credentials';
 
 /**
  * What the owner may write on their own profile: everything an admin edit carries except `active`.
- * A profile edit can therefore never ban, or unban, the account it belongs to; `role` is already
- * absent from {@link update}'s data.
+ * A profile edit can therefore never ban, or unban, the account it belongs to; `role` is not in
+ * {@link update}'s data either.
  */
 export type OwnProfileData = Omit<Parameters<typeof update>[1], 'active'>;
 
@@ -40,16 +40,13 @@ export type OwnProfileData = Omit<Parameters<typeof update>[1], 'active'>;
  *
  * @param user - the loaded account, the caller's own
  * @param data - the validated profile fields; no `active`, no `role`
- * @param context - the caller, for the audit row
  * @param alsoInSave - a write that commits with the save (an outbox row), or `undefined`
  */
 export const updateOwnProfile = (
     user: UserDocument,
     data: OwnProfileData,
-    context: CallerContext,
     alsoInSave?: SaveHook
-): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    update(user, data, context, undefined, alsoInSave);
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => update(user, data, alsoInSave);
 
 /**
  * Soft-delete an account the inactivity reaper found idle past its warning. The reaper hands a

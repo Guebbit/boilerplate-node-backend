@@ -117,15 +117,8 @@ export const cancelRemainder = async (
     );
     if (!canceled) return refuse(409, ERROR_CODES.DELIVERY_NOT_SHIPPABLE, 'delivery.not-shippable');
 
-    const progress = await reportProgress(orderId, session);
-    const reportCanceled = await settleOrder(
-        orderId,
-        progress.order.status,
-        progress.summary,
-        new Date(),
-        session,
-        actor
-    );
+    await reportProgress(orderId, session);
+    const reportCanceled = await settleOrder(orderId, new Date(), session, actor);
     await recordRemainderCanceled(canceled, session, actor);
     await announceCanceled(canceled, session);
     return { ok: true, lines, waitingForStock, ...(reportCanceled && { reportCanceled }) };

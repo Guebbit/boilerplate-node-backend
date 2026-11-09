@@ -7,7 +7,7 @@
 import { asStub } from '@tests/stub';
 import { observePort } from '@tests/ports';
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext, callerContextAs } from '@tests/callers';
+import { callerContextAs } from '@tests/callers';
 import { systemCallerContext } from '@kernel/permissions';
 import type { ClientSession } from 'mongoose';
 import { personalDataErasers, setPersonalDataErasers } from '../../erasure-registry';
@@ -400,24 +400,19 @@ describe('userService.create', () => {
 });
 
 describe('userService.updateById', () => {
-    it('updates the username and role of an existing user', async () => {
+    it('updates the username of an existing user', async () => {
         const user = await createUser();
         const id = user._id.toString();
 
         const result = await userService.updateById(
             id,
-            {
-                username: 'new-name',
-                role: 'admin'
-            },
+            { username: 'new-name' },
             callerContextAs('admin')
         );
 
         expect(result.success).toBe(true);
         const updated = (result as { data: UserDocument }).data;
         expect(updated.username).toBe('new-name');
-        const roles = await accessService.rolesOf(String(updated._id), DEPLOYMENT_TENANT_ID);
-        expect(roles.tenant).toBe('admin');
     });
 
     it('keeps the change and logs when the image hand-off fails after the commit', async () => {
@@ -442,11 +437,10 @@ describe('userService.updateById', () => {
     it('dates the analytics choice when it is first made and when it changes, not when it repeats', async () => {
         const created = await createUser();
         const id = created._id.toString();
-        const owner = callerContextAs('customer');
         /** Answer through the profile door, on a freshly loaded account, and read the date back. */
         const answer = async (consent: boolean): Promise<Date | undefined> => {
             const loaded = await userRepository.findById(id);
-            await userService.updateOwnProfile(loaded!, { analyticsConsent: consent }, owner);
+            await userService.updateOwnProfile(loaded!, { analyticsConsent: consent });
             const stored = await userRepository.findById(id);
             return stored?.analyticsConsentAt;
         };
@@ -598,67 +592,6 @@ describe('userService.updateById', () => {
         expect(refreshed!.active).toBe(false);
     });
 
-    it('rejects an escalated role grant and leaves the rest of the edit unwritten, rather than committing it first', async () => {
-        const user = await createUser({ active: true, username: 'before-grant' });
-        const id = user._id.toString();
-
-        // A moderator cannot grant `admin` — the escalation must be refused BEFORE the username
-        // half of this same request is allowed to land. It is answered as a 403 envelope, the same
-        // shape `create()`'s own escalation refusal has.
-        const result = await userService.updateById(
-            id,
-            { username: 'after-grant', role: 'admin' },
-            callerContextAs('moderator')
-        );
-
-        expect(result).toMatchObject({
-            success: false,
-            status: 403,
-            errors: [{ code: 'ROLE_MANAGEMENT_REQUIRED' }]
-        });
-
-        const refreshed = await userRepository.findById(id);
-        expect(refreshed!.username).toBe('before-grant');
-    });
-
-    it.each(['no-such-role', 'customer'])(
-        'answers a translated 422 naming role for %s, to a caller who may assign',
-        async (role) => {
-            const user = await createUser({ active: true });
-
-            const result = await userService.updateById(
-                user._id.toString(),
-                { role },
-                callerContextAs('admin')
-            );
-
-            expect(result).toMatchObject({
-                success: false,
-                status: 422,
-                errors: [{ code: 'VALIDATION_ERROR', details: { field: 'role' } }]
-            });
-        }
-    );
-
-    /*
-     * A PUT carries `role` on every save. Resending what the user already has (no staff role,
-     * spelled `null`) must not be a role change: support may edit a customer but could never GRANT
-     * or REVOKE a role.
-     */
-    it('treats the role already held as no change: no grant check, no role audit', async () => {
-        const auditSpy = observePort(auditPort.emitAuditEvent);
-        const user = await createUser({}, 'customer');
-        const id = user._id.toString();
-
-        const result = await userService.updateById(id, { role: null }, callerContextAs('support'));
-
-        expect(result.success).toBe(true);
-        expect(auditSpy).not.toHaveBeenCalledWith(
-            // `access`'s own action name — its `audit.ts` is wiring, not published by its barrel.
-            expect.objectContaining({ action: 'access.role.assigned' })
-        );
-    });
-
     it('sends the admin-created and deactivated events as the admin, with no target id', async () => {
         const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
         const admin = callerContextAs('admin', 'a'.repeat(24));
@@ -756,11 +689,7 @@ describe('userService.updateOwnProfile', () => {
     it('updates the owner’s own document', async () => {
         const user = await createUser();
 
-        const result = await userService.updateOwnProfile(
-            user,
-            { username: 'direct-update' },
-            testCallerContext
-        );
+        const result = await userService.updateOwnProfile(user, { username: 'direct-update' });
 
         expect(result.success).toBe(true);
         expect((result as ResponseSuccess<UserDocument>).data.username).toBe('direct-update');

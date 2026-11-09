@@ -326,6 +326,14 @@ override all ASK for a move, never assign the field themselves. See
 | `processing` → `canceled`                  | `system`                                                                         | `markUndeliverable`: a lost parcel's remainder was cancelled and refunded and nothing ever arrived — cause `lost`, `refund: false`, no clock. Outside the actor table, so the system cancels stay on `pending`                                 |
 | `pending`/`paid`/`processing` → `canceled` | `customer` (own order, `pending`/`paid` only) or an operator (also `processing`) | `POST /orders/{id}/cancel` — **only while nothing has shipped**, conditional on `fulfillment.shipped` in the write's own filter                                                                                                                |
 
+`delivery` never picks one of the shipping rows above. It writes the fulfilment summary and calls
+`settleFulfillment(orderId, at, session, actor)`, which reads the order's own status and stored summary
+and makes the move the summary makes due (`domain/fulfillment.ts`'s `settlementFor`), or none. A
+lost parcel or a replacement calls `reopenForFulfillment`: `shipped` takes `reopen`, `delivered` takes
+`reship`, `processing` is already there. The `mark*` steps beneath are not on the barrel. The summary
+write never settles by itself: an admin override to `shipped` commits before its sync runs, and
+settling from "units remain" would undo it.
+
 ### The fulfilment summary
 
 `orders` cannot import `delivery` (the arrow points the other way), so the order carries a small
@@ -458,7 +466,7 @@ flowchart LR
 ```
 
 **Two writers, one door.** `orders` writes its own moves inside the move's transaction (the
-`markPaid`, `markProcessing`, `markShipped`, `markDelivered` and `markFulfillmentComplete` doors take
+`markPaid`, `markProcessing`, `markShipped`, `markDelivered` and `markFulfillmentComplete` steps take
 an `actor`). A module that depends on `orders` calls `orderService.appendTimeline(orderId, entry,
 session)` in its own transaction, so a row commits with the fact it describes or not at all, and a
 write that lost its race leaves no row. `orders` cannot listen to them: they import it.

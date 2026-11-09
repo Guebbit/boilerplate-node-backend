@@ -369,44 +369,41 @@ describe('a product edited only through the locales translations route', () => {
     });
 });
 
-describe('a user edited only through its role', () => {
-    it('moves the ETag, so a second admin holding the old tag is refused', async () => {
+describe('a user whose role is handed out at the door', () => {
+    it('moves the ETag, so an edit holding the old tag is refused', async () => {
         const { bearer } = await authenticateAs('admin');
         const target = await createUser({ email: 'target@example.com', username: 'target' });
         const path = `/users/${String(target._id)}`;
         const before = etagOf(await api().get(path).set('Authorization', bearer));
 
-        const first = await api()
-            .patch(path)
+        const granted = await api()
+            .post(`${path}/assign-role`)
             .set('Authorization', bearer)
-            .set('If-Match', before)
             .send({ role: 'support' });
-        const second = await api()
+        const stale = await api()
             .patch(path)
             .set('Authorization', bearer)
             .set('If-Match', before)
-            .send({ role: null });
+            .send({ username: 'late-edit' });
 
-        expect(first.status).toBe(200);
-        expect(etagOf(first)).not.toBe(before);
-        expect(second.status).toBe(412);
+        expect(granted.status).toBe(200);
+        expect(etagOf(await api().get(path).set('Authorization', bearer))).not.toBe(before);
+        expect(stale.status).toBe(412);
     });
-});
 
-describe('two admins changing only a role, both holding one tag', () => {
-    it('lets exactly one through: the role edit is fenced like any other', async () => {
+    it('is a state guard, not a fence: a repeat is a 409 and a different role is accepted', async () => {
         const { bearer } = await authenticateAs('admin');
         const target = await createUser({ email: 'target@example.com', username: 'target' });
-        const path = `/users/${String(target._id)}`;
-        const tag = etagOf(await api().get(path).set('Authorization', bearer));
+        const door = `/users/${String(target._id)}/assign-role`;
+        const assign = (role: string) =>
+            api().post(door).set('Authorization', bearer).send({ role });
 
-        const responses = await Promise.all(
-            ['support', 'manager'].map((role) =>
-                api().patch(path).set('Authorization', bearer).set('If-Match', tag).send({ role })
-            )
-        );
+        const first = await assign('support');
+        const repeat = await assign('support');
+        const other = await assign('manager');
+        const statuses = [first.status, repeat.status, other.status];
 
-        expect(responses.map((response) => response.status).toSorted()).toEqual([200, 412]);
+        expect(statuses).toEqual([200, 409, 200]);
     });
 });
 

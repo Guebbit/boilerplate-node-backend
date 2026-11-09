@@ -8,6 +8,8 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { createUser, PLAIN_PASSWORD, userRepository } from '@modules/users/tests/factories';
+import { accessService } from '@modules/access';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
 import { freezeDate, advanceDate } from '@tests/clock';
@@ -31,6 +33,10 @@ jest.mock('@infrastructure/observability/audit', () =>
 
 /** The stored `active` flag of one account. */
 const activeOf = (id: string) => userRepository.findById(id).then((user) => user?.active);
+
+/** The tenant role one account holds now, `null` for none. */
+const roleOf = (id: string) =>
+    accessService.rolesOf(id, DEPLOYMENT_TENANT_ID).then(({ tenant }) => tenant);
 
 // Serializes the payload and checks for credential fields/values that must never leave the API.
 const assertNoCredentials = (payload: unknown) => {
@@ -252,19 +258,16 @@ describe('PUT /users/{id}', () => {
         const response = await api()
             .put(`/users/${String(target._id)}`)
             .set('Authorization', bearer)
-            .send({
-                username: 'replacedfull',
-                role: null
-            });
+            .send({ username: 'replacedfull' });
 
         expect(response.status).toBe(200);
         expect(response.body.imageUrl).toBe('https://cdn.example.com/avatars/original.png');
         expect(response.body.phone).toBeUndefined();
     });
 
-    // `username`/`role` are the Replace schema's `required` set — an omitted one is a
-    // malformed PUT, not a value to fill in.
-    it('refuses a body missing one of the required identity fields', async () => {
+    // `username` is the Replace schema's `required` set — an omitted one is a malformed PUT, not a
+    // value to fill in.
+    it('refuses a body missing the required identity field', async () => {
         const { bearer } = await authenticateAs('admin');
         const target = await createUser(
             { username: 'replacepartial', email: 'replacepartial@example.com' },
@@ -274,7 +277,7 @@ describe('PUT /users/{id}', () => {
         const response = await api()
             .put(`/users/${String(target._id)}`)
             .set('Authorization', bearer)
-            .send({ role: null });
+            .send({ website: null });
 
         expect(response.status).toBe(422);
     });
@@ -289,10 +292,7 @@ describe('PUT /users/{id}', () => {
         const response = await api()
             .put(`/users/${String(target._id)}`)
             .set('Authorization', bearer)
-            .send({
-                username: 'editednocredential',
-                role: null
-            });
+            .send({ username: 'editednocredential' });
 
         expect(response.status).toBe(200);
         assertNoCredentials(response.body);
@@ -314,7 +314,7 @@ describe('PUT /users/{id}', () => {
         const response = await api()
             .put(`/users/${String(target._id)}`)
             .set('Authorization', bearer)
-            .send({ username: 'putcredential', role: null, ...extra });
+            .send({ username: 'putcredential', ...extra });
 
         expect(response.status).toBe(422);
         const after = await userRepository.findByIdWithCredentials(String(target._id));
@@ -335,10 +335,10 @@ describe('PATCH /users/{id}', () => {
         const response = await api()
             .patch(`/users/${String(target._id)}`)
             .set('Authorization', bearer)
-            .send({ role: 'moderator' });
+            .send({ website: 'https://patched.example.com' });
 
         expect(response.status).toBe(200);
-        expect(response.body.role).toBe('moderator');
+        expect(response.body.website).toBe('https://patched.example.com');
         expect(response.body.email).toBe(target.email);
         expect(response.body.username).toBe(target.username);
     });
@@ -752,6 +752,7 @@ const actionsSeenBy = async (callerRole: string) => {
 const noActions = {
     update: false,
     assignRole: false,
+    revokeRole: false,
     delete: false,
     hardDelete: false,
     restore: false,
@@ -794,12 +795,14 @@ describe('GET /users — what the caller may do to each account', () => {
     it('lets an admin, who manages roles, act on a customer, on staff and on another admin', async () => {
         const seen = await actionsSeenBy('admin');
         const adminActions = { ...liveAccountActions, assignRole: true };
+        // There is a role to take away only from the accounts that hold one.
+        const onStaff = { ...adminActions, revokeRole: true };
 
         expect(seen).toMatchObject({
             'row-customer': adminActions,
-            'row-support': adminActions,
-            'row-admin': adminActions,
-            self: adminActions
+            'row-support': onStaff,
+            'row-admin': onStaff,
+            self: onStaff
         });
     });
 
@@ -875,46 +878,38 @@ describe('GET /users — what the caller may do to each account', () => {
 
 /**
  * Handing a staff role out, or taking one away, asks for a fresh session at the tier minting an API
- * key does: a stolen session must not be able to quietly make a second administrator. A write that
- * names no role is never prompted.
+ * key does: a stolen session must not be able to quietly make a second administrator. The door
+ * asks it of every call, a repeat included; a profile edit never is.
  */
-describe('the step-up on naming a role', () => {
+describe('the step-up on the role door', () => {
     afterEach(() => {
         jest.useRealTimers();
     });
 
-    it('401s REAUTH_REQUIRED for a stale session granting a role, and writes nothing', async () => {
-        freezeDate();
-        const { bearer } = await authenticateAsRole('admin');
-        const target = await createUser({ email: 'stale@target.test', username: 'staletarget' });
-        advanceDate((reauthWindowSeconds('critical') + 1) * 1000);
+    it.each([
+        ['assign-role', 'customer', { role: 'support' }],
+        ['revoke-role', 'support', undefined]
+    ])(
+        '401s REAUTH_REQUIRED for a stale session calling %s, and writes nothing',
+        async (door, held, body) => {
+            freezeDate();
+            const { bearer } = await authenticateAsRole('admin');
+            const target = await createUser(
+                { email: `stale-${door}@target.test`, username: `stale${door.slice(0, 6)}` },
+                held
+            );
+            advanceDate((reauthWindowSeconds('critical') + 1) * 1000);
 
-        const response = await api()
-            .patch(`/users/${target.id}`)
-            .set('Authorization', bearer)
-            .send({ role: 'support' });
+            const response = await api()
+                .post(`/users/${target.id}/${door}`)
+                .set('Authorization', bearer)
+                .send(body);
 
-        expect(response.status).toBe(401);
-        expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
-    });
-
-    it('401s REAUTH_REQUIRED for a stale session taking a role away too', async () => {
-        freezeDate();
-        const { bearer } = await authenticateAsRole('admin');
-        const target = await createUser(
-            { email: 'stale2@target.test', username: 'staletwo' },
-            'support'
-        );
-        advanceDate((reauthWindowSeconds('critical') + 1) * 1000);
-
-        const response = await api()
-            .patch(`/users/${target.id}`)
-            .set('Authorization', bearer)
-            .send({ role: null });
-
-        expect(response.status).toBe(401);
-        expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
-    });
+            expect(response.status).toBe(401);
+            expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
+            expect(await roleOf(target.id)).toBe(held === 'customer' ? null : held);
+        }
+    );
 
     it('lets the same stale session edit the profile, which names no role', async () => {
         freezeDate();
@@ -954,42 +949,6 @@ describe('the step-up on naming a role', () => {
         }
     );
 
-    it('lets a stale role manager PUT an account unchanged: the role it carries is what is stored', async () => {
-        freezeDate();
-        const { bearer } = await authenticateAsRole('admin');
-        const target = await createUser(
-            { email: 'stale5@target.test', username: 'stalefive' },
-            'support'
-        );
-        advanceDate((reauthWindowSeconds('critical') + 1) * 1000);
-
-        const response = await api()
-            .put(`/users/${target.id}`)
-            .set('Authorization', bearer)
-            .send({ username: 'renamedfive', role: 'support' });
-
-        expect(response.status).toBe(200);
-        expect(response.body.role).toBe('support');
-    });
-
-    it('still asks a stale role manager once the PUT changes the role', async () => {
-        freezeDate();
-        const { bearer } = await authenticateAsRole('admin');
-        const target = await createUser(
-            { email: 'stale6@target.test', username: 'stalesix' },
-            'support'
-        );
-        advanceDate((reauthWindowSeconds('critical') + 1) * 1000);
-
-        const response = await api()
-            .put(`/users/${target.id}`)
-            .set('Authorization', bearer)
-            .send({ username: 'stalesix', role: 'manager' });
-
-        expect(response.status).toBe(401);
-        expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
-    });
-
     it('lets a stale moderator ban a customer, since a moderator manages no staff', async () => {
         freezeDate();
         const { bearer } = await authenticateAsRole('moderator');
@@ -1006,32 +965,31 @@ describe('the step-up on naming a role', () => {
 
 /**
  * An API key never holds `assign:Role`, so a `PUT /users/{id}` from one is never challenged: it
- * edits a profile, and a role change is refused with the audited 403 every non-granter gets.
+ * edits a profile, and the role door is session-only: `isAuth` refuses it 401.
  */
-describe('PUT /users/{id} from an API key', () => {
-    it('edits an account that keeps its role, instead of a bare 401', async () => {
+describe('the users routes from an API key', () => {
+    it('edits a profile, instead of a bare 401', async () => {
         const secret = await credentialHolding(['update:User']);
         const target = await createUser({ email: 'keyed@target.test', username: 'keyedtarget' });
 
         const response = await api()
             .put(`/users/${target.id}`)
             .set('Authorization', `Bearer ${secret}`)
-            .send({ username: 'keyedrenamed', role: null });
+            .send({ username: 'keyedrenamed' });
 
         expect(response.status).toBe(200);
     });
 
-    it('403s ROLE_MANAGEMENT_REQUIRED when it names a different role', async () => {
+    it('is refused 401 at the role door, before any permission is asked', async () => {
         const secret = await credentialHolding(['update:User']);
         const target = await createUser({ email: 'keyed2@target.test', username: 'keyedtwo' });
 
         const response = await api()
-            .put(`/users/${target.id}`)
+            .post(`/users/${target.id}/assign-role`)
             .set('Authorization', `Bearer ${secret}`)
-            .send({ username: 'keyedtwo', role: 'support' });
+            .send({ role: 'support' });
 
-        expect(response.status).toBe(403);
-        expect(response.body.errors[0].code).toBe('ROLE_MANAGEMENT_REQUIRED');
+        expect(response.status).toBe(401);
     });
 });
 
@@ -1045,7 +1003,7 @@ describe('refusing a role grant over HTTP', () => {
         const target = await createUser({ email: 'grant@target.test', username: 'granttarget' });
 
         const real = await api()
-            .patch(`/users/${target.id}`)
+            .post(`/users/${target.id}/assign-role`)
             .set('Authorization', bearer)
             .send({ role: 'support' });
         const invented = await api().post('/users').set('Authorization', bearer).send({
@@ -1069,7 +1027,7 @@ describe('refusing a role grant over HTTP', () => {
             });
 
             const response = await api()
-                .patch(`/users/${target.id}`)
+                .post(`/users/${target.id}/assign-role`)
                 .set('Authorization', bearer)
                 .set('Accept-Language', 'it')
                 .send({ role });
@@ -1082,4 +1040,102 @@ describe('refusing a role grant over HTTP', () => {
             });
         }
     );
+});
+
+/**
+ * The role door's own answers: the user back with its flags, a repeat as 409, a missing account
+ * as 404, a bare body as 422, and no `If-Match` to fence two callers.
+ */
+describe('POST /users/{id}/assign-role and /revoke-role', () => {
+    it('hands a role out, shows it on the user, and takes it away again', async () => {
+        const { bearer } = await authenticateAsRole('admin');
+        const target = await createUser({ email: 'door@target.test', username: 'doortarget' });
+
+        const granted = await api()
+            .post(`/users/${target.id}/assign-role`)
+            .set('Authorization', bearer)
+            .send({ role: 'support' });
+        const revoked = await api()
+            .post(`/users/${target.id}/revoke-role`)
+            .set('Authorization', bearer);
+
+        expect(granted.status).toBe(200);
+        expect(granted.body).toMatchObject({
+            role: 'support',
+            actions: { assignRole: true, revokeRole: true }
+        });
+        expect(revoked.status).toBe(200);
+        expect(revoked.body.role).toBeUndefined();
+        expect(revoked.body.actions.revokeRole).toBe(false);
+    });
+
+    it('answers 409 to a repeat of either move', async () => {
+        const { bearer } = await authenticateAsRole('admin');
+        const held = await createUser(
+            { email: 'held@target.test', username: 'heldtarget' },
+            'support'
+        );
+        const plain = await createUser({ email: 'plain@target.test', username: 'plaintarget' });
+
+        const again = await api()
+            .post(`/users/${held.id}/assign-role`)
+            .set('Authorization', bearer)
+            .send({ role: 'support' });
+        const none = await api()
+            .post(`/users/${plain.id}/revoke-role`)
+            .set('Authorization', bearer);
+
+        expect([again.status, none.status]).toEqual([409, 409]);
+        expect([again.body.errors[0].code, none.body.errors[0].code]).toEqual([
+            'USER_ROLE_ALREADY_ASSIGNED',
+            'USER_ROLE_NOT_ASSIGNED'
+        ]);
+    });
+
+    it('lets the last of two different roles win, with no If-Match to refuse the second', async () => {
+        const { bearer } = await authenticateAsRole('admin');
+        const target = await createUser({ email: 'race@target.test', username: 'racetarget' });
+        const assign = (role: string) =>
+            api()
+                .post(`/users/${target.id}/assign-role`)
+                .set('Authorization', bearer)
+                .send({ role });
+
+        const first = await assign('support');
+        const second = await assign('manager');
+
+        expect([first.status, second.status]).toEqual([200, 200]);
+        expect(await roleOf(target.id)).toBe('manager');
+    });
+
+    it('answers 404 for an account that does not exist, and 422 for a body without a role', async () => {
+        const { bearer } = await authenticateAsRole('admin');
+        const target = await createUser({ email: 'body@target.test', username: 'bodytarget' });
+
+        const missing = await api()
+            .post('/users/64b7f0000000000000000000/revoke-role')
+            .set('Authorization', bearer);
+        const bare = await api()
+            .post(`/users/${target.id}/assign-role`)
+            .set('Authorization', bearer)
+            .send({});
+
+        expect([missing.status, bare.status]).toEqual([404, 422]);
+    });
+
+    it('is refused to a moderator, whose keys do not include assign:Role', async () => {
+        const { bearer } = await authenticateAsRole('moderator');
+        const target = await createUser(
+            { email: 'mod@target.test', username: 'modtarget' },
+            'support'
+        );
+
+        const revoked = await api()
+            .post(`/users/${target.id}/revoke-role`)
+            .set('Authorization', bearer);
+
+        expect(revoked.status).toBe(403);
+        expect(revoked.body.errors[0].code).toBe('ROLE_MANAGEMENT_REQUIRED');
+        expect(await roleOf(target.id)).toBe('support');
+    });
 });
