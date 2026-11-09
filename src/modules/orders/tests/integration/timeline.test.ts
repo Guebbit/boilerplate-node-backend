@@ -10,7 +10,13 @@ import { setEnvironment } from '@tests/environment';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { createUser, eraseAsScheduled } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
-import { createOrder, seedOrder, toOrderItem, timelineOf } from '@modules/orders/tests/factories';
+import {
+    createOrder,
+    seedOrder,
+    toOrderItem,
+    timelineAs,
+    timelineOf
+} from '@modules/orders/tests/factories';
 import { asAdmin, asCustomer, callerContextAs } from '@tests/callers';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { resetDomainEvents } from '@kernel/events';
@@ -164,8 +170,8 @@ describe('who reads what', () => {
             callerContextAs('admin', 'admin-1')
         );
 
-        const staff = await orderService.readTimeline(id, asAdmin());
-        const buyer = await orderService.readTimeline(id, asCustomer('someone'));
+        const staff = await timelineAs(id, asAdmin());
+        const buyer = await timelineAs(id, asCustomer('someone'));
 
         expect(typesOf(staff)).toEqual(['paid', 'status_overridden']);
         expect(staff[0].actor).toBe('cashier-1');
@@ -186,7 +192,7 @@ describe('who reads what', () => {
             callerContextAs('admin', 'admin-1')
         );
 
-        const buyer = await orderService.readTimeline(String(order._id), asCustomer('someone'));
+        const buyer = await timelineAs(String(order._id), asCustomer('someone'));
 
         expect(JSON.stringify(buyer)).not.toContain('private reason');
     });
@@ -316,7 +322,7 @@ describe('the buyer`s data export', () => {
             callerContextAs('admin', 'admin-1')
         );
         // The buyer's screen hides this row; the export does not.
-        const onScreen = await orderService.readTimeline(String(mine._id), asCustomer(user.id));
+        const onScreen = await timelineAs(String(mine._id), asCustomer(user.id));
         expect(onScreen.map((row) => row.type)).not.toContain('status_overridden');
 
         const exported = await orderService.collectTimelineOf(user.id);

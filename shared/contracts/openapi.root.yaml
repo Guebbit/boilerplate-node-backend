@@ -742,7 +742,10 @@ components:
             default: 10
             minimum: 1
             maximum: 100
-            description: Optional override; server may clamp to a max
+            description: >-
+                Rows per page, a whole number from 1 to 100. Absent or empty: the deployment's default
+                (10 unless `NODE_SETTINGS_PAGINATION_PAGE_SIZE` sets another). Anything else, 0
+                included, is a 422; nothing is clamped.
         Id:
             type: string
             minLength: 1

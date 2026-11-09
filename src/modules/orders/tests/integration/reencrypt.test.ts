@@ -14,7 +14,7 @@ import ordersModule from '../../module';
 import { orderModel, orderEventModel } from '../../model';
 import { orderService } from '../../services';
 import { callerContextAs, asAdmin } from '@tests/callers';
-import { createOrder, toOrderItem } from '../factories';
+import { createOrder, toOrderItem, timelineAs } from '../factories';
 
 setupTestDb();
 
@@ -60,7 +60,7 @@ describe('orders reencrypt', () => {
             expect(report.rewritten).toBe(1);
             const raw = await orderEventModel.collection.findOne({ type: 'note_added' });
             expect(keyVersionOf(raw?.text as string)).toBe('v2');
-            const rows = await orderService.readTimeline(id, asAdmin());
+            const rows = await timelineAs(id, asAdmin());
             expect(rows.find(({ type }) => type === 'note_added')).toMatchObject({
                 text: 'Called the buyer'
             });
