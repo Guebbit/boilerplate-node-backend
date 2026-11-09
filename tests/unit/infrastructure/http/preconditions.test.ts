@@ -39,35 +39,67 @@ describe('preconditionOf', () => {
     );
 });
 
-/** A response that records the headers set on it, and whose request carries `headers`. */
+/** A response whose `json` and `setHeader` are recorded; `sent` is what the original `json` got. */
 const makeResponse = (headers: Record<string, string> = {}) => {
     const setHeader = jest.fn();
-    return { setHeader, response: asStub<Response>({ setHeader, req: { headers } }) };
+    const json = jest.fn();
+    const response = asStub<Response>({ setHeader, json, req: { headers } });
+    return { setHeader, json, response };
 };
 
 describe('setEtag', () => {
-    it('stamps the quoted edit counter', () => {
+    it('stamps "<edit counter>.<digest of the body>" when json runs', () => {
         const { response, setHeader } = makeResponse();
 
         setEtag(response, { editRevision: 12 });
+        expect(setHeader).not.toHaveBeenCalled();
+        response.json({ a: 1 });
 
-        expect(setHeader).toHaveBeenCalledWith('ETag', '"12"');
+        expect(setHeader).toHaveBeenCalledWith('ETag', expect.stringMatching(/^"12\.[\w-]{16}"$/));
     });
 
-    it('never answers 304 from it: If-None-Match is dropped from the request', () => {
-        const { response } = makeResponse({ 'if-none-match': '"12"' });
+    it('sets the header before the body is sent, so Express keeps it', () => {
+        const order: string[] = [];
+        const setHeader = jest.fn(() => order.push('header'));
+        const json = jest.fn(() => order.push('json'));
+        const response = asStub<Response>({ setHeader, json, req: { headers: {} } });
+
+        setEtag(response, { editRevision: 1 });
+        response.json({});
+
+        expect(order).toEqual(['header', 'json']);
+    });
+
+    it('moves the digest with the body but keeps the edit part', () => {
+        const { response, setHeader } = makeResponse();
+        setEtag(response, { editRevision: 3 });
+
+        response.json({ stock: 1 });
+        response.json({ stock: 2 });
+
+        const [first, second] = setHeader.mock.calls.map((call) => String(call[1]));
+        expect(first).not.toBe(second);
+        expect(first?.split('.', 1)[0]).toBe(second?.split('.', 1)[0]);
+    });
+
+    it('leaves If-None-Match for Express to evaluate', () => {
+        const { response } = makeResponse({ 'if-none-match': '"12.x"' });
 
         setEtag(response, { editRevision: 12 });
+        response.json({});
 
-        expect(response.req.headers).not.toHaveProperty('if-none-match');
+        expect(response.req.headers).toHaveProperty('if-none-match');
     });
 
-    it('sends nothing for a row with no version, and leaves If-None-Match alone', () => {
-        const { response, setHeader } = makeResponse({ 'if-none-match': '"x"' });
+    it('sends nothing for a row with no version', () => {
+        const { response, setHeader, json } = makeResponse();
+        const original = response.json;
 
         setEtag(response, { title: 'no counter', updatedAt: new Date(1_700_000_000_000) });
+        response.json({});
 
+        expect(response.json).toBe(original);
         expect(setHeader).not.toHaveBeenCalled();
-        expect(response.req.headers).toHaveProperty('if-none-match');
+        expect(json).toHaveBeenCalledWith({});
     });
 });

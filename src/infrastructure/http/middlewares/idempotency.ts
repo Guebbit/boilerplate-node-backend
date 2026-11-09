@@ -123,9 +123,10 @@ type StoredRecord = Pick<
 
 /**
  * The headers an answer carries that a retry must see too: the challenge of a 401, the wait of a
- * 429 or 503, the allowed methods of a 405. Without them a replayed refusal is a bare status.
+ * 429 or 503, the allowed methods of a 405, the `ETag` of a write that answers its row's new tag.
+ * Without them a replayed refusal is a bare status, and a replayed write hands back no tag.
  */
-const REPLAYED_HEADERS = ['Retry-After', 'WWW-Authenticate', 'Allow'] as const;
+const REPLAYED_HEADERS = ['Retry-After', 'WWW-Authenticate', 'Allow', 'ETag'] as const;
 
 /**
  * The replayable headers the handler set on this response, by name.

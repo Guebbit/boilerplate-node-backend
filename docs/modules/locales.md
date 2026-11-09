@@ -126,7 +126,7 @@ flowchart TD
     GA --> PV{"first choice is a draft<br/>and the caller may read drafts?"}
     PV -->|no| SC["setCache<br/>shared entry, public headers"]
     PV -->|yes| RB["re-bind: locale = de, preview<br/>private, no-store"]
-    RB --> SC2["setCache sees the flag<br/>no Redis read, no write, no 304"]
+    RB --> SC2["setCache sees the flag<br/>no Redis read, no write"]
     SC --> C["service applyTranslations"]
     SC2 --> C
     C --> RP["port resolve / search<br/>allow-list = live plus the draft tag"]

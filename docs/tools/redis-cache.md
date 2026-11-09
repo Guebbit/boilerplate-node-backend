@@ -30,6 +30,7 @@ flowchart LR
 - writes invalidate related tags,
 - no route caches a response that depends on WHO is asking (see below),
 - the key is built from declared parameters, not the raw URL (see below),
+- a versioned read's `ETag` (`"<editRevision>.<digest>"`) is stored with the entry and replayed on a hit or a stale serve, so a miss and a hit send the same tag and a revisit is a `304` either way ([the tag](../api/write-methods.md#what-the-tag-is)); an unversioned read stores none and Express mints its own,
 - oversized responses are served but not stored (see below),
 - a stale hot key is rebuilt by exactly one caller, not stampeded by all of them (see below),
 - if Redis is unavailable, the app keeps going.
@@ -74,7 +75,7 @@ visitor.
 | Decision | `cacheable = !draftPreview && scopeKey(request)`. The flag wins over `scopeKey`             |
 | Redis    | No key is built, nothing is read, nothing is written. `armCacheWrite` refuses a second time |
 | Headers  | `private, no-store` on GET and POST. `privateNoCache` keeps it. `Vary` is unchanged         |
-| 304      | `If-None-Match` / `If-Modified-Since` are dropped, as `noStore` does                        |
+| 304      | Evaluated as on every read (RFC 9110 §13.1.2); only the same preview answer can match       |
 | Order    | Mount before `setCache`: its key is built from `request.locale`                             |
 
 Why not trust `scopeKey`: a custom role or an API key can hold `display:Locale` without

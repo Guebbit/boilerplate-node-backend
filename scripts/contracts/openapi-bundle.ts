@@ -302,7 +302,9 @@ const withNoStoreHeader = (operation: Operation): void => {
  *
  * `private-no-cache`, `revalidate` and `max-age: <s>` reads answer `304` through Express's own ETag
  * check, and no fragment says so: the shared `304` is added here, rather than 29 operations
- * repeating it. `no-store` gets no `304`, only the `Cache-Control: no-store` header on its `200`.
+ * repeating it. `no-store` gets no declared `304`, only the `Cache-Control: no-store` header on its
+ * `200`: a compliant cache never revalidates it. A client that sends `If-None-Match` anyway is still
+ * answered per RFC 9110 §13.1.2, undeclared.
  *
  * Static on purpose: reading the mounted routers would boot the app, which needs files this very
  * build generates. `tests/cross-cutting/cache-policy-declared.test.ts` holds the `304` family equal

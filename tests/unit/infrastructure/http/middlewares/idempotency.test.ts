@@ -390,6 +390,21 @@ describe('an answer that is stored and replayed', () => {
         expect(update.$set.headers).not.toHaveProperty('X-Other');
     });
 
+    it('stores the ETag a write answered, so a replay can hand the same tag back', async () => {
+        const response = makeHeaderResponse({ ETag: '"5.abc"' });
+        response.statusCode = 200;
+
+        idempotencyKey(makeRequest('key-1', { a: 1 }), response, jest.fn());
+        await flush();
+        response.json({ ok: true });
+
+        const [, update] = updateOne.mock.calls.at(-1) as [
+            unknown,
+            { $set: Record<string, unknown> }
+        ];
+        expect(update.$set).toMatchObject({ headers: { ETag: '"5.abc"' } });
+    });
+
     it('records a bodiless answer that ends without json, and only once', async () => {
         const response = makeHeaderResponse();
         response.statusCode = 202;
@@ -496,6 +511,30 @@ describe('an answer that is stored and replayed', () => {
         expect(response.getHeader('retry-after')).toBe('30');
         expect(response.status).toHaveBeenCalledWith(429);
         expect(response.json).toHaveBeenCalledWith({ stored: true });
+    });
+
+    it('replays the ETag the first answer carried', async () => {
+        const fingerprint = await fingerprintOfFirstClaim();
+        create.mockRejectedValueOnce({ code: 11_000 });
+        findOne.mockReturnValueOnce({
+            lean: () => ({
+                exec: () =>
+                    Promise.resolve({
+                        state: 'done',
+                        fingerprint,
+                        status: 200,
+                        body: { stored: true },
+                        headers: { ETag: '"5.abc"' }
+                    })
+            })
+        });
+        const response = makeHeaderResponse();
+
+        idempotencyKey(makeRequest('key-1', { a: 1 }), response, jest.fn());
+        await flush();
+        await flush();
+
+        expect(response.getHeader('etag')).toBe('"5.abc"');
     });
 });
 

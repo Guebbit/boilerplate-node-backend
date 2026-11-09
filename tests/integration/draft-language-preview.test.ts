@@ -201,7 +201,7 @@ describe('a staff credential that holds display:Locale and nothing else', () => 
         expect(preview.body.description).toBe('Soft bed');
     });
 
-    it('is told nothing by a conditional request: a 200 with a body, never a 304', async () => {
+    it('answers the same preview its own tag with an empty 304, keeping ETag and no-store', async () => {
         const id = await givenDraftGerman();
         const key = `Bearer ${await credentialHolding(['display:Locale'])}`;
         const first = await api().get(`/products/${id}`).set(asking('de', key));
@@ -210,8 +210,23 @@ describe('a staff credential that holds display:Locale and nothing else', () => 
             .get(`/products/${id}`)
             .set({ ...asking('de', key), 'If-None-Match': first.headers.etag });
 
-        expect(again.status).toBe(200);
-        expect(again.body.title).toBe(DRAFT_TITLE);
+        expect(again.status).toBe(304);
+        expect(again.text).toBe('');
+        expect(again.headers.etag).toBe(first.headers.etag);
+        expect(again.headers['cache-control']).toBe('private, no-store');
+    });
+
+    it('answers the draft body to a visitor’s tag: the live answer’s tag never matches it', async () => {
+        const id = await givenDraftGerman();
+        const key = `Bearer ${await credentialHolding(['display:Locale'])}`;
+        const visitor = await api().get(`/products/${id}`).set(asking('de'));
+
+        const preview = await api()
+            .get(`/products/${id}`)
+            .set({ ...asking('de', key), 'If-None-Match': visitor.headers.etag });
+
+        expect(preview.status).toBe(200);
+        expect(preview.body.title).toBe(DRAFT_TITLE);
     });
 
     it('finds a product by a word that only the draft text holds, and a visitor does not', async () => {

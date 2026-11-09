@@ -451,9 +451,10 @@ components:
         ETag:
             required: true
             description: >-
-                The resource's current version as a strong entity-tag (RFC 9110 §8.8.3). Send it
-                back as `If-Match` on `PUT`, `PATCH` or `DELETE` to refuse the write if someone
-                else changed the resource in between. Opaque: compare it, never parse it.
+                A strong entity-tag over this exact answer (RFC 9110 §8.8.3). Send it back as
+                `If-None-Match` for a `304`, or as `If-Match` on `PUT`, `PATCH` or `DELETE`, which
+                compares only its edit part, so a stock or price change never refuses your edit.
+                Opaque: compare it, never parse it.
             schema:
                 type: string
 

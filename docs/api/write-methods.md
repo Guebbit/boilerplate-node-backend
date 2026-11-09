@@ -400,12 +400,12 @@ sequenceDiagram
     participant B as Editor B
     participant S as API
     A->>S: GET /products/1
-    S-->>A: 200 + ETag "4"
+    S-->>A: 200 + ETag "4.k3f9…"
     B->>S: GET /products/1
-    S-->>B: 200 + ETag "4"
-    A->>S: PATCH /products/1<br/>If-Match: "4"
-    S-->>A: 200 + ETag "5"
-    B->>S: PATCH /products/1<br/>If-Match: "4"
+    S-->>B: 200 + ETag "4.k3f9…"
+    A->>S: PATCH /products/1<br/>If-Match: "4.k3f9…"
+    S-->>A: 200 + ETag "5.q81x…"
+    B->>S: PATCH /products/1<br/>If-Match: "4.k3f9…"
     S-->>B: 412 PRECONDITION_FAILED — nothing written
     B->>S: GET /products/1 (re-read, reapply, resend)
 ```
@@ -430,9 +430,17 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
 
 ### What the tag is
 
-- **`ETag: "<editRevision>"`** — strong, quoted, opaque to the client: compare it, never parse it.
-  `editRevision` is an integer stored on the row (never in the representation) that every edit
-  moves by one, in the same atomic update as the edit itself (`$inc`).
+- **`ETag: "<editRevision>.<digest>"`** — strong, quoted, opaque to the client: compare it, never
+  parse it. Two parts, one for each job:
+  - **The edit part** (`editRevision`): an integer stored on the row (never in the representation)
+    that every edit moves by one, in the same atomic update as the edit itself (`$inc`). A write's
+    `If-Match` compares only this.
+  - **The digest**: a short sha256 of the exact body sent, so the whole tag changes whenever the
+    bytes do (stock, price, language, a stock move) and a read can safely answer `304` on a match.
+    A write never compares it, so a sale never refuses an editor's open form. This is the one
+    registered difference from RFC 9110 §13.1.1, `if-match-edit-version`
+    (`docs/theory/api-standards.md`); FHIR's version-only `If-Match` is the same kind of choice.
+  - A Redis copy stores the tag and replays it, so a hit and a miss send the same one.
 - **Why a counter, and not `updatedAt` or Mongoose's `__v`.** A strong validator must change
   whenever the representation does (RFC 9110 §8.8.1). Two edits in one millisecond share an
   `updatedAt` (and the PHP twin's timestamps have whole seconds); `__v` moves only when an *array*
@@ -466,9 +474,9 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
 | Header | Result |
 | --- | --- |
 | absent | the write runs unconditionally |
-| `"<tag>"` matching the stored version | the write runs; the response carries the **new** `ETag` |
-| `"<tag>"` no longer matching, or the row is gone | **412** `PRECONDITION_FAILED`, nothing written |
-| several tags, `"a", "b"` | matches if any does |
+| `"<tag>"` whose edit part matches the stored version | the write runs; the response carries the **new** `ETag` |
+| `"<tag>"` whose edit part is old, or the row is gone | **412** `PRECONDITION_FAILED`, nothing written |
+| several tags, `"a", "b"` | matches if any edit part does |
 | `*` | matches any row that exists |
 | weak (`W/"…"`), or anything that is not a quoted tag | never matches → 412 (`If-Match` compares strongly) |
 
@@ -481,9 +489,10 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
   `createDeleteController` open the precondition for the request; `repository.save` and
   `repository.deleteOne` meet it. A module's service never sees a header.
 - **The body is validated first.** A 422 for a body the schema refuses wins over a 412.
-- **The tag of a versioned read validates writes, not reads.** It covers the row's own edits, not
-  what is derived from config (prices, the caller's language), so the contract does not offer a
-  `304` from it.
+- **The whole tag validates reads; the edit part validates writes.** A versioned item read
+  (`products`, `users`, `orders`, `examples`) answers `If-None-Match` with `304` when the whole tag
+  matches, on a Redis miss and a hit alike. The digest moves with prices, language and stock, so a
+  `304` is never stale; the edit part is the only thing a write checks.
 - **The cached reads are a separate case.** Two families answer `If-None-Match` with `304` on no
   change, through Express's own ETag check: the `privateNoCache` reads (`orders`, `users`,
   `tasks`, `payments`, `returns`, `stats`: a private copy the browser revalidates) and every
@@ -494,6 +503,8 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
   `tests/cross-cutting/cache-policy-declared.test.ts` walks the mounted routers and holds them
   equal to the `x-cache` operations, both ways.
   The sitemap streams its XML and carries no `ETag`, so it is not one of them.
+- **`no-store` reads get no declared `304`**: a compliant cache never revalidates them. A client that
+  sends `If-None-Match` anyway is still answered per RFC 9110 §13.1.2, undeclared.
 - **Browsers** may send `If-Match` and read `ETag` cross-origin: both are in the CORS allow and
   expose lists.
 

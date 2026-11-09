@@ -6,6 +6,7 @@ import {
     carryVersion,
     checkedDelete,
     etagOf,
+    versionOfTag,
     fencedSave,
     PreconditionFailedError,
     runWithPrecondition,
@@ -14,6 +15,9 @@ import {
 } from '@infrastructure/persistence/versioning';
 
 const REVISION = 7;
+
+/** A body digest; a write never compares it. */
+const DIGEST = 'abc123';
 
 /** A document as the service loaded it. */
 const loaded = (id = 'row-1', editRevision = REVISION) => ({ _id: id, editRevision });
@@ -68,8 +72,18 @@ describe('carryVersion', () => {
 });
 
 describe('etagOf', () => {
-    it('quotes the counter, as a strong entity-tag is written', () => {
-        expect(etagOf(REVISION)).toBe('"7"');
+    it('quotes the counter and the digest, as a strong entity-tag is written', () => {
+        expect(etagOf(REVISION, DIGEST)).toBe('"7.abc123"');
+    });
+});
+
+describe('versionOfTag', () => {
+    it('reads the edit part of a tag etagOf made', () => {
+        expect(versionOfTag(etagOf(REVISION, DIGEST))).toBe(REVISION);
+    });
+
+    it.each(['W/"7.abc"', '"7"', '"x.abc"', '7.abc', '"7.a"b"'])('reads nothing from %s', (tag) => {
+        expect(versionOfTag(tag)).toBeUndefined();
     });
 });
 
@@ -97,7 +111,7 @@ describe('fencedSave', () => {
         // The fence is read while the write runs: it is gone once the write has settled.
         const write = jest.fn(() => Promise.resolve(Reflect.get(document, '$where')));
 
-        const fence = await runWithPrecondition(on(etagOf(REVISION)), () =>
+        const fence = await runWithPrecondition(on(etagOf(REVISION, DIGEST)), () =>
             fencedSave(document, write)
         );
 
@@ -121,9 +135,9 @@ describe('fencedSave', () => {
     ])('takes the fence off the document once the write has %s', async (_outcome, write) => {
         const document = loaded();
 
-        await runWithPrecondition(on(etagOf(REVISION)), () => fencedSave(document, write)).catch(
-            () => undefined
-        );
+        await runWithPrecondition(on(etagOf(REVISION, DIGEST)), () =>
+            fencedSave(document, write)
+        ).catch(() => undefined);
 
         expect(document).not.toHaveProperty('$where');
     });
@@ -131,7 +145,19 @@ describe('fencedSave', () => {
     it('accepts any of several tags', async () => {
         const write = jest.fn().mockResolvedValue('saved');
 
-        await runWithPrecondition(on('"1"', etagOf(REVISION)), () => fencedSave(loaded(), write));
+        await runWithPrecondition(on('"1.x"', etagOf(REVISION, DIGEST)), () =>
+            fencedSave(loaded(), write)
+        );
+
+        expect(write).toHaveBeenCalledTimes(1);
+    });
+
+    it('compares the edit part only: a tag whose digest is old still writes', async () => {
+        const write = jest.fn().mockResolvedValue('saved');
+
+        await runWithPrecondition(on(etagOf(REVISION, 'an-older-body')), () =>
+            fencedSave(loaded(), write)
+        );
 
         expect(write).toHaveBeenCalledTimes(1);
     });
@@ -140,7 +166,7 @@ describe('fencedSave', () => {
         const write = jest.fn();
 
         await expect(
-            runWithPrecondition(on('"1"'), () => fencedSave(loaded(), write))
+            runWithPrecondition(on('"1.x"'), () => fencedSave(loaded(), write))
         ).rejects.toBeInstanceOf(PreconditionFailedError);
 
         expect(write).not.toHaveBeenCalled();
@@ -148,13 +174,15 @@ describe('fencedSave', () => {
 
     it('refuses a weak tag: If-Match compares strongly', async () => {
         await expect(
-            runWithPrecondition(on(`W/${etagOf(REVISION)}`), () => fencedSave(loaded(), jest.fn()))
+            runWithPrecondition(on(`W/${etagOf(REVISION, DIGEST)}`), () =>
+                fencedSave(loaded(), jest.fn())
+            )
         ).rejects.toBeInstanceOf(PreconditionFailedError);
     });
 
     it('refuses a row that carries no version, unless the header was `*`', async () => {
         await expect(
-            runWithPrecondition(on('"1"'), () => fencedSave(unversioned(), jest.fn()))
+            runWithPrecondition(on('"1.x"'), () => fencedSave(unversioned(), jest.fn()))
         ).rejects.toBeInstanceOf(PreconditionFailedError);
 
         const write = jest.fn().mockResolvedValue('saved');
@@ -170,7 +198,7 @@ describe('fencedSave', () => {
             const lost = Object.assign(new Error('lost the race'), { name });
 
             await expect(
-                runWithPrecondition(on(etagOf(REVISION)), () =>
+                runWithPrecondition(on(etagOf(REVISION, DIGEST)), () =>
                     fencedSave(loaded(), () => Promise.reject(lost))
                 )
             ).rejects.toBeInstanceOf(PreconditionFailedError);
@@ -181,7 +209,7 @@ describe('fencedSave', () => {
         const broken = new Error('disk');
 
         await expect(
-            runWithPrecondition(on(etagOf(REVISION)), () =>
+            runWithPrecondition(on(etagOf(REVISION, DIGEST)), () =>
                 fencedSave(loaded(), () => Promise.reject(broken))
             )
         ).rejects.toBe(broken);
@@ -190,7 +218,7 @@ describe('fencedSave', () => {
     it('checks only the first save of the row: a later one has a version the caller never saw', async () => {
         const write = jest.fn().mockResolvedValue('saved');
 
-        await runWithPrecondition(on(etagOf(REVISION)), async () => {
+        await runWithPrecondition(on(etagOf(REVISION, DIGEST)), async () => {
             await fencedSave(loaded(), write);
             await fencedSave(loaded('row-1', REVISION + 1), write);
         });
@@ -204,7 +232,7 @@ describe('checkedDelete', () => {
         const write = jest.fn();
 
         await expect(
-            runWithPrecondition(on('"1"'), () => checkedDelete(loaded(), write))
+            runWithPrecondition(on('"1.x"'), () => checkedDelete(loaded(), write))
         ).rejects.toBeInstanceOf(PreconditionFailedError);
 
         expect(write).not.toHaveBeenCalled();
@@ -213,7 +241,9 @@ describe('checkedDelete', () => {
     it('deletes on a matching tag, and with no precondition at all', async () => {
         const write = jest.fn().mockResolvedValue({ deletedCount: 1 });
 
-        await runWithPrecondition(on(etagOf(REVISION)), () => checkedDelete(loaded(), write));
+        await runWithPrecondition(on(etagOf(REVISION, DIGEST)), () =>
+            checkedDelete(loaded(), write)
+        );
         await checkedDelete(loaded(), write);
 
         expect(write).toHaveBeenCalledTimes(2);
@@ -228,7 +258,7 @@ describe('checkedDelete', () => {
         });
 
         await expect(
-            runWithPrecondition(on(etagOf(REVISION)), () => checkedDelete(document, write))
+            runWithPrecondition(on(etagOf(REVISION, DIGEST)), () => checkedDelete(document, write))
         ).rejects.toBeInstanceOf(PreconditionFailedError);
 
         expect(fence).toEqual({ editRevision: REVISION });

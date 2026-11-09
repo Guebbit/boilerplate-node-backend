@@ -70,6 +70,11 @@ const createResponse = () => {
             headers.vary = existing ? `${existing}, ${field}` : field;
             return response;
         }),
+        setHeader: jest.fn((name: string, value: string) => {
+            headers[name.toLowerCase()] = value;
+            return response;
+        }),
+        get: jest.fn((name: string) => headers[name.toLowerCase()]),
         json: jest.fn((body: unknown) => body),
         on: jest.fn((event: string, handler: () => void) => {
             listeners.set(event, handler);
@@ -253,6 +258,76 @@ describe('setCache', () => {
         expect(response.status).toHaveBeenCalledWith(200);
         expect(response.json).toHaveBeenCalledWith({ success: true });
         expect(next).not.toHaveBeenCalled();
+    });
+
+    it('replays the tag a stored entry carries, before the body goes out', async () => {
+        mockedCache.getCacheValue.mockResolvedValue(
+            JSON.stringify({
+                status: 200,
+                body: { id: 'p1' },
+                staleAt: Date.now() + 60_000,
+                etag: '"4.abc"'
+            })
+        );
+        const middleware = setCache(60, { keyParameters: [], scopeKey: GUEST_SCOPE });
+        const { response, headers } = createResponse();
+        const order: string[] = [];
+        jest.mocked(response.setHeader).mockImplementation((name: string) => {
+            order.push(`header:${name}`);
+            return response;
+        });
+        jest.mocked(response.json).mockImplementation(() => {
+            order.push('json');
+            return response;
+        });
+
+        await middleware(
+            asStub<Request>({ method: 'GET', originalUrl: '/p', query: {}, locale: 'en' }),
+            response,
+            jest.fn() as NextFunction
+        );
+
+        expect(response.setHeader).toHaveBeenCalledWith('ETag', '"4.abc"');
+        expect(order).toEqual(['header:ETag', 'json']);
+        expect(headers['cache-status']).toContain('hit');
+    });
+
+    it('sends no tag for an entry stored without one: Express mints its own', async () => {
+        mockedCache.getCacheValue.mockResolvedValue(
+            JSON.stringify({ status: 200, body: {}, staleAt: Date.now() + 60_000 })
+        );
+        const middleware = setCache(60, { keyParameters: [], scopeKey: GUEST_SCOPE });
+        const { response } = createResponse();
+
+        await middleware(
+            asStub<Request>({ method: 'GET', originalUrl: '/p', query: {}, locale: 'en' }),
+            response,
+            jest.fn() as NextFunction
+        );
+
+        expect(response.setHeader).not.toHaveBeenCalled();
+    });
+
+    it('stores the tag the miss sent, so a hit can replay it', async () => {
+        mockedCache.getCacheValue.mockResolvedValue(undefined);
+        const middleware = setCache(60, { keyParameters: [], scopeKey: GUEST_SCOPE });
+        const { response } = createResponse();
+        await middleware(
+            asStub<Request>({ method: 'GET', originalUrl: '/p', query: {}, locale: 'en' }),
+            response,
+            jest.fn() as NextFunction
+        );
+
+        // The controller's `setEtag` wrapper sets the header, then calls the cache's `json`.
+        response.setHeader('ETag', '"2.xyz"');
+        response.json({ id: 'p1' });
+
+        expect(mockedCache.setCacheValue).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.stringContaining(String.raw`"etag":"\"2.xyz\""`),
+            expect.any(Number),
+            undefined
+        );
     });
 
     /*
@@ -1062,7 +1137,7 @@ describe('a draft preview', () => {
     it('wins over a scopeKey that says the caller shares the visitors entry: no read, private, no-store', async () => {
         const { response, headers } = createResponse();
         const request = getRequest();
-        markDraftPreview(request, response);
+        markDraftPreview(response);
         const next = jest.fn() as NextFunction;
 
         await setCache(60, { tags: ['products'], keyParameters: [], scopeKey: GUEST_SCOPE })(
@@ -1085,7 +1160,7 @@ describe('a draft preview', () => {
             locale: 'de',
             headers: {}
         });
-        markDraftPreview(request, response);
+        markDraftPreview(response);
 
         await setCache(60, {
             tags: ['products'],
@@ -1117,18 +1192,9 @@ describe('a draft preview', () => {
         expect(mockedCache.setCacheValue).not.toHaveBeenCalled();
     });
 
-    it('drops conditional request headers, so no 304 can answer without a body', () => {
-        const { response } = createResponse();
-        const headers = { 'if-none-match': '"abc"', 'if-modified-since': 'Wed, 21 Oct 2015' };
-
-        markDraftPreview(asStub<Request>({ headers }), response);
-
-        expect(headers).toEqual({});
-    });
-
     it('leaves privateNoCache from downgrading it to no-cache', () => {
         const { response, headers } = createResponse();
-        markDraftPreview(asStub<Request>({ headers: {} }), response);
+        markDraftPreview(response);
 
         privateNoCache(asStub<Request>({ headers: {} }), response, jest.fn() as NextFunction);
 
@@ -1153,7 +1219,7 @@ describe('noStore', () => {
         expect(response.locals.noStore).toBe(true);
     });
 
-    it('drops conditional request headers, so a stale ETag cannot short-circuit to a bodyless 304', () => {
+    it('leaves the conditional headers for Express to evaluate (RFC 9110 §13.1.2)', () => {
         const { response } = createResponse();
         const headers: Record<string, string> = {
             'if-none-match': '"abc"',
@@ -1162,8 +1228,8 @@ describe('noStore', () => {
 
         noStore(asStub<Request>({ headers }), response, jest.fn() as NextFunction);
 
-        expect(headers['if-none-match']).toBeUndefined();
-        expect(headers['if-modified-since']).toBeUndefined();
+        expect(headers['if-none-match']).toBe('"abc"');
+        expect(headers['if-modified-since']).toBe('Wed, 21 Oct 2015 07:28:00 GMT');
     });
 
     it('calls next', () => {
