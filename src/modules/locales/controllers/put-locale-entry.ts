@@ -18,6 +18,7 @@ import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
  * PUT /locales/:locale/apps/:app/entries/:entryId (admin)
  * Edit one value. The key is not editable — it's the identity a client looks the string
  * up by, so changing it is a delete plus an add, not an update.
+ * No `If-Match`: one string, edited from the list.
  */
 export const replaceLocaleEntry = (
     request: Request<

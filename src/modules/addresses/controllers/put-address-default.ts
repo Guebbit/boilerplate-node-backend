@@ -15,6 +15,7 @@ import { catchAs, refused } from '@infrastructure/http/controller';
  * PUT /account/addresses/:addressId/default — make one entry the book's default.
  * No body: the URI is the whole statement, so sending it twice leaves the same state (RFC 9110
  * §9.3.4). Answers the entry; the holder it demoted is another row, so a client refetches the book.
+ * No `If-Match`: no GET on this URL, so no client can hold a tag.
  */
 export const putAddressDefault = (request: Request<{ addressId: string }>, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */

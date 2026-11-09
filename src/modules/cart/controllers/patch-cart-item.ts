@@ -17,6 +17,7 @@ import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
  * Set the quantity of a line the cart holds. Returns the updated cart. A change never creates:
  * a line the cart does not hold is 404 `cart.item-not-found`. Shares `POST /cart/items`' 404 for a
  * product the storefront wouldn't show, from the same place: `upsertCartItem`.
+ * No `If-Match`: no GET on this URL; the cart has its own line rules.
  */
 export const patchCartItem = (
     request: Request<{ productId?: string }, unknown, UpdateCartItemByProductIdRequest>,
