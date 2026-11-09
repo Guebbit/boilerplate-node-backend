@@ -923,6 +923,10 @@ describe('consumeFromQueue contract validation', () => {
         );
         await settle();
 
+        expect(handler).toHaveBeenCalledWith(
+            { request: { to: 'a@example.com' }, templateName: 'account.reset', data: {} },
+            expect.anything()
+        );
         expect(handler).toHaveBeenCalledTimes(1);
         expect(mockAck).toHaveBeenCalledTimes(1);
         expect(mockSendToQueue).not.toHaveBeenCalled();
