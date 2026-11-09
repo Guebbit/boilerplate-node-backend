@@ -495,7 +495,7 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
   plugin (`persistence/revision-plugin.ts`) adds the `$inc` beside that stamp — through `save()`,
   `updateOne`, `updateMany` and `findOneAndUpdate`, pipeline updates included. A write that is NOT
   an editor's edit passes `timestamps: false` and so never touches either: the stock mirror, the
-  image digest, a session token. An admin's form is never invalidated by a customer logging in.
+  image digest, a session token, a password change, the reaper's warning. An admin's form is never invalidated by a customer logging in.
 - **Where the counter lives.** It is the schema's Mongoose version key (`editRevision`, replacing
   `__v` on every versioned schema). It is not called `revision` because `locales` owns a wire
   field of that name with another meaning. It is stripped from every response and carried beside

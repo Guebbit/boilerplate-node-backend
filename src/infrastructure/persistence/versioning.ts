@@ -13,7 +13,8 @@
  * on every edit — through `save()` and through query updates alike. It is neither `updatedAt`
  * (two edits in one millisecond share it) nor Mongoose's default `__v` (which moves only when an
  * array changes). An edit that lives outside the row (a role, a translation) moves it by hand,
- * and the writes that are NOT an edit (stock mirror, image digest, session tokens) pass
+ * and the writes that are NOT an edit (stock mirror, image digest, session tokens, a password
+ * change, the reaper's warning) pass
  * `timestamps: false`, so they never invalidate an editor's copy.
  *
  * The tag has two parts. The digest changes whenever the bytes do (reads compare the whole tag,
