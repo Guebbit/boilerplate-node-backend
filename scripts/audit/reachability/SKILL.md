@@ -17,7 +17,8 @@ edge case — a green suite is the symptom, not the refutation. Do not treat "th
 is a test for that" as an answer to anything here.
 
 SCOPE: the argument you were given: a module name (`orders`), a path, `--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5).
-Empty means `whole-repo`.
+Empty means `whole-repo`: one helper per defence family. A solo run states its sample at the top
+(which families, how many rows) and lists the unread families under _What would have to be read_.
 
 ## Naming the scope
 
@@ -57,7 +58,8 @@ Find the test that proves it and write down what it actually calls:
 | service  | `accountService.x(...)`                     |
 | unit     | the function itself, or its repository      |
 
-Altitude is the whole measurement. Record it even when it is `real` — those rows
+Judge a test's altitude by what it calls, not by its title or comments. Altitude is the whole
+measurement. Record it even when it is `real` — those rows
 are what makes the report readable rather than a list of accusations.
 
 ### 3 — trace the real path, for anything below `real`
@@ -70,11 +72,12 @@ a throw. `tests/support/routes.ts`'s `guardsOn` gives the guard chain; read
 Then ask the only question that matters: **does any step before it change what the
 defence reads, or stop it running at all?**
 
-### 4 — the four tells
+### 4 — the tells
 
 Each has bitten this repo. Each passed its tests throughout.
 
-- **A pre-flight step touching the state the defence inspects.** A housekeeping
+- **A pre-flight step touching the state the defence inspects.** List every route that deletes,
+  rotates or overwrites that state, not just the steps before it. A housekeeping
   sweep ran ahead of refresh-token rotation on the same request, reading the same
   cutoff constant, and deleted the superseded row the reuse check was about to
   recognise — collection-wide, so any user's request would do it. Reuse detection
@@ -93,6 +96,11 @@ Each has bitten this repo. Each passed its tests throughout.
   chain — a generic 500 before the route ran, rather than a response without the
   header (`8710899c`).
 
+- **A local answer that skips the global error handler.** A defence that lives in the global error
+  handler protects only errors that reach it. List every local `.catch` that answers on its own, and
+  trace each: does it still do what the handler would have done? (Database errors writing personal
+  data into the logs was the first example.)
+
 ### 4b — steps nobody tagged
 
 The same family from the other side: a defence skipped through another entry point.
@@ -103,7 +111,18 @@ For each module in scope:
 
 - List the barrel's doors that check scope, ownership or state, then call another function that
   does the write (`payments`' `settlePayment`, `inventory`'s `applyTransition` are the known two).
-- That function is a finding when it is not tagged `@internal`.
+- A door is wherever a check runs that the step then trusts as a **parameter**: a verified
+  signature, a redeemed token's claim, a checked state. That can be a service, a controller or a
+  middleware. The tell: a step whose parameter docs say "already verified" or "already checked"
+  (e.g. `applyWebhookDelivery`, `settlement.ts`). Not a door: anything that judges the **caller or
+  the request** (`isAuth`, `requirePermission` including its step-up tier, antibot, rate limits):
+  that is the house layer.
+- That function is a finding when it is not tagged `@internal`, unless it is a friend step: a step
+  another module must call is fine when it is exported only from the owner's
+  `src/modules/<owner>/friends/<caller>.ts`. A finding is: published, untagged **and** not in a
+  friend file.
+- Follow wrappers: a function whose body only adds shape around a tagged or friend-file step is
+  that step.
 - It is a worse one when the barrel publishes it: a sibling module can then write past the checks.
   `tests/cross-cutting/guarded-steps-stay-unpublished.test.ts` already refuses a TAGGED step in a
   barrel, so a published untagged step is exactly what it cannot see.
@@ -113,7 +132,12 @@ For each module in scope:
 
 ### 5 — classify
 
-`reachable` / `reachable, behaviour differs` / `UNREACHABLE` / `not traced`.
+`reachable` / `reachable, behaviour differs` / `UNREACHABLE` / `unreachable, defensive` / `not traced`.
+
+`unreachable, defensive` only when all three hold: (1) the branch **refuses** (denies or answers an
+error), never grants or handles; (2) its comment names the earlier step that makes it unreachable;
+(3) the row cites that step's `file:line`, re-checked this run. Otherwise it is `UNREACHABLE` and
+ranked.
 
 For anything but `reachable`, give the ONE request that proves it — method, path,
 headers, body, and any pre-flight call the real path makes that the test omits.
