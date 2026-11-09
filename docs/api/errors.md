@@ -59,6 +59,25 @@ rejection into a problem, so no service or controller builds the body itself.
 A response always carries at least one item: a status-only failure (a bare 404) answers one built
 from the status.
 
+### What an operation lists
+
+An operation's `x-error-codes: { '<status>': [CODE, ...] }` lists the codes it can answer with, so a
+client reads what THIS call can refuse. A code the catalogue marks `scope: app` is the exception:
+any operation may send it (a status-derived code, `VALIDATION_ERROR`, `RATE_LIMITED`, `LIMIT_*`), so
+no operation lists it. Every other catalogue code is listed on at least one operation.
+
+Three checks keep the lists true:
+
+| Check                                                                                         | Where                                                                 |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| A sent code is listed: an HTTP test whose answer carries an unlisted code fails               | `assertResponseMatchesContract`, `tests/support/response-contract.ts` |
+| A catalogue code is listed somewhere, and a guard-made code is listed on every route it guards | `tests/cross-cutting/contract-error-declarations.test.ts`             |
+| The bundle refuses a listed name the catalogue lacks, or one under another status             | `scripts/contracts/openapi-bundle.ts`                                 |
+
+Guard-made means the route table decides it: `requireFreshAuth*` or a rule's `stepUp` makes
+`401 REAUTH_REQUIRED`, and a rule's `deniedCode` makes that 403. A service code is caught by the
+runtime check once a test provokes it.
+
 ### The status-only code
 
 An error that names no cause of its own gets the **official RFC 9110 name of its status**, in

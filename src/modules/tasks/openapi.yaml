@@ -57,6 +57,7 @@ paths:
                 refused `401`, so the client refreshes and sends it again as the person.
             operationId: createContactTask
             x-error-codes:
+                '403': [ANTIBOT_VERIFICATION_FAILED]
                 '409': [IDEMPOTENCY_IN_FLIGHT]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:

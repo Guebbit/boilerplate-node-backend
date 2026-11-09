@@ -12,6 +12,7 @@ import { asStub } from '@tests/stub';
 import type { OpenApiDocument } from '../../../../scripts/contracts/openapi-document';
 import {
     checkOperationErrorCodes,
+    isErrorCodeEntry,
     withAppLevelResponses,
     withErrorCodes,
     withModuleStamps,
@@ -197,6 +198,23 @@ const errorCodesResult = (
  * `x-error-codes`. Driven with a small map rather than the real contract, same split as
  * the other two suites above.
  */
+describe('isErrorCodeEntry', () => {
+    it.each([
+        ['a plain entry', { status: 409, description: 'x' }],
+        ['an app-scoped entry', { status: 422, description: 'x', scope: 'app' }]
+    ])('accepts %s', (_name, entry) => {
+        expect(isErrorCodeEntry(entry)).toBe(true);
+    });
+
+    it.each([
+        ['a missing status', { description: 'x' }],
+        ['a missing description', { status: 409 }],
+        ['an unknown scope', { status: 409, description: 'x', scope: 'worker' }]
+    ])('refuses %s', (_name, entry) => {
+        expect(isErrorCodeEntry(entry)).toBe(false);
+    });
+});
+
 describe('withErrorCodes', () => {
     it('publishes every collected code, sorted', () => {
         const result = errorCodesResult(errorCodesBundle(), {

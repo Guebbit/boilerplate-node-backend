@@ -54,12 +54,14 @@ info:
 x-error-codes:
     BAD_REQUEST:
         {
+            scope: app,
             status: 400,
             description: 'A malformed request the body parser or a library refused before any route ran.'
         }
-    UNAUTHORIZED: { status: 401, description: 'No valid session — log in and retry.' }
+    UNAUTHORIZED: { scope: app, status: 401, description: 'No valid session — log in and retry.' }
     FORBIDDEN:
         {
+            scope: app,
             status: 403,
             description: "The server understood the request and refuses it, whoever the caller is: the caller lacks the permission this route requires (a key's own `deniedCode` can replace this default with a more specific one), or a human-challenge token is missing or refused (`ANTIBOT_VERIFICATION_FAILED`)."
         }
@@ -70,86 +72,119 @@ x-error-codes:
         }
     NOT_FOUND:
         {
+            scope: app,
             status: 404,
             description: 'The addressed resource does not exist, or the caller may not be told that it does.'
         }
     CONFLICT:
         {
+            scope: app,
             status: 409,
             description: "The request is well-formed but conflicts with the resource's current state."
         }
     PRECONDITION_FAILED:
         {
+            scope: app,
             status: 412,
             description: "The write's `If-Match` no longer describes the stored resource — someone changed or removed it since the caller read it. Re-read, reapply the edit, resend."
         }
     VALIDATION_ERROR:
         {
+            scope: app,
             status: 422,
             description: 'One or more fields failed schema validation — see `errors[].details.field`.'
         }
     UNPROCESSABLE_CONTENT:
         {
+            scope: app,
             status: 422,
             description: 'A 422 with no more specific code of its own: refused for a reason that is not one field (a field-level failure is `VALIDATION_ERROR`). The derived code of a status-only 422.'
         }
     CLIENT_ERROR:
         {
+            scope: app,
             status: 400,
             description: 'A 4xx whose status has no code of its own in this catalogue (the derived name is not listed here), so no wording is invented for it. Never a 5xx.'
         }
     INTERNAL_SERVER_ERROR:
         {
+            scope: app,
             status: 500,
             description: 'An unexpected server-side failure. Never carries library or stack detail.'
         }
     METHOD_NOT_ALLOWED:
         {
+            scope: app,
             status: 405,
             description: 'The path exists, but not with this method. The `Allow` header lists the methods it does answer.'
         }
     CONTENT_TOO_LARGE:
-        { status: 413, description: "The request body exceeds this deployment's size limit." }
+        {
+            scope: app,
+            status: 413,
+            description: "The request body exceeds this deployment's size limit."
+        }
     UNSUPPORTED_MEDIA_TYPE:
         {
+            scope: app,
             status: 415,
             description: "The request's `Content-Type` is not one this operation accepts."
         }
     LIMIT_PART_COUNT:
-        { status: 400, description: 'A multipart upload carries too many parts (multer).' }
+        {
+            scope: app,
+            status: 400,
+            description: 'A multipart upload carries too many parts (multer).'
+        }
     LIMIT_FILE_SIZE:
         {
+            scope: app,
             status: 413,
             description: "An uploaded file exceeds this deployment's size limit (multer)."
         }
     LIMIT_FILE_COUNT:
-        { status: 400, description: 'A multipart upload carries too many files (multer).' }
-    LIMIT_FIELD_KEY: { status: 400, description: 'A multipart field name is too long (multer).' }
-    LIMIT_FIELD_VALUE: { status: 413, description: 'A multipart field value is too long (multer).' }
+        {
+            scope: app,
+            status: 400,
+            description: 'A multipart upload carries too many files (multer).'
+        }
+    LIMIT_FIELD_KEY:
+        { scope: app, status: 400, description: 'A multipart field name is too long (multer).' }
+    LIMIT_FIELD_VALUE:
+        { scope: app, status: 413, description: 'A multipart field value is too long (multer).' }
     LIMIT_FIELD_COUNT:
         {
+            scope: app,
             status: 400,
             description: 'A multipart upload carries too many non-file fields (multer).'
         }
     LIMIT_UNEXPECTED_FILE:
         {
+            scope: app,
             status: 400,
             description: 'A multipart upload carries a file under a field name this operation does not accept (multer).'
         }
     MISSING_FIELD_NAME:
-        { status: 400, description: 'A multipart file part carries no field name (multer).' }
+        {
+            scope: app,
+            status: 400,
+            description: 'A multipart file part carries no field name (multer).'
+        }
     SERVICE_UNAVAILABLE:
         {
+            scope: app,
             status: 503,
             description: 'A dependency (database, broker) is unreachable. Carries a `Retry-After` hint.'
         }
     RATE_LIMITED:
         {
+            scope: app,
             status: 429,
             description: "The caller spent a rate-limit budget: a request limiter, a mailbox's send budget, or an account's wrong-code budget (the 2FA lock). Carries `Retry-After`, and `details.retryAfter` with the same seconds; `details.policy` names the budget when there is one."
         }
     TOO_MANY_REQUESTS:
         {
+            scope: app,
             status: 429,
             description: 'The derived code of a status-only 429, one no budget named. Nothing sends it today; it keeps the status-to-code rule total.'
         }

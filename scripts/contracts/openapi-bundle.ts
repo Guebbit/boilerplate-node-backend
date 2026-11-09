@@ -325,12 +325,20 @@ export const withNotModified: Step = (document_) => {
     }
 };
 
-/** Narrows a fragment's `x-error-codes` entry to the shape this step requires. */
-const isErrorCodeEntry = (value: unknown): value is ErrorCodeEntry =>
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { status?: unknown }).status === 'number' &&
-    typeof (value as { description?: unknown }).description === 'string';
+/**
+ * Narrows a fragment's `x-error-codes` entry to the shape this step requires: a numeric status, a
+ * string description, and a `scope` that is absent or `app`.
+ */
+export const isErrorCodeEntry = (value: unknown): value is ErrorCodeEntry => {
+    if (typeof value !== 'object' || value === null) return false;
+    // One `as`: the keys are read off an object the checks below are about to narrow.
+    const { status, description, scope } = value as Record<string, unknown>;
+    return (
+        typeof status === 'number' &&
+        typeof description === 'string' &&
+        (scope === undefined || scope === 'app')
+    );
+};
 
 /**
  * Every error code the contract declares, collected straight off the root and every module
@@ -338,7 +346,7 @@ const isErrorCodeEntry = (value: unknown): value is ErrorCodeEntry =>
  * reachable from the root's `paths`/`components` and has no way to see a top-level key nothing
  * ever points at. The same reason {@link moduleOfPath} reads `sectionPaths` off disk instead.
  *
- * @throws Error if two fragments declare the same code, or an entry is missing its status or description
+ * @throws Error if two fragments declare the same code, or an entry is missing its status or description, or has another `scope`
  */
 const collectErrorCodes = (): Record<string, ErrorCodeEntry> => {
     const collected: Record<string, ErrorCodeEntry> = {};
@@ -348,7 +356,7 @@ const collectErrorCodes = (): Record<string, ErrorCodeEntry> => {
         for (const [code, entry] of Object.entries(parsed['x-error-codes'] ?? {})) {
             if (!isErrorCodeEntry(entry))
                 throw new Error(
-                    `[openapi] ${owner}'s x-error-codes.${code} needs a numeric status and a string description.`
+                    `[openapi] ${owner}'s x-error-codes.${code} needs a numeric status, a string description and, if any, \`scope: app\`.`
                 );
             if (Object.hasOwn(collected, code))
                 throw new Error(

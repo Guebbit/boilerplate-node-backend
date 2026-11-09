@@ -18,18 +18,43 @@
  * The bundle is generated. A failure there names a line nobody edits, and the fix is in a fragment
  * the message would not mention.
  *
- * ── Scope: 404 on a path id only ──────────────────────────────────────────────────────────────
+ * ── Scope: the 404 on a path id, and the codes a guard makes ──────────────────────────────────
  * The 422 an id in a body or a query answers is held by `tests/integration/malformed-ids.test.ts`,
  * which finds those sites from the schema itself. The sweep over 500 reports three operations —
  * `GET /account`, `GET /observability/events`, `GET /observability/metrics` — and they are NOT
  * asserted here: whether each is an omission or a deliberate shape is a question about those
  * endpoints, and answering it means editing a file that must move in three repositories at once.
+ *
+ * ── The error codes ───────────────────────────────────────────────────────────────────────────
+ * An operation's `x-error-codes` lists what it can send (`docs/api/errors.md#the-errors-extension`).
+ * Three things hold that list true:
+ *   - every catalogue code that is not `scope: app` is listed on at least one operation;
+ *   - every guard-made code is listed on every route that mounts the guard — read off the route
+ *     table, the permission rules and the kernel's own questions, never off a second list;
+ *   - the runtime check in `tests/support/response-contract.ts` fails any HTTP test whose answer
+ *     carries a code its operation does not list (service codes only a test can see).
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import YAML from 'yaml';
 import { MODULES_ROOT } from '@tests/paths';
+import { everyMountedRoute, type MountedRoute } from '@tests/contract-routes';
+import { errorCodeIndex, listOperations } from '@tests/spec-walk';
+import {
+    PRESET_ROLES,
+    callerForSubject,
+    findRule,
+    ruleId,
+    staffRoleWithheld
+} from '@kernel/permissions';
+import { holds } from '@kernel/ability';
+import { asStub } from '@tests/stub';
+import type { AuthContext } from '@types';
+
+jest.mock('@kernel/middlewares/authorizations', () =>
+    jest.requireActual<typeof import('@tests/routes')>('@tests/routes').authGuardsMock()
+);
 
 /** The HTTP methods an operation object may be keyed by. */
 const METHODS = new Set(['get', 'post', 'put', 'patch', 'delete']);
@@ -94,5 +119,122 @@ describe('declared error responses', () => {
             );
 
         expect(undeclared).toEqual([]);
+    });
+});
+
+/** The 401 a step-up guard answers. */
+const REAUTH = 'REAUTH_REQUIRED';
+
+/** The 403 an unenrolled staff member gets where their role would have held the rule. */
+const ENROLLMENT = 'SECOND_FACTOR_ENROLLMENT_REQUIRED';
+
+/**
+ * Whether the guard sends {@link ENROLLMENT} on this ask: some preset role, withheld for want of
+ * an authenticator app, would hold the rule once enrolled and does not hold it through its
+ * audience. The same pair `wouldHoldOnceEnrolled` asks (`kernel/middlewares/authorizations.ts`),
+ * through the kernel's exported helpers, so `IMPLIED_BY` is honoured as in the guard.
+ */
+const sendsEnrollment = (action: never, subject: never): boolean =>
+    PRESET_ROLES.some((role) =>
+        [true, false].some((verified) => {
+            const context = asStub<AuthContext>({
+                id: 'sweep',
+                tenantId: 'sweep',
+                verified,
+                authenticatorArmed: false,
+                roles: {
+                    tenant: role.scope === 'tenant' ? role.name : null,
+                    platform: role.scope === 'platform' ? role.name : null
+                }
+            });
+            const enrolled = { ...context, authenticatorArmed: true };
+
+            return (
+                staffRoleWithheld(context) &&
+                holds(callerForSubject(enrolled, subject), action, subject) &&
+                !holds(callerForSubject(context, subject), action, subject)
+            );
+        })
+    );
+
+/** A code one route's guards oblige its operation to list, under a status. */
+interface Obligation {
+    status: string;
+    code: string;
+}
+
+/** What one mounted route's guards oblige its operation to list. */
+const obligationsOf = (route: MountedRoute): Obligation[] => {
+    const obliged: Obligation[] = [];
+
+    if (route.guards.some((guard) => /^requireFreshAuth(When)?\(/.test(guard)))
+        obliged.push({ status: '401', code: REAUTH });
+
+    for (const ask of route.permissions) {
+        const rule = findRule(ruleId(ask.action, ask.subject));
+        if (rule?.stepUp) obliged.push({ status: '401', code: REAUTH });
+        if (rule?.deniedCode) obliged.push({ status: '403', code: rule.deniedCode });
+        // `never`: the ask came from a `requirePermission` mount the guard already typed.
+        if (sendsEnrollment(ask.action as never, ask.subject as never))
+            obliged.push({ status: '403', code: ENROLLMENT });
+    }
+
+    return obliged;
+};
+
+/** `GET /products/:id` mounted → `GET /products/{id}` as the spec spells it. */
+const specKey = (route: MountedRoute): string =>
+    `${route.method} ${route.path.replaceAll(/:(\w+)/g, '{$1}').replace(/\/$/, '')}`;
+
+describe('declared error codes', () => {
+    const index = errorCodeIndex();
+    const listed = new Set(
+        Object.values(index.listed).flatMap((byStatus) => Object.values(byStatus).flat())
+    );
+
+    it('lists every catalogue code that is not app-wide on at least one operation', () => {
+        // The enrollment 403 is held out until its lines are decided (PD-2).
+        const orphans = index.catalogue.filter(
+            (code) => !index.appScoped.has(code) && !listed.has(code) && code !== ENROLLMENT
+        );
+
+        expect(orphans).toEqual([]);
+    });
+
+    it('lists every guard-made code on every operation whose route mounts the guard', () => {
+        const idOf = new Map(
+            listOperations().map((operation) => [
+                `${operation.method.toUpperCase()} ${operation.path}`,
+                operation.operationId
+            ])
+        );
+        const routes = everyMountedRoute();
+        // A route matching no operation fails: skipping it would let the sweep shrink silently.
+        const unmatched = routes.map((route) => specKey(route)).filter((key) => !idOf.has(key));
+        const missing = routes.flatMap((route) =>
+            obligationsOf(route)
+                // The enrollment 403 is held out until its lines are decided (PD-2); the canary
+                // below still proves the sweep computes it.
+                .filter(({ code }) => code !== ENROLLMENT)
+                .filter(({ status, code }) => {
+                    const operationId = idOf.get(specKey(route));
+                    return !(index.listed[operationId ?? '']?.[status] ?? []).includes(code);
+                })
+                .map(({ status, code }) => `${specKey(route)}: ${status} ${code}`)
+        );
+
+        expect({ unmatched, missing: [...new Set(missing)] }).toEqual({
+            unmatched: [],
+            missing: []
+        });
+    });
+
+    it('finds guard-made codes to hold the lists against', () => {
+        // A canary: a renamed guard label would leave the sweep above requiring nothing.
+        const codes = everyMountedRoute().flatMap((route) =>
+            obligationsOf(route).map(({ code }) => code)
+        );
+
+        expect(codes).toEqual(expect.arrayContaining([REAUTH, ENROLLMENT]));
     });
 });

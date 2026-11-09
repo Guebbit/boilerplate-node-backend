@@ -122,6 +122,8 @@ paths:
                 being handed the run of the order record. Refuses an order that is not `paid`
                 with a named 409.
             operationId: processOrder
+            x-error-codes:
+                '409': [ORDER_NOT_PAID]
             security:
                 - bearerAuth: []
             parameters:
@@ -374,7 +376,7 @@ paths:
                 422 means the key was reused with another body.
             operationId: shipFulfillmentOrder
             x-error-codes:
-                '409': [DELIVERY_NOT_PHYSICAL, DELIVERY_NOT_SHIPPABLE, IDEMPOTENCY_IN_FLIGHT, ORDER_NOT_PROCESSING]
+                '409': [DELIVERY_NOT_PHYSICAL, DELIVERY_NOT_SHIPPABLE, IDEMPOTENCY_IN_FLIGHT, ORDER_NOT_PROCESSING, ORDER_NOT_PAID]
                 '422': [DELIVERY_LINES_INVALID, IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: []
@@ -419,7 +421,7 @@ paths:
                 reused with another body).
             operationId: fulfillFulfillmentOrder
             x-error-codes:
-                '409': [DELIVERY_NOT_DIGITAL, IDEMPOTENCY_IN_FLIGHT]
+                '409': [DELIVERY_NOT_DIGITAL, IDEMPOTENCY_IN_FLIGHT, ORDER_NOT_PAID, ORDER_NOT_PROCESSING]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: []

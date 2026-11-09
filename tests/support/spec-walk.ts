@@ -97,6 +97,8 @@ interface ParameterObject {
 /** The slice of the OpenAPI document the walk reads. */
 interface SpecDocument {
     paths: Record<string, Record<string, unknown>>;
+    /** The error-code catalogue: every code with its status, description and optional `scope`. */
+    'x-error-codes'?: Record<string, { scope?: string }>;
     components?: {
         schemas?: Record<string, SchemaNode>;
         parameters?: Record<string, ParameterObject>;
@@ -324,6 +326,47 @@ export const requiredResponseHeaders = (
         }
 
     return byOperation;
+};
+
+/**
+ * The error codes the contract lets an answer carry: the catalogue's `scope: app` ones (any
+ * operation may send them) and each operation's own `x-error-codes` list, by status.
+ */
+export interface ErrorCodeIndex {
+    /** Codes any operation may send. */
+    appScoped: ReadonlySet<string>;
+    /** Every code the catalogue declares. */
+    catalogue: readonly string[];
+    /** `{ checkout: { '409': ['CART_EMPTY'] } }`; an operation that lists none is absent. */
+    listed: Record<string, Record<string, readonly string[]>>;
+}
+
+/**
+ * Reads {@link ErrorCodeIndex} off the spec. What lets the shared `afterEach` fail an answer whose
+ * code its operation never documented.
+ */
+export const errorCodeIndex = (spec: SpecDocument = readSpec()): ErrorCodeIndex => {
+    const listed: ErrorCodeIndex['listed'] = {};
+
+    for (const pathItem of Object.values(spec.paths))
+        for (const method of METHODS) {
+            const operation = pathItem[method] as Record<string, unknown> | undefined;
+            const codes = operation?.['x-error-codes'] as
+                | Record<string, readonly string[]>
+                | undefined;
+            if (typeof operation?.operationId === 'string' && codes)
+                listed[operation.operationId] = codes;
+        }
+
+    return {
+        catalogue: Object.keys(spec['x-error-codes'] ?? {}),
+        appScoped: new Set(
+            Object.entries(spec['x-error-codes'] ?? {})
+                .filter(([, entry]) => entry.scope === 'app')
+                .map(([code]) => code)
+        ),
+        listed
+    };
 };
 
 /**

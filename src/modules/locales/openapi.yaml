@@ -127,6 +127,8 @@ paths:
                 wording of their own in it until a dictionary file is deployed, so each falls back
                 to the default language. It carries only the frontend app until one exists.
             operationId: createLocale
+            x-error-codes:
+                '409': [LOCALE_LANGUAGE_EXISTS]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -233,6 +235,8 @@ paths:
                 `POST /locales` answers `Location` at this URL, so following it reads what was
                 created.
             operationId: getLocale
+            x-error-codes:
+                '404': [LOCALE_LANGUAGE_NOT_FOUND]
             security:
                 - {}
                 - bearerAuth: []
@@ -263,6 +267,8 @@ paths:
                 Whether the language is switched on is not a field here: `POST
                 /locales/{locale}/activate` and `/deactivate` move it.
             operationId: replaceLocale
+            x-error-codes:
+                '404': [LOCALE_LANGUAGE_NOT_FOUND]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -297,6 +303,8 @@ paths:
                 Whether the language is switched on is not a field here: `POST
                 /locales/{locale}/activate` and `/deactivate` move it.
             operationId: updateLocale
+            x-error-codes:
+                '404': [LOCALE_LANGUAGE_NOT_FOUND]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -334,6 +342,7 @@ paths:
                 the language says whether it would be accepted now.
             operationId: deleteLocale
             x-error-codes:
+                '404': [LOCALE_LANGUAGE_NOT_FOUND]
                 '409': [LOCALE_LANGUAGE_IS_FALLBACK]
             security:
                 - bearerAuth: []
@@ -361,6 +370,7 @@ paths:
                 `actions.activate` says whether it would be accepted.
             operationId: activateLocale
             x-error-codes:
+                '404': [LOCALE_LANGUAGE_NOT_FOUND]
                 '409': [LOCALE_LANGUAGE_ALREADY_ACTIVE]
             security:
                 - bearerAuth: []
@@ -395,6 +405,7 @@ paths:
                 `actions.deactivate` says whether it would be accepted.
             operationId: deactivateLocale
             x-error-codes:
+                '404': [LOCALE_LANGUAGE_NOT_FOUND]
                 '409': [LOCALE_LANGUAGE_ALREADY_INACTIVE, LOCALE_LANGUAGE_IS_FALLBACK]
             security:
                 - bearerAuth: []
@@ -445,6 +456,8 @@ paths:
                 Public and cacheable, like every other locale read; a staff answer skips the
                 shared cache.
             operationId: getLocaleMessages
+            x-error-codes:
+                '404': [LOCALE_LANGUAGE_NOT_FOUND]
             security:
                 - {}
                 - bearerAuth: []
@@ -480,6 +493,8 @@ paths:
                 slice is a resource of its own, `/locales/{locale}/apps/{app}/entries`, which is
                 where it is written.
             operationId: listLocaleEntries
+            x-error-codes:
+                '404': [LOCALE_LANGUAGE_NOT_FOUND]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -517,6 +532,9 @@ paths:
                 the writes below target; an app the deployment does not configure is refused
                 with a 422.
             operationId: listAppLocaleEntries
+            x-error-codes:
+                '404': [LOCALE_LANGUAGE_NOT_FOUND]
+                '422': [LOCALE_APP_UNKNOWN]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -545,6 +563,10 @@ paths:
                 — see `entries` on `ReplaceLocaleEntriesRequest` for what a collision is and why it is refused here
                 rather than discovered when the tree is built.
             operationId: createLocaleEntry
+            x-error-codes:
+                '404': [LOCALE_LANGUAGE_NOT_FOUND]
+                '409': [LOCALE_ENTRY_KEY_COLLISION, LOCALE_ENTRY_KEY_EXISTS]
+                '422': [LOCALE_APP_UNKNOWN, LOCALE_ENTRY_KEY_INVALID]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -588,6 +610,9 @@ paths:
                 Nobody adds five hundred keys through a form; without this the admin surface is a
                 demo.
             operationId: replaceLocaleEntries
+            x-error-codes:
+                '404': [LOCALE_LANGUAGE_NOT_FOUND]
+                '422': [LOCALE_APP_UNKNOWN, LOCALE_ENTRY_KEY_INVALID]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -623,6 +648,10 @@ paths:
                 See `PUT` on this collection for the replacing counterpart, and for why the choice
                 lives in the method.
             operationId: updateLocaleEntries
+            x-error-codes:
+                '404': [LOCALE_LANGUAGE_NOT_FOUND]
+                '409': [LOCALE_ENTRY_KEY_COLLISION]
+                '422': [LOCALE_APP_UNKNOWN, LOCALE_ENTRIES_EMPTY, LOCALE_ENTRY_KEY_INVALID]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -667,6 +696,8 @@ paths:
                 key). An entry of another app or language, an unknown id and a malformed one are
                 the same 404.
             operationId: getLocaleEntry
+            x-error-codes:
+                '422': [LOCALE_APP_UNKNOWN]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -694,6 +725,8 @@ paths:
                 client looks the string up by, so changing it is a delete plus an add, and the two
                 collision checks that go with them.
             operationId: replaceLocaleEntry
+            x-error-codes:
+                '422': [LOCALE_APP_UNKNOWN]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -723,6 +756,8 @@ paths:
             summary: Remove one translation entry
             description: Removes a single key from one language. The other languages keep theirs.
             operationId: deleteLocaleEntry
+            x-error-codes:
+                '422': [LOCALE_APP_UNKNOWN]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -749,6 +784,8 @@ paths:
                 translation screen reads as a whole. A public read resolves to one language
                 server-side; this is the only door that shows every language at once.
             operationId: getEntityTranslations
+            x-error-codes:
+                '404': [LOCALE_ENTITY_TYPE_UNKNOWN, LOCALE_ENTITY_NOT_FOUND]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -786,6 +823,8 @@ paths:
                 `fields` object, a `fields` key the `translatables` registry does not declare, or a
                 missing/`null` fallback locale.
             operationId: replaceEntityTranslations
+            x-error-codes:
+                '404': [LOCALE_ENTITY_NOT_FOUND]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -839,6 +878,8 @@ paths:
                 `translations.it.title`, so an editor with several tabs open can tell which one
                 failed.
             operationId: updateEntityTranslations
+            x-error-codes:
+                '404': [LOCALE_ENTITY_TYPE_UNKNOWN, LOCALE_ENTITY_NOT_FOUND]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
