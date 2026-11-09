@@ -577,10 +577,18 @@ describe('logoutEverywhere', () => {
     it('moves the session epoch, so access tokens already handed out stop working', async () => {
         const user = await createUserWithSessionsAndAReset();
 
+        // The epoch is stored to the millisecond, so the bracket cannot flake. The upper bound
+        // catches an epoch dated in the future, which would lock the user out.
+        // The HTTP sibling ("logout-all signs the caller out too…") proves the 401 end to end.
+        const before = new Date();
         await accountService.logoutEverywhere(String(user._id), testCallerContext);
+        const after = new Date();
 
         const stored = await userRepository.findByIdWithCredentials(String(user._id));
-        expect(stored?.tokensValidAfter).toBeInstanceOf(Date);
+        const epoch = stored?.tokensValidAfter;
+        expect(epoch).toBeInstanceOf(Date);
+        expect(epoch?.getTime()).toBeGreaterThanOrEqual(before.getTime());
+        expect(epoch?.getTime()).toBeLessThanOrEqual(after.getTime());
     });
 
     it('answers 401, not 404, for a user that does not exist', async () => {

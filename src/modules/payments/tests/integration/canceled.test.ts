@@ -132,6 +132,8 @@ describe('a late report on a canceled payment', () => {
     it('is not re-read by the buyer sync', async () => {
         const { user, orderId } = await canceledOrder();
         const payment = await paymentRepository.findByOrderId(orderId);
+        // Installed after `canceledOrder()`: the cancel path may call `retrieve` itself.
+        const retrieve = jest.spyOn(fakePaymentProvider, 'retrieve');
 
         const answer = await paymentService.syncPayment(
             String(payment?._id),
@@ -139,6 +141,7 @@ describe('a late report on a canceled payment', () => {
             testCallerContext
         );
 
+        expect(retrieve).not.toHaveBeenCalled();
         expect(answer.success && answer.data.status).toBe('canceled');
     });
 

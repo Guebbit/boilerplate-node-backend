@@ -822,7 +822,8 @@ const applyRefundDelivery = (
  * reconciliation sweep and the cancel path's catch all share, so they cannot drift apart.
  *
  * A payment already past `SUCCESS_SETTLEABLE_PAYMENT_STATUSES` is left alone without asking the provider
- * anything, the same shortcut {@link syncPayment} takes: nothing it could say would be acted on.
+ * anything. Not the same shortcut as {@link syncPayment}: that one uses `SETTLEABLE_PAYMENT_STATUSES`
+ * and stops at `canceled`, while this set lets `canceled` through (money can still land on it).
  *
  * @param payment - the payment to reconcile; it must hold a `providerRef`
  * @returns what the settlement did, or `null` when the payment was already settled and the
