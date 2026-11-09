@@ -10,7 +10,7 @@
  */
 
 import type { Router } from 'express';
-import type { ZodType } from 'zod';
+import type { ZodObject, ZodType } from 'zod';
 import type { ClientSession } from 'mongoose';
 import { assertModuleConfig } from '@kernel/module-config';
 import type { ConfigSlice } from '@infrastructure/config/define';
@@ -95,23 +95,17 @@ export interface TranslatableTarget {
     collection: string;
 
     /**
-     * Whether `entityId` currently names a real document on {@link collection} — checked before
-     * ANY translation write, so a missing entity answers the contract's declared 404 instead of
-     * writing orphan translation rows first and only discovering the miss when {@link writeDerived}
-     * runs. Supplied by the OWNING module, same reasoning as {@link writeDerived}: `locales` cannot
-     * resolve the target's Mongoose model by collection name to check this itself.
+     * The entity's edit counter (its version) when `entityId` currently names a real document on
+     * {@link collection}, or `undefined` when it names none. Read before ANY translation write, so
+     * a missing entity answers the contract's declared 404 instead of writing orphan translation
+     * rows first; and it is the version the translations' `ETag` is derived from. Supplied by the
+     * OWNING module, same reasoning as {@link writeDerived}: `locales` cannot resolve the target's
+     * Mongoose model by collection name to read this itself.
      *
      * @param entityId - the id exactly as it arrived on the request path — may be malformed
-     * @returns whether a document with this id exists
+     * @returns the counter (`0` for a row that has none yet), or `undefined` for no such document
      */
-    exists: (entityId: string) => Promise<boolean>;
-
-    /**
-     * Field names on this collection a translation row may carry. Validated against at write
-     * time — a translation naming a field this list does not declare is a 422, not a silently
-     * accepted key nothing ever reads.
-     */
-    fields: readonly string[];
+    revisionOf: (entityId: string) => Promise<number | undefined>;
 
     /**
      * The cache tag `invalidateCache` must clear when a translation write lands. The precedent is
@@ -126,6 +120,7 @@ export interface TranslatableTarget {
      * (see {@link ImageTarget.writeback} for the same shape), so `locales` never has to find the
      * target's Mongoose model by collection name to reach it. `session` joins the write to the
      * caller's transaction (a product write commits its row, its translations and this together).
+     * A `null` field is removed from the document, never stored as `''`.
      */
     writeDerived: (
         entityId: string,
@@ -143,27 +138,15 @@ export interface TranslatableTarget {
     markEdited: (entityId: string, session?: ClientSession) => Promise<void>;
 
     /**
-     * The OWNING module's own rules for a locale's field values — the same ones its own write
-     * door applies — so the generic translator's door cannot land a value the entity itself would
-     * refuse (a product title under its minimum). Optional: a target with no rules beyond the
-     * field names {@link fields} declares leaves it out.
+     * The rules for ONE locale's fields, taken from the OWNING module's own write contract: the
+     * PATCH body's field itself, or the locale entry of its `translations` map. Its keys are the
+     * translatable fields (a key outside it is a 422), and parsing against it is the generic
+     * door's whole value check, so that door cannot land what the entity's own door would refuse.
+     * A field these rules do not make nullable can never be cleared, in any locale.
      *
-     * @param fields - the locale's changes: a string sets, `null` clears
-     * @param isFallback - whether this is the fallback locale, whose fields are the entity's own
-     * @returns one issue per broken rule; empty when the values are legal
+     * REQUIRED, for the same reason as `personalData`: a module cannot compile without answering.
      */
-    checkFields?: (
-        fields: Record<string, string | null>,
-        isFallback: boolean
-    ) => TranslationFieldIssue[];
-}
-
-/** One rule a locale's field values broke — see {@link TranslatableTarget.checkFields}. */
-export interface TranslationFieldIssue {
-    /** The field the rule is about, as the target names it. */
-    field: string;
-    /** Already translated, ready to show. */
-    message: string;
+    fieldRules: ZodObject<Record<string, ZodType<string | null | undefined>>>;
 }
 
 /**

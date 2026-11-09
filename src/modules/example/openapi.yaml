@@ -26,6 +26,8 @@ x-personal-data:
 
 paths:
     /examples:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         get:
             x-cache: private-no-cache
             tags: [Examples]
@@ -228,6 +230,8 @@ paths:
     # (docs/theory/tactical-ddd.md). No `If-Match`: the write is conditional on the status read, so
     # of two racing moves exactly one lands.
     /examples/{id}/publish:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Examples]
             summary: Publish an example
@@ -256,6 +260,8 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     /examples/{id}/archive:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Examples]
             summary: Archive an example
@@ -283,6 +289,8 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     /examples/{id}/unarchive:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Examples]
             summary: Return an archived example to draft

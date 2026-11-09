@@ -7,6 +7,7 @@
  * that question is answered by each module's own `module.yaml`, enforced by
  * `.dependency-cruiser.cjs`, not by anything `registerModules` does at boot.
  */
+import { z } from 'zod';
 import {
     registerModules,
     resolveTranslatables,
@@ -16,6 +17,10 @@ import {
     resolveBrowserEvents,
     type AppModule
 } from '@kernel/registry';
+
+/** One locale's rules for the two stub entities: a single optional string each. */
+const titleRules = z.strictObject({ title: z.string().optional() });
+const bodyRules = z.strictObject({ body: z.string().optional() });
 
 it('calls subscribe on every module that declares one', () => {
     const first = jest.fn();
@@ -60,9 +65,9 @@ describe('resolveTranslatables', () => {
                 translatables: {
                     product: {
                         collection: 'products',
-                        fields: ['title'],
+                        fieldRules: titleRules,
                         cacheTag: 'products',
-                        exists: jest.fn(),
+                        revisionOf: jest.fn(),
                         writeDerived: writeProduct,
                         markEdited: jest.fn()
                     }
@@ -74,9 +79,9 @@ describe('resolveTranslatables', () => {
                 translatables: {
                     page: {
                         collection: 'pages',
-                        fields: ['body'],
+                        fieldRules: bodyRules,
                         cacheTag: 'pages',
-                        exists: jest.fn(),
+                        revisionOf: jest.fn(),
                         writeDerived: writePage,
                         markEdited: jest.fn()
                     }
@@ -88,17 +93,17 @@ describe('resolveTranslatables', () => {
         expect(resolveTranslatables(modules)).toEqual({
             product: {
                 collection: 'products',
-                fields: ['title'],
+                fieldRules: titleRules,
                 cacheTag: 'products',
-                exists: expect.any(Function),
+                revisionOf: expect.any(Function),
                 writeDerived: writeProduct,
                 markEdited: expect.any(Function)
             },
             page: {
                 collection: 'pages',
-                fields: ['body'],
+                fieldRules: bodyRules,
                 cacheTag: 'pages',
-                exists: expect.any(Function),
+                revisionOf: expect.any(Function),
                 writeDerived: writePage,
                 markEdited: expect.any(Function)
             }
@@ -112,9 +117,9 @@ describe('resolveTranslatables', () => {
     it('refuses to boot when two modules declare the same entityType, instead of keeping one', () => {
         const target = {
             collection: 'products',
-            fields: ['title'],
+            fieldRules: titleRules,
             cacheTag: 'products',
-            exists: jest.fn(),
+            revisionOf: jest.fn(),
             writeDerived: jest.fn(),
             markEdited: jest.fn()
         };

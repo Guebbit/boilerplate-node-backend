@@ -35,6 +35,7 @@ import { EXAMPLE_PUBLISHED } from './events';
 import { mailOwnerOfPublished } from './services/notify';
 import { collectPersonalData, eraseForUser } from './services/personal-data';
 import { exampleRateLimits } from './rate-limits';
+import { exampleTranslationFieldRules } from './model';
 import { exampleRepository } from './repository';
 import { router } from './routes';
 
@@ -68,9 +69,9 @@ export default {
     translatables: {
         example: {
             collection: 'examples',
-            fields: ['title'],
             cacheTag: 'examples',
-            ...exampleRepository.translatable
+            ...exampleRepository.translatable,
+            fieldRules: exampleTranslationFieldRules
         }
     },
     // An export lists the person's examples; an erasure deletes them, inside its transaction.

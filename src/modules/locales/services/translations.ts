@@ -1,7 +1,7 @@
 /**
  * @module
  * The translator's door: reading every locale an entity has, and writing a PATCH or PUT into it.
- * Generic across whatever `translatables` declares — `product` in V1 — and never reaches the
+ * Generic across whatever `translatables` declares, and never reaches the
  * entity's own collection except through the derived-index-column write the registry names.
  */
 
@@ -10,7 +10,7 @@ import type { Translation, TranslationOrigin, ReplaceEntityTranslationsRequest }
 import { ERROR_CODES } from '@api/error-codes';
 import { canonicalLocale, getFallbackLocale, t } from '@infrastructure/i18n';
 import type { TranslatableTarget } from '@kernel/registry';
-import { fillOmittedWithNull } from '@infrastructure/object-guards';
+import { fillOmittedWithNull, stripUndefined } from '@infrastructure/object-guards';
 import type {
     TranslationBatch,
     TranslationWritePlan,
@@ -24,6 +24,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
+import { carryVersion, rearmPrecondition } from '@infrastructure/persistence/versioning';
 import { withTransaction } from '@infrastructure/runtime/database';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
@@ -42,6 +43,10 @@ export interface EntityTranslationsResult {
     /** Every field name the `translatables` registry declares for this `entityType`. */
     fields: readonly string[];
 }
+
+/** Every field name a target's `fieldRules` declares: the translatable fields, in rule order. */
+const declaredFields = (target: TranslatableTarget): string[] =>
+    Object.keys(target.fieldRules.shape);
 
 /** An `entityType` the registry does not know: 404, like any path that names nothing. */
 const entityTypeUnknown = (entityType: string): ResponseReject =>
@@ -116,7 +121,7 @@ const planSlot = (
             return slotRejection('locales.error-translation-fields-empty', undefined, locale);
 
         const unknownField = Object.keys(value.fields).find(
-            (field) => !target.fields.includes(field)
+            (field) => !declaredFields(target).includes(field)
         );
         if (unknownField !== undefined)
             return slotRejection(
@@ -125,13 +130,21 @@ const planSlot = (
                 `${locale}.${unknownField}`
             );
 
-        // The entity's own rules for a value — the ones its own write door applies, so this door
-        // cannot land what that one would refuse.
-        const broken = target.checkFields?.(value.fields, locale === fallbackLocale).at(0);
-        if (broken)
-            return generateReject(422, [fieldError(`${locale}.${broken.field}`, broken.message)]);
+        // The entity's own rules for a value, parsed (so trimmed too): this door cannot land what
+        // the entity's own write door would refuse. The unknown-field check above runs first, so
+        // strict mode's root-level `unrecognized_keys` issue (empty path) never reaches here.
+        const parsed = target.fieldRules.safeParse(value.fields);
+        if (!parsed.success) {
+            const [issue] = parsed.error.issues;
+            return generateReject(422, [
+                fieldError(`${locale}.${String(issue.path[0])}`, issue.message)
+            ]);
+        }
 
-        return { locale, kind: 'upsert', fields: value.fields, origin: value.origin ?? 'human' };
+        // `.optional()` rules type an omitted field as `undefined`; zod omits the key in practice,
+        // and `stripUndefined` makes it certain, which narrows the type the compiler cannot.
+        const fields = stripUndefined(parsed.data) as Record<string, string | null>;
+        return { locale, kind: 'upsert', fields, origin: value.origin ?? 'human' };
     };
 
     // The fallback locale can't be deleted or deactivated, so writing it never needs the
@@ -337,13 +350,20 @@ const applyTranslationBatch = async (
 
     // Checked before any write: a missing (or malformed) entity id must never leave orphan
     // translation rows behind for a document that was never there to translate.
-    if (!(await target.exists(entityId))) return entityNotFound(entityType, entityId);
+    if ((await target.revisionOf(entityId)) === undefined)
+        return entityNotFound(entityType, entityId);
 
     const translatedBy = context?.caller.id ?? undefined;
-    // One transaction: the rows, the derived index column (see `writePlannedTranslations`'s
-    // docblock) and the document's tag. Rows outside the document changed, so its tag must move
-    // with them, and no `PUT` carrying the still-valid tag may land between the two writes.
+    // One transaction: the document's tag, the rows and the derived index column (see
+    // `writePlannedTranslations`'s docblock). Rows outside the document changed, so its tag must
+    // move with them, and no `PUT` carrying the still-valid tag may land between the writes.
     await withTransaction(async (session) => {
+        // The driver re-runs this callback on a transient conflict; each run must compare the
+        // caller's `If-Match` again, or the retry would write unchecked over the conflicting edit.
+        rearmPrecondition();
+        // First, so a stale `If-Match` is refused (412) before any row is written. The fence is
+        // the OWNER's counter: a translation save and a product edit refuse each other on purpose.
+        await target.markEdited(entityId, session);
         await writePlannedTranslations(
             entityType,
             entityId,
@@ -352,7 +372,6 @@ const applyTranslationBatch = async (
             translatedBy,
             session
         );
-        await target.markEdited(entityId, session);
     });
 
     await invalidateCacheTagsLogged([target.cacheTag]);
@@ -442,7 +461,7 @@ export const replaceEntityTranslations = async (
     return applyTranslationBatch(
         entityType,
         entityId,
-        { ...clearOmittedInPayload(canonicalPayload, target.fields), ...deletions },
+        { ...clearOmittedInPayload(canonicalPayload, declaredFields(target)), ...deletions },
         context
     );
 };
@@ -455,12 +474,22 @@ export const getEntityTranslations = (
     const target = translatableTarget(entityType);
     if (!target) return Promise.resolve(entityTypeUnknown(entityType));
 
-    return translationRepository.findEntityTranslations(entityType, entityId).then((rows) =>
-        generateSuccess({
-            entityType,
-            entityId,
-            translations: translationRepository.normalize(rows),
-            fields: target.fields
-        })
-    );
+    return Promise.all([
+        target.revisionOf(entityId),
+        translationRepository.findEntityTranslations(entityType, entityId)
+    ]).then(([revision, rows]) => {
+        if (revision === undefined) return entityNotFound(entityType, entityId);
+        // The owner's counter rides beside the result, so the `ETag` can be derived from it.
+        return generateSuccess(
+            carryVersion(
+                { editRevision: revision },
+                {
+                    entityType,
+                    entityId,
+                    translations: translationRepository.normalize(rows),
+                    fields: declaredFields(target)
+                }
+            )
+        );
+    });
 };

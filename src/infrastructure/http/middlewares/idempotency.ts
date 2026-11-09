@@ -21,6 +21,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { canonicalize } from '@guebbit/js-toolkit';
 import { rejectResponse } from '@infrastructure/http/response';
+import { keepEtag } from '@infrastructure/http/preconditions';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { logger } from '@infrastructure/adapters/logger';
 import { pseudonymise } from '@infrastructure/security/pseudonymise';
@@ -123,10 +124,16 @@ type StoredRecord = Pick<
 
 /**
  * The headers an answer carries that a retry must see too: the challenge of a 401, the wait of a
- * 429 or 503, the allowed methods of a 405, the `ETag` of a write that answers its row's new tag.
+ * 429 or 503, the allowed methods of a 405, the `ETag` of a write that answers its row's new tag and the `Content-Location` it belongs to.
  * Without them a replayed refusal is a bare status, and a replayed write hands back no tag.
  */
-const REPLAYED_HEADERS = ['Retry-After', 'WWW-Authenticate', 'Allow', 'ETag'] as const;
+const REPLAYED_HEADERS = [
+    'Retry-After',
+    'WWW-Authenticate',
+    'Allow',
+    'ETag',
+    'Content-Location'
+] as const;
 
 /**
  * The replayable headers the handler set on this response, by name.
@@ -322,6 +329,8 @@ const respondToCollision = (
     if (existing.location) response.location(existing.location);
     if (existing.contentType) response.type(existing.contentType);
     for (const [name, value] of Object.entries(existing.headers ?? {})) response.set(name, value);
+    // The stored tag is the API's own, made by the first answer: a replay keeps it.
+    if (existing.headers?.ETag !== undefined) keepEtag(response);
     // A bodiless outcome (202) replays bodiless: no JSON content type, no document.
     if (existing.body === undefined || existing.body === null)
         return response.status(existing.status ?? 200).end();

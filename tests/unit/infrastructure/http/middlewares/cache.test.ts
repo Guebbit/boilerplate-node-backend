@@ -75,6 +75,7 @@ const createResponse = () => {
             return response;
         }),
         get: jest.fn((name: string) => headers[name.toLowerCase()]),
+        getHeader: jest.fn((name: string) => headers[name.toLowerCase()]),
         json: jest.fn((body: unknown) => body),
         on: jest.fn((event: string, handler: () => void) => {
             listeners.set(event, handler);
@@ -83,6 +84,31 @@ const createResponse = () => {
     });
 
     return { response, headers, listeners };
+};
+
+/** Runs `setCache` over a GET whose response may already carry the dead-session clear; answers the headers. */
+const runWithCookie = async (setCookie: boolean) => {
+    const middleware = setCache(60, {
+        tags: ['products'],
+        keyParameters: [],
+        scopeKey: GUEST_SCOPE
+    });
+    const { response, headers } = createResponse();
+    if (setCookie) response.setHeader('Set-Cookie', '__Host-session=; Max-Age=0');
+
+    await middleware(
+        asStub<Request>({
+            method: 'GET',
+            originalUrl: '/products',
+            query: {},
+            locale: 'en'
+        }),
+        response,
+        jest.fn() as NextFunction
+    );
+    response.statusCode = 200;
+    response.json({ success: true });
+    return headers;
 };
 
 /** Runs the middleware and returns the key it looked up. */
@@ -947,6 +973,22 @@ describe('setCache', () => {
             );
 
             expect(headers['cache-control']).toBe('private, no-cache');
+        });
+    });
+
+    describe('a response that already sets a cookie', () => {
+        it('is private, no-cache and never touches Redis', async () => {
+            const headers = await runWithCookie(true);
+
+            expect(headers['cache-control']).toBe('private, no-cache');
+            expect(mockedCache.getCacheValue).not.toHaveBeenCalled();
+            expect(mockedCache.setCacheValue).not.toHaveBeenCalled();
+        });
+
+        it('is still shared when no cookie is set', async () => {
+            const headers = await runWithCookie(false);
+
+            expect(headers['cache-control']).toMatch(/^public, max-age=60/);
         });
     });
 });

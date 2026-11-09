@@ -266,3 +266,16 @@ describe('a public cached read answers 304 too', () => {
         expect(revalidated.text).toBe('');
     });
 });
+
+describe('GET /config declares and honours its minute of caching', () => {
+    // The root contract is outside `cache-policy-declared`, so this test is its guard.
+    it('answers public, max-age=60, then an empty 304 to a matching If-None-Match', async () => {
+        const read = await api().get('/config');
+        const revalidated = await api().get('/config').set('If-None-Match', read.headers.etag);
+
+        expect(read.status).toBe(200);
+        expect(read.headers['cache-control']).toBe('public, max-age=60');
+        expect(revalidated.status).toBe(304);
+        expect(revalidated.text).toBe('');
+    });
+});

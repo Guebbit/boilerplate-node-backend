@@ -87,6 +87,38 @@ describe('translating an example’s title through /locales', () => {
         expect(response.status).toBe(422);
     });
 
+    it.each([
+        ['a cleared title', 'en', null],
+        ['a cleared title in another language', 'it', null],
+        ['a title past the contract bound', 'en', 'x'.repeat(201)],
+        ['a title of only spaces', 'en', '   ']
+    ])('refuses %s and leaves the row alone', async (_label, locale, title) => {
+        const { user, bearer } = await adminWithLanguages();
+        const example = await createExample({ userId: user.id, title: 'Keep' });
+
+        const response = await api()
+            .patch(`/locales/translations/example/${String(example._id)}`)
+            .set('Authorization', bearer)
+            .send({ [locale]: { fields: { title }, origin: 'human' } });
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].details).toEqual({ field: `${locale}.title` });
+        expect(await fieldOf(String(example._id), 'title')).toBe('Keep');
+    });
+
+    it('stores the trimmed title, as the example’s own door does', async () => {
+        const { user, bearer } = await adminWithLanguages();
+        const example = await createExample({ userId: user.id, title: 'Before' });
+
+        const response = await api()
+            .patch(`/locales/translations/example/${String(example._id)}`)
+            .set('Authorization', bearer)
+            .send({ en: { fields: { title: '  After  ' }, origin: 'human' } });
+
+        expect(response.status).toBe(200);
+        expect(await fieldOf(String(example._id), 'title')).toBe('After');
+    });
+
     it('answers 404 for an example that does not exist', async () => {
         const { bearer } = await adminWithLanguages();
 

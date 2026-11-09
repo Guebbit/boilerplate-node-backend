@@ -39,8 +39,10 @@ export const openSseStream = (response: Response, reverify: () => Promise<boolea
     response.status(200);
     // The MIME type that makes this an SSE stream for the browser's `EventSource`.
     response.setHeader('Content-Type', 'text/event-stream');
-    // `no-transform` stops a proxy gzipping or buffering the body, which would hold frames back.
-    response.setHeader('Cache-Control', 'no-cache, no-transform');
+    // no-store:     one caller's live data, cookie-authenticated, which RFC 9111 §3.5 does not
+    //               protect; the browser's own `EventSource` asks for `no-store` as well.
+    // no-transform: stops a proxy gzipping or buffering the body, which would hold frames back.
+    response.setHeader('Cache-Control', 'no-store, no-transform');
     response.setHeader('Connection', 'keep-alive');
     // Send the headers now, before any body, so the client sees the stream open.
     response.flushHeaders();

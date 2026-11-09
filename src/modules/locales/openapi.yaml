@@ -12,7 +12,6 @@ x-error-codes:
     LOCALE_ENTRY_KEY_EXISTS: { status: 409, description: 'The key is already translated in this language and app, or a batch names it twice.' }
     LOCALE_ENTRY_KEY_COLLISION: { status: 409, description: 'The key is a strict dotted prefix of another key, or has one as a prefix: no dictionary tree can hold both.' }
     LOCALE_ENTRY_KEY_INVALID: { status: 422, description: 'The key is empty, longer than 200 characters, or has an empty or reserved segment.' }
-    LOCALE_ENTRIES_EMPTY: { status: 422, description: 'A merge patch named no entry at all.' }
     LOCALE_APP_UNKNOWN: { status: 422, description: 'No app with that id is configured on this deployment — see `GET /locales/apps`.' }
     LOCALE_ENTITY_TYPE_UNKNOWN: { status: 404, description: 'The entity type is not a registered translatable.' }
     LOCALE_ENTITY_NOT_FOUND: { status: 404, description: 'The module that owns the entity type holds no entity with that id.' }
@@ -100,6 +99,8 @@ paths:
                 caller who holds `display:Locale` is answered outside the shared cache, so only
                 such a caller gets a flag set to `true`; everyone else's answer is the cached one,
                 with every flag `false`.
+
+                Unpaged: one row per language this deployment offers.
             operationId: listLocales
             security:
                 - {}
@@ -168,6 +169,8 @@ paths:
                 `GET /locales/{locale}/messages?app=`.
 
                 Public and cacheable, like every other locale read.
+
+                Unpaged: the apps come from the API's configuration.
             operationId: listLocaleApps
             security: []
             responses:
@@ -219,6 +222,9 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
 
     /locales/{locale}:
+        # Bundler: adds the `If-Match` parameter and 412 to the writes listed, and `ETag` to the 200s.
+        # No `delete`: removing a language is unconditional (its cascade deletes the rows first).
+        x-versioned: [get, put, patch]
         get:
             x-cache: revalidate
             tags: [Locales]
@@ -651,7 +657,7 @@ paths:
             x-error-codes:
                 '404': [LOCALE_LANGUAGE_NOT_FOUND]
                 '409': [LOCALE_ENTRY_KEY_COLLISION]
-                '422': [LOCALE_APP_UNKNOWN, LOCALE_ENTRIES_EMPTY, LOCALE_ENTRY_KEY_INVALID]
+                '422': [LOCALE_APP_UNKNOWN, LOCALE_ENTRY_KEY_INVALID]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -776,6 +782,9 @@ paths:
     # never the entity's own write path. `entityType` is a `translatables` registry key (`product`
     # in V1); the entity's OWN contract is untouched by this feature and never sees this shape.
     /locales/translations/{entityType}/{id}:
+        # Bundler: adds the `If-Match` parameter and 412 to the writes listed, and `ETag` to the 200s.
+        # The tag is the OWNING entity's (product, example), not a counter of its own.
+        x-versioned: [get, put, patch]
         get:
             tags: [Locales]
             summary: Read every translation an entity has
@@ -1430,8 +1439,8 @@ components:
                         maxLength: 2000
                     description: >-
                         Translation key to text, or to `null` to delete it. A `null` for a key that
-                        is not stored is a no-op, not an error. An empty map is a 422 — enforced at
-                        write time.
+                        is not stored is a no-op, not an error. An empty map changes nothing
+                        and answers 200.
 
                         A key is 1 to 200 characters once trimmed, and two keys that are the same
                         once trimmed are a 409. A key being written (a string) is refused when it is

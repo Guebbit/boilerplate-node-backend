@@ -11,6 +11,7 @@ import type { Response } from 'express';
 import { orderService } from '../services';
 import type { AuthContext, Order } from '@types';
 import { createdOrOk } from '@infrastructure/http/response';
+import { answerAsResource } from '@infrastructure/http/preconditions';
 import { catchAs } from '@infrastructure/http/controller';
 
 /**
@@ -20,7 +21,8 @@ import { catchAs } from '@infrastructure/http/controller';
 type OrderForResponse = Parameters<typeof orderService.withActions>[0];
 
 /**
- * Hydrate `order` with `authContext`'s `actions` and send it as the response body.
+ * Hydrate `order` with `authContext`'s `actions` and send it as the response body, tagged with
+ * the order's real `ETag` (and its `Content-Location` on a write).
  *
  * Owns its own `.catch`, with the SAME operation name each call site already passes its own
  * chain's final `.catch` — `withActions` failing is exactly as much this operation's failure as
@@ -42,6 +44,9 @@ export const respondWithOrder = (
     orderService
         .withActions(order, authContext)
         .then((resolved) => {
+            // The order's real tag, and the resource it belongs to (RFC 9110 §8.8.3). Taken from
+            // the document: `resolved` is the wire shape.
+            answerAsResource(response, order, `/orders/${resolved.id}`);
             // A 201 always names the new order (RFC 9110 §9.3.3).
             createdOrOk<Order>(response, resolved, status, `/orders/${resolved.id}`);
         })

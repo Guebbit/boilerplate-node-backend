@@ -22,6 +22,7 @@ import { limitJsonDepth, JSON_BODY_TYPES } from '@infrastructure/http/middleware
 import { requireJsonObjectBody } from '@infrastructure/http/middlewares/json-object';
 import { REQUEST_CONTENT_TYPES } from '@api/request-content-types';
 import { isAllowedOrigin } from '@infrastructure/http/origins';
+import { dropUnownedValidators } from '@infrastructure/http/preconditions';
 import { appConfig } from './config';
 import { enabledModules } from '../modules';
 
@@ -107,6 +108,10 @@ export const installSecurity = (app: Express): void => {
     // Strong rather than Express's default weak ETags: a weak comparison can answer 304 for content
     // that did change, serving stale data.
     app.set('etag', 'strong');
+
+    // No validator on a PUT answer (RFC 9110 §9.3.4), and on any other write only an ETag the API
+    // made itself: the content tag above is neither.
+    app.use(dropUnownedValidators);
 
     /*
      * How many reverse proxies sit in front of this process — the COUNT, never `true`, so Express
@@ -201,6 +206,8 @@ export const installSecurity = (app: Express): void => {
                 'ETag',
                 // Where a create put the new resource, on the 201 and on an idempotent replay.
                 'Location',
+                // Which resource a write's answer (and its ETag) is the representation of.
+                'Content-Location',
                 // The server-chosen download name (invoice number, dated export): a browser client
                 // cannot read it unless it is listed here.
                 'Content-Disposition',

@@ -178,8 +178,10 @@ const pipelineOf =
                 .then((result) => {
                     // Sends the error envelope (404, 409, 422) and stops here if refused.
                     if (refused(response, result)) return;
-                    // The saved row's new tag, so the caller's next edit needs no re-read.
-                    setEtag(response, result.data);
+                    // The saved row's new tag, so the caller's next edit needs no re-read. A PUT
+                    // answers none (RFC 9110 §9.3.4; `dropUnownedValidators` enforces it), so only a
+                    // PATCH stamps one.
+                    if (request.method === 'PATCH') setEtag(response, result.data);
                     return Promise.resolve(present(result.data, request)).then((shaped) => {
                         successResponse(response, shaped, 200);
                     });

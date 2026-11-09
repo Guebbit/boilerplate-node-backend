@@ -15,7 +15,7 @@
  * See: docs/api/contract-fragmentation.md
  */
 
-import type { OpenAPIV3_1 } from 'openapi-types';
+import { OpenAPIV3, type OpenAPIV3_1 } from 'openapi-types';
 import { operationsOf, type Operation, type OpenApiDocument, type Step } from './openapi-document';
 
 /** The response header an idempotent operation's 2xx declares, and the component that describes it. */
@@ -51,6 +51,22 @@ const inlineResponsesOf = (document_: OpenApiDocument): OpenAPIV3_1.ResponseObje
     ].filter((response): response is OpenAPIV3_1.ResponseObject => !('$ref' in response));
 
 /**
+ * Every response written inline on a write (anything but GET and HEAD). A write answer carries only
+ * an `ETag` the API made itself, and a PUT answer none at all (RFC 9110 §8.8.3, §9.3.4, enforced by
+ * `dropUnownedValidators`), so the optional `ETag` the root stamps on every read is left off these.
+ * A write that does answer a real tag (`x-versioned`) declares it by hand, which wins.
+ */
+const writeResponsesOf = (document_: OpenApiDocument): Set<unknown> =>
+    new Set(
+        operationsOf(document_)
+            .filter(
+                ({ method }) =>
+                    method !== OpenAPIV3.HttpMethods.GET && method !== OpenAPIV3.HttpMethods.HEAD
+            )
+            .flatMap(({ operation }) => Object.values(operation.responses ?? {}))
+    );
+
+/**
  * Stamp the root's `x-app-level-headers` onto every response, then spend the key.
  *
  * Never overwrites: a response that declares its own `Cache-Control` (a `no-store` download, a
@@ -63,10 +79,11 @@ export const withAppLevelHeaders: Step = (document_) => {
     if (!isHeaderMap(headerMap))
         throw new Error('[openapi] the root declares no `x-app-level-headers` map.');
 
+    const onWrite = writeResponsesOf(document_);
     for (const response of inlineResponsesOf(document_)) {
         const headers = response.headers ?? {};
         for (const [name, component] of Object.entries(headerMap))
-            if (!declares(headers, name))
+            if (!declares(headers, name) && !(onWrite.has(response) && name === 'ETag'))
                 headers[name] = { $ref: `#/components/headers/${component}` };
         response.headers = headers;
     }

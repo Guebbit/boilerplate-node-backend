@@ -17,6 +17,7 @@
 import * as zod from 'zod';
 import * as responseSchemas from '@api/schemas.zod';
 import {
+    declaredResponseHeaders,
     errorCodeIndex,
     listOperations,
     requiredResponseHeaders,
@@ -74,6 +75,9 @@ export const undocumentedCodes = (operationId: string, status: number, body: unk
                 !listed.includes(code)
         );
 };
+
+/** Every header the spec declares, per operation and status — built once, like the routes. */
+const DECLARED_HEADERS = declaredResponseHeaders();
 
 /**
  * Every named export of the generated schema module, indexed by name.
@@ -179,6 +183,53 @@ export const isPackedRuleOperand = (operationId: string, path: string): boolean 
     /^(account\.)?abilities\.(tenant|platform)\.\d+\.2\.deletedAt$/.test(path);
 
 /**
+ * Throws when a PUT answer carries a validator. RFC 9110 §9.3.4 allows one only when the stored
+ * bytes are what the client sent, which no PUT here can promise; `dropUnownedValidators` strips them.
+ * Judged for every PUT the suite makes, so a new route cannot slip past the app-level hook.
+ *
+ * @param response - a real response from `supertest(app)`
+ * @throws {Error} when a PUT answer has an `ETag` or `Last-Modified` header
+ */
+const assertNoPutValidator = (response: Response): void => {
+    if (response.request.method !== 'PUT') return;
+    const present = ['etag', 'last-modified'].filter((name) => name in response.headers);
+    if (present.length > 0)
+        throw new Error(
+            `PUT ${new URL(response.request.url).pathname} answered ${String(response.status)} with ${present.join(' and ')}: a PUT answer carries no validator (RFC 9110 §9.3.4)`
+        );
+};
+
+/** The shape of a tag this API makes, `"<edit counter>.<digest>"`; Express's own byte-hash is not it. */
+const OWN_ETAG = /^"\d+\.[\w-]+"$/;
+
+/**
+ * Throws when a write answers an `ETag` that is not a real tag the operation documents.
+ *
+ * A write answer may carry only the API's own tag (RFC 9110 §8.8.3): the one an `If-Match` accepts,
+ * declared by the operation (`x-versioned`). Express's byte-hash on a create or an action is
+ * neither, and `dropUnownedValidators` strips it, so this is the canary that it stays stripped.
+ *
+ * @param response - a real response from `supertest(app)`
+ * @param operationId - the operation that answered
+ * @throws {Error} when a write sends an `ETag` that is not its own tag, or that its operation never declares
+ */
+const assertWriteTagIsReal = (response: Response, operationId: string): void => {
+    const { method } = response.request;
+    const { etag: tag } = response.headers;
+    if (method === 'GET' || method === 'HEAD' || tag === undefined) return;
+
+    const where = `${method} ${new URL(response.request.url).pathname} (${String(response.status)})`;
+    if (!OWN_ETAG.test(tag))
+        throw new Error(
+            `${where} answered ETag ${tag}, which is not this API's own tag: a write answer keeps only a tag an If-Match accepts (RFC 9110 §8.8.3)`
+        );
+    if (!DECLARED_HEADERS[operationId]?.[String(response.status)]?.includes('etag'))
+        throw new Error(
+            `${where} answered an ETag that ${operationId} does not document: mark its path \`x-versioned\``
+        );
+};
+
+/**
  * Checks one captured response against `openapi.yaml`, throwing a plain `Error` on a mismatch.
  *
  * An undeclared path is not this function's job — that's the 404-envelope contract test's own
@@ -190,6 +241,7 @@ export const isPackedRuleOperand = (operationId: string, path: string): boolean 
  */
 export const assertResponseMatchesContract = (response: Response): void => {
     assertProblemMediaType(response);
+    assertNoPutValidator(response);
 
     const { pathname } = new URL(response.request.url);
     // Node's http reports the verb upper-case; `HttpMethod` (and the spec walk) is lower-case —
@@ -199,6 +251,8 @@ export const assertResponseMatchesContract = (response: Response): void => {
 
     const operationId = operationFor(method, pathname);
     if (!operationId) return;
+
+    assertWriteTagIsReal(response, operationId);
 
     const schema = schemaFor(operationId, response.status);
     if (!schema)

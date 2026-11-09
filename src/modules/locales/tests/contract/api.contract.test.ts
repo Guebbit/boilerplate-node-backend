@@ -1105,16 +1105,22 @@ describe('PUT vs PATCH /locales/:locale/apps/:app/entries', () => {
         expect(dictionary.body.messages).toEqual({ cart: { title: 'Carrinho' } });
     });
 
-    it('PATCH 422s on an empty map', async () => {
+    it('PATCH answers 200 and writes nothing on an empty map', async () => {
         const { bearer } = await authenticateAs('admin');
-        await createLanguage(bearer);
+        await seedTwoKeys(bearer);
 
         const response = await api()
             .patch('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer)
             .send({ entries: {} });
 
-        expect(response.status).toBe(422);
+        expect(response.status).toBe(200);
+        expect(response.body).toMatchObject({ created: 0, updated: 0, removed: 0 });
+
+        const dictionary = await api().get('/locales/pt/messages');
+        expect(dictionary.body.messages).toEqual({
+            cart: { title: 'Carrinho', empty: 'Vazio' }
+        });
     });
 
     it('PUT 422s on a null value, which only PATCH reads as a delete', async () => {

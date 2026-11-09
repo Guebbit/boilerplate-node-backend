@@ -15,7 +15,6 @@ import { CreateProductBody, ReplaceProductByIdBody, UpdateProductByIdBody } from
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
-import type { TranslationFieldIssue } from '@kernel/registry';
 import { fitsCurrency, minorUnitExponent } from '@domain-primitives/money';
 import { latestReleaseDate } from './domain/preorder';
 import { derivedStockFields } from './presenter';
@@ -107,38 +106,12 @@ export interface ProductDocument extends ProductRecord, Document {
 export type ProductModel = Model<ProductDocument, Record<string, never>, unknown>;
 
 /**
- * The key one locale's fields are parked under to parse them through the contract's own
- * `translations` map; its name never reaches a message.
+ * The rules the contract puts on ONE locale's fields: the `translations` map's object member
+ * (the union's other option is the locale's own `null`). The `translatables` registry's
+ * `fieldRules`, so the generic translator's door keeps a title above its minimum too.
  */
-const CHECKED_LOCALE = 'checked';
-
-/**
- * `PATCH`'s `translations` as the contract declares it: an object merges into a locale, `null`
- * deletes it, absence leaves it untouched. The one source of the title floor and the description
- * rules for the generic translator's door too.
- */
-const translationsPatch = UpdateProductByIdBody.shape.translations.unwrap();
-
-/**
- * The rules the contract puts on one locale's fields, as the `translatables` registry's
- * `checkFields`: what keeps the generic translator's door from landing a title under its minimum
- * or an empty description on a product.
- *
- * @param fields - one locale's changes: a string sets, `null` clears
- * @returns one issue per broken rule, each naming its field
- */
-export const checkProductTranslationFields = (
-    fields: Record<string, string | null>
-): TranslationFieldIssue[] => {
-    const parsed = translationsPatch.safeParse({ [CHECKED_LOCALE]: fields });
-    if (parsed.success) return [];
-
-    return parsed.error.issues.map((issue) => ({
-        // Path is `[CHECKED_LOCALE, field, ...]`: the field is what the caller names.
-        field: String(issue.path[1] ?? ''),
-        message: issue.message
-    }));
-};
+export const productTranslationFieldRules =
+    UpdateProductByIdBody.shape.translations.unwrap().valueType.options[0];
 
 /**
  * The fallback locale (`NODE_FALLBACK_LOCALE`) MUST NOT be `null` — deleting it would leave the

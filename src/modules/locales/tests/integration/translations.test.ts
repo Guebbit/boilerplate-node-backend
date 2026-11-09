@@ -52,10 +52,21 @@ describe('getEntityTranslations', () => {
     });
 
     it('answers an empty list for an entity with no rows yet', async () => {
-        const result = await localeService.getEntityTranslations('product', 'p1');
+        const product = await createProduct();
+
+        const result = await localeService.getEntityTranslations('product', String(product._id));
 
         expect(result.success).toBe(true);
         expect(result.data?.translations).toEqual([]);
+    });
+
+    it('answers 404 for an entity that does not exist', async () => {
+        const result = await localeService.getEntityTranslations(
+            'product',
+            String(new Types.ObjectId())
+        );
+
+        expect(result.status).toBe(404);
     });
 
     it('lists every locale row for the entity, sorted by locale', async () => {
@@ -113,7 +124,7 @@ describe('updateEntityTranslations', () => {
     });
 
     it('rejects rather than writing anything for a malformed entity id', async () => {
-        // `target.exists` throws the same `BSONError` `toObjectId` always does on a bad id
+        // `target.revisionOf` throws the same `BSONError` `toObjectId` always does on a bad id
         // (`create-repository.ts`) — the controller's `catchAs` turns it into a 422. The property
         // under test here is the ORDER: the rejection must land before any row is written.
         const malformedId = 'not-an-object-id';
@@ -594,7 +605,7 @@ describe('updateEntityTranslations, field by field (RFC 7396)', () => {
         const row = await translationRepository.findEntityLocale('product', id, FALLBACK);
         expect(row?.fields).toEqual({ title: 'Cozy Bed' });
         const stored = await readProduct(id);
-        expect(stored?.description).toBe('');
+        expect(stored?.description).toBeUndefined();
     });
 
     it('refuses a value the product itself would refuse, naming the locale and field', async () => {
@@ -654,7 +665,7 @@ describe('replaceEntityTranslations', () => {
         const row = await translationRepository.findEntityLocale('product', id, FALLBACK);
         expect(row?.fields).toEqual({ title: 'Cozy Bed XL' });
         const stored = await readProduct(id);
-        expect(stored?.description).toBe('');
+        expect(stored?.description).toBeUndefined();
     });
 
     it('does not delete the fallback row when a PUT names it in another casing', async () => {

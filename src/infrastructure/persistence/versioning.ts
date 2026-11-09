@@ -13,7 +13,8 @@
  * on every edit — through `save()` and through query updates alike. It is neither `updatedAt`
  * (two edits in one millisecond share it) nor Mongoose's default `__v` (which moves only when an
  * array changes). An edit that lives outside the row (a role, a translation) moves it by hand,
- * and the writes that are NOT an edit (stock mirror, image digest, session tokens) pass
+ * and the writes that are NOT an edit (stock mirror, image digest, session tokens, a password
+ * change, the reaper's warning) pass
  * `timestamps: false`, so they never invalidate an editor's copy.
  *
  * The tag has two parts. The digest changes whenever the bytes do (reads compare the whole tag,
@@ -143,11 +144,13 @@ export const isLostRace = (error: unknown): boolean =>
 /**
  * Whether the open precondition (if any) is about this document and still unconsumed. Consumes it:
  * a second save of the same row in one request has, by then, a version the caller never saw.
+ *
+ * @param document - the row about to be written
+ * @param key - what the route calls this row: its `_id`, or another id the path carries
  */
-const takePrecondition = (document: { _id?: unknown }): Precondition | undefined => {
+const takePrecondition = (document: { _id?: unknown }, key: string): Precondition | undefined => {
     const scope = scopeStorage.getStore();
-    if (!scope || scope.consumed || String(document._id) !== scope.precondition.id)
-        return undefined;
+    if (!scope || scope.consumed || key !== scope.precondition.id) return undefined;
     scope.consumed = true;
     return scope.precondition;
 };
@@ -195,13 +198,16 @@ const armed = <T>(document: { editRevision?: unknown }, write: () => Promise<T>)
  *
  * @param document - the hydrated document about to be saved
  * @param write - `document.save()`
+ * @param key - the id the route names this row by; `_id` unless the path carries another one
+ *   (a language is addressed by its tag)
  * @throws {PreconditionFailedError} when the tag no longer matches
  */
 export const fencedSave = <T>(
     document: { _id?: unknown; editRevision?: unknown },
-    write: () => Promise<T>
+    write: () => Promise<T>,
+    key = String(document._id)
 ): Promise<T> => {
-    const precondition = takePrecondition(document);
+    const precondition = takePrecondition(document, key);
     if (!precondition) return write();
     if (!accepts(precondition, versionOf(document)))
         return Promise.reject(new PreconditionFailedError());
@@ -209,6 +215,27 @@ export const fencedSave = <T>(
     return armed(document, write).catch((error: unknown) => {
         throw isLostRace(error) ? new PreconditionFailedError() : error;
     });
+};
+
+/**
+ * The filter that fences a query update (`updateOne`) on the open precondition: the document's
+ * counter must be one the caller's header names. Uses the precondition up, like
+ * {@link fencedSave}.
+ *
+ * Version `0` also matches a row with no counter yet (Mongo's `null` matches a missing field); a
+ * header that parses to no version gives an empty `$in`, so nothing matches and the write is a 412.
+ *
+ * @param key - the id the route names the row by
+ * @param path - the counter's path on the row, normally {@link EDIT_REVISION}
+ * @returns `{}` when there is no precondition about this row, or it is `*`
+ */
+export const preconditionFilter = (key: string, path: string): Record<string, unknown> => {
+    const precondition = takePrecondition({}, key);
+    if (!precondition || precondition.etags === 'any') return {};
+    const versions = precondition.etags
+        .map((tag) => versionOfTag(tag))
+        .filter((version) => version !== undefined);
+    return { [path]: { $in: versions.includes(0) ? [...versions, null] : versions } };
 };
 
 /**
@@ -232,7 +259,7 @@ export const checkedDelete = (
     document: { _id?: unknown; editRevision?: unknown },
     write: () => Promise<DeleteOutcome>
 ): Promise<void> => {
-    const precondition = takePrecondition(document);
+    const precondition = takePrecondition(document, String(document._id));
     if (!precondition) return write().then(() => undefined);
     if (!accepts(precondition, versionOf(document)))
         return Promise.reject(new PreconditionFailedError());

@@ -336,6 +336,11 @@ const refuseInvalidApiKey = (response: Response): void => {
  *   resolving the credential or session, otherwise with none
  */
 export const getAuth = (request: Request, response: Response, next: NextFunction) => {
+    // In cookie mode the session cookie picks the caller, so a cache must key on it too; in jwt
+    // mode the cookie is not read here. `Authorization` is named by `setCache`/`privateNoCache`.
+    // https://www.rfc-editor.org/rfc/rfc9110.html#section-12.5.5
+    if (cookieAuthenticatesRequests()) response.vary('Cookie');
+
     // Two modules can share a URL prefix (e.g. `account` and `addresses` both under `/account`),
     // each mounting this guard on its own router. An unmatched request in the first router falls
     // through Express to the second, which would otherwise redo the verify / user read /

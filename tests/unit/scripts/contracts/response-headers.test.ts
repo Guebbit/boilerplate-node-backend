@@ -69,6 +69,34 @@ describe('withAppLevelHeaders', () => {
         expect(own?.['404']).toEqual({ $ref: '#/components/responses/NotFound' });
     });
 
+    it('leaves `ETag` off every write answer, because only an operation that answers a real tag declares one', () => {
+        const document_ = asStub<OpenApiDocument>({
+            openapi: '3.1.0',
+            'x-app-level-headers': { ETag: 'EntityTag' },
+            paths: {
+                '/item': {
+                    put: { responses: { '200': { description: 'replaced' } } },
+                    patch: { responses: { '200': { description: 'merged' } } },
+                    get: { responses: { '200': { description: 'read' } } }
+                }
+            }
+        });
+
+        const { paths } = applied(withAppLevelHeaders, document_);
+
+        expect(paths?.['/item']?.put?.responses?.['200']).toEqual({
+            description: 'replaced',
+            headers: {}
+        });
+        expect(paths?.['/item']?.patch?.responses?.['200']).toEqual({
+            description: 'merged',
+            headers: {}
+        });
+        expect(paths?.['/item']?.get?.responses?.['200']).toHaveProperty('headers', {
+            ETag: { $ref: '#/components/headers/EntityTag' }
+        });
+    });
+
     it('spends the root key, which is an instruction to the step', () => {
         expect(applied(withAppLevelHeaders, bundle())).not.toHaveProperty('x-app-level-headers');
     });

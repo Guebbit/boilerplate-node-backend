@@ -11,16 +11,19 @@
  */
 
 import type { ClientSession, Document, Model, QueryFilter, UpdateQuery } from 'mongoose';
+import { clearedOrValue, setAndUnset } from './changes';
 import { toObjectId } from './create-repository';
+import { EDIT_REVISION } from './revision-plugin';
+import { PreconditionFailedError, preconditionFilter } from './versioning';
 
 /** What a collection offers the translation port; the shape `TranslatableTarget` asks for. */
 export interface TranslatableColumns {
-    /** Whether a document with this id exists, in any scope. */
-    exists: (entityId: string) => Promise<boolean>;
+    /** The document's edit counter (`0` before its first edit), or `undefined` when none has this id; any scope. */
+    revisionOf: (entityId: string) => Promise<number | undefined>;
     /**
      * Copies the fallback locale's fields onto the document's own columns, so a search or a list
-     * never resolves a translation for the language the row is already in. A cleared field is an
-     * empty column. `timestamps: false`: a derived copy is not an edit anybody made.
+     * never resolves a translation for the language the row is already in. A cleared field is no
+     * field (`$unset`), the same as its translation row. `timestamps: false`: a derived copy is not an edit anybody made.
      */
     writeDerived: (
         entityId: string,
@@ -30,6 +33,10 @@ export interface TranslatableColumns {
     /**
      * Stamps the document as edited, so its version (the ETag) moves even when no column changed.
      * Written by hand with `timestamps: false`, since Mongoose adds no `$set` to an empty update.
+     * Fenced on the request's `If-Match` when one names this row: nothing matched means the
+     * owner's version moved since the caller read it.
+     *
+     * @throws {PreconditionFailedError} when the open precondition no longer matches
      */
     markEdited: (entityId: string, session?: ClientSession) => Promise<void>;
 }
@@ -43,34 +50,46 @@ export const translatableColumnsOf = <TDocument extends Document>(
     model: Model<TDocument>
 ): TranslatableColumns => ({
     // `async` because `toObjectId` throws on a malformed id.
-    exists: async (entityId) =>
-        (await model.exists({ _id: toObjectId(entityId) } as QueryFilter<TDocument>).exec()) !==
-        null,
+    revisionOf: async (entityId) => {
+        const row = await model
+            .findOne({ _id: toObjectId(entityId) } as QueryFilter<TDocument>, {
+                [EDIT_REVISION]: 1
+            })
+            .lean<{ editRevision?: number }>()
+            .exec();
+        return row ? (row.editRevision ?? 0) : undefined;
+    },
 
     writeDerived: (entityId, fields, session) =>
         model
             .updateOne(
                 { _id: toObjectId(entityId) } as QueryFilter<TDocument>,
                 // `as`: the column names arrive as data (the port's `fields`), which a generic
-                // `TDocument` cannot show the compiler.
-                {
-                    $set: Object.fromEntries(
-                        Object.entries(fields).map(([name, value]) => [name, value ?? ''])
+                // `TDocument` cannot show the compiler. A `null` becomes an `$unset`.
+                setAndUnset(
+                    Object.fromEntries(
+                        Object.entries(fields).map(([name, value]) => [name, clearedOrValue(value)])
                     )
-                } as UpdateQuery<TDocument>,
+                ) as UpdateQuery<TDocument>,
                 // `session` joins the caller's transaction; `undefined` stands alone.
                 { timestamps: false, session }
             )
             .exec()
             .then(() => undefined),
 
-    markEdited: (entityId, session) =>
-        model
+    markEdited: (entityId, session) => {
+        const fence = preconditionFilter(entityId, EDIT_REVISION);
+        return model
             .updateOne(
-                { _id: toObjectId(entityId) } as QueryFilter<TDocument>,
+                { _id: toObjectId(entityId), ...fence } as QueryFilter<TDocument>,
+                // The revision plugin sees this `updatedAt` stamp and adds the `$inc` of the counter.
                 { $set: { updatedAt: new Date() } },
                 { timestamps: false, session }
             )
             .exec()
-            .then(() => undefined)
+            .then(({ matchedCount }) => {
+                if (matchedCount === 0 && Object.keys(fence).length > 0)
+                    throw new PreconditionFailedError();
+            });
+    }
 });

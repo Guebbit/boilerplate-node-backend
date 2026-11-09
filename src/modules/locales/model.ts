@@ -13,6 +13,7 @@ import { LocaleDirection, TranslationOrigin } from '@types';
 import type { Language, LocaleEntry, Translation } from '@types';
 import { CreateLocaleBody } from '@api/schemas.zod';
 import { trimmedInto } from '@infrastructure/http/schemas';
+import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { baseLanguage, canonicalLocale, canonicalLocaleSetter } from '@infrastructure/i18n';
 
@@ -145,6 +146,13 @@ export const localeSchema = new Schema<LocaleDocument, LocaleModel>(
         timestamps: true
     }
 );
+
+/**
+ * The edit counter behind the language's `ETag` and `If-Match` — see
+ * `@infrastructure/persistence/revision-plugin`. Not `revision`: that field counts dictionary
+ * writes and keeps its own meaning.
+ */
+localeSchema.plugin(revisionPlugin);
 
 /*
  * Derived on every save so the column cannot drift from `tag` — a hook rather than an assignment

@@ -15,6 +15,8 @@ import { addressService } from '../service';
 /**
  * `PUT` and `PATCH /account/addresses/:addressId` — one handler pair over `addressService.update`, which
  * answers the entry it wrote.
+ * No `If-Match`: one owner, and the address lives in one book document, so a book counter would
+ *   let editing A refuse B.
  */
 export const { replace: replaceAddress, update: updateAddress } = createUpdateController({
     versioned: false,
