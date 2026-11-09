@@ -19,12 +19,14 @@ jest.mock('@modules/account/repository', () => {
     };
 });
 
-jest.mock('@modules/users', () => {
-    const actual = jest.requireActual<typeof import('@modules/users')>('@modules/users');
+jest.mock('@modules/users/friends/account', () => {
+    const actual = jest.requireActual<typeof import('@modules/users/friends/account')>(
+        '@modules/users/friends/account'
+    );
     return {
         ...actual,
         __esModule: true,
-        userService: { ...actual.userService, findAuthenticatableById: jest.fn() }
+        accountUserService: { ...actual.accountUserService, findAuthenticatableById: jest.fn() }
     };
 });
 
@@ -42,7 +44,7 @@ jest.mock('@modules/access', () => {
 
 import { listSessions, newestPerFamily } from '@modules/account/session/listing';
 import { sessionRepository, type SessionRow } from '@modules/account/repository';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { accessService } from '@modules/access';
 import { hashToken } from '@infrastructure/security/hash-token';
 
@@ -66,7 +68,9 @@ const row = (familyId: Types.ObjectId, overrides: Partial<SessionRow> = {}): Ses
     });
 
 /** The account-read double. */
-const { findAuthenticatableById } = asStub<{ findAuthenticatableById: jest.Mock }>(userService);
+const { findAuthenticatableById } = asStub<{ findAuthenticatableById: jest.Mock }>(
+    accountUserService
+);
 
 beforeEach(() => {
     jest.resetAllMocks();

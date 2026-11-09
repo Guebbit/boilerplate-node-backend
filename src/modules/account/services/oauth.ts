@@ -10,7 +10,8 @@
 
 import { getCurrentLocale } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
-import { userService, isAuthenticatable, isRestorable, type UserDocument } from '@modules/users';
+import { isAuthenticatable, isRestorable, type UserDocument } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { rehostRemoteImage } from '@infrastructure/adapters/remote-image';
 import type { CallerContext } from '@types';
@@ -192,28 +193,30 @@ export const linkProviderToSignedInAccount = (
         if (sessionUserId !== user.id) throw new OAuthLinkExpiredError();
         if (!isAuthenticatable(user)) throw new OAuthAccountUnavailableError(user.id);
 
-        return userService.findByOAuthIdentity(provider, identity.providerId).then((owner) => {
-            if (owner && owner.id !== user.id) throw new OAuthIdentityTakenError(provider);
+        return accountUserService
+            .findByOAuthIdentity(provider, identity.providerId)
+            .then((owner) => {
+                if (owner && owner.id !== user.id) throw new OAuthIdentityTakenError(provider);
 
-            return userService
-                .linkOAuthAccount(user.id, {
-                    provider,
-                    providerId: identity.providerId,
-                    connectedAt: new Date()
-                })
-                .then((linked) => {
-                    if (!linked) return user;
+                return accountUserService
+                    .linkOAuthAccount(user.id, {
+                        provider,
+                        providerId: identity.providerId,
+                        connectedAt: new Date()
+                    })
+                    .then((linked) => {
+                        if (!linked) return user;
 
-                    return recordAccountAudit(context, user.id, {
-                        action: accountAuditActions.AUTH_OAUTH_LINKED,
-                        outcome: 'success',
-                        metadata: { via: provider }
-                    }).then(() => {
-                        notifySignInMethod(user, 'linked', provider, context);
-                        return user;
+                        return recordAccountAudit(context, user.id, {
+                            action: accountAuditActions.AUTH_OAUTH_LINKED,
+                            outcome: 'success',
+                            metadata: { via: provider }
+                        }).then(() => {
+                            notifySignInMethod(user, 'linked', provider, context);
+                            return user;
+                        });
                     });
-                });
-        });
+            });
     });
 
 /**
@@ -250,7 +253,7 @@ const signupFromOAuth = (
         // `verifiedAt` below is the whole of the vouching: the provider vouches for this address,
         // so the account is a `customer` from its first request. A failure leaves no row behind,
         // only the re-hosted avatar to discard.
-        userService
+        accountUserService
             .registerFromOAuth({
                 email: identity.email,
                 // No display name from the provider: the address is at least unique, unlike a blank.
@@ -327,7 +330,7 @@ export const loginOrCreateFromOAuth = (
     identity: OAuthIdentity,
     context: CallerContext
 ): Promise<{ user: UserDocument; outcome: OAuthOutcome }> =>
-    userService
+    accountUserService
         // WITH credentials, unlike every other lookup in this file: the controller may need to
         // build a 2FA login challenge off `user.twoFactorMethods`, which is `select: false` —
         // see 1b in docs/theory/defences/authentication.md#federated-login.
@@ -343,7 +346,7 @@ export const loginOrCreateFromOAuth = (
 
             // Same reason as the lookup above: `linkToExistingAccount` below may hand this
             // account straight to a 2FA challenge too.
-            return userService.findByEmail(identity.email).then((byEmail) => {
+            return accountUserService.findByEmail(identity.email).then((byEmail) => {
                 // Unverified is refused on BOTH branches: a signup would stamp `verifiedAt` on an
                 // address nobody proved, which pre-hijacks it (Sudhodanan & Paverd 2022).
                 if (!identity.emailVerified) throw new OAuthEmailUnverifiedError(identity.email);
@@ -401,7 +404,7 @@ export const listOAuthLinks = (
     userId: string
 ): Promise<{ provider: string; connectedAt: Date }[]> =>
     // `oauthAccounts` is `select: false`, hence the credentialed read.
-    userService.findByIdWithCredentials(userId).then((user) =>
+    accountUserService.findByIdWithCredentials(userId).then((user) =>
         (user?.oauthAccounts ?? []).map(({ provider, connectedAt }) => ({
             provider,
             connectedAt
@@ -423,7 +426,7 @@ export const unlinkOAuthProvider = (
     provider: string,
     context: CallerContext
 ): Promise<boolean> =>
-    userService.unlinkOAuthAccount(userId, provider).then((removed) => {
+    accountUserService.unlinkOAuthAccount(userId, provider).then((removed) => {
         if (!removed) return removed;
 
         recordAudit(context, {
@@ -433,7 +436,7 @@ export const unlinkOAuthProvider = (
             metadata: { via: provider }
         });
         // Told after the fact, like a connect: whoever removed it, the owner reads about it.
-        return userService.findByIdWithCredentials(userId).then((user) => {
+        return accountUserService.findByIdWithCredentials(userId).then((user) => {
             if (user) notifySignInMethod(user, 'unlinked', provider, context);
             return removed;
         });

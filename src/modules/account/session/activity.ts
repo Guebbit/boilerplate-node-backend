@@ -5,7 +5,7 @@
  */
 
 import { logger } from '@infrastructure/adapters/logger';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 
 /**
  * Stamp the account as active. Never rejects: a lost stamp costs a stale reading, nothing more,
@@ -14,7 +14,7 @@ import { userService } from '@modules/users';
  * @param userId - the account a session was just minted or kept alive for
  */
 export const recordActivity = (userId: string): Promise<void> =>
-    userService.touchLastActive(userId).catch((error: unknown) => {
+    accountUserService.touchLastActive(userId).catch((error: unknown) => {
         // Stryker disable next-line all
         logger.warn({ message: 'Could not stamp the account as active.', userId, error });
     });

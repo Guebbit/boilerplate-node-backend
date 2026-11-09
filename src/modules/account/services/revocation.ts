@@ -10,7 +10,7 @@
  * See docs/modules/account-sessions.md#revocation.
  */
 
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { logger } from '@infrastructure/adapters/logger';
 import { announceInTransaction, type OutboxAnnouncement } from '@kernel/outbox';
 import { ACCOUNT_SESSIONS_REVOKED } from '../events';
@@ -69,11 +69,12 @@ const PENDING_TOKEN_TYPES: readonly VerificationTokenType[] = [
  */
 const moveEpoch = (cause: RevocationCause, userId: string): Promise<void> => {
     if (REVOCATION[cause].epoch === 'with-write') return Promise.resolve();
-    if (!announces(cause)) return userService.bumpSessionEpoch(userId);
+    if (!announces(cause)) return accountUserService.bumpSessionEpoch(userId);
 
     return announceInTransaction(
         // Hands back the id: a `write` that resolves to nothing announces nothing.
-        (session) => userService.bumpSessionEpoch(userId, undefined, session).then(() => userId),
+        (session) =>
+            accountUserService.bumpSessionEpoch(userId, undefined, session).then(() => userId),
         (id) => sessionsRevokedAnnouncement(id, cause)
     ).then(() => undefined);
 };

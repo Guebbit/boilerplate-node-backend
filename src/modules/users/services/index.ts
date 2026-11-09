@@ -1,9 +1,9 @@
 /**
  * @module
- * User service — the User document's admin CRUD and search, plus the named identity operations
- * `account` calls to authenticate, register, verify and 2FA-protect it: the `users` end of the one
- * domain-primitives relationship in this repo (`docs/theory/strategic-ddd.md` §5). One file per
- * flow, not one big file; see `docs/theory/layers.md`.
+ * User service — the User document's admin CRUD and search, and the few reads and holds a sibling
+ * module really uses. The rest of what touches the document (authenticate, register, verify,
+ * 2FA-protect, erase) is `account`'s and lives behind `../friends/account.ts`. One file per flow,
+ * not one big file; see `docs/theory/layers.md`.
  *
  * The flows themselves — HTTP, sessions, emails, rate limits, anti-automation — stay in `account`;
  * these files only ever enforce what the document itself requires.
@@ -12,16 +12,8 @@
  */
 
 import { presentAccount } from '../presenter';
-import {
-    search,
-    getById,
-    findByEmail,
-    staffContacts,
-    toUserContract,
-    toUserContracts
-} from './read';
+import { search, getById, staffContacts, toUserContract, toUserContracts } from './read';
 import { activate, deactivate } from './activation';
-import { enqueueIfPending } from './image';
 import { create } from './create';
 import { updateById } from './update';
 import { assignUserRole, revokeUserRole } from './role';
@@ -31,69 +23,10 @@ import {
     purchaseHoldCountingSince,
     setPurchaseHold,
     liftPurchaseHold,
-    takeAutomaticPurchaseHold,
     flagPurchaseHoldReview
 } from './purchase-hold';
-import {
-    updateOwnProfile,
-    softDeleteInactive,
-    eraseInactive,
-    scheduleOwnDeletion,
-    restoreOwnAccount,
-    eraseScheduledDeletion,
-    eraseAgain,
-    restoreDeletionState,
-    findDueScheduledDeletions
-} from './own-account';
-import {
-    findAuthenticatableById,
-    findByIdWithCredentials,
-    findForLogin,
-    findByOAuthIdentity,
-    findByIdWithPendingEmail,
-    emailOrPendingEmailTaken,
-    emailTaken
-} from './lookups';
-import {
-    setPassword,
-    markSessionsEnded,
-    markEmailVerified,
-    applyEmailChange,
-    restorePreviousEmail,
-    cancelPendingEmail,
-    markInactivityWarned,
-    persistTwoFactorMethods,
-    persistTwoFactorWrite,
-    armReauthCode,
-    spendDeliveredCode,
-    recordDeliveredMiss,
-    reserveMfaAttempt,
-    resetMfaAttempts,
-    claimTotpStep,
-    spendBackupCode,
-    bumpSessionEpoch,
-    touchLastActive,
-    touchApiKeyUse
-} from './credentials';
-import { clearLapsedPreviousEmail, clearDeliveredCode } from './credentials';
-import { reencryptUserPhones, reencryptTwoFactorSecrets } from './reencrypt';
-import { exportSignInMethods } from './sign-in-methods';
-import { userAuditChanges } from './audit-changes';
-import {
-    registerSelfService,
-    registerFromOAuth,
-    buildSignupDecoy,
-    linkOAuthAccount,
-    unlinkOAuthAccount
-} from './signup';
-import {
-    findInactiveUnwarned,
-    findInactiveUnminimised,
-    minimiseInactive,
-    minimiseInactiveBefore,
-    findWarnedStillInactive,
-    findReaperSoftDeletedPastGrace
-} from './reaper';
+import { findAuthenticatableById } from './lookups';
+import { touchApiKeyUse } from './credentials';
 
 export { isAuthenticatable, isRestorable } from '../authenticatable';
 export { personalDataSubjectOf } from './personal-data-subject';
@@ -106,21 +39,15 @@ export type { StaffContact } from './read';
 /**
  * The service's public surface — the controllers call through this, never the bare functions.
  * `updateById`, `activate`, `deactivate` and `removeById` load by id and ask the staff-role question first;
- * `assignUserRole` and `revokeUserRole` are the role door and ask the grant itself. The
- * named doors take an already-loaded document for the one caller that holds the record and the
- * right to change it: the owner (`updateOwnProfile`, `scheduleOwnDeletion`, `restoreOwnAccount`), the
- * scheduled purge (`eraseScheduledDeletion`) and the inactivity reaper (`softDeleteInactive`,
- * `eraseInactive`) and the restore runbook (`eraseAgain`, `restoreDeletionState`, friend-only to `account`). The raw `update` and `remove` beneath them are not here.
+ * `assignUserRole` and `revokeUserRole` are the role door and ask the grant itself. What `account`
+ * alone calls (credentials, sign-up, the owner's own doors, the reaper) is `accountUserService`
+ * in `../friends/account.ts`, not here: a sibling cannot reach a step that trusts its caller.
  */
 export const userService = {
-    userAuditChanges,
     search,
     getById,
     staffContacts,
     create,
-    registerSelfService,
-    registerFromOAuth,
-    buildSignupDecoy,
     updateById,
     assignUserRole,
     revokeUserRole,
@@ -132,58 +59,9 @@ export const userService = {
     purchaseHoldCountingSince,
     setPurchaseHold,
     liftPurchaseHold,
-    takeAutomaticPurchaseHold,
     flagPurchaseHoldReview,
-    updateOwnProfile,
-    softDeleteInactive,
-    eraseInactive,
-    scheduleOwnDeletion,
-    restoreOwnAccount,
-    eraseScheduledDeletion,
-    eraseAgain,
-    restoreDeletionState,
-    findDueScheduledDeletions,
-    findByEmail,
-    emailTaken,
     findAuthenticatableById,
-    findByIdWithCredentials,
-    findForLogin,
-    findByOAuthIdentity,
-    findByIdWithPendingEmail,
-    emailOrPendingEmailTaken,
-    exportSignInMethods,
-    setPassword,
-    markSessionsEnded,
-    markEmailVerified,
-    applyEmailChange,
-    restorePreviousEmail,
-    cancelPendingEmail,
-    markInactivityWarned,
-    persistTwoFactorMethods,
-    persistTwoFactorWrite,
-    armReauthCode,
-    spendDeliveredCode,
-    recordDeliveredMiss,
-    reserveMfaAttempt,
-    resetMfaAttempts,
-    claimTotpStep,
-    spendBackupCode,
-    bumpSessionEpoch,
-    touchLastActive,
     touchApiKeyUse,
-    clearLapsedPreviousEmail,
-    clearDeliveredCode,
-    reencryptUserPhones,
-    reencryptTwoFactorSecrets,
-    linkOAuthAccount,
-    unlinkOAuthAccount,
-    findInactiveUnwarned,
-    findInactiveUnminimised,
-    minimiseInactive,
-    minimiseInactiveBefore,
-    findWarnedStillInactive,
-    findReaperSoftDeletedPastGrace,
-    enqueueIfPending,
     // The barrel never publishes a presenter function, so a sibling that has to shape an account
     // for a response reaches the helper through the service.
     toAccount: presentAccount,

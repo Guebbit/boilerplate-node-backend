@@ -7,7 +7,7 @@
 
 import type { TwoFactorMethodHandler } from '../registry';
 import { generateSecret } from 'otplib';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { buildOtpauthUri, decryptTotpSecret, encryptTotpSecret, verifyTotpCode } from '../totp';
 
 /**
@@ -52,10 +52,12 @@ export const totpMethod: TwoFactorMethodHandler = {
             // The replay mark is a conditional write (only a LATER step wins), so two requests
             // carrying one code cannot both pass: the loser is a wrong code. The in-memory
             // entry follows, so the caller's own save writes the same value.
-            return userService.claimTotpStep(user.id, entry.method, timeStep).then((claimed) => {
-                if (claimed) entry.lastUsedStep = timeStep;
-                return claimed;
-            });
+            return accountUserService
+                .claimTotpStep(user.id, entry.method, timeStep)
+                .then((claimed) => {
+                    if (claimed) entry.lastUsedStep = timeStep;
+                    return claimed;
+                });
         });
     }
 };

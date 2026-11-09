@@ -17,7 +17,8 @@ import { logger } from '@infrastructure/adapters/logger';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { getDefaultLocale } from '@infrastructure/i18n';
 import { systemCallerContext } from '@kernel/permissions';
-import { userService, type UserDocument } from '@modules/users';
+import { type UserDocument } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { inactivityWarningEmail, greetableName } from '../emails';
 import { DAY_MS } from '@domain-primitives/time';
 
@@ -37,7 +38,7 @@ const warn = (user: UserDocument): Promise<void> => {
         GRACE_DAYS
     );
     return enqueueEmail({ to: user.email, subject: mail.subject }, mail.template, mail.data).then(
-        () => userService.markInactivityWarned(user).then(() => undefined)
+        () => accountUserService.markInactivityWarned(user).then(() => undefined)
     );
 };
 
@@ -46,7 +47,7 @@ const warn = (user: UserDocument): Promise<void> => {
  * retried next night, never stopping the rest.
  */
 const minimiseStage = (minimiseDays: number): Promise<number> =>
-    userService.minimiseInactiveBefore(daysAgo(minimiseDays)).then((result) => {
+    accountUserService.minimiseInactiveBefore(daysAgo(minimiseDays)).then((result) => {
         logger.info({ message: 'Inactive-account minimise stage complete.', ...result });
         return result.minimised;
     });
@@ -68,19 +69,21 @@ type DeletionCounts = Omit<InactiveReapCounts, 'minimised'>;
 
 /** Stages 1-3, the opt-in deletion path: warn, soft delete, hard delete. */
 const deletionStages = async (inactiveDays: number): Promise<DeletionCounts> => {
-    const toWarn = await userService.findInactiveUnwarned(daysAgo(inactiveDays));
+    const toWarn = await accountUserService.findInactiveUnwarned(daysAgo(inactiveDays));
     for (const user of toWarn) await warn(user);
 
-    const toSoftDelete = await userService.findWarnedStillInactive(daysAgo(GRACE_DAYS));
+    const toSoftDelete = await accountUserService.findWarnedStillInactive(daysAgo(GRACE_DAYS));
     // Both deletes hand a system context: nobody is at the keyboard, so the trail is the only record.
     for (const user of toSoftDelete)
-        await userService.softDeleteInactive(user, systemCallerContext('User'));
+        await accountUserService.softDeleteInactive(user, systemCallerContext('User'));
 
-    const toHardDelete = await userService.findReaperSoftDeletedPastGrace(daysAgo(GRACE_DAYS));
+    const toHardDelete = await accountUserService.findReaperSoftDeletedPastGrace(
+        daysAgo(GRACE_DAYS)
+    );
     // Every HTTP-driven delete records through `createDeleteController`'s spec; this one has no
     // request behind it, so it hands its own audit context.
     for (const user of toHardDelete)
-        await userService.eraseInactive(user, systemCallerContext('User'));
+        await accountUserService.eraseInactive(user, systemCallerContext('User'));
 
     const counts = {
         warned: toWarn.length,

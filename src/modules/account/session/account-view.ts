@@ -19,7 +19,7 @@ import {
     staffRoleWithheld,
     PERMISSION_RULES
 } from '@kernel/permissions';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import type {
     Abilities,
     AccountView,
@@ -103,10 +103,10 @@ export const activityOf = (context: AuthContext): SessionActivity => {
  * @param context - the resolved signed-in caller
  */
 export const accountViewOf = (
-    user: Parameters<typeof userService.toAccount>[0],
+    user: Parameters<typeof accountUserService.toAccount>[0],
     context: AuthContext
 ): AccountView => ({
-    ...userService.toAccount(user, context.roles.tenant),
+    ...accountUserService.toAccount(user, context.roles.tenant),
     abilities: abilitiesOf(context),
     activity: activityOf(context)
 });
@@ -138,7 +138,7 @@ export const withAccountView = (
 ): Promise<AuthTokens> =>
     Promise.all([
         resolveProof(userId, { authTime: Math.floor(proof.provedAt / 1000), amr: proof.amr }),
-        userService.findByIdWithPendingEmail(userId)
+        accountUserService.findByIdWithPendingEmail(userId)
     ]).then(([context, user]) =>
         context && user ? { ...issued, account: accountViewOf(user, context) } : issued
     );

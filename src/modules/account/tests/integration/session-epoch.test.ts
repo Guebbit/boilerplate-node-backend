@@ -10,7 +10,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
 import { codeFor } from '@tests/totp';
 import { cookieHeader } from '@tests/cookies';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import {
     createUser,
@@ -57,7 +57,10 @@ describe('a token minted before the epoch', () => {
         const { bearer } = await loginAs(user.email);
         expect(await statusWith(bearer)).toBe(200);
 
-        await userService.bumpSessionEpoch(user.id, new Date(Date.now() + PAST_THE_SECOND_MS));
+        await accountUserService.bumpSessionEpoch(
+            user.id,
+            new Date(Date.now() + PAST_THE_SECOND_MS)
+        );
 
         expect(await statusWith(bearer)).toBe(401);
     });
@@ -66,7 +69,10 @@ describe('a token minted before the epoch', () => {
         const user = await createUser({ verifiedAt: new Date() });
         const { cookie } = await loginAs(user.email);
 
-        await userService.bumpSessionEpoch(user.id, new Date(Date.now() + PAST_THE_SECOND_MS));
+        await accountUserService.bumpSessionEpoch(
+            user.id,
+            new Date(Date.now() + PAST_THE_SECOND_MS)
+        );
 
         const refresh = await api().post('/account/refresh').set('Cookie', cookie);
         expect(refresh.status).toBe(401);
@@ -76,8 +82,8 @@ describe('a token minted before the epoch', () => {
         const user = await createUser({ verifiedAt: new Date() });
         const later = new Date(Date.now() + 60_000);
 
-        await userService.bumpSessionEpoch(user.id, later);
-        await userService.bumpSessionEpoch(user.id, new Date());
+        await accountUserService.bumpSessionEpoch(user.id, later);
+        await accountUserService.bumpSessionEpoch(user.id, new Date());
 
         const stored = await userRepository.findByIdWithCredentials(user.id);
         expect(stored?.tokensValidAfter).toEqual(later);
@@ -134,8 +140,8 @@ describe('the events that move the epoch', () => {
         const other = await loginAs(user.email);
         const caller = await loginAs(user.email);
         // The guard reads the account first; the service's own read is the second call.
-        const read = userService.findAuthenticatableById.bind(userService);
-        jest.spyOn(userService, 'findAuthenticatableById')
+        const read = accountUserService.findAuthenticatableById.bind(accountUserService);
+        jest.spyOn(accountUserService, 'findAuthenticatableById')
             .mockImplementationOnce(read)
             .mockRejectedValueOnce(new Error('datastore down'));
 
@@ -271,7 +277,9 @@ describe('"this wasn\'t me" ends the sessions before it touches the address', ()
 describe('a credential change moves the epoch in its own write', () => {
     // The bump is made to fail: only a change that no longer depends on it can still end the sessions.
     beforeEach(() => {
-        jest.spyOn(userService, 'bumpSessionEpoch').mockRejectedValue(new Error('bump failed'));
+        jest.spyOn(accountUserService, 'bumpSessionEpoch').mockRejectedValue(
+            new Error('bump failed')
+        );
     });
 
     afterEach(() => {

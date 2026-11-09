@@ -17,7 +17,7 @@ import { setEnvironment } from '@tests/environment';
 import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
 import { userRepository } from '@modules/users/tests/factories';
 import { EMAIL_VERIFY_TOKEN_TYPE } from '@modules/account/services';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { decodeJwt } from 'jose';
 import { logger } from '@infrastructure/adapters/logger';
 import * as mailerPort from '@infrastructure/adapters/mailer';
@@ -952,7 +952,7 @@ describe('POST /account/export for an account that is gone', () => {
     // unauthenticated, as it is on every other self-service route; the contract declares no 404.
     it('answers 401', async () => {
         const { bearer } = await loginWithCookie();
-        jest.spyOn(userService, 'getById').mockResolvedValueOnce(undefined);
+        jest.spyOn(accountUserService, 'getById').mockResolvedValueOnce(undefined);
 
         const response = await api().post('/account/export').set('Authorization', bearer).send();
 

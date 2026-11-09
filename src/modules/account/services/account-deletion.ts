@@ -7,7 +7,8 @@
  * See: docs/theory/data-retention.md#self-deletion-a-grace-under-one-month
  */
 
-import { userService, type UserDocument } from '@modules/users';
+import { type UserDocument } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import type { CallerContext } from '@types';
 import { systemCallerContext } from '@kernel/permissions';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -64,7 +65,7 @@ export const scheduleAccountDeletion = (
     const purgeAt = deletionPurgeAt(requestedAt);
 
     return (
-        userService
+        accountUserService
             // The ledger row joins the lock's transaction: committed together, or neither.
             .scheduleOwnDeletion(user, requestedAt, purgeAt, (session) =>
                 recordSchedule(user.id, requestedAt, purgeAt, session)
@@ -125,7 +126,7 @@ export const restoreAccount = (
     // One clock: the lock and the ledger row carry the same instant.
     const restoredAt = new Date();
     // The ledger row joins the restore's transaction: committed together, or neither.
-    return userService
+    return accountUserService
         .restoreOwnAccount(user, restoredAt, (session) =>
             recordCancellation(user.id, restoredAt, session)
         )
@@ -207,7 +208,7 @@ export const restoreAccountByLink = (
 export const handleRestoredByStaff = (userId: string, canceledAt: Date): Promise<void> =>
     removeTokens(userId, [ACCOUNT_RESTORE_TOKEN_TYPE])
         .then(() => recordCancellation(userId, canceledAt))
-        .then(() => userService.getById(userId))
+        .then(() => accountUserService.getById(userId))
         .then((user) => {
             // The staff member is in `users`' own audit row; this trail records the cancellation.
             if (user) announceRestored(user, 'staff', systemCallerContext('User'));

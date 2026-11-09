@@ -13,6 +13,7 @@ import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { resolveAnalyticsProvider } from '@infrastructure/observability/analytics';
 import { createUser } from '@modules/users/tests/factories';
 import { userService } from '@modules/users/services';
+import { accountUserService } from '../../friends/account';
 import { userModel } from '../../model';
 import usersModule from '../../module';
 
@@ -27,7 +28,7 @@ const DAY_MS = 86_400_000;
 /** An account its owner scheduled for erasure at `purgeAt`. */
 const scheduled = async (email: string, purgeAt: Date) => {
     const user = await createUser({ email, username: email.split('@', 1)[0] });
-    await userService.scheduleOwnDeletion(user, new Date(), purgeAt);
+    await accountUserService.scheduleOwnDeletion(user, new Date(), purgeAt);
     return user;
 };
 
@@ -50,7 +51,7 @@ describe('user.erased', () => {
     it('is written once by the scheduled purge', async () => {
         const user = await scheduled('purge-path@example.com', new Date(Date.now() - DAY_MS));
 
-        await userService.eraseScheduledDeletion(user, systemCallerContext('User'));
+        await accountUserService.eraseScheduledDeletion(user, systemCallerContext('User'));
 
         expect(await erasedRows()).toMatchObject([
             { aggregateId: user.id, payload: { userId: user.id } }
@@ -60,7 +61,10 @@ describe('user.erased', () => {
     it('is not written when the purge claim is lost', async () => {
         const user = await scheduled('lost-claim@example.com', new Date(Date.now() + 5 * DAY_MS));
 
-        const result = await userService.eraseScheduledDeletion(user, systemCallerContext('User'));
+        const result = await accountUserService.eraseScheduledDeletion(
+            user,
+            systemCallerContext('User')
+        );
 
         expect(result).toMatchObject({
             success: false,

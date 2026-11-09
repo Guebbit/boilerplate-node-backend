@@ -10,7 +10,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { codeFor } from '@tests/totp';
 import { cookieHeader, setCookie } from '@tests/cookies';
 import { createUser, PLAIN_PASSWORD, userRepository } from '@modules/users/tests/factories';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { registerOAuthProvider } from '../../oauth/providers';
 import { fakeOAuthProvider } from '@scenarios/support/doubles/oauth-fake';
 import { DELETION_RESTORE_TOKEN_TYPE } from '../../token-types';
@@ -34,7 +34,11 @@ const pendingAccount = async (overrides: Parameters<typeof createUser>[0] = {}) 
         ...overrides
     });
     const stored = await userRepository.findById(user.id);
-    await userService.scheduleOwnDeletion(stored!, new Date(Date.now() - 60_000), daysFromNow(20));
+    await accountUserService.scheduleOwnDeletion(
+        stored!,
+        new Date(Date.now() - 60_000),
+        daysFromNow(20)
+    );
     return user;
 };
 
@@ -166,7 +170,7 @@ describe('a pending account with a second factor', () => {
         const user = await createUser({ email: 'second@example.com', verifiedAt: new Date() });
         const secret = await armTotp(user.email);
         const armed = await userRepository.findById(user.id);
-        await userService.scheduleOwnDeletion(
+        await accountUserService.scheduleOwnDeletion(
             armed!,
             new Date(Date.now() - 60_000),
             daysFromNow(20)

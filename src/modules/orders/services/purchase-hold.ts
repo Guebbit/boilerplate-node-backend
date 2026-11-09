@@ -21,6 +21,7 @@ import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { emitDomainEvent, type DomainEventMap } from '@kernel/events';
 import { systemCallerContext } from '@kernel/permissions';
 import { userService } from '@modules/users';
+import { takeAutomaticPurchaseHold } from '@modules/users/friends/orders';
 import { purchaseHoldCancelCount, purchaseHoldWindowDays } from '../config';
 import { purchaseHoldUntil } from '../domain';
 import { ORDER_PURCHASE_HOLD_PLACED } from '../events';
@@ -86,20 +87,18 @@ const findingsFor = (userId: string, now: Date): Promise<Findings> =>
 const actOn = (userId: string, findings: Findings): Promise<void> => {
     if (findings.pauseUntil) {
         const until = findings.pauseUntil;
-        return userService
-            .takeAutomaticPurchaseHold(userId, until, systemCallerContext('User'), {
-                cancelCount: purchaseHoldCancelCount(),
-                windowDays: purchaseHoldWindowDays()
-            })
-            .then((taken) =>
-                taken
-                    ? emitDomainEvent(ORDER_PURCHASE_HOLD_PLACED, {
-                          tenantId: DEPLOYMENT_TENANT_ID,
-                          userId,
-                          until: until.toISOString()
-                      }).then(() => undefined)
-                    : undefined
-            );
+        return takeAutomaticPurchaseHold(userId, until, systemCallerContext('User'), {
+            cancelCount: purchaseHoldCancelCount(),
+            windowDays: purchaseHoldWindowDays()
+        }).then((taken) =>
+            taken
+                ? emitDomainEvent(ORDER_PURCHASE_HOLD_PLACED, {
+                      tenantId: DEPLOYMENT_TENANT_ID,
+                      userId,
+                      until: until.toISOString()
+                  }).then(() => undefined)
+                : undefined
+        );
     }
     if (!findings.review) return Promise.resolve();
 

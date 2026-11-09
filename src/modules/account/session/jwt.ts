@@ -13,7 +13,7 @@ import { SignJWT, jwtVerify, errors as joseErrors } from 'jose';
 import type { JWTHeaderParameters, JWTPayload } from 'jose';
 import type { ResolveMissReason } from '@kernel/authentication';
 import { hashToken } from '@infrastructure/security/hash-token';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { sessionRepository } from '../repository';
 import type { SessionRow } from '../repository';
 import type { SessionSnapshot } from './strategy';
@@ -275,7 +275,7 @@ export const verifyRefreshWithRow = (
             if (row?.mode !== 'jwt' || row.supersededAt || row.expiresAt <= new Date())
                 throw new TokenRejection('revoked', 'Forbidden');
             // Scoped: a deactivated or deleted account's refresh cookie stops on its very next use.
-            return userService.findAuthenticatableById(String(row.userId)).then((user) => {
+            return accountUserService.findAuthenticatableById(String(row.userId)).then((user) => {
                 if (!user || predatesSessionEpoch(data.auth_time, user.tokensValidAfter))
                     throw new TokenRejection('revoked', 'Forbidden');
                 return { data, row };
@@ -361,7 +361,7 @@ const mintRefreshToken = (
     guard: (user: { id: string; twoFactorEnabledAt?: Date; tokensValidAfter?: Date }) => void,
     continued?: SessionSnapshot
 ): Promise<string> =>
-    userService.findAuthenticatableById(id).then((user) => {
+    accountUserService.findAuthenticatableById(id).then((user) => {
         if (!user) throw new Error('User not found');
         guard(user);
         /*
@@ -544,7 +544,7 @@ const reissueRotated = (
     oldToken: string,
     remainingMs: number
 ): Promise<RotatedSession> =>
-    userService.findAuthenticatableById(claims.sub).then((user) => {
+    accountUserService.findAuthenticatableById(claims.sub).then((user) => {
         if (!user) throw new TokenRejection('revoked', 'User not found');
         // The epoch may have moved since the presented token was minted: a rotation must not
         // carry a revoked session forward.

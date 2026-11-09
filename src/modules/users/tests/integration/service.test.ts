@@ -14,6 +14,7 @@ import { personalDataErasers, setPersonalDataErasers } from '../../erasure-regis
 import type { PersonalDataSubject } from '@kernel/registry';
 import { createUser } from '@modules/users/tests/factories';
 import { userService } from '@modules/users/services';
+import { accountUserService } from '../../friends/account';
 import { remove } from '../../services/remove';
 import { USER_SETUP_REQUESTED } from '../../events';
 import { userRepository } from '../../repository';
@@ -440,7 +441,7 @@ describe('userService.updateById', () => {
         /** Answer through the profile door, on a freshly loaded account, and read the date back. */
         const answer = async (consent: boolean): Promise<Date | undefined> => {
             const loaded = await userRepository.findById(id);
-            await userService.updateOwnProfile(loaded!, { analyticsConsent: consent });
+            await accountUserService.updateOwnProfile(loaded!, { analyticsConsent: consent });
             const stored = await userRepository.findById(id);
             return stored?.analyticsConsentAt;
         };
@@ -685,11 +686,13 @@ describe('userService.updateById', () => {
     });
 });
 
-describe('userService.updateOwnProfile', () => {
+describe('accountUserService.updateOwnProfile', () => {
     it('updates the owner’s own document', async () => {
         const user = await createUser();
 
-        const result = await userService.updateOwnProfile(user, { username: 'direct-update' });
+        const result = await accountUserService.updateOwnProfile(user, {
+            username: 'direct-update'
+        });
 
         expect(result.success).toBe(true);
         expect((result as ResponseSuccess<UserDocument>).data.username).toBe('direct-update');

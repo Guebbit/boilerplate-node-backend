@@ -69,7 +69,8 @@ the decision actually gets made.
 this module's barrel is the widest in the repo: `account` needs more of it to authenticate the same
 document. What a barrel publishes, and the deny-list that holds even here, is
 [Published language](../theory/strategic-ddd.md#5-published-language-the-barrel). Every read or
-write, `account`'s included, goes through `userService`, never the collection directly.
+write goes through a service, never the collection directly: `userService` for a sibling,
+`accountUserService` (`friends/account.ts`) for `account`.
 
 ::: tip Why two modules and not one
 `/users` and `/account` are different mounts. Merging them
@@ -84,7 +85,7 @@ list is checked on every regenerate, so it is never repeated by hand here.
 ## The pipeline
 
 One collection, two services over it: `/users` (admin) and `/account` (signup, login, reset) both
-write through `userService`, never the collection directly.
+write through a service, never the collection directly (`userService`, and `accountUserService` for `account`).
 
 `PUT /users/{id}` replaces the record (a field left out reverts to its default); `PATCH /users/{id}`
 merges (a field left out keeps its current value). Neither carries the role: that has its own door
@@ -241,6 +242,26 @@ analytics provider to forget the id ([PostHog erasure](../tools/analytics.md#era
 
 ## The doors a sibling module may use
 
+A sibling reaches `users` through two objects, and the second is for one module only:
+
+| Object               | Where                                          | Who may import it                              |
+| -------------------- | ---------------------------------------------- | ---------------------------------------------- |
+| `userService`        | the barrel, `@modules/users`                   | any module, except `account` (lint refuses it) |
+| `accountUserService` | `@modules/users/friends/account` (`@internal`) | `account` only (and tests)                     |
+
+`userService` holds what other modules really use: `search`, `getById`, `staffContacts`,
+`findAuthenticatableById`, `touchApiKeyUse`, `purchaseHoldOf`, `purchaseHoldCountingSince`,
+`flagPurchaseHoldReview`, the staff admin writes (`create`, `updateById`, `activate`, `deactivate`,
+`removeById`, `restoreById`, `setPurchaseHold`, `liftPurchaseHold`, `assignUserRole`,
+`revokeUserRole`, which check role or grant protection themselves) and the shapers `toAccount`,
+`toUserContract`, `toUserContracts`. `accountUserService` holds every step `account` calls (the doors
+below, credentials, sign-up, the OAuth link, the reaper's reads); they trust that `account` checked.
+`getById`, `findAuthenticatableById` and `toAccount` are the same functions under both names.
+`account` cannot import `userService`, so a new `account`-only function can only go in its own
+object; publishing one is a deliberate step for another module. The same pattern gives `orders` the
+one hold it may take (`friends/orders.ts`). See
+[Published language](../theory/strategic-ddd.md#5-published-language-the-barrel).
+
 Two writes skip the ban check and the staff protection the admin routes enforce: the raw `update`
 and `remove`. Both are `@internal` and never leave the module. `account` reaches the record through
 named doors instead, each narrower than the write beneath it:
@@ -271,12 +292,12 @@ and is left out; so is a banned or deleted one.
 A protective pause on checkout for one account, so a person steps in before a bot or a loop does
 damage. It is a field on the user (`purchaseHold`) with its own two doors and one reader:
 
-| Door                                   | Who                                        | What it does                                                                                                                                                                              |
-| -------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /users/{id}/place-purchase-hold` | staff with `ban:User`                      | a manual hold ending at `until`, with an optional `note` written for the buyer; replaces any; the same staff hold again (same `until` and `note`) is `409 USER_PURCHASE_HOLD_ALREADY_SET` |
-| `POST /users/{id}/lift-purchase-hold`  | staff with `ban:User`                      | the review: ends the hold now and restarts the count; `409 USER_PURCHASE_HOLD_NOT_SET` with none                                                                                          |
-| `takeAutomaticPurchaseHold`            | `orders` only (a lint-guarded friend door) | the shop's own hold after repeated cancellations; atomic, so only one of two racing calls wins                                                                                            |
-| `purchaseHoldOf`                       | `cart`'s checkout                          | the hold in force, if any                                                                                                                                                                 |
+| Door                                   | Who                                 | What it does                                                                                                                                                                              |
+| -------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /users/{id}/place-purchase-hold` | staff with `ban:User`               | a manual hold ending at `until`, with an optional `note` written for the buyer; replaces any; the same staff hold again (same `until` and `note`) is `409 USER_PURCHASE_HOLD_ALREADY_SET` |
+| `POST /users/{id}/lift-purchase-hold`  | staff with `ban:User`               | the review: ends the hold now and restarts the count; `409 USER_PURCHASE_HOLD_NOT_SET` with none                                                                                          |
+| `takeAutomaticPurchaseHold`            | `orders` only (`friends/orders.ts`) | the shop's own hold after repeated cancellations; atomic, so only one of two racing calls wins                                                                                            |
+| `purchaseHoldOf`                       | `cart`'s checkout                   | the hold in force, if any                                                                                                                                                                 |
 
 A hold is in force while `until` is in the future, so every reader ignores an expired one at once.
 Reads show it only while in force, to staff on `/users` and to the buyer on `/account` and in the cart

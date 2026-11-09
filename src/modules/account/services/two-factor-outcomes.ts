@@ -6,7 +6,8 @@
 
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
-import { userService, type UserDocument } from '@modules/users';
+import { type UserDocument } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import {
     generateReject,
     generateSuccess,
@@ -101,7 +102,7 @@ export const audited = <T>(
  */
 export const rejectWrongCode = (user: UserDocument): Promise<ResponseReject> =>
     (user.isModified()
-        ? userService.persistTwoFactorMethods(user).then(() => undefined)
+        ? accountUserService.persistTwoFactorMethods(user).then(() => undefined)
         : Promise.resolve()
     )
         .catch((error: unknown) => {
@@ -197,6 +198,6 @@ export const deliverArmedCode = (
     return armed.handler
         .send(user, armed.entry, context)
         .then((delivery) =>
-            userService.persistTwoFactorMethods(user).then(() => generateSuccess(delivery))
+            accountUserService.persistTwoFactorMethods(user).then(() => generateSuccess(delivery))
         );
 };

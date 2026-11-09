@@ -6,7 +6,7 @@
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, userRepository } from '@modules/users/tests/factories';
-import { userService } from '@modules/users/services';
+import { exportSignInMethods } from '../../services/sign-in-methods';
 
 setupTestDb();
 
@@ -16,7 +16,7 @@ const LINKED_AT = new Date('2026-03-01T10:00:00.000Z');
 /** A fixed moment a factor was armed. */
 const ARMED_AT = new Date('2026-04-02T09:30:00.000Z');
 
-describe('userService.exportSignInMethods', () => {
+describe('exportSignInMethods', () => {
     it('lists the linked providers and the armed factors, and nothing that opens them', async () => {
         const user = await createUser({
             email: 'ways-in@example.com',
@@ -44,7 +44,7 @@ describe('userService.exportSignInMethods', () => {
             connectedAt: LINKED_AT
         });
 
-        const section = await userService.exportSignInMethods(user.id);
+        const section = await exportSignInMethods(user.id);
 
         expect(section).toEqual({
             providers: [
@@ -67,7 +67,7 @@ describe('userService.exportSignInMethods', () => {
             twoFactorMethods: [{ method: 'totp', secret: 'pending-secret' }]
         });
 
-        await expect(userService.exportSignInMethods(user.id)).resolves.toEqual({
+        await expect(exportSignInMethods(user.id)).resolves.toEqual({
             providers: [],
             twoFactor: []
         });
@@ -76,15 +76,13 @@ describe('userService.exportSignInMethods', () => {
     it('answers empty lists for an account that holds only a password', async () => {
         const user = await createUser({ email: 'plain@example.com' });
 
-        await expect(userService.exportSignInMethods(user.id)).resolves.toEqual({
+        await expect(exportSignInMethods(user.id)).resolves.toEqual({
             providers: [],
             twoFactor: []
         });
     });
 
     it('answers nothing for an account that is gone, so the assembly omits the section', async () => {
-        await expect(
-            userService.exportSignInMethods('64b7f0a1c2d3e4f5a6b7c8d9')
-        ).resolves.toBeUndefined();
+        await expect(exportSignInMethods('64b7f0a1c2d3e4f5a6b7c8d9')).resolves.toBeUndefined();
     });
 });

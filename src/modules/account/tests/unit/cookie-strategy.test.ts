@@ -11,13 +11,15 @@ import { Types } from 'mongoose';
 import { asStub } from '@tests/stub';
 import { setEnvironment } from '@tests/environment';
 
-jest.mock('@modules/users', () => {
-    const actual = jest.requireActual<typeof import('@modules/users')>('@modules/users');
+jest.mock('@modules/users/friends/account', () => {
+    const actual = jest.requireActual<typeof import('@modules/users/friends/account')>(
+        '@modules/users/friends/account'
+    );
     return {
         ...actual,
         __esModule: true,
-        userService: {
-            ...actual.userService,
+        accountUserService: {
+            ...actual.accountUserService,
             findAuthenticatableById: jest.fn(),
             touchLastActive: jest.fn()
         }
@@ -67,7 +69,7 @@ import { cookieStrategy } from '@modules/account/session/cookie-strategy';
 import { SecondFactorRequiredError, StaleProofError } from '@modules/account/session/mint-guard';
 import { resolveProof } from '@modules/account/session/auth-context';
 import { sessionRepository, type NewSessionRow } from '@modules/account/repository';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { accessService } from '@modules/access';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { cookieSet, recordingResponse, requestWith } from '../strategy-doubles';
@@ -95,7 +97,7 @@ const sessions = asStub<{
 
 /** The account-read doubles. */
 const users = asStub<{ findAuthenticatableById: jest.Mock; touchLastActive: jest.Mock }>(
-    userService
+    accountUserService
 );
 
 /** The proof resolver double. */

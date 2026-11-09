@@ -10,7 +10,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
 import { eventually } from '@tests/eventually';
 import { createUser } from '@modules/users/tests/factories';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { logger } from '@infrastructure/adapters/logger';
 
 /** Every mail the app queued. */
@@ -38,9 +38,9 @@ afterEach(() => jest.restoreAllMocks());
 describe('POST /account/password/reset timing', () => {
     it('answers before a slow repository does, and still mails once it finishes', async () => {
         const user = await createUser({ email: 'slow@example.com' });
-        const lookup = userService.findByEmail.bind(userService);
+        const lookup = accountUserService.findByEmail.bind(accountUserService);
         let released = false;
-        jest.spyOn(userService, 'findByEmail').mockImplementation(
+        jest.spyOn(accountUserService, 'findByEmail').mockImplementation(
             (address) =>
                 new Promise((resolve) => {
                     setTimeout(() => {
@@ -63,7 +63,7 @@ describe('POST /account/password/reset timing', () => {
 
     it('answers an unknown address in the same breath, behind a slow repository too', async () => {
         let released = false;
-        jest.spyOn(userService, 'findByEmail').mockImplementation(
+        jest.spyOn(accountUserService, 'findByEmail').mockImplementation(
             () =>
                 new Promise((resolve) => {
                     setTimeout(() => {
@@ -82,7 +82,9 @@ describe('POST /account/password/reset timing', () => {
     });
 
     it('logs a failure behind the answer instead of swallowing it, and still answers 204', async () => {
-        jest.spyOn(userService, 'findByEmail').mockRejectedValue(new Error('database is gone'));
+        jest.spyOn(accountUserService, 'findByEmail').mockRejectedValue(
+            new Error('database is gone')
+        );
         const logged = jest.spyOn(logger, 'error').mockImplementation(() => logger);
 
         const response = await api()

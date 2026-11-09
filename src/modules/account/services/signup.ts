@@ -18,7 +18,8 @@ import {
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { ERROR_CODES } from '@api/error-codes';
 import { SignupBody } from '@api/schemas.zod';
-import { userService, type UserDocument } from '@modules/users';
+import { type UserDocument } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { parseFormBoolean } from '@infrastructure/http/request';
 import type { CallerContext } from '@types';
 import { optionalBooleanSchema } from '@infrastructure/http/schemas';
@@ -81,7 +82,7 @@ const guardEmailPolicy = (input: SignupInput): Promise<ResponseSuccess<UserDocum
     checkEmailPolicy(input.email).then((verdict) =>
         verdict === 'refused'
             ? generateSuccess<UserDocument>(
-                  userService.buildSignupDecoy({
+                  accountUserService.buildSignupDecoy({
                       email: input.email,
                       username: input.username,
                       ...analyticsAnswer(input.analyticsConsent),
@@ -99,7 +100,7 @@ const guardEmailPolicy = (input: SignupInput): Promise<ResponseSuccess<UserDocum
 const createAccountIfEmailFree = (
     input: SignupInput
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    userService
+    accountUserService
         .emailTaken(input.email)
         .then<ResponseSuccess<UserDocument> | ResponseReject>((taken) => {
             if (taken)
@@ -109,7 +110,7 @@ const createAccountIfEmailFree = (
                         message: t('account.signup.email-already-used')
                     }
                 ]);
-            return userService
+            return accountUserService
                 .registerSelfService({
                     username: input.username,
                     email: input.email,
@@ -122,7 +123,7 @@ const createAccountIfEmailFree = (
                     locale: getCurrentLocale()
                 })
                 .then((createdUser) =>
-                    userService
+                    accountUserService
                         .enqueueIfPending(createdUser)
                         .then((user) => generateSuccess<UserDocument>(user))
                 );

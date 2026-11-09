@@ -39,7 +39,6 @@ import {
     cancelForPaymentMismatchById
 } from './cancel';
 import {
-    markPaid,
     markProcessing,
     settleFulfillment,
     reopenForFulfillment,
@@ -136,7 +135,6 @@ export const orderService = {
     updateById,
     removeById,
     restoreById,
-    markPaid,
     markProcessing,
     settleFulfillment,
     reopenForFulfillment,

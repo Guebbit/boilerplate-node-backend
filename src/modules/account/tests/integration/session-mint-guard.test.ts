@@ -11,7 +11,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { sessionRowsOf } from '../factories';
 import { decodeJwt } from 'jose';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { continueSession, startSession } from '../../session/jwt';
 import { SecondFactorRequiredError, StaleProofError } from '../../session/mint-guard';
 
@@ -78,7 +78,7 @@ describe('the proof time', () => {
     it('refuses a first session on a proof the epoch has since passed, storing nothing', async () => {
         const user = await createUser();
         const provedAt = Date.now();
-        await userService.bumpSessionEpoch(user.id, new Date(provedAt + 1));
+        await accountUserService.bumpSessionEpoch(user.id, new Date(provedAt + 1));
 
         await expect(startSession(user.id, ['pwd'], undefined, provedAt)).rejects.toBeInstanceOf(
             StaleProofError

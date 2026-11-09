@@ -12,7 +12,7 @@ import { registerCheckoutModules } from '@tests/checkout-modules';
 import { resetDomainEvents } from '@kernel/events';
 import { systemCallerContext } from '@kernel/permissions';
 import { createUser, userRepository } from '@modules/users/tests/factories';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { RACE_SIZE } from '@tests/race';
 
 setupTestDb();
@@ -43,13 +43,13 @@ describe('restore against the purge at the boundary', () => {
         const outcomes = await Promise.all(
             rounds.map(({ user, purgeAt }) =>
                 Promise.allSettled([
-                    userService.eraseScheduledDeletion(
+                    accountUserService.eraseScheduledDeletion(
                         user,
                         systemCallerContext('User'),
                         new Date()
                     ),
                     // A node whose clock is a second behind still sees the grace running.
-                    userService.restoreOwnAccount(user, new Date(purgeAt.getTime() - 1))
+                    accountUserService.restoreOwnAccount(user, new Date(purgeAt.getTime() - 1))
                 ])
             )
         );

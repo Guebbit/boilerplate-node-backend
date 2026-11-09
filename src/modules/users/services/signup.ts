@@ -90,6 +90,8 @@ export const unlinkOAuthAccount = (userId: string, provider: string): Promise<bo
 /**
  * Attach a federated identity to an existing account.
  *
+ * No check here: `account` has already verified the provider's claim (`friends/account.ts`).
+ *
  * @returns whether the link was written; `false` when the account already holds that provider
  */
 export const linkOAuthAccount = (

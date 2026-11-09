@@ -5,7 +5,7 @@
  * Run by the ops script `reencrypt`; see `@infrastructure/security/reencrypt`.
  */
 
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { getTotpEncryptionKeyRing } from '../session/config';
 import { totpBinding } from '../two-factor/totp';
 
@@ -15,7 +15,7 @@ import { totpBinding } from '../two-factor/totp';
  * @param dryRun - count what a real run would move and write nothing
  */
 export const reencryptTotpSecrets = (dryRun = false) =>
-    userService.reencryptTwoFactorSecrets(
+    accountUserService.reencryptTwoFactorSecrets(
         { ring: getTotpEncryptionKeyRing(), bindingOf: totpBinding },
         dryRun
     );

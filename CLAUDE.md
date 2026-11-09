@@ -127,6 +127,10 @@ and emails, plus `export type *` from its model. See `docs/theory/strategic-ddd.
 - MUST NOT import a module's own barrel from inside that module — reach the sibling file directly.
   A module's own files depending on its published surface is what makes the surface unsafe to
   narrow later, and risks a load-order cycle under `export *`.
+- A module may import a sibling's `friends/<its own name>.ts` (lint: the file's name must be the
+  importer's), and a friend uses only its friend object: `account` imports `accountUserService`
+  from `users/friends/account`, never the public `userService`. A step exactly one module may call
+  goes in that file, tagged `@internal`; the barrel never publishes it.
 - A controller reaching a repository, a model or wiring for something the barrel won't publish
   belongs to the service instead — ask the module's service for it, or add the read there.
 

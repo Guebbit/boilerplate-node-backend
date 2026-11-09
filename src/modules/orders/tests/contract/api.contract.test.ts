@@ -14,7 +14,7 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { orderModel } from '../../model';
 import { orderRepository } from '../../repository';
-import { orderService } from '../../services';
+import { markPaid } from '../../friends/payments';
 import { OrderStatus } from '@types';
 import { freezeDate, advanceDate } from '@tests/clock';
 import { reauthWindowSeconds } from '@kernel/config';
@@ -595,7 +595,7 @@ describe('GET /orders/{id}/timeline', () => {
         const buyer = await authenticateAs('user');
         const order = await seedOrderFor(buyer.user);
         const id = String(order._id);
-        await orderService.markPaid(id, 'card');
+        await markPaid(id, 'card');
         await api()
             .post(`/orders/${id}/status-override`)
             .set('Authorization', staff.bearer)

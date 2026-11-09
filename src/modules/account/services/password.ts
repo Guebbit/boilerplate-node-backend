@@ -23,7 +23,8 @@ import { logger } from '@infrastructure/adapters/logger';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
 import { SignupBody } from '@api/schemas.zod';
-import { userService, type UserDocument } from '@modules/users';
+import { type UserDocument } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
@@ -110,10 +111,10 @@ export const passwordChange = (
 const passwordAndEpochWrite =
     (user: UserDocument, password: string) =>
     (session: ClientSession): Promise<UserDocument> =>
-        userService
+        accountUserService
             .setPassword(user, password, session)
             .then((saved) =>
-                userService.bumpSessionEpoch(saved.id, undefined, session).then(() => saved)
+                accountUserService.bumpSessionEpoch(saved.id, undefined, session).then(() => saved)
             );
 
 /**

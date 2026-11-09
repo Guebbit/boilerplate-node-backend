@@ -8,7 +8,7 @@ import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { mint } from '@modules/api-keys/services/api-keys';
 import { createUser, PLAIN_PASSWORD, userRepository } from '@modules/users/tests/factories';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, loginBearer } from '@tests/http';
 import { armAuthenticator, TEST_AUTHENTICATOR_SECRET } from '@tests/authenticator';
@@ -110,9 +110,9 @@ describe('what counts as an authenticator app', () => {
         const app = await createUser({ email: 'app@example.com', username: 'app' }, 'manager');
         const mailed = await createUser({ email: 'mail@example.com', username: 'mail' }, 'manager');
         await armAuthenticator(app.id);
-        const withMail = await userService.findByIdWithCredentials(mailed.id);
+        const withMail = await accountUserService.findByIdWithCredentials(mailed.id);
         withMail!.twoFactorMethods.push({ method: 'email', enrolledAt: new Date() });
-        await userService.persistTwoFactorWrite(withMail!);
+        await accountUserService.persistTwoFactorWrite(withMail!);
 
         const appRow = await userRepository.findById(app.id);
         const mailedRow = await userRepository.findById(mailed.id);

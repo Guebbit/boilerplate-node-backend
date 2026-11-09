@@ -6,7 +6,7 @@
 
 import type { AuthContext, Session } from '@types';
 import { hashToken } from '@infrastructure/security/hash-token';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { sessionRepository, type SessionRow } from '../repository';
@@ -63,7 +63,7 @@ export const listSessions = (
 ): Promise<Session[]> =>
     Promise.all([
         sessionRepository.listLive(userId, mode, new Date()),
-        userService.findAuthenticatableById(userId),
+        accountUserService.findAuthenticatableById(userId),
         accessService.rolesOf(userId, DEPLOYMENT_TENANT_ID)
     ]).then(([allRows, user, roles]) => {
         // A ban moves the account's epoch and deletes no row, and a staff session past its idle

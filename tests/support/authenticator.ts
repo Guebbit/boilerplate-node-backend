@@ -7,7 +7,7 @@
  */
 
 import { Types } from 'mongoose';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { userRepository } from '@modules/users/tests/factories';
 import { accessService } from '@modules/access';
 import { encryptTotpSecret } from '@modules/account/two-factor/totp';
@@ -29,7 +29,7 @@ export const armAuthenticator = (
     userId: string,
     secret: string = TEST_AUTHENTICATOR_SECRET
 ): Promise<void> =>
-    userService.findByIdWithCredentials(userId).then((user) => {
+    accountUserService.findByIdWithCredentials(userId).then((user) => {
         if (!user) throw new Error(`armAuthenticator: no account ${userId}`);
 
         const entryId = new Types.ObjectId();
@@ -39,7 +39,7 @@ export const armAuthenticator = (
             enrolledAt: new Date(),
             secret: encryptTotpSecret(secret, String(entryId))
         });
-        return userService.persistTwoFactorWrite(user).then(() => undefined);
+        return accountUserService.persistTwoFactorWrite(user).then(() => undefined);
     });
 
 /**

@@ -8,7 +8,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
-import { orderService } from '@modules/orders';
+import { markPaid } from '@modules/orders/friends/payments';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { emptyFileSandbox } from '@tests/file-sandbox';
@@ -45,7 +45,7 @@ describe('GET /orders/{id}/invoice', () => {
 
     it('matches the contract once the order is paid: a PDF', async () => {
         const { bearer, orderId } = await customerWithOrder();
-        await orderService.markPaid(orderId);
+        await markPaid(orderId);
         // The invoice is frozen by a fire-and-forget listener; wait for it.
         await eventually(() =>
             api()

@@ -5,7 +5,8 @@
  * the users door. The same path serves a second factor's code and the step-up code.
  */
 
-import { userService, type DeliveredCodeSlot, type UserDocument } from '@modules/users';
+import { type DeliveredCodeSlot, type UserDocument } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import type { DeliveredCodeState } from '@modules/users';
 import { DELIVERED_CODE_MAX_ATTEMPTS, checkDeliveredCode } from './delivered-codes';
 
@@ -32,9 +33,15 @@ export const verifyDeliveredCode = (
 
     const verdict = checkDeliveredCode(state, code, now);
     if (verdict === 'match')
-        return userService.spendDeliveredCode(user, slot, hash, DELIVERED_CODE_MAX_ATTEMPTS, now);
+        return accountUserService.spendDeliveredCode(
+            user,
+            slot,
+            hash,
+            DELIVERED_CODE_MAX_ATTEMPTS,
+            now
+        );
     if (verdict === 'miss')
-        return userService
+        return accountUserService
             .recordDeliveredMiss(user, slot, hash, DELIVERED_CODE_MAX_ATTEMPTS)
             .then(() => false);
     return Promise.resolve(false);

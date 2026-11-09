@@ -30,7 +30,7 @@ import { publishToQueue } from '@infrastructure/adapters/queue';
 import { settleWithin } from '@infrastructure/runtime/settle';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { withOwnAccount } from './caller';
 import { WORKER_CHANNELS } from '@types';
 import type { AccountExport, AccountExportJobPayload, CallerContext } from '@types';
@@ -214,7 +214,7 @@ export const requestExport = (
                 );
             }),
         // No credentials needed: the export reads the profile, never a secret.
-        userService.getById
+        accountUserService.getById
     );
 
 /**

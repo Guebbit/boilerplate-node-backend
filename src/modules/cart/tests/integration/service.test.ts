@@ -31,6 +31,7 @@ import { cartService } from '@modules/cart/services';
 import { cartRepository } from '@modules/cart/repository';
 import { addressService } from '@modules/addresses';
 import { userService } from '@modules/users';
+import { takeAutomaticPurchaseHold } from '@modules/users/friends/orders';
 import { callerContextAs } from '@tests/callers';
 import { asCustomer, testCallerContext } from '@tests/callers';
 import { registerModules } from '@kernel/registry';
@@ -1557,7 +1558,7 @@ describe('orderConfirm — paymentMethod', () => {
 
         it('answers an automatic hold without a note', async () => {
             const user = await buyerReadyToCheckOut();
-            await userService.takeAutomaticPurchaseHold(
+            await takeAutomaticPurchaseHold(
                 user.id,
                 new Date(Date.now() + 24 * 60 * 60 * 1000),
                 testCallerContext,

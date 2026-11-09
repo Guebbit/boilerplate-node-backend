@@ -275,11 +275,18 @@ way a handle does. What it never publishes, no matter how convenient:
     `updateOwnProfile`, `scheduleOwnDeletion`, `restoreOwnAccount`, `eraseScheduledDeletion`, `softDeleteInactive` and `eraseInactive`, see
     [users](../modules/users.md#the-doors-a-sibling-module-may-use).
 
-    **A step exactly one other module must call** cannot be hidden this way: it has to be published.
-    The lint rule `local/friend-members` (see `eslint.config.ts`) is its door: it names the service
-    member and the module allowed to reach it (`userService.setPassword` and `userService.eraseAgain` from `account` only,
-    `orderService.markPaid` from `payments` only), and refuses every other module. Tests and
-    factories are left out, as they always are.
+    **A step exactly one other module must call** is not published in the barrel either. The owner
+    gives that module a **friend file**, `src/modules/<owner>/friends/<friend>.ts`, and the
+    boundaries policy lets only the module named in the file's name import it (the template
+    `friends/{{ from.element.captured.module }}.ts` in `eslint.config.ts`). Three exist:
+    `users/friends/account.ts` (`accountUserService`, everything `account` calls),
+    `users/friends/orders.ts` (`takeAutomaticPurchaseHold`) and `orders/friends/payments.ts`
+    (`markPaid`). A friend file opens with why that module is the friend, and the step it carries is
+    tagged `@internal` so the barrel can never re-export it. A friend uses only its friend object:
+    a second policy refuses `account` the public `userService`, so a new `account`-only function can
+    only be added to `accountUserService`, and making something public is a deliberate step for
+    another module. Tests may reach any friend file. Not caught, on purpose: `import * as users`,
+    `export *` and a dynamic `import()`.
 
 - **The model's runtime** — the mongoose schema, its `toJSON` transform, the model object itself.
   `export type * from './model'` still publishes every type the model declares; only the values
@@ -337,7 +344,8 @@ the reasoning is in [account-two-factor](../modules/account-two-factor.md#what-t
 
 ### The one door
 
-A module publishes `index.ts`, its runtime API, and nothing else. `fileInternalPath` names that
+A module publishes `index.ts`, its runtime API, and nothing else, plus the friend file it keeps for
+each module it has named a friend (`friends/<that module>.ts`, see §5). `fileInternalPath` names that
 file inside the target element, so the rule is about the door rather than about the path
 spelling that reaches it. A scenario's fixtures are `scenarios/`'s own tier, not a second door
 on the module.

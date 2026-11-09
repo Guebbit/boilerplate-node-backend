@@ -7,7 +7,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { userModel } from '../../model';
-import { userService } from '@modules/users/services';
+import { accountUserService } from '../../friends/account';
 import { isAuthenticatable, isRestorable } from '../../authenticatable';
 import { createUser } from '@modules/users/tests/factories';
 import { systemCallerContext } from '@kernel/permissions';
@@ -23,7 +23,7 @@ const stored = (id: string) => userModel.findById(id).exec();
 /** An account its owner scheduled for erasure at `purgeAt`. */
 const scheduled = async (email: string, purgeAt: Date) => {
     const user = await createUser({ email, username: email });
-    await userService.scheduleOwnDeletion(user, new Date(), purgeAt);
+    await accountUserService.scheduleOwnDeletion(user, new Date(), purgeAt);
     return userModel.findById(user.id).orFail().exec();
 };
 
@@ -33,7 +33,7 @@ describe('scheduleOwnDeletion', () => {
         const requestedAt = new Date();
         const purgeAt = daysFromNow(30);
 
-        const saved = await userService.scheduleOwnDeletion(user, requestedAt, purgeAt);
+        const saved = await accountUserService.scheduleOwnDeletion(user, requestedAt, purgeAt);
 
         expect(saved.deletedAt).toEqual(requestedAt);
         expect(saved.deletedBy).toBe('owner');
@@ -64,7 +64,7 @@ describe('restoreOwnAccount', () => {
     it('clears the lock inside the grace and leaves the sessions dead', async () => {
         const user = await scheduled('inside@example.com', daysFromNow(5));
 
-        expect(await userService.restoreOwnAccount(user)).toBe(true);
+        expect(await accountUserService.restoreOwnAccount(user)).toBe(true);
 
         const after = await stored(user.id);
         expect(after?.deletedAt).toBeUndefined();
@@ -76,7 +76,7 @@ describe('restoreOwnAccount', () => {
     it('does nothing once purgeAt has passed', async () => {
         const user = await scheduled('past@example.com', daysFromNow(-1));
 
-        expect(await userService.restoreOwnAccount(user)).toBe(false);
+        expect(await accountUserService.restoreOwnAccount(user)).toBe(false);
         const after = await stored(user.id);
         expect(after?.deletedBy).toBe('owner');
     });
@@ -85,8 +85,8 @@ describe('restoreOwnAccount', () => {
         const user = await scheduled('twice@example.com', daysFromNow(5));
 
         const results = await Promise.all([
-            userService.restoreOwnAccount(user),
-            userService.restoreOwnAccount(user)
+            accountUserService.restoreOwnAccount(user),
+            accountUserService.restoreOwnAccount(user)
         ]);
 
         expect(results.toSorted()).toEqual([false, true]);
@@ -97,7 +97,10 @@ describe('eraseScheduledDeletion', () => {
     it('erases an account whose grace has run out', async () => {
         const user = await scheduled('due@example.com', daysFromNow(-1));
 
-        const result = await userService.eraseScheduledDeletion(user, systemCallerContext('User'));
+        const result = await accountUserService.eraseScheduledDeletion(
+            user,
+            systemCallerContext('User')
+        );
 
         expect(result.success).toBe(true);
         expect(await stored(user.id)).toBeNull();
@@ -106,7 +109,10 @@ describe('eraseScheduledDeletion', () => {
     it('refuses with 409 while the grace is still running, deleting nothing', async () => {
         const user = await scheduled('early@example.com', daysFromNow(5));
 
-        const result = await userService.eraseScheduledDeletion(user, systemCallerContext('User'));
+        const result = await accountUserService.eraseScheduledDeletion(
+            user,
+            systemCallerContext('User')
+        );
 
         expect(result).toMatchObject({ success: false, status: 409 });
         expect(await stored(user.id)).not.toBeNull();
@@ -115,9 +121,12 @@ describe('eraseScheduledDeletion', () => {
     it('refuses an account that was restored after the job read it', async () => {
         const user = await scheduled('raced@example.com', daysFromNow(-1));
         await userModel.updateOne({ _id: user.id }, { $set: { purgeAt: daysFromNow(5) } }).exec();
-        await userService.restoreOwnAccount(user);
+        await accountUserService.restoreOwnAccount(user);
 
-        const result = await userService.eraseScheduledDeletion(user, systemCallerContext('User'));
+        const result = await accountUserService.eraseScheduledDeletion(
+            user,
+            systemCallerContext('User')
+        );
 
         expect(result).toMatchObject({ success: false, status: 409 });
         expect(await stored(user.id)).not.toBeNull();
@@ -130,7 +139,10 @@ describe('eraseScheduledDeletion', () => {
             deletedBy: 'reaper'
         });
 
-        const result = await userService.eraseScheduledDeletion(user, systemCallerContext('User'));
+        const result = await accountUserService.eraseScheduledDeletion(
+            user,
+            systemCallerContext('User')
+        );
 
         expect(result).toMatchObject({ success: false, status: 409 });
         expect(await stored(user.id)).not.toBeNull();
@@ -148,7 +160,7 @@ describe('findDueScheduledDeletions', () => {
         });
         await createUser({ email: 'admin@example.com', deletedAt: daysFromNow(-90) });
 
-        const due = await userService.findDueScheduledDeletions();
+        const due = await accountUserService.findDueScheduledDeletions();
 
         expect(due.map(({ email }) => email)).toEqual(['due-a@example.com']);
     });
@@ -158,6 +170,6 @@ describe('the inactivity reaper', () => {
     it('never lists an owner-scheduled account, however old', async () => {
         await scheduled('ignored@example.com', daysFromNow(-1));
 
-        expect(await userService.findReaperSoftDeletedPastGrace(new Date())).toEqual([]);
+        expect(await accountUserService.findReaperSoftDeletedPastGrace(new Date())).toEqual([]);
     });
 });

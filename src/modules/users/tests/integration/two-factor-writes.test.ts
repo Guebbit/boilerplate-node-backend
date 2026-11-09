@@ -6,7 +6,7 @@
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
-import { userService } from '../../services';
+import { accountUserService } from '../../friends/account';
 import { versionOf } from '@infrastructure/persistence/versioning';
 import type { TwoFactorMethodRecord, UserDocument } from '../../model';
 
@@ -27,7 +27,7 @@ const ARMED: TwoFactorMethodRecord[] = [
 
 /** One loaded copy of the account, credentials included — what a request holds. */
 const load = async (id: string): Promise<UserDocument> => {
-    const user = await userService.findByIdWithCredentials(id);
+    const user = await accountUserService.findByIdWithCredentials(id);
     if (!user) throw new Error('fixture user is missing');
     return user;
 };
@@ -58,12 +58,12 @@ describe('persistTwoFactorMethods', () => {
         const slow = await load(id);
 
         // This request accepts step 11 …
-        expect(await userService.claimTotpStep(id, 'totp', 11)).toBe(true);
+        expect(await accountUserService.claimTotpStep(id, 'totp', 11)).toBe(true);
         entryOf(slow, 'totp').lastUsedStep = 11;
         // … and a faster one accepts step 12 before this one gets to write.
-        expect(await userService.claimTotpStep(id, 'totp', 12)).toBe(true);
+        expect(await accountUserService.claimTotpStep(id, 'totp', 12)).toBe(true);
 
-        await userService.persistTwoFactorMethods(slow);
+        await accountUserService.persistTwoFactorMethods(slow);
 
         expect(await field(id, 'totp', 'lastUsedStep')).toBe(12);
     });
@@ -78,8 +78,8 @@ describe('persistTwoFactorMethods', () => {
 
         entryOf(first, 'email').codeAttempts = 2;
         entryOf(second, 'totp').secret = 'rotated';
-        await userService.persistTwoFactorMethods(first);
-        await userService.persistTwoFactorMethods(second);
+        await accountUserService.persistTwoFactorMethods(first);
+        await accountUserService.persistTwoFactorMethods(second);
 
         expect(await field(id, 'email', 'codeAttempts')).toBe(2);
         expect(await field(id, 'totp', 'secret')).toBe('rotated');
@@ -95,7 +95,7 @@ describe('persistTwoFactorMethods', () => {
 
         email.codeHash = undefined;
         email.codeAttempts = undefined;
-        await userService.persistTwoFactorMethods(user);
+        await accountUserService.persistTwoFactorMethods(user);
 
         const after = entryOf(await load(id), 'email');
         expect(after.codeHash).toBeUndefined();
@@ -112,7 +112,7 @@ describe('persistTwoFactorMethods', () => {
         const user = await load(id);
 
         user.twoFactorMethods.push({ method: 'email', codeHash: 'fresh' });
-        await userService.persistTwoFactorMethods(user);
+        await accountUserService.persistTwoFactorMethods(user);
 
         const reloaded = await load(id);
         expect(reloaded.twoFactorMethods.map((entry) => entry.method)).toEqual(['totp', 'email']);
@@ -128,13 +128,13 @@ describe('persistTwoFactorMethods', () => {
         const bystander = await load(id);
 
         entryOf(bystander, 'email').codeAttempts = 4;
-        await userService.persistTwoFactorMethods(bystander);
+        await accountUserService.persistTwoFactorMethods(bystander);
 
         remover.twoFactorMethods.splice(
             remover.twoFactorMethods.findIndex((entry) => entry.method === 'totp'),
             1
         );
-        await userService.persistTwoFactorMethods(remover, ['totp']);
+        await accountUserService.persistTwoFactorMethods(remover, ['totp']);
 
         const reloaded = await load(id);
         expect(reloaded.twoFactorMethods.map((entry) => entry.method)).toEqual(['email']);
@@ -149,7 +149,7 @@ describe('persistTwoFactorMethods', () => {
         const user = await load(id);
 
         user.twoFactorMethods = [];
-        await userService.persistTwoFactorMethods(user, 'all');
+        await accountUserService.persistTwoFactorMethods(user, 'all');
 
         const reloaded = await load(id);
         expect(reloaded.twoFactorMethods).toHaveLength(0);
@@ -165,8 +165,8 @@ describe('persistTwoFactorMethods', () => {
 
         entryOf(user, 'totp').enrolledAt = undefined;
         user.twoFactorBackupCodes = ['digest-a'];
-        userService.markSessionsEnded(user, epoch);
-        await userService.persistTwoFactorMethods(user);
+        accountUserService.markSessionsEnded(user, epoch);
+        await accountUserService.persistTwoFactorMethods(user);
 
         const after = await load(id);
         expect(after.twoFactorBackupCodes).toEqual(['digest-a']);
@@ -181,8 +181,8 @@ describe('persistTwoFactorMethods', () => {
 
         first.twoFactorMethods.push({ method: 'totp', secret: 'first' });
         second.twoFactorMethods.push({ method: 'totp', secret: 'second' });
-        await userService.persistTwoFactorMethods(first);
-        await userService.persistTwoFactorMethods(second);
+        await accountUserService.persistTwoFactorMethods(first);
+        await accountUserService.persistTwoFactorMethods(second);
 
         const reloaded = await load(id);
         expect(reloaded.twoFactorMethods).toHaveLength(1);
@@ -196,7 +196,7 @@ describe('persistTwoFactorMethods', () => {
         });
         const before = await load(id);
 
-        await userService.persistTwoFactorMethods(before);
+        await accountUserService.persistTwoFactorMethods(before);
 
         const after = await load(id);
         expect(versionOf(after)).toBe(versionOf(before));
@@ -211,7 +211,7 @@ describe('persistTwoFactorMethods', () => {
         const user = await load(id);
 
         entryOf(user, 'email').codeAttempts = 2;
-        await userService.persistTwoFactorMethods(user);
+        await accountUserService.persistTwoFactorMethods(user);
 
         const after = await load(id);
         expect(versionOf(after)).toBe(versionOf(user));
@@ -226,12 +226,12 @@ describe('persistTwoFactorMethods', () => {
         const user = await load(id);
 
         entryOf(user, 'email').codeAttempts = 3;
-        await userService.persistTwoFactorMethods(user);
+        await accountUserService.persistTwoFactorMethods(user);
         // Another request moves the counter on; a settled copy must not put its own 3 back.
         const other = await load(id);
         entryOf(other, 'email').codeAttempts = 4;
-        await userService.persistTwoFactorMethods(other);
-        await userService.persistTwoFactorMethods(user);
+        await accountUserService.persistTwoFactorMethods(other);
+        await accountUserService.persistTwoFactorMethods(user);
 
         expect(await field(id, 'email', 'codeAttempts')).toBe(4);
     });
@@ -256,8 +256,8 @@ describe('spendBackupCode', () => {
         const first = await load(id);
         const second = await load(id);
 
-        expect(await userService.spendBackupCode(first, 'digest-a')).toBe(true);
-        expect(await userService.spendBackupCode(second, 'digest-a')).toBe(false);
+        expect(await accountUserService.spendBackupCode(first, 'digest-a')).toBe(true);
+        expect(await accountUserService.spendBackupCode(second, 'digest-a')).toBe(false);
 
         expect(await codesOf(id)).toEqual(['digest-b', 'digest-c']);
         expect(second.twoFactorBackupCodes).toHaveLength(3);
@@ -268,9 +268,9 @@ describe('spendBackupCode', () => {
         const stale = await load(id);
         const spender = await load(id);
 
-        await userService.spendBackupCode(spender, 'digest-a');
+        await accountUserService.spendBackupCode(spender, 'digest-a');
         entryOf(stale, 'email').codeAttempts = 2;
-        await userService.persistTwoFactorMethods(stale);
+        await accountUserService.persistTwoFactorMethods(stale);
 
         expect(await codesOf(id)).toEqual(['digest-b', 'digest-c']);
     });
@@ -280,9 +280,9 @@ describe('spendBackupCode', () => {
         const user = await load(id);
         const other = await load(id);
 
-        await userService.spendBackupCode(user, 'digest-a');
-        await userService.spendBackupCode(other, 'digest-b');
-        await userService.persistTwoFactorMethods(user);
+        await accountUserService.spendBackupCode(user, 'digest-a');
+        await accountUserService.spendBackupCode(other, 'digest-b');
+        await accountUserService.persistTwoFactorMethods(user);
 
         expect(await codesOf(id)).toEqual(['digest-c']);
     });
@@ -303,11 +303,11 @@ describe('the armed flag and the first backup-code set', () => {
 
         first.twoFactorMethods.shift();
         second.twoFactorMethods.pop();
-        await userService.persistTwoFactorWrite(first, {
+        await accountUserService.persistTwoFactorWrite(first, {
             dropped: ['totp'],
             discardCodesIfDisarmed: true
         });
-        await userService.persistTwoFactorWrite(second, {
+        await accountUserService.persistTwoFactorWrite(second, {
             dropped: ['email'],
             discardCodesIfDisarmed: true
         });
@@ -326,10 +326,10 @@ describe('the armed flag and the first backup-code set', () => {
         const confirmer = await load(id);
 
         entryOf(confirmer, 'totp').enrolledAt = new Date();
-        await userService.persistTwoFactorWrite(confirmer);
+        await accountUserService.persistTwoFactorWrite(confirmer);
         // The restarter never saw the arming; its write touches the entry's secret only.
         entryOf(restarter, 'totp').secret = 'again';
-        await userService.persistTwoFactorWrite(restarter);
+        await accountUserService.persistTwoFactorWrite(restarter);
 
         expect(await flagOf(id)).toBeInstanceOf(Date);
     });
@@ -343,7 +343,7 @@ describe('the armed flag and the first backup-code set', () => {
         const user = await load(id);
 
         entryOf(user, 'email').codeAttempts = 2;
-        await userService.persistTwoFactorWrite(user);
+        await accountUserService.persistTwoFactorWrite(user);
 
         expect(await flagOf(id)).toEqual(armedAt);
     });
@@ -360,8 +360,8 @@ describe('the armed flag and the first backup-code set', () => {
 
         entryOf(first, 'totp').enrolledAt = new Date();
         entryOf(second, 'email').enrolledAt = new Date();
-        const one = await userService.persistTwoFactorWrite(first, { mintCodes: MINTED });
-        const two = await userService.persistTwoFactorWrite(second, {
+        const one = await accountUserService.persistTwoFactorWrite(first, { mintCodes: MINTED });
+        const two = await accountUserService.persistTwoFactorWrite(second, {
             mintCodes: { salt: 'other-salt', digests: ['x-1'] }
         });
 
@@ -376,7 +376,7 @@ describe('the armed flag and the first backup-code set', () => {
         const user = await load(id);
 
         entryOf(user, 'totp').secret = 'again';
-        await userService.persistTwoFactorWrite(user, { mintCodes: MINTED });
+        await accountUserService.persistTwoFactorWrite(user, { mintCodes: MINTED });
 
         expect(await codesOf(id)).toEqual([]);
     });
@@ -387,7 +387,7 @@ describe('the armed flag and the first backup-code set', () => {
 
         entryOf(user, 'totp').enrolledAt = undefined;
         entryOf(user, 'email').enrolledAt = undefined;
-        await userService.persistTwoFactorMethods(user);
+        await accountUserService.persistTwoFactorMethods(user);
 
         expect(await flagOf(id)).toBeUndefined();
         expect(await codesOf(id)).toEqual(['digest-a', 'digest-b', 'digest-c']);

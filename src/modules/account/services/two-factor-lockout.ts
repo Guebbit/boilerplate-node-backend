@@ -5,7 +5,8 @@
  */
 
 import { t } from '@infrastructure/i18n';
-import { userService, type TwoFactorMethodRecord, type UserDocument } from '@modules/users';
+import { type TwoFactorMethodRecord, type UserDocument } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import {
     generateSuccess,
     generateReject,
@@ -42,7 +43,7 @@ const consumeBackupCode = (user: UserDocument, code: string): Promise<boolean> =
     for (const stored of user.twoFactorBackupCodes)
         if (constantTimeEqual(stored, digest)) matched = true;
 
-    return matched ? userService.spendBackupCode(user, digest) : Promise.resolve(false);
+    return matched ? accountUserService.spendBackupCode(user, digest) : Promise.resolve(false);
 };
 
 /**
@@ -95,7 +96,7 @@ export const verifyArmedFactor = (
     code: string,
     context: CallerContext
 ): Promise<FactorVerdict> =>
-    userService
+    accountUserService
         .reserveMfaAttempt(user.id, MFA_MAX_FAILURES, MFA_LOCK_MS)
         .then(({ reserved, lockedNow }) => {
             if (!reserved) return 'locked' as const;
@@ -103,7 +104,7 @@ export const verifyArmedFactor = (
 
             return verifyAnyFactor(user, code).then((matched) =>
                 matched
-                    ? userService.resetMfaAttempts(user.id).then(() => 'matched' as const)
+                    ? accountUserService.resetMfaAttempts(user.id).then(() => 'matched' as const)
                     : ('wrong' as const)
             );
         });
@@ -143,7 +144,7 @@ export const proveSecondFactor = (
 
     return verifyArmedFactor(user, code, context).then((verdict) =>
         settleVerdict(verdict, user, () =>
-            userService.persistTwoFactorMethods(user).then(() => generateSuccess(undefined))
+            accountUserService.persistTwoFactorMethods(user).then(() => generateSuccess(undefined))
         )
     );
 };

@@ -18,7 +18,7 @@ import inventoryModule from '@modules/inventory/module';
 import ordersModule from '@modules/orders/module';
 import invoicingModule from '@modules/invoicing/module';
 import { yearInZone } from '@domain-primitives/time';
-import { orderService } from '@modules/orders';
+import { markPaid } from '@modules/orders/friends/payments';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createOrder, timelineOf, toOrderItem } from '@modules/orders/tests/factories';
@@ -51,7 +51,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
             }
         });
 
-        await orderService.markPaid(String(order._id));
+        await markPaid(String(order._id));
         const invoice = await waitForInvoice(String(order._id));
 
         expect(invoice.number).toMatch(/^\d{4}-\d{6}$/);
@@ -84,7 +84,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
             }
         });
 
-        await orderService.markPaid(String(order._id));
+        await markPaid(String(order._id));
         const invoice = await waitForInvoice(String(order._id));
 
         expect(decryptInvoiceParty(invoice.billingAddress!, 'invoice', invoice._id).fullName).toBe(
@@ -105,7 +105,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
             }
         });
 
-        await orderService.markPaid(String(order._id));
+        await markPaid(String(order._id));
         const invoice = await waitForInvoice(String(order._id));
 
         expect(invoice.billingAddress).toBeUndefined();
@@ -124,7 +124,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
             products.map((product) => toOrderItem(product, 1))
         );
 
-        await orderService.markPaid(String(order._id));
+        await markPaid(String(order._id));
         const invoice = await waitForInvoice(String(order._id));
 
         // Read field by field: a Mongoose array of subdocuments is not plain data, and `toEqual` trips on it.
@@ -157,7 +157,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         });
         const order = await createOrder(user, [toOrderItem(zeroRated, 1), toOrderItem(exempt, 1)]);
 
-        await orderService.markPaid(String(order._id));
+        await markPaid(String(order._id));
         const invoice = await waitForInvoice(String(order._id));
 
         expect(invoice.lines.map((line) => line.rateType)).toEqual(['zero_rated', 'exempt']);
@@ -171,8 +171,8 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
             createOrder(user, [toOrderItem(product, 1)])
         ]);
 
-        await orderService.markPaid(String(orderA._id));
-        await orderService.markPaid(String(orderB._id));
+        await markPaid(String(orderA._id));
+        await markPaid(String(orderB._id));
         const [invoiceA, invoiceB] = await Promise.all([
             waitForInvoice(String(orderA._id)),
             waitForInvoice(String(orderB._id))
@@ -328,7 +328,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         const user = await createUser();
         const order = await createOrder(user, []);
 
-        await orderService.markPaid(String(order._id));
+        await markPaid(String(order._id));
         await settleOutboxNudges();
 
         await expect(

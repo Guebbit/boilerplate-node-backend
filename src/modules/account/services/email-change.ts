@@ -20,7 +20,8 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import { userService, type UserDocument } from '@modules/users';
+import { type UserDocument } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
@@ -55,7 +56,7 @@ export interface EmailChangeOutcome {
  *                    `users_email` (both unique) are the swap-time half, since the two are up to
  *                    24 hours apart and only the indexes are still there for both.
  *
- * Mutates `user` in place; the caller's own `save()` (inside `userService.update`) persists it.
+ * Mutates `user` in place; the caller's own `save()` (inside `accountUserService.updateOwnProfile`) persists it.
  * @param user - the loaded document; must carry `pendingEmail` (`findByIdWithCredentials`)
  * @param requestedEmail - `parseResult.data.email`, or `undefined` when the field was omitted
  */
@@ -71,7 +72,7 @@ export const applyEmailChangeRequest = (
     )
         return Promise.resolve({ conflict: false, requested: false });
 
-    return userService.emailOrPendingEmailTaken(requestedEmail, user.id).then((taken) => {
+    return accountUserService.emailOrPendingEmailTaken(requestedEmail, user.id).then((taken) => {
         if (taken) return { conflict: true, requested: false };
         user.pendingEmail = requestedEmail;
         return { conflict: false, requested: true };
@@ -89,14 +90,14 @@ export const cancelPendingEmailChange = (
     userId: string,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    userService
+    accountUserService
         .findByIdWithPendingEmail(userId)
         .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
             if (!user) return generateReject(401, []);
             // Only `pendingEmail` is loaded here: enough to tell whether `cancel` applies, which
             // is all the table is asked for.
             const hadPending = emailChangeNext(emailChangeStateOf(user), 'cancel') !== undefined;
-            return userService
+            return accountUserService
                 .cancelPendingEmail(user)
                 .then((saved) => revokeCanceledChange(hadPending, saved, context))
                 .then((saved) => generateSuccess(saved, 200));

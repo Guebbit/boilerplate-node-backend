@@ -115,6 +115,7 @@ const markSystemMove = (
  * units are then taken again before the `paid` write: enough, and the order is paid as usual;
  * short, it is not written `paid` and this answers `null`, so the payment is refunded and the
  * late cancel ends the order. See `docs/modules/inventory-reservations.md`.
+ * @internal Friend-only to `payments` (`friends/payments.ts`): it moves an order to paid unchecked.
  * @param orderId - the order the payment was for
  * @param paymentMethod - `card` when the provider took the money: the order then says so, even if
  *   checkout chose bank transfer (a customer who changed their mind). Offline money leaves the

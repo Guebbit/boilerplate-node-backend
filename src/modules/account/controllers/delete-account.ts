@@ -6,7 +6,7 @@
  */
 
 import type { Request, Response } from 'express';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { accountService } from '../services';
 import { destroySessionCookie } from '../session/cookies';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
@@ -23,7 +23,7 @@ export const deleteAccount = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
     const { id } = request.authContext!;
 
-    return userService
+    return accountUserService
         .findAuthenticatableById(id)
         .then((user) => {
             if (!user) {

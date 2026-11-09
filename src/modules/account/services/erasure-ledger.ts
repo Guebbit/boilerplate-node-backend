@@ -15,7 +15,7 @@ import type { ClientSession } from 'mongoose';
 import type { PersonalDataSubject } from '@kernel/registry';
 import type { CallerContext } from '@types';
 import { systemCallerContext } from '@kernel/permissions';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { logger } from '@infrastructure/adapters/logger';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { extractErrorMessage } from '@guebbit/js-toolkit';
@@ -161,7 +161,7 @@ const reapplyOne = (
     context: CallerContext
 ): Promise<ReapplyBucket> => {
     if (rows.erased)
-        return userService
+        return accountUserService
             .eraseAgain(userId, rows.erased.at, context)
             .then((result) => (result === null ? 'alreadyGone' : 'erased'));
 
@@ -170,7 +170,7 @@ const reapplyOne = (
         scheduled?.purgeAt && (!canceled || scheduled.at > canceled.at)
             ? { requestedAt: scheduled.at, purgeAt: scheduled.purgeAt }
             : null;
-    return userService.restoreDeletionState(userId, schedule, context).then((changed) => {
+    return accountUserService.restoreDeletionState(userId, schedule, context).then((changed) => {
         if (changed === null) return 'alreadyGone';
         if (!changed) return 'unchanged';
         return schedule ? 'rescheduled' : 'unscheduled';

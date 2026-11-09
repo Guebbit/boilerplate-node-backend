@@ -328,7 +328,7 @@ export const userSchema = new Schema<UserDocument, UserModel>(
             required: true,
             // A backstop, not the real check — the generated `CreateUserBody`/`SignupBody`
             // already validate every parsed body. This covers the
-            // one path that skips Zod: `userService.registerFromOAuth` (`account/services/oauth.ts`)
+            // one path that skips Zod: `accountUserService.registerFromOAuth` (`account/services/oauth.ts`)
             // writes a provider's own `email` straight through.
             //
             // Loose on purpose — one "@", one "." after it, no whitespace:

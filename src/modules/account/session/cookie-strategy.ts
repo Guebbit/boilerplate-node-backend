@@ -21,7 +21,7 @@ import { bearerOf, readSessionCookie } from '@kernel/cookies';
 import type { Resolution, StreamWatch } from '@kernel/authentication';
 import { logger } from '@infrastructure/adapters/logger';
 import { hashToken } from '@infrastructure/security/hash-token';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import type { AuthContext, ResolveOptions } from '@types';
 import { sessionRepository, type SessionRow } from '../repository';
 import { recordActivity } from './activity';
@@ -300,7 +300,7 @@ export const cookieStrategy: SessionStrategy = {
 
     issue: (request, response, userId, options: IssueOptions) => {
         const { remember, amr, provedAt, transport = 'cookie' } = options;
-        return userService.findAuthenticatableById(userId).then((user) => {
+        return accountUserService.findAuthenticatableById(userId).then((user) => {
             if (!user) throw new Error('User not found');
             assertSecondFactor(user, amr);
             assertProofCurrent(user, provedAt);

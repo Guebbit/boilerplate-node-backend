@@ -7,7 +7,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
-import { userService } from '@modules/users/services';
+import { accountUserService } from '../../friends/account';
 import { userRepository } from '../../repository';
 
 setupTestDb();
@@ -40,42 +40,48 @@ describe('external-key lookups', () => {
     });
 
     it('login refuses an operator in place of the email', async () => {
-        await expect(userService.findForLogin(operatorAsString())).rejects.toThrow(CAST_FAILURE);
+        await expect(accountUserService.findForLogin(operatorAsString())).rejects.toThrow(
+            CAST_FAILURE
+        );
     });
 
     it('login still finds the real account by its email', async () => {
-        expect(await userService.findForLogin('real@example.com')).not.toBeNull();
+        expect(await accountUserService.findForLogin('real@example.com')).not.toBeNull();
     });
 
     it('the reset and delete lookup refuses an operator in place of the email', async () => {
-        await expect(userService.findByEmail(operatorAsString())).rejects.toThrow(CAST_FAILURE);
+        await expect(accountUserService.findByEmail(operatorAsString())).rejects.toThrow(
+            CAST_FAILURE
+        );
     });
 
     it('signup refuses an operator in place of the email', async () => {
-        await expect(userService.emailTaken(operatorAsString())).rejects.toThrow(CAST_FAILURE);
-        expect(await userService.emailTaken('real@example.com')).toBe(true);
+        await expect(accountUserService.emailTaken(operatorAsString())).rejects.toThrow(
+            CAST_FAILURE
+        );
+        expect(await accountUserService.emailTaken('real@example.com')).toBe(true);
     });
 
     it('an email change refuses an operator in place of the email', async () => {
         await expect(
-            userService.emailOrPendingEmailTaken(operatorAsString(), '0'.repeat(24))
+            accountUserService.emailOrPendingEmailTaken(operatorAsString(), '0'.repeat(24))
         ).rejects.toThrow(CAST_FAILURE);
-        expect(await userService.emailOrPendingEmailTaken('real@example.com', '0'.repeat(24))).toBe(
-            true
-        );
+        expect(
+            await accountUserService.emailOrPendingEmailTaken('real@example.com', '0'.repeat(24))
+        ).toBe(true);
     });
 
     it('a federated identity refuses an operator in place of the subject', async () => {
-        await expect(userService.findByOAuthIdentity('google', operatorAsString())).rejects.toThrow(
-            CAST_FAILURE
-        );
-        expect(await userService.findByOAuthIdentity('google', 'sub-1')).not.toBeNull();
+        await expect(
+            accountUserService.findByOAuthIdentity('google', operatorAsString())
+        ).rejects.toThrow(CAST_FAILURE);
+        expect(await accountUserService.findByOAuthIdentity('google', 'sub-1')).not.toBeNull();
     });
 
     it('a banned account is still refused by the login lookup, so the trusted operator holds', async () => {
         await createUser({ email: 'banned@example.com', username: 'banned', active: false });
 
-        expect(await userService.findForLogin('banned@example.com')).toBeNull();
+        expect(await accountUserService.findForLogin('banned@example.com')).toBeNull();
         expect(await userRepository.count({ email: 'banned@example.com' })).toBe(1);
     });
 });

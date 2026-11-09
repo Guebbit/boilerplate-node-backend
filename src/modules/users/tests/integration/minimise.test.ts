@@ -19,7 +19,7 @@ import {
     markOrderPaidAt,
     orderRepository
 } from '@modules/orders/tests/factories';
-import { userService } from '../../services';
+import { accountUserService } from '../../friends/account';
 import { createUser, userRepository } from '@modules/users/tests/factories';
 import usersModule from '../../module';
 import { userModel } from '../../model';
@@ -78,7 +78,7 @@ describe('inactivity minimisation', () => {
     it('drops the address book, starts the orders’ clock, and keeps the login and the orders', async () => {
         const { user, orderId } = await inactiveCustomerWithOrder('quiet');
 
-        const result = await userService.minimiseInactiveBefore(daysAgo(30));
+        const result = await accountUserService.minimiseInactiveBefore(daysAgo(30));
 
         expect(result).toEqual({ minimised: 1, failed: 0 });
         expect(await addressesOf(user.id)).toEqual([]);
@@ -94,7 +94,7 @@ describe('inactivity minimisation', () => {
         const { user } = await inactiveCustomerWithOrder('banned');
         await makeInactive(user.id, { active: false });
 
-        const result = await userService.minimiseInactiveBefore(daysAgo(30));
+        const result = await accountUserService.minimiseInactiveBefore(daysAgo(30));
 
         expect(result).toEqual({ minimised: 1, failed: 0 });
         expect(await addressesOf(user.id)).toEqual([]);
@@ -103,10 +103,10 @@ describe('inactivity minimisation', () => {
 
     it('is a no-op on a rerun', async () => {
         const { orderId } = await inactiveCustomerWithOrder('rerun');
-        await userService.minimiseInactiveBefore(daysAgo(30));
+        await accountUserService.minimiseInactiveBefore(daysAgo(30));
         const stamped = await clockOf(orderId);
 
-        const again = await userService.minimiseInactiveBefore(daysAgo(30));
+        const again = await accountUserService.minimiseInactiveBefore(daysAgo(30));
 
         expect(again).toEqual({ minimised: 0, failed: 0 });
         expect(await clockOf(orderId)).toEqual(stamped);
@@ -119,7 +119,7 @@ describe('inactivity minimisation', () => {
         );
         await giveAddress(user.id);
 
-        const result = await userService.minimiseInactiveBefore(daysAgo(30));
+        const result = await accountUserService.minimiseInactiveBefore(daysAgo(30));
 
         expect(result).toEqual({ minimised: 0, failed: 0 });
         expect(await addressesOf(user.id)).toHaveLength(1);
@@ -127,7 +127,7 @@ describe('inactivity minimisation', () => {
 
     it('minimises again an account that came back and went quiet again', async () => {
         const { user } = await inactiveCustomerWithOrder('boomerang');
-        await userService.minimiseInactiveBefore(daysAgo(30));
+        await accountUserService.minimiseInactiveBefore(daysAgo(30));
         await giveAddress(user.id);
         // Back for a day, long enough ago to be quiet again, but after the first minimising.
         await makeInactive(user.id, {
@@ -141,7 +141,7 @@ describe('inactivity minimisation', () => {
             )
             .exec();
 
-        const result = await userService.minimiseInactiveBefore(daysAgo(30));
+        const result = await accountUserService.minimiseInactiveBefore(daysAgo(30));
 
         expect(result).toEqual({ minimised: 1, failed: 0 });
         expect(await addressesOf(user.id)).toEqual([]);
@@ -163,7 +163,7 @@ describe('inactivity minimisation', () => {
             usersModule
         ]);
 
-        const result = await userService.minimiseInactiveBefore(daysAgo(30));
+        const result = await accountUserService.minimiseInactiveBefore(daysAgo(30));
 
         expect(result).toEqual({ minimised: 0, failed: 1 });
         expect(await isMinimised(user.id)).toBe(false);

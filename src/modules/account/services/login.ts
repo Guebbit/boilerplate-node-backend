@@ -16,7 +16,8 @@ import {
     validationErrors
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import { userService, isAuthenticatable, isRestorable, type UserDocument } from '@modules/users';
+import { isAuthenticatable, isRestorable, type UserDocument } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { withOwnAccount } from './caller';
 
 /**
@@ -44,7 +45,7 @@ export const login = (
         return Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
 
     return (
-        userService
+        accountUserService
             // `password` is select:false — this is one of the few flows that legitimately needs it.
             // `parseResult.data.email`, not the raw `email` param: the parse above is what proves
             // it's actually a string, which the outer `email?: string` signature can't itself tell TS.

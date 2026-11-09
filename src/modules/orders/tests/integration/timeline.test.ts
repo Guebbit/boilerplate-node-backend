@@ -16,6 +16,7 @@ import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { resetDomainEvents } from '@kernel/events';
 import { OrderStatus } from '@types';
 import { orderService } from '../../services';
+import { markPaid } from '../../friends/payments';
 import { withdrawUntilFrom } from '../../domain';
 import { orderEventModel } from '../../model';
 import { cancelForErasureById } from '../../services/cancel';
@@ -63,7 +64,7 @@ describe('what each move writes', () => {
         const order = await seedOrder(OrderStatus.pending);
         const id = String(order._id);
 
-        await orderService.markPaid(id, 'card', { actor: 'cashier-1', method: 'cash' });
+        await markPaid(id, 'card', { actor: 'cashier-1', method: 'cash' });
         await orderService.markProcessing(id, undefined, 'admin-1');
         await markShipped(id, undefined, 'admin-1');
         await markDelivered(id, new Date('2026-05-01T09:00:00Z'), undefined, 'admin-2');
@@ -99,7 +100,7 @@ describe('what each move writes', () => {
     it('writes nothing for a move that lost its race', async () => {
         const order = await seedOrder(OrderStatus.canceled);
 
-        expect(await orderService.markPaid(String(order._id))).toBeNull();
+        expect(await markPaid(String(order._id))).toBeNull();
 
         expect(await timelineOf(String(order._id))).toEqual([]);
     });
@@ -108,7 +109,7 @@ describe('what each move writes', () => {
         const order = await seedOrder(OrderStatus.pending);
         jest.spyOn(outboxEventModel, 'create').mockRejectedValueOnce(new Error('disk full'));
 
-        await expect(orderService.markPaid(String(order._id))).rejects.toThrow('disk full');
+        await expect(markPaid(String(order._id))).rejects.toThrow('disk full');
 
         expect(await timelineOf(String(order._id))).toEqual([]);
     });
@@ -155,7 +156,7 @@ describe('who reads what', () => {
     it('shows the buyer the buyer-visible rows without an actor, and staff every row with it', async () => {
         const order = await seedOrder(OrderStatus.pending);
         const id = String(order._id);
-        await orderService.markPaid(id, 'card', { actor: 'cashier-1' });
+        await markPaid(id, 'card', { actor: 'cashier-1' });
         await orderService.overrideStatus(
             id,
             OrderStatus.processing,

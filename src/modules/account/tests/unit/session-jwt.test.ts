@@ -18,17 +18,19 @@ import { keyId } from '@modules/account/session/key-ring';
 
 /*
  * The session store and the SERVICE, not the model: `session/jwt.ts` reaches `sessionRepository`
- * and `userService.findAuthenticatableById` rather than running raw queries itself, so this suite
+ * and `accountUserService.findAuthenticatableById` rather than running raw queries itself, so this suite
  * doubles those instead. What the QUERIES look like is asserted in `../integration/auth-storage.test.ts`, against a
- * real store. Every other `userService` member rides through unchanged (`...actual.userService`).
+ * real store. Every other `accountUserService` member rides through unchanged (`...actual.accountUserService`).
  */
-jest.mock('@modules/users', () => {
-    const actual = jest.requireActual<typeof import('@modules/users')>('@modules/users');
+jest.mock('@modules/users/friends/account', () => {
+    const actual = jest.requireActual<typeof import('@modules/users/friends/account')>(
+        '@modules/users/friends/account'
+    );
     return {
         ...actual,
         __esModule: true,
-        userService: {
-            ...actual.userService,
+        accountUserService: {
+            ...actual.accountUserService,
             findAuthenticatableById: jest.fn(),
             touchLastActive: jest.fn()
         }
@@ -62,7 +64,7 @@ import {
     getRefreshTokenAudience,
     getTokenIssuer
 } from '@modules/account/session/config';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { sessionRepository } from '@modules/account/repository';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { setEnvironment } from '@tests/environment';
@@ -72,7 +74,7 @@ const USER_ID = '507f1f77bcf86cd799439011';
 const mockedUsers = asStub<{
     findAuthenticatableById: jest.Mock;
     touchLastActive: jest.Mock;
-}>(userService);
+}>(accountUserService);
 
 const mockedSessions = asStub<{
     findByHash: jest.Mock;

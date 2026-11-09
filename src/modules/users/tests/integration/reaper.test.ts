@@ -9,6 +9,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { userModel } from '../../model';
 import { userService } from '@modules/users/services';
+import { accountUserService } from '../../friends/account';
 import { createUser } from '@modules/users/tests/factories';
 import { systemCallerContext } from '@kernel/permissions';
 import { callerContextAs } from '@tests/callers';
@@ -70,7 +71,7 @@ describe('the inactivity reaper’s candidates', () => {
         await inactiveAccount('operator', undefined, 'operator');
         await inactiveAccount('both', 'customer', 'operator');
 
-        const candidates = await userService.findInactiveUnwarned(NOW);
+        const candidates = await accountUserService.findInactiveUnwarned(NOW);
 
         expect(emailsOf(candidates)).toEqual([
             'customer@reaper.test',
@@ -87,7 +88,7 @@ describe('the inactivity reaper’s candidates', () => {
         const moderator = await inactiveAccount('moderator', 'moderator');
         await Promise.all([customer, admin, moderator].map(({ id }) => makeInactive(id, warned)));
 
-        const candidates = await userService.findWarnedStillInactive(NOW);
+        const candidates = await accountUserService.findWarnedStillInactive(NOW);
 
         expect(emailsOf(candidates)).toEqual(['customer@reaper.test']);
     });
@@ -98,7 +99,7 @@ describe('the inactivity reaper’s candidates', () => {
         const admin = await inactiveAccount('admin', 'admin');
         await Promise.all([customer, admin].map(({ id }) => makeInactive(id, reaped)));
 
-        const candidates = await userService.findReaperSoftDeletedPastGrace(NOW);
+        const candidates = await accountUserService.findReaperSoftDeletedPastGrace(NOW);
 
         expect(emailsOf(candidates)).toEqual(['customer@reaper.test']);
     });
@@ -107,7 +108,7 @@ describe('the inactivity reaper’s candidates', () => {
         const user = await inactiveAccount('returned', 'customer');
         await makeInactive(user.id, { lastActiveAt: new Date() });
 
-        expect(await userService.findInactiveUnwarned(daysAgo(30))).toEqual([]);
+        expect(await accountUserService.findInactiveUnwarned(daysAgo(30))).toEqual([]);
     });
 
     it('measures the grace from the warning, so a freshly warned account is never soft-deleted', async () => {
@@ -116,7 +117,7 @@ describe('the inactivity reaper’s candidates', () => {
         await makeInactive(fresh.id, { inactivityWarnedAt: new Date() });
         await makeInactive(ripe.id, { inactivityWarnedAt: daysAgo(31) });
 
-        const candidates = await userService.findWarnedStillInactive(daysAgo(30));
+        const candidates = await accountUserService.findWarnedStillInactive(daysAgo(30));
 
         expect(emailsOf(candidates)).toEqual(['ripe@reaper.test']);
     });
@@ -129,18 +130,18 @@ describe('the inactivity reaper’s candidates', () => {
             lastActiveAt: daysAgo(100)
         });
 
-        expect(emailsOf(await userService.findInactiveUnwarned(daysAgo(30)))).toEqual([
+        expect(emailsOf(await accountUserService.findInactiveUnwarned(daysAgo(30)))).toEqual([
             'boomerang@reaper.test'
         ]);
         // ...and an account that returned after the warning is not a soft-delete candidate.
-        expect(await userService.findWarnedStillInactive(daysAgo(30))).toEqual([]);
+        expect(await accountUserService.findWarnedStillInactive(daysAgo(30))).toEqual([]);
     });
 
     it('does not warn an account already warned for this stretch of inactivity', async () => {
         const user = await inactiveAccount('warned', 'customer');
         await makeInactive(user.id, { inactivityWarnedAt: daysAgo(5) });
 
-        expect(await userService.findInactiveUnwarned(NOW)).toEqual([]);
+        expect(await accountUserService.findInactiveUnwarned(NOW)).toEqual([]);
     });
 
     it('never lists a disabled account in any stage', async () => {
@@ -152,20 +153,20 @@ describe('the inactivity reaper’s candidates', () => {
             deletedAt: LONG_AGO
         });
 
-        expect(await userService.findInactiveUnwarned(NOW)).toEqual([]);
-        expect(await userService.findWarnedStillInactive(NOW)).toEqual([]);
-        expect(await userService.findReaperSoftDeletedPastGrace(NOW)).toEqual([]);
+        expect(await accountUserService.findInactiveUnwarned(NOW)).toEqual([]);
+        expect(await accountUserService.findWarnedStillInactive(NOW)).toEqual([]);
+        expect(await accountUserService.findReaperSoftDeletedPastGrace(NOW)).toEqual([]);
     });
 
     it('never hard-deletes a staff soft delete, even of a once-warned account', async () => {
         const user = await inactiveAccount('staffdeleted', 'customer');
         await makeInactive(user.id, { inactivityWarnedAt: LONG_AGO, deletedAt: LONG_AGO });
 
-        expect(await userService.findReaperSoftDeletedPastGrace(NOW)).toEqual([]);
+        expect(await accountUserService.findReaperSoftDeletedPastGrace(NOW)).toEqual([]);
     });
 
     it('lists nothing, and queries nothing more, when no account is inactive', async () => {
-        expect(await userService.findInactiveUnwarned(NOW)).toEqual([]);
+        expect(await accountUserService.findInactiveUnwarned(NOW)).toEqual([]);
     });
 });
 
@@ -185,7 +186,7 @@ describe('who soft-deleted the account', () => {
         });
         const byStaff = await createUser({ email: 'by-staff@reaper.test', username: 'bystaff' });
 
-        await userService.softDeleteInactive(byReaper, systemCallerContext('User'));
+        await accountUserService.softDeleteInactive(byReaper, systemCallerContext('User'));
         await userService.removeById(byStaff.id, false, callerContextAs('admin'));
 
         expect(await markerOf(byReaper.id)).toBe('reaper');
@@ -197,7 +198,7 @@ describe('who soft-deleted the account', () => {
             email: 'restored@reaper.test',
             username: 'restored'
         });
-        await userService.softDeleteInactive(user, systemCallerContext('User'));
+        await accountUserService.softDeleteInactive(user, systemCallerContext('User'));
 
         await userService.restoreById(user.id, callerContextAs('admin'));
 
@@ -209,7 +210,10 @@ describe('the reaper’s soft delete refusals', () => {
     it('refuses an account nobody warned: the warning is what makes the deletion fair', async () => {
         const unwarned = await createUser({ email: 'unwarned@reaper.test', username: 'unwarned' });
 
-        const result = await userService.softDeleteInactive(unwarned, systemCallerContext('User'));
+        const result = await accountUserService.softDeleteInactive(
+            unwarned,
+            systemCallerContext('User')
+        );
 
         expect(result.success).toBe(false);
         expect(await markerOf(unwarned.id)).toBeUndefined();
@@ -224,7 +228,10 @@ describe('the reaper’s soft delete refusals', () => {
             'support'
         );
 
-        const result = await userService.softDeleteInactive(staff, systemCallerContext('User'));
+        const result = await accountUserService.softDeleteInactive(
+            staff,
+            systemCallerContext('User')
+        );
 
         expect(result.success).toBe(false);
         expect(await markerOf(staff.id)).toBeUndefined();
@@ -237,10 +244,10 @@ describe('the reaper’s hard delete', () => {
             email: 'erase-own@reaper.test',
             username: 'eraseown'
         });
-        await userService.softDeleteInactive(user, systemCallerContext('User'));
+        await accountUserService.softDeleteInactive(user, systemCallerContext('User'));
         const marked = await userModel.findById(user.id).exec();
 
-        const result = await userService.eraseInactive(marked!, systemCallerContext('User'));
+        const result = await accountUserService.eraseInactive(marked!, systemCallerContext('User'));
 
         expect(result.success).toBe(true);
         expect(await userModel.findById(user.id).lean().exec()).toBeNull();
@@ -251,7 +258,7 @@ describe('the reaper’s hard delete', () => {
         await userService.removeById(user.id, false, callerContextAs('admin'));
         const marked = await userModel.findById(user.id).exec();
 
-        const result = await userService.eraseInactive(marked!, systemCallerContext('User'));
+        const result = await accountUserService.eraseInactive(marked!, systemCallerContext('User'));
 
         expect(result).toMatchObject({ success: false, status: 409 });
         expect(await userModel.findById(user.id).lean().exec()).not.toBeNull();
@@ -265,7 +272,7 @@ describe('API-key use counts as activity', () => {
         await makeInactive(used.id, { lastApiKeyUseAt: daysAgo(1) });
         await makeInactive(idle.id, { lastApiKeyUseAt: daysAgo(400) });
 
-        const candidates = await userService.findInactiveUnwarned(daysAgo(30));
+        const candidates = await accountUserService.findInactiveUnwarned(daysAgo(30));
 
         expect(emailsOf(candidates)).toEqual(['key-idle@reaper.test']);
     });
@@ -277,7 +284,7 @@ describe('API-key use counts as activity', () => {
             lastApiKeyUseAt: daysAgo(5)
         });
 
-        expect(await userService.findWarnedStillInactive(daysAgo(30))).toEqual([]);
+        expect(await accountUserService.findWarnedStillInactive(daysAgo(30))).toEqual([]);
     });
 
     it('stamps the use once a day: a second use inside the day keeps the first stamp', async () => {

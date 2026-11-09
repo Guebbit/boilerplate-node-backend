@@ -7,7 +7,8 @@
  * See: docs/theory/data-retention.md#self-deletion-a-grace-under-one-month
  */
 
-import { userService, type UserDocument } from '@modules/users';
+import { type UserDocument } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { logger } from '@infrastructure/adapters/logger';
 import { systemCallerContext } from '@kernel/permissions';
 import { recordAudit } from '@infrastructure/observability/audit';
@@ -38,7 +39,7 @@ const purgeOne = (user: UserDocument): Promise<keyof PurgeCounts> => {
     const name = greetableName(user, email);
     const context = systemCallerContext('User');
 
-    return userService
+    return accountUserService
         .eraseScheduledDeletion(user, context)
         .then((result) => {
             if (!result.success) return 'skipped';
@@ -76,7 +77,7 @@ const purgeOne = (user: UserDocument): Promise<keyof PurgeCounts> => {
  */
 export const purgeScheduledDeletions = async (): Promise<PurgeCounts> => {
     // App time, never the database's: the demo clock moves only the app's.
-    const due = await userService.findDueScheduledDeletions(new Date());
+    const due = await accountUserService.findDueScheduledDeletions(new Date());
     const counts: PurgeCounts = { purged: 0, skipped: 0, failed: 0 };
     for (const user of due) counts[await purgeOne(user)] += 1;
     logger.info({ message: 'Scheduled-deletion purge complete.', ...counts });

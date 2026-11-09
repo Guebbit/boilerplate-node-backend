@@ -22,6 +22,7 @@ import {
 import { callerContextAs, asCustomer } from '@tests/callers';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { orderService } from '../../services';
+import { markPaid } from '../../friends/payments';
 import { overrideStatus } from '../../services/override';
 import { markShipped, markDelivered, markFulfillmentComplete } from '../../services/status';
 import { ORDER_CANCELED, ORDER_CREATED, ORDER_STATUS_CHANGED } from '../../events';
@@ -65,7 +66,7 @@ describe('a status move reported to orders', () => {
     it('writes order.status_changed with the move, keyed by the order', async () => {
         const order = await seedOrder(OrderStatus.pending);
 
-        await orderService.markPaid(String(order._id));
+        await markPaid(String(order._id));
         await settleOutboxNudges();
 
         const rows = await rowsNamed(ORDER_STATUS_CHANGED);
@@ -79,14 +80,14 @@ describe('a status move reported to orders', () => {
     it('writes no event for a move that lost its race', async () => {
         const order = await seedOrder(OrderStatus.canceled);
 
-        expect(await orderService.markPaid(String(order._id))).toBeNull();
+        expect(await markPaid(String(order._id))).toBeNull();
         await settleOutboxNudges();
 
         expect(await outboxEventModel.countDocuments()).toBe(0);
     });
 
     it.each([
-        ['markPaid', OrderStatus.pending, (id: string) => orderService.markPaid(id)],
+        ['markPaid', OrderStatus.pending, (id: string) => markPaid(id)],
         ['markProcessing', OrderStatus.paid, (id: string) => orderService.markProcessing(id)],
         ['markShipped', OrderStatus.processing, (id: string) => markShipped(id)],
         ['markDelivered', OrderStatus.shipped, (id: string) => markDelivered(id, new Date())],

@@ -1,13 +1,13 @@
 /**
  * @module
- * `userService.findByOAuthIdentity` — the case-1 lookup `account/services/oauth.ts` runs first, on
+ * `accountUserService.findByOAuthIdentity` — the case-1 lookup `account/services/oauth.ts` runs first, on
  * every callback. Filtered the same way `findForLogin` is: matching on `oauthAccounts` alone would
  * let an account deactivated or soft-deleted after linking a provider resolve here and walk
  * straight into a session.
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, userRepository } from '@modules/users/tests/factories';
-import { userService } from '@modules/users/services';
+import { accountUserService } from '../../friends/account';
 
 setupTestDb();
 
@@ -19,12 +19,12 @@ const linkIdentity = (userId: string) =>
         connectedAt: new Date()
     });
 
-describe('userService.findByOAuthIdentity', () => {
+describe('accountUserService.findByOAuthIdentity', () => {
     it('finds the account by provider + providerId', async () => {
         const user = await createUser({ email: 'linked@example.com' });
         await linkIdentity(user.id);
 
-        const found = await userService.findByOAuthIdentity('google', 'subject-1');
+        const found = await accountUserService.findByOAuthIdentity('google', 'subject-1');
 
         expect(found?.id).toBe(user.id);
     });
@@ -33,7 +33,9 @@ describe('userService.findByOAuthIdentity', () => {
         const user = await createUser({ email: 'deactivated@example.com', active: false });
         await linkIdentity(user.id);
 
-        await expect(userService.findByOAuthIdentity('google', 'subject-1')).resolves.toBeFalsy();
+        await expect(
+            accountUserService.findByOAuthIdentity('google', 'subject-1')
+        ).resolves.toBeFalsy();
     });
 
     it('resolves nothing for a soft-deleted account, even though the identity is linked', async () => {
@@ -43,12 +45,14 @@ describe('userService.findByOAuthIdentity', () => {
         });
         await linkIdentity(user.id);
 
-        await expect(userService.findByOAuthIdentity('google', 'subject-1')).resolves.toBeFalsy();
+        await expect(
+            accountUserService.findByOAuthIdentity('google', 'subject-1')
+        ).resolves.toBeFalsy();
     });
 
     it('resolves nothing for an identity nobody holds', async () => {
         await expect(
-            userService.findByOAuthIdentity('google', 'no-such-subject')
+            accountUserService.findByOAuthIdentity('google', 'no-such-subject')
         ).resolves.toBeFalsy();
     });
 });

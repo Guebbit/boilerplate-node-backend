@@ -22,7 +22,8 @@ import {
     writeExport,
     type AppendExport
 } from '@infrastructure/adapters/export-store';
-import { personalDataSubjectOf, userService } from '@modules/users';
+import { personalDataSubjectOf } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import type { AccountExportJobPayload } from '@types';
 import type { PersonalDataSection, PersonalDataSubject } from '@kernel/registry';
 import { exportRetentionMs } from '../config';
@@ -85,7 +86,7 @@ const mailRequester = (
     job: AccountExportJobPayload,
     build: (name: string) => ReturnType<typeof exportReadyEmail>
 ): Promise<void> =>
-    userService.getById(job.userId).then((user) => {
+    accountUserService.getById(job.userId).then((user) => {
         // Erased in the meantime: nobody is left to tell.
         if (!user) return;
 
@@ -236,7 +237,7 @@ export const runExportJob = (job: AccountExportJobPayload): Promise<boolean> =>
         // Replaced, erased or already settled: nothing to build.
         if (row?.status !== 'building') return true;
 
-        return userService.getById(job.userId).then((user) => {
+        return accountUserService.getById(job.userId).then((user) => {
             // Erased since the request: there is no account to export, and the job's own address
             // is not trusted to stand in for one.
             if (!user) return fail(job, row, new Error('The account is gone.')).then(() => true);

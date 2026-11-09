@@ -20,7 +20,7 @@ import { setEnvironment, withEnvironmentOverrides } from '@tests/environment';
 import { asReject } from '@tests/response';
 import { testCallerContext } from '@tests/callers';
 import { createUser, eraseAsScheduled, userRepository } from '@modules/users/tests/factories';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { createNotification } from '@modules/notifications/tests/factories';
 import type { PersonalDataSection } from '@kernel/registry';
 import { logger } from '@infrastructure/adapters/logger';
@@ -563,8 +563,8 @@ describe('a build that fails', () => {
         // The account vanishes between the failed build and the notice: nobody is left to tell.
         // Set after the request, which reads the user itself. The job's first read (to build)
         // is the real one; the second (to mail the notice) finds nobody.
-        const readUser = userService.getById;
-        jest.spyOn(userService, 'getById')
+        const readUser = accountUserService.getById;
+        jest.spyOn(accountUserService, 'getById')
             .mockImplementationOnce(readUser)
             .mockResolvedValueOnce(undefined);
         await settleInlineExports();
@@ -583,8 +583,8 @@ describe('a build that fails', () => {
         const { user } = await requestFor();
         // Set after the request, which reads the user itself. The job reads the account twice: once
         // to build (this must work) and once to mail the notice (this one fails).
-        const readUser = userService.getById;
-        jest.spyOn(userService, 'getById')
+        const readUser = accountUserService.getById;
+        jest.spyOn(accountUserService, 'getById')
             .mockImplementationOnce(readUser)
             .mockRejectedValueOnce(new Error('mongo still away'));
         await settleInlineExports();
@@ -641,7 +641,7 @@ describe('a job for an account that is gone', () => {
             expiresAt: new Date(Date.now() + 60_000)
         });
         // The account vanishes between the request and the run.
-        jest.spyOn(userService, 'getById').mockResolvedValue(undefined);
+        jest.spyOn(accountUserService, 'getById').mockResolvedValue(undefined);
 
         await expect(
             runExportJob({ exportId: String(rowId), userId: user.id, locale: 'en' })
@@ -777,7 +777,7 @@ describe('erasing the account', () => {
         await settleInlineExports();
         // The real section list again: erasure resolves its hooks from the registered modules.
         setPersonalDataSections(originalSections);
-        const stored = await userService.getById(user.id);
+        const stored = await accountUserService.getById(user.id);
 
         const removed = await eraseAsScheduled(stored!);
 

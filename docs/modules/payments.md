@@ -158,7 +158,7 @@ Two different questions, asked at two different moments, both owned by `orders`:
   confirm asks one more thing of `orders`, `isPayableNow` (awaiting payment AND its hold not
   released), because it is the only door where the buyer can still be refused before money moves;
   [why the others do not](./inventory-reservations.md#money-can-land-on-a-released-hold-take-the-units-again).
-- **The final write** — `orderService.markPaid` — is what actually moves the order once money has
+- **The final write** — `markPaid` (`orders/friends/payments.ts`) — is what actually moves the order once money has
   settled (`settlePayment` calls it; see "Status transitions" below and
   `docs/theory/tactical-ddd.md` §1 "Who writes the status"). It is `orders`' own conditional write,
   independent of the pre-check: a race that slips past the pre-check still cannot double-move the

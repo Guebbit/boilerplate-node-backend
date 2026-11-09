@@ -9,7 +9,8 @@ import { cooldownRemaining } from '../cooldown';
 import { resetRequestEmail, setupRequestEmail, greetableName, recipientLocale } from '../emails';
 import { sendAccountMail } from './mail';
 import { PASSWORD_RESET_TOKEN_TYPE } from '../token-types';
-import { userService, type UserDocument } from '@modules/users';
+import { type UserDocument } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
@@ -109,7 +110,7 @@ export const requestPasswordReset = (
     context: CallerContext
 ): Promise<boolean> => {
     const attempt = email
-        ? userService
+        ? accountUserService
               .findByEmail(email)
               .then((user) => (user ? mailResetLink(user, context) : false))
         : Promise.resolve(false);

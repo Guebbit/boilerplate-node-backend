@@ -16,6 +16,7 @@ import {
 import type { PaymentStatus, AuthContext } from '@types';
 import { toMinorUnits } from '@domain-primitives/money';
 import { orderService, paymentSettled } from '@modules/orders';
+import { markPaid } from '@modules/orders/friends/payments';
 import { bankTransferHoldHours } from '../config';
 import { ReceivePaymentWebhookBody } from '@api/schemas.zod';
 import type { CallerContext } from '@types';
@@ -268,7 +269,7 @@ const settleWithin = async (
     );
     if (!succeeded) return { kind: 'replay', payment: null };
 
-    const moved = await orderService.markPaid(
+    const moved = await markPaid(
         orderId,
         paid.paidBy,
         { actor: paid.actor, method: payment.method },

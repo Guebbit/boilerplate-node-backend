@@ -12,6 +12,8 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import type { ResponseReject } from '@infrastructure/http/response';
 import { outboxEventModel } from '@kernel/outbox';
 import { userService } from '@modules/users/services';
+import { accountUserService } from '../../friends/account';
+import { takeAutomaticPurchaseHold } from '../../friends/orders';
 import { createUser, userRepository } from '@modules/users/tests/factories';
 import { reapExpiredPurchaseHolds } from '../../services/purchase-hold';
 import { usersAuditActions } from '../../audit';
@@ -429,12 +431,7 @@ describe('the review flag', () => {
     it('is set in the same write as an automatic hold', async () => {
         const buyer = await createUser();
 
-        await userService.takeAutomaticPurchaseHold(
-            buyer.id,
-            inDays(1),
-            testCallerContext,
-            AUTOMATIC_BASIS
-        );
+        await takeAutomaticPurchaseHold(buyer.id, inDays(1), testCallerContext, AUTOMATIC_BASIS);
 
         const stored = await userRepository.findById(buyer.id);
         expect(stored?.purchaseHoldFlaggedAt).toBeInstanceOf(Date);
@@ -485,7 +482,7 @@ describe('takeAutomaticPurchaseHold', () => {
         const buyer = await createUser();
         const until = inDays(4);
 
-        const taken = await userService.takeAutomaticPurchaseHold(
+        const taken = await takeAutomaticPurchaseHold(
             buyer.id,
             until,
             testCallerContext,
@@ -506,18 +503,8 @@ describe('takeAutomaticPurchaseHold', () => {
         const buyer = await createUser();
 
         const outcomes = await Promise.all([
-            userService.takeAutomaticPurchaseHold(
-                buyer.id,
-                inDays(2),
-                testCallerContext,
-                AUTOMATIC_BASIS
-            ),
-            userService.takeAutomaticPurchaseHold(
-                buyer.id,
-                inDays(3),
-                testCallerContext,
-                AUTOMATIC_BASIS
-            )
+            takeAutomaticPurchaseHold(buyer.id, inDays(2), testCallerContext, AUTOMATIC_BASIS),
+            takeAutomaticPurchaseHold(buyer.id, inDays(3), testCallerContext, AUTOMATIC_BASIS)
         ]);
 
         expect(outcomes.filter(Boolean)).toHaveLength(1);
@@ -531,7 +518,7 @@ describe('takeAutomaticPurchaseHold', () => {
             callerContextAs('moderator')
         );
 
-        const taken = await userService.takeAutomaticPurchaseHold(
+        const taken = await takeAutomaticPurchaseHold(
             buyer.id,
             inDays(1),
             testCallerContext,
@@ -554,7 +541,7 @@ describe('takeAutomaticPurchaseHold', () => {
             }
         });
 
-        const taken = await userService.takeAutomaticPurchaseHold(
+        const taken = await takeAutomaticPurchaseHold(
             buyer.id,
             inDays(2),
             testCallerContext,
@@ -598,7 +585,7 @@ describe('what the wire shows', () => {
  * @param id - the account
  */
 const exportedProfile = (id: string): Promise<{ purchaseHold?: object }> =>
-    userService
+    accountUserService
         .findByIdWithCredentials(id)
         // The export writes `JSON.stringify(section)`: this is that, read back, because the
         // `toJSON` transform runs only in the stringify (`structuredClone` would skip it).
@@ -633,12 +620,7 @@ describe('the buyer mail when a hold is placed', () => {
     it('mails an automatic hold with the rule that caused it, in the buyer’s language', async () => {
         const buyer = await createUser({ email: 'it@owner.test', username: 'it', locale: 'it' });
 
-        await userService.takeAutomaticPurchaseHold(
-            buyer.id,
-            inDays(4),
-            testCallerContext,
-            AUTOMATIC_BASIS
-        );
+        await takeAutomaticPurchaseHold(buyer.id, inDays(4), testCallerContext, AUTOMATIC_BASIS);
 
         expect(holdMails()).toHaveLength(1);
         const data = holdMails()[0][2];
@@ -655,18 +637,8 @@ describe('the buyer mail when a hold is placed', () => {
         const buyer = await createUser();
 
         await Promise.all([
-            userService.takeAutomaticPurchaseHold(
-                buyer.id,
-                inDays(2),
-                testCallerContext,
-                AUTOMATIC_BASIS
-            ),
-            userService.takeAutomaticPurchaseHold(
-                buyer.id,
-                inDays(3),
-                testCallerContext,
-                AUTOMATIC_BASIS
-            )
+            takeAutomaticPurchaseHold(buyer.id, inDays(2), testCallerContext, AUTOMATIC_BASIS),
+            takeAutomaticPurchaseHold(buyer.id, inDays(3), testCallerContext, AUTOMATIC_BASIS)
         ]);
 
         expect(holdMails()).toHaveLength(1);
@@ -703,7 +675,7 @@ describe('the buyer mail when a hold is placed', () => {
         );
         mockEnqueueEmail.mockClear();
 
-        const taken = await userService.takeAutomaticPurchaseHold(
+        const taken = await takeAutomaticPurchaseHold(
             buyer.id,
             inDays(1),
             testCallerContext,

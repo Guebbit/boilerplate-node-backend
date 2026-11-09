@@ -107,7 +107,7 @@ check. A `save()` of the whole `twoFactorMethods` array would let the slower one
 loaded, which undid a TOTP step the faster one had just claimed (the RFC 6238 §5.2 replay window)
 and made unrelated requests fail each other with a lost-race `412`.
 
-So `userService.persistTwoFactorMethods` writes a **diff**, not the array:
+So `accountUserService.persistTwoFactorMethods` writes a **diff**, not the array:
 
 ```mermaid
 flowchart LR

@@ -1157,6 +1157,46 @@ export default tseslint.config(
                         },
 
                         /*
+                         * Friend files. `users/friends/account.ts` is the one file of `users` that
+                         * `account` may import besides the barrel; the owner publishes it for ONE
+                         * named friend, and the template lets only that module in. A friend uses
+                         * only its friend object: `account` may not also import the public one.
+                         */
+                        {
+                            from: { element: { type: 'module' } },
+                            allow: {
+                                to: {
+                                    element: {
+                                        type: 'module',
+                                        fileInternalPath:
+                                            'friends/{{ from.element.captured.module }}.ts'
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            from: {
+                                element: {
+                                    type: 'module',
+                                    captured: { module: 'account' },
+                                    fileInternalPath: '!tests/**'
+                                }
+                            },
+                            dependency: { specifiers: ['userService'] },
+                            disallow: {
+                                to: {
+                                    element: {
+                                        type: 'module',
+                                        captured: { module: 'users' },
+                                        fileInternalPath: 'index.ts'
+                                    }
+                                }
+                            },
+                            message:
+                                'account uses `accountUserService` from @modules/users/friends/account, never the public `userService`. Not caught (deliberate evasion, unused today): `import * as users`, `export *`, dynamic `import()`.'
+                        },
+
+                        /*
                          * `scenarios/` reaches down into every tier: a scenario file imports its
                          * module's repository, model and factories directly, which is wider than
                          * the one door above grants a sibling module — see the element descriptor
@@ -1310,7 +1350,7 @@ export default tseslint.config(
                                 to: {
                                     element: {
                                         type: ['module', 'domain'],
-                                        fileInternalPath: ['module.ts', 'tests/**']
+                                        fileInternalPath: ['module.ts', 'tests/**', 'friends/**']
                                     }
                                 }
                             }
@@ -1351,56 +1391,6 @@ export default tseslint.config(
         files: ['src/modules/*/index.ts'],
         rules: {
             'local/barrel-allowed-sources': 'error'
-        }
-    },
-
-    /**
-     * Friends-only service members: a write exactly one other module must call. The barrel has to
-     * publish it (the friend sits in another module), so the barrel cannot be the door; this is.
-     * `account` writes `users`' credentials, the email-verification state and the restore-runbook erasure (a system caller only), `payments` moves an
-     * order to paid. Tests and factories reach them as they always did, so they are left out.
-     * See `docs/theory/strategic-ddd.md` §5.
-     */
-    {
-        files: ['src/modules/**/*.ts'],
-        ignores: ['src/**/tests/**', 'src/**/factories.ts'],
-        rules: {
-            'local/friend-members': [
-                'error',
-                {
-                    entries: [
-                        {
-                            handle: 'userService',
-                            owner: 'users',
-                            members: [
-                                'setPassword',
-                                'linkOAuthAccount',
-                                'persistTwoFactorWrite',
-                                'applyEmailChange',
-                                'markEmailVerified',
-                                'minimiseInactive',
-                                'eraseAgain',
-                                'restoreDeletionState'
-                            ],
-                            friends: ['account']
-                        },
-                        {
-                            // The shop's own pause after repeated cancellations: `orders` owns the
-                            // count that justifies it, so no other module may take a hold itself.
-                            handle: 'userService',
-                            owner: 'users',
-                            members: ['takeAutomaticPurchaseHold'],
-                            friends: ['orders']
-                        },
-                        {
-                            handle: 'orderService',
-                            owner: 'orders',
-                            members: ['markPaid'],
-                            friends: ['payments']
-                        }
-                    ]
-                }
-            ]
         }
     },
 

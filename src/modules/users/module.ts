@@ -23,7 +23,9 @@ import { resolveAnalyticsProvider } from '@infrastructure/observability/analytic
 import { router } from './routes';
 import { router as roleRouter } from './role-routes';
 import { userRepository } from './repository';
-import { userService } from './services';
+import { findByIdWithCredentials } from './services/lookups';
+import { exportSignInMethods } from './services/sign-in-methods';
+import { reencryptUserPhones } from './services/reencrypt';
 import { setPersonalDataErasers, setPersonalDataMinimisers } from './erasure-registry';
 import { USER_ERASED, USER_PROFILE_CHANGED } from './events';
 import { usersConfig } from './config';
@@ -90,16 +92,16 @@ export default {
         // this section specifically, since nothing else in the export means anything without it.
         {
             section: 'profile',
-            collect: (subject) => userService.findByIdWithCredentials(subject.userId)
+            collect: (subject) => findByIdWithCredentials(subject.userId)
         },
         // The ways in the account holds, as facts: providers linked and factors armed, no secrets.
         {
             section: 'signInMethods',
-            collect: (subject) => userService.exportSignInMethods(subject.userId)
+            collect: (subject) => exportSignInMethods(subject.userId)
         }
     ],
     // The phone is PII-encrypted. The TOTP secrets on this same document are `account`'s walk.
-    reencrypt: userService.reencryptUserPhones,
+    reencrypt: reencryptUserPhones,
     // The PII encryption key: see `./config`.
     config: [usersConfig.slice]
 } satisfies AppModule;

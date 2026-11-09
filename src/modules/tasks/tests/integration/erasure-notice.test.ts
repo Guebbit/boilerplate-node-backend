@@ -12,6 +12,7 @@ import { systemCallerContext } from '@kernel/permissions';
 import type { UserDocument } from '@modules/users';
 import { createUser, eraseAsInactive, eraseAsScheduled } from '@modules/users/tests/factories';
 import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { resetDomainEvents } from '@kernel/events';
 import { registerModules } from '@kernel/registry';
@@ -57,7 +58,7 @@ const doors: [string, (user: UserDocument) => Promise<unknown>][] = [
     ['the inactivity reaper hard-deleting it', (user) => eraseAsInactive(user)],
     [
         'the erasure ledger replayed on a restored database',
-        (user) => userService.eraseAgain(user.id, new Date(), systemCallerContext('User'))
+        (user) => accountUserService.eraseAgain(user.id, new Date(), systemCallerContext('User'))
     ]
 ];
 

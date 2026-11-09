@@ -28,12 +28,8 @@ import { registerAuthResolver } from '@kernel/authentication';
 import { onDomainEvent } from '@kernel/events';
 import { resolveAnalyticsProvider } from '@infrastructure/observability/analytics';
 import { ACCOUNT_ANALYTICS_CONSENT_WITHDRAWN } from './events';
-import {
-    userService,
-    USER_SETUP_REQUESTED,
-    USER_DEACTIVATED,
-    USER_DELETION_CANCELED
-} from '@modules/users';
+import { USER_SETUP_REQUESTED, USER_DEACTIVATED, USER_DELETION_CANCELED } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { accountAuthResolver } from './session/resolver';
 import { accountConfig } from './config';
 import { sessionConfig } from './session/config';
@@ -131,7 +127,7 @@ export default {
          * `undefined` and the request is simply dropped — nobody is left to email.
          */
         onDomainEvent(USER_SETUP_REQUESTED, ({ userId }) =>
-            userService.getById(userId).then((user) => user && requestAccountSetup(user))
+            accountUserService.getById(userId).then((user) => user && requestAccountSetup(user))
         );
         /*
          * A ban ends the sessions in `users`' own save; the one-time links (a reset, an email

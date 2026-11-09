@@ -14,7 +14,7 @@ import { writeWithUploadedImage } from '@infrastructure/http/uploads';
 import { createUpdateController } from '@infrastructure/surfaces/create-update-controller';
 import { ReplaceAccountBody, UpdateAccountBody } from '@api/schemas.zod';
 import { accountService } from '../services';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { wellFormedLocale } from '@infrastructure/http/schemas';
 
 /**
@@ -43,5 +43,6 @@ export const { replace: replaceAccount, update: updateAccount } = createUpdateCo
         ),
     // The role comes straight off the already-resolved auth context, same as `get-account.ts` —
     // a profile edit never changes it, so no second lookup here.
-    present: (user, request) => userService.toAccount(user, request.authContext!.roles.tenant)
+    present: (user, request) =>
+        accountUserService.toAccount(user, request.authContext!.roles.tenant)
 });

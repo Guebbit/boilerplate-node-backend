@@ -16,7 +16,7 @@ import productsModule from '@modules/products/module';
 import inventoryModule from '@modules/inventory/module';
 import ordersModule from '@modules/orders/module';
 import invoicingModule from '@modules/invoicing/module';
-import { orderService } from '@modules/orders';
+import { markPaid } from '@modules/orders/friends/payments';
 import { writeDocument } from '@infrastructure/adapters/document-store';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
@@ -54,7 +54,7 @@ const invoiceIssuedAt = async (issuedAt: string, timezone = 'Europe/Rome') => {
             country: 'GB'
         }
     });
-    await orderService.markPaid(String(order._id));
+    await markPaid(String(order._id));
     const invoice = await waitForInvoice(String(order._id));
     await invoiceModel.updateOne({ _id: invoice._id }, { issuedAt: new Date(issuedAt), timezone });
     return { orderId: String(order._id), invoiceId: invoice._id };

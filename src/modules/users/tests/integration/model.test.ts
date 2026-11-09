@@ -10,7 +10,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { userRepository } from '../../repository';
 import { userService } from '@modules/users/services';
-import { userService as userServiceObject } from '../../services';
+import { accountUserService } from '../../friends/account';
 
 setupTestDb();
 
@@ -34,7 +34,7 @@ describe('email is case-insensitive', () => {
     it('finds an authenticatable account by a differently-cased login attempt', async () => {
         await createUser({ email: 'ada@example.com' });
 
-        const found = await userServiceObject.findForLogin('ADA@example.COM');
+        const found = await accountUserService.findForLogin('ADA@example.COM');
 
         expect(found).not.toBeNull();
         expect(found!.email).toBe('ada@example.com');

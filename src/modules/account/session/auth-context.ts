@@ -8,7 +8,7 @@
 
 import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import type { AuthContext } from '@types';
 import { predatesSessionEpoch } from '../domain/epoch';
 
@@ -37,7 +37,7 @@ export const resolveProof = (
     userId: string,
     proof: SessionProof
 ): Promise<AuthContext | undefined> =>
-    userService.findAuthenticatableById(userId).then((user) => {
+    accountUserService.findAuthenticatableById(userId).then((user) => {
         if (!user || predatesSessionEpoch(proof.authTime, user.tokensValidAfter)) return undefined;
 
         return accessService.rolesOf(user.id, DEPLOYMENT_TENANT_ID).then(

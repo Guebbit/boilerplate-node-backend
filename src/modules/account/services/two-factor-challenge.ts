@@ -6,7 +6,8 @@
  */
 
 import { t } from '@infrastructure/i18n';
-import { userService, type UserDocument } from '@modules/users';
+import { type UserDocument } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import {
     generateSuccess,
     generateReject,
@@ -140,7 +141,7 @@ export const verifyLoginChallenge = (
                     spendLiveToken(MFA_CHALLENGE_TOKEN_TYPE, challenge).then(
                         (spentByThisRequest) =>
                             spentByThisRequest
-                                ? userService.persistTwoFactorMethods(user).then((saved) =>
+                                ? accountUserService.persistTwoFactorMethods(user).then((saved) =>
                                       generateSuccess({
                                           user: saved,
                                           amr

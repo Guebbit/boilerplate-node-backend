@@ -22,6 +22,7 @@ import {
     lastOverrideOf
 } from '@modules/orders/tests/factories';
 import { orderService, withdrawUntilFrom } from '@modules/orders';
+import { markPaid } from '@modules/orders/friends/payments';
 import { OrderStatus } from '@types';
 import { findShippingMethod, priceShipping, SHIPPING_METHODS } from '@modules/delivery/domain';
 import { deliveryService } from '@modules/delivery/services';
@@ -176,7 +177,7 @@ describe('the fulfillment orders of a paid order', () => {
             status: OrderStatus.pending
         });
         // The listener is wired by the app's module registry; this stands in for its trigger.
-        await orderService.markPaid(String(order._id));
+        await markPaid(String(order._id));
         await settleOutboxNudges();
 
         const all = await fulfillmentOrderRepository.findByOrderId(String(order._id));

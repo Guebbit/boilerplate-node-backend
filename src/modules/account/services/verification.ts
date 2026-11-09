@@ -11,7 +11,8 @@
 
 import { t } from '@infrastructure/i18n';
 import { accountConfig } from '../config';
-import { userService, type UserDocument } from '@modules/users';
+import { type UserDocument } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { issueToken, tokenSentAt, redeemLiveToken, refuseLink } from './tokens';
 import { verifyRequestEmail, recipientLocale, greetableName } from '../emails';
 import { sendAccountMail } from './mail';
@@ -181,7 +182,7 @@ export const requestEmailVerificationFor = (
     userId: string,
     context: CallerContext
 ): Promise<ResponseSuccess<EmailVerificationRequested> | ResponseReject> =>
-    userService.findByIdWithCredentials(userId).then((user) => {
+    accountUserService.findByIdWithCredentials(userId).then((user) => {
         if (!user) return generateReject(404, [t('users.not-found')]);
         if (user.verifiedAt)
             return generateReject(409, [
@@ -248,7 +249,7 @@ export const resendPendingEmailVerificationFor = (
  * `password-reset.ts#markResetCompleted` is the one caller, and the reset passes that to
  * `writePassword` as `beforeSave`, so a verification lands in the same write as the new password —
  * a spent reset token proves the same mailbox a verify token does. `completeEmailVerification`/
- * `completeEmailChange` below do NOT call this: they call the equivalent `userService` operation
+ * `completeEmailChange` below do NOT call this: they call the equivalent `accountUserService` operation
  * directly, which mutates and persists in one step.
  *
  * @param user - the account whose address was just proven
@@ -283,7 +284,7 @@ export const completeEmailVerification = (
     user: UserDocument,
     context: CallerContext
 ): Promise<UserDocument> =>
-    userService
+    accountUserService
         .markEmailVerified(user)
         .then((saved) =>
             auditProvenAddress(saved, context, accountAuditActions.AUTH_EMAIL_VERIFY_COMPLETED)
@@ -314,7 +315,7 @@ export const completeEmailChange = (
     if (emailChangeNext(emailChangeStateOf(user), 'confirm') === undefined || !newEmail)
         return Promise.resolve(user);
 
-    return userService
+    return accountUserService
         .applyEmailChange(user, newEmail)
         .then((saved) => revokeFor('email-change-confirm', saved.id).then(() => saved))
         .then((saved) =>
@@ -348,8 +349,8 @@ export const undoEmailChange = (
     revokeFor('email-change-undo', user.id)
         .then(() =>
             undoRestoresPreviousEmail(emailChangeStateOf(user))
-                ? userService.restorePreviousEmail(user)
-                : userService.cancelPendingEmail(user)
+                ? accountUserService.restorePreviousEmail(user)
+                : accountUserService.cancelPendingEmail(user)
         )
         .then((saved) =>
             auditProvenAddress(saved, context, accountAuditActions.AUTH_EMAIL_CHANGE_UNDONE)

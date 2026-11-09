@@ -11,7 +11,8 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import { userService, type UserDocument } from '@modules/users';
+import { type UserDocument } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { sessionRepository } from '../repository';
 import type { CallerContext } from '@types';
@@ -112,7 +113,7 @@ export const logoutEverywhere = (
     userId: string,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    userService
+    accountUserService
         .findAuthenticatableById(userId)
         .then(
             (

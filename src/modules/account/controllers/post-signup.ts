@@ -13,7 +13,7 @@ import { authSignupTotal } from '../metrics';
 import { logger } from '@infrastructure/adapters/logger';
 import { callerContextOf } from '@infrastructure/http/request';
 import { issueSession } from '../session/session';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { logAntibotRefusal } from '@infrastructure/http/middlewares/antibot-log';
 import { AMR } from '../domain/session-proof';
 
@@ -89,7 +89,7 @@ export const postSignup = (
                 // point of this branch being indistinguishable.
                 createdResponse<Account>(
                     response,
-                    userService.toAccount(data, null),
+                    accountUserService.toAccount(data, null),
                     SIGNUP_LOCATION
                 );
                 return;
@@ -128,7 +128,7 @@ export const postSignup = (
                 // Self-service signup grants no role, so there is none to look up.
                 createdResponse<Account>(
                     response,
-                    userService.toAccount(data, null),
+                    accountUserService.toAccount(data, null),
                     SIGNUP_LOCATION
                 );
             });

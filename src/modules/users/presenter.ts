@@ -1,7 +1,7 @@
 /**
  * @module
  * The one place a stored account becomes the `Account` or `User` contract — `account`'s own
- * controllers reach this through `userService.toAccount`, never `./model` directly (the
+ * controllers reach this through `accountUserService.toAccount`, never `./model` directly (the
  * persistence wall): a controller may not reach a module's model layer, so the shaping helper it
  * needs rides through the service. Pure: the lookups and the `actions` rules sit in `./services`.
  */

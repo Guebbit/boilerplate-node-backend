@@ -18,7 +18,8 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import { userService, type UserDocument } from '@modules/users';
+import { type UserDocument } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import type { CallerContext, UpdateAccountRequest } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
@@ -35,7 +36,7 @@ import { ACCOUNT_ANALYTICS_CONSENT_WITHDRAWN } from '../events';
 
 /**
  * Read the caller's own profile.
- * `findByIdWithPendingEmail`, not `userService.getById`: that read is shared with the admin's
+ * `findByIdWithPendingEmail`, not `accountUserService.getById`: that read is shared with the admin's
  * `get-user.ts` lookup, which has no business seeing a pending change, and the caller's own
  * client needs it to show "verification pending for …" — `pendingEmail` is otherwise
  * `select: false`. Not a wrapper around an emit inside `getById` either, for a second reason: an
@@ -49,7 +50,7 @@ export const getOwnProfile = (
         ...buildAnalyticsBase(context),
         event: accountAnalyticsEvents.USER_PROFILE_VIEWED
     });
-    return userService.findByIdWithPendingEmail(userId).then((user) => user ?? undefined);
+    return accountUserService.findByIdWithPendingEmail(userId).then((user) => user ?? undefined);
 };
 
 /**
@@ -111,11 +112,13 @@ const saveProfile = (
                   )
             : undefined;
 
-        return userService.updateOwnProfile(user, fields, announceWithdrawal).then((result) => {
-            if (withdrawing && result.success) nudgeOutbox();
-            if (!result.success || !emailOutcome.requested) return result;
-            return notifyEmailChangeRequested(result.data, context).then(() => result);
-        });
+        return accountUserService
+            .updateOwnProfile(user, fields, announceWithdrawal)
+            .then((result) => {
+                if (withdrawing && result.success) nudgeOutbox();
+                if (!result.success || !emailOutcome.requested) return result;
+                return notifyEmailChangeRequested(result.data, context).then(() => result);
+            });
     });
 };
 
@@ -164,9 +167,9 @@ const writeProfile = (
 /**
  * Update the caller's own profile — email, username, locale, image. `changes` are already validated
  * against the contract at the edge.
- * Narrower than the admin `userService.update`: no `admin`/`active`/`password` — those belong to
+ * Narrower than the admin `userService.updateById`: no `admin`/`active`/`password` — those belong to
  * `/users` and to {@link passwordChangeWithCurrent}, which proves the current password first.
- * `email` never reaches `userService.update` directly — {@link applyEmailChangeRequest} routes it
+ * `email` never reaches `accountUserService.updateOwnProfile` directly — {@link applyEmailChangeRequest} routes it
  * through `pendingEmail` instead, so `verified` (describing the account's CURRENT address) is
  * untouched by a change still waiting to be proven.
  */
@@ -181,7 +184,7 @@ export const updateProfile = (
         applyEmailChangeRequest(user, changes.email).then((emailOutcome) => {
             // Read before the write assigns onto the document. `email` counts only when this call
             // is what asked for the change.
-            const metadata = userService.userAuditChanges(user, {
+            const metadata = accountUserService.userAuditChanges(user, {
                 ...changes,
                 email: emailOutcome.requested ? changes.email : undefined
             });

@@ -168,6 +168,8 @@ const adoptOutcome = (
  * {@link persistTwoFactorMethods} with the backup-code instructions and the outcome. An empty
  * write sends nothing and answers from the copy.
  *
+ * No check here: `account` has already proved the second factor (`friends/account.ts`).
+ *
  * @param user - the loaded copy, credentials included, as the request left it
  * @param options - methods removed, and whether to discard or mint backup codes inside the write
  * @returns what is stored after the write; a caller that asked to mint compares `backupCodeSalt`

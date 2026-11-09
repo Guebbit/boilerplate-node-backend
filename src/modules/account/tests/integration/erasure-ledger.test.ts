@@ -11,6 +11,7 @@ import { testCallerContext } from '@tests/callers';
 import { observePort } from '@tests/ports';
 import { resetDomainEvents } from '@kernel/events';
 import { createUser, eraseAsScheduled, userRepository } from '@modules/users/tests/factories';
+import { accountUserService } from '@modules/users/friends/account';
 import { userService } from '@modules/users';
 import * as auditPort from '@infrastructure/observability/audit';
 import { accountService } from '../../services';
@@ -180,7 +181,7 @@ describe('reapplyErasures', () => {
         const user = await createUser({ email: 'fresh-row@example.com' });
         const original = new Date(Date.now() - 3 * DAY);
 
-        await userService.eraseAgain(user.id, original, systemCallerContext('User'));
+        await accountUserService.eraseAgain(user.id, original, systemCallerContext('User'));
 
         const rows = await rowsOf(user.id);
         expect(rows).toHaveLength(1);
@@ -208,7 +209,7 @@ describe('reapplyErasures', () => {
         await eraseAsScheduled(user);
         await restoreFromSnapshot(user.id, 'stubborn@example.com');
         const since = new Date(Date.now() - DAY);
-        jest.spyOn(userService, 'eraseAgain').mockRejectedValueOnce(new Error('simulated'));
+        jest.spyOn(accountUserService, 'eraseAgain').mockRejectedValueOnce(new Error('simulated'));
 
         const failed = await reapplyErasures({ since });
         expect(failed.failed).toEqual([user.id]);
@@ -472,10 +473,10 @@ describe('restore doors take only the system caller', () => {
     it('refuses restoreDeletionState and eraseAgain for any other caller', async () => {
         const user = await createUser({ email: 'not-system@example.com' });
 
-        expect(() => userService.restoreDeletionState(user.id, null, testCallerContext)).toThrow(
-            'system caller'
-        );
-        expect(() => userService.eraseAgain(user.id, new Date(), testCallerContext)).toThrow(
+        expect(() =>
+            accountUserService.restoreDeletionState(user.id, null, testCallerContext)
+        ).toThrow('system caller');
+        expect(() => accountUserService.eraseAgain(user.id, new Date(), testCallerContext)).toThrow(
             'system caller'
         );
         expect(await userRepository.findById(user.id)).not.toBeNull();
@@ -486,8 +487,8 @@ describe('restore doors take only the system caller', () => {
         const user = await lockedInSnapshot('audited@example.com', new Date(Date.now() + DAY));
         const system = systemCallerContext('User');
 
-        await userService.restoreDeletionState(user.id, null, system);
-        await userService.restoreDeletionState(user.id, null, system);
+        await accountUserService.restoreDeletionState(user.id, null, system);
+        await accountUserService.restoreDeletionState(user.id, null, system);
 
         const actions = auditSpy.mock.calls.map(([event]) => (event as { action: string }).action);
         expect(actions.filter((a) => a === 'system.user.deletion_lock_restored')).toHaveLength(1);

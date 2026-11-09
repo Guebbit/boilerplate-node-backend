@@ -5,7 +5,7 @@
  * TTL date and the database deletes it.
  */
 
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { verificationTokenRepository } from '../repository';
 import { EMAIL_CHANGE_UNDO_TOKEN_TYPE } from '../token-types';
 
@@ -22,4 +22,4 @@ import { EMAIL_CHANGE_UNDO_TOKEN_TYPE } from '../token-types';
 export const reapLapsedPreviousEmails = (): Promise<number> =>
     verificationTokenRepository
         .userIdsWithLive(EMAIL_CHANGE_UNDO_TOKEN_TYPE, new Date())
-        .then((keep) => userService.clearLapsedPreviousEmail(keep));
+        .then((keep) => accountUserService.clearLapsedPreviousEmail(keep));

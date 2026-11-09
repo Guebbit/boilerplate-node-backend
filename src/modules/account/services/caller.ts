@@ -12,7 +12,8 @@ import {
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { CallerContext } from '@types';
-import { userService, type UserDocument } from '@modules/users';
+import { type UserDocument } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { isUnrestrictedCaller } from '../roles';
 
 /**
@@ -31,7 +32,7 @@ export const withOwnAccount = <T>(
     ) => ResponseSuccess<T> | ResponseReject | Promise<ResponseSuccess<T> | ResponseReject>,
     load: (
         id: string
-    ) => Promise<UserDocument | null | undefined> = userService.findByIdWithCredentials
+    ) => Promise<UserDocument | null | undefined> = accountUserService.findByIdWithCredentials
 ): Promise<ResponseSuccess<T> | ResponseReject> =>
     load(userId).then((user) => (user ? action(user) : generateReject(401, [])));
 

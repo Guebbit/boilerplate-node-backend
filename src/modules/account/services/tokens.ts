@@ -14,7 +14,8 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { accountAuditActions } from '../audit';
 import { authOneTimeTokenRejectedTotal } from '../metrics';
-import { userService, type UserDocument } from '@modules/users';
+import { type UserDocument } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { verificationTokenRepository, type VerificationTokenRow } from '../repository';
 import type { VerificationTokenType } from '../token-types';
 import { t } from '@infrastructure/i18n';
@@ -91,7 +92,7 @@ export const findLiveTokenEntry = (
     verificationTokenRepository.findLive(type, hashToken(token), new Date()).then((entry) =>
         entry
             ? // With credentials: every flow that finds a token goes on to change the account.
-              userService
+              accountUserService
                   .findByIdWithCredentials(String(entry.userId))
                   .then((user) => (user ? { user, entry } : undefined))
             : undefined

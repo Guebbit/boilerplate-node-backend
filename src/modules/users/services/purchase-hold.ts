@@ -281,6 +281,7 @@ export const reapExpiredPurchaseHolds = (now = new Date()): Promise<number> =>
  * Take the automatic hold after repeated cancellations. Atomic: when two cancellations race to the
  * limit only one call returns `true`, so only one staff mail and one audit row follow.
  *
+ * @internal Friend-only to `orders` (`friends/orders.ts`): `orders` owns the count that justifies it.
  * @param id - the account
  * @param until - when the counted cancellations fall back under the limit
  * @param context - the system caller, for the audit row

@@ -26,7 +26,7 @@ import {
     PLAIN_PASSWORD,
     REPLACEMENT_PASSWORD
 } from '@modules/users/tests/factories';
-import { userService } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { SignJWT, decodeJwt } from 'jose';
 import type { Response } from 'express';
@@ -380,7 +380,7 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
             .spyOn(accountService, 'login')
             .mockImplementationOnce((...args) =>
                 login(...args).then((result) =>
-                    userService.bumpSessionEpoch(user.id, new Date()).then(() => result)
+                    accountUserService.bumpSessionEpoch(user.id, new Date()).then(() => result)
                 )
             );
 

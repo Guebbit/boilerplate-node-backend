@@ -21,7 +21,8 @@ import {
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { userService, type DeliveredCodeState, type UserDocument } from '@modules/users';
+import { type DeliveredCodeState, type UserDocument } from '@modules/users';
+import { accountUserService } from '@modules/users/friends/account';
 import type {
     CallerContext,
     ReauthMethod,
@@ -105,7 +106,7 @@ const deliverCode = (
     const slot: DeliveredCodeState = user.reauthCode;
 
     return deliverEmailCode(user, slot, context, reauthCodeEmail)
-        .then((delivery) => userService.armReauthCode(user).then(() => delivery))
+        .then((delivery) => accountUserService.armReauthCode(user).then(() => delivery))
         .then((delivery) => generateSuccess(delivery));
 };
 

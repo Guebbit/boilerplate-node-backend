@@ -9,6 +9,7 @@ import { callerContextAs } from '@tests/callers';
 import { outboxEventModel } from '@kernel/outbox';
 import { createUser } from '@modules/users/tests/factories';
 import { userService } from '@modules/users/services';
+import { accountUserService } from '../../friends/account';
 import { userModel } from '../../model';
 
 setupTestDb();
@@ -36,7 +37,7 @@ describe('user.profile_changed', () => {
     it('is written by the owner’s own edit', async () => {
         const user = await createUser({ email: 'self-edit@example.com', username: 'selfedit' });
 
-        await userService.updateOwnProfile(await userModel.findById(user.id).orFail(), {
+        await accountUserService.updateOwnProfile(await userModel.findById(user.id).orFail(), {
             phone: '+391234567890'
         });
 
@@ -69,8 +70,8 @@ describe('user.profile_changed', () => {
         const user = await createUser({ email: 'old@example.com', username: 'emailer' });
         const loaded = await userModel.findById(user.id).orFail();
 
-        await userService.applyEmailChange(loaded, 'new@example.com');
-        await userService.restorePreviousEmail(await userModel.findById(user.id).orFail());
+        await accountUserService.applyEmailChange(loaded, 'new@example.com');
+        await accountUserService.restorePreviousEmail(await userModel.findById(user.id).orFail());
 
         expect(await payloads()).toMatchObject([{ changed: ['email'] }, { changed: ['email'] }]);
     });
