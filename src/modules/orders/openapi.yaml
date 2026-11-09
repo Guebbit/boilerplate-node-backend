@@ -520,8 +520,10 @@ paths:
             tags: [Orders]
             summary: The order's timeline
             description: >-
-                What happened to the order, oldest first: status moves, payments and refunds,
-                shipments, returns, documents. Every caller who may read the order may read this,
+                What happened to the order, a page at a time, newest first (a log, so no `sort`):
+                status moves, payments and refunds, shipments, returns, documents, staff notes.
+                Paged rather than capped: staff notes make a history grow without limit, and
+                `meta.totalItems` counts the rows this caller may read. Every caller who may read the order may read this,
                 but not the same rows. A caller holding `display:Order` sees every row, with the
                 `actor` who made it and any `text` staff wrote. The buyer sees only the
                 buyer-visible types and never an `actor`: a manual correction, a hold and a failed
@@ -531,15 +533,18 @@ paths:
                 - bearerAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
             responses:
                 '200':
-                    description: The order's timeline, oldest first
+                    description: A page of the order's timeline, newest first (a log, so no `sort`)
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/OrderTimelineResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
     /orders/{id}/timeline/notes:
         post:
@@ -1969,12 +1974,14 @@ components:
         OrderTimelineResponse:
             type: object
             additionalProperties: false
-            required: [items]
+            required: [items, meta]
             properties:
                 items:
                     type: array
                     items:
                         $ref: '#/components/schemas/OrderTimelineEntry'
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
 
         CancelOrderRequest:
             type: object

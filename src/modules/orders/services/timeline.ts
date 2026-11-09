@@ -33,7 +33,13 @@ import { encryptPii, decryptPii } from '@infrastructure/security/pii-encryption'
 import { timelineNoteAad } from '../pii';
 import { orderEventTextRetentionDays } from '../config';
 import { presentTimeline, presentTimelineEntry } from '../presenter';
-import type { TimelineEntryInput } from '../domain';
+import { BUYER_VISIBLE_TYPES, type TimelineEntryInput } from '../domain';
+import {
+    buildPaginatedMeta,
+    normalizePagination,
+    type PaginatedMeta,
+    type PaginationInput
+} from '@infrastructure/persistence/search';
 import { DAY_MS } from '@domain-primitives/time';
 
 /**
@@ -188,22 +194,29 @@ const readsEveryOrder = (authContext: AuthContext | undefined): boolean =>
     heldRules(callerForSubject(authContext, 'Order')).has('display:Order');
 
 /**
- * An order's timeline as this caller may read it, oldest first. The order itself is already
- * checked: the controller reached it through `getForCaller`.
+ * One page of an order's timeline as this caller may read it, newest first. The order itself is
+ * already checked: the controller reached it through `getForCaller`.
  *
  * @param orderId - the order
  * @param authContext - the caller; staff see every row and its actor, the buyer neither the
  *   staff-only rows nor any actor
+ * @param pagination - `page`/`pageSize` as they came off the request
+ * @returns the page and its meta; `totalItems` counts only rows this caller may read
  */
 export const readTimeline = (
     orderId: string,
-    authContext: AuthContext | undefined
-): Promise<OrderTimelineEntry[]> =>
-    orderEventRepository
-        .findByOrderId(orderId)
-        .then((events) =>
-            presentTimeline(events, readsEveryOrder(authContext) ? 'staff' : 'buyer')
-        );
+    authContext: AuthContext | undefined,
+    pagination: PaginationInput
+): Promise<{ items: OrderTimelineEntry[]; meta: PaginatedMeta }> => {
+    const reader = readsEveryOrder(authContext) ? 'staff' : 'buyer';
+    const page = normalizePagination(pagination);
+    return orderEventRepository
+        .findPageByOrderId(orderId, reader === 'staff' ? undefined : BUYER_VISIBLE_TYPES, page)
+        .then(({ rows, totalItems }) => ({
+            items: presentTimeline(rows, reader),
+            meta: buildPaginatedMeta(page, totalItems)
+        }));
+};
 
 /**
  * Every timeline row of one account's own orders, for `POST /account/export`. Staff text and

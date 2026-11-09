@@ -518,19 +518,21 @@ components:
             required: false
             description: >-
                 The rate-limit budgets this request passed, as a list in the current IETF draft's
-                syntax (`draft-ietf-httpapi-ratelimit-headers`): `"login";q=5;w=900` is a budget
-                named `login` that allows `q` requests per `w` seconds. One list item per budget the
-                request passed, named as in the budget table. Any response may carry it; no
-                identifier of the caller is ever included.
+                syntax (`draft-ietf-httpapi-ratelimit-headers`):
+                `"global";q=100;w=60, "credentials-identity";q=10;w=900` is two budgets, each
+                allowing `q` requests per `w` seconds. One list item per budget the request passed,
+                named by the budget's `namespace` (the budget table in `docs/tools/security.md`).
+                Any response may carry it; no identifier of the caller is ever included.
             schema:
                 type: string
 
         RateLimit:
             required: false
             description: >-
-                What is left of each budget in `RateLimit-Policy`, same names and order:
-                `"login";r=3;t=600` is 3 requests remaining, and the window resets in 600 seconds.
-                Back off before `r` reaches 0. Any response may carry it. On a `429`, the budget that
+                What is left of each budget in `RateLimit-Policy`, in the same order:
+                `"global";r=97;t=41, "credentials-identity";r=9;t=880` is 97 and 9 requests left,
+                resetting in 41 and 880 seconds. Back off before `r` reaches 0. Any response may
+                carry it. Ignore it on a response served from a cache (`Age` > 0). On a `429`, the budget that
                 refused is always listed with `r=0` and `t` equal to `Retry-After`, even one with no
                 `RateLimit-Policy` item. It is never listed on a success.
             schema:
@@ -740,7 +742,10 @@ components:
             default: 10
             minimum: 1
             maximum: 100
-            description: Optional override; server may clamp to a max
+            description: >-
+                Rows per page, a whole number from 1 to 100. Absent or empty: the deployment's default
+                (10 unless `NODE_SETTINGS_PAGINATION_PAGE_SIZE` sets another). Anything else, 0
+                included, is a 422; nothing is clamped.
         Id:
             type: string
             minLength: 1

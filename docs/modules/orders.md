@@ -444,7 +444,7 @@ already `shipped` makes the second call silent.
 
 ## The timeline
 
-What happened to an order, oldest first: `GET /orders/{id}/timeline`. One append-only collection,
+What happened to an order, a page at a time, newest first: `GET /orders/{id}/timeline`. One append-only collection,
 `orderevents`, owned by `orders` and typed as an `AppendOnlyLedger` (the stock-movement precedent).
 It is its own collection because the alternatives fail: an array on the order collides with the
 conditional status writes siblings make in their own transactions, the audit log expires at 90
@@ -477,6 +477,14 @@ flowchart LR
 an `actor`). A module that depends on `orders` calls `orderService.appendTimeline(orderId, entry,
 session)` in its own transaction, so a row commits with the fact it describes or not at all, and a
 write that lost its race leaves no row. `orders` cannot listen to them: they import it.
+
+**Paged as a log.** Staff notes make an order's history grow without limit (the only cap is the
+note rate limit, per staff account), so the read takes `page`/`pageSize` and answers `{ items, meta }`,
+newest first, with no `sort` (a log: [Sorting](../api/sorting.md#lists-with-one-fixed-order)). The
+buyer's audience is part of the query, not a filter on the page, so `meta.totalItems` and every page
+count only rows that caller may read. Offset paging on a list that grows at its head can shift a row
+onto the next page; the order page dedupes by row id when it loads older rows. The index
+`{ orderId, at, _id }` serves it; `_id` closes the order.
 
 **Types and audience.** `domain/timeline.ts` decides, per type, whether the buyer may read it
 (Magento's `is_visible_on_front`, WooCommerce's `is_customer_note`); a private row is hidden whole,

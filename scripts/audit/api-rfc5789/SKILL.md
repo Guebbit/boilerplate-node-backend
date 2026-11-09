@@ -37,8 +37,8 @@ Output is `tmp/reports/audit/api-rfc5789/<SCOPE>.md`, where `<SCOPE>` is:
     - Spectral `shared/contracts/spectral.yaml` (security on every operation, no `nullable`, errors are
       `application/problem+json`, the 2xx body is an object, replace is PUT and update is PATCH,
       operationId shape, schema names, camelCase parameters, `maxLength`, `names-in-us-english-*`)
-    - Spectral: replace is PUT, update is PATCH
     - `tests/cross-cutting/replace-patch-parity.test.ts`, `tests/contract/request-contract.test.ts` and `tests/contract/request-sources.test.ts`
+    - `tests/contract/write-methods.test.ts` and `tests/integration/bad-bodies.test.ts` (the 415 on an undeclared type)
     - `scripts/contracts/generate-request-content-types.ts` (the declared request media types) and the 415 guard `src/infrastructure/http/middlewares/content-type.ts`
       A guarded rule gets one line ("guarded by X") and no verdict hunt.
 5. If this audit is part of a run of several, the USER gives the order of precedence first
@@ -46,7 +46,7 @@ Output is `tmp/reports/audit/api-rfc5789/<SCOPE>.md`, where `<SCOPE>` is:
 
 ## Steps
 
-1. List the operations in scope from the bundle (List the `patch` operations; read each handler and its service.)
+1. List the `patch` operations in scope from the bundle; read each handler and its service. The body parsers: `JSON_BODY_TYPES` (`src/infrastructure/http/middlewares/json-depth.ts`, mounted in `src/app/security.ts`), and `upload.image()` in the module's `routes.ts` on a multipart PATCH.
 2. For each rule, check three sources and reach ONE verdict: the contract (the operation, its
    responses, its headers), the handler (controller, then service, never only the route), and the
    docs page that describes it.

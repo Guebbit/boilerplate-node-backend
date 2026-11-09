@@ -19,7 +19,7 @@ import {
     applyOrderEventTransform
 } from './model';
 import type { OrderDocument, OrderEventDocument, OrderReference } from './model';
-import { paymentStatusFilter, returnStatusFilter } from './domain';
+import { paymentStatusFilter, returnStatusFilter, type OrderTimelineType } from './domain';
 import type {
     DeliveryClock,
     FulfillmentSummary,
@@ -50,7 +50,8 @@ import {
     DEFAULT_SORT,
     SORT_COLLATION,
     sortOf,
-    type PaginatedMeta
+    type PaginatedMeta,
+    type PaginationResult
 } from '@infrastructure/persistence/search';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import { updateStatusIfIn as sharedUpdateStatusIfIn } from '@infrastructure/persistence/conditional-status';
@@ -946,7 +947,11 @@ export const orderEventRepository: AppendOnlyLedger<
     OrderEventDocument,
     Wire<OrderEventDocument>
 > & {
-    findByOrderId: (orderId: string) => Promise<OrderEventDocument[]>;
+    findPageByOrderId: (
+        orderId: string,
+        types: readonly OrderTimelineType[] | undefined,
+        pagination: PaginationResult
+    ) => Promise<{ rows: OrderEventDocument[]; totalItems: number }>;
     findByOrderIds: (orderIds: readonly string[]) => Promise<OrderEventDocument[]>;
     findBuyerCancelTimes: (
         orderIds: readonly string[],
@@ -967,16 +972,28 @@ export const orderEventRepository: AppendOnlyLedger<
     }),
 
     /**
-     * One order's rows, oldest first. Ties on `at` end on the id, so two rows written in one
-     * transaction keep the order they were appended in.
+     * One page of an order's rows, newest first: a log, so the order is fixed. Ties on `at` end on
+     * the id, descending, so rows written in one transaction keep a total order across pages.
      *
      * @param orderId - the order
+     * @param types - the only types to count and return, or `undefined` for every row
+     * @param pagination - which page, from `normalizePagination`
      */
-    findByOrderId: (orderId) =>
-        orderEventModel
-            .find({ orderId: toObjectId(orderId) })
-            .sort({ at: 1, _id: 1 })
-            .exec(),
+    findPageByOrderId: (orderId, types, pagination) => {
+        const where: QueryFilter<OrderEventDocument> = {
+            orderId: toObjectId(orderId),
+            ...(types ? { type: { $in: [...types] } } : {})
+        };
+        return Promise.all([
+            orderEventModel
+                .find(where)
+                .sort({ at: -1, _id: -1 })
+                .skip(pagination.skip)
+                .limit(pagination.pageSize)
+                .exec(),
+            orderEventModel.countDocuments(where).exec()
+        ]).then(([rows, totalItems]) => ({ rows, totalItems }));
+    },
 
     /**
      * Every row of several orders, grouped by order and oldest first within it — the data export's read.
