@@ -59,12 +59,6 @@ describe('GET /orders/{id}/invoice', () => {
         expect(response.status).toBe(200);
         expect(response.headers['content-type']).toMatch(/^application\/pdf/);
     });
-
-    it('refuses a caller who is not signed in', async () => {
-        const response = await api().get(`/orders/${MISSING_ID}/invoice`);
-
-        expect(response.status).toBe(401);
-    });
 });
 
 describe('GET /orders/{id}/credit-notes', () => {
@@ -78,12 +72,6 @@ describe('GET /orders/{id}/credit-notes', () => {
         expect(response.status).toBe(200);
         expect(response.body).toEqual({ items: [] });
     });
-
-    it('refuses a caller who is not signed in', async () => {
-        const response = await api().get(`/orders/${MISSING_ID}/credit-notes`);
-
-        expect(response.status).toBe(401);
-    });
 });
 
 describe('GET /orders/{id}/credit-notes/{creditNoteId}', () => {
@@ -95,11 +83,5 @@ describe('GET /orders/{id}/credit-notes/{creditNoteId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-    });
-
-    it('refuses a caller who is not signed in', async () => {
-        const response = await api().get(`/orders/${MISSING_ID}/credit-notes/${MISSING_ID}`);
-
-        expect(response.status).toBe(401);
     });
 });

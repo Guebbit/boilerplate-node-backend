@@ -208,12 +208,6 @@ describe('GET /notifications/{id}', () => {
 
         expect([unknown.status, malformed.status]).toEqual([404, 404]);
     });
-
-    it('refuses an anonymous caller with 401', async () => {
-        const response = await api().get(`/notifications/${MISSING_ID}`);
-
-        expect(response.status).toBe(401);
-    });
 });
 
 describe('DELETE /notifications/{id}', () => {
@@ -245,16 +239,6 @@ describe('DELETE /notifications/{id}', () => {
 
         const response = await api()
             .delete(`/notifications/${MISSING_ID}`)
-            .set('Authorization', bearer);
-
-        expect(response.status).toBe(404);
-    });
-
-    it('matches the error contract for a malformed id', async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api()
-            .delete(`/notifications/${MALFORMED_ID}`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);

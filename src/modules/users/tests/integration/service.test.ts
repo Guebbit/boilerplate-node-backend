@@ -888,15 +888,6 @@ describe('userService.remove', () => {
     // A hard delete with no audit context (every HTTP-driven caller) must NOT record a
     // system row — `createDeleteController`'s own spec already records one, and a second row
     // here would double the audit trail for the exact same delete.
-    it('records no audit row when called with no context', async () => {
-        const auditSpy = observePort(auditPort.emitAuditEvent);
-        const user = await createUser();
-
-        await remove(user, true);
-
-        expect(auditSpy).not.toHaveBeenCalled();
-    });
-
     // The inactivity reaper is the one caller with no request behind it, and passes its own
     // system context — this is the row that closes the "reaper writes no audit row" gap.
     it('records SYSTEM_USER_ERASED when hard-deleted with a system audit context', async () => {

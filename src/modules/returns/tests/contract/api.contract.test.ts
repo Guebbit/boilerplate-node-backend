@@ -551,14 +551,6 @@ describe('POST /returns/{id}/close', () => {
         expect(response.status).toBe(422);
     });
 
-    it('refuses the buyer: closing is staff’s act', async () => {
-        const { customer, id } = await withdrawn();
-
-        const response = await api().post(`/returns/${id}/close`).set('Authorization', customer);
-
-        expect(response.status).toBe(403);
-    });
-
     it('answers 404 for a return that does not exist', async () => {
         const { bearer } = await authenticateAsRole('warehouse');
 

@@ -2,6 +2,7 @@ import {
     buildAuditEvent,
     emitAuditEvent,
     extractRequestContext,
+    recordAudit,
     registerAuditSink,
     coreAuditActions,
     type AuditEvent,
@@ -101,6 +102,24 @@ describe('emitAuditEvent', () => {
 
         const call = (auditLogger.log as jest.Mock).mock.calls[0] as [string, ...unknown[]];
         expect(call[0]).toBe('warn');
+    });
+});
+
+describe('recordAudit', () => {
+    beforeEach(() => jest.clearAllMocks());
+    // The sink lives in a module closure: put an inert one back so it cannot see later tests.
+    afterEach(() => registerAuditSink(() => {}));
+
+    // A background job has no caller behind it, so nothing is emitted. Services pass `context`
+    // straight through, so this one door covers every service that audits.
+    it('emits nothing when there is no caller context', () => {
+        const sink = jest.fn();
+        registerAuditSink(sink);
+
+        recordAudit(undefined, { action: 'auth.login', outcome: 'success' });
+
+        expect(sink).not.toHaveBeenCalled();
+        expect(auditLogger.log).not.toHaveBeenCalled();
     });
 });
 

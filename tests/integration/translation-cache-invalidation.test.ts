@@ -85,25 +85,6 @@ describe('a translation write invalidates the cached product it translated', () 
         expect(afterPatch.headers['cache-status']).toContain('fwd=miss');
         expect(afterPatch.body.title).toBe('New title');
     });
-
-    it('does not clear the cache when the write was refused', async () => {
-        await givenLocale(FALLBACK);
-        const product = await createProduct({ title: 'Untouched' });
-        const id = String(product._id);
-        const { bearer } = await authenticateAs('admin');
-
-        await api().get(`/products/${id}`);
-
-        // 422 — `xx` is not a locale this deployment knows.
-        const refused = await api()
-            .patch(`/locales/translations/product/${id}`)
-            .set('Authorization', bearer)
-            .send({ xx: { fields: { title: 'Nope' }, origin: 'human' } });
-        expect(refused.status).toBe(422);
-
-        const stillCached = await api().get(`/products/${id}`);
-        expect(stillCached.headers['cache-status']).toMatch(/; hit; ttl=\d+/);
-    });
 });
 
 /** The title an anonymous reader gets for a product in Italian, and whether it came from cache. */

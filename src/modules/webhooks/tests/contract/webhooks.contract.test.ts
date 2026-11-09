@@ -142,16 +142,6 @@ describe('GET /webhooks/subscriptions/:id', () => {
 
         expect(response.status).toBe(404);
     });
-
-    it('refuses a caller without the read key', async () => {
-        const { bearer } = await authenticateAsRole('customer');
-
-        const response = await api()
-            .get('/webhooks/subscriptions/000000000000000000000000')
-            .set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
-    });
 });
 
 describe('POST /webhooks/subscriptions', () => {
@@ -666,16 +656,6 @@ describe('GET /webhooks/deliveries/:id', () => {
         );
 
         expect(statuses).toEqual([404, 404, 404]);
-    });
-
-    it('refuses a caller without read:WebhookSubscription with 403', async () => {
-        const { bearer } = await authenticateAsRole('customer');
-
-        const response = await api()
-            .get('/webhooks/deliveries/000000000000000000000000')
-            .set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
     });
 });
 

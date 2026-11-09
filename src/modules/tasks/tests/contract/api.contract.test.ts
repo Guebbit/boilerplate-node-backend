@@ -460,14 +460,6 @@ describe('GET /tasks/summary and the queue filters', () => {
         expect(response.body).toEqual({ open: 1, mine: 0, overdue: 0, unassigned: 1 });
     });
 
-    it('refuses a shopper the summary with 403', async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api().get('/tasks/summary').set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
-    });
-
     it('filters by source, kind and assignee', async () => {
         const { bearer } = await authenticateAs('admin');
         await createContactTask();
@@ -514,13 +506,6 @@ describe('DELETE /tasks/{id}', () => {
     it('matches the error contract for a request that does not exist', async () => {
         const { bearer } = await authenticateAs('admin');
         const response = await api().delete(`/tasks/${MISSING_ID}`).set('Authorization', bearer);
-
-        expect(response.status).toBe(404);
-    });
-
-    it('answers 404, not 500, for a malformed id', async () => {
-        const { bearer } = await authenticateAs('admin');
-        const response = await api().delete('/tasks/not-an-object-id').set('Authorization', bearer);
 
         expect(response.status).toBe(404);
     });

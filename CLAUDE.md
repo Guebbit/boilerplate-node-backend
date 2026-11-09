@@ -20,7 +20,7 @@ verifies all of it. The pre-commit hook runs it with
 `--no-sync`, so `npm run complete` only ever verifies — but a contract change is not finished until
 `sync:frontend` has actually run against the frontend checkout.
 
-See: `docs/api/contract-fragmentation.md`, `docs/api/regenerating.md`
+See: `docs/api/contract-fragmentation.md`, `docs/api/regenerating.md`, `docs/theory/api-standards.md`
 
 ## Changing a shared rule
 
@@ -154,7 +154,7 @@ and emails, plus `export type *` from its model. See `docs/theory/strategic-ddd.
 ## Tests
 
 Placement is by scope, and `eslint-plugin-boundaries` enforces the line at the import.
-See `docs/reference/tests.md`.
+See `docs/reference/tests.md`; fakes live outside `src/`: `docs/tools/test-doubles.md`.
 
 - A test about **one module's rules** lives in `src/modules/<module>/tests/`, and may run the real
   modules that module depends on (`dependsOn`) — through their barrel, or their
@@ -169,6 +169,8 @@ See `docs/reference/tests.md`.
   `jest/no-disabled-tests` refuse a `.only` or a `.skip` outright.
 - Assert through the public door (the route, the service, the repository), not on private
   internals. A test shaped like the implementation fails on every refactor and catches nothing.
+- A 401, 403 or malformed-id answer is the app-wide sweeps' job; a module test checks one only
+  when it checks more than the status. See: `docs/tools/contract-testing.md`
 - **A run that finds failures: fix them all, then re-run only what the fixes can affect.** That is
   the failed tests plus the ones that touch the same areas — never the whole suite by default. A
   long suite (the live e2e takes hours) is run in full once; a second full run is a deliberate
@@ -242,7 +244,7 @@ An interface says its purpose and what each field means; a function adds `@param
 `jsdoc/check-param-names` refuses a name that is not in the signature, and the `*-description`
 rules refuse an empty one.
 MUST: docs describing flow, architecture or process include Mermaid diagrams — that detail belongs
-there, not in a comment.
+there, not in a comment. How a docs page is shaped: `docs/reference/documentation-style.md`.
 
 Comments are **not** a replacement for `docs/`. They orient a reader already in the file; the
 reasoning, the alternatives, the diagrams live in `docs/` — a comment points there, it does not

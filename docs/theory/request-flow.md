@@ -292,6 +292,9 @@ the contract and still be refused here.
 | a **body field**   | **422** `VALIDATION_ERROR`, `details.field` names the field           | 404 from the service    |
 | a **query filter** | **422** `VALIDATION_ERROR`, `details.field` names the field           | an empty list           |
 
+`tests/integration/malformed-ids.test.ts` owns the test of this table: it sends every position its
+malformed spellings, so a module test repeats one only when it checks more than the status.
+
 ```mermaid
 flowchart TD
     A["id arrives"] --> B{"where?"}
