@@ -65,11 +65,10 @@ describe('a token refresh', () => {
             .post('/account/refresh')
             .set('Cookie', cookieHeader(login, '__Host-session'));
 
-        if (getSessionMode() === 'cookie') {
-            expect(refreshed.status).toBe(404);
-            return;
-        }
-        expect(refreshed.status).toBe(200);
-        expect(refreshed.body.abilities).toEqual(login.body.account.abilities);
+        const cookieMode = getSessionMode() === 'cookie';
+        expect(refreshed.status).toBe(cookieMode ? 404 : 200);
+        expect(refreshed.body.abilities).toEqual(
+            cookieMode ? undefined : login.body.account.abilities
+        );
     });
 });

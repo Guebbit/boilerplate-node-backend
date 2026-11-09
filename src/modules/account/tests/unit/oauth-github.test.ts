@@ -236,9 +236,8 @@ describe('githubOAuthProvider.exchangeCode', () => {
         );
 
         const attempt = exchange();
-        const assertion = expect(attempt).rejects.toThrow();
-        jest.runAllTimers();
-        await assertion;
+        // The `expect` sits inside the array so the rejection is awaited as the timers fire.
+        await Promise.all([expect(attempt).rejects.toThrow(), jest.runAllTimersAsync()]);
 
         jest.useRealTimers();
     });

@@ -261,7 +261,7 @@ describe('listLeaseSummaries', () => {
  * A lease row has no TTL: a job that stopped running entirely must stay visible as stale, since
  * the alert on `job_last_success_timestamp_seconds` reads it from here.
  */
-describe('listLeaseSummaries', () => {
+describe('listLeaseSummaries — staleness', () => {
     it('still reports a row untouched for longer than any retention window', async () => {
         const longAgo = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000);
         await leaseModel.create({

@@ -42,16 +42,17 @@ describe('isBuyerRetentionOver', () => {
 
 describe('buyerRetentionScanBound', () => {
     it.each([
-        ['2015-06-01T10:00:00Z', 'Pacific/Kiritimati', '2025-12-31T09:59:00Z'],
+        ['2015-06-01T10:00:00Z', 'Pacific/Kiritimati', '2025-12-31T10:00:00Z'],
         ['2015-12-31T23:59:00Z', 'Pacific/Pago_Pago', '2026-12-01T00:00:00Z'],
         ['2015-06-01T10:00:00Z', 'Europe/Rome', '2025-12-31T23:00:00Z']
     ])('never drops a document issued %s in %s that is due at %s', (issued, timezone, now) => {
         const document = { issuedAt: new Date(issued), timezone };
         const at = new Date(now);
 
-        // Only meaningful when due; the bound must then lie after the document.
-        if (isBuyerRetentionOver(document, 10, at))
-            expect(document.issuedAt < buyerRetentionScanBound(10, at)).toBe(true);
+        // UTC+14 reaches 1 January first, so Kiritimati is due at 10:00Z the day before.
+        // Every row is due; the bound must then lie after the document.
+        expect(isBuyerRetentionOver(document, 10, at)).toBe(true);
+        expect(document.issuedAt < buyerRetentionScanBound(10, at)).toBe(true);
     });
 
     it('sits at the start of the year N before tomorrow, in UTC', () => {

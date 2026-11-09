@@ -172,8 +172,8 @@ const missingKeyOf = (authContext: AuthContext): string | undefined => {
  * eligible shipment groups are canceled instead: see {@link withdrawEligibleGroups}.
  *
  * A shipment can land between the read that said "before dispatch" and the cancel; the cancel then
- * refuses, and the withdrawal is opened again on what the order now is — a return, never a full
- * refund of goods the buyer already holds.
+ * refuses, and the withdrawal is opened again on what the order now is — a return, not a cancel:
+ * the refund waits for the goods.
  *
  * Staff recording the buyer's withdrawal need `create:Refund` (the money goes back) and
  * `update:Order` (the cancel); the cancel runs on the operator's scope, the record names the day

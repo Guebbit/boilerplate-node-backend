@@ -97,7 +97,10 @@ const recordFailure = (subscriptionId: string): Promise<WebhookSubscriptionDocum
     webhookSubscriptionModel
         .findOneAndUpdate(
             { _id: toObjectId(subscriptionId), failingSince: { $exists: false } },
-            { $set: { failingSince: new Date() } }
+            { $set: { failingSince: new Date() } },
+            // `timestamps: false`: delivery bookkeeping is not an edit, so it must not move
+            // `updatedAt` or the edit counter an open form's `If-Match` compares with.
+            { timestamps: false }
         )
         .exec()
         .then(() =>
@@ -105,7 +108,7 @@ const recordFailure = (subscriptionId: string): Promise<WebhookSubscriptionDocum
                 .findOneAndUpdate(
                     { _id: toObjectId(subscriptionId) },
                     { $inc: { consecutiveFailures: 1 } },
-                    { returnDocument: 'after' }
+                    { returnDocument: 'after', timestamps: false }
                 )
                 .exec()
         );
@@ -127,7 +130,7 @@ const recordOutcome = (
               .findOneAndUpdate(
                   { _id: toObjectId(subscriptionId) },
                   { $set: { consecutiveFailures: 0 }, $unset: { failingSince: '' } },
-                  { returnDocument: 'after' }
+                  { returnDocument: 'after', timestamps: false }
               )
               .exec()
         : recordFailure(subscriptionId);
@@ -157,7 +160,7 @@ const disable = (subscriptionId: string): Promise<WebhookSubscriptionDocument | 
         .findOneAndUpdate(
             { _id: toObjectId(subscriptionId), disabledAt: null },
             { $set: { disabledAt: now, autoDisabledAt: now } },
-            { returnDocument: 'after' }
+            { returnDocument: 'after', timestamps: false }
         )
         .exec();
 };

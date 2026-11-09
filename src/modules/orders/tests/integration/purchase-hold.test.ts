@@ -305,12 +305,13 @@ describe('the pause counts what bots do', () => {
         await expect(holdOf(buyer.id)).resolves.toMatchObject({ reason: 'repeated_cancellations' });
     });
 
-    it('flags the account in the same write as the pause', async () => {
+    it('flags the account for review when the third cancel pauses it', async () => {
         const buyer = await createUser();
 
         for (let n = 0; n < 3; n += 1)
             await orderService.considerPurchaseHold(buyerCanceled(await cancelOneAsBuyer(buyer)));
 
+        await expect(holdOf(buyer.id)).resolves.toMatchObject({ reason: 'repeated_cancellations' });
         await expect(flaggedAt(buyer.id)).resolves.toBeInstanceOf(Date);
     });
 });

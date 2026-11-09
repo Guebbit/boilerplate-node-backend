@@ -14,7 +14,11 @@ import { inventoryService } from '../services';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import type { InventoryLevel } from '@types';
 
-/** Handles `PATCH /inventory/levels/:productId`. */
+/**
+ * Handles `PATCH /inventory/levels/:productId`.
+ * No `If-Match`: one field (the backorder limit); stock moves through receive/adjust, which have
+ *   their own atomic rule.
+ */
 export const patchInventoryLevel = (
     request: Request<{ productId?: string }>,
     response: Response

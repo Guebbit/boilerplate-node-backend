@@ -250,12 +250,12 @@ describe('personal data', () => {
 });
 
 describe('the writes `locales` makes on this collection', () => {
-    it('says whether an example exists, whoever owns it', async () => {
+    it("reads an example's edit counter, whoever owns it, and nothing for a missing one", async () => {
         const owner = await createUser();
         const mine = await createExample({ userId: owner.id });
 
-        expect(await exampleRepository.translatable.exists(String(mine._id))).toBe(true);
-        expect(await exampleRepository.translatable.exists(MISSING_ID)).toBe(false);
+        expect(await exampleRepository.translatable.revisionOf(String(mine._id))).toBe(0);
+        expect(await exampleRepository.translatable.revisionOf(MISSING_ID)).toBeUndefined();
     });
 
     it('copies the fallback-language title onto the row without counting it as an edit', async () => {

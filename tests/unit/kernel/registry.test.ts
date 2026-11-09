@@ -62,7 +62,7 @@ describe('resolveTranslatables', () => {
                         collection: 'products',
                         fields: ['title'],
                         cacheTag: 'products',
-                        exists: jest.fn(),
+                        revisionOf: jest.fn(),
                         writeDerived: writeProduct,
                         markEdited: jest.fn()
                     }
@@ -76,7 +76,7 @@ describe('resolveTranslatables', () => {
                         collection: 'pages',
                         fields: ['body'],
                         cacheTag: 'pages',
-                        exists: jest.fn(),
+                        revisionOf: jest.fn(),
                         writeDerived: writePage,
                         markEdited: jest.fn()
                     }
@@ -90,7 +90,7 @@ describe('resolveTranslatables', () => {
                 collection: 'products',
                 fields: ['title'],
                 cacheTag: 'products',
-                exists: expect.any(Function),
+                revisionOf: expect.any(Function),
                 writeDerived: writeProduct,
                 markEdited: expect.any(Function)
             },
@@ -98,7 +98,7 @@ describe('resolveTranslatables', () => {
                 collection: 'pages',
                 fields: ['body'],
                 cacheTag: 'pages',
-                exists: expect.any(Function),
+                revisionOf: expect.any(Function),
                 writeDerived: writePage,
                 markEdited: expect.any(Function)
             }
@@ -114,7 +114,7 @@ describe('resolveTranslatables', () => {
             collection: 'products',
             fields: ['title'],
             cacheTag: 'products',
-            exists: jest.fn(),
+            revisionOf: jest.fn(),
             writeDerived: jest.fn(),
             markEdited: jest.fn()
         };

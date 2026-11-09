@@ -24,6 +24,16 @@ const assignableTenantRoles = PRESET_ROLES.filter(
     (role) => role.scope === 'tenant' && role.assignable !== false
 ).map((role) => role.name);
 
+/** Whether a synchronous call throws: lets one `expect` cover both outcomes of a table row. */
+const refuses = (call: () => void): boolean => {
+    try {
+        call();
+        return false;
+    } catch {
+        return true;
+    }
+};
+
 describe('grantableRoles', () => {
     // The rule is "hold `assign:Role`", so only a role manager hands out roles, and any of
     // them. `customer` and `unverified` are not roles at all: an audience is computed, so there is
@@ -62,7 +72,6 @@ describe('grantableRoles', () => {
             assertCanGrant('tenant', role, granter);
         };
 
-        if (offered) expect(grant).not.toThrow();
-        else expect(grant).toThrow();
+        expect(refuses(grant)).toBe(!offered);
     });
 });

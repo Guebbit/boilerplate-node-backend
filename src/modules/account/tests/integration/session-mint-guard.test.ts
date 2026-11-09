@@ -66,8 +66,12 @@ describe('the mint guard, over proofs x armed x mint kind', () => {
         const user = await (armed ? armedUser() : createUser());
         const attempt = (mint === 'start' ? startSession : continueSession)(user.id, amr);
 
-        if (minted) await attempt;
-        else await expect(attempt).rejects.toBeInstanceOf(SecondFactorRequiredError);
+        const outcome = await attempt.then(
+            () => 'minted',
+            (error: unknown) => (error instanceof SecondFactorRequiredError ? 'refused' : 'other')
+        );
+
+        expect(outcome).toBe(minted ? 'minted' : 'refused');
 
         // A refusal stores nothing; a mint stores exactly one row.
         expect(await sessionsOf(user.id)).toBe(minted ? 1 : 0);

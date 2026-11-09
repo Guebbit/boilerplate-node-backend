@@ -13,7 +13,10 @@ import { requireId } from '@infrastructure/http/ids';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { respondWithOrder } from './respond';
 
-/** PUT /orders/:id/shipping-address — replace the address, with nothing else changed. */
+/**
+ * PUT /orders/:id/shipping-address — replace the address, with nothing else changed.
+ * No `If-Match`: no GET on this URL; a staff fix-up of one field.
+ */
 export const putShippingAddress = (
     request: Request<{ id?: string }>,
     response: Response

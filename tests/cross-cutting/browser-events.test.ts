@@ -30,7 +30,7 @@ describe('browser events: contract fragment and manifest agree', () => {
     it('finds an owner whenever `products`, the module that declares one, is deployed', () => {
         // The canary for the table below: no owner must mean "none is deployed", never "the
         // fragment stopped being read".
-        if (isDeployed('products')) expect(owners.length).toBeGreaterThanOrEqual(1);
+        expect(owners.length > 0).toBe(isDeployed('products'));
     });
 
     // `it.each` rejects an empty table outright, so the per-owner check exists only with an owner.

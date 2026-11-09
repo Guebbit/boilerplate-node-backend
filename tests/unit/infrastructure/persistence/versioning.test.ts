@@ -9,6 +9,7 @@ import {
     versionOfTag,
     fencedSave,
     PreconditionFailedError,
+    preconditionFilter,
     runWithPrecondition,
     versionOf,
     type Precondition
@@ -269,5 +270,45 @@ describe('checkedDelete', () => {
         const write = jest.fn().mockResolvedValue({ deletedCount: 0 });
 
         await expect(checkedDelete(loaded(), write)).resolves.toBeUndefined();
+    });
+});
+
+const filterOn = (precondition: Precondition | undefined, key = 'row-1') =>
+    runWithPrecondition(precondition, () =>
+        Promise.resolve(preconditionFilter(key, 'editRevision'))
+    );
+
+describe('preconditionFilter', () => {
+    it('names the versions the header carries, and nothing else', async () => {
+        const filter = await filterOn(on(etagOf(REVISION, DIGEST), etagOf(REVISION + 1, DIGEST)));
+
+        expect(filter).toEqual({ editRevision: { $in: [REVISION, REVISION + 1] } });
+    });
+
+    it('lets version 0 match a row that has no counter yet', async () => {
+        expect(await filterOn(on(etagOf(0, DIGEST)))).toEqual({
+            editRevision: { $in: [0, null] }
+        });
+    });
+
+    it('matches nothing for a header that carries no version of ours', async () => {
+        expect(await filterOn(on('W/"1"'))).toEqual({ editRevision: { $in: [] } });
+    });
+
+    it('is no filter for `*`, for no precondition, or for one about another row', async () => {
+        expect(await filterOn({ id: 'row-1', etags: 'any' })).toEqual({});
+        expect(await filterOn(undefined)).toEqual({});
+        expect(await filterOn(on(etagOf(REVISION, DIGEST)), 'row-2')).toEqual({});
+    });
+
+    it('is used up by its first call, like a save', async () => {
+        const filters = await runWithPrecondition(on(etagOf(REVISION, DIGEST)), () =>
+            Promise.resolve([
+                preconditionFilter('row-1', 'editRevision'),
+                preconditionFilter('row-1', 'editRevision')
+            ])
+        );
+
+        expect(filters[1]).toEqual({});
     });
 });

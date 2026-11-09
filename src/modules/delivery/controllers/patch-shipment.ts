@@ -13,7 +13,10 @@ import { requireId } from '@infrastructure/http/ids';
 import { deliveryService } from '../services';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
-/** Handles `PATCH /delivery/shipments/:id`. */
+/**
+ * Handles `PATCH /delivery/shipments/:id`.
+ * No `If-Match`: one field (the tracking code); the last value is as good as the first.
+ */
 export const patchShipment = (request: Request<{ id?: string }>, response: Response) => {
     const id = requireId(request, response, { notFound: 'delivery.shipment-not-found' });
     if (!id) return Promise.resolve();

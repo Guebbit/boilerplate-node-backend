@@ -461,15 +461,31 @@ and the bundler adds the header parameter, the 412 and the response header from 
 | order | `GET /orders/{id}` | `PUT`, `PATCH`, `DELETE /orders/{id}`, `DELETE /orders/{id}/hard` |
 | the caller's account | `GET /account` | `PUT`, `PATCH /account` |
 | example | `GET /examples/{id}` | `PUT`, `PATCH`, `DELETE /examples/{id}` |
+| webhook subscription | `GET /webhooks/subscriptions/{id}` | `PUT`, `PATCH`, `DELETE /webhooks/subscriptions/{id}` |
+| language | `GET /locales/{locale}` | `PUT`, `PATCH /locales/{locale}` (not the `DELETE`: removing a language is unconditional) |
+| translations of an entity | `GET /locales/translations/{entityType}/{id}` | `PUT`, `PATCH /locales/translations/{entityType}/{id}` |
 
 The role door (`POST /users/{id}/assign-role`, `/revoke-role`) is not in that column: a POST is a
 state change with its own 409, not an overwrite, so two callers naming different roles both succeed
 and the last write wins. It still moves the row's `editRevision`, so an edit holding an older tag is
 refused.
 
-Not versioned: a resource with no item read to take a tag from (tasks, locales, an address
-inside its book), a resource that has an item read but no `If-Match` (webhook subscriptions) and
-anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declared.
+Not versioned: a resource with no item read to take a tag from (tasks, an address inside its book)
+and anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declared.
+
+A language is addressed by its tag, so its `If-Match` is keyed by the tag (case-insensitive: `pt-br`
+is `pt-BR`), while the counter lives on its row. Writing a dictionary entry moves the language's
+`revision` (what clients re-fetch on) but not its edit counter or `updatedAt`; switching it on or
+off does move them, so an open name form is refused after a toggle.
+
+The translations of an entity are fenced on the OWNER's counter (the product's or the example's
+`editRevision`), not on one of their own: a translation save already moves it, and a product read
+shows the translations. So a translation save and a product edit refuse each other's stale tag, on
+purpose; a stock move refuses neither. The read answers 404 for an entity that does not exist.
+
+A webhook subscription's delivery bookkeeping (the failure streak, the auto-disable) writes with
+`timestamps: false`, so a delivery outcome never moves the edit counter and never refuses an open
+edit form.
 
 ### What the tag is
 

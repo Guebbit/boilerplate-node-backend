@@ -28,6 +28,7 @@ import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
 import { setFakeOutcome } from '@scenarios/support/doubles/payments/fake';
 import { signWebhookPayload, WEBHOOK_SIGNATURE_HEADER } from '@modules/payments/providers';
+import { displayStatusOf } from '@modules/payments';
 import { PAYMENT_SUCCEEDED } from '@modules/payments/events';
 import { paymentModel } from '@modules/payments/model';
 import { orderModel } from '@modules/orders/model';
@@ -268,14 +269,17 @@ describe('P4 — more buyers than units, all at once', () => {
     });
 });
 
+/** Both sequential orders end canceled: never charged, or charged and refunded in full. */
+const SEQUENTIAL_OUTCOMES = ['canceled/canceled', 'canceled/refunded'];
+
 describe('P5 — a customer cancelling while the payment settles', () => {
     /*
      * Each order races its own cancel against its own confirm, several orders at once so the
-     * interleavings vary. Which side wins is the database's business; what is asserted is that
-     * the outcome is one a sequential run could also have produced — never a canceled order
-     * that kept the money, and never a paid order whose payment did not succeed.
+     * interleavings vary. Which side wins is the database's business. Every order ends canceled
+     * (a customer may cancel a paid order, and a write conflict is retried): either never
+     * charged, or charged and refunded in full. A `paid` order would mean a cancel was refused.
      */
-    it('never keeps money for a canceled order, nor marks paid what was not charged', async () => {
+    it('lands every cancel, and a canceled order never keeps the money', async () => {
         const product = await createProduct({ onHand: RACE_SIZE * 2 });
         const orders = await Promise.all(
             Array.from({ length: RACE_SIZE }, () => orderAwaitingPayment(String(product._id), 1))
@@ -293,16 +297,24 @@ describe('P5 — a customer cancelling while the payment settles', () => {
         await settleEvents();
 
         expectNoServerErrors(results);
+        // The even indexes are the cancels.
+        expect(
+            results
+                .filter((_, index) => index % 2 === 0)
+                .map((result) => (result.status === 'fulfilled' ? result.value.status : 0))
+        ).toEqual(Array.from({ length: RACE_SIZE }, () => 200));
+        const outcomes: string[] = [];
         for (const { orderId, paymentId } of orders) {
             const order = await orderModel.findById(orderId);
             const payment = await paymentModel.findById(paymentId);
-            if (order?.status === 'canceled')
-                // Never charged, or charged and given back — never charged and kept.
-                expect(['canceled', 'succeeded']).toContain(payment?.status);
-            else {
-                expect(order?.status).toBe('paid');
-                expect(payment?.status).toBe('succeeded');
-            }
+            // `displayStatusOf` says `refunded` only when no refund is still open and the refunds
+            // add up to the amount; `amountRefunded` alone counts a refund the moment it opens.
+            outcomes.push(
+                `${orderId} ${String(order?.status)}/${payment ? displayStatusOf(payment) : 'missing'}`
+            );
         }
+        expect(
+            outcomes.filter((outcome) => SEQUENTIAL_OUTCOMES.every((ok) => !outcome.endsWith(ok)))
+        ).toEqual([]);
     });
 });

@@ -575,7 +575,7 @@ describe('GET /products?deleted= — for a caller who may not see deleted rows',
     });
 });
 
-describe('DELETE /products/{id}', () => {
+describe('DELETE /products/{id} — the soft-delete response', () => {
     it('matches the contract for a soft delete', async () => {
         const { bearer } = await authenticateAs('admin');
         const product = await createProduct();
