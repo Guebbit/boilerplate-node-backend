@@ -320,7 +320,8 @@ re-implementing the rules — a status dropdown listing every enum value, a canc
 `pending` or `paid`, a pay form testing for `pending`. Three copies of server rules, in a separately
 deployed codebase, with nothing able to notice when they drift.
 
-A record with a lifecycle `status` therefore lists `actions` in `required`, on every read and write,
+A record with a lifecycle `status`, or with doors a client offers as controls (`Product`: update,
+delete, restore, hard delete), therefore lists `actions` in `required`, on every read and write,
 list rows included; a read-only projection or a line of its parent is the exception, and
 `tests/cross-cutting/api-standards.test.ts` names each one with its reason. A presenter maps what
 a service decided and imports no ability, caller or service; review holds that line.
@@ -401,9 +402,13 @@ The client's side of the bargain is to decide nothing. A control is enabled when
 and disabled otherwise, which is what makes a rule change on the API move the interface without the
 interface being edited.
 
-Every door a client offers as a control has its flag, including the forced and destructive ones
-(delete, hard delete, a forced ship or arrival, a replay). A refusal described only in the
-operation's prose leaves the client to copy the rule.
+Every door a client offers as a control has its flag, including the destructive ones (delete, hard
+delete, a replay). A refusal described only in the operation's prose leaves the client to copy the
+rule.
+
+A refusal about the caller's account, not the resource (a purchase hold, the open-order limit),
+needs no flag: the control stays enabled, the door refuses, and the client renders the refusal's
+`details`. The account's own record may show the state as a banner; it never disables the control.
 
 ---
 

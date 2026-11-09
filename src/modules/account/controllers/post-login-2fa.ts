@@ -10,7 +10,8 @@ import { LoginTwoFactorBody } from '@api/schemas.zod';
 import type { LoginTwoFactorRequest, LoginTwoFactorOutcome } from '@types';
 import { t } from '@infrastructure/i18n';
 import { isRestorable } from '@modules/users';
-import { accountService, twoFactorService } from '../services';
+import { twoFactorService } from '../services';
+import { buildDeletionPending } from '../services/deletion-sign-in';
 import { issueSession } from '../session/session';
 import { withAccountView } from '../session/account-view';
 import { rememberDevice } from '../session/device-cookie';
@@ -66,13 +67,11 @@ export const postLoginTwoFactor = (
             // Deletion grace: the second factor passed, so the claim check goes back instead of a
             // session. The challenge is spent either way; the client restores or walks away.
             if (isRestorable(user)) {
-                return accountService
-                    .buildDeletionPending(user, withProofs(amr, AMR.otp))
-                    .then((pending) => {
-                        authTwoFactorChallengeTotal.inc({ status: 'success' });
-                        destroyMfaChallengeCookie(response);
-                        successResponse<LoginTwoFactorOutcome>(response, pending, 200);
-                    });
+                return buildDeletionPending(user, withProofs(amr, AMR.otp)).then((pending) => {
+                    authTwoFactorChallengeTotal.inc({ status: 'success' });
+                    destroyMfaChallengeCookie(response);
+                    successResponse<LoginTwoFactorOutcome>(response, pending, 200);
+                });
             }
 
             const proofs = withProofs(amr, AMR.otp);

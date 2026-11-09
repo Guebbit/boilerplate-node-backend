@@ -71,44 +71,32 @@ export const validatePasswordChange = (
 type PasswordCause = Extract<RevocationCause, 'password-change' | 'password-reset'>;
 
 /**
- * Change user password with validation, then revoke every refresh token on the account.
- * The funnel both `completePasswordReset` and `passwordChangeWithCurrent` end at, so a future
- * third caller gets the revoke for free. Order
- * matters — save first, revoke second: a revoke landing against a password write that then fails
- * would log everyone out for nothing. The revoke's own failure is swallowed rather than turned
- * into a rejection: the password write already succeeded, and a lost revoke is defense in depth
- * this codebase can afford to lose once, not a reason to tell the caller their change failed.
- * `passwordChangeWithCurrent`'s caller re-mints its own session on top of this — see
- * `postPasswordChange` and `../session/session`'s `issueSession`.
+ * The authenticated change's check-then-write: validate the new pair, refuse a breached password,
+ * then hand the write to {@link writePassword}, which also revokes every refresh token.
+ * Order matters — save first, revoke second: a revoke landing against a password write that then
+ * fails would log everyone out for nothing.
+ * `passwordChangeWithCurrent`'s caller re-mints its own session on top — see `postPasswordChange`
+ * and `../session/session`'s `issueSession`.
  *
  * @param user - the account, carrying its credential fields
  * @param password - the new password, as typed
  * @param passwordConfirm - the repeat, which must match
- * @param beforeSave - a caller's own mutation to ride along in the same write, run only once
- *   every refusal is behind us. A parameter rather than a mutation the caller makes first: a
- *   refused password must not leave a half-applied change on the document, and the only place
- *   that can be guaranteed is here, next to the `save`.
- * @param cause - which password event this is; a cause that announces also writes
- *   `account.sessions_revoked` through the outbox, in the write's own transaction
- * @internal Writes a new password with no check of the current one; only `passwordChangeWithCurrent` and the reset flow may reach it.
+ * @internal Writes a new password with no check of the current one; only `passwordChangeWithCurrent` may reach it.
  */
 export const passwordChange = (
     user: UserDocument,
-    password = '',
-    passwordConfirm = '',
-    beforeSave?: (user: UserDocument) => void,
-    cause: PasswordCause = 'password-change'
+    password: string,
+    passwordConfirm: string
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     const errors = validatePasswordChange(password, passwordConfirm);
 
     if (errors.length > 0) return Promise.resolve(generateReject(422, errors));
 
-    // One check for both callers: `completePasswordReset` and `passwordChangeWithCurrent` both
-    // funnel through this function.
+    // The reset runs its own breach check in `resetWith`, so this one belongs to the change alone.
     return assertPasswordNotBreached(password).then((breachErrors) => {
         if (breachErrors.length > 0) return generateReject(422, breachErrors);
 
-        return writePassword(user, password, beforeSave, cause);
+        return writePassword(user, password, undefined, 'password-change');
     });
 };
 
@@ -129,8 +117,9 @@ const passwordAndEpochWrite =
             );
 
 /**
- * The write half of {@link passwordChange}, for a caller that has already run every check on the
- * password itself — shape, match, breach — and must not run the breach lookup a second time.
+ * The shared final write of a new password: {@link passwordChange} and the reset both end here.
+ * Every check on the password itself — shape, match, breach — is the caller's, done before.
+ * The revoke lives here, so a caller cannot forget it.
  *
  * One transaction holds the new password, the session epoch and, when the cause announces, the
  * `account.sessions_revoked` outbox row: the credential cannot change while old sessions stay live,
@@ -141,6 +130,7 @@ const passwordAndEpochWrite =
  * @param password - the new password, already accepted
  * @param beforeSave - a caller's own mutation to ride along in the same write, or `undefined`
  * @param cause - which password event this is, and so what it announces and purges
+ * @internal No shape, breach or current-password check; only `passwordChange` and the reset's `resetWith` may reach it.
  */
 export const writePassword = (
     user: UserDocument,

@@ -42,7 +42,6 @@ import {
 } from '../oauth/config';
 import {
     accountService,
-    twoFactorService,
     OAuthEmailUnverifiedError,
     OAuthAccountUnverifiedError,
     OAuthAccountUnavailableError,
@@ -50,6 +49,9 @@ import {
     OAuthIdentityTakenError,
     OAuthLinkExpiredError
 } from '../services';
+import { linkProviderToSignedInAccount, loginOrCreateFromOAuth } from '../services/oauth';
+import { buildDeletionPending } from '../services/deletion-sign-in';
+import { buildLoginChallenge } from '../services/two-factor-challenge';
 import { isRestorable } from '@modules/users';
 import { issueSession } from '../session/session';
 import { recordLoginSuccess } from '../session/login-observability';
@@ -175,7 +177,7 @@ export const getOAuthCallback = (request: Request, response: Response) => {
             })
             .then((identity) =>
                 signedInUserId(request).then((sessionUserId) =>
-                    accountService.linkProviderToSignedInAccount(
+                    linkProviderToSignedInAccount(
                         linkToken,
                         sessionUserId,
                         provider.name,
@@ -222,7 +224,7 @@ export const getOAuthCallback = (request: Request, response: Response) => {
             state: String(cookieOf(request, OAUTH_STATE_COOKIE)),
             codeVerifier: verifier
         })
-        .then((identity) => accountService.loginOrCreateFromOAuth(provider.name, identity, context))
+        .then((identity) => loginOrCreateFromOAuth(provider.name, identity, context))
         .then(({ user, outcome }) => {
             /*
              * A factor armed on the password path applies here too — 2FA is a control on the
@@ -234,24 +236,22 @@ export const getOAuthCallback = (request: Request, response: Response) => {
                 // Deletion grace: no session and no login yet. The claim check rides a cookie, the
                 // dates ride the redirect; the frontend offers the restore.
                 if (isRestorable(user)) {
-                    return accountService
-                        .buildDeletionPending(user, [provider.name])
-                        .then((pending) => {
-                            createDeletionChallengeCookie(
-                                response,
-                                pending.challenge,
-                                pending.expiresAt
-                            );
-                            authOauthTotal.inc({
-                                provider: providerName,
-                                status: 'deletion_pending'
-                            });
-                            clearOAuthCookies(response);
-                            response.redirect(
-                                302,
-                                oauthFrontendDeletionCallbackUrl(pending, continueTo, savedLocale())
-                            );
+                    return buildDeletionPending(user, [provider.name]).then((pending) => {
+                        createDeletionChallengeCookie(
+                            response,
+                            pending.challenge,
+                            pending.expiresAt
+                        );
+                        authOauthTotal.inc({
+                            provider: providerName,
+                            status: 'deletion_pending'
                         });
+                        clearOAuthCookies(response);
+                        response.redirect(
+                            302,
+                            oauthFrontendDeletionCallbackUrl(pending, continueTo, savedLocale())
+                        );
+                    });
                 }
 
                 return issueSession(request, response, user.id, {
@@ -281,7 +281,7 @@ export const getOAuthCallback = (request: Request, response: Response) => {
                 });
             }
 
-            return twoFactorService.buildLoginChallenge(user, [provider.name]).then((challenge) => {
+            return buildLoginChallenge(user, [provider.name]).then((challenge) => {
                 createMfaChallengeCookie(response, challenge.challenge, challenge.expiresAt);
                 authOauthTotal.inc({ provider: providerName, status: 'mfa_required' });
                 clearOAuthCookies(response);

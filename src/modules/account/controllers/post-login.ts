@@ -9,7 +9,9 @@ import { RememberTier } from '@types';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { isRestorable } from '@modules/users';
-import { accountService, twoFactorService } from '../services';
+import { accountService } from '../services';
+import { buildDeletionPending } from '../services/deletion-sign-in';
+import { buildLoginChallenge } from '../services/two-factor-challenge';
 import { SESSION_TRANSPORTS } from '../session/strategy';
 import { issueSession } from '../session/session';
 import { withAccountView } from '../session/account-view';
@@ -91,11 +93,9 @@ export const postLogin = (
              * `postLoginTwoFactor` is what finishes it.
              */
             if (data.twoFactorEnabledAt) {
-                return twoFactorService
-                    .buildLoginChallenge(data, [AMR.password])
-                    .then((challenge) => {
-                        successResponse<LoginOutcome>(response, challenge, 200);
-                    });
+                return buildLoginChallenge(data, [AMR.password]).then((challenge) => {
+                    successResponse<LoginOutcome>(response, challenge, 200);
+                });
             }
 
             /*
@@ -104,7 +104,7 @@ export const postLogin = (
              * client decides to restore (`POST /account/login/restore`) or to walk away.
              */
             if (isRestorable(data)) {
-                return accountService.buildDeletionPending(data, [AMR.password]).then((pending) => {
+                return buildDeletionPending(data, [AMR.password]).then((pending) => {
                     successResponse<LoginOutcome>(response, pending, 200);
                 });
             }

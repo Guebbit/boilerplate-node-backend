@@ -378,6 +378,8 @@ buyer's own request.
 
 Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
 
+The client does not re-derive these: every `Product` carries `actions { update, delete, restore, hardDelete }`, the server's answer for the caller (`update` needs `update:Product` and `update:Translation`; `restore` also needs the product to be soft-deleted). A caller answered from the cache shared with guests gets all `false`; see [Capabilities](../theory/tactical-ddd.md#2-capabilities-the-server-answers-what-a-client-may-do).
+
 <!-- permissions:start -->
 
 | Rule              | Set                 | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                             |

@@ -29,6 +29,7 @@ import { findLiveTokenEntry, issueToken, spendLiveToken } from './tokens';
  * @param user - the account, with `purgeAt` set (`isRestorable`)
  * @param amr - how the sign-in was proven; stored on the claim check and handed to the session
  * @returns the body to answer with
+ * @internal Mints a sign-in claim check with no password; only the login doors may, so it stays off `accountService`.
  */
 export const buildDeletionPending = (
     user: UserDocument,

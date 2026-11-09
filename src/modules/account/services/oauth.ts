@@ -176,6 +176,7 @@ export const startOAuthLink = (userId: string): Promise<string> =>
  *   not signed in as the account the token was minted for
  * @throws {@link OAuthAccountUnavailableError} for an account that may no longer authenticate
  * @throws {@link OAuthIdentityTakenError} for an identity another account holds
+ * @internal Trusts an identity the callback exchanged; only that controller may, so it stays off `accountService`.
  */
 export const linkProviderToSignedInAccount = (
     linkToken: string | undefined,
@@ -319,6 +320,7 @@ export type OAuthOutcome = 'login' | 'signup';
  *   account already holds it
  * @throws {@link OAuthAccountUnverifiedError} when it matches an account that never proved that
  *   address itself
+ * @internal Trusts an identity the callback exchanged; only that controller may, so it stays off `accountService`.
  */
 export const loginOrCreateFromOAuth = (
     provider: string,

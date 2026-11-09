@@ -101,20 +101,14 @@ export const accountService = {
     confirmEmailChange: verification.confirmEmailChange,
     undoEmailChangeByToken: verification.undoEmailChangeByToken,
     restoreAccountByLink: accountDeletion.restoreAccountByLink,
-    buildDeletionPending: deletionSignIn.buildDeletionPending,
     restoreAtSignIn: deletionSignIn.restoreAtSignIn,
     purgeScheduledDeletions: purgeDeletions.purgeScheduledDeletions,
-    completeEmailVerification: verification.completeEmailVerification,
-    completeEmailChange: verification.completeEmailChange,
-    undoEmailChange: verification.undoEmailChange,
     recordOneTimeTokenRejected: tokens.recordOneTimeTokenRejected,
     sessionsList: sessions.sessionsList,
     sessionGet: sessions.sessionGet,
     reapLapsedPreviousEmails: previousEmailCleanup.reapLapsedPreviousEmails,
     reapExpiredExports: exportRows.reapExpiredExports,
-    loginOrCreateFromOAuth: oauth.loginOrCreateFromOAuth,
     startOAuthLink: oauth.startOAuthLink,
-    linkProviderToSignedInAccount: oauth.linkProviderToSignedInAccount,
     recordOAuthFailure: oauth.recordOAuthFailure,
     listOAuthLinks: oauth.listOAuthLinks,
     unlinkOAuthProvider: oauth.unlinkOAuthProvider,
@@ -130,7 +124,6 @@ export const accountService = {
  * challenge/verify pair.
  */
 export const twoFactorService = {
-    buildLoginChallenge: twoFactorChallenge.buildLoginChallenge,
     twoFactorStatus: twoFactorEnrollment.twoFactorStatus,
     setupTwoFactorMethod: twoFactorEnrollment.setupTwoFactorMethod,
     sendMethodCode: twoFactorEnrollment.sendMethodCode,

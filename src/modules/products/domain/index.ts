@@ -4,6 +4,9 @@
  * See `docs/theory/domain-layer.md`.
  */
 
+export { productActions, NO_PRODUCT_ACTIONS, NO_PRODUCT_STANDING } from './actions';
+export type { ProductStanding } from './actions';
+
 export { availableStock, stockFlags } from './stock';
 
 export { isPreorder, latestReleaseDate } from './preorder';

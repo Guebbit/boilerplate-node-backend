@@ -58,6 +58,7 @@ export const MFA_CHALLENGE_DELIVERED_TTL_MS = 10 * MINUTE_MS;
  *   for an OAuth one. Stored on the challenge so `verifyLoginChallenge` can hand it back once the
  *   second factor does too.
  * @returns the challenge payload, ready to send
+ * @internal Mints a sign-in challenge with no password check; only the login doors may, so it stays off `twoFactorService`.
  */
 export const buildLoginChallenge = (
     user: UserDocument,

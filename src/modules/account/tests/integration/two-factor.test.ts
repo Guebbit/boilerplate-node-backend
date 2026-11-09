@@ -20,6 +20,7 @@ import { getExpiryTime } from '@modules/account/session/config';
 import { userRepository } from '@modules/users/tests/factories';
 import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
 import { twoFactorService } from '@modules/account/services';
+import { buildLoginChallenge } from '@modules/account/services/two-factor-challenge';
 import { DELIVERED_CODE_MAX_ATTEMPTS } from '@modules/account/two-factor';
 import { testCallerContext } from '@tests/callers';
 import { plantToken } from '../factories';
@@ -139,7 +140,7 @@ const startLogin = (email: string) =>
 const mintChallenge = (userId: string): Promise<string> =>
     userRepository
         .findByIdWithCredentials(userId)
-        .then((user) => twoFactorService.buildLoginChallenge(user!, ['pwd']))
+        .then((user) => buildLoginChallenge(user!, ['pwd']))
         .then(({ challenge }) => challenge);
 
 describe('status', () => {

@@ -12,6 +12,7 @@ import { codeFor } from '@tests/totp';
 import { forgetSessionEpoch } from '@tests/session-epoch';
 import { createUser, PLAIN_PASSWORD, userRepository } from '@modules/users/tests/factories';
 import { twoFactorService } from '@modules/account/services';
+import { buildLoginChallenge } from '@modules/account/services/two-factor-challenge';
 import { DELIVERED_CODE_MAX_ATTEMPTS, hashBackupCode } from '@modules/account/two-factor';
 import { createAccessToken, startSession } from '@modules/account/session/jwt';
 import { testCallerContext } from '@tests/callers';
@@ -84,7 +85,7 @@ const armedAccount = async () => {
 const challengeFor = (userId: string): Promise<string> =>
     userRepository
         .findByIdWithCredentials(userId)
-        .then((user) => twoFactorService.buildLoginChallenge(user!, ['pwd']))
+        .then((user) => buildLoginChallenge(user!, ['pwd']))
         .then(({ challenge }) => challenge);
 
 /** `POST /account/login/2fa` with a backup code, on its own fresh challenge. */

@@ -55,6 +55,7 @@ type ProductCreateData = Omit<
     | 'buyable'
     | 'preorder'
     | 'backorder'
+    | 'actions'
     | 'onHand'
     | 'releaseDate'
     | 'restockDate'
