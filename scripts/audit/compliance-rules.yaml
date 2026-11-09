@@ -38,37 +38,47 @@ rules:
           audit rather than assuming absence carries over.
 
     - id: signup-mandatory-consent-checkbox
-      title: Signup requires an un-ticked, mandatory acceptance of privacy/cookie/terms policies
+      title: Every account records its holder's own acceptance of the Terms before first use (a box that starts unticked, or the notice beside a provider button); the privacy notice is shown, not agreed to
       category: consumer-protection
       responsibility: both
       severity: high
       rule: >
-          A user completing signup must affirmatively accept the terms and have the privacy notice put
-          in front of them, via a checkbox that is NOT pre-checked, and the acceptance must be
-          durably recorded (who, when, which policy version) before the account is usable. Cookie
-          and analytics consent is asked separately, never bundled into it. A sign-in with a
-          third-party provider that creates the account may take the acceptance from a notice beside
-          its button ("by continuing you agree to the Terms") instead of a checkbox: that is how the
-          providers' own pages do it, and the record is stamped at creation all the same.
+          Every account carries its holder's own record of accepting the terms (when, and which
+          version of the text) before its first session. The holder makes it, on the first screen
+          they act on, through a checkbox that is NOT pre-checked. A staff member never accepts on
+          someone's behalf. Covered paths: self-signup; a sign-in with a third-party provider that
+          creates the account, where a notice beside its button ("by continuing you agree to the
+          Terms") counts, as it does on the providers' own pages; and the first password set on a
+          staff-created account. The privacy notice is shown to the person, never agreed to. The
+          first mail to a staff-created account links the privacy notice, as that mail is the
+          person's first contact from us. Cookie and analytics consent is asked separately, never
+          bundled into the acceptance.
       applies_when: >
-          Always applicable to any signup flow that creates a persistent account tied to personal
-          data.
+          Every path that makes an account usable, including staff creation (`users` admin create
+          -> setup link). Demo and test data (scenarios, factories) are out of scope.
       evidence:
           backend:
-              - src/modules/account/*.ts (signup/register handler and its Zod schema)
-              - src/modules/users/model.ts (`termsAcceptedAt` / `termsVersion`, or their absence)
-              - openapi.yaml (the signup request schema — is acceptance a required field at all?)
+              - src/modules/account/services/signup.ts, oauth.ts, password-reset.ts (where the record is stamped)
+              - src/modules/account/consent-record.ts, src/modules/users/model.ts (`termsAcceptedAt` / `termsVersion`)
+              - src/modules/account/openapi.yaml (`SignupRequest`, `PasswordResetConfirmRequest`; the root bundle `openapi.yaml` is generated)
+              - src/modules/account/emails.ts (`setupRequestEmail`, links the privacy notice)
           frontend:
-              - signup/register view component (checkbox default v-model value must be false)
-              - routed pages for /privacy-policy, /cookie-policy, /terms
+              - Signup.vue and the `account-setup` view (PasswordResetConfirm.vue in setup mode); the shared Terms checkbox (default value must be false)
+              - routed pages for /terms and /privacy
       references:
-          - GDPR Art. 4(11), Art. 7(2) (consent must be freely given, specific, unambiguous — no
-            pre-ticked boxes)
-          - ePrivacy Directive Art. 5(3) (cookie consent)
+          - GDPR Art. 6(1)(b) (the Terms are a contract step, not consent)
+          - GDPR Art. 7(1), 7(4) and EDPB Guidelines 05/2020 para 13, para 81 (only for the separate
+            analytics opt-in, and for no bundling of consent with the contract)
+          - GDPR Art. 13 and Art. 14(3)(b) (the privacy notice is information; due at the latest at
+            the first communication)
+          - Consumer Rights Directive 2011/83 Art. 6(9) (the trader proves the information duties)
+          - e-Commerce Directive 2000/31 Art. 10(3) (the Terms can be stored and reproduced)
+          - ePrivacy Directive Art. 5(3) (only for cookie/analytics asked separately)
       notes: >
-          A single "I agree to everything" checkbox is a known-weak pattern under Art. 7(2) if it
-          bundles cookie consent with contract acceptance — flag this even where a checkbox exists,
-          if it does not separate cookie consent from ToS acceptance.
+          The privacy notice is information (Art. 13/14). Copy that asks the user to "accept" or
+          "agree to" it presents information as an agreement: flag it. Bundling (Art. 7(4)) is a
+          separate fault: consent tied to the contract. A single "I agree to everything" checkbox
+          that also carries cookie consent is flagged even where a checkbox exists.
 
     - id: dmca-agent-published
       title: No published DMCA/copyright takedown agent contact
