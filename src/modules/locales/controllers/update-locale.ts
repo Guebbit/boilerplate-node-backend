@@ -16,7 +16,7 @@ import { localeService } from '../services';
  * change itself.
  */
 export const { replace: replaceLocale, update: updateLocale } = createUpdateController({
-    versioned: false,
+    versioned: true,
     entity: 'locale',
     replaceSchema: ReplaceLocaleBody.extend({
         name: localeService.localeDisplayName,
@@ -28,8 +28,9 @@ export const { replace: replaceLocale, update: updateLocale } = createUpdateCont
     }),
     // The path param is `:locale`, a language tag — not the `:id` the factory would validate. No
     // format check: `findByTag` matches on a plain string field, never an ObjectId, so a malformed
-    // tag already misses every language and falls out through the ordinary 404.
-    idFrom: (request) => String(request.params.locale),
+    // tag already misses every language and falls out through the ordinary 404. Normalized, so
+    // `If-Match` is keyed the way the repository's `save` keys it (`pt-br` is `pt-BR`).
+    idFrom: (request) => localeService.normalizeTag(String(request.params.locale)),
     update: (tag, changes, request) =>
         localeService.updateLanguage(tag, changes, callerContextOf(request)),
     present: (row, request) =>

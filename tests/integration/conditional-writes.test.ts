@@ -33,6 +33,8 @@ import {
     versionOf,
     etagOf as etagFor
 } from '@infrastructure/persistence/versioning';
+import { localeModel } from '@modules/locales/model';
+import { localeRepository } from '@modules/locales/repository';
 import { givenLocale } from '@modules/locales/tests/factories';
 
 setupTestDb();
@@ -128,6 +130,20 @@ const RESOURCES: Resource[] = [
         edit: (n) => ({ description: `edit-${n.toString()}` }),
         expected: (n) => `edit-${n.toString()}`,
         stored: (id) => webhookSubscriptionModel.findById(id).then((row) => row?.description)
+    },
+    {
+        name: 'a language',
+        collection: 'locales',
+        // Addressed by its tag, versioned by its row: the one resource whose path id is not its `_id`.
+        seed: async () => {
+            const { bearer } = await authenticateAs('admin');
+            const language = await givenLocale('pt-BR');
+            const path = '/locales/pt-BR';
+            return { path, readPath: path, bearer, id: String(language._id) };
+        },
+        edit: (n) => ({ name: `Portugues ${'x'.repeat(n)}` }),
+        expected: (n) => `Portugues ${'x'.repeat(n)}`,
+        stored: (id) => localeModel.findById(id).then((row) => row?.name)
     }
 ];
 
@@ -263,6 +279,51 @@ describe.each(RESOURCES)('conditional writes on $name', (resource) => {
     });
 });
 
+describe('a language: what moves its edit tag', () => {
+    it('matches a lowercase tag in the path, and answers the stored tag', async () => {
+        const { readPath, bearer } = await resourceNamed('a language').seed();
+        const tag = etagOf(await api().get(readPath).set('Authorization', bearer));
+
+        const write = await api()
+            .patch('/locales/pt-br')
+            .set('Authorization', bearer)
+            .set('If-Match', tag)
+            .send({ name: 'Portugues' });
+
+        expect(write.status).toBe(200);
+    });
+
+    it('is not moved by a dictionary write, so an open name form still saves', async () => {
+        const { path, readPath, bearer, id } = await resourceNamed('a language').seed();
+        const tag = etagOf(await api().get(readPath).set('Authorization', bearer));
+        const before = await storedRevision('locales', id);
+
+        await localeRepository.bumpRevision('pt-BR');
+        const write = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', tag)
+            .send({ name: 'Portugues' });
+
+        expect(await storedRevision('locales', id)).toBe(Number(before) + 1);
+        expect(write.status).toBe(200);
+    });
+
+    it('is moved by switching the language off, so an open form gets 412', async () => {
+        const { path, readPath, bearer } = await resourceNamed('a language').seed();
+        const tag = etagOf(await api().get(readPath).set('Authorization', bearer));
+        await api().post('/locales/pt-BR/deactivate').set('Authorization', bearer).expect(200);
+
+        const write = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', tag)
+            .send({ name: 'Portugues' });
+
+        expect(write.status).toBe(412);
+    });
+});
+
 describe('a webhook subscription: delivery bookkeeping is not an edit', () => {
     it('keeps an earlier tag valid after a delivery failure was recorded', async () => {
         const { path, readPath, bearer, id } = await resourceNamed('a webhook subscription').seed();
@@ -280,7 +341,10 @@ describe('a webhook subscription: delivery bookkeeping is not an edit', () => {
 });
 
 /** Resources that also take a DELETE by id — the account deletes through its own two-step flow. */
-const DELETABLE = RESOURCES.filter((resource) => resource.name !== "the caller's own account");
+const DELETABLE = RESOURCES.filter(
+    // A language's delete is unconditional: its cascade removes the rows before the language.
+    (resource) => resource.name !== "the caller's own account" && resource.name !== 'a language'
+);
 
 describe.each(DELETABLE)('conditional DELETE on $name', (resource) => {
     it('refuses a stale tag and keeps the row', async () => {

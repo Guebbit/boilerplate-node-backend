@@ -462,6 +462,7 @@ and the bundler adds the header parameter, the 412 and the response header from 
 | the caller's account | `GET /account` | `PUT`, `PATCH /account` |
 | example | `GET /examples/{id}` | `PUT`, `PATCH`, `DELETE /examples/{id}` |
 | webhook subscription | `GET /webhooks/subscriptions/{id}` | `PUT`, `PATCH`, `DELETE /webhooks/subscriptions/{id}` |
+| language | `GET /locales/{locale}` | `PUT`, `PATCH /locales/{locale}` (not the `DELETE`: removing a language is unconditional) |
 
 The role door (`POST /users/{id}/assign-role`, `/revoke-role`) is not in that column: a POST is a
 state change with its own 409, not an overwrite, so two callers naming different roles both succeed
@@ -470,6 +471,11 @@ refused.
 
 Not versioned: a resource with no item read to take a tag from (tasks, an address inside its book)
 and anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declared.
+
+A language is addressed by its tag, so its `If-Match` is keyed by the tag (case-insensitive: `pt-br`
+is `pt-BR`), while the counter lives on its row. Writing a dictionary entry moves the language's
+`revision` (what clients re-fetch on) but not its edit counter or `updatedAt`; switching it on or
+off does move them, so an open name form is refused after a toggle.
 
 A webhook subscription's delivery bookkeeping (the failure streak, the auto-disable) writes with
 `timestamps: false`, so a delivery outcome never moves the edit counter and never refuses an open

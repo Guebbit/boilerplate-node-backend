@@ -8,6 +8,7 @@ import type { Request, Response } from 'express';
 import type { Language, LocaleCapabilities, LocaleDictionary } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { hasServedDictionary, readLocaleDictionary, t } from '@infrastructure/i18n';
+import { setEtag } from '@infrastructure/http/preconditions';
 import { localeService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
@@ -42,6 +43,8 @@ export const getLocale = (request: Request<{ locale: string }>, response: Respon
         .then((result) => {
             if (refused(response, result)) return;
 
+            // The language's edit tag, so a name edit can send `If-Match`.
+            setEtag(response, result.data);
             return successResponse<Language>(response, result.data);
         })
         .catch(catchAs(response, 'getLocale'));

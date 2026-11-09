@@ -18,6 +18,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
+import { carryVersion } from '@infrastructure/persistence/versioning';
 import type { Caller } from '@types';
 import { accessibleFilterFor } from '@kernel/access/query';
 import { deriveBaseLanguage, type LocaleDocument } from '../model';
@@ -108,23 +109,25 @@ export const dynamicCapability = (
         Partial<Pick<LocaleDocument, '_id' | 'createdAt' | 'updatedAt'>>,
     entryCount: number,
     standing: LanguageStanding = NO_STANDING
-): Language => ({
-    // Read off `_id`: the manifest's rows come straight from `.lean()`, before the `id` transform.
-    ...(language._id ? { id: String(language._id) } : {}),
-    tag: language.tag,
-    baseLanguage: deriveBaseLanguage(language.tag),
-    name: language.name,
-    nativeName: language.nativeName,
-    direction: language.direction,
-    active: language.active,
-    apps: [frontendApp()],
-    source: LocaleSource.dynamic,
-    entryCount,
-    revision: language.revision,
-    actions: languageActions(language, standing),
-    ...(language.createdAt ? { createdAt: language.createdAt.toISOString() } : {}),
-    ...(language.updatedAt ? { updatedAt: language.updatedAt.toISOString() } : {})
-});
+): Language =>
+    // The row's edit counter rides beside the wire shape, so the `ETag` can be derived from it.
+    carryVersion(language, {
+        // Read off `_id`: the manifest's rows come straight from `.lean()`, before the `id` transform.
+        ...(language._id ? { id: String(language._id) } : {}),
+        tag: language.tag,
+        baseLanguage: deriveBaseLanguage(language.tag),
+        name: language.name,
+        nativeName: language.nativeName,
+        direction: language.direction,
+        active: language.active,
+        apps: [frontendApp()],
+        source: LocaleSource.dynamic,
+        entryCount,
+        revision: language.revision,
+        actions: languageActions(language, standing),
+        ...(language.createdAt ? { createdAt: language.createdAt.toISOString() } : {}),
+        ...(language.updatedAt ? { updatedAt: language.updatedAt.toISOString() } : {})
+    });
 
 /**
  * The two tiers as one list. A tag in both merges into ONE row carrying BOTH apps, using the
@@ -147,11 +150,11 @@ export const mergeCapabilities = (
         rows.set(
             language.tag,
             rows.has(language.tag)
-                ? {
+                ? carryVersion(dynamic, {
                       ...dynamic,
                       apps: [backendApp(), frontendApp()],
                       source: LocaleSource.both
-                  }
+                  })
                 : dynamic
         );
     }

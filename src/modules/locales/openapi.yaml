@@ -217,6 +217,9 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
 
     /locales/{locale}:
+        # Bundler: adds the `If-Match` parameter and 412 to the writes listed, and `ETag` to the 200s.
+        # No `delete`: removing a language is unconditional (its cascade deletes the rows first).
+        x-versioned: [get, put, patch]
         get:
             x-cache: revalidate
             tags: [Locales]
