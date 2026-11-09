@@ -1,6 +1,7 @@
-# API-standards rule registry. Read by the ten `scripts/audit/api-<standard>/SKILL.md` audits; each
-# one evaluates only the rules whose `standard` is its own. Same top shape as
-# `compliance-rules.yaml` (`version`, `rules`), different per-rule fields.
+# API-standards rule registry. Read by two audits: `scripts/audit/api-http/SKILL.md` judges the eight
+# HTTP web standards, `scripts/audit/api-style/SKILL.md` one style guide (Zalando unless the API
+# clearly leans Google AIP; the skill says how it tells). Same top shape as `compliance-rules.yaml`
+# (`version`, `rules`), different per-rule fields.
 #
 # Fields:
 #   id          `<standard>-<what>`, unique.

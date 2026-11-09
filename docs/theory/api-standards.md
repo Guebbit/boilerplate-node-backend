@@ -1,7 +1,7 @@
 # API Standards
 
 This API follows the mature HTTP standards, and writes down where it does not. This page names
-each standard, links its source, and lists the differences with their reasons. The ten audits under
+each standard, links its source, and lists the differences with their reasons. The two audits under
 `scripts/audit/api-*` read it; they report and never change a file.
 
 ## Why standards matter here
@@ -43,8 +43,14 @@ flowchart TD
 
 ## The standards
 
-Each audit has one standard, a folder under `scripts/audit/`, and its rules in
+Two kinds, two audits. Both take their rules from
 [`scripts/audit/api-standards.yaml`](https://github.com/Guebbit/boilerplate-node-backend/blob/main/scripts/audit/api-standards.yaml).
+
+| Kind        | Standards                            | Audit       | Choice                                    |
+| ----------- | ------------------------------------ | ----------- | ----------------------------------------- |
+| Web rules   | the six RFCs and the two IETF drafts | `api-http`  | none: every HTTP API follows them         |
+| Style guide | Zalando **or** Google AIP            | `api-style` | one: Zalando, unless the API leans Google |
+
 The "follows" column is a link, not a restatement.
 
 | Standard          | What it is                                                    | Source                                                                                                                                         | Where we follow it, and differ                                                                                |
@@ -73,13 +79,26 @@ the right tool is a deterministic contract diff such as oasdiff, not an AI.
 
 ## When standards disagree
 
-They do: Zalando wants `snake_case` and Google's JSON mapping wants `lowerCamelCase`; Zalando wants
-problem JSON and Google wants `google.rpc.Status`. A single audit reports against its own standard
-only.
+The eight web rules do not: they come from the IETF HTTP working groups and are written to fit
+together. They only overlap, on a 304 and on a 429, and `api-http` reports each overlap once.
 
-When someone asks for several audits at once, they state the **order of precedence first**
-(for example "RFC 9110 > Google AIP > Zalando"). Each conflict is then reported once, under the
-winning standard, and the losing standards' view is a note. The agent never picks the order.
+The two style guides do, on purpose:
+
+| Topic          | Zalando               | Google AIP          |
+| -------------- | --------------------- | ------------------- |
+| Property names | `snake_case`          | `lowerCamelCase`    |
+| Errors         | RFC 9457 problem JSON | `google.rpc.Status` |
+| Paging         | cursor preferred      | opaque `page_token` |
+
+So an API follows **one**, and the other is never judged. Nobody configures it; the audit looks:
+
+- **Zalando** is the default: REST + JSON first, and it agrees with RFC 9457 on errors.
+- **Google AIP** fits a gRPC/protobuf-first API. When the contract shows two or more Google signals
+  (Google-shaped errors, `:verb` paths, `page_token` paging, field masks), the audit asks before
+  switching. Under Google, `api-http` also asks before it skips its RFC 9457 rules.
+
+The order is fixed: **web rules, then the style guide.** A guide rule a web rule already decides is
+listed by `api-style` under "Decided by the web rules", not judged twice.
 
 ## Stricter than the standard
 
@@ -125,5 +144,5 @@ difference: `civil-date-wire-form`. AIP-142 spells the type `google.type.Date`; 
 ## Related
 
 - [Write Methods](../api/write-methods.md), [Errors](../api/errors.md), [Responses](../api/responses.md)
-- [AI auditing](../tools/ai-auditing.md): how the ten audits run and where reports go
+- [AI auditing](../tools/ai-auditing.md): how the two audits run and where reports go
 - [Contract Fragmentation](../api/contract-fragmentation.md): where the bundled contract the audits read comes from
