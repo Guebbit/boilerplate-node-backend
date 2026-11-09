@@ -59,7 +59,7 @@ const doors: Door[] = [
         method: 'put',
         route: () => '/account',
         as: 'user',
-        body: { email: 'attacker@example.com', username: 'attacker', analyticsConsent: false }
+        body: { username: 'attacker', analyticsConsent: false }
     },
     {
         name: 'POST /users',
@@ -225,7 +225,7 @@ describe('imageUrl is never a client-named path', () => {
                 .set('Authorization', userBearer)
                 .attach('imageUpload', PNG_BYTES, { filename: 'a.png', contentType: 'image/png' });
             const ownUrl = uploaded.body.imageUrl as string;
-            const profile = { email: uploaded.body.email as string, username: 'putname' };
+            const profile = { username: 'putname' };
 
             const kept = await api()
                 .put('/account')

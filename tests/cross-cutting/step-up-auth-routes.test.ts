@@ -68,8 +68,12 @@ const STEP_UP_ROUTES: Record<string, string[]> = {
     // Only for an account with a second factor armed (the otp demand): the plain password change
     // of an account without one is gated by the current password alone, as before.
     'account POST /password': [`requireFreshAuthWhen(sensitive)`],
-    'account PUT /': [`requireFreshAuthWhen(sensitive)`, `requireFreshAuthWhen(sensitive)`],
-    'account PATCH /': [`requireFreshAuthWhen(sensitive)`, `requireFreshAuthWhen(sensitive)`],
+    // The email is a sign-in and recovery channel: always a fresh session, and the code on top for
+    // an armed account. `PUT`/`PATCH /account` no longer carry it, so they ask nothing.
+    'account POST /email-change': [
+        `requireFreshAuthWhen(sensitive)`,
+        `requireFreshAuth(sensitive)`
+    ],
     'account DELETE /sessions': [`requireFreshAuth(sensitive)`],
     // Disconnecting a provider removes a way into the account: an identity change, sensitive tier.
     'account POST /oauth/links/:provider': [`requireFreshAuth(sensitive)`],

@@ -95,6 +95,7 @@ Otherwise it is a field of `PUT` / `PATCH`.
 | --- | --- | --- |
 | a side effect of its own (ends sessions, clears a cache, resets a streak, releases a hold) | an action | `POST /users/{id}/deactivate`, `POST /orders/{id}/cancel` |
 | a guard or a permission of its own | an action | `POST /locales/{locale}/deactivate` (fallback guard) |
+| an identity of its own: a sign-in or recovery channel, with a step-up and mails of its own | an action at its own door, never a field of the profile | `POST /account/email-change {email}`, `POST /account/password` |
 | consequences that come only from the state it leaves behind | a field | `Product.active`, `purchasable`, `allowBackorder` |
 
 `product.buyable_again` does not make `active` an action: it follows the derived `buyable` state,
@@ -254,6 +255,7 @@ The body **is** the new resource (RFC 9110 §9.3.4).
 | --- | --- | --- |
 | server-managed | `id`, timestamps, lifecycle `status`, totals, `verifiedAt` | the server |
 | a secret with its own door | `password` | `POST /account/password`, the reset flow |
+| a sign-in channel with its own door | `email` | `POST /account/email-change` |
 | an uploaded file | `imageUrl` | a multipart upload; an explicit `null` clears |
 | a pointer owned by the parent | an address's `default` | `PUT /account/addresses/{id}/default` |
 
@@ -277,8 +279,9 @@ answer 201, RFC 9110 §9.3.4, and nothing here has a URL the client may name).
 **Offer a PUT only when the body can be the whole resource.** A route that sets two fields of a
 bigger record is a PATCH alone (`PATCH /users/{id}`), never a PUT that clears the rest.
 
-**A server may transform.** RFC 9110 lets the stored state differ from the body. Here that is one
-case: `PUT /account`'s `email` becomes `pendingEmail` until the new address is proven.
+**A server may transform.** RFC 9110 lets the stored state differ from the body. No route does
+today: the one that did, an email held as `pendingEmail` until proven, is its own door now
+(`POST /account/email-change`), so `PUT /account` stores exactly what it is sent.
 
 **A keyed map is part of the representation.** A product's `translations` on a PUT is the whole
 set: a stored locale it leaves out is deleted, the fallback locale is required, and a locale it
@@ -570,7 +573,6 @@ A new date filter picks one of the three; a fourth spelling needs a card.
 
 | Route | Differs how | Why |
 | --- | --- | --- |
-| `PUT /account` | `email` is stored as `pendingEmail` | an address is proven before it replaces the old one |
 | `POST /account/signup` | a refused address still gets a 201 and the same `Location: /account`, and nothing is created | antibot: the refusal must look like a success |
 | `PUT /cart/shipping-method`, `PUT /locales/{locale}/apps/{app}/entries/{entryId}`, `PUT /account/addresses/{id}/default` | no PATCH | one field, or none; a PATCH would say exactly what the PUT says |
 | `POST /payments`, `POST /orders/{id}/payments` | 200 when they refresh or convert the order's one payment row | one payment per order is a database fact |

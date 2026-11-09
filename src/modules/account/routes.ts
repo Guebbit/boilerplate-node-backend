@@ -35,6 +35,7 @@ import { upload } from '@infrastructure/http/middlewares/upload';
 import { getAccount } from './controllers/get-account';
 import { replaceAccount, updateAccount } from './controllers/update-account';
 import { cancelPendingEmail } from './controllers/delete-email-change';
+import { postEmailChange } from './controllers/post-email-change';
 import { postPendingEmailResend } from './controllers/post-email-change-resend';
 import { postLogin } from './controllers/post-login';
 import { postSignup } from './controllers/post-signup';
@@ -77,30 +78,6 @@ import { getOAuthStart } from './controllers/get-oauth-start';
 import { getOAuthCallback } from './controllers/get-oauth-callback';
 import { noStore } from '@infrastructure/http/middlewares/cache';
 import { requireAllowedOrigin } from '@infrastructure/http/middlewares/origin';
-import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
-
-/**
- * Whether THIS request is changing the caller's email — the one field `requireFreshAuthWhen`
- * gates on `PUT /` and `PATCH /`. Case-insensitive, the same way `accountService.updateProfile`'s
- * own `applyEmailChangeRequest` compares (`normalizeEmail`), so the guard and the service can
- * never disagree about what counts as an email change — a mixed-case resend of the current
- * address must not demand a step-up the service itself treats as a no-op.
- *
- * MUST run after `upload.image()`: both verbs accept `multipart/form-data`, so `request.body`
- * does not exist until multer has parsed it — a predicate mounted earlier reads an empty object,
- * concludes "no email change", and gates nothing.
- *
- * Not exported: a wiring file's own predicate is asserted through `PUT /account` itself — whether
- * a stale session is challenged or not — never by calling this directly.
- */
-const isChangingEmail = (request: Request): boolean => {
-    const { email } = (request.body ?? {}) as { email?: unknown };
-    // Anything but a string is not an address and not this guard's to judge: the controller's own
-    // validation refuses it with a 422, where `normalizeEmail` below would throw on a number.
-    if (typeof email !== 'string') return false;
-    const currentEmail = request.authContext?.email;
-    return currentEmail === undefined || normalizeEmail(email) !== normalizeEmail(currentEmail);
-};
 
 /**
  * Whether the caller's account has a second factor armed — the condition under which the identity
@@ -108,10 +85,6 @@ const isChangingEmail = (request: Request): boolean => {
  */
 const callerHasTwoFactor = (request: Request): boolean =>
     request.authContext?.twoFactorArmed === true;
-
-/** {@link isChangingEmail} for a caller who has a second factor armed. */
-const isChangingEmailWithTwoFactor = (request: Request): boolean =>
-    callerHasTwoFactor(request) && isChangingEmail(request);
 
 /**
  * What an armed account must have proved to pass an identity route: a second-factor code, in the
@@ -140,31 +113,24 @@ router.use(noStore);
 router.get('/', isAuth, getAccount);
 
 // PUT /account (replace) and PATCH /account (merge) — own profile, requires auth. The upload
-// mirrors signup's. requireFreshAuthWhen AFTER upload.image(): see isChangingEmail's own doc for
-// why the order is load-bearing. Sensitive tier, not critical: an unconditional gate here would
-// ask for a password on every avatar upload — this route is the takeover path specifically
-// BECAUSE of the email field, not the write in general.
-router.put(
-    '/',
-    uploadLimiter,
-    isAuth,
-    upload.image(),
-    // The otp guard first: a stale armed session is challenged ONCE, with `details.methods`, and
-    // the plain recency guard below it only ever sees accounts without a second factor.
-    requireFreshAuthWhen(isChangingEmailWithTwoFactor, 'sensitive', OTP_PROOF),
-    requireFreshAuthWhen(isChangingEmail, 'sensitive'),
-    replaceAccount
-);
+// mirrors signup's. No fresh-auth gate: the fields here (username, locale, image, consent) are not
+// a sign-in or recovery channel. The email is, and has its own door below.
+router.put('/', uploadLimiter, isAuth, upload.image(), replaceAccount);
 
-// PATCH /account — merge the fields sent; same gate and upload as the PUT above.
-router.patch(
-    '/',
-    uploadLimiter,
+// PATCH /account — merge the fields sent; same upload as the PUT above.
+router.patch('/', uploadLimiter, isAuth, upload.image(), updateAccount);
+
+// POST /account/email-change — start an email change (requires auth). The address is a sign-in and
+// recovery channel, so the step-up is unconditional: sensitive tier, plus an `otp` proof when a
+// second factor is armed. `signedInCredentialLimiters` after `isAuth`, as on /password: its budget
+// is per account, and bounds a signed-in caller probing which addresses are taken.
+router.post(
+    '/email-change',
     isAuth,
-    upload.image(),
-    requireFreshAuthWhen(isChangingEmailWithTwoFactor, 'sensitive', OTP_PROOF),
-    requireFreshAuthWhen(isChangingEmail, 'sensitive'),
-    updateAccount
+    requireFreshAuthWhen(callerHasTwoFactor, 'sensitive', OTP_PROOF),
+    requireFreshAuth('sensitive'),
+    signedInCredentialLimiters,
+    postEmailChange
 );
 
 // DELETE /account/email-change — cancel a pending email change (requires auth). No fresh-auth

@@ -96,7 +96,7 @@ describe('the body media type', () => {
             .put('/account')
             .set('Authorization', bearer)
             .set('Content-Type', 'application/merge-patch+json')
-            .send(JSON.stringify({ email: 'a@b.co', username: 'abc', analyticsConsent: false }));
+            .send(JSON.stringify({ username: 'abc', analyticsConsent: false }));
 
         expect(response.status).toBe(415);
     });

@@ -93,7 +93,7 @@ describe('Accept-Language negotiation', () => {
      * `src/infrastructure/http/middlewares/upload.ts` re-enters the store after multer; this is the guard.
      */
     // Signup takes no image any more (and so declares no multipart body); `PATCH /account` is a
-    // multipart door a signed-in caller can reach, and rejects an invalid email the same way.
+    // multipart door a signed-in caller can reach, and refuses a field it does not take the same way.
     it('keeps the locale across a multipart upload', async () => {
         const { bearer } = await authenticateAs('user');
 
@@ -101,11 +101,13 @@ describe('Accept-Language negotiation', () => {
             .patch('/account')
             .set('Authorization', bearer)
             .set('Accept-Language', 'it')
-            .field('email', INVALID_SIGNUP.email);
+            .field('email', 'new@example.com');
 
         expect(response.status).toBe(422);
         expect(response.headers['content-language']).toBe('it');
-        expect(messagesOf(response.body)).toContain(emailRefusal('it'));
+        expect(messagesOf(response.body)).toContain(
+            translator('it')('validation.unrecognized-keys', { keys: 'email' })
+        );
     });
 
     /**

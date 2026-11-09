@@ -1,13 +1,13 @@
 /**
  * @module
- * Requesting and cancelling an email change. Which event applies in which state is
+ * Requesting and cancelling an email change (`POST` / `DELETE /account/email-change`). Which event applies in which state is
  * `../domain/email-change`; confirming and undoing are `./verification`.
  */
 
 import { emailChangeNoticeEmail, greetableName, recipientLocale } from '../emails';
 import { sendAccountMail } from './mail';
 import { emailChangeNext, emailChangeStateOf } from '../domain';
-import { sendVerificationEmail } from './verification';
+import { sendVerificationEmail, resendCooldownRemaining } from './verification';
 import {
     EMAIL_CHANGE_TOKEN_TYPE,
     EMAIL_CHANGE_UNDO_TOKEN_TYPE,
@@ -27,57 +27,102 @@ import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 import { issueToken, removeTokens } from './tokens';
+import { withOwnAccount } from './caller';
+import { mailRecipientRefusal } from '../mail-budget';
+import { resendTooSoon } from '../cooldown';
+import { ERROR_CODES, type ErrorCode } from '@api/error-codes';
+import { t } from '@infrastructure/i18n';
 
 /**
- * Result of evaluating `PUT/PATCH /account`'s `email` field against the pending-change rules — see
- * {@link applyEmailChangeRequest}. `requested` is true only when THIS call is what set
- * `pendingEmail`, which is what gates the old-address notice and the new verification link: a
- * plain cancellation or a profile update that never touched `email` sends neither.
+ * `POST /account/email-change` — parks the requested address as `pendingEmail`, never as `email`.
+ * The account keeps its current, PROVEN address until the new one is confirmed through
+ * `POST /account/email-change/confirm` — docs/modules/account.md#proving-an-address.
+ *
+ * Outcomes, in the order they are judged:
+ * - CURRENT address: 409 `EMAIL_ALREADY_CURRENT`, nothing changes.
+ * - PENDING address: 409 `EMAIL_CHANGE_ALREADY_PENDING`, nothing mailed (`/resend` mails again).
+ * - Held by ANOTHER account (its `email` or `pendingEmail`): 409 `EMAIL_ALREADY_USED` — the
+ *   REQUEST-TIME half of the collision rule. `users_pending_email` and `users_email` (both unique)
+ *   are the swap-time half, since the two are up to 24 hours apart and only indexes are still there.
+ * - Inside the minute after the last request: 429 `EMAIL_CHANGE_TOO_SOON`. A genuine change mails
+ *   two addresses, so it is paced like the resend button. Answered before the mailbox budget is
+ *   touched, so a paced request spends nothing.
+ * - The new mailbox's budget spent: refused BEFORE the save, so `pendingEmail` stays as it was.
+ * - Otherwise: saved, then both mails sent. A different address replaces a pending one, and the
+ *   newest link is the only live one.
+ *
+ * @param userId - the authenticated caller
+ * @param requestedEmail - the validated address
+ * @param context - the caller
  */
-export interface EmailChangeOutcome {
-    conflict: boolean;
-    requested: boolean;
-}
+export const requestEmailChange = (
+    userId: string,
+    requestedEmail: string,
+    context: CallerContext
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
+    withOwnAccount(userId, (user) => {
+        const wanted = normalizeEmail(requestedEmail);
+        if (wanted === normalizeEmail(user.email))
+            return alreadyHeld(
+                ERROR_CODES.EMAIL_ALREADY_CURRENT,
+                'account.email-change.already-current'
+            );
+        if (user.pendingEmail !== undefined && wanted === normalizeEmail(user.pendingEmail))
+            return alreadyHeld(
+                ERROR_CODES.EMAIL_CHANGE_ALREADY_PENDING,
+                'account.email-change.already-pending'
+            );
+
+        return accountUserService
+            .emailOrPendingEmailTaken(requestedEmail, user.id)
+            .then((taken) =>
+                taken
+                    ? alreadyHeld(
+                          ERROR_CODES.EMAIL_ALREADY_USED,
+                          'account.email-change.already-used'
+                      )
+                    : saveRequestedEmail(user, requestedEmail, context)
+            );
+    })
+        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error))
+        .then((result) => (result.success ? generateSuccess(result.data, 200) : result));
 
 /**
- * Applies `PUT/PATCH /account`'s `email` field to `user.pendingEmail` — never straight to
- * `user.email`. The account keeps its current, PROVEN address until the new one is confirmed
- * through `POST /account/email-change/confirm` — docs/modules/account.md#proving-an-address.
- *
- * Outcomes:
- * - Absent field:    leaves everything alone.
- * - CURRENT address: a no-op. A `PUT` (`email` required), or a save that merely didn't change it,
- *                    must not silently cancel a pending change the caller never asked to cancel —
- *                    see {@link cancelPendingEmailChange} for that explicit action.
- * - PENDING address: a no-op too. A retried or double-submitted save would otherwise mail both
- *                    addresses again and replace the link already delivered.
- * - Any OTHER address: checked against every account's `email` AND `pendingEmail` first — the
- *                    REQUEST-TIME half of the collision rule. `users_pending_email` and
- *                    `users_email` (both unique) are the swap-time half, since the two are up to
- *                    24 hours apart and only the indexes are still there for both.
- *
- * Mutates `user` in place; the caller's own `save()` (inside `accountUserService.updateOwnProfile`) persists it.
- * @param user - the loaded document; must carry `pendingEmail` (`findByIdWithCredentials`)
- * @param requestedEmail - `parseResult.data.email`, or `undefined` when the field was omitted
+ * A 409 for an address the request cannot take: the account's own, the one already pending, or one
+ * another account holds.
  */
-export const applyEmailChangeRequest = (
+const alreadyHeld = (code: ErrorCode, messageKey: string): ResponseReject =>
+    generateReject(409, [{ code, message: t(messageKey) }]);
+
+/**
+ * The pacing, the mailbox budget, the write and the two mails of a genuine request — everything
+ * after {@link requestEmailChange} has decided the address is free to ask for.
+ */
+const saveRequestedEmail = (
     user: UserDocument,
-    requestedEmail: string | undefined
-): Promise<EmailChangeOutcome> => {
-    if (
-        requestedEmail === undefined ||
-        normalizeEmail(requestedEmail) === normalizeEmail(user.email) ||
-        (user.pendingEmail !== undefined &&
-            normalizeEmail(requestedEmail) === normalizeEmail(user.pendingEmail))
-    )
-        return Promise.resolve({ conflict: false, requested: false });
+    requestedEmail: string,
+    context: CallerContext
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
+    resendCooldownRemaining(user, EMAIL_CHANGE_TOKEN_TYPE).then((wait) => {
+        if (wait > 0)
+            return resendTooSoon(
+                ERROR_CODES.EMAIL_CHANGE_TOO_SOON,
+                t('account.email-change.too-soon'),
+                wait
+            );
 
-    return accountUserService.emailOrPendingEmailTaken(requestedEmail, user.id).then((taken) => {
-        if (taken) return { conflict: true, requested: false };
-        user.pendingEmail = requestedEmail;
-        return { conflict: false, requested: true };
+        return mailRecipientRefusal(requestedEmail, context).then(
+            (refusal) =>
+                refusal ??
+                accountUserService
+                    .setPendingEmail(user, requestedEmail)
+                    .then((saved) =>
+                        notifyEmailChangeRequested(saved, context).then(() =>
+                            generateSuccess(saved, 200)
+                        )
+                    )
+        );
     });
-};
 
 /**
  * `DELETE /account/email-change` — the explicit cancel. Resending the current address through
@@ -153,10 +198,7 @@ const sendEmailChangeMail = (user: UserDocument, context: CallerContext): Promis
  * follows the mail rather than the write: what is worth auditing is that a confirmation is now in
  * someone's inbox, not that a field was set.
  */
-export const notifyEmailChangeRequested = (
-    user: UserDocument,
-    context: CallerContext
-): Promise<void> =>
+const notifyEmailChangeRequested = (user: UserDocument, context: CallerContext): Promise<void> =>
     sendEmailChangeMail(user, context).then(() => {
         recordAudit(context, {
             action: accountAuditActions.AUTH_EMAIL_CHANGE_REQUESTED,
