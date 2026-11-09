@@ -10,7 +10,7 @@
  * 2. **The RAW body**, never a re-serialised object: a signature covers exact bytes.
  * 3. **Applied once**, behind the service: every effect is a conditional write, so a redelivered
  *    event settles nothing twice. A provider retries until it gets a 2xx.
- * 4. **200 for anything authentic**, including events this module ignores. A non-2xx tells the
+ * 4. **204 for anything authentic**, including events this module ignores. A non-2xx tells the
  *    provider the delivery failed, and it comes back harder. Only an unverifiable body is a 400,
  *    because that is not a delivery — and a genuine fault is left to become a 500, since that IS
  *    a retry worth having.
@@ -30,8 +30,7 @@ import { callerContextOf } from '@infrastructure/http/request';
 import { recordSecurityEvent } from '@infrastructure/observability/security-events';
 import { paymentsAuditActions } from '../audit';
 import { WebhookRejected } from '../providers';
-import { paymentProviderRegistry } from '../providers/registry';
-import { paymentService } from '../services';
+import { paymentService, WebhookProviderUnknownError } from '../services';
 
 /** Handles `POST /payments/webhook/:provider`. */
 export const postPaymentWebhook = (request: Request, response: Response) => {
@@ -49,21 +48,16 @@ export const postPaymentWebhook = (request: Request, response: Response) => {
         return;
     }
 
-    return Promise.resolve()
-        .then(() => paymentProviderRegistry.resolve(String(request.params.provider)))
-        .then((provider) => {
-            if (!provider) {
+    return paymentService
+        .receiveWebhook(String(request.params.provider), rawBody, headers)
+        .then(() => {
+            noContentResponse(response);
+        })
+        .catch((error: unknown) => {
+            if (error instanceof WebhookProviderUnknownError) {
                 rejectResponse(response, 404, [t('payments.webhook-not-configured')]);
                 return;
             }
-            return provider
-                .parseWebhook(rawBody, headers)
-                .then((event) => paymentService.applyWebhookDelivery(event, provider.name))
-                .then(() => {
-                    noContentResponse(response);
-                });
-        })
-        .catch((error: unknown) => {
             if (error instanceof WebhookRejected) {
                 // `error.message` IS the reason — 'Malformed signature header', 'Signature
                 // timestamp outside tolerance', 'Signature does not match', 'Body is not valid

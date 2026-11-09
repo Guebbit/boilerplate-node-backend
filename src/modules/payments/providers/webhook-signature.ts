@@ -24,6 +24,15 @@ export const WEBHOOK_SIGNATURE_HEADER = 'payment-signature';
 const TOLERANCE_SECONDS = 300;
 
 /**
+ * The longest signature header this application reads, matching `Payment-Signature` `maxLength` in
+ * the contract. Two full signatures (a rotation) are ~150; a longer header is not a signature.
+ */
+const MAX_HEADER_LENGTH = 200;
+
+/** The most `v1` values read from one header: a rotation sends two, the rest is padding. */
+const MAX_SIGNATURES = 4;
+
+/**
  * A delivery this application refuses to act on — an unverifiable signature, but also (thrown
  * elsewhere, by a provider's own `parseWebhook`) an unparseable body or an event carrying no id. Answered 400,
  * never 500 — see the controller. Named for what it IS, not for the one case this file itself
@@ -83,6 +92,10 @@ export const signWebhookPayload = (
  * @throws {WebhookRejected} when the header is malformed, stale, or does not match
  */
 export const verifyWebhookSignature = (rawBody: Buffer, header: string | undefined): void => {
+    // Before any split or HMAC: the work below grows with the header, and a forger chooses its size.
+    if ((header?.length ?? 0) > MAX_HEADER_LENGTH)
+        throw new WebhookRejected('Malformed signature header', true);
+
     const pairs = (header ?? '').split(',').map((pair) => {
         const index = pair.indexOf('=');
         return [pair.slice(0, index).trim(), pair.slice(index + 1).trim()] as const;
@@ -91,7 +104,10 @@ export const verifyWebhookSignature = (rawBody: Buffer, header: string | undefin
     const timestamp = Number(pairs.find(([key]) => key === 't')?.[1]);
     // EVERY `v1`, not the last: a provider rotating its secret signs with the old and the new one
     // and sends both, and either may be the one this ring still holds.
-    const provided = pairs.filter(([key]) => key === 'v1').map(([, value]) => value);
+    const provided = pairs
+        .filter(([key]) => key === 'v1')
+        .map(([, value]) => value)
+        .slice(0, MAX_SIGNATURES);
     if (!Number.isFinite(timestamp) || provided.length === 0 || provided.includes(''))
         throw new WebhookRejected('Malformed signature header', true);
 
@@ -102,10 +118,10 @@ export const verifyWebhookSignature = (rawBody: Buffer, header: string | undefin
     // (`.digest('hex')` always lower-cases) — comparing the raw strings would refuse a valid
     // uppercase delivery instead of matching it byte-for-byte. Every pairing is compared, none
     // short-circuited: which entry of the ring matched is not something to leak through timing.
-    const matches = secrets().flatMap((secret) =>
-        provided.map((value) =>
-            constantTimeEqual(digest(timestamp, rawBody, secret), value.toLowerCase())
-        )
-    );
+    // One digest per secret, outside the per-value loop: hashing the body is the costly part.
+    const matches = secrets().flatMap((secret) => {
+        const expected = digest(timestamp, rawBody, secret);
+        return provided.map((value) => constantTimeEqual(expected, value.toLowerCase()));
+    });
     if (!matches.includes(true)) throw new WebhookRejected('Signature does not match', true);
 };
