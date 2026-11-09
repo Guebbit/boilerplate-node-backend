@@ -234,7 +234,7 @@ describe('GET /sitemap/products-{page}.xml', () => {
             expect(listed).toEqual(ids);
         }));
 
-    it.each(['2', '0', '01', 'abc', '-1'])(
+    it.each(['2', '0', '01', 'abc', '-1', '99999999999999999999'])(
         'answers 404 for a file the index does not list (%s)',
         async (page) => {
             await createProduct();

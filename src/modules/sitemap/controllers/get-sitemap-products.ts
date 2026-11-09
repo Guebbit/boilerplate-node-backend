@@ -15,13 +15,15 @@ const PAGE_NUMBER = /^[1-9]\d*$/;
 
 /** GET /sitemap/products-:page.xml — a file the index lists; any other name is a 404. */
 export const getSitemapProducts = (request: Request<{ page: string }>, response: Response) => {
-    if (!PAGE_NUMBER.test(request.params.page)) {
+    const page = Number(request.params.page);
+    // A digit string too long for a safe integer would reach the database as a huge `skip`.
+    if (!PAGE_NUMBER.test(request.params.page) || !Number.isSafeInteger(page)) {
         rejectResponse(response, 404);
         return;
     }
 
     return sitemapService
-        .listProducts(Number(request.params.page))
+        .listProducts(page)
         .then((entries) => {
             if (!entries) {
                 rejectResponse(response, 404);
