@@ -74,7 +74,7 @@ describe('GET /observability/metrics', () => {
         expect(recorded.status).toBeUndefined();
     });
 
-    it('answers a failed collection with 500 and a valid empty exposition', async () => {
+    it('answers a failed collection with a typed 500 and a one-line comment body', async () => {
         jest.mocked(getPrometheusMetrics).mockRejectedValueOnce(new Error('registry exploded'));
         const { response, recorded } = fakeResponse();
 
@@ -84,8 +84,9 @@ describe('GET /observability/metrics', () => {
         await Promise.resolve();
 
         expect(recorded.status).toBe(500);
-        // A comment line, not an error page: the body still has to parse as an exposition, or the
-        // scraper logs a format error on top of the outage and the series simply stops.
+        // Typed like the success: the contract says text, and Prometheus only reads the status.
+        expect(recorded.headers['Content-Type']).toBe(metricsRegistry.contentType);
+        // A comment line, not an error page: the body is still plain exposition text.
         expect(recorded.body).toBe('# metrics unavailable\n');
     });
 
