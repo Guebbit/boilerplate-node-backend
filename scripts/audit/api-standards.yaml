@@ -72,7 +72,7 @@ rules:
               src/infrastructure/http/preconditions.ts
           ]
       lint: no
-      difference: null
+      difference: if-match-edit-version
 
     # RFC 9111, caching.
     - id: rfc9111-no-store-on-errors

@@ -108,6 +108,7 @@ describe('createItemController — ETag', () => {
 
         await handler(makeRequest(OBJECT_ID), response);
 
-        expect(setHeader).toHaveBeenCalledWith('ETag', '"12"');
+        // Two parts: the edit counter an If-Match compares, then a digest of the body sent.
+        expect(setHeader).toHaveBeenCalledWith('ETag', expect.stringMatching(/^"12\.[\w-]+"$/));
     });
 });

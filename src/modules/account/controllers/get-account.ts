@@ -34,8 +34,9 @@ export const getAccount = (request: Request, response: Response): void => {
                 rejectResponse(response, 401);
                 return;
             }
-            // The version a profile edit sends back as `If-Match`: over the stored document, not
-            // the body, so a role change never turns an earlier read's `If-Match` into a 412.
+            // The edit part is the stored document's revision (a role change moves it,
+            // `users/services/update.ts`); the body part moves on every read (`lastActiveAt`),
+            // which `no-store` makes harmless.
             setEtag(response, user);
             successResponse<AccountView>(response, accountViewOf(user, authContext));
         })

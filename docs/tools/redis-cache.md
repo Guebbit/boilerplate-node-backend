@@ -30,6 +30,7 @@ flowchart LR
 - writes invalidate related tags,
 - no route caches a response that depends on WHO is asking (see below),
 - the key is built from declared parameters, not the raw URL (see below),
+- a versioned read's `ETag` (`"<editRevision>.<digest>"`) is stored with the entry and replayed on a hit or a stale serve, so a miss and a hit send the same tag and a revisit is a `304` either way ([the tag](../api/write-methods.md#what-the-tag-is)); an unversioned read stores none and Express mints its own,
 - oversized responses are served but not stored (see below),
 - a stale hot key is rebuilt by exactly one caller, not stampeded by all of them (see below),
 - if Redis is unavailable, the app keeps going.

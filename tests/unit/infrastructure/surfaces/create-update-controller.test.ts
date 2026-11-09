@@ -12,7 +12,7 @@ import type { Request } from 'express';
 import { asStub } from '@tests/stub';
 import { makeResponseStub } from '@tests/express';
 import { generateReject, generateSuccess } from '@infrastructure/http/response';
-import { etagOf, fencedSave } from '@infrastructure/persistence/versioning';
+import { fencedSave } from '@infrastructure/persistence/versioning';
 import {
     clearableFields,
     createPatchController,
@@ -276,7 +276,7 @@ describe('createUpdateController — conditional writes', () => {
         const response = makeResponse();
 
         await replace(
-            makeRequest({ title: 'x' }, VALID_ID, false, etagOf(LOADED_REVISION)),
+            makeRequest({ title: 'x' }, VALID_ID, false, `"${String(LOADED_REVISION)}.x"`),
             response
         );
 
@@ -309,14 +309,19 @@ describe('createUpdateController — conditional writes', () => {
         expect(write).toHaveBeenCalledTimes(1);
     });
 
-    it("answers the saved row's new ETag", async () => {
+    it("answers the saved row's new ETag, edit part first", async () => {
         const response = makeResponse();
+        const sent = response.json;
         const saved = generateSuccess({ title: 'x', editRevision: LOADED_REVISION });
         const { update: patch } = makeController({ update: jest.fn().mockResolvedValue(saved) });
 
         await patch(makeRequest({ title: 'x' }), response);
 
-        expect(response.setHeader).toHaveBeenCalledWith('ETag', etagOf(LOADED_REVISION));
+        expect(sent).toHaveBeenCalledTimes(1);
+        expect(response.setHeader).toHaveBeenCalledWith(
+            'ETag',
+            expect.stringMatching(new RegExp(String.raw`^"${String(LOADED_REVISION)}\.[\w-]+"$`))
+        );
     });
 });
 

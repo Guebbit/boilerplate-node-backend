@@ -186,6 +186,9 @@ describe('a 201 names the new resource in Location', () => {
     });
 });
 
+/** A well-formed two-part tag whose edit part a fresh row is not at. */
+const STALE_TAG = '"1.stale"';
+
 describe('conditional writes (RFC 9110 §13.1.1)', () => {
     // The shared response check (`@tests/contract`) fails a 200 that forgets the `ETag` the spec
     // requires, and a 412 the operation never declared — so these cases pin the spec AND the server.
@@ -196,7 +199,7 @@ describe('conditional writes (RFC 9110 §13.1.1)', () => {
         const response = await api()
             .patch(`/products/${product.id}`)
             .set('Authorization', bearer)
-            .set('If-Match', '"1"')
+            .set('If-Match', STALE_TAG)
             .send({ active: false });
 
         expect(response.status).toBe(412);
@@ -210,7 +213,7 @@ describe('conditional writes (RFC 9110 §13.1.1)', () => {
         const response = await api()
             .delete(`/products/${product.id}`)
             .set('Authorization', bearer)
-            .set('If-Match', '"1"');
+            .set('If-Match', STALE_TAG);
 
         expect(response.status).toBe(412);
     });

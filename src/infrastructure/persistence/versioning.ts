@@ -3,9 +3,10 @@
  * The version of a stored row, and the write precondition that reads it.
  *
  * ```
- * GET  /x/{id}  → ETag: "<editRevision>"
+ * GET  /x/{id}  → ETag: "<editRevision>.<digest of the body>"
  * PUT  /x/{id}  → If-Match: "<that>"  ─ controller opens a precondition scope (id + tags)
- *                                     └ repository.save / deleteOne meet it, compare, and fence the write
+ *                                     └ repository.save / deleteOne meet it, compare the
+ *                                       EDIT part only, and fence the write
  * ```
  *
  * The version is `editRevision`, the integer counter `./revision-plugin` moves by an atomic `$inc`
@@ -14,6 +15,10 @@
  * array changes). An edit that lives outside the row (a role, a translation) moves it by hand,
  * and the writes that are NOT an edit (stock mirror, image digest, session tokens) pass
  * `timestamps: false`, so they never invalidate an editor's copy.
+ *
+ * The tag has two parts. The digest changes whenever the bytes do (reads compare the whole tag,
+ * so a 304 is always safe); a write compares only the edit part, so a sale never refuses an
+ * editor's open form. The one registered difference: `if-match-edit-version`.
  *
  * See: docs/api/write-methods.md#conditional-writes-etag-and-if-match
  */
@@ -80,11 +85,25 @@ export const versionOf = (row: unknown): number | undefined => {
 };
 
 /**
- * The strong entity-tag for a version: the integer quoted, as RFC 9110 §8.8.3 writes one.
+ * The strong entity-tag for one answer: `"<version>.<digest>"`, quoted as RFC 9110 §8.8.3 writes
+ * one. The digest makes it change with every byte; the version is the part a write compares.
  *
  * @param version - a {@link versionOf} result
+ * @param digest - a digest of the exact body sent (URL-safe characters only)
  */
-export const etagOf = (version: number): string => `"${version.toString()}"`;
+export const etagOf = (version: number, digest: string): string =>
+    `"${version.toString()}.${digest}"`;
+
+/**
+ * The edit part of a tag {@link etagOf} made.
+ *
+ * @param tag - one entity-tag as the caller sent it
+ * @returns the version, or `undefined` for a weak tag or one this API never sent
+ */
+export const versionOfTag = (tag: string): number | undefined => {
+    const match = /^"(\d+)\.[^"]*"$/.exec(tag);
+    return match?.[1] === undefined ? undefined : Number(match[1]);
+};
 
 /**
  * Runs `work` with `precondition` open, so the first write to that row inside it is checked.
@@ -134,7 +153,8 @@ const takePrecondition = (document: { _id?: unknown }): Precondition | undefined
 };
 
 /**
- * Whether the row's current version is one the caller's header accepts.
+ * Whether the row's current version is one the caller's header accepts: the edit part of any tag
+ * sent equals it (the digest part is for reads, never compared here).
  *
  * @param precondition - the open precondition
  * @param version - the row's current {@link versionOf}
@@ -142,7 +162,7 @@ const takePrecondition = (document: { _id?: unknown }): Precondition | undefined
 const accepts = (precondition: Precondition, version: number | undefined): boolean =>
     precondition.etags === 'any'
         ? true
-        : version !== undefined && precondition.etags.includes(etagOf(version));
+        : version !== undefined && precondition.etags.some((tag) => versionOfTag(tag) === version);
 
 /**
  * Runs `write` with the loaded counter added to the filter of the document's write (Mongoose:

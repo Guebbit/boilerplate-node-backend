@@ -122,14 +122,21 @@ const etagOf = (response: { headers: Record<string, unknown> }): string => {
     return tag;
 };
 
+/**
+ * The edit part of a response's two-part `ETag` (`"<editRevision>.<digest>"`): the number a write
+ * compares.
+ */
+const editPartOf = (response: { headers: Record<string, unknown> }): string =>
+    etagOf(response).slice(1).split('.', 1)[0] ?? '';
+
 describe.each(RESOURCES)('conditional writes on $name', (resource) => {
-    it("hands out an ETag on the item read: the row's stored counter, quoted", async () => {
+    it("hands out an ETag on the item read: the row's stored counter, then a body digest", async () => {
         const { readPath, bearer, id } = await resource.seed();
 
         const response = await api().get(readPath).set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(etagOf(response)).toBe(`"${String(await storedRevision(resource.collection, id))}"`);
+        expect(editPartOf(response)).toBe(String(await storedRevision(resource.collection, id)));
         // The counter is the version, not part of the representation.
         expect(response.body).not.toHaveProperty('editRevision');
     });
@@ -316,7 +323,10 @@ describe('a product edited through its translations', () => {
 
         expect(write.status).toBe(200);
         expect(etagOf(write)).not.toBe(before);
-        expect(etagOf(await api().get(path).set('Authorization', bearer))).toBe(etagOf(write));
+        // A PATCH answers a thinner body than a GET, so only the edit part is shared.
+        expect(editPartOf(await api().get(path).set('Authorization', bearer))).toBe(
+            editPartOf(write)
+        );
     });
 });
 
@@ -405,7 +415,7 @@ describe('a save is fenced, not only checked', () => {
         const product = await createProduct();
         const loaded = await productRepository.findById(product.id);
         if (!loaded) throw new Error('seeded product missing');
-        const tag = etagFor(versionOf(loaded) ?? 0);
+        const tag = etagFor(versionOf(loaded) ?? 0, 'x');
         // Another writer lands after the service loaded the row: its tag is the same until then.
         await productModel.updateOne({ _id: product.id }, { $set: { tags: ['theirs'] } });
         loaded.tags = ['mine'];
@@ -444,7 +454,7 @@ describe('a hard delete is fenced, not only checked', () => {
         const target = await createUser({ email: 'fence@example.com', username: 'fence' });
         const loaded = await userRepository.findById(String(target._id));
         if (!loaded) throw new Error('seeded user missing');
-        const tag = etagFor(versionOf(loaded) ?? 0);
+        const tag = etagFor(versionOf(loaded) ?? 0, 'x');
         // Another writer lands after the service loaded the row.
         await userModel.updateOne({ _id: target._id }, { $set: { username: 'moved' } });
 
@@ -458,8 +468,32 @@ describe('a hard delete is fenced, not only checked', () => {
     });
 });
 
-describe('the ETag validates writes only', () => {
-    it('never answers 304 to If-None-Match: a tag cannot see config-derived parts of the body', async () => {
+/**
+ * One of {@link RESOURCES} by name.
+ * @param name - the resource's `name`
+ */
+const resourceNamed = (name: string): Resource => {
+    const found = RESOURCES.find((resource) => resource.name === name);
+    if (!found) throw new Error(`no resource named ${name}`);
+    return found;
+};
+
+describe('the ETag is two parts: reads compare all of it, writes the edit part', () => {
+    it('answers an empty 304 to a matching If-None-Match, keeping the ETag', async () => {
+        const { readPath, bearer } = await resourceNamed('a user').seed();
+        const first = await api().get(readPath).set('Authorization', bearer);
+
+        const second = await api()
+            .get(readPath)
+            .set('Authorization', bearer)
+            .set('If-None-Match', etagOf(first));
+
+        expect(second.status).toBe(304);
+        expect(second.text).toBe('');
+        expect(etagOf(second)).toBe(etagOf(first));
+    });
+
+    it('answers a guest 304 on a product revisit', async () => {
         const product = await createProduct();
         const first = await api().get(`/products/${product.id}`);
 
@@ -467,7 +501,70 @@ describe('the ETag validates writes only', () => {
             .get(`/products/${product.id}`)
             .set('If-None-Match', etagOf(first));
 
-        expect(second.status).toBe(200);
-        expect(second.body.id).toBe(product.id);
+        expect(second.status).toBe(304);
+        expect(etagOf(second)).toBe(etagOf(first));
     });
+
+    it('answers a 200 and a new tag once the body changed without an edit (a stock move)', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const path = `/products/${product.id}`;
+        const old = await api().get(path).set('Authorization', bearer);
+        // A stock move is not an edit: no `editRevision` bump, but staff see the counters.
+        await productModel.updateOne(
+            { _id: product.id },
+            { $set: { onHand: 123 } },
+            { timestamps: false }
+        );
+
+        const reread = await api()
+            .get(path)
+            .set('Authorization', bearer)
+            .set('If-None-Match', etagOf(old));
+        const write = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', etagOf(old))
+            .send({ tags: ['after-stock-move'] });
+
+        expect(reread.status).toBe(200);
+        expect(etagOf(reread)).not.toBe(etagOf(old));
+        expect(editPartOf(reread)).toBe(editPartOf(old));
+        expect(write.status).toBe(200);
+    });
+
+    it('refuses an If-Match whose edit part is old, even with the current digest', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const path = `/products/${product.id}`;
+        const old = etagOf(await api().get(path).set('Authorization', bearer));
+        await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .send({ tags: ['moved'] })
+            .expect(200);
+
+        const write = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', old)
+            .send({ tags: ['mine'] });
+
+        expect(write.status).toBe(412);
+    });
+
+    it.each(['an order', 'a user'])(
+        'answers 304 on %s read to a caller holding the tag',
+        async (name) => {
+            const { readPath, bearer } = await resourceNamed(name).seed();
+            const first = await api().get(readPath).set('Authorization', bearer);
+
+            const second = await api()
+                .get(readPath)
+                .set('Authorization', bearer)
+                .set('If-None-Match', etagOf(first));
+
+            expect(second.status).toBe(304);
+        }
+    );
 });

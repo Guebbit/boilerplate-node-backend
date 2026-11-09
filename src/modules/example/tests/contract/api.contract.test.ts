@@ -387,6 +387,38 @@ describe('PUT and PATCH /examples/{id}', () => {
         expect(response.status).toBe(412);
     });
 
+    it('answers 412 to a DELETE whose If-Match has moved on, and keeps the row', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const { id } = await createViaApi(bearer, A_NOTE);
+        const stale = await etagOf(api().get(`/examples/${id}`).set('Authorization', bearer));
+        await api()
+            .patch(`/examples/${id}`)
+            .set('Authorization', bearer)
+            .send({ title: 'Someone else was here' });
+
+        const refused = await api()
+            .delete(`/examples/${id}`)
+            .set('Authorization', bearer)
+            .set('If-Match', stale);
+        const stillThere = await api().get(`/examples/${id}`).set('Authorization', bearer);
+
+        expect(refused.status).toBe(412);
+        expect(stillThere.status).toBe(200);
+    });
+
+    it('deletes with 204 when the DELETE carries the current If-Match', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const { id } = await createViaApi(bearer, A_NOTE);
+        const current = await etagOf(api().get(`/examples/${id}`).set('Authorization', bearer));
+
+        const response = await api()
+            .delete(`/examples/${id}`)
+            .set('Authorization', bearer)
+            .set('If-Match', current);
+
+        expect(response.status).toBe(204);
+    });
+
     it('answers 404 for someone else’s example, on both verbs', async () => {
         const { bearer } = await authenticateAsRole('editor');
         const other = await createUser({ email: 'other@example.com' });

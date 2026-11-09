@@ -7,6 +7,7 @@
  * See: docs/api/write-methods.md#conditional-writes-etag-and-if-match
  */
 
+import { createHash } from 'node:crypto';
 import type { Request, Response } from 'express';
 import {
     etagOf,
@@ -57,12 +58,29 @@ export const withIfMatch = <T>(request: Request, id: string, work: () => Promise
     runWithPrecondition(preconditionOf(request, id), work);
 
 /**
- * Stamps `ETag` on a response about one row.
+ * How many characters of the body's sha256 (base64url) the tag's digest keeps: 96 bits, plenty
+ * to tell two versions of one resource apart.
+ */
+const DIGEST_LENGTH = 16;
+
+/**
+ * A digest of the exact bytes `response.json` will send for `body`. Nothing in `src` sets
+ * Express's `json spaces`/`replacer`/`escape`, so `JSON.stringify` matches the wire bytes.
+ */
+const digestOf = (body: unknown): string =>
+    // node:crypto sha256, base64url so the digest never needs quoting inside the tag.
+    // https://nodejs.org/api/crypto.html#hashdigestencoding
+    createHash('sha256').update(JSON.stringify(body)).digest('base64url').slice(0, DIGEST_LENGTH);
+
+/**
+ * Stamps `ETag` on a response about one row: `"<editRevision>.<digest of this body>"`.
  *
- * Also drops `If-None-Match` from the request. Express would otherwise answer 304 from this tag,
- * and this tag covers the row's own edits only — not the config-derived parts of a
- * representation (prices, language) — so a 304 could serve a stale body. The tag validates
- * WRITES; reads always send the body.
+ * The header is set when `response.json` runs, because the digest needs the body. Express then
+ * keeps this tag instead of minting its own and answers `If-None-Match` itself: a match on the
+ * WHOLE tag is a 304, so a read is never stale (the digest moves with prices, stock, language).
+ * A write's `If-Match` compares only the edit part (see `persistence/versioning.ts`).
+ *
+ * The wrapper is installed after the Redis cache's, so it runs first and the cache stores the tag.
  *
  * @param response - the express response
  * @param row - the row (hydrated, lean or serialized) the body describes
@@ -70,6 +88,9 @@ export const withIfMatch = <T>(request: Request, id: string, work: () => Promise
 export const setEtag = (response: Response, row: unknown): void => {
     const version = versionOf(row);
     if (version === undefined) return;
-    response.setHeader('ETag', etagOf(version));
-    delete response.req.headers['if-none-match'];
+    const responseJson = response.json.bind(response);
+    response.json = ((body: unknown) => {
+        response.setHeader('ETag', etagOf(version, digestOf(body)));
+        return responseJson(body);
+    }) as Response['json'];
 };

@@ -32,11 +32,15 @@ import { HOUR_SECONDS } from '@domain-primitives/time';
  * `staleAt` (epoch ms) is when the entry stops being a HIT and starts being servable-but-stale —
  * strictly before Redis' own TTL, which is `ttl + grace` (see {@link armCacheWrite}) so the bytes
  * are still there to serve during the grace window.
+ *
+ * `etag` is the tag the miss sent (a versioned read's `"<editRevision>.<digest>"`), replayed on a
+ * hit so a miss and a hit send the same tag. Absent on an unversioned read: Express mints its own.
  */
 interface CachedResponse {
     status: number;
     body: unknown;
     staleAt: number;
+    etag?: string;
 }
 
 /**
@@ -132,7 +136,7 @@ const serializeCachedResponse = (key: string, value: CachedResponse): string | u
 };
 
 /**
- * Whether a parsed value has the three fields `CachedResponse` requires.
+ * Whether a parsed value has the fields `CachedResponse` requires (`etag` optional).
  *
  * A stored entry can outlive the shape it was written under — a deploy that changes this
  * interface leaves old Redis entries in place — so a field-by-field check catches that, not just
@@ -143,7 +147,8 @@ const isCachedResponse = (value: unknown): value is CachedResponse =>
     value !== null &&
     typeof (value as Record<string, unknown>).status === 'number' &&
     typeof (value as Record<string, unknown>).staleAt === 'number' &&
-    'body' in value;
+    'body' in value &&
+    ['string', 'undefined'].includes(typeof (value as Record<string, unknown>).etag);
 
 /**
  * Read one stored envelope back.
@@ -368,7 +373,9 @@ const armCacheWrite = (
             const payload = serializeCachedResponse(cacheKey, {
                 status: response.statusCode,
                 body,
-                staleAt: Date.now() + ttl * 1000
+                staleAt: Date.now() + ttl * 1000,
+                // setEtag's json wrapper runs before this one, so the header is already set.
+                etag: response.get('ETag')
             });
             if (payload !== undefined)
                 // eslint-disable-next-line @typescript-eslint/no-floating-promises -- setCacheValue never rejects (it logs a failed write)
@@ -377,6 +384,18 @@ const armCacheWrite = (
 
         return responseJson(body);
     }) as Response['json'];
+};
+
+/**
+ * Send a stored entry: its status, the tag the original answer carried (if any), and its body.
+ * With the tag set, Express skips minting one and still answers a matching `If-None-Match` 304.
+ *
+ * @param response - the response to answer
+ * @param cached - the stored envelope
+ */
+const replay = (response: Response, cached: CachedResponse): void => {
+    if (cached.etag !== undefined) response.setHeader('ETag', cached.etag);
+    response.status(cached.status).json(cached.body);
 };
 
 /**
@@ -504,7 +523,7 @@ const serveOrArm = (
                         `${CACHE_STATUS_NAME}; hit; ttl=${String(secondsBetween(decidedAt, cachedResponse.staleAt))}`
                     );
                     cacheRequestsTotal.inc({ result: 'hit' });
-                    response.status(cachedResponse.status).json(cachedResponse.body);
+                    replay(response, cachedResponse);
                     return;
                 }
 
@@ -520,7 +539,7 @@ const serveOrArm = (
                             `${CACHE_STATUS_NAME}; hit; ttl=-${String(secondsBetween(cachedResponse.staleAt, decidedAt))}`
                         );
                         cacheRequestsTotal.inc({ result: 'stale' });
-                        response.status(cachedResponse.status).json(cachedResponse.body);
+                        replay(response, cachedResponse);
                         return;
                     }
 
