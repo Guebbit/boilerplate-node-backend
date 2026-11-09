@@ -609,13 +609,13 @@ describe('POST /users/{id}/activate and /deactivate', () => {
 });
 
 /** Lifting a hold that is not there is a conflict, not a second success. */
-describe('DELETE /users/{id}/purchase-hold', () => {
+describe('POST /users/{id}/lift-purchase-hold', () => {
     it('answers 409 USER_PURCHASE_HOLD_NOT_SET for an account with nothing to lift', async () => {
         const { bearer } = await authenticateAs('admin');
         const user = await createUser();
 
         const response = await api()
-            .delete(`/users/${user.id}/purchase-hold`)
+            .post(`/users/${user.id}/lift-purchase-hold`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(409);
@@ -755,7 +755,7 @@ const noActions = {
     delete: false,
     hardDelete: false,
     restore: false,
-    setPurchaseHold: false,
+    placePurchaseHold: false,
     liftPurchaseHold: false,
     activate: false,
     deactivate: false
@@ -770,7 +770,7 @@ const liveAccountActions = {
     update: true,
     delete: true,
     hardDelete: true,
-    setPurchaseHold: true,
+    placePurchaseHold: true,
     deactivate: true
 };
 

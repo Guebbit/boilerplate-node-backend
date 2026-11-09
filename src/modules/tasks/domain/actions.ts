@@ -43,7 +43,7 @@ export const actionsOf = ({
     markSpam: mayWork && status !== TaskStatus.spam,
     reopen: mayWork && !isOpen(status),
     assign: mayWork && isOpen(status),
-    unassign: mayWork && isOpen(status) && assigned,
+    unassign: mayWork && assigned,
     note: mayWork,
     delete: mayDelete
 });

@@ -50,7 +50,8 @@ The **set** of statuses is not its business. `OrderStatus` is generated from `op
 `@api/models`, so the six values are contract-first and single-sourced. What the enum cannot carry
 is the **edges** between them, and the **actor** each edge belongs to.
 
-The table is keyed by **event**, not by status: `pay`, `process`, `ship`, `deliver`,
+The table is keyed by **event**, not by status: `pay`, `process`, `ship`, `reopen` (a lost
+shipment steps the order back), `reship` (a replacement does the same from `delivered`), `deliver`,
 `fulfillmentComplete` (the digital `processing -> delivered` edge, also a remainder cancel that
 completes the order), `expire`, `cancel` and `cancelInFulfillment`. Each entry carries its `from`
 set, its `to` and its actors, so a service names the event and the conditional write is handed the
@@ -76,7 +77,6 @@ stateDiagram-v2
     processing --> canceled: admin, withdrawal
     shipped --> delivered: system
     processing --> delivered: system (digital fulfillment)
-    delivered --> [*]
     canceled --> [*]
 ```
 
@@ -88,10 +88,13 @@ Three absences are load-bearing:
   past that the order is in the fulfilment queue and cancelling becomes an operator's decision (the
   EU withdrawal right is its own actor, `withdrawal`, which can also cancel from `processing`).
 - **`shipped` has no cancel edge at all.** Goods in transit come back as a return, which is a flow
-  of its own rather than a status the order rewinds into.
+  of its own. The only way back is a lost parcel or a replacement, which step the order back to
+  `processing`.
 
 An admin override (below) can still force any of these moves forward with a reason — the diagram
-above is the ORDINARY lifecycle, the one no override is involved in.
+above is the forward path, the one no override is involved in. Two system-only backward moves
+(`reopen` for a lost parcel, `reship` for a replacement) and the lost-parcel cancel are in
+[orders](../modules/orders.md#who-writes-the-status).
 
 ### Who writes the status
 
@@ -148,7 +151,7 @@ actor into a second table would let the two disagree, so it rides on the edge it
 `system` is not a privilege level above `admin`. It is **narrower**: the moves an operator may never
 make by hand, because something outside the application has to have happened first. Money landing
 is one; fulfilment starting (`paid → processing`) is the other, recorded through `delivery`'s own
-start action (`POST /orders/{id}/process`) — see "Action endpoints execute" below.
+start action (`POST /orders/{id}/process`), or by the first shipment or fulfil — see "Action endpoints execute" below.
 
 ### What the table prevents
 
@@ -331,7 +334,7 @@ So the server sends the answer. `Order.actions` and `PaymentActions` are compute
 stored. `example` is the minimal worked case: `Example.actions` is flags `{ publish, archive, unarchive, update, delete }` (one door per lifecycle event, like `User.actions`),
 the events from the domain's table and the two keys asked of the kernel per row (`permitsOnRows`), so
 the own-rows condition in `authorization.yaml` stays its only encoding. `User.actions` is the
-account-side case: one flag per endpoint (`activate`, `restore`, `setPurchaseHold`…), assembled in
+account-side case: one flag per endpoint (`activate`, `restore`, `placePurchaseHold`…), assembled in
 `users/services/actions.ts` from the caller's keys, `access`'s pure `mayChangeAccount` and the row's
 own state, and only mapped by the presenter ([users](../modules/users.md#actions)):
 

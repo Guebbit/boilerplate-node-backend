@@ -2,8 +2,8 @@
  * @module
  * The key rules — everything that decides whether a translation key can be stored and rendered.
  * Internal to `services/`; `entries.ts` and `messages.ts` share these and none of them owns it.
- * Pure and database-free by construction — an i18n admin has no rules worth a separate `domain/`
- * folder.
+ * Pure and database-free by construction. Its rules answer with a rejection, not a verdict, so
+ * they stay in `services/`.
  */
 
 import { ERROR_CODES } from '@api/error-codes';

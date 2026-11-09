@@ -40,6 +40,12 @@ beforeEach(() => {
 const holdMails = () =>
     mockEnqueueEmail.mock.calls.filter(([, template]) => template === 'users.purchase-hold-placed');
 
+/** The stored user, read past the service. */
+const storedUser = (id: string) => userRepository.findById(id);
+
+/** The stored hold, read past the service. */
+const storedHold = (id: string) => storedUser(id).then((user) => user?.purchaseHold);
+
 const DAY = 24 * 60 * 60 * 1000;
 
 /** The rule behind an automatic hold, as the buyer's mail states it. */
@@ -126,6 +132,72 @@ describe('setPurchaseHold', () => {
     });
 });
 
+describe('placing a hold that is already in force', () => {
+    it('refuses the identical repeat with 409 and mails, audits and stamps nothing', async () => {
+        const buyer = await createUser();
+        const until = inDays(3);
+        const staff = callerContextAs('moderator');
+        await userService.setPurchaseHold(buyer.id, { until, note: 'Write to us.' }, staff);
+        const placed = await storedHold(buyer.id);
+        const recorded = observePort(auditPort.emitAuditEvent);
+
+        const repeat = await userService.setPurchaseHold(
+            buyer.id,
+            { until, note: 'Write to us.' },
+            staff
+        );
+
+        expect(repeat).toMatchObject({
+            success: false,
+            status: 409,
+            errors: [{ code: 'USER_PURCHASE_HOLD_ALREADY_SET' }]
+        });
+        expect(holdMails()).toHaveLength(1);
+        expect(recorded).not.toHaveBeenCalled();
+        const stored = await storedHold(buyer.id);
+        expect(stored?.setAt).toEqual(placed?.setAt);
+    });
+
+    it('replaces the hold, with one more mail, when the note differs', async () => {
+        const buyer = await createUser();
+        const until = inDays(3);
+        const staff = callerContextAs('moderator');
+        await userService.setPurchaseHold(buyer.id, { until, note: 'First.' }, staff);
+
+        const changed = await userService.setPurchaseHold(
+            buyer.id,
+            { until, note: 'Second.' },
+            staff
+        );
+
+        expect(changed.success).toBe(true);
+        expect(holdMails()).toHaveLength(2);
+        await expect(userService.purchaseHoldOf(buyer.id)).resolves.toMatchObject({
+            note: 'Second.'
+        });
+    });
+
+    it('does not treat an automatic hold with the same end date as a repeat', async () => {
+        const until = inDays(3);
+        const buyer = await createUser({
+            purchaseHold: { until, reason: 'repeated_cancellations', setAt: inDays(-1) }
+        });
+        mockEnqueueEmail.mockClear();
+
+        const placed = await userService.setPurchaseHold(
+            buyer.id,
+            { until },
+            callerContextAs('moderator')
+        );
+
+        expect(placed.success).toBe(true);
+        await expect(userService.purchaseHoldOf(buyer.id)).resolves.toMatchObject({
+            reason: 'staff'
+        });
+        expect(holdMails()).toHaveLength(1);
+    });
+});
+
 describe('liftPurchaseHold', () => {
     it('ends a hold in force, restarts the count, and audits it', async () => {
         const recorded = observePort(auditPort.emitAuditEvent);
@@ -160,6 +232,8 @@ describe('liftPurchaseHold', () => {
         expect(recorded).not.toHaveBeenCalledWith(
             auditedAction(usersAuditActions.ADMIN_USER_PURCHASE_HOLD_LIFTED)
         );
+        const stored = await storedUser(buyer.id);
+        expect(stored?.purchaseHoldResetAt).toBeUndefined();
     });
 
     it('audits a lift of a hold that has already ended, as a review with no hold in force', async () => {

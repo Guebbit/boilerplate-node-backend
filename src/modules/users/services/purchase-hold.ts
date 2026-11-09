@@ -173,7 +173,8 @@ const saveAnnouncingReview = (user: UserDocument, wasFlagged: boolean): Promise<
  * @param input - the end date (must be in the future) and an optional note for the buyer
  * @param context - the staff caller: audited, and judged against the account like any ban
  * @returns the user; 404 when there is none, 403 `ROLE_MANAGEMENT_REQUIRED` for a staff account the
- *   caller may not manage, 422 on a past date
+ *   caller may not manage, 422 on a past date, 409 `USER_PURCHASE_HOLD_ALREADY_SET` when the same
+ *   staff hold is already in force
  */
 export const setPurchaseHold = (
     id: string,
@@ -192,7 +193,21 @@ export const setPurchaseHold = (
                     fieldError('until', t('users.purchase-hold-until-past'))
                 ]);
 
-            const note = input.note?.trim();
+            const note = input.note?.trim() || undefined;
+            // The same staff hold already in force: a repeat, refused before it mails or audits.
+            const inForce = activeHoldOf(user, now);
+            if (
+                inForce?.reason === 'staff' &&
+                inForce.until.getTime() === input.until.getTime() &&
+                inForce.note === note
+            )
+                return generateReject(409, [
+                    {
+                        code: ERROR_CODES.USER_PURCHASE_HOLD_ALREADY_SET,
+                        message: t('users.purchase-hold-already-set')
+                    }
+                ]);
+
             const hold: PurchaseHoldRecord = {
                 until: input.until,
                 reason: 'staff',

@@ -196,7 +196,8 @@ observability's `DependencyStatus`, out of it.
 
 It is a consequence of the floor, not a rule of its own. `webhooks` has a 4-state delivery status and no
 transition table: its moves are atomic claims in `repository.ts`, a database concern. Its `domain/`
-exists for `backoff.ts`.
+exists for the retry ladder and auto-disable limits (`backoff.ts`, `rules.generated.ts`) and the
+event filter.
 
 No rule that clears the floor means no folder, and never an empty one: creating a folder to match a
 shape is how ceremony starts.
@@ -371,7 +372,7 @@ aggregate — plain data with functions in front of it, placed wherever the rule
 flowchart TD
     Q{"Does the business<br/>argue about these rules?"}
     Q -->|"no — CRUD over a form"| A["rules file in domain/<br/>✅ what this repo ships"]
-    Q -->|yes| Q2{"Is it the core domain,<br/>your advantage?"}
+    Q -->|yes| Q2{"Does the logic outgrow<br/>plain functions?"}
     Q2 -->|no| A
     Q2 -->|yes| B["full tactical DDD<br/>in that module only"]
 
@@ -383,9 +384,11 @@ flowchart TD
     class B costly;
 ```
 
-DDD's own doctrine: spend the modelling effort on the **core domain**, keep supporting and generic
-subdomains simple. A boilerplate cannot know which is which, so it ships the cheap option and leaves
-the expensive one one folder away.
+DDD's own doctrine: spend the modelling effort on the **core domain**. The effort follows the logic,
+and the subdomain label is the first guess at how much logic there will be
+([strategic §4](./strategic-ddd.md#4-subdomain-distillation--where-to-spend-effort)). A boilerplate
+cannot know where a real project's logic will grow, so it ships the cheap option and leaves the
+expensive one one folder away.
 
 The expensive option is an aggregate root, a repository returning domain objects instead of
 `OrderDocument`, and invariants enforced at construction rather than by a Mongoose schema

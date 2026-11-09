@@ -413,7 +413,7 @@ rules:
       notes: >
           Safeguards present: the buyer is told when a hold is placed, why, until when and what still
           works (mail and an in-app notice on the cart and on the profile); a contact route reaches
-          staff who can lift it (DELETE /users/{id}/purchase-hold, which also restarts the count);
+          staff who can lift it (POST /users/{id}/lift-purchase-hold, which also restarts the count);
           the processing basis and a legitimate-interest assessment are written down
           (docs/theory/data-retention.md); the pause is capped at 7 days and flags the account so a
           person reviews it (users list filter purchaseHoldReview). Gap: a person only reviews

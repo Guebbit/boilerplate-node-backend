@@ -56,7 +56,7 @@ export const userActionsFor = (
         hardDelete: mayDelete,
         // An owner-scheduled row past `purgeAt` waits only for the purge job: no restore.
         restore: mayDelete && deleted && !(user.purgeAt && user.purgeAt <= now),
-        setPurchaseHold: mayBan,
+        placePurchaseHold: mayBan,
         liftPurchaseHold: mayBan && hasPurchaseHoldToClear(user),
         activate: mayBan && !active,
         deactivate: mayBan && active

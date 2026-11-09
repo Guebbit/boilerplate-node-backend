@@ -441,7 +441,7 @@ describe('a return on goods that have shipped', () => {
             expect(stored?.returnPostage).toBe('shop');
         }));
 
-    it('leaves the order where it is — a return is its own object, delivered stays terminal', async () => {
+    it('leaves the order where it is — a return is its own object, delivered stays delivered', async () => {
         const { user, orderId } = await deliveredOrder();
 
         await returnService.createReturn(

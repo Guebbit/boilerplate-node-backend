@@ -790,8 +790,8 @@ stateDiagram-v2
   When a card pays a transfer order the order's `paymentMethod` becomes `card`, so the order page
   agrees with its payment; money recorded by hand leaves it alone.
 - **The hold is longer, and the sweep needs no change to know it.** `cart`'s checkout hands
-  `inventoryService.reserveForOrder` an explicit window — `NODE_BANK_TRANSFER_HOLD_HOURS` (default
-  168, a week) instead of `NODE_RESERVATION_TTL_MINUTES` — and the same reservation sweep that
+  `placeOrder` an explicit window, which `orders` passes to `inventory`'s `reserveForOrder` —
+  `NODE_BANK_TRANSFER_HOLD_HOURS` (default 168, a week) instead of `NODE_RESERVATION_TTL_MINUTES` — and the same reservation sweep that
   releases a 15-minute card hold releases this one too, since it only ever reads each hold's own
   stored `expiresAt`. See [Inventory Reservations](./inventory-reservations.md#the-sweep).
 - **A week-long hold is free to take, so an account is capped, for every method.**

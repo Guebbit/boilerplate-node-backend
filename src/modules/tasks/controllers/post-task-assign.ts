@@ -1,6 +1,6 @@
 /**
  * @module
- * `PUT /tasks/:id/assignee` (take or assign).
+ * `POST /tasks/:id/assign` (take or assign).
  *
  * See: docs/modules/tasks.md
  */
@@ -14,8 +14,8 @@ import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { requireId } from '@infrastructure/http/ids';
 import { taskService } from '../services';
 
-/** PUT /tasks/:id/assignee (staff) — hand the task to one person; taking it is assigning yourself. */
-export const putTaskAssignee = (
+/** POST /tasks/:id/assign (staff) — hand the task to one person; taking it is assigning yourself. */
+export const postTaskAssign = (
     request: Request<{ id: string }, unknown, AssignTaskRequest>,
     response: Response
 ) => {
@@ -30,5 +30,5 @@ export const putTaskAssignee = (
             if (refused(response, result)) return;
             successResponse<Task>(response, result.data, 200);
         })
-        .catch(catchAs(response, 'putTaskAssignee'));
+        .catch(catchAs(response, 'postTaskAssign'));
 };

@@ -132,7 +132,7 @@ An operationId is `<verb><Subject>`. The verbs, in the order a resource uses the
 | `restore` | undo a soft delete |
 
 A domain verb is used only where CRUD would mislead: `revoke`, `cancel`, `unlink`, `clear`,
-`rotate`, `lift`, and `add` for the cart line (the POST grows an existing line).
+`rotate`, `lift`, `place`, `assign`, and `add` for the cart line (the POST grows an existing line).
 
 `ById` is the resource's own id; `By<Other>Id` is addressed by another resource's id (today only
 the cart line, addressed by its product: `updateCartItemByProductId`).

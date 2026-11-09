@@ -66,6 +66,25 @@ flowchart TD
   answers the thing acted on, it may create records on the side (refunds, credit notes, override
   shipments, stock movements) and stays 200.
 
+#### A toggle is a pair of actions
+
+A toggle on a resource is a state of a record that stays, flipped both ways (assigned or not, held
+or not). When either direction has its own effect, guard, permission, audit row or notification, it
+is a pair of POST actions, `POST /x/{id}/<verb>` and `POST /x/{id}/<opposite>`, never a PUT/DELETE
+pair (Google [AIP-136](https://google.aip.dev/136): POST for a method with side effects):
+
+- `assign` / `unassign` a task, `place-purchase-hold` / `lift-purchase-hold` on a user.
+- Each answers 200 and the resource. A repeat that finds the target state already reached is 409
+  (`<RESOURCE>_ALREADY_<STATE>` or `<RESOURCE>_NOT_<STATE>`). No `Idempotency-Key`: the state
+  machine refuses the repeat.
+- A direction whose body names a value (assign to X, place a hold until D) treats "the same value
+  already in force" as that repeat; its `actions` flag stays true, and the client hides the control
+  for the value in force. A body-less direction's flag is false once its state is reached.
+- PUT/DELETE sub-paths stay for what writes a value or names a thing: a line, a body-less pointer,
+  a pending request its owner discards, a value of the parent (`…/shipping-address`,
+  `/cart/shipping-method`, `…/cover`), the `/hard` delete.
+- A toggle with no direction of its own is a field of PUT/PATCH (`Product.active`).
+
 #### Action or field
 
 A status or flag moves through an action when the move has its OWN effect, guard or permission.
@@ -99,8 +118,9 @@ parent, never on a URL of its own.
 - Every write answers **200 + the whole parent**: no 201, no `Location`, no GET of one line. A GET
   on the line collection is a 405 naming the writes; the parent's GET is the read.
 - **A PUT never creates**, and a PATCH on a line the parent does not hold is a 404.
-- A repeat is not an error: adding what is saved is the same 200 and fires nothing twice. A
-  cart add GROWS an existing line instead (Shopify, commercetools).
+- A repeat is not an error for an add: adding what is saved is the same 200 and fires nothing
+  twice. A cart add GROWS an existing line instead (Shopify, commercetools). Removing a line the
+  parent does not hold is a 404.
 - Names: a line add is `create*` (`add*` for a cart line, which may grow instead), its removal
   `delete*` or `remove*`, its change `update*`.
 
@@ -143,10 +163,17 @@ allowed", with 409 where Google says 400).
 - `POST /tasks/{id}/resolve` on a resolved task: `TASK_ALREADY_RESOLVED`; `mark-spam` on spam:
   `TASK_ALREADY_SPAM`; `reopen` on an open one: `TASK_ALREADY_OPEN`. A reopen that finds a newer
   open task on the same situation: `TASK_SUPERSEDED`, with the newer task's id in `details`.
-- `DELETE /users/{id}/purchase-hold` on an account with no hold and no review flag:
+- `POST /users/{id}/lift-purchase-hold` on an account with no hold and no review flag:
   `USER_PURCHASE_HOLD_NOT_SET`.
-- A retried `DELETE` leaves the same state (RFC 9110 §9.2.2). What is already gone answers 404, as
-  Google's [AIP-135](https://google.aip.dev/135) does.
+- `POST /tasks/{id}/unassign` on a task nobody holds: `TASK_NOT_ASSIGNED`; `POST …/assign` to the
+  person who holds it already: `TASK_ALREADY_ASSIGNED`. Both write, announce and audit nothing.
+- A retried `DELETE` leaves the same state (RFC 9110 §9.2.2). It is never this refusal. What it
+  answers with nothing left to remove: 404 when the URI names one thing that no longer answers a
+  GET (a row, a line, a session, a link, a withdrawn note), as Google's
+  [AIP-135](https://google.aip.dev/135) does. The same success when the thing still answers a GET
+  in its deleted state (a soft delete, a revoked key), or when the URI names a collection or a
+  pending request (`DELETE /cart/items`, `/notifications`, `/account/email-change`). The line
+  rule's repeat 200 is for adds only: removing a line not held is a 404.
 - The caller's `actions` flag for the move is `false` in that state, so a screen never offers it.
 - Every 409 names a code, and the code is listed in a contract fragment's `x-error-codes`: a bare
   message cannot be told from its neighbour by a client. `tests/cross-cutting/api-standards.test.ts`

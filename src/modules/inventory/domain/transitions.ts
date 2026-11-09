@@ -1,8 +1,8 @@
 /**
  * @module
- * Inventory rules. Pure: data in, verdict out — no status codes, no i18n, no database. A product
- * carries two counters, `onHand` (units that exist) and `reserved` (units an open order has
- * claimed), and a third, `backordered`, for units that do not exist yet and are only promised.
+ * Inventory rules. Pure: data in, verdict out — no status codes, no i18n, no database. A stock
+ * level carries three counters: `onHand` (units that exist), `reserved` (units an open order has
+ * claimed) and `backordered` (units that do not exist yet and are only promised).
  * The transitions move those counters, and this file is the one place that says what each does — a
  * new one is one entry here plus one enum value in `openapi.yaml`. What a customer
  * may actually buy from those counters is `@modules/products`'s `availableStock`

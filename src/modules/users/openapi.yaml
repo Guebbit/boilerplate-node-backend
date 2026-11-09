@@ -12,6 +12,7 @@ x-error-codes:
     USER_STAFF_NOT_REAPABLE: { status: 409, description: 'The inactivity reaper met an account holding a staff role and left it alone. Raised by the reaper, never by a route.' }
     USER_NOT_REAPER_DELETED: { status: 409, description: 'The reaper may only erase an account it soft-deleted itself. Raised by the reaper, never by a route.' }
     USER_ERASURE_NOT_DUE: { status: 409, description: 'The account''s erasure was claimed by another run, or is not due yet, so this run did nothing.' }
+    USER_PURCHASE_HOLD_ALREADY_SET: { status: 409, description: 'The account already holds a staff purchase hold with this end date and note, so placing it again changes nothing.' }
     USER_PURCHASE_HOLD_NOT_SET: { status: 409, description: 'The account has no purchase hold and no review flag, so there is nothing to lift.' }
 
 # The tags this module's operations file themselves under, with what each is for.
@@ -250,20 +251,23 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
-    # A protective pause on checkout for one account: set by hand here, or by the shop after
-    # repeated buyer cancellations. Both verbs need `ban:User`. A hold never blocks paying an
+    # A protective pause on checkout for one account: placed by hand here, or by the shop after
+    # repeated buyer cancellations. Both actions need `ban:User`. A hold never blocks paying an
     # existing order, cancelling, a withdrawal, a return or the account's own data rights.
-    /users/{id}/purchase-hold:
-        put:
+    /users/{id}/place-purchase-hold:
+        post:
             tags: [Users]
-            summary: Put a purchase hold on a user
+            summary: Place a purchase hold on a user
             description: >-
                 Replaces any hold the account has with a manual one ending at `until`. Checkout then
-                answers 409 `CART_PURCHASE_HOLD` until that instant, or until `DELETE` lifts it. Clears the account's review flag: placing a hold is acting on it.
-                Audited as `admin.user.purchase_hold_set`.
-            operationId: setUserPurchaseHold
+                answers 409 `CART_PURCHASE_HOLD` until that instant, or until `lift-purchase-hold`
+                ends it. Clears the account's review flag: placing a hold is acting on it. Placing
+                the staff hold already in force, with the same `until` and the same `note`, answers
+                409 `USER_PURCHASE_HOLD_ALREADY_SET` and writes, mails and audits nothing; any other
+                body replaces the hold. Audited as `admin.user.purchase_hold_set`.
+            operationId: placeUserPurchaseHold
             x-error-codes:
-                '409': [CART_PURCHASE_HOLD]
+                '409': [USER_PURCHASE_HOLD_ALREADY_SET]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -274,7 +278,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/SetPurchaseHoldRequest'
+                            $ref: '#/components/schemas/PlacePurchaseHoldRequest'
             responses:
                 '200':
                     description: The user, now holding the hold
@@ -285,8 +289,10 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-        delete:
+    /users/{id}/lift-purchase-hold:
+        post:
             tags: [Users]
             summary: Lift a user's purchase hold
             description: >-
@@ -549,9 +555,9 @@ components:
                     type: boolean
                     enum: [true]
 
-        # `PUT /users/{id}/purchase-hold`. A manual hold carries its own end date; it never stores a
+        # `POST /users/{id}/place-purchase-hold`. A manual hold carries its own end date; it never stores a
         # reason code, the server stamps `staff`.
-        SetPurchaseHoldRequest:
+        PlacePurchaseHoldRequest:
             type: object
             additionalProperties: false
             required: [until]

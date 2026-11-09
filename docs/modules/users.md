@@ -171,17 +171,17 @@ lookups it needs (the caller's keys, who holds a staff role) made once per reque
 The presenter only maps the finished block. `/account` serves a different schema, `Account`, which
 has no `actions` and no review flag: a person's own record has no one to protect.
 
-| Flag               | Endpoint                           | The caller needs            | And the account must be         |
-| ------------------ | ---------------------------------- | --------------------------- | ------------------------------- |
-| `update`           | `PUT` / `PATCH /users/{id}`        | `update:User`               | reachable (below)               |
-| `assignRole`       | the `role` field of those          | `update`, and `assign:Role` | reachable                       |
-| `delete`           | `DELETE /users/{id}`               | `delete:User`               | not soft-deleted                |
-| `hardDelete`       | `DELETE /users/{id}/hard`          | `delete:User`               | reachable                       |
-| `restore`          | `POST /users/{id}/restore`         | `delete:User`               | soft-deleted                    |
-| `setPurchaseHold`  | `PUT /users/{id}/purchase-hold`    | `ban:User`                  | reachable                       |
-| `liftPurchaseHold` | `DELETE /users/{id}/purchase-hold` | `ban:User`                  | holding a hold or a review flag |
-| `activate`         | `POST /users/{id}/activate`        | `ban:User`                  | deactivated                     |
-| `deactivate`       | `POST /users/{id}/deactivate`      | `ban:User`                  | active                          |
+| Flag                | Endpoint                               | The caller needs            | And the account must be         |
+| ------------------- | -------------------------------------- | --------------------------- | ------------------------------- |
+| `update`            | `PUT` / `PATCH /users/{id}`            | `update:User`               | reachable (below)               |
+| `assignRole`        | the `role` field of those              | `update`, and `assign:Role` | reachable                       |
+| `delete`            | `DELETE /users/{id}`                   | `delete:User`               | not soft-deleted                |
+| `hardDelete`        | `DELETE /users/{id}/hard`              | `delete:User`               | reachable                       |
+| `restore`           | `POST /users/{id}/restore`             | `delete:User`               | soft-deleted                    |
+| `placePurchaseHold` | `POST /users/{id}/place-purchase-hold` | `ban:User`                  | reachable                       |
+| `liftPurchaseHold`  | `POST /users/{id}/lift-purchase-hold`  | `ban:User`                  | holding a hold or a review flag |
+| `activate`          | `POST /users/{id}/activate`            | `ban:User`                  | deactivated                     |
+| `deactivate`        | `POST /users/{id}/deactivate`          | `ban:User`                  | active                          |
 
 "Reachable" is `access`'s one pure rule, `mayChangeAccount`: an account that holds no staff role, or
 is the caller's own, or the caller holds `assign:Role`. The service's `canChangeAccount` asks the
@@ -241,12 +241,12 @@ and is left out; so is a banned or deleted one.
 A protective pause on checkout for one account, so a person steps in before a bot or a loop does
 damage. It is a field on the user (`purchaseHold`) with its own two doors and one reader:
 
-| Door                               | Who                                        | What it does                                                                                     |
-| ---------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `PUT /users/{id}/purchase-hold`    | staff with `ban:User`                      | a manual hold ending at `until`, with an optional `note` written for the buyer; replaces any     |
-| `DELETE /users/{id}/purchase-hold` | staff with `ban:User`                      | the review: ends the hold now and restarts the count; `409 USER_PURCHASE_HOLD_NOT_SET` with none |
-| `takeAutomaticPurchaseHold`        | `orders` only (a lint-guarded friend door) | the shop's own hold after repeated cancellations; atomic, so only one of two racing calls wins   |
-| `purchaseHoldOf`                   | `cart`'s checkout                          | the hold in force, if any                                                                        |
+| Door                                   | Who                                        | What it does                                                                                                                                                                              |
+| -------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /users/{id}/place-purchase-hold` | staff with `ban:User`                      | a manual hold ending at `until`, with an optional `note` written for the buyer; replaces any; the same staff hold again (same `until` and `note`) is `409 USER_PURCHASE_HOLD_ALREADY_SET` |
+| `POST /users/{id}/lift-purchase-hold`  | staff with `ban:User`                      | the review: ends the hold now and restarts the count; `409 USER_PURCHASE_HOLD_NOT_SET` with none                                                                                          |
+| `takeAutomaticPurchaseHold`            | `orders` only (a lint-guarded friend door) | the shop's own hold after repeated cancellations; atomic, so only one of two racing calls wins                                                                                            |
+| `purchaseHoldOf`                       | `cart`'s checkout                          | the hold in force, if any                                                                                                                                                                 |
 
 A hold is in force while `until` is in the future, so every reader ignores an expired one at once.
 Reads show it only while in force, to staff on `/users` and to the buyer on `/account` and in the cart

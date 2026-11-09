@@ -1,29 +1,37 @@
 /**
  * @module
- * Controller for `DELETE /users/:id/purchase-hold` — ending the pause staff put on one account.
+ * Controller for `POST /users/:id/place-purchase-hold` — staff pausing checkout for one account.
  *
  * See: docs/modules/users.md#purchase-hold
  */
 
 import type { Request, Response } from 'express';
+import { PlaceUserPurchaseHoldBody } from '@api/schemas.zod';
 import { successResponse } from '@infrastructure/http/response';
 import { requireId } from '@infrastructure/http/ids';
 import { callerContextOf } from '@infrastructure/http/request';
-import { catchAs, namedHandler, refused } from '@infrastructure/http/controller';
+import { catchAs, namedHandler, parseBody, refused } from '@infrastructure/http/controller';
 import { userService } from '../services';
 
 /**
- * DELETE /users/:id/purchase-hold — end the hold now and restart the cancellation count.
- * `userService.liftPurchaseHold` owns the 404, the 403 for a staff account and the audit row.
+ * POST /users/:id/place-purchase-hold — replace the account's hold with a manual one ending at `until`.
+ * `userService.setPurchaseHold` owns the 404, the 403 for a staff account and the audit row.
  */
-export const deletePurchaseHold = namedHandler(
-    'liftUserPurchaseHold',
+export const postPlacePurchaseHold = namedHandler(
+    'placeUserPurchaseHold',
     (request: Request, response: Response) => {
         const id = requireId(request, response, { notFound: 'users.not-found' });
         if (!id) return Promise.resolve();
 
+        const body = parseBody(PlaceUserPurchaseHoldBody, request.body, response);
+        if (!body) return Promise.resolve();
+
         return userService
-            .liftPurchaseHold(id, callerContextOf(request))
+            .setPurchaseHold(
+                id,
+                { until: new Date(body.until), note: body.note },
+                callerContextOf(request)
+            )
             .then((result) => {
                 if (refused(response, result)) return;
 
@@ -33,6 +41,6 @@ export const deletePurchaseHold = namedHandler(
                         successResponse(response, user, 200);
                     });
             })
-            .catch(catchAs(response, 'liftUserPurchaseHold'));
+            .catch(catchAs(response, 'placeUserPurchaseHold'));
     }
 );
