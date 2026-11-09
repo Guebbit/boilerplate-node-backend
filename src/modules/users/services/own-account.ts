@@ -9,13 +9,7 @@
  * staff protection the admin doors enforce, so they stay `@internal` and only these reach them.
  */
 
-import { ERROR_CODES } from '@api/error-codes';
-import { t } from '@infrastructure/i18n';
-import {
-    generateReject,
-    type ResponseSuccess,
-    type ResponseReject
-} from '@infrastructure/http/response';
+import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import type { CallerContext } from '@types';
 import { accessService } from '@modules/access';
 import { withTransaction } from '@infrastructure/runtime/database';
@@ -53,58 +47,48 @@ export const updateOwnProfile = (
  * system context, so the trail records `SYSTEM_USER_SOFT_DELETED` and the row is stamped as the
  * reaper's own, which is what later lets {@link eraseInactive} take it.
  *
- * Refused with 409 for an account that was never warned (the warning is the notice that makes this
- * deletion fair) and for one that holds a staff role (the reaper reads customers only, so a staff
- * account here means a read went wrong, and the cost of that is a locked-out administrator).
+ * Rejects for an account that was never warned (the warning is the notice that makes this
+ * deletion fair): the reaper's read only returns warned accounts, so that is a misuse.
+ * Resolves `false` for one that holds a staff role: the reaper reads customers only, so a role
+ * granted between its read and this call is a race, and the cost of deleting it is a
+ * locked-out administrator.
  *
  * @param user - an account the reaper's read returned (customers only)
  * @param context - the reaper's system context
+ * @returns whether the account was soft-deleted; `false` when it holds a staff role
+ * @throws {Error} (as a rejection) when the account was never warned
  */
 export const softDeleteInactive = (
     user: UserDocument,
     context: CallerContext
-): ReturnType<typeof remove> => {
+): Promise<boolean> => {
     if (!user.inactivityWarnedAt)
-        return Promise.resolve(
-            generateReject(409, [
-                { code: ERROR_CODES.USER_NOT_WARNED, message: t('users.not-warned') }
-            ])
+        return Promise.reject(
+            new Error('The inactivity reaper may only delete an account it has warned.')
         );
 
-    return accessService.holdsStaffRole(String(user._id)).then((staff) =>
-        staff
-            ? generateReject(409, [
-                  {
-                      code: ERROR_CODES.USER_STAFF_NOT_REAPABLE,
-                      message: t('users.inactive-staff-account')
-                  }
-              ])
-            : remove(user, false, context)
-    );
+    return accessService
+        .holdsStaffRole(String(user._id))
+        .then((staff) => (staff ? false : remove(user, false, context).then(() => true)));
 };
 
 /**
  * Hard-delete an account the reaper soft-deleted itself, once its grace has run out. A row
  * soft-deleted by anyone else (an admin deleting an account is a decision to keep it restorable)
- * is refused with 409, so the reaper can never finish what it did not start.
+ * rejects, so the reaper can never finish what it did not start.
  *
  * @param user - an account the reaper's read returned
  * @param context - the reaper's system context
+ * @returns whether THIS call erased the account
+ * @throws {Error} (as a rejection) when the reaper did not soft-delete the account
  */
-export const eraseInactive = (
-    user: UserDocument,
-    context: CallerContext
-): ReturnType<typeof remove> =>
-    user.deletedBy === 'reaper'
-        ? remove(user, true, context)
-        : Promise.resolve(
-              generateReject(409, [
-                  {
-                      code: ERROR_CODES.USER_NOT_REAPER_DELETED,
-                      message: t('users.not-reaper-deleted')
-                  }
-              ])
-          );
+export const eraseInactive = (user: UserDocument, context: CallerContext): Promise<boolean> => {
+    if (user.deletedBy !== 'reaper')
+        return Promise.reject(
+            new Error('The inactivity reaper may only erase an account it soft-deleted.')
+        );
+    return erase(user, context);
+};
 
 /**
  * Lock the caller's own account and promise its erasure at `purgeAt`: one save that stamps
@@ -164,18 +148,19 @@ export const restoreOwnAccount = (
 /**
  * Hard-delete an account whose owner-scheduled grace has run out: the purge job's door. The first
  * write of the transaction is a claim on `purgeAt <= now`, so a restore that got there first
- * wins and this refuses with 409. The context is the job's system one, so the trail says
+ * wins and this resolves `false`. The context is the job's system one, so the trail says
  * `SYSTEM_USER_ERASED`, not an admin erase.
  *
  * @param user - an account the due read returned
  * @param context - the purge job's system context
  * @param now - the moment `purgeAt` is judged against; app time, never the database's clock
+ * @returns whether THIS call erased it; `false` when a restore won the claim
  */
 export const eraseScheduledDeletion = (
     user: UserDocument,
     context: CallerContext,
     now: Date = new Date()
-): ReturnType<typeof erase> =>
+): Promise<boolean> =>
     erase(user, context, (session) => userRepository.claimScheduledErasure(user.id, now, session));
 
 /**
@@ -211,13 +196,14 @@ const requireSystemCaller = (context: CallerContext): void => {
  * @param userId - the account the ledger names
  * @param erasedAt - the original erasure date, so the clocks the erasure starts do not restart
  * @param context - the operator's system context; any other caller is refused
- * @returns `null` when the restored database does not hold the account (nothing to erase)
+ * @returns `null` when the restored database does not hold the account (nothing to erase), else
+ *   whether THIS call erased it
  */
 export const eraseAgain = (
     userId: string,
     erasedAt: Date,
     context: CallerContext
-): Promise<Awaited<ReturnType<typeof erase>> | null> => {
+): Promise<boolean | null> => {
     requireSystemCaller(context);
     return userRepository
         .findById(userId)

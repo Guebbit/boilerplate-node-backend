@@ -8,6 +8,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
+import { accessService } from '@modules/access';
 import { createUser } from '@modules/users/tests/factories';
 import mongoose, { Types } from 'mongoose';
 import { reapInactiveAccounts } from '../../services/reap-inactive';
@@ -40,6 +41,10 @@ beforeEach(() => {
     setEnvironment({ NODE_MAIL_TRANSPORT: 'outbox' });
 });
 
+afterEach(() => {
+    jest.restoreAllMocks();
+});
+
 describe('reapInactiveAccounts', () => {
     it('warns an inactive customer once, and neither deletes them in the same run', async () => {
         const user = await createUser({ email: 'quiet@reaper.test' }, 'customer');
@@ -69,6 +74,24 @@ describe('reapInactiveAccounts', () => {
         const state = await stateOf(user.id);
         expect(state?.deletedAt).toBeDefined();
         expect(state?.deletedBy).toBe('reaper');
+    });
+
+    it('leaves out of its count an account that gained a staff role after the read', async () => {
+        const raced = await createUser({ email: 'raced@reaper.test' }, 'customer');
+        const plain = await createUser({ email: 'plain@reaper.test' }, 'customer');
+        await backdate(raced.id, { inactivityWarnedAt: daysAgo(31) });
+        await backdate(plain.id, { inactivityWarnedAt: daysAgo(31) });
+        // The role lands between the reaper's customers-only read and the delete door's own check.
+        jest.spyOn(accessService, 'holdsStaffRole').mockImplementation((id) =>
+            Promise.resolve(id === raced.id)
+        );
+
+        const counts = await reapInactiveAccounts({ inactiveDays: 365, minimiseDays: 0 });
+
+        expect(counts.softDeleted).toBe(1);
+        const [racedState, plainState] = await Promise.all([stateOf(raced.id), stateOf(plain.id)]);
+        expect(racedState?.deletedAt).toBeUndefined();
+        expect(plainState?.deletedAt).toBeDefined();
     });
 
     it('hard deletes a reaper soft delete a grace later', async () => {

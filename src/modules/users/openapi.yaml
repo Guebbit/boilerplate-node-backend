@@ -10,10 +10,6 @@ x-error-codes:
     USER_ALREADY_INACTIVE: { status: 409, description: 'The account is deactivated already: `POST /users/{id}/deactivate` has nothing to do.' }
     USER_ROLE_ALREADY_ASSIGNED: { status: 409, description: 'The account already holds the role named, so `POST /users/{id}/assign-role` has nothing to do.' }
     USER_ROLE_NOT_ASSIGNED: { status: 409, description: 'The account holds no staff role, so `POST /users/{id}/revoke-role` has nothing to take away.' }
-    USER_NOT_WARNED: { status: 409, description: 'The inactivity reaper tried to delete an account that was never warned first. Raised by the reaper, never by a route.' }
-    USER_STAFF_NOT_REAPABLE: { status: 409, description: 'The inactivity reaper met an account holding a staff role and left it alone. Raised by the reaper, never by a route.' }
-    USER_NOT_REAPER_DELETED: { status: 409, description: 'The reaper may only erase an account it soft-deleted itself. Raised by the reaper, never by a route.' }
-    USER_ERASURE_NOT_DUE: { status: 409, description: 'The account''s erasure was claimed by another run, or is not due yet, so this run did nothing.' }
     USER_PURCHASE_HOLD_ALREADY_SET: { status: 409, description: 'The account already holds a staff purchase hold with this end date and note, so placing it again changes nothing.' }
     USER_PURCHASE_HOLD_NOT_SET: { status: 409, description: 'The account has no purchase hold and no review flag, so there is nothing to lift.' }
 
