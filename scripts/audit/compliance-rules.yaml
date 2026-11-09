@@ -439,6 +439,7 @@ suggested_rules:
           backend:
               - src/modules/users/model.ts (a policyVersion / acceptedPolicyVersion field)
               - src/modules/account/*.ts (a re-consent-required check on login)
+              - src/modules/orders/model.ts (termsVersion frozen on each checkout order)
           frontend:
               - a re-consent modal/banner component
       references:

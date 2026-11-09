@@ -716,6 +716,7 @@ describe('POST /cart/checkout', () => {
         expect(response.status).toBe(201);
         expect(response.body.items).toHaveLength(1);
         expect(response.body.order).toBeUndefined();
+        expect(response.body.termsVersion).toEqual(expect.any(String));
         expect(response.headers.location).toBe(`/orders/${String(response.body.id)}`);
     });
 

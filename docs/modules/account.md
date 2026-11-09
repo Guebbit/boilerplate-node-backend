@@ -394,6 +394,8 @@ the write is re-checked.
 
 `NODE_TERMS_VERSION` and `termsVersion()` belong here, with the consent record signup writes: the
 version is stored beside the date the Terms were accepted. `GET /config` prints it as `termsVersion`.
+[`orders`](./orders.md#creating-an-order) also reads `termsVersion()`: an order placed at checkout
+freezes the version in force at placement.
 
 ## Operator identity {#operator-identity}
 

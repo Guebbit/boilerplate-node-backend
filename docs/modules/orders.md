@@ -231,6 +231,11 @@ address or method, cart pre-flight and clearing — stays with the caller; `plac
 what it needs to hold and write. See [Checkout](./cart-checkout.md#the-sequence) for the storefront
 path in full.
 
+An order placed through checkout freezes the `termsVersion` in force at placement, as it freezes its
+`currency`; a staff-placed order carries none. The label is evidence only together with the
+operator's archive of each version's text (CRD Art. 6(9)). `GET /config` shows the version in force
+now. See [Terms version](./account.md#terms-version).
+
 A line the shelf only half covered carries what it owes, frozen like the rest of it: `backorderedQuantity`
 (how many of `quantity` were owed), `promisedAt` (the product's restock date, else the day it was
 placed plus 30 days; stored as that instant, answered as the shop day) and `promiseDated` (whether that was a date the product named). The confirmation
@@ -857,8 +862,10 @@ to [shop](./shop.md). `orders` reads both. A partly-set return address counts as
 
 ### What the placed-order emails carry
 
-Both placed-order emails, the confirmation and the bank-transfer instructions that replace it, end
-with the same partial (`templates/partials/orders.withdrawal-notice.ejs`). The text goes in the body,
+The placed-order confirmation, which every order gets whatever the payment method, ends with the
+withdrawal partial (`templates/partials/orders.withdrawal-notice.ejs`). A `bank_transfer` order also
+gets the instructions mail, [`payments`'](./payments.md#bank-transfer), which does not carry it. The
+text goes in the body,
 not behind a link: a web page is not a durable medium (CJEU C-49/11). `withdrawalNotice()` in
 `emails.ts` builds it from the official Annex I wording, and picks one of three cases:
 

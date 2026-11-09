@@ -333,6 +333,25 @@ describe('create', () => {
             });
         }));
 
+    it('stamps no Terms version on a staff-placed order: no buyer accepted anything', () =>
+        withEnvironmentOverrides({ NODE_TERMS_VERSION: '2026-11' }, async () => {
+            const user = await createUser();
+            const product = await createProduct();
+
+            const order = asSuccess(
+                await orderService.create(
+                    String(user._id),
+                    user.email,
+                    [{ productId: String(product._id), quantity: 1 }],
+                    callerContextAs('admin')
+                )
+            ).data;
+
+            expect(order.termsVersion).toBeUndefined();
+            const reread = await orderRepository.findById(String(order._id));
+            expect(reread!.termsVersion).toBeUndefined();
+        }));
+
     it('stores a full product snapshot on each line', async () => {
         const { order, keyboard } = await seedOrder();
 

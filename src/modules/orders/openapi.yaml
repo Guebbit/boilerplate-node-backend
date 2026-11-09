@@ -2567,6 +2567,15 @@ components:
                     allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     readOnly: true
                     description: ISO-4217 currency code this order was priced in (e.g. EUR).
+                # Frozen from `NODE_TERMS_VERSION` when checkout placed the order, the way `currency`
+                # is. A staff-placed order carries none.
+                termsVersion:
+                    type: string
+                    readOnly: true
+                    description: >-
+                        The Terms version in force when the buyer placed the order at checkout;
+                        absent on staff-placed orders.
+                    example: '2'
                 # Both derived at serialization from the lines' frozen `taxRate` — never stored.
                 # See `src/modules/orders/domain/tax.ts`.
                 netTotal:

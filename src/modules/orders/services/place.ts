@@ -29,6 +29,7 @@ import { appendTimeline } from './timeline';
 // follows for its own writes.
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 import { BACKORDER_PROMISE_DAYS, shopCurrency } from '@modules/shop';
+import { termsVersion } from '@modules/account';
 import type { OrderAddress } from '@types';
 
 /**
@@ -77,6 +78,8 @@ export interface PlaceOrderInput {
     billingAddress?: OrderAddress;
     /** Free-text notes the buyer left at checkout — `undefined` writes no `notes` field at all. */
     notes?: string;
+    /** Checkout only: the buyer accepted the Terms, so the order freezes the version in force. */
+    termsAccepted?: true;
     /**
      * A write that must land with the order or not at all — checkout's cart clear. It runs inside
      * the order's own transaction, after the order is written; resolving `false` (a conditional
@@ -202,6 +205,7 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
             items,
             orderNumber,
             currency: shopCurrency(),
+            ...(input.termsAccepted ? { termsVersion: termsVersion() } : {}),
             payBy,
             ...(input.notes ? { notes: input.notes } : {}),
             ...(input.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),
