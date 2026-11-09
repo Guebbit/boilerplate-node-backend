@@ -28,7 +28,7 @@ Two tests belong to the same group when they exercise the same branch with
 inputs that are equivalent under the code's own partitioning — not when their
 titles look similar. Use the evidence, in this order:
 
-- `tmp/reports/mutation/mutation.json` and `tmp/reports/stryker-incremental.json` — which
+- `tmp/reports/mutation/mutation.json` — which
   mutants each test kills is the ground truth for "what does this test discriminate"
 - `tmp/reports/test-report.json` — per-test duration, for the cost ranking
 - Stryker stops at the first test that kills a mutant, so every `killedBy` list in a regular report
@@ -49,6 +49,10 @@ Distinguish two kinds and say which:
 - **redundant** — a strictly weaker copy of a sibling. Safe to remove.
 - **cheap insurance** — kills nothing extra today but pins a documented rule or a
   regression that already bit once. Keep it, and say why.
+
+Stryker does not run the contract, fuzz or journey suites. A duplicate where both sides sit in a
+skipped suite gets the verdict **by construction**, never "unverified": same route or branch, same
+input partition, subset assertions, each cited.
 
 ### 3 — rank by CI cost
 
@@ -72,7 +76,7 @@ Rules:
 - If `tmp/reports/mutation/mutation.json` is missing or older than the code under
   audit, say so at the top of the report and downgrade every verdict to
   "unverified". A guess here deletes real coverage.
-- A test whose only job is to pin a rule the contract states is never bloat, even
-  at zero unique mutants. Redundancy is measured against other TESTS, not against
-  the value of the rule.
+- A rule the contract states is never bloat while this test is its only owner. When an app-wide
+  sweep pins the same rule on the same route with an equal or stronger assertion, the per-route copy
+  is redundant unless it checks more than the status (`docs/tools/contract-testing.md`).
 - `tmp/reports/` is gitignored. These files are working evidence, not deliverables.

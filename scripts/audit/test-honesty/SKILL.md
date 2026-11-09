@@ -20,6 +20,27 @@ Empty means `whole-repo`.
 Output goes to `tmp/reports/audit-<run>/test-honesty/<SCOPE>…`. `<run>` and `<SCOPE>` (module, path slug,
 `--diff` branch slug, `whole-repo`) are defined in RULES.md rule 4.
 
+### A `whole-repo` run
+
+- **Slices:** one module's tests, or one top folder of `tests/` (`unit`, `integration`,
+  `cross-cutting`; the rest together). A slice too big for one sitting is split by its next folder
+  level (`tests/unit/infrastructure`, `tests/unit/scripts`, …). Small modules are never merged, so
+  slice names stay stable between runs.
+- **Order:** security boundaries, then money and stock, then the rest. No file tags risk, so write
+  the chosen order at the top of `whole-repo.md` before the first slice
+  (e.g. `access → account → payments → orders → returns`).
+- **Oracle:** read once per run; record its source and date once in `whole-repo.md`, and say so if
+  it changed between sittings.
+- **Files:** each slice writes `whole-repo.<slice>.md` when finished (`whole-repo.orders.md`,
+  `whole-repo.tests-unit.md`), starting with the HEAD sha it read. A slice with nothing to report
+  still writes a one-line file.
+- **Roll-up:** `whole-repo.md`, written last: oracle status, one row per slice (tests, Liar read,
+  verdict counts), every finding row, security and money first.
+- **Partial:** a slice with no file is named in `whole-repo.md`, and the run is PARTIAL.
+- **Resume:** keep the run's folder. Each sitting runs its own tripwire pair; if the last sitting
+  died before its `compare`, run `compare` first, then `snapshot`. `whole-repo.md` lists one
+  Tripwire line per sitting.
+
 ## What this audit is not
 
 Three neighbours already own a question. Note the finding in one line and route it:
@@ -51,6 +72,19 @@ literature instead of to taste.
 | **Bent to fit**              | git history shows the expected value edited to match the code, with no spec or docs change in that commit                                              |
 | **Dull**                     | a title that names nothing (`works`, `handles it`, `returns correctly`) — the reader cannot tell what would break it                                   |
 
+**Learning and boundary tests are not Testing the platform** (Martin, _Clean Code_ ch. 8;
+Beck, _TDD by Example_, "Learning Test"). A test whose subject is the library itself is not a
+finding, and goes in no row and no count, when it:
+
+- calls the library directly, with the same switches production sets,
+- has a title that names the library behaviour,
+- names the production file or symbol that relies on it,
+- has an oracle a library upgrade could turn red.
+
+A test that calls this repo's own wrapper (`getTracer`) is judged as this repo's code.
+`not.toThrow()` / `toBeDefined()` on a call the library promises never fails is still Coverage
+padding. A repo setting that no test pins goes to `/audit-spec-gaps`.
+
 "Dull" alone is never CONFIRMED by the oracle below. It is a naming finding, and it is cheap to fix.
 
 ## Steps
@@ -61,12 +95,15 @@ A text search is the deterministic first cut. Run it over the scope's test files
 (`src/modules/<module>/tests/**`, or `tests/**` for a system scope):
 
 ```bash
-rg -n "toBeDefined\(\)|toBeTruthy\(\)|not\.toThrow\(\)|expect\(true\)|expect\.anything\(\)|toMatchObject\(\{\}\)|toBeGreaterThanOrEqual\(0\)" <paths>
-rg -n "^\s*(if|try|catch)\b" <paths>                    # conditional or caught assertions
-rg -n "\.then\(" <paths>                                 # then read each: returned or awaited?
+npm run audit:test-candidates -- -o tmp/reports/audit-<run>/test-honesty/candidates.json <paths>   # tests whose every assertion is weak
+rg -n "eslint-disable.*jest/" <paths>                   # the gate's described disables are candidates
 rg -n "jest\.(mock|spyOn)\(" <paths>                    # then ask: is the mocked thing the subject?
-rg -c "\bexpect\(" <paths>                               # a file whose count is low for its it() count
 ```
+
+The script replaces the weak-matcher, `if|try|catch`, `.then(` and `rg -c` cuts: the lint gate now
+refuses a conditional `expect`, a missing one and a duplicate title. Its known false positives are
+asserting helpers (`refused(...)`) and supertest's `.expect(200)`. Negative titles and effect-verb
+titles ("writes", "refunds", "mails") with only a success check stay an `rg` read.
 
 Add the two priors, in this order:
 
@@ -76,8 +113,11 @@ Add the two priors, in this order:
 - `git log -p --follow -- <test file>` — for **Bent to fit**: a commit that changes only an
   expected literal in the test, alongside a `src/` change, and no `docs/` or contract change.
 
-Then read every remaining test in scope for **The Liar** and **Success Against All Odds**. Those
-two need judgement, and no pattern finds them.
+Then read for **The Liar** and **Success Against All Odds**. Those two need judgement, and no
+pattern finds them. When the scope is too big to read every test, read in full every test in a
+security, money or stock slice; elsewhere, every test whose title claims a refusal, an effect
+(writes, sends, refunds, stops, same write), or an order or rounding, plus every test the candidate
+script listed. Sample the rest.
 
 ### 2 — for each candidate, name the break
 
@@ -113,11 +153,12 @@ never edit `src/` to check.
   `tmp/reports/mutation-shards/<size>/<shard>/` instead.
 - A file's entry is stale when that source changed after the report was written
   (`git log -1 --format=%cI -- <file>` against the report's date): say so in the row.
-- No usable report: ask the user before `npm run mutation` (RULES.md rule 2). It re-runs Stryker
-  for the branch's changed files and writes `tmp/reports/`, `tmp/stryker/` and wipes
-  `tmp/test-mutation`. Never run `mutation:pull` or `mutation:full` yourself: they write the
-  tracked `mutation-baseline.json`. Ask the user to pull instead. If nothing covers the scope, say
-  so at the top and mark every row UNVERIFIED.
+- No usable report:
+    - Say why at the top, in one line: the pull's own error, or "never pulled".
+    - Other `tmp/reports/mutation*/**/mutation.json` files: hints only, with the same per-file
+      staleness rule. Never `stryker-incremental.json` (a cache, not a result).
+    - Offer `npm run mutation` for the scope and wait for yes (RULES.md rule 2).
+    - Mark the report PARTIAL: here the report is the oracle. Rows without a mutant stay UNVERIFIED.
 
 - Match each break to a mutant: same location, same effect — a `ConditionalExpression` forced to
   `true` for a deleted guard, an emptied `BlockStatement` for a deleted call, an `EqualityOperator`
@@ -140,7 +181,8 @@ Only CONFIRMED and DULL rows are findings. CLEAN rows go in a one-line count, ne
 
 ### 4 — write the report
 
-`tmp/reports/audit-<run>/test-honesty/<SCOPE>.md`:
+`tmp/reports/audit-<run>/test-honesty/<SCOPE>.md`. Start with `Tripwire:` (RULES.md rule 6), then
+`Liar read: full` or `Liar read: sampled (N of M tests, picked by …)`. Then the table:
 
 | file:line | test name | shape | claims | break | mutant (id, status) | verdict | suggested fix |
 

@@ -11,7 +11,8 @@ ROLE: Guideline reviewer: you read the API against Zalando's rules, and you do n
 GOAL: For every rule in `scripts/audit/api-standards.yaml` whose `standard` is `zalando`, give one
 verdict per rule per operation in scope, each with a citation. The audit judges where names, enums, paging, money and errors differ from Zalando's rules, and whether each difference is written down.
 It reports against the Zalando guidelines ONLY. Other standards disagree with it in places; that is
-not this audit's business.
+not this audit's business. When a precedence is given, a rule a higher standard overrides is listed
+once under **Superseded by a higher standard**, not judged.
 
 SCOPE: the argument you were given: a module name (`orders`), a path, `--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5). Empty means
 `whole-repo`: the **whole contract**. A difference from a standard is rarely introduced by the change
@@ -30,12 +31,13 @@ Output goes to `tmp/reports/audit-<run>/api-zalando/<SCOPE>…`. `<run>` and `<S
    `difference` names a row there gets the verdict `KNOWN-DIFFERENCE` when the difference is what
    you found, with the row `id`.
 3. Read the rules of this standard in `scripts/audit/api-standards.yaml`. Open each `source` and
-   re-read the clause: the `rule` sentence is a summary, the standard is the authority.
+   re-read the clause: the `rule` sentence is a summary, the standard is the authority. The guideline text is
+   `https://opensource.zalando.com/restful-api-guidelines/`; the registry's `section` number is the
+   anchor (`#173`).
 4. Name the existing guard and move on for anything already guarded mechanically. Here:
     - Spectral `shared/contracts/spectral.yaml` (security on every operation, no `nullable`, errors are
       `application/problem+json`, the 2xx body is an object, replace is PUT and update is PATCH,
       operationId shape, schema names, camelCase parameters, `maxLength`, `names-in-us-english-*`)
-    - Spectral operationId shape, camelCase parameters, `names-in-us-english-*` (Zalando #103)
     - `tests/cross-cutting/paginated-sort-is-total.test.ts`, `tests/contract/unknown-query-params.test.ts`
       A guarded rule gets one line ("guarded by X") and no verdict hunt.
 5. If this audit is part of a run of several, the USER gives the order of precedence first
@@ -43,7 +45,7 @@ Output goes to `tmp/reports/audit-<run>/api-zalando/<SCOPE>…`. `<run>` and `<S
 
 ## Steps
 
-1. List the operations in scope from the bundle (Read the guideline text itself for each rule (`https://opensource.zalando.com/restful-api-guidelines/`): the rule number in the registry is the key.)
+1. List the operations in scope from the bundle.
 2. For each rule, check three sources and reach ONE verdict: the contract (the operation, its
    responses, its headers), the handler (controller, then service, never only the route), and the
    docs page that describes it.
@@ -58,13 +60,17 @@ Output goes to `tmp/reports/audit-<run>/api-zalando/<SCOPE>…`. `<run>` and `<S
 
 ## Verdicts
 
-| Verdict            | Means                                                                           |
-| ------------------ | ------------------------------------------------------------------------------- |
-| `VIOLATION`        | the API contradicts the standard and no page says it does so on purpose         |
-| `KNOWN-DIFFERENCE` | it differs, and a row on the theory page says why; still reported               |
-| `LINT-CANDIDATE`   | mechanical: REPORTED only, never turned into a Spectral rule, with the JSONPath |
-| `SATISFIED`        | checked, and it holds                                                           |
-| `NOT-APPLICABLE`   | the rule does not touch this scope; one line saying what you checked            |
+| Verdict            | Means                                                                                 |
+| ------------------ | ------------------------------------------------------------------------------------- |
+| `VIOLATION`        | the API contradicts the standard, and no theory row named by the rule says why        |
+| `KNOWN-DIFFERENCE` | it differs, and the theory row the rule's `difference` names says why; still reported |
+| `LINT-CANDIDATE`   | mechanical: REPORTED only, never turned into a Spectral rule, with the JSONPath       |
+| `SATISFIED`        | checked, and it holds                                                                 |
+| `NOT-APPLICABLE`   | the rule does not touch this scope; one line saying what you checked                  |
+
+A difference explained only on another page, or by a theory row the rule does not name, is still a
+`VIOLATION`: fix side `docs`, the evidence cites that page, and the fix is a theory row linking to it,
+named in the rule's `difference`.
 
 ## Output
 
@@ -78,3 +84,9 @@ Then list the `VIOLATION` and `LINT-CANDIDATE` rows again, worst first.
 No citation, no finding: an absence claim names the grep that found
 nothing. Three real violations over thirty maybes. The report is disposable; see
 `docs/tools/ai-auditing.md`.
+
+### Superseded by a higher standard
+
+Only when a precedence was given. One row per Zalando rule (or half of one) a higher standard
+overrides: `| rule id | yields to (standard · clause) | theory row | why |`, no verdict column. With no
+precedence, write "none: no precedence given".

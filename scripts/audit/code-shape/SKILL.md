@@ -133,7 +133,6 @@ Write `tmp/reports/audit-<run>/code-shape/<SCOPE>.md`:
 
 ## Rules
 
-- Do NOT edit source, config or tests. This is a report; the human decides.
 - Every row cites a `file:line` taken from the tool output, or — reviewer 4 only — the search that
   found it.
 - Never call a function shallow from its name alone. Read its body and its callers.

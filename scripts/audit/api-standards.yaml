@@ -19,7 +19,8 @@
 #               KNOWN-DIFFERENCE, not as a violation.
 #
 # Rules that Spectral or a test already guards are NOT here: the audits name those guards in
-# their own SKILL.md and skip them. Budget: 3-6 rules for Google AIP and Zalando, 2-4 for an RFC.
+# their own SKILL.md and skip them. Budget: 3-6 rules for Google AIP and Zalando, 2-4 for an RFC, up to 7 for idempotency-key (no
+# Spectral rule or test guards its clauses).
 # Theory and the list of differences: docs/theory/api-standards.md.
 version: 1
 
@@ -28,16 +29,28 @@ rules:
     - id: rfc9110-get-safe
       standard: rfc9110
       section: methods
-      rule: A GET (and HEAD) changes nothing observable on the server, and the handler never reads a request body.
-      source: https://www.rfc-editor.org/rfc/rfc9110#section-9.2.1
-      evidence: [openapi.yaml paths.*.get, src/modules/*/routes.ts, src/modules/*/controllers]
+      rule: 'A GET or HEAD is safe: the client does not request, and cannot be held accountable for, a state change; side effects it did not request are allowed (§9.2.1). Content received in a GET has no defined semantics and cannot alter the meaning or target of the request (§9.3.1).'
+      source:
+          [
+              https://www.rfc-editor.org/rfc/rfc9110#section-9.2.1,
+              https://www.rfc-editor.org/rfc/rfc9110#section-9.3.1
+          ]
+      evidence:
+          [
+              openapi.yaml paths.*.get,
+              src/modules/*/routes.ts,
+              src/modules/*/controllers,
+              src/modules/*/services,
+              src/infrastructure/http/request.ts,
+              src/infrastructure/surfaces/
+          ]
       lint: no
       difference: oauth-callback-get
 
     - id: rfc9110-delete-no-body
       standard: rfc9110
       section: methods
-      rule: A DELETE carries no request body, and the handler reads none; a missing target is 404, a success is 204 or 200.
+      rule: 'Content received in a DELETE has no defined semantics and cannot alter the meaning or target of the request; a client SHOULD NOT send it; a success SHOULD be 202, 204 or 200 (§9.3.5).'
       source: https://www.rfc-editor.org/rfc/rfc9110#section-9.3.5
       evidence:
           [
@@ -302,19 +315,41 @@ rules:
       difference: null
 
     # IETF Idempotency-Key header, latest draft (draft-08 when written; re-check it).
-    - id: idempotency-key-moving-posts
+    - id: idempotency-key-moving-writes
       standard: idempotency-key
       section: scope
-      rule: Every POST that moves money, stock or an account takes `Idempotency-Key`, or sits in a class of the published exceptions table.
+      rule: Every POST or PATCH that moves money, stock or an account takes `Idempotency-Key`, or sits in a class of the published exceptions table; a PATCH whose merge patch sets absolute values is idempotent by construction and needs none.
       source: https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
       evidence:
           [
               openapi.yaml paths.*.post.parameters,
+              openapi.yaml paths.*.patch,
               docs/tools/idempotency.md#named-exceptions,
-              docs/api/write-methods.md#retrying-a-post
+              docs/api/write-methods.md#retrying-a-post,
+              docs/api/write-methods.md (the "Safe to repeat" row)
           ]
       lint: no
       difference: null
+
+    - id: idempotency-key-syntax
+      standard: idempotency-key
+      section: syntax
+      rule: The key is accepted in the draft's quoted (structured-field string) form.
+      source: https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
+      evidence:
+          [openapi.yaml paths.*.post.parameters, src/infrastructure/http/middlewares/idempotency.ts]
+      lint: possible
+      difference: idempotency-key-malformed-refused
+
+    - id: idempotency-key-error-doc-link
+      standard: idempotency-key
+      section: errors
+      rule: 'A 400, 409 or 422 refusal of a key points at documentation (a problem `type`, or a `Link` with `rel=describedby`).'
+      source: https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
+      evidence:
+          [src/infrastructure/http/middlewares/idempotency.ts, docs/api/errors.md#problem-details]
+      lint: no
+      difference: idempotency-doc-link
 
     - id: idempotency-key-missing-400
       standard: idempotency-key
@@ -433,7 +468,7 @@ rules:
     - id: zalando-pagination
       standard: zalando
       section: '#159 / #160, pagination'
-      rule: A collection is paginated, and cursor paging is preferred to offset paging.
+      rule: 'A list that can grow past a few hundred entries is paginated (#159), by cursor unless a #160 trade-off favours offset, such as jumping to page N.'
       source: https://opensource.zalando.com/restful-api-guidelines/#160
       evidence: [openapi.yaml paths.*.get.parameters, docs/api/responses.md#pagination]
       lint: no
@@ -450,8 +485,8 @@ rules:
 
     - id: zalando-problem-json
       standard: zalando
-      section: '#176, error format'
-      rule: Every error is `application/problem+json`, and none exposes a stack trace.
+      section: '#176 / #177, error format'
+      rule: 'Every endpoint can answer its 4xx and 5xx as `application/problem+json` (#176), and no error exposes a stack trace (#177).'
       source: https://opensource.zalando.com/restful-api-guidelines/#176
       evidence: [src/infrastructure/http/response.ts, docs/api/errors.md]
       lint: no
@@ -460,7 +495,7 @@ rules:
     - id: zalando-idempotent-writes
       standard: zalando
       section: '#229 / #230 / #231, idempotent writes'
-      rule: A POST or PATCH is designed to be idempotent, through an `Idempotency-Key` or a secondary key.
+      rule: 'Every POST and PATCH has had idempotency considered (#229, a SHOULD): it takes an `Idempotency-Key` (#230), a secondary key (#231) or `If-Match`, repeats harmlessly by itself (an absolute merge patch), or sits in a named-exception class.'
       source: https://opensource.zalando.com/restful-api-guidelines/#229
       evidence: [docs/tools/idempotency.md#named-exceptions, openapi.yaml paths.*.post.parameters]
       lint: no

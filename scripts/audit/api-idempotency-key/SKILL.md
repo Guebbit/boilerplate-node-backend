@@ -9,7 +9,7 @@ disagree, RULES.md wins.
 ROLE: Retry-safety reviewer: you judge whether a retried write can do its harm twice.
 
 GOAL: For every rule in `scripts/audit/api-standards.yaml` whose `standard` is `idempotency-key`, give one
-verdict per rule per operation in scope, each with a citation. The audit judges whether every POST that moves money, stock or an account takes a key or sits in a published exception class.
+verdict per rule per operation in scope, each with a citation. The audit judges whether every POST or PATCH that moves money, stock or an account takes a key or sits in a published exception class.
 It reports against the IETF Idempotency-Key draft ONLY. Other standards disagree with it in places; that is
 not this audit's business.
 
@@ -36,14 +36,20 @@ Output goes to `tmp/reports/audit-<run>/api-idempotency-key/<SCOPE>…`. `<run>`
       `application/problem+json`, the 2xx body is an object, replace is PUT and update is PATCH,
       operationId shape, schema names, camelCase parameters, `maxLength`, `names-in-us-english-*`)
     - `tests/contract/idempotency.test.ts` (the middleware's own behaviour)
-    - `scripts/contracts/response-headers.ts` (`Idempotent-Replayed`)
+    - `scripts/contracts/response-headers.ts` (declares `Idempotent-Replayed` on 2xx only; non-2xx is still yours to check) and `tests/contract/idempotency.test.ts`, the test "replays a refusal as the problem it was…" (the proof that a replay carries the header)
       A guarded rule gets one line ("guarded by X") and no verdict hunt.
 5. If this audit is part of a run of several, the USER gives the order of precedence first
    ("RFC 9110 > Google AIP > Zalando"). Ask for it if you were not given one. Never pick it.
 
 ## Steps
 
-1. List the operations in scope from the bundle (FIRST open the draft (`https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/`) and write down its number and date. The registry says draft-08 (2026-10-22) when it was written; the latest draft wins. The house rule is a MINIMUM (`docs/tools/idempotency.md`, "Named exceptions"): a create with no key that no exception names is a finding only if a retry does real harm.)
+0. FIRST open the draft (`https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/`)
+   and write down its number, date and state (Internet-Draft or RFC). The registry says draft-08
+   (2026-10-22) when it was written; the latest draft wins, and its state tells you how much weight
+   to give it against practice.
+1. List the operations in scope from the bundle.
+   1b. The house rule is a MINIMUM (`docs/tools/idempotency.md`, "Named exceptions"): a create with no
+   key that no exception names is a finding only if a retry does real harm.
 2. For each rule, check three sources and reach ONE verdict: the contract (the operation, its
    responses, its headers), the handler (controller, then service, never only the route), and the
    docs page that describes it.
@@ -53,13 +59,17 @@ Output goes to `tmp/reports/audit-<run>/api-idempotency-key/<SCOPE>…`. `<run>`
 
 ## Verdicts
 
-| Verdict            | Means                                                                           |
-| ------------------ | ------------------------------------------------------------------------------- |
-| `VIOLATION`        | the API contradicts the standard and no page says it does so on purpose         |
-| `KNOWN-DIFFERENCE` | it differs, and a row on the theory page says why; still reported               |
-| `LINT-CANDIDATE`   | mechanical: REPORTED only, never turned into a Spectral rule, with the JSONPath |
-| `SATISFIED`        | checked, and it holds                                                           |
-| `NOT-APPLICABLE`   | the rule does not touch this scope; one line saying what you checked            |
+| Verdict            | Means                                                                                 |
+| ------------------ | ------------------------------------------------------------------------------------- |
+| `VIOLATION`        | the API contradicts the standard, and no theory row named by the rule says why        |
+| `KNOWN-DIFFERENCE` | it differs, and the theory row the rule's `difference` names says why; still reported |
+| `LINT-CANDIDATE`   | mechanical: REPORTED only, never turned into a Spectral rule, with the JSONPath       |
+| `SATISFIED`        | checked, and it holds                                                                 |
+| `NOT-APPLICABLE`   | the rule does not touch this scope; one line saying what you checked                  |
+
+A difference explained only on another page, or by a theory row the rule does not name, is still a
+`VIOLATION`: fix side `docs`, the evidence cites that page, and the fix is a theory row linking to it,
+named in the rule's `difference`.
 
 ## Output
 
@@ -68,6 +78,7 @@ Write `tmp/reports/audit-<run>/api-idempotency-key/<SCOPE>.md`: the bundle's mti
 | rule id | operation | verdict | evidence (file:line) | section | fix side |
 
 `fix side` is `contract`, `code`, `docs` or `standard` (the standard is the one that fits worse).
+Rank worst first: harm a retry can do twice (money, stock or an account) > MUST > SHOULD > docs.
 Then list the `VIOLATION` and `LINT-CANDIDATE` rows again, worst first.
 
 No citation, no finding: an absence claim names the grep that found

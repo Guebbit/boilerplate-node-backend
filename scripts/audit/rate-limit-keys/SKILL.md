@@ -115,7 +115,6 @@ Then print the `WEAK KEY, UNCOVERED` and `label drift` rows, cheapest bypass fir
 
 Rules:
 
-- Do NOT write or modify tests or source. This is a report.
 - `sound` rows stay in the table. A report that lists only accusations reads as a
   list of bugs; the table is what makes "23 of 25 are fine" legible.
 - A weak key is NOT a finding when the route carries a partner budget that covers

@@ -83,7 +83,6 @@ Then print only the `not covered` rows, security boundaries first.
 
 Rules:
 
-- Do NOT write or modify tests. This is a report.
 - Every rule needs a spec citation. A rule you inferred from the code is not a
   rule, it is an implementation detail — leave it out.
 - A gap that is deliberate needs to be recorded as deliberate, with the doc that

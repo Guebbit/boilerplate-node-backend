@@ -31,13 +31,15 @@ Output goes to `tmp/reports/audit-<run>/api-rfc9110/<SCOPE>…`. `<run>` and `<S
    you found, with the row `id`.
 3. Read the rules of this standard in `scripts/audit/api-standards.yaml`. Open each `source` and
    re-read the clause: the `rule` sentence is a summary, the standard is the authority.
-4. Name the existing guard and move on for anything already guarded mechanically. Here:
+4. Name the existing guard and move on for anything already guarded mechanically. Name each guard by
+   file and function or test title, never by line. Here:
     - Spectral `shared/contracts/spectral.yaml` (security on every operation, no `nullable`, errors are
       `application/problem+json`, the 2xx body is an object, replace is PUT and update is PATCH,
       operationId shape, schema names, camelCase parameters, `maxLength`, `names-in-us-english-*`)
     - a bundler step (`scripts/contracts/openapi-bundle.ts`) adds `ETag`, `If-Match`, 412 and 304
-    - `scripts/contracts/response-headers.ts` adds `Idempotent-Replayed`
-    - `tests/support/response-contract.ts` and `tests/contract/write-methods.test.ts`: a 201 carries its `Location` (indirectly, `tests/support/spec-walk.ts:308-310`; directly `write-methods.test.ts`, the `a 201 names the new resource in Location` block)
+    - `scripts/contracts/response-headers.ts` declares `Idempotent-Replayed` on 2xx only
+    - a 201 carries its `Location` (indirectly, `requiredResponseHeaders` in `tests/support/spec-walk.ts`, read by the shared `afterEach` in `tests/support/response-contract.ts`; directly, `write-methods.test.ts`, the `a 201 names the new resource in Location` block)
+    - 405 `Allow`: `methodNotAllowed` and its unit test. 401 `WWW-Authenticate` and 503 `Retry-After`: `rejectResponse` in `response.ts` and its tests
     - `tests/cross-cutting/api-standards.test.ts`, `tests/contract/route-spec-parity.test.ts`, `tests/integration/conditional-writes.test.ts`, `tests/fuzz/endpoints.fuzz.test.ts`
       A guarded rule gets one line ("guarded by X") and no verdict hunt.
 5. If this audit is part of a run of several, the USER gives the order of precedence first
@@ -45,7 +47,15 @@ Output goes to `tmp/reports/audit-<run>/api-rfc9110/<SCOPE>…`. `<run>` and `<S
 
 ## Steps
 
-1. List the operations in scope from the bundle (Pick the operations whose meaning is the question: every GET that is not a plain read, every POST that answers 200 or 201, every DELETE, every 405, 401, 503. A sample module is enough when the scope is large, but SAY which and why.)
+1. List the operations in scope from the bundle, by rule:
+    - `rfc9110-get-safe`: every GET (a plain read is judged once, at its shared surface)
+    - `rfc9110-delete-no-body`: every DELETE
+    - `rfc9110-created-means-created`: every POST answering 200 or 201
+    - `rfc9110-conditional-requests`: every operation on a resource that sends an `ETag` (reads for
+      `If-None-Match`, writes for `If-Match`)
+
+    A sample module is enough when the scope is large, but SAY which and why.
+
 2. For each rule, check three sources and reach ONE verdict: the contract (the operation, its
    responses, its headers), the handler (controller, then service, never only the route), and the
    docs page that describes it.
@@ -55,13 +65,17 @@ Output goes to `tmp/reports/audit-<run>/api-rfc9110/<SCOPE>…`. `<run>` and `<S
 
 ## Verdicts
 
-| Verdict            | Means                                                                           |
-| ------------------ | ------------------------------------------------------------------------------- |
-| `VIOLATION`        | the API contradicts the standard and no page says it does so on purpose         |
-| `KNOWN-DIFFERENCE` | it differs, and a row on the theory page says why; still reported               |
-| `LINT-CANDIDATE`   | mechanical: REPORTED only, never turned into a Spectral rule, with the JSONPath |
-| `SATISFIED`        | checked, and it holds                                                           |
-| `NOT-APPLICABLE`   | the rule does not touch this scope; one line saying what you checked            |
+| Verdict            | Means                                                                                 |
+| ------------------ | ------------------------------------------------------------------------------------- |
+| `VIOLATION`        | the API contradicts the standard, and no theory row named by the rule says why        |
+| `KNOWN-DIFFERENCE` | it differs, and the theory row the rule's `difference` names says why; still reported |
+| `LINT-CANDIDATE`   | mechanical: REPORTED only, never turned into a Spectral rule, with the JSONPath       |
+| `SATISFIED`        | checked, and it holds                                                                 |
+| `NOT-APPLICABLE`   | the rule does not touch this scope; one line saying what you checked                  |
+
+A difference explained only on another page, or by a theory row the rule does not name, is still a
+`VIOLATION`: fix side `docs`, the evidence cites that page, and the fix is a theory row linking to it,
+named in the rule's `difference`.
 
 ## Output
 

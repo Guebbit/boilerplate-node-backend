@@ -53,13 +53,17 @@ Output goes to `tmp/reports/audit-<run>/api-ratelimit-headers/<SCOPE>…`. `<run
 
 ## Verdicts
 
-| Verdict            | Means                                                                           |
-| ------------------ | ------------------------------------------------------------------------------- |
-| `VIOLATION`        | the API contradicts the standard and no page says it does so on purpose         |
-| `KNOWN-DIFFERENCE` | it differs, and a row on the theory page says why; still reported               |
-| `LINT-CANDIDATE`   | mechanical: REPORTED only, never turned into a Spectral rule, with the JSONPath |
-| `SATISFIED`        | checked, and it holds                                                           |
-| `NOT-APPLICABLE`   | the rule does not touch this scope; one line saying what you checked            |
+| Verdict            | Means                                                                                 |
+| ------------------ | ------------------------------------------------------------------------------------- |
+| `VIOLATION`        | the API contradicts the standard, and no theory row named by the rule says why        |
+| `KNOWN-DIFFERENCE` | it differs, and the theory row the rule's `difference` names says why; still reported |
+| `LINT-CANDIDATE`   | mechanical: REPORTED only, never turned into a Spectral rule, with the JSONPath       |
+| `SATISFIED`        | checked, and it holds                                                                 |
+| `NOT-APPLICABLE`   | the rule does not touch this scope; one line saying what you checked                  |
+
+A difference explained only on another page, or by a theory row the rule does not name, is still a
+`VIOLATION`: fix side `docs`, the evidence cites that page, and the fix is a theory row linking to it,
+named in the rule's `difference`.
 
 ## Output
 

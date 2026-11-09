@@ -130,7 +130,6 @@ Then print the `UNREACHABLE` and `behaviour differs` rows, most-exploitable firs
 
 Rules:
 
-- Do NOT write or modify tests or source. This is a report.
 - Every verdict cites the real path by `file:line`. "Probably fine" is not a
   verdict — use `not traced` and say what you would have to read.
 - A defence whose test already drives `api()` or the real router is `reachable`.
