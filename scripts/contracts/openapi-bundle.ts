@@ -252,7 +252,7 @@ const withIfMatch = (operation: Operation): void => {
 
 /**
  * Apply every path item's `x-versioned: [methods]` marker: `ETag` on the listed reads and on the
- * listed `put`/`patch` `200`s, and `If-Match` plus `412` on the listed writes.
+ * listed `patch` `200`s, and `If-Match` plus `412` on the listed writes.
  *
  * Runs on the bundled document for the same reason {@link withAppLevelResponses} does, and the
  * marker STAYS in the published contract — it is the machine-readable list of which resources
@@ -273,8 +273,9 @@ export const withVersionedResources: Step = (document_) => {
             if (VERSIONED_READ_METHODS.has(method)) withEtagHeader(operation, `${method} ${route}`);
             else if (VERSIONED_WRITE_METHODS.has(method)) withIfMatch(operation);
             else throw new Error(`[openapi] ${route}: x-versioned cannot name ${method}.`);
-            if (method === 'put' || method === 'patch')
-                withEtagHeader(operation, `${method} ${route}`);
+            // Only a PATCH answer carries the new tag: a PUT answer carries no validator
+            // (RFC 9110 §9.3.4, enforced by `dropPutValidators`).
+            if (method === 'patch') withEtagHeader(operation, `${method} ${route}`);
         }
     }
 };

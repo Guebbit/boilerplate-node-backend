@@ -5,7 +5,7 @@
  */
 import { asStub } from '@tests/stub';
 import type { Request, Response } from 'express';
-import { preconditionOf, setEtag } from '@infrastructure/http/preconditions';
+import { dropPutValidators, preconditionOf, setEtag } from '@infrastructure/http/preconditions';
 
 /** A request carrying this `If-Match` (or none). */
 const requestWith = (ifMatch?: string) =>
@@ -101,5 +101,44 @@ describe('setEtag', () => {
         expect(response.json).toBe(original);
         expect(setHeader).not.toHaveBeenCalled();
         expect(json).toHaveBeenCalledWith({});
+    });
+});
+
+/** A response whose head has not been written yet, plus what the head write forwards to. */
+const headOf = () => {
+    const written = jest.fn();
+    const removeHeader = jest.fn();
+    const response = asStub<Response>({ writeHead: written, removeHeader });
+    return { response, written, removeHeader };
+};
+
+describe('dropPutValidators', () => {
+    it('strips both validators when a PUT answer writes its head, then writes it', () => {
+        const { response, written, removeHeader } = headOf();
+
+        dropPutValidators(asStub<Request>({ method: 'PUT' }), response, jest.fn());
+        response.writeHead(200);
+
+        expect(removeHeader.mock.calls).toEqual([['ETag'], ['Last-Modified']]);
+        expect(written).toHaveBeenCalledTimes(1);
+        expect(written).toHaveBeenCalledWith(200);
+    });
+
+    it.each(['GET', 'PATCH', 'POST', 'DELETE'])('leaves a %s answer alone', (method) => {
+        const { response, removeHeader } = headOf();
+        const head = response.writeHead;
+
+        dropPutValidators(asStub<Request>({ method }), response, jest.fn());
+
+        expect(response.writeHead).toBe(head);
+        expect(removeHeader).not.toHaveBeenCalled();
+    });
+
+    it('always continues the chain', () => {
+        const next = jest.fn();
+
+        dropPutValidators(asStub<Request>({ method: 'PUT' }), headOf().response, next);
+
+        expect(next).toHaveBeenCalledWith();
     });
 });

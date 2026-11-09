@@ -15,7 +15,7 @@
  * See: docs/api/contract-fragmentation.md
  */
 
-import type { OpenAPIV3_1 } from 'openapi-types';
+import { OpenAPIV3, type OpenAPIV3_1 } from 'openapi-types';
 import { operationsOf, type Operation, type OpenApiDocument, type Step } from './openapi-document';
 
 /** The response header an idempotent operation's 2xx declares, and the component that describes it. */
@@ -51,6 +51,17 @@ const inlineResponsesOf = (document_: OpenApiDocument): OpenAPIV3_1.ResponseObje
     ].filter((response): response is OpenAPIV3_1.ResponseObject => !('$ref' in response));
 
 /**
+ * Every response written inline on a `PUT`. A PUT answer carries no validator (RFC 9110 §9.3.4,
+ * enforced by `dropPutValidators`), so the `ETag` the root stamps everywhere else is left off these.
+ */
+const putResponsesOf = (document_: OpenApiDocument): Set<unknown> =>
+    new Set(
+        operationsOf(document_)
+            .filter(({ method }) => OpenAPIV3.HttpMethods.PUT === method)
+            .flatMap(({ operation }) => Object.values(operation.responses ?? {}))
+    );
+
+/**
  * Stamp the root's `x-app-level-headers` onto every response, then spend the key.
  *
  * Never overwrites: a response that declares its own `Cache-Control` (a `no-store` download, a
@@ -63,10 +74,11 @@ export const withAppLevelHeaders: Step = (document_) => {
     if (!isHeaderMap(headerMap))
         throw new Error('[openapi] the root declares no `x-app-level-headers` map.');
 
+    const onPut = putResponsesOf(document_);
     for (const response of inlineResponsesOf(document_)) {
         const headers = response.headers ?? {};
         for (const [name, component] of Object.entries(headerMap))
-            if (!declares(headers, name))
+            if (!declares(headers, name) && !(onPut.has(response) && name === 'ETag'))
                 headers[name] = { $ref: `#/components/headers/${component}` };
         response.headers = headers;
     }

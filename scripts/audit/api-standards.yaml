@@ -66,7 +66,7 @@ rules:
       standard: rfc9110
       section: conditional requests
       rule: An origin server that receives `If-Match` MUST evaluate it before performing the method, using the strong comparison (§13.1.1), and one that receives `If-None-Match` on a request that selects a representation MUST evaluate it, answering a GET or HEAD whose tag matches with 304 (§13.1.2).
-      house: Every read the contract declares a `304` on (`x-cache` other than `no-store`) sends an `ETag` (RFC 9110 §8.8.3 SHOULD), the two-part `"<editRevision>.<digest>"` one on a versioned item read, and the versioned-resources table lists exactly the `x-versioned` paths (docs/api/write-methods.md#conditional-writes-etag-and-if-match).
+      house: Every read the contract declares a `304` on (`x-cache` other than `no-store`) sends an `ETag` (RFC 9110 §8.8.3 SHOULD), the two-part `"<editRevision>.<digest>"` one on a versioned item read, and the versioned-resources table lists exactly the `x-versioned` paths (docs/api/write-methods.md#conditional-writes-etag-and-if-match). A PUT answer carries no validator (§9.3.4).
       source:
           [
               https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1,

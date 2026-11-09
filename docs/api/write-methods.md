@@ -452,6 +452,9 @@ sequenceDiagram
 ### Which resources are versioned
 
 A resource is versioned when its item read hands out an `ETag` **and** its write honours `If-Match`.
+A PUT answer never carries a validator: every PUT here transforms what it stores, and RFC 9110 §9.3.4
+forbids a validator on the answer then. `dropPutValidators` (`http/preconditions.ts`) strips it
+whatever the controller or Express set.
 The contract says so with one marker on the path item — `x-versioned: [get, put, patch, delete]` —
 and the bundler adds the header parameter, the 412 and the response header from it.
 
@@ -518,7 +521,7 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
 | Header | Result |
 | --- | --- |
 | absent | the write runs unconditionally |
-| `"<tag>"` whose edit part matches the stored version | the write runs; the response carries the **new** `ETag` |
+| `"<tag>"` whose edit part matches the stored version | the write runs; a PATCH's response carries the **new** `ETag`, a PUT's carries none |
 | `"<tag>"` whose edit part is old, or the row is gone | **412** `PRECONDITION_FAILED`, nothing written |
 | several tags, `"a", "b"` | matches if any edit part does |
 | `*` | matches any row that exists |
@@ -555,7 +558,8 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
 ### For a client
 
 1. Keep the `ETag` of the record the form loaded.
-2. Send it back as `If-Match` on the save; take the new `ETag` from the 200.
+2. Send it back as `If-Match` on the save; take the new `ETag` from a PATCH's 200. After a PUT, re-read
+   with GET: a PUT answer carries no `ETag` or `Last-Modified` (RFC 9110 §9.3.4).
 3. On 412 the record changed under you: re-read it, show the user what is different, resend.
 
 ## Date filters

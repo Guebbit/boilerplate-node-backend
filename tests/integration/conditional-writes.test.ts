@@ -306,6 +306,20 @@ describe('PUT', () => {
         const stored = await readOrder(String(order._id));
         expect(stored?.email).toBe('fresh@example.com');
     });
+
+    it('answers no validator, neither a tag nor a modification date (RFC 9110 §9.3.4)', async () => {
+        const { bearer, user } = await authenticateAs('admin');
+        const order = await createOrder(user, [toOrderItem(await createProduct(), 1)]);
+
+        const put = await api()
+            .put(`/orders/${String(order._id)}`)
+            .set('Authorization', bearer)
+            .send({ email: 'put@example.com' });
+
+        expect(put.status).toBe(200);
+        expect(put.headers).not.toHaveProperty('etag');
+        expect(put.headers).not.toHaveProperty('last-modified');
+    });
 });
 
 describe('a product edited through its translations', () => {
