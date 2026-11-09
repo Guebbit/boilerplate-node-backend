@@ -9,7 +9,7 @@
  * `src/modules/invoicing/tests/unit/emails.test.ts`.
  */
 import {
-    cardHoldExpiredEmail,
+    holdExpiredEmail,
     orderConfirmEmail,
     orderCanceledEmail,
     type OrderLines
@@ -291,7 +291,7 @@ describe('every order mail prints money in the order"s own currency', () => {
     };
     it.each([
         ['the confirmation', () => orderConfirmEmail('en', NAME, YEN, ORDER_ID)],
-        ['the card-hold expiry', () => cardHoldExpiredEmail('en', YEN)]
+        ['the card-hold expiry', () => holdExpiredEmail('en', YEN)]
     ])('%s', (_label, build) => {
         expect(build().data.total).toContain('¥1,990');
     });

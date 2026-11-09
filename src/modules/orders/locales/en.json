@@ -59,7 +59,7 @@
             "form-date": "Date",
             "form-delete": "(*) Delete as appropriate."
         },
-        "email-card-expired": {
+        "email-hold-expired": {
             "subject": "Your order was cancelled — payment not completed",
             "meta-title": "Order cancelled",
             "greeting": "Hello!",

@@ -159,6 +159,13 @@ export interface OrderDocument
      */
     currency: string;
     /**
+     * The Terms version in force when the buyer placed this order at checkout, frozen from
+     * `termsVersion()` like `currency`. Absent on a staff-placed order: no buyer accepted anything.
+     * Evidence of which text applied (CRD Art. 6(9)) only with the operator's archive of each
+     * version's text. Not personal data.
+     */
+    termsVersion?: string;
+    /**
      * When erasure or inactivity minimisation started this order's PII clock. Only its presence
      * matters: `reap:orders` derives the due date from `paidAt`, `status` and `conformityUntil`
      * on every run. See `docs/theory/data-retention.md#orders-after-the-account`.
@@ -468,6 +475,10 @@ export const orderSchema = new Schema<OrderDocument>(
         currency: {
             type: String,
             required: true
+        },
+        // Frozen at checkout from `termsVersion()`; absent on a staff-placed order.
+        termsVersion: {
+            type: String
         },
         /*
          * The address the order ships to — a SNAPSHOT, exactly like the product snapshots in

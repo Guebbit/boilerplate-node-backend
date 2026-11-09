@@ -54,7 +54,7 @@ process.env.NODE_AUTH_RATE_LIMIT_MAX ??= '10000';
 process.env.NODE_AUTH_RATE_LIMIT_ADDRESS_MAX ??= '10000';
 process.env.NODE_AUTH_RATE_LIMIT_BLOCK_MAX ??= '10000';
 process.env.NODE_AUTH_RATE_LIMIT_DEVICE_MAX ??= '10000';
-process.env.NODE_AUTH_RATE_LIMIT_SESSION_MAX ??= '10000';
+process.env.NODE_AUTH_RATE_LIMIT_SIGNED_IN_MAX ??= '10000';
 
 /**
  * `submissionLimiter` (`POST /tasks`) needs the same treatment, for a sharper reason

@@ -43,8 +43,6 @@ const RATE_LIMITED = [
     'POST /restore',
     'POST /password',
     'POST /reauth',
-    'POST /email-verification/resend',
-    'POST /email-change/resend',
     'POST /email-verification/confirm',
     'POST /email-change/confirm',
     'POST /email-change/undo',
@@ -55,13 +53,8 @@ const RATE_LIMITED = [
     'GET /oauth/:provider/callback'
 ];
 
-/** The credential routes that run `isAuth` first, and so key their per-account budget on the session. */
-const SESSION_KEYED = new Set([
-    'POST /password',
-    'POST /reauth',
-    'POST /email-verification/resend',
-    'POST /email-change/resend'
-]);
+/** The credential routes that run `isAuth` first, and so key their per-account budget on the signed-in account. */
+const SESSION_KEYED = new Set(['POST /password', 'POST /reauth']);
 
 /** Routes that act on the caller's own account and therefore demand a live session. */
 const AUTHENTICATED = [
@@ -195,24 +188,24 @@ describe('account routes — credential rate limiting', () => {
             entry.startsWith('credentials-')
         );
 
-        // The per-account budget (the named account's, or the signed-in session's), a forged
+        // The per-account budget (the named account's, or the signed-in account's), a forged
         // device cookie, address AND address-block: each is keyed differently and defends an
         // attack the others miss. Any one missing reads as protected and is not.
         expect(limiters).toEqual([
-            SESSION_KEYED.has(signature) ? 'credentials-session' : 'credentials-identity',
+            SESSION_KEYED.has(signature) ? 'credentials-signed-in' : 'credentials-identity',
             'credentials-device',
             'credentials-address',
             'credentials-block'
         ]);
     });
 
-    it('authenticates before rate-limiting, so the per-account budget is keyed on the session', () => {
-        // On these routes the body names no account, so the budget reads the session's. Reversed,
+    it('authenticates before rate-limiting, so the per-account budget is keyed on the signed-in account', () => {
+        // On these routes the body names no account, so the budget reads the signed-in account's. Reversed,
         // it would fall back to the address block.
         for (const signature of SESSION_KEYED) {
             const chain = chainOf(router, signature);
 
-            expect(chain.indexOf('isAuth')).toBeLessThan(chain.indexOf('credentials-session'));
+            expect(chain.indexOf('isAuth')).toBeLessThan(chain.indexOf('credentials-signed-in'));
         }
     });
 

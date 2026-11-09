@@ -157,3 +157,75 @@ describe('GET /account/oauth/google/callback issuer check (RFC 9207)', () => {
         expect(spy).not.toHaveBeenCalled();
     });
 });
+
+/** The `r=` (remaining) of the address budget, read off a response's `RateLimit` header. */
+const addressRemaining = (response: { headers: Record<string, unknown> }): number => {
+    const header = String(response.headers.ratelimit);
+    const match = /"credentials-address";r=(\d+)/.exec(header);
+    if (!match) throw new Error(`no address budget in RateLimit: ${header}`);
+    return Number(match[1]);
+};
+
+/** A forged state/verifier cookie pair: both checks only compare the cookie to the query. */
+const FORGED_COOKIES = '__Host-oauth_state=x; __Host-oauth_verifier=y';
+
+/**
+ * How many units of the address budget `callback` cost: the remaining count a probe request sees
+ * before it, minus the one it sees after. The limiter writes `r=` before the handler runs, and a
+ * refund lands after the response, so the second probe is what shows the first one's outcome.
+ *
+ * @param callback - the callback URL path and query to fire
+ * @param cookies - the `Cookie` header to send with it
+ */
+const addressCost = async (callback: string, cookies: string): Promise<number> => {
+    const first = await api().get(callback).set('Cookie', cookies);
+    const second = await api().get(callback).set('Cookie', cookies);
+    return addressRemaining(first) - addressRemaining(second);
+};
+
+/** Fires the GitHub callback for a login `start` began. */
+const githubCallback = (login: { state: string; cookies: string }) =>
+    api()
+        .get(`/account/oauth/github/callback?code=a-code&state=${login.state}`)
+        .set('Cookie', login.cookies);
+
+describe('the callback and the credential budgets', () => {
+    it('counts a redirected failure: a forged pair with ?error= spends the address budget', async () => {
+        const cost = await addressCost(
+            '/account/oauth/github/callback?error=access_denied&state=x',
+            FORGED_COOKIES
+        );
+
+        expect(cost).toBe(1);
+    });
+
+    it.each([
+        ['github', ''],
+        ['google', `&${GOOGLE_ISS}`]
+    ])('counts a garbage code that reaches the %s exchange', async (provider, issuer) => {
+        const spy = jest
+            .spyOn(globalThis, 'fetch')
+            .mockImplementation(() =>
+                Promise.resolve(Response.json({ error: 'invalid_grant' }, { status: 400 }))
+            );
+
+        const cost = await addressCost(
+            `/account/oauth/${provider}/callback?code=garbage&state=x${issuer}`,
+            FORGED_COOKIES
+        );
+
+        expect(spy).toHaveBeenCalled();
+        expect(cost).toBe(1);
+    });
+
+    it('spends nothing on a successful callback', async () => {
+        mockProviders(await googleIdToken());
+        const first = await start('github');
+        const second = await start('github');
+        const one = await githubCallback(first);
+        const two = await githubCallback(second);
+
+        expect(one.headers.location).not.toContain('error=');
+        expect(addressRemaining(one) - addressRemaining(two)).toBe(0);
+    });
+});

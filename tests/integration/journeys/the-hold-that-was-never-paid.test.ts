@@ -70,7 +70,7 @@ describe('an abandoned 3-D Secure challenge', () => {
         expect(await orderOf(owner, order.id)).toMatchObject({ status: 'canceled' });
         expect(await stockOf(staff, productId)).toEqual({ onHand: 10, reserved: 0 });
         expect(await ledgerOf(staff, productId)).toEqual(['expire', 'reserve']);
-        expect(mailsTo(email, 'orders.order-card-expired')).toHaveLength(1);
+        expect(mailsTo(email, 'orders.order-hold-expired')).toHaveLength(1);
     });
 });
 

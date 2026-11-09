@@ -1,3 +1,4 @@
+import express from 'express';
 import type { RequestHandler } from 'express';
 import supertest from 'supertest';
 import type { AuthContext } from '@types';
@@ -32,21 +33,21 @@ const asAccount: RequestHandler = (request, _response, next) => {
     next();
 };
 
-describe('sessionCredentialLimiters on an authenticated route', () => {
+describe('signedInCredentialLimiters on an authenticated route', () => {
     afterEach(() => jest.resetModules());
 
     it('spends one budget per ACCOUNT, however many address blocks the guesses come from', async () => {
-        const sessionCredentialLimiters = await withAccountRateLimits(
+        const signedInCredentialLimiters = await withAccountRateLimits(
             {
-                NODE_AUTH_RATE_LIMIT_SESSION_MAX: '2',
+                NODE_AUTH_RATE_LIMIT_SIGNED_IN_MAX: '2',
                 NODE_AUTH_RATE_LIMIT_ADDRESS_MAX: '50',
                 NODE_AUTH_RATE_LIMIT_BLOCK_MAX: '50'
             },
-            (module) => module.sessionCredentialLimiters
+            (module) => module.signedInCredentialLimiters
         );
 
-        // 401: a wrong password, the only answer that spends `skipSuccessfulRequests` budgets.
-        const app = appAnswering(401, true, asAccount, ...sessionCredentialLimiters);
+        // 401 stands in for any refusal: every status >= 400 spends a `skipSuccessfulRequests` budget.
+        const app = appAnswering(401, true, asAccount, ...signedInCredentialLimiters);
         const guess = (account: string, ip: string) =>
             supertest(app).post('/route').set('X-Forwarded-For', ip).set('x-test-account', account);
 
@@ -141,6 +142,48 @@ describe('credentialLimiters on a public route', () => {
         expect(await statusOf(guess('victim@example.com'))).toBe(401);
         expect(await statusOf(guess('victim@example.com'))).toBe(429);
         expect(await statusOf(guess('other@example.com'))).toBe(401);
+    });
+});
+
+/** A route answering 302 (as the OAuth callback does), flagging it as a failure or not. */
+const redirectingApp = (failed: boolean, limiters: RequestHandler[]) => {
+    const app = express();
+    app.use(express.json());
+    app.get('/route', ...limiters, (request, response) => {
+        request.credentialAttemptFailed = failed;
+        response.redirect(302, '/elsewhere');
+    });
+    return app;
+};
+
+/** Credential limiters with the address budget at two, the others out of the way. */
+const smallAddressLimiters = () =>
+    withAccountRateLimits(
+        {
+            NODE_AUTH_RATE_LIMIT_ADDRESS_MAX: '2',
+            NODE_AUTH_RATE_LIMIT_BLOCK_MAX: '50',
+            NODE_AUTH_RATE_LIMIT_DEVICE_MAX: '50'
+        },
+        (module) => module.credentialLimiters
+    );
+
+describe('credentialLimiters and a failure that redirects', () => {
+    afterEach(() => jest.resetModules());
+
+    it('spends the address budget when the handler flags the failure', async () => {
+        const app = redirectingApp(true, await smallAddressLimiters());
+        const attempt = () => statusOf(supertest(app).get('/route'));
+
+        expect(await attempt()).toBe(302);
+        expect(await attempt()).toBe(302);
+        expect(await attempt()).toBe(429);
+    });
+
+    it('refunds a redirect that is not flagged', async () => {
+        const app = redirectingApp(false, await smallAddressLimiters());
+
+        for (let attempt = 0; attempt < 5; attempt += 1)
+            expect(await statusOf(supertest(app).get('/route'))).toBe(302);
     });
 });
 

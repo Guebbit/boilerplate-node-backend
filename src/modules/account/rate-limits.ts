@@ -11,7 +11,7 @@
  * See: docs/tools/security.md#the-rate-limit-budgets
  */
 
-import type { Request, RequestHandler } from 'express';
+import type { Request, RequestHandler, Response } from 'express';
 import type { RateLimitBudget } from '@types';
 import {
     buildRateLimiter,
@@ -74,13 +74,15 @@ const CREDENTIAL_IDENTITY_BUDGET: RateLimitBudget = {
 
 /**
  * Failed attempts a SIGNED-IN caller makes on the routes that re-prove them (`POST /account/password`,
- * `/reauth`, `/email-verification/resend`, `/email-change/resend`). Those bodies name no account, so the key
- * is the session's own: a hijacked session guessing the password cannot spread across addresses.
- * Never keyed on a body field — those routes validate after their limiter, so an injected `email`
- * would rotate the bucket — and never excused by a device cookie: the session is the proof here.
+ * `/reauth`). One bucket per ACCOUNT, shared by every session: the account's password is what is guessed.
+ *
+ * Trade-off: a stolen session that spends it refuses the owner's other sessions too.
+ * Way out:   a fresh login, not counted here, is fresh enough for `DELETE /account/sessions`.
+ * Keying:    never a body field (validated after the limiter, so an injected `email` would rotate the
+ *            bucket); never excused by a device cookie (the session is the proof here).
  */
-const SESSION_CREDENTIAL_BUDGET: RateLimitBudget = {
-    ...accountRateLimitData.credentialsSession,
+const SIGNED_IN_CREDENTIAL_BUDGET: RateLimitBudget = {
+    ...accountRateLimitData.credentialsSignedIn,
     keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
     keyGenerator: accountIdOf,
     skipSuccessfulRequests: true
@@ -98,11 +100,19 @@ const CREDENTIAL_DEVICE_BUDGET: RateLimitBudget = {
     skip: (request) => !presentsFailingDeviceCookie(request)
 };
 
+/**
+ * Whether a credential attempt succeeded: it answered below 400 AND the OAuth callback did not
+ * flag a failure it redirected (a 302). Without the flag a redirected failure is refunded.
+ */
+const credentialAttemptSucceeded = (request: Request, response: Response): boolean =>
+    !request.credentialAttemptFailed && response.statusCode < 400;
+
 /** Failed attempts from ONE address — defeats spraying a user list. */
 const CREDENTIAL_ADDRESS_BUDGET: RateLimitBudget = {
     ...accountRateLimitData.credentialsAddress,
     keyedBy: KEYED_BY_ADDRESS,
-    skipSuccessfulRequests: true
+    skipSuccessfulRequests: true,
+    requestWasSuccessful: credentialAttemptSucceeded
 };
 
 /** Failed attempts from ONE address block — defeats a proxy pool or an IPv6 allocation. */
@@ -111,6 +121,7 @@ const CREDENTIAL_BLOCK_BUDGET: RateLimitBudget = {
     keyedBy: KEYED_BY_ADDRESS_BLOCK,
     keyGenerator: addressBlockOf,
     skipSuccessfulRequests: true,
+    requestWasSuccessful: credentialAttemptSucceeded,
     requestPropertyName: BLOCK_RATE_LIMIT_PROPERTY
 };
 
@@ -130,6 +141,8 @@ const SHARED_CREDENTIAL_LIMITERS: RequestHandler[] = [
  * token confirms, the second-factor login, OAuth. The per-account budget counts only a request
  * whose body names an account.
  *
+ * A failure that redirects (OAuth) counts too, through `credentialAttemptFailed`.
+ *
  * `skipSuccessfulRequests` on all of them: only FAILURES spend the budget, so a shared address (an
  * office, CI, the e2e suite) is never locked out by people getting it right. Exported as an array
  * because Express flattens one, so a route cannot apply part of the set.
@@ -143,10 +156,10 @@ export const credentialLimiters: RequestHandler[] = [
 
 /**
  * {@link credentialLimiters} for the routes that run `isAuth` FIRST and re-prove the signed-in
- * caller: the per-account budget is the session's own, not a body field.
+ * caller: the per-account budget is the signed-in account's, never a body field.
  */
-export const sessionCredentialLimiters: RequestHandler[] = [
-    buildRateLimiter(SESSION_CREDENTIAL_BUDGET),
+export const signedInCredentialLimiters: RequestHandler[] = [
+    buildRateLimiter(SIGNED_IN_CREDENTIAL_BUDGET),
     ...SHARED_CREDENTIAL_LIMITERS
 ];
 
@@ -348,7 +361,7 @@ export const accountRateLimits: readonly RateLimitBudget[] = [
     CREDENTIAL_DEVICE_BUDGET,
     CREDENTIAL_ADDRESS_BUDGET,
     CREDENTIAL_BLOCK_BUDGET,
-    SESSION_CREDENTIAL_BUDGET,
+    SIGNED_IN_CREDENTIAL_BUDGET,
     PASSWORD_CHECK_BUDGET,
     PASSWORD_CHECK_BLOCK_BUDGET,
     SIGNUP_IDENTITY_BUDGET,

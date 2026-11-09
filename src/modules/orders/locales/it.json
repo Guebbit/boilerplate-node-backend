@@ -59,7 +59,7 @@
             "form-date": "Data",
             "form-delete": "(*) Cancellare la dicitura inutile."
         },
-        "email-card-expired": {
+        "email-hold-expired": {
             "subject": "Il tuo ordine è stato annullato — pagamento non completato",
             "meta-title": "Ordine annullato",
             "greeting": "Ciao!",

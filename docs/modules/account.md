@@ -223,7 +223,7 @@ Three things in the flow above are decisions rather than mechanics:
   address again through `PUT`/`PATCH /account` is a no-op (a double-submitted save must not mail
   twice), so `POST /account/email-change/resend` is the explicit way to ask for the link again.
   The old address was told once, when the change was requested; telling it on every resend would
-  read like a takeover alert. It uses `POST /account/email-verification/resend`'s cooldown and budget and
+  read like a takeover alert. It uses `POST /account/email-verification/resend`'s cooldown and mailbox budget and
   answers `200 { resendAfter }` like it, so the button counts down from the server's number; when
   nothing is pending it mails nothing and answers `resendAfter` 0.
 - **A new change request is paced, and so is a reset request.** A genuine change to a different
@@ -394,6 +394,8 @@ the write is re-checked.
 
 `NODE_TERMS_VERSION` and `termsVersion()` belong here, with the consent record signup writes: the
 version is stored beside the date the Terms were accepted. `GET /config` prints it as `termsVersion`.
+[`orders`](./orders.md#creating-an-order) also reads `termsVersion()`: an order placed at checkout
+freezes the version in force at placement.
 
 ## Operator identity {#operator-identity}
 

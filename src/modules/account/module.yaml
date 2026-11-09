@@ -62,16 +62,18 @@ rateLimits:
             the address budget because a block is shared by many honest callers (an office, a CGNAT
             pool, one IPv6 customer's whole allocation), not by one.
         audited: true
-    credentialsSession:
+    credentialsSignedIn:
         name: Credential guesses — per signed-in account
-        namespace: credentials-session
-        environmentVariable: NODE_AUTH_RATE_LIMIT_SESSION_MAX
+        namespace: credentials-signed-in
+        environmentVariable: NODE_AUTH_RATE_LIMIT_SIGNED_IN_MAX
         defaultMax: 10
         windowMs: 900000
-        bounds:
-            Failed attempts a signed-in caller makes to re-prove themselves — a stolen session guessing
-            the password, or spamming the verification mail. Keyed on the session, so changing
-            address does not refill it.
+        bounds: >-
+            Failed password attempts a signed-in caller makes on the routes that re-prove them
+            (`/password`, `/reauth`). Keyed on the ACCOUNT, so neither a new address nor a second
+            session refills it. Trade-off: a stolen session that spends it refuses the owner's other
+            sessions too, until the window ends. A fresh sign-in is not counted here and is fresh
+            enough to end every other session; a password reset ends them all.
         audited: true
     passwordCheck:
         name: Password-strength checks

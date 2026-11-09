@@ -510,6 +510,8 @@ const placeOrderInputOf = ({
     email: user.email,
     locale: buyerLocale,
     notes,
+    // The storefront shows "By placing the order you accept the Terms" above the order button.
+    termsAccepted: true,
     lines: placeLinesOf(joined),
     paymentMethod: requestedMethod,
     billingAddress: toOrderAddress(billingAddress),

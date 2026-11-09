@@ -231,6 +231,11 @@ address or method, cart pre-flight and clearing — stays with the caller; `plac
 what it needs to hold and write. See [Checkout](./cart-checkout.md#the-sequence) for the storefront
 path in full.
 
+An order placed through checkout freezes the `termsVersion` in force at placement, as it freezes its
+`currency`; a staff-placed order carries none. The label is evidence only together with the
+operator's archive of each version's text (CRD Art. 6(9)). `GET /config` shows the version in force
+now. See [Terms version](./account.md#terms-version).
+
 A line the shelf only half covered carries what it owes, frozen like the rest of it: `backorderedQuantity`
 (how many of `quantity` were owed), `promisedAt` (the product's restock date, else the day it was
 placed plus 30 days; stored as that instant, answered as the shop day) and `promiseDated` (whether that was a date the product named). The confirmation
@@ -272,7 +277,9 @@ exists for manual corrections, not as a second sales channel:
   role without `display:Product` gets `404` for a hidden or removed product and an order never
   copies a product its caller may not read;
 - it holds stock for the default reservation window like any other order, so an unpaid correction
-  order is cancelled by the same reservation sweep as an abandoned checkout;
+  order is cancelled by the same reservation sweep as an abandoned checkout, and its buyer gets the
+  same hold-expiry notice (`orders.order-hold-expired`): they were sent the confirmation, so the
+  cancel is told too;
 - carrying no address or shipping, it cannot be fulfilled through the warehouse's normal
   ship/deliver flow — moving it forward is the admin override's job (see below), not a parcel
   someone can actually hand over.
@@ -739,14 +746,14 @@ the buyer's own edit is a later, optional step.
 
 Every cancel and every refund leaves one written trace, and each has exactly one mail:
 
-| What happened                                      | The mail                                                                                             | Template                                                 |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| The customer, or staff, cancelled                  | what the cancel did to their money: going back, no refund, or nothing charged                        | `orders.order-canceled`                                  |
-| The reservation sweep cancelled (a hold timed out) | a card hold's expiry notice; a transfer's is `payments`' (`cause: reservation_expired` on the event) | `orders.order-card-expired`, `payments.transfer-expired` |
-| The customer withdrew before dispatch              | `returns`' withdrawal acknowledgement                                                                | `returns.notice`                                         |
-| The account was erased                             | none: the address belongs to an account that no longer exists                                        |                                                          |
-| Money went back outside a return                   | the amount, and whether it was everything                                                            | `payments.refund-issued` (sent by `payments`)            |
-| Money went back for a return                       | `returns`' closing notice                                                                            | `returns.notice`                                         |
+| What happened                                      | The mail                                                                                                                              | Template                                                 |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| The customer, or staff, cancelled                  | what the cancel did to their money: going back, no refund, or nothing charged                                                         | `orders.order-canceled`                                  |
+| The reservation sweep cancelled (a hold timed out) | a hold's expiry notice (a card order or a staff-created one); a transfer's is `payments`' (`cause: reservation_expired` on the event) | `orders.order-hold-expired`, `payments.transfer-expired` |
+| The customer withdrew before dispatch              | `returns`' withdrawal acknowledgement                                                                                                 | `returns.notice`                                         |
+| The account was erased                             | none: the address belongs to an account that no longer exists                                                                         |                                                          |
+| Money went back outside a return                   | the amount, and whether it was everything                                                                                             | `payments.refund-issued` (sent by `payments`)            |
+| Money went back for a return                       | `returns`' closing notice                                                                                                             | `returns.notice`                                         |
 
 The analytics event follows the same split: only a hold that timed out reports
 `order_reservation_expired`. An erasure's cancel, which also has no request behind it, reports
@@ -857,8 +864,10 @@ to [shop](./shop.md). `orders` reads both. A partly-set return address counts as
 
 ### What the placed-order emails carry
 
-Both placed-order emails, the confirmation and the bank-transfer instructions that replace it, end
-with the same partial (`templates/partials/orders.withdrawal-notice.ejs`). The text goes in the body,
+The placed-order confirmation, which every order gets whatever the payment method, ends with the
+withdrawal partial (`templates/partials/orders.withdrawal-notice.ejs`). A `bank_transfer` order also
+gets the instructions mail, [`payments`'](./payments.md#bank-transfer), which does not carry it. The
+text goes in the body,
 not behind a link: a web page is not a durable medium (CJEU C-49/11). `withdrawalNotice()` in
 `emails.ts` builds it from the official Annex I wording, and picks one of three cases:
 

@@ -208,7 +208,7 @@ export const requestEmailVerificationFor = (
  * again reads like a takeover alert. A no-op (`resendAfter` 0, nothing sent, nothing audited) when
  * no change is pending, so a client need not read the profile first.
  *
- * Same cooldown and the same per-account budget as {@link requestEmailVerificationFor}, anchored on
+ * Same cooldown as {@link requestEmailVerificationFor}, anchored on
  * the `email-change` token, since that is the one the last send minted. `sendVerificationEmail`
  * revokes the previous link, so only the newest one ever confirms.
  *

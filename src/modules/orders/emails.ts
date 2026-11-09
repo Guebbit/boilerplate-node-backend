@@ -280,19 +280,19 @@ export const orderConfirmEmail = (
 };
 
 /**
- * A `card` hold that lapsed — a customer who never finished checkout gets the explanation once the
- * thirty-minute reservation lapses. (A bank transfer nobody sent is answered by `payments`.)
+ * Any order whose stock hold lapsed unpaid (a checkout card or a staff-created order): its buyer
+ * gets the explanation once the reservation ends. A transfer's is `payments`'.
  */
-export const cardHoldExpiredEmail = (locale: string, order: OrderLines): EmailContent => {
+export const holdExpiredEmail = (locale: string, order: OrderLines): EmailContent => {
     const t = translator(locale);
     return {
-        template: 'orders.order-card-expired',
-        subject: t('orders.email-card-expired.subject'),
+        template: 'orders.order-hold-expired',
+        subject: t('orders.email-hold-expired.subject'),
         data: {
             locale,
-            pageMetaTitle: t('orders.email-card-expired.meta-title'),
-            greeting: t('orders.email-card-expired.greeting'),
-            body: t('orders.email-card-expired.body'),
+            pageMetaTitle: t('orders.email-hold-expired.meta-title'),
+            greeting: t('orders.email-hold-expired.greeting'),
+            body: t('orders.email-hold-expired.body'),
             total: t('orders.email-confirm.total', {
                 total: formatMoney(locale, orderTotal(order), order.currency)
             }),

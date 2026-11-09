@@ -37,11 +37,7 @@ import {
 } from '@modules/account/emails';
 import { contactRequestEmail, erasureNoticeEmail } from '@modules/tasks/emails';
 import { examplePublishedEmail } from '@modules/example';
-import {
-    orderConfirmEmail,
-    cardHoldExpiredEmail,
-    orderCanceledEmail
-} from '@modules/orders/emails';
+import { orderConfirmEmail, holdExpiredEmail, orderCanceledEmail } from '@modules/orders/emails';
 import {
     paymentReceivedEmail,
     refundIssuedEmail,
@@ -167,7 +163,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         items: [{ quantity: 2, product: { title: 'Boiled sweets', price: '3.50' } }],
         currency: 'EUR'
     }),
-    'orders.order-card-expired': cardHoldExpiredEmail(locale, {
+    'orders.order-hold-expired': holdExpiredEmail(locale, {
         items: [{ quantity: 2, product: { title: 'Boiled sweets', price: '3.50' } }],
         currency: 'EUR'
     }),
