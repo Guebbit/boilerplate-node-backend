@@ -19,7 +19,8 @@ import {
     toOrderItem,
     markOrderPaidAt
 } from '@modules/orders/tests/factories';
-import { carryOrderTo } from '@modules/delivery/tests/factories';
+import { carryOrderTo, fulfillmentOrdersOf, shipmentsOf } from '@modules/delivery/tests/factories';
+import { deliveryService } from '@modules/delivery';
 import { resetDomainEvents, onDomainEvent } from '@kernel/events';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
@@ -1235,6 +1236,38 @@ describe('what a new return leaves behind', () => {
 
         expect(!outcome.success && outcome.status).toBe(409);
         expect(await returnRepository.findByOrderId(orderId)).toHaveLength(0);
+    });
+
+    it('opens a return when a shipment lands between the read and the cancel, never a full refund', async () => {
+        const { user, orderId } = await orderIn(OrderStatus.processing);
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(orderId);
+        const realWithdraw = orderService.withdrawById.bind(orderService);
+        // The shipment lands after the "before dispatch" read and before the cancel runs.
+        jest.spyOn(orderService, 'withdrawById').mockImplementationOnce((...args) =>
+            deliveryService
+                .shipFulfillmentOrder(
+                    String(fulfillmentOrder._id),
+                    {},
+                    asAdmin(),
+                    callerContextAs('admin')
+                )
+                .then(() => realWithdraw(...args))
+        );
+
+        const outcome = await returnService.createReturn(
+            { orderId, reason: 'withdrawal' },
+            buyer(user),
+            testCallerContext
+        );
+
+        const returns = await returnRepository.findByOrderId(orderId);
+        expect(outcome.success).toBe(true);
+        const stored = await readOrder(orderId);
+        expect(stored?.status).toBe(OrderStatus.shipped);
+        expect(await shipmentsOf(orderId)).toHaveLength(1);
+        expect(
+            returns.map(({ kind, status, lines }) => ({ kind, status, lines: lines.length }))
+        ).toEqual([{ kind: 'return', status: 'approved', lines: 2 }]); // the shirt and the mug
     });
 });
 
