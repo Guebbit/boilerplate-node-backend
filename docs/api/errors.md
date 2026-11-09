@@ -1,7 +1,11 @@
 # Error Responses
 
-Every 4xx and 5xx this API sends is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem
-details document, as `application/problem+json`. One shape, one media type, whatever route failed.
+Every 4xx and 5xx the application sends is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457)
+problem details document, as `application/problem+json`. One shape, one media type, whatever route
+failed. Node's HTTP server answers four statuses itself, outside Express, with no body: 400 and 431
+for a malformed request line or headers (before any route), and 408 (request not received within
+`NODE_HTTP_REQUEST_TIMEOUT_MS`), 413 (chunk extension over 16 KiB) and 400 (malformed body framing)
+mid-request, after the route was reached. See [Outside the JSON API](#outside-the-json-api).
 
 | | Standard |
 | --- | --- |
@@ -155,6 +159,7 @@ These answers are not problem documents on purpose:
 | `GET /.well-known/security.txt`, found | plain text, fixed by RFC 9116. Its 404 is a problem |
 | A stream already open (SSE) | the status line is gone; the stream carries its own events |
 | A redirect (OAuth callback success) | a `302`, not an error |
+| Node's own 400 / 408 / 413 / 431 | Node's HTTP server writes a bare status line and closes the connection; no language, no request id. A broken request line or headers never reach a route; a timed-out or malformed body is cut after the route has started. Behind the Traefik overlay only the 431 reaches a client; Traefik answers a bad request line itself and cuts a slow request at 60 s, before Node's 408 |
 
 The 404 for a path that matches nothing and the 405 for a method a path does not offer belong to no
 operation, so the contract describes them once, in the root document's description.

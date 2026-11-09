@@ -31,13 +31,17 @@ info:
         (`{ methods }`). An answer with nothing to say is `204` and has no body. A create is `201`
         with a `Location` header. See `docs/api/responses.md`.
 
-        Errors: every 4xx and 5xx answers RFC 9457 problem details as `application/problem+json`,
+        Errors: every 4xx and 5xx the application answers is RFC 9457 problem details as `application/problem+json`,
         whatever `Accept` says: `type` (always `about:blank`), `title` (the English status
         phrase), `status`, `detail` (the translated sentence), `instance` (`urn:uuid:` and the
         request id) and the `errors` extension, whose `code` is the machine key. That includes the
         answers no operation declares: a path that matches nothing (404) and a method a path does
         not offer (405, with `Allow`). The few non-JSON answers (probes, the Prometheus text,
         `security.txt`) are named on their own operations.
+        Node's HTTP server answers four statuses itself, outside Express, with no body: 400 and 431
+        for a malformed request line or headers (before any route), and 408 (request not received
+        within `NODE_HTTP_REQUEST_TIMEOUT_MS`), 413 (chunk extension over 16 KiB) and 400 (malformed
+        body framing) mid-request, after the route was reached.
 
         The header is intentionally not declared per operation: it applies to all of them and
         clients set it once in an interceptor, so declaring it on every operation would only add a
