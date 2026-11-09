@@ -12,6 +12,7 @@ import { availableStock, preorderAllowanceLeft, stockFlags } from './domain/stoc
 import { isPreorder } from './domain/preorder';
 import { isBackorder } from './domain/backorder';
 import { isBuyable, type BuyableFacts } from './domain/buyable';
+import { NO_PRODUCT_ACTIONS } from './domain/actions';
 import { lowStockThreshold } from './config';
 import type { ProductDocument } from './model';
 import { shopCurrency, shopDayOf } from '@modules/shop';
@@ -20,7 +21,8 @@ import { padDecimal } from '@domain-primitives/money';
 /**
  * The block of a product's response that is derived, never stored: `available` (the shelf, or for
  * a preorder what is left of its allowance), the `inStock` /
- * `lowStock` flags, `preorder`, `backorder`, `buyable` and the live `currency`. One place, because the document's own
+ * `lowStock` flags, `preorder`, `backorder`, `buyable`, the live `currency` and `actions` (all `false`:
+ * no caller yet, `services/actions.ts` stamps the real ones). One place, because the document's own
  * serialisation and a presented document must agree on every one of them.
  *
  * @param facts - the stock counters, the preorder allowance and what decides a preorder
@@ -44,7 +46,8 @@ export const derivedStockFields = (facts: BuyableFacts) => {
         preorder,
         backorder: isBackorder(facts, now),
         buyable: isBuyable(facts, now),
-        currency: shopCurrency()
+        currency: shopCurrency(),
+        actions: NO_PRODUCT_ACTIONS
     };
 };
 

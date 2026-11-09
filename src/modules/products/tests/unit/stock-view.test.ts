@@ -6,6 +6,7 @@
 import { callerAs, strangerCaller } from '@tests/callers';
 import { versionOf } from '@infrastructure/persistence/versioning';
 import type { Product } from '@types';
+import { NO_PRODUCT_ACTIONS } from '../../domain';
 import { canSeeStock, redactStock } from '../../services/stock-view';
 
 /** A wire product, counters included. */
@@ -19,7 +20,8 @@ const product: Product = {
     buyable: true,
     onHand: 12,
     reserved: 2,
-    available: 10
+    available: 10,
+    actions: NO_PRODUCT_ACTIONS
 };
 
 describe('canSeeStock', () => {
@@ -57,7 +59,8 @@ describe('redactStock', () => {
             currency: 'EUR',
             inStock: true,
             lowStock: false,
-            buyable: true
+            buyable: true,
+            actions: NO_PRODUCT_ACTIONS
         });
     });
 

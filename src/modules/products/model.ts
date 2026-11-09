@@ -38,6 +38,7 @@ export interface ProductRecord extends Omit<
     | 'preorder'
     | 'backorder'
     | 'currency'
+    | 'actions'
     | 'releaseDate'
     | 'restockDate'
     | 'createdAt'

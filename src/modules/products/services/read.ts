@@ -13,6 +13,8 @@ import { canSeeStock, redactStock } from './stock-view';
 import { productRepository } from '../repository';
 import { translationsWithFallback } from './lookups';
 import { canSeeTranslations } from './translation-view';
+import { standingOn, standingOnRead, withActions } from './actions';
+import type { ProductStanding } from '../domain/actions';
 import type { ProductDocument } from '../model';
 
 /**
@@ -80,7 +82,15 @@ export const getByIdForCaller = (
 
     return productRepository
         .findByIdScoped(id, scope)
-        .then((product) => (product ? presentForCaller(product, context.caller) : product));
+        .then((product) =>
+            product
+                ? presentWithStanding(
+                      product,
+                      context.caller,
+                      standingOnRead(callerScope, context.caller)
+                  )
+                : product
+        );
 };
 
 /**
@@ -89,13 +99,30 @@ export const getByIdForCaller = (
  * `read:StockLevel`. The write routes answer with this too, so a write's body is the product's
  * own read (AIP-133/134/164).
  *
+ * `actions` carries the caller's own keys: a write is never served from the shared cache.
+ *
  * @param product - the stored document
  * @param caller - `request.caller`, or `undefined` for a path with no request (sees no counters)
  */
 export const presentForCaller = (product: ProductDocument, caller?: Caller): Promise<Product> =>
+    presentWithStanding(product, caller, standingOn(caller));
+
+/**
+ * {@link presentForCaller} with the standing chosen by the caller of this function.
+ *
+ * @param product - the stored document
+ * @param caller - `request.caller`
+ * @param standing - the flags' basis: the keys for a write, the read standing for a cacheable read
+ */
+const presentWithStanding = (
+    product: ProductDocument,
+    caller: Caller | undefined,
+    standing: ProductStanding
+): Promise<Product> =>
     resolveToLocale(product)
         .then((resolved) => withTranslations(product, resolved, caller))
-        .then((visible) => redactStock(visible, canSeeStock(caller)));
+        .then((visible) => redactStock(visible, canSeeStock(caller)))
+        .then((visible) => withActions(visible, standing));
 
 /**
  * The resolved product plus its `translations`, for a caller who may read them; untouched
