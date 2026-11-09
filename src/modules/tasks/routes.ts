@@ -16,8 +16,8 @@ import { getTasks } from './controllers/get-tasks';
 import { getTaskById } from './controllers/get-task';
 import { getTaskSummary } from './controllers/get-task-summary';
 import { postTaskMarkSpam, postTaskReopen, postTaskResolve } from './controllers/post-task-doors';
-import { deleteTaskAssignee } from './controllers/delete-task-assignee';
-import { putTaskAssignee } from './controllers/put-task-assignee';
+import { postTaskAssign } from './controllers/post-task-assign';
+import { postTaskUnassign } from './controllers/post-task-unassign';
 import { postTaskNote } from './controllers/post-task-note';
 import { deleteTask } from './controllers/delete-task';
 import { noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
@@ -79,9 +79,10 @@ router.post('/:id/resolve', requirePermission('update', 'Task'), noStore, postTa
 router.post('/:id/mark-spam', requirePermission('update', 'Task'), noStore, postTaskMarkSpam);
 router.post('/:id/reopen', requirePermission('update', 'Task'), noStore, postTaskReopen);
 
-// Assignment: taking a task is assigning yourself; giving it back clears it.
-router.put('/:id/assignee', requirePermission('update', 'Task'), noStore, putTaskAssignee);
-router.delete('/:id/assignee', requirePermission('update', 'Task'), noStore, deleteTaskAssignee);
+// Assignment: a pair of actions, each with its own bell and audit row. Taking a task is assigning
+// yourself; a repeat finds the state reached and answers 409 (`docs/api/write-methods.md`).
+router.post('/:id/assign', requirePermission('update', 'Task'), noStore, postTaskAssign);
+router.post('/:id/unassign', requirePermission('update', 'Task'), noStore, postTaskUnassign);
 
 // POST /tasks/:id/notes — the staff thread, append-only. `idempotencyKey` after the permission
 // check: a note has no delete door, so a retry after a lost answer must replay, not append twice.

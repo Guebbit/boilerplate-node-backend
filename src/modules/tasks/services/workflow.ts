@@ -72,6 +72,18 @@ const isDuplicateKey = (error: unknown): boolean =>
 const notOpen = (): ResponseReject =>
     generateReject(409, [{ code: ERROR_CODES.TASK_NOT_OPEN, message: t('tasks.not-open') }]);
 
+/** The 409 for taking a task back from nobody. */
+const notAssigned = (): ResponseReject =>
+    generateReject(409, [
+        { code: ERROR_CODES.TASK_NOT_ASSIGNED, message: t('tasks.not-assigned') }
+    ]);
+
+/** The 409 for assigning a task to the person who holds it already. */
+const alreadyAssigned = (): ResponseReject =>
+    generateReject(409, [
+        { code: ERROR_CODES.TASK_ALREADY_ASSIGNED, message: t('tasks.already-assigned') }
+    ]);
+
 /** The 404 a missing or out-of-jurisdiction task earns: it does not admit to existing. */
 const notFound = (): ResponseReject => generateReject(404, [t('generic.error-item-gone')]);
 
@@ -261,6 +273,9 @@ const assign = (
 
         const { task } = loaded;
         if (!isOpen(task.status)) return notOpen();
+        // A repeat is refused before any write: no second bell, no second audit row.
+        if (task.assigneeId !== undefined && String(task.assigneeId) === userId)
+            return alreadyAssigned();
 
         return mayBeAssigned(userId, task.routeSet).then((allowed) => {
             if (!allowed)
@@ -286,8 +301,8 @@ const assign = (
     });
 
 /**
- * Give a task back. An `in_progress` task goes back to `new`. Answers the task whether or
- * not anyone held it.
+ * Give a task back, in any status. An `in_progress` task goes back to `new`. A task nobody holds
+ * is a 409 `TASK_NOT_ASSIGNED`, and nothing is written or audited.
  *
  * @param id - the task
  * @param context - the caller
@@ -298,9 +313,11 @@ const unassign = (
 ): Promise<ResponseSuccess<Task> | ResponseReject> =>
     loadWorkable(id, context).then((loaded) => {
         if ('refusal' in loaded) return loaded.refusal;
+        if (loaded.task.assigneeId === undefined) return notAssigned();
 
         return taskRepository.unassign(id).then((released) => {
-            if (!released) return notFound();
+            // The write is conditional on an assignee: losing a race to another unassign lands here.
+            if (!released) return notAssigned();
             recordAudit(context, {
                 action: tasksAuditActions.ADMIN_TASK_UNASSIGNED,
                 outcome: 'success',

@@ -814,7 +814,7 @@ not a setting: a raised window does not lengthen it). A machine's decision stays
 looks at the flag before it ends: staff can lift it, or place a manual hold, which has no maximum. The
 account also carries a review flag (`purchaseHoldFlaggedAt`), set with an automatic hold or alone by
 the paid count. The flag outlives the hold's end, so an unreviewed pause does not drop off the staff
-list; it stays until a staff member acts: placing a hold or `DELETE /users/{id}/purchase-hold` clears
+list; it stays until a staff member acts: placing a hold or `POST /users/{id}/lift-purchase-hold` clears
 it and restarts the count from that moment, so the same cancellations never trigger a second hold. The hold is stored on the user (`users` owns it, see
 [users](./users.md#purchase-hold)); `orders` only owns the count. Staff are told by a work notice
 (`order.purchase_hold_placed` → [shop-tasks](./shop-tasks.md#the-notices): the bell,

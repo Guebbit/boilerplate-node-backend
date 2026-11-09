@@ -331,7 +331,7 @@ So the server sends the answer. `Order.actions` and `PaymentActions` are compute
 stored. `example` is the minimal worked case: `Example.actions` is flags `{ publish, archive, unarchive, update, delete }` (one door per lifecycle event, like `User.actions`),
 the events from the domain's table and the two keys asked of the kernel per row (`permitsOnRows`), so
 the own-rows condition in `authorization.yaml` stays its only encoding. `User.actions` is the
-account-side case: one flag per endpoint (`activate`, `restore`, `setPurchaseHold`…), assembled in
+account-side case: one flag per endpoint (`activate`, `restore`, `placePurchaseHold`…), assembled in
 `users/services/actions.ts` from the caller's keys, `access`'s pure `mayChangeAccount` and the row's
 own state, and only mapped by the presenter ([users](../modules/users.md#actions)):
 

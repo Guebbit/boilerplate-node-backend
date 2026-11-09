@@ -29,6 +29,8 @@
         "already-open": "This task is already open.",
         "superseded": "A newer open task already covers this situation, so this one cannot be reopened.",
         "not-open": "This task is closed. Reopen it first.",
-        "assignee-invalid": "That person cannot work this task."
+        "assignee-invalid": "That person cannot work this task.",
+        "already-assigned": "This task is already assigned to that person.",
+        "not-assigned": "Nobody holds this task, so there is nothing to give back."
     }
 }

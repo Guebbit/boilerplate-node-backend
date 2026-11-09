@@ -28,7 +28,7 @@ describe('userActionsFor — the keys', () => {
             delete: true,
             hardDelete: true,
             restore: false,
-            setPurchaseHold: true,
+            placePurchaseHold: true,
             liftPurchaseHold: false,
             activate: false,
             deactivate: true
@@ -122,10 +122,10 @@ describe('userActionsFor — the account’s state', () => {
         ).toBe(true);
     });
 
-    it('still offers setPurchaseHold on an account that is held, to extend it', () => {
+    it('still offers placePurchaseHold on an account that is held, to extend it', () => {
         expect(
             userActionsFor({ id: 'owner', purchaseHold: holdInForce }, false, callerOf('moderator'))
-                .setPurchaseHold
+                .placePurchaseHold
         ).toBe(true);
     });
 });

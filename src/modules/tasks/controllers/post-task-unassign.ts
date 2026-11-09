@@ -1,6 +1,6 @@
 /**
  * @module
- * `DELETE /tasks/:id/assignee` (give back).
+ * `POST /tasks/:id/unassign` (give back).
  *
  * See: docs/modules/tasks.md
  */
@@ -13,8 +13,8 @@ import { catchAs, refused } from '@infrastructure/http/controller';
 import { requireId } from '@infrastructure/http/ids';
 import { taskService } from '../services';
 
-/** DELETE /tasks/:id/assignee (staff) — give the task back. */
-export const deleteTaskAssignee = (request: Request<{ id: string }>, response: Response) => {
+/** POST /tasks/:id/unassign (staff) — give the task back. */
+export const postTaskUnassign = (request: Request<{ id: string }>, response: Response) => {
     const id = requireId(request, response, { notFound: 'generic.error-item-gone' });
     if (!id) return Promise.resolve();
 
@@ -24,5 +24,5 @@ export const deleteTaskAssignee = (request: Request<{ id: string }>, response: R
             if (refused(response, result)) return;
             successResponse<Task>(response, result.data, 200);
         })
-        .catch(catchAs(response, 'deleteTaskAssignee'));
+        .catch(catchAs(response, 'postTaskUnassign'));
 };

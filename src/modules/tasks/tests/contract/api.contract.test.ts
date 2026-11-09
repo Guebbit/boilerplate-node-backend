@@ -364,10 +364,10 @@ describe('assignment and notes', () => {
         const id = await createContactTask();
 
         const taken = await api()
-            .put(`/tasks/${id}/assignee`)
+            .post(`/tasks/${id}/assign`)
             .set('Authorization', bearer)
             .send({ userId: user.id });
-        const given = await api().delete(`/tasks/${id}/assignee`).set('Authorization', bearer);
+        const given = await api().post(`/tasks/${id}/unassign`).set('Authorization', bearer);
 
         expect(taken.status).toBe(200);
         expect(taken.body).toMatchObject({ status: 'in_progress', assigneeId: user.id });
@@ -376,12 +376,32 @@ describe('assignment and notes', () => {
         expect(given.body).not.toHaveProperty('assigneeId');
     });
 
+    it('answers 409 to a repeated assign and to giving back a task nobody holds', async () => {
+        const { bearer, user } = await authenticateAs('admin');
+        const id = await createContactTask();
+        const none = await api().post(`/tasks/${id}/unassign`).set('Authorization', bearer);
+        await api()
+            .post(`/tasks/${id}/assign`)
+            .set('Authorization', bearer)
+            .send({ userId: user.id });
+
+        const again = await api()
+            .post(`/tasks/${id}/assign`)
+            .set('Authorization', bearer)
+            .send({ userId: user.id });
+
+        expect(none.status).toBe(409);
+        expect(none.body.errors[0].code).toBe('TASK_NOT_ASSIGNED');
+        expect(again.status).toBe(409);
+        expect(again.body.errors[0].code).toBe('TASK_ALREADY_ASSIGNED');
+    });
+
     it('422s an assignee id that is not an id', async () => {
         const { bearer } = await authenticateAs('admin');
         const id = await createContactTask();
 
         const response = await api()
-            .put(`/tasks/${id}/assignee`)
+            .post(`/tasks/${id}/assign`)
             .set('Authorization', bearer)
             .send({ userId: 'nobody' });
 

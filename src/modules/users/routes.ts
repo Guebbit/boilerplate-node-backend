@@ -23,8 +23,8 @@ import { replaceUser, updateUser } from './controllers/update-user';
 import { deleteUsers } from './controllers/delete-users';
 import { restoreUsers } from './controllers/post-user-restore';
 import { getUserItem } from './controllers/get-user';
-import { deletePurchaseHold } from './controllers/delete-purchase-hold';
-import { putPurchaseHold } from './controllers/put-purchase-hold';
+import { postLiftPurchaseHold } from './controllers/post-lift-purchase-hold';
+import { postPlacePurchaseHold } from './controllers/post-place-purchase-hold';
 import { postActivate, postDeactivate } from './controllers/post-user-activation';
 import { noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
@@ -125,10 +125,11 @@ router.patch(
 // DELETE /users/:id — soft delete unless ?hardDelete=true
 router.delete('/:id', requirePermission('delete', 'User'), deleteUsers);
 
-// PUT / DELETE /users/:id/purchase-hold — pause checkout for one account, or end the pause. The
-// ban's permission: both are a staff act on a buyer's standing, and neither touches their login.
-router.put('/:id/purchase-hold', requirePermission('ban', 'User'), putPurchaseHold);
-router.delete('/:id/purchase-hold', requirePermission('ban', 'User'), deletePurchaseHold);
+// POST /users/:id/place-purchase-hold and /lift-purchase-hold — pause checkout for one account, or
+// end the pause. The ban's permission: both are a staff act on a buyer's standing, and neither
+// touches their login. A repeat finds the state reached and answers 409.
+router.post('/:id/place-purchase-hold', requirePermission('ban', 'User'), postPlacePurchaseHold);
+router.post('/:id/lift-purchase-hold', requirePermission('ban', 'User'), postLiftPurchaseHold);
 
 // POST /users/:id/activate and /deactivate — switch an account on or off. A deactivation is a
 // ban today, so both ride the ban's permission; each answers 409 when the account is there already.

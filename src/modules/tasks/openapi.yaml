@@ -16,6 +16,8 @@ x-error-codes:
     TASK_ALREADY_OPEN: { status: 409, description: 'The task is already open (new or in progress), so there is nothing to reopen.' }
     TASK_SUPERSEDED: { status: 409, description: 'A newer open task already covers the same situation, so this one cannot be reopened. `details.taskId` names the newer one.' }
     TASK_NOT_OPEN: { status: 409, description: 'The task is closed; reopen it before assigning it.' }
+    TASK_ALREADY_ASSIGNED: { status: 409, description: 'The task is assigned to that person already, so there is nothing to change.' }
+    TASK_NOT_ASSIGNED: { status: 409, description: 'Nobody holds the task, so there is nothing to take back.' }
     TASK_ASSIGNEE_INVALID: { status: 422, description: 'The person does not exist, or does not hold both the permission set that works this task and `update:Task`.' }
 
 # This module's sections of the account data export (`POST /account/export`): the bundler
@@ -338,18 +340,20 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
-    /tasks/{id}/assignee:
-        put:
+    /tasks/{id}/assign:
+        post:
             tags: [Tasks]
             summary: Assign a task
             description: >
                 Hands the task to one person (taking it is assigning yourself). A `new` task
                 becomes `in_progress`. The person must hold the permission set that works the task
                 and `update:Task`, so they can open, note and close it.
-                Replaces any earlier assignee. A closed task answers 409 `TASK_NOT_OPEN`.
+                Replaces any earlier assignee. A closed task answers 409 `TASK_NOT_OPEN`;
+                assigning it to the person who holds it already answers 409 `TASK_ALREADY_ASSIGNED`
+                and writes nothing.
             operationId: assignTask
             x-error-codes:
-                '409': [TASK_NOT_OPEN]
+                '409': [TASK_NOT_OPEN, TASK_ALREADY_ASSIGNED]
                 '422': [TASK_ASSIGNEE_INVALID]
             security:
                 - bearerAuth: []
@@ -374,11 +378,16 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-        delete:
+    /tasks/{id}/unassign:
+        post:
             tags: [Tasks]
             summary: Give a task back
-            description: Clears the assignee. An `in_progress` task goes back to `new`. Answers 200 whether or not anyone held it.
+            description: >
+                Clears the assignee, whatever the task's status. An `in_progress` task goes back to
+                `new`. A task nobody holds answers 409 `TASK_NOT_ASSIGNED` and writes nothing.
             operationId: unassignTask
+            x-error-codes:
+                '409': [TASK_NOT_ASSIGNED]
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -394,6 +403,7 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
     /tasks/{id}/notes:
         post:
             tags: [Tasks]
@@ -554,10 +564,10 @@ components:
                     description: Whether `POST /tasks/{id}/reopen` would be accepted.
                 assign:
                     type: boolean
-                    description: Whether `PUT /tasks/{id}/assignee` would be accepted.
+                    description: Whether `POST /tasks/{id}/assign` would be accepted. Stays true for a task someone holds, since a new person replaces them.
                 unassign:
                     type: boolean
-                    description: Whether `DELETE /tasks/{id}/assignee` would change anything.
+                    description: Whether `POST /tasks/{id}/unassign` would be accepted, which needs an assignee, in any status.
                 note:
                     type: boolean
                     description: Whether `POST /tasks/{id}/notes` would be accepted.

@@ -46,7 +46,7 @@ export interface TaskRepository extends Repository<TaskDocument, StoredTask> {
     moveFrom: (id: string, from: TaskStatus, patch: TaskPatch) => Promise<TaskDocument | null>;
     /** Give an open task to someone; a `new` one becomes `in_progress`. `null`: not open. */
     assign: (id: string, userId: string, session?: ClientSession) => Promise<TaskDocument | null>;
-    /** Clear the assignee; an `in_progress` task goes back to `new`. `null`: no such task. */
+    /** Clear the assignee; an `in_progress` task goes back to `new`. `null`: no such task, or nobody held it. */
     unassign: (id: string) => Promise<TaskDocument | null>;
     /** Append a note. `null`: no such task. */
     appendNote: (id: string, note: TaskNoteDocument) => Promise<TaskDocument | null>;
@@ -147,14 +147,18 @@ export const taskRepository: TaskRepository = {
     unassign: (id) =>
         taskModel
             .updateOne(
-                { _id: toObjectId(id), status: TaskStatus.in_progress },
+                {
+                    _id: toObjectId(id),
+                    status: TaskStatus.in_progress,
+                    assigneeId: { $exists: true }
+                },
                 { $set: { status: TaskStatus.new } }
             )
             .exec()
             .then(() =>
                 taskModel
                     .findOneAndUpdate(
-                        { _id: toObjectId(id) },
+                        { _id: toObjectId(id), assigneeId: { $exists: true } },
                         { $unset: { assigneeId: 1 } },
                         { returnDocument: 'after' }
                     )

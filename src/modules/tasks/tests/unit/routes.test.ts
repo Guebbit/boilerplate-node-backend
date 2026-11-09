@@ -30,8 +30,8 @@ describe('tasks routes — what is mounted', () => {
             'POST /:id/resolve',
             'POST /:id/mark-spam',
             'POST /:id/reopen',
-            'PUT /:id/assignee',
-            'DELETE /:id/assignee',
+            'POST /:id/assign',
+            'POST /:id/unassign',
             'POST /:id/notes',
             'DELETE /:id'
         ]);
@@ -65,8 +65,8 @@ describe('tasks routes — the positional guard', () => {
         'POST /:id/resolve',
         'POST /:id/mark-spam',
         'POST /:id/reopen',
-        'PUT /:id/assignee',
-        'DELETE /:id/assignee',
+        'POST /:id/assign',
+        'POST /:id/unassign',
         'POST /:id/notes',
         'DELETE /:id'
     ])('%s sits below the gate and is keyed', (signature) => {

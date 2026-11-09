@@ -1182,7 +1182,7 @@ components:
                     delete,
                     hardDelete,
                     restore,
-                    setPurchaseHold,
+                    placePurchaseHold,
                     liftPurchaseHold,
                     activate,
                     deactivate
@@ -1225,16 +1225,17 @@ components:
                         Whether `POST /users/{id}/restore` would be accepted — `delete:User`, the
                         account is not a staff account the caller may not manage, and it is
                         soft-deleted.
-                setPurchaseHold:
+                placePurchaseHold:
                     type: boolean
                     description: >-
-                        Whether `PUT /users/{id}/purchase-hold` would be accepted — `ban:User`, and
-                        the account is not a staff account the caller may not manage. A hold can be
-                        placed again to extend it.
+                        Whether `POST /users/{id}/place-purchase-hold` would be accepted — `ban:User`,
+                        and the account is not a staff account the caller may not manage. A hold can
+                        be placed again with a new end date or note to replace it; the client hides
+                        the control for the value already in force.
                 liftPurchaseHold:
                     type: boolean
                     description: >-
-                        Whether `DELETE /users/{id}/purchase-hold` would be accepted — `ban:User`,
+                        Whether `POST /users/{id}/lift-purchase-hold` would be accepted — `ban:User`,
                         the account is not a staff account the caller may not manage, and there is
                         a hold or a review flag to clear.
                 activate:
@@ -1519,8 +1520,10 @@ paths:
         $ref: '../../src/modules/tasks/openapi.yaml#/paths/~1tasks~1{id}~1mark-spam'
     /tasks/{id}/reopen:
         $ref: '../../src/modules/tasks/openapi.yaml#/paths/~1tasks~1{id}~1reopen'
-    /tasks/{id}/assignee:
-        $ref: '../../src/modules/tasks/openapi.yaml#/paths/~1tasks~1{id}~1assignee'
+    /tasks/{id}/assign:
+        $ref: '../../src/modules/tasks/openapi.yaml#/paths/~1tasks~1{id}~1assign'
+    /tasks/{id}/unassign:
+        $ref: '../../src/modules/tasks/openapi.yaml#/paths/~1tasks~1{id}~1unassign'
     /tasks/{id}/notes:
         $ref: '../../src/modules/tasks/openapi.yaml#/paths/~1tasks~1{id}~1notes'
 

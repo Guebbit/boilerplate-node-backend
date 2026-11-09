@@ -355,7 +355,7 @@ const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
     signup: { passwordConfirm: (_world, payload) => payload.password },
     searchUsers: { id: () => [OBJECT_ID] },
     // A generated date-time can be in the past; a purchase hold must end in the future.
-    setUserPurchaseHold: { until: () => new Date(Date.now() + 7 * 86_400_000).toISOString() },
+    placeUserPurchaseHold: { until: () => new Date(Date.now() + 7 * 86_400_000).toISOString() },
     searchProducts: { id: () => [OBJECT_ID] },
     searchOrders: {
         id: () => [OBJECT_ID],

@@ -148,13 +148,13 @@ flowchart LR
     class SP,X bad;
 ```
 
-| Door                | From                       | To                                     | Stamps                                                                                               |
-| ------------------- | -------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `POST …/resolve`    | new, in progress, spam     | resolved                               | `resolution: staff`, `closedAt` (kept if already closed), `respondedAt` once; releases the dedup key |
-| `POST …/mark-spam`  | new, in progress, resolved | spam                                   | `resolution: spam`, `closedAt` (kept); releases the dedup key                                        |
-| `POST …/reopen`     | resolved, spam             | in progress with an assignee, else new | clears `closedAt` and `resolution`; restores the dedup key; **keeps `dueAt`**                        |
-| `PUT …/assignee`    | new, in progress           | in progress                            | the assignee must hold the task's route set and `update:Task` (else 422)                             |
-| `DELETE …/assignee` | any                        | an in-progress task goes back to new   | clears the assignee                                                                                  |
+| Door               | From                       | To                                     | Stamps                                                                                                                                                  |
+| ------------------ | -------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST …/resolve`   | new, in progress, spam     | resolved                               | `resolution: staff`, `closedAt` (kept if already closed), `respondedAt` once; releases the dedup key                                                    |
+| `POST …/mark-spam` | new, in progress, resolved | spam                                   | `resolution: spam`, `closedAt` (kept); releases the dedup key                                                                                           |
+| `POST …/reopen`    | resolved, spam             | in progress with an assignee, else new | clears `closedAt` and `resolution`; restores the dedup key; **keeps `dueAt`**                                                                           |
+| `POST …/assign`    | new, in progress           | in progress                            | the assignee must hold the task's route set and `update:Task` (else 422); the person who holds it already: 409 `TASK_ALREADY_ASSIGNED`, nothing written |
+| `POST …/unassign`  | any                        | an in-progress task goes back to new   | clears the assignee; nobody held it: 409 `TASK_NOT_ASSIGNED`, nothing written or audited                                                                |
 
 Every move is **one conditional write** filtered on the status that was read, so two clicks give one
 200 and one 409. A repeat answers 409 with `TASK_ALREADY_RESOLVED`, `TASK_ALREADY_SPAM` or

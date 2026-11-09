@@ -66,6 +66,25 @@ flowchart TD
   answers the thing acted on, it may create records on the side (refunds, credit notes, override
   shipments, stock movements) and stays 200.
 
+#### A toggle is a pair of actions
+
+A toggle on a resource is a state of a record that stays, flipped both ways (assigned or not, held
+or not). When either direction has its own effect, guard, permission, audit row or notification, it
+is a pair of POST actions, `POST /x/{id}/<verb>` and `POST /x/{id}/<opposite>`, never a PUT/DELETE
+pair (Google [AIP-136](https://google.aip.dev/136): POST for a method with side effects):
+
+- `assign` / `unassign` a task, `place-purchase-hold` / `lift-purchase-hold` on a user.
+- Each answers 200 and the resource. A repeat that finds the target state already reached is 409
+  (`<RESOURCE>_ALREADY_<STATE>` or `<RESOURCE>_NOT_<STATE>`). No `Idempotency-Key`: the state
+  machine refuses the repeat.
+- A direction whose body names a value (assign to X, place a hold until D) treats "the same value
+  already in force" as that repeat; its `actions` flag stays true, and the client hides the control
+  for the value in force. A body-less direction's flag is false once its state is reached.
+- PUT/DELETE sub-paths stay for what writes a value or names a thing: a line, a body-less pointer,
+  a pending request its owner discards, a value of the parent (`…/shipping-address`,
+  `/cart/shipping-method`, `…/cover`), the `/hard` delete.
+- A toggle with no direction of its own is a field of PUT/PATCH (`Product.active`).
+
 #### Action or field
 
 A status or flag moves through an action when the move has its OWN effect, guard or permission.
@@ -143,8 +162,10 @@ allowed", with 409 where Google says 400).
 - `POST /tasks/{id}/resolve` on a resolved task: `TASK_ALREADY_RESOLVED`; `mark-spam` on spam:
   `TASK_ALREADY_SPAM`; `reopen` on an open one: `TASK_ALREADY_OPEN`. A reopen that finds a newer
   open task on the same situation: `TASK_SUPERSEDED`, with the newer task's id in `details`.
-- `DELETE /users/{id}/purchase-hold` on an account with no hold and no review flag:
+- `POST /users/{id}/lift-purchase-hold` on an account with no hold and no review flag:
   `USER_PURCHASE_HOLD_NOT_SET`.
+- `POST /tasks/{id}/unassign` on a task nobody holds: `TASK_NOT_ASSIGNED`; `POST …/assign` to the
+  person who holds it already: `TASK_ALREADY_ASSIGNED`. Both write, announce and audit nothing.
 - A retried `DELETE` leaves the same state (RFC 9110 §9.2.2). What is already gone answers 404, as
   Google's [AIP-135](https://google.aip.dev/135) does.
 - The caller's `actions` flag for the move is `false` in that state, so a screen never offers it.

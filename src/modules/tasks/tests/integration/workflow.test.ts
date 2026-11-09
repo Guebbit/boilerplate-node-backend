@@ -372,6 +372,48 @@ describe('assign and unassign', () => {
         expect(wire.status).toBe(TaskStatus.new);
         expect(wire.assigneeId).toBeUndefined();
     });
+
+    it('refuses assigning the person who holds it with 409 and announces nothing twice', async () => {
+        const worker = await createUser({}, 'support');
+        const task = await fileContact();
+        await taskService.assign(String(task._id), worker.id, admin);
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        const again = asReject(await taskService.assign(String(task._id), worker.id, admin));
+
+        expect(again.status).toBe(409);
+        expect(again.errors[0].code).toBe('TASK_ALREADY_ASSIGNED');
+        expect(await outboxEventModel.countDocuments({ name: 'task.assigned' })).toBe(1);
+        expect(auditSpy).not.toHaveBeenCalled();
+    });
+
+    it('refuses giving back a task nobody holds with 409 and writes no audit row', async () => {
+        const task = await fileContact();
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        const result = asReject(await taskService.unassign(String(task._id), admin));
+
+        expect(result.status).toBe(409);
+        expect(result.errors[0].code).toBe('TASK_NOT_ASSIGNED');
+        expect(await storedField(task._id, 'status')).toBe(TaskStatus.new);
+        expect(
+            auditSpy.mock.calls.some(
+                ([entry]) => entry.action === tasksAuditActions.ADMIN_TASK_UNASSIGNED
+            )
+        ).toBe(false);
+    });
+
+    it('gives back a closed task too, keeping its status', async () => {
+        const worker = await createUser({}, 'support');
+        const task = await fileContact();
+        await taskService.assign(String(task._id), worker.id, admin);
+        await taskService.resolve(String(task._id), admin);
+
+        const result = asSuccess(await taskService.unassign(String(task._id), admin));
+
+        expect(result.data.status).toBe(TaskStatus.resolved);
+        expect(result.data.assigneeId).toBeUndefined();
+    });
 });
 
 describe('notes', () => {
