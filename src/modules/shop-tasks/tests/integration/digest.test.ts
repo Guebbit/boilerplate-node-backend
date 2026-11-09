@@ -26,7 +26,10 @@ import { callerInScope } from '@kernel/permissions';
 import { resetDomainEvents } from '@kernel/events';
 import { registerModules } from '@kernel/registry';
 import { DAY_MS } from '@domain-primitives/time';
-import { OrderStatus } from '@types';
+import { OrderStatus, PaymentAttentionKind, type PaymentAttentionItem } from '@types';
+import { asStub } from '@tests/stub';
+import { inventoryService } from '@modules/inventory';
+import { paymentService } from '@modules/payments';
 import { enabledModules } from '../../../../modules';
 
 // The queue, not the copy.
@@ -45,7 +48,11 @@ beforeEach(() => {
     registerModules(enabledModules);
 });
 
-afterEach(() => resetDomainEvents());
+afterEach(() => {
+    resetDomainEvents();
+    // The stale-refunds case replaces `listAttention`; put it back for the next one.
+    jest.restoreAllMocks();
+});
 
 /** A staff member who can act: the role given, an authenticator app armed. */
 const staff = (role: string, email: string, locale = 'en') =>
@@ -147,6 +154,58 @@ describe('the daily digest', () => {
             ['shop-tasks.staff.unshipped', 2]
         ]);
         expect(digestMails()).toHaveLength(2);
+    });
+
+    it('updates a count that fell without asking for attention again: no new mail, still read', async () => {
+        const warehouse = await staff('warehouse', 'warehouse@example.com');
+        const first = await paidAndWaiting(5);
+        await paidAndWaiting(6);
+        await runStaffDigest('daily');
+        await notificationsService.readAll(warehouse.id);
+        mockEnqueueEmail.mockClear();
+
+        await forceOrderStatus(String(first._id), OrderStatus.canceled);
+        await runStaffDigest('daily');
+
+        await expect(summariesOf('warehouse', warehouse.id)).resolves.toEqual([
+            ['shop-tasks.staff.unshipped', 1]
+        ]);
+        expect(digestMails()).toHaveLength(0);
+        const row = await notificationsService
+            .listVisible(
+                callerInScope(
+                    { ...asRole('warehouse', warehouse.id), tenantId: DEPLOYMENT_TENANT_ID },
+                    'tenant'
+                )
+            )
+            .then(({ items }) => items.find(({ code }) => code === 'shop-tasks.staff.unshipped'));
+        expect(row?.readAt).toBeDefined();
+    });
+
+    it('mails the stale-refunds summary and leaves low-stock to the bell', async () => {
+        const owner = await staff('admin', 'owner@example.com');
+        await createProduct({ title: 'Nearly gone', onHand: 0 });
+        jest.spyOn(paymentService, 'listAttention').mockResolvedValue({
+            items: [asStub<PaymentAttentionItem>({ kind: PaymentAttentionKind.stale_refund })]
+        });
+        expect(await inventoryService.listLevels({ lowOnly: true })).toMatchObject({
+            meta: { totalItems: 1 }
+        });
+
+        await runStaffDigest('daily');
+
+        const rows = await summariesOf('admin', owner.id);
+        expect(rows).toEqual(
+            expect.arrayContaining([
+                ['shop-tasks.staff.stale-refunds', 1],
+                ['shop-tasks.staff.low-stock', 1]
+            ])
+        );
+        const lines = digestMails().flatMap((call) =>
+            (call[2] as { lines: { link: string }[] }).lines.map(({ link }) => link)
+        );
+        expect(lines).toHaveLength(1);
+        expect(lines[0]).toContain('sales/payments');
     });
 
     it('removes the row when the count falls to zero', async () => {

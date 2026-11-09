@@ -16,11 +16,9 @@ import {
 import { t } from '@infrastructure/i18n';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { isObjectIdString, toObjectId } from '@infrastructure/persistence/create-repository';
-import { recordAudit } from '@infrastructure/observability/audit';
 import type { TaskDocument } from '../model';
 import { taskRepository } from '../repository';
 import { OPEN_STATUSES } from '../domain';
-import { tasksAuditActions } from '../audit';
 import { inJurisdiction, jurisdictionScope } from '../access';
 import { presentTask, withView } from '../presenter';
 import { assigneeNamesOf, viewerOf } from '../views';
@@ -72,8 +70,6 @@ const scopeOf = (
  * Search tasks by status, kind, source, assignee, overdue, email fragment or free text,
  * paginated — inside the caller's jurisdiction.
  *
- * Emits `tasksAuditActions.ADMIN_TASK_VIEWED` when a `context` is given.
- *
  * @param filters - the validated filters; `page`/`pageSize` may be strings, which
  *   `normalizePagination` coerces and bounds
  * @param context - the caller. Required: the jurisdiction is theirs.
@@ -87,10 +83,6 @@ export const search = (
     return taskRepository.search(filters, scopeOf(filters, context, now)).then(({ items, meta }) =>
         assigneeNamesOf(items.map((row) => row.assigneeId)).then((names) => {
             const viewer = viewerOf(context.caller, names);
-            recordAudit(context, {
-                action: tasksAuditActions.ADMIN_TASK_VIEWED,
-                outcome: 'success'
-            });
             return { items: items.map((row) => withView(row, viewer.of(row), now)), meta };
         })
     );

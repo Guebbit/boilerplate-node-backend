@@ -107,6 +107,26 @@ const buyerReadyToCheckOut = async () => {
     return user;
 };
 
+/** A buyer who is on hold, at the open-order cap, and ready to check out otherwise. */
+const onHoldAtTheCap = async () => {
+    const user = await buyerReadyToCheckOut();
+    const product = await createProduct();
+    await createOrder(user, [toOrderItem(product)], {
+        status: 'pending',
+        paymentMethod: 'card'
+    });
+    await createOrder(user, [toOrderItem(product)], {
+        status: 'pending',
+        paymentMethod: 'card'
+    });
+    await userService.setPurchaseHold(
+        user.id,
+        { until: new Date(Date.now() + 86_400_000) },
+        callerContextAs('moderator')
+    );
+    return user;
+};
+
 describe('cart storage', () => {
     it('holds no cart document until the first write', async () => {
         // Absence and an empty cart are the same state — nothing creates a placeholder.
@@ -1584,6 +1604,32 @@ describe('orderConfirm — paymentMethod', () => {
 
             expect(result.success).toBe(true);
         });
+    });
+
+    describe('when several refusals apply at once', () => {
+        it('names the hold before the cap', async () => {
+            const user = await onHoldAtTheCap();
+
+            const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
+
+            expect(asReject(result).errors[0].code).toBe('CART_PURCHASE_HOLD');
+        });
+
+        it('names a payment method nobody offers before the hold', () =>
+            withEnvironmentOverrides(
+                { NODE_BANK_TRANSFER_BENEFICIARY: undefined, NODE_BANK_TRANSFER_IBAN: undefined },
+                async () => {
+                    const user = await onHoldAtTheCap();
+
+                    const result = await cartService.orderConfirm(user.id, testCallerContext, {
+                        paymentMethod: 'bank_transfer'
+                    });
+
+                    expect(asReject(result).errors[0].code).toBe(
+                        'CART_PAYMENT_METHOD_NOT_AVAILABLE'
+                    );
+                }
+            ));
     });
 
     it('lets a stricter shop hold an account to a single open order', async () => {

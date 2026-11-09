@@ -474,6 +474,21 @@ describe('switching on and off', () => {
         expect(auditedAs(webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_DISABLED)).toHaveLength(1);
     });
 
+    it('does not relabel a pause by hand as the failure guard’s work when exhausted deliveries follow', async () => {
+        const created = await subscribe();
+        await disable(String(created._id), context);
+        const paused = await stored(String(created._id));
+        const pausedAt = paused?.disabledAt;
+
+        // The guard's own write, as an exhausted delivery finalizing after the pause would make it.
+        const guarded = await webhookSubscriptionRepository.disable(String(created._id));
+
+        expect(guarded).toBeNull();
+        const after = await stored(String(created._id));
+        expect(after?.autoDisabledAt).toBeUndefined();
+        expect(after?.disabledAt).toEqual(pausedAt);
+    });
+
     it('enables a disabled subscription: streak, failing-since date and both stamps are cleared', async () => {
         const created = await subscribe();
         const row = await stored(String(created._id));

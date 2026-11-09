@@ -51,7 +51,9 @@ describe('preorderAllowanceLeft', () => {
         [10, 10, 0],
         [3, 5, 0],
         [undefined, undefined, 0],
-        [4, undefined, 4]
+        [4, undefined, 4],
+        // No cap: the contract wants an integer, and the buyer is never told the count.
+        [null, 5, 999_999]
     ])('allows %s with %s claimed to leave %s', (limit, claimed, expected) => {
         expect(preorderAllowanceLeft(limit, claimed)).toBe(expected);
     });

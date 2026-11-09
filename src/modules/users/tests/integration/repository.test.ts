@@ -16,6 +16,16 @@ import { userModel as Users } from '@modules/users/model';
 
 setupTestDb();
 
+/** One live account and one soft-deleted account, told apart by their emails. */
+const liveAndDeleted = async () => {
+    await createUser({ email: 'live@example.com', username: 'live' });
+    await createUser({
+        email: 'gone@example.com',
+        username: 'gone',
+        deletedAt: new Date()
+    });
+};
+
 describe('userRepository', () => {
     describe('create', () => {
         it('inserts a new user and returns the Mongoose document', async () => {
@@ -125,6 +135,20 @@ describe('userRepository', () => {
 
             // Lean objects have no Mongoose save() method
             expect(typeof asStub<{ save?: unknown }>(user).save).toBe('undefined');
+        });
+    });
+
+    describe('search', () => {
+        it.each([
+            [true, ['gone@example.com']],
+            [false, ['live@example.com']],
+            [undefined, ['gone@example.com', 'live@example.com']]
+        ])('answers %s for `deleted` with exactly those accounts', async (deleted, emails) => {
+            await liveAndDeleted();
+
+            const { items } = await userRepository.search(deleted === undefined ? {} : { deleted });
+
+            expect(items.map(({ email }) => email).toSorted()).toEqual(emails);
         });
     });
 

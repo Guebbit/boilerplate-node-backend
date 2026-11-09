@@ -18,6 +18,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, readOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { fulfillmentOrdersOf, shipmentsOf } from '../factories';
 import { OrderStatus } from '@types';
+import { orderService } from '@modules/orders';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { eventually } from '@tests/eventually';
@@ -136,5 +137,33 @@ describe('a ship racing a cancel of the whole order', () => {
             expect(shipments).toEqual([]);
             expect(after.status).toBe('canceled');
         }
+    });
+});
+
+describe('a first shipment from a paid order that moved away meanwhile', () => {
+    it('answers 409 ORDER_NOT_PAID and ships nothing', async () => {
+        const { user, bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.paid
+        });
+        // The ship act read the order as `paid`; the conditional `paid → processing` write then
+        // finds it elsewhere (another request cancelled it). A race cannot be made to land here on
+        // demand, so the orders door answers what it answers once it has lost.
+        jest.spyOn(orderService, 'markProcessing').mockResolvedValueOnce(null);
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
+        // `paid` has no fulfillment order until one is made; the first shipment is the act under test.
+        expect(fulfillmentOrder).toBeDefined();
+
+        const response = await api()
+            .post(`/delivery/fulfillment-orders/${String(fulfillmentOrder._id)}/shipments`)
+            .set('Authorization', bearer)
+            .send({});
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('ORDER_NOT_PAID');
+        expect(await shipmentsOf(String(order._id))).toEqual([]);
+        const stored = await readOrder(String(order._id));
+        expect(stored?.status).toBe(OrderStatus.paid);
     });
 });

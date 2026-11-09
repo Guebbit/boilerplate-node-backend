@@ -34,7 +34,10 @@ import { callerAs, TEST_TENANT_ID } from '@tests/callers';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
 import { webhooksAuditActions } from '@modules/webhooks/audit';
-import { webhookDeliveryAttemptsTotal } from '@modules/webhooks/metrics';
+import {
+    webhookDeliveryAttemptsTotal,
+    webhookSubscriptionsAutoDisabledTotal
+} from '@modules/webhooks/metrics';
 
 // The real `node:https`, with this suite's own throwaway CA injected into every request — see
 // `https-test-server.ts`'s own doc for why `NODE_TLS_REJECT_UNAUTHORIZED` does NOT work here.
@@ -189,6 +192,12 @@ const runChainToCompletion = async (deliveryId: string): Promise<void> => {
         if (delivery?.status !== 'pending') return;
     }
 };
+
+/** What the auto-disable counter holds. */
+const total = (): Promise<number> =>
+    webhookSubscriptionsAutoDisabledTotal
+        .get()
+        .then(({ values }) => values.reduce((sum, { value }) => sum + value, 0));
 
 /** How many delivery attempts the counter holds for one outcome label. */
 const attemptsCounted = (outcome: 'success' | 'failure'): Promise<number> =>
@@ -444,6 +453,22 @@ describe('sustained failure', () => {
                 targetId: String(subscription._id)
             })
         );
+    });
+
+    it('counts the auto-disable once, for the alert that watches how many subscriptions go quiet', async () => {
+        const before = await total();
+        const subscription = await createSubscription(`${server.url}/hook`);
+
+        for (let chain = 0; chain < WEBHOOK_MAX_CONSECUTIVE_FAILURES - 1; chain++) {
+            const job = await createPendingDelivery(subscription, `order.paid.count.${chain}`);
+            await runChainToCompletion(job.deliveryId);
+        }
+        await backdateFailingStreak(String(subscription._id));
+        expect(await total()).toBe(before);
+        const finalJob = await createPendingDelivery(subscription, 'order.paid.count.final');
+        await runChainToCompletion(finalJob.deliveryId);
+
+        expect(await total()).toBe(before + 1);
     });
 
     it('a chain that succeeds resets the streak (and failingSince), so it never auto-disables on unrelated blips', async () => {

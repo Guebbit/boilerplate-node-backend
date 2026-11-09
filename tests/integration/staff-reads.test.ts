@@ -11,6 +11,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { OrderStatus } from '@types';
 import { carryOrderTo } from '@modules/delivery/tests/factories';
+import { createSystemTask, findAllTasks } from '@modules/tasks/tests/factories';
 
 setupTestDb();
 
@@ -149,5 +150,46 @@ describe('GET /returns/{id}', () => {
         expect(viewed()).toEqual([
             expect.objectContaining({ action: 'admin.return.viewed', targetId: returnId })
         ]);
+    });
+});
+
+describe('GET /tasks/{id}', () => {
+    it('records staff opening a visitor message, naming the task', async () => {
+        const admin = await authenticateAs('admin');
+        await api().post('/tasks').send({
+            name: 'Ada Lovelace',
+            email: 'ada@example.com',
+            subject: 'Broken checkout',
+            message: 'The checkout button does nothing on mobile.'
+        });
+        const [task] = await findAllTasks();
+        auditSpy.mockClear();
+
+        const response = await api()
+            .get(`/tasks/${String(task._id)}`)
+            .set('Authorization', admin.bearer);
+
+        expect(response.status).toBe(200);
+        // Filtered on the target: other staff reads of the same action may be target-less.
+        expect(viewed().filter((entry) => entry.targetId === String(task._id))).toEqual([
+            expect.objectContaining({
+                action: 'admin.task.viewed',
+                actorUserId: String(admin.user._id),
+                targetType: 'task'
+            })
+        ]);
+    });
+
+    it('records nothing for a system task, which holds no visitor data', async () => {
+        const admin = await authenticateAs('admin');
+        const task = await createSystemTask();
+        auditSpy.mockClear();
+
+        const response = await api()
+            .get(`/tasks/${String(task._id)}`)
+            .set('Authorization', admin.bearer);
+
+        expect(response.status).toBe(200);
+        expect(viewed()).toEqual([]);
     });
 });

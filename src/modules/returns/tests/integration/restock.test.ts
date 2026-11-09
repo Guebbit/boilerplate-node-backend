@@ -14,11 +14,15 @@ import { asAdmin, asCustomer, callerContextAs, testCallerContext } from '@tests/
 import { asReject } from '@tests/response';
 import { OrderStatus } from '@types';
 import { createUser } from '@modules/users/tests/factories';
-import { createProduct, countersOf } from '@modules/products/tests/factories';
+import { createProduct, countersOf, deleteProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { carryOrderTo } from '@modules/delivery/tests/factories';
 import { inventoryService } from '@modules/inventory';
-import { reservationRepository } from '@modules/inventory/tests/factories';
+import {
+    removeLevel,
+    reservationRepository,
+    stockLevelRepository
+} from '@modules/inventory/tests/factories';
 import { paymentService } from '@modules/payments';
 import paymentsModule from '@modules/payments/module';
 import returnsModule from '../../module';
@@ -154,6 +158,41 @@ describe('receiving with a restock count', () => {
             { productId: String(shirt._id), restocked: 0 },
             { productId: String(mug._id), restocked: 1 }
         ]);
+    });
+});
+
+/** The shirt is gone, its level row with it: what a hard delete leaves behind. */
+const hardDeleteShirt = async (shirt: Awaited<ReturnType<typeof createProduct>>) => {
+    await deleteProduct(shirt);
+    await removeLevel(String(shirt._id));
+};
+
+describe('receiving a return of a product that has since been hard-deleted', () => {
+    it.each([
+        ['no lines', {}],
+        ['a restock count for the deleted line', { restock: 1 }]
+    ])('moves no stock and still refunds the line, given %s', async (_name, count) => {
+        const { shirt, orderId, id } = await approvedReturn();
+        await hardDeleteShirt(shirt);
+
+        const result = await returnService.receiveReturn(
+            id,
+            'restock' in count
+                ? { lines: [{ productId: String(shirt._id), restock: count.restock }] }
+                : {},
+            callerContextAs('admin')
+        );
+
+        // Nothing to move stock into, and that is not a failure: the return closes.
+        expect(result.success && result.data).toMatchObject({
+            status: 'closed',
+            refundAmount: '70.00'
+        });
+        expect(await stockLevelRepository.findByProductId(String(shirt._id))).toBeNull();
+        const movements = await inventoryService.listMovements({ productId: String(shirt._id) });
+        expect(movements.items.filter(({ reason }) => reason === 'restock')).toHaveLength(0);
+        const payment = await paymentService.getForOrder(orderId, asAdmin());
+        expect(payment.success && payment.data.amountRefunded).toBe('70.00');
     });
 });
 
