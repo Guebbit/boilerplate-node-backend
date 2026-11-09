@@ -1092,7 +1092,8 @@ const resetWithLink = async (user: { id: string }) => {
         'post-reset-link',
         REPLACEMENT_PASSWORD,
         REPLACEMENT_PASSWORD,
-        testCallerContext
+        testCallerContext,
+        true
     );
 };
 
@@ -1237,14 +1238,16 @@ describe('completePasswordReset', () => {
                 'reset-link',
                 BREACHED,
                 BREACHED,
-                testCallerContext
+                testCallerContext,
+                true
             )
         );
         const accepted = await accountService.completePasswordReset(
             'reset-link',
             GOOD,
             GOOD,
-            testCallerContext
+            testCallerContext,
+            true
         );
 
         expect(refused.status).toBe(422);
@@ -1260,7 +1263,8 @@ describe('completePasswordReset', () => {
                 'typo-link',
                 GOOD,
                 `${GOOD}x`,
-                testCallerContext
+                testCallerContext,
+                true
             )
         );
 
@@ -1271,17 +1275,30 @@ describe('completePasswordReset', () => {
     it('spends the link: a second use of it is refused like a link that never existed', async () => {
         const user = await createUser();
         await plantToken(user.id, 'password', 'once-link', { ttlMs: 3_600_000 });
-        await accountService.completePasswordReset('once-link', GOOD, GOOD, testCallerContext);
+        await accountService.completePasswordReset(
+            'once-link',
+            GOOD,
+            GOOD,
+            testCallerContext,
+            true
+        );
 
         const second = asReject(
-            await accountService.completePasswordReset('once-link', GOOD, GOOD, testCallerContext)
+            await accountService.completePasswordReset(
+                'once-link',
+                GOOD,
+                GOOD,
+                testCallerContext,
+                true
+            )
         );
         const invented = asReject(
             await accountService.completePasswordReset(
                 'never-issued',
                 GOOD,
                 GOOD,
-                testCallerContext
+                testCallerContext,
+                true
             )
         );
 
@@ -1294,8 +1311,8 @@ describe('completePasswordReset', () => {
         await plantToken(user.id, 'password', 'race-link', { ttlMs: 3_600_000 });
 
         const results = await Promise.all([
-            accountService.completePasswordReset('race-link', GOOD, GOOD, testCallerContext),
-            accountService.completePasswordReset('race-link', GOOD, GOOD, testCallerContext)
+            accountService.completePasswordReset('race-link', GOOD, GOOD, testCallerContext, true),
+            accountService.completePasswordReset('race-link', GOOD, GOOD, testCallerContext, true)
         ]);
 
         expect(results.filter((result) => result.success)).toHaveLength(1);

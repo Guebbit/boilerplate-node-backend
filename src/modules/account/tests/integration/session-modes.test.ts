@@ -568,7 +568,8 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
         const reset = await api().post('/account/password/reset/confirm').send({
             token: 'reset-link',
             password: REPLACEMENT_PASSWORD,
-            passwordConfirm: REPLACEMENT_PASSWORD
+            passwordConfirm: REPLACEMENT_PASSWORD,
+            termsAccepted: true
         });
 
         expect(reset.status).toBe(204);

@@ -11,7 +11,8 @@
             "terms-not-accepted": "You must accept the Terms of Service and confirm you have read the Privacy Policy to register."
         },
         "reset": {
-            "token-not-found": "Invalid or expired token, please try again."
+            "token-not-found": "Invalid or expired token, please try again.",
+            "terms-not-accepted": "You must accept the Terms of Service and confirm you have read the Privacy Policy."
         },
         "delete": {
             "token-not-found": "Invalid or expired token, please try again."
@@ -80,6 +81,9 @@
                 "greeting": "Hello, {{name}}!",
                 "intro": "An administrator created an account for you. Choose a password to complete your registration.",
                 "link-label": "Set my password",
+                "legal-intro": "Before you start, read how we work and how we handle your data:",
+                "terms-label": "Terms of Service",
+                "privacy-label": "Privacy Policy",
                 "ignore": "If you weren't expecting this, contact whoever manages this site."
             },
             "reset-confirm": {

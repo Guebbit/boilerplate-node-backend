@@ -89,7 +89,8 @@ describe('keys end with the sessions that may be compromised', () => {
         const response = await api().post('/account/password/reset/confirm').send({
             token: 'reset-revokes-keys',
             password: REPLACEMENT_PASSWORD,
-            passwordConfirm: REPLACEMENT_PASSWORD
+            passwordConfirm: REPLACEMENT_PASSWORD,
+            termsAccepted: true
         });
 
         // The event rides the outbox: the relay delivers it right after the commit.

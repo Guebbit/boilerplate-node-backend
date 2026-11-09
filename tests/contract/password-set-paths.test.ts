@@ -95,7 +95,8 @@ const resetPath: PasswordSetPath = {
         const response = await api().post('/account/password/reset/confirm').send({
             token: 'breach-reset-token',
             password: BREACHED_PASSWORD,
-            passwordConfirm: BREACHED_PASSWORD
+            passwordConfirm: BREACHED_PASSWORD,
+            termsAccepted: true
         });
         return {
             response,

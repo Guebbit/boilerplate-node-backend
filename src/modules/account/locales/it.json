@@ -11,7 +11,8 @@
             "terms-not-accepted": "Devi accettare i Termini di Servizio e confermare di aver letto l'Informativa sulla Privacy per registrarti."
         },
         "reset": {
-            "token-not-found": "Token non valido o scaduto, riprova."
+            "token-not-found": "Token non valido o scaduto, riprova.",
+            "terms-not-accepted": "Devi accettare i Termini di Servizio e confermare di aver letto l'Informativa sulla Privacy."
         },
         "delete": {
             "token-not-found": "Token non valido o scaduto, riprova."
@@ -80,6 +81,9 @@
                 "greeting": "Ciao, {{name}}!",
                 "intro": "Un amministratore ha creato un account per te. Scegli una password per completare la registrazione.",
                 "link-label": "Imposta la mia password",
+                "legal-intro": "Prima di iniziare, leggi come lavoriamo e come trattiamo i tuoi dati:",
+                "terms-label": "Termini di Servizio",
+                "privacy-label": "Informativa sulla Privacy",
                 "ignore": "Se non te lo aspettavi, contatta chi gestisce questo sito."
             },
             "reset-confirm": {

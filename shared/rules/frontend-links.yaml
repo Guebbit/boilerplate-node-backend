@@ -8,6 +8,8 @@
 links:
     verify: verify-email/confirm#token={token}
     reset: password-reset/confirm#token={token}
+    # The first password of an account staff created: the same token and endpoint as a reset, on its own page.
+    setup: account-setup#token={token}
     restore: account-restore#token={token}
     emailChange: email-change/confirm#token={token}
     emailUndo: email-change/undo#token={token}
@@ -17,6 +19,7 @@ links:
     # Pre-filled for an account question: the way to ask a person about a purchase hold (GDPR Art. 22(3)).
     contact: contact?category=account
     privacy: privacy
+    terms: terms
 
 # Public pages that take no id, as paths under `/<locale>/`. '' is the home page.
 staticPages:

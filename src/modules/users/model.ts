@@ -415,9 +415,10 @@ export const userSchema = new Schema<UserDocument, UserModel>(
             type: Date
         },
         /*
-         * When the account accepted the terms, and which text (`termsVersion` of `GET /shop` then). Set by
-         * a signup and by a first sign-in through a provider; left unset for every other creation
-         * path (the admin `/users` route, fixtures), which show nobody the terms.
+         * When the account accepted the terms, and which text (`GET /config` carries the version in
+         * force). Stamped by signup, by provider sign-in, or by the first password set on a
+         * staff-created account; the admin `/users` route itself stamps nothing, as a staff member
+         * never accepts for the person.
          */
         termsAcceptedAt: {
             type: Date

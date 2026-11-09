@@ -10,7 +10,7 @@ import { accountConfig } from './config';
 
 /**
  * Which text of the Terms is in force (`NODE_TERMS_VERSION`, `1` by default). Published so `GET
- * /shop` can print it: the shop group reaches the foundation, never the other way round.
+ * /config` can print it (`app/config-routes.ts`).
  *
  * @returns the configured label
  */
@@ -18,7 +18,7 @@ export const termsVersion = (): string => accountConfig().NODE_TERMS_VERSION;
 
 /**
  * The record of accepting the terms now: the moment and the text in force (`NODE_TERMS_VERSION`).
- * Every path that shows the terms before it creates the account stamps this.
+ * Stamped by signup, provider sign-in, and the first password set on a staff-created account.
  */
 export const termsAcceptance = (): { termsAcceptedAt: Date; termsVersion: string } => ({
     termsAcceptedAt: new Date(),

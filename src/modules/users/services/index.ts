@@ -96,6 +96,8 @@ import {
 
 export { isAuthenticatable, isRestorable } from '../authenticatable';
 export { personalDataSubjectOf } from './personal-data-subject';
+// The privacy-notice link: `account`'s setup mail is a person's first contact (GDPR Art. 14(3)(b)).
+export { privacyFrontendLink } from '../config';
 export type { TwoFactorSecretRing } from './reencrypt';
 export type { ActivePurchaseHold } from './purchase-hold';
 export type { StaffContact } from './read';

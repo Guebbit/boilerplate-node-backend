@@ -1373,7 +1373,8 @@ describe('the per-account wrong-code lock', () => {
         const response = await api().post('/account/password/reset/confirm').send({
             token: 'reset-clears-the-lock',
             password: REPLACEMENT_PASSWORD,
-            passwordConfirm: REPLACEMENT_PASSWORD
+            passwordConfirm: REPLACEMENT_PASSWORD,
+            termsAccepted: true
         });
 
         expect(response.status).toBe(204);

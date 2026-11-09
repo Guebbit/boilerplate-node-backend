@@ -28,6 +28,7 @@ import { encryptTotpSecret } from '@modules/account/two-factor/totp';
 import type { UserOverrides } from '@modules/users/factories';
 import userImages from './users-images.generated.json';
 import { makeUser } from '@modules/users/factories';
+import { termsVersion } from '@modules/account/consent-record';
 import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
 import { userRepository } from '@modules/users/repository';
 
@@ -109,6 +110,9 @@ const userOf = (name: PersonaName) => {
         username,
         email,
         password,
+        // Every seeded person has accepted the Terms, as a signup or a setup page would have recorded.
+        termsAcceptedAt: new Date().toISOString(),
+        termsVersion: termsVersion(),
         // A seed account exists to be logged into, not to demonstrate the verify-your-email nag.
         ...(state.verified ? { verifiedAt: new Date() } : {}),
         ...(state.active ? {} : { active: false }),
@@ -191,6 +195,8 @@ const customerUsers = CUSTOMER_NAMES.map(([key, username], index) =>
         username,
         email: SEED_CUSTOMER_EMAILS[key],
         verifiedAt: new Date(),
+        termsAcceptedAt: new Date().toISOString(),
+        termsVersion: termsVersion(),
         // Alternating: a real customer base is a mix of opted-in and not, and `root`/`customer`
         // alone left the "granted" path exercised by exactly one account.
         analyticsConsent: index % 2 === 0,

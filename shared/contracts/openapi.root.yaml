@@ -1033,9 +1033,9 @@ components:
                 analyticsConsentAt:
                     type: string
                     format: date-time
-                # When the account accepted the terms, and which text (`GET /shop`'s `termsVersion` at that
-                # moment). Stamped by a signup, or by the first sign-in with a provider; absent on
-                # an account an administrator created. There is no re-acceptance flow.
+                # When the account accepted the terms, and which text (`GET /config`'s `termsVersion` at that
+                # moment). Stamped by a signup, by the first sign-in with a provider, or by the first
+                # password set on an account an administrator created. There is no re-acceptance flow.
                 termsAcceptedAt:
                     type: string
                     format: date-time

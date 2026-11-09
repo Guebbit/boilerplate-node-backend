@@ -1888,6 +1888,15 @@ components:
                     $ref: '#/components/schemas/PasswordNew'
                 passwordConfirm:
                     $ref: '#/components/schemas/Password'
+                # The holder's own tick of the Terms. Needed only when the account holds no Terms
+                # record (staff created it): without it the answer is a 422 naming this field, and
+                # the link is not spent. Ignored when the account already has a record.
+                termsAccepted:
+                    type: boolean
+                    enum: [true]
+                    description: >-
+                        Required when the account holds no Terms record, as an account an
+                        administrator created does not. Ignored otherwise.
 
         AccountRestoreRequest:
             type: object

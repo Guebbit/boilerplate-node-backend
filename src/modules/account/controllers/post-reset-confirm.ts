@@ -26,12 +26,18 @@ export const postResetConfirm = (
     const body = parseBody(ConfirmPasswordResetBody, request.body, response);
     if (!body) return;
 
-    const { token, password, passwordConfirm } = body;
+    const { token, password, passwordConfirm, termsAccepted } = body;
 
     // The whole order — checks, then the atomic spend of the link — lives in the service, so a
     // refused password can never burn the link. See `completePasswordReset`.
     return accountService
-        .completePasswordReset(token, password, passwordConfirm, callerContextOf(request))
+        .completePasswordReset(
+            token,
+            password,
+            passwordConfirm,
+            callerContextOf(request),
+            termsAccepted
+        )
         .then((result) => {
             if (refused(response, result)) {
                 authPasswordResetConfirmTotal.inc({ status: 'failure' });

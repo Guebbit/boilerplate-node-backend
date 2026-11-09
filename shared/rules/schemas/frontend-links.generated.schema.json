@@ -13,6 +13,10 @@
           "type": "string",
           "minLength": 1
         },
+        "setup": {
+          "type": "string",
+          "minLength": 1
+        },
         "restore": {
           "type": "string",
           "minLength": 1
@@ -44,11 +48,16 @@
         "privacy": {
           "type": "string",
           "minLength": 1
+        },
+        "terms": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "required": [
         "verify",
         "reset",
+        "setup",
         "restore",
         "emailChange",
         "emailUndo",
@@ -56,7 +65,8 @@
         "order",
         "product",
         "contact",
-        "privacy"
+        "privacy",
+        "terms"
       ],
       "additionalProperties": false
     },

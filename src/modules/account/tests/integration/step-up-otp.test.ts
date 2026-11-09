@@ -301,7 +301,8 @@ describe('undoing an email change', () => {
         const reset = await api().post('/account/password/reset/confirm').send({
             token: 'reset-after-the-change',
             password: REPLACEMENT_PASSWORD,
-            passwordConfirm: REPLACEMENT_PASSWORD
+            passwordConfirm: REPLACEMENT_PASSWORD,
+            termsAccepted: true
         });
 
         expect(reset.status).toBe(204);

@@ -66,7 +66,8 @@ const resetFor = (token: string) =>
     api().post('/account/password/reset/confirm').send({
         token,
         password: REPLACEMENT_PASSWORD,
-        passwordConfirm: REPLACEMENT_PASSWORD
+        passwordConfirm: REPLACEMENT_PASSWORD,
+        termsAccepted: true
     });
 
 describe('GET /account/oauth/links', () => {

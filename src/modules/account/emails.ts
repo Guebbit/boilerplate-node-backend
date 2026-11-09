@@ -10,7 +10,13 @@
 import { supportEmail } from '@infrastructure/adapters/config';
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { getDefaultLocale, translator } from '@infrastructure/i18n';
-import { accountExportLink, accountFrontendLink, type AccountLinkKind } from './config';
+import {
+    accountExportLink,
+    accountFrontendLink,
+    accountTermsLink,
+    type AccountLinkKind
+} from './config';
+import { privacyFrontendLink } from '@modules/users';
 import type { CallerContext } from '@types';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 
@@ -164,7 +170,8 @@ export const resetRequestEmail = (locale: string, name: string, token: string): 
  * Account setup: an admin created this account with no password, and asked to have the user set
  * one themselves. Same link, same token type and TTL as {@link resetRequestEmail} — see
  * `password-reset-request.ts`'s `requestAccountSetup` — only the copy differs: the recipient did not lose a
- * password, they never had one.
+ * password, they never had one. It is also the person's first contact from us, so it links the
+ * Terms and the privacy notice (GDPR Art. 14(3)(b)); the page it opens asks for the Terms tick.
  */
 export const setupRequestEmail = (locale: string, name: string, token: string): EmailContent => {
     return accountMail({
@@ -174,7 +181,12 @@ export const setupRequestEmail = (locale: string, name: string, token: string): 
         body: (t) => ({
             intro: t('account.email.setup-request.intro'),
             linkLabel: t('account.email.setup-request.link-label'),
-            linkUrl: accountFrontendLink('reset', { locale, token }),
+            linkUrl: accountFrontendLink('setup', { locale, token }),
+            legalIntro: t('account.email.setup-request.legal-intro'),
+            termsLabel: t('account.email.setup-request.terms-label'),
+            termsUrl: accountTermsLink(locale),
+            privacyLabel: t('account.email.setup-request.privacy-label'),
+            privacyUrl: privacyFrontendLink(locale),
             ignore: t('account.email.setup-request.ignore')
         })
     });
