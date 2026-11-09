@@ -82,7 +82,7 @@ const resolveStatus = (error: Error): number => {
  *
  * - a body-parser error: `type` only. Its message quotes the request body (`Unexpected token ...
  *   in JSON`), and a client controls that body.
- * - a Mongo/Mongoose error: name and code only, via the shared `loggableDatabaseError`.
+ * - a Mongo/Mongoose error: name, code and stack frames (no message), via the shared `loggableDatabaseError`.
  * - anything else: unchanged, the logger's own serializer decides.
  *
  * @param error - the unhandled error

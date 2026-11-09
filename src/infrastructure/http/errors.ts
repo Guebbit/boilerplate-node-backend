@@ -125,11 +125,12 @@ const DATABASE_ERROR_NAME =
     /^(?:Mongo\w*Error|Mongoose\w*Error|ValidationError|CastError|BSONError)$/;
 
 /**
- * What of a failure may reach the log. A Mongo/Mongoose error keeps its name and code only: its
- * message carries the offending values (a duplicate-key error names the email, a
- * `ValidationError` quotes what was rejected), and log redaction reads key names, never message
- * text. The stack is left out too, since its first line IS the message. Anything else is
- * returned unchanged for the logger's own serializer.
+ * What of a failure may reach the log. A Mongo/Mongoose error keeps its name, its code and its
+ * stack FRAMES, never its message: the message carries the offending values (a duplicate-key
+ * error names the email, a `ValidationError` quotes what was rejected), and log redaction reads
+ * key names, never message text. The stack's leading lines are that message, so only the
+ * `    at ...` frame lines are kept; they name where the error came from and no data. Anything
+ * else is returned unchanged for the logger's own serializer.
  *
  * Shared by the global error handler and {@link logDatabaseFailure}, so both paths scrub alike.
  *
@@ -138,7 +139,12 @@ const DATABASE_ERROR_NAME =
  */
 export const loggableDatabaseError = (error: unknown): unknown => {
     if (!(error instanceof Error) || !DATABASE_ERROR_NAME.test(error.name)) return error;
-    return { name: error.name, code: 'code' in error ? error.code : undefined };
+    // A message may span several lines, so frames are picked by shape, not by "drop line one".
+    const frames = (error.stack ?? '')
+        .split('\n')
+        .filter((line) => /^\s+at /.test(line))
+        .join('\n');
+    return { name: error.name, code: 'code' in error ? error.code : undefined, stack: frames };
 };
 
 /**

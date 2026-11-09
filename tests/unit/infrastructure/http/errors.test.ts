@@ -326,7 +326,7 @@ describe('rejectDatabaseError', () => {
         // `warn`, not `error`: a 422 is the request's fault, not a server failure worth paging.
         expect(mockedLogger.warn).toHaveBeenCalledWith('getProducts - Invalid identifier', {
             status: 422,
-            error: { name: 'BSONError', code: undefined }
+            error: { name: 'BSONError', code: undefined, stack: expect.any(String) }
         });
         expect(mockedLogger.error).not.toHaveBeenCalled();
     });
@@ -469,7 +469,7 @@ describe('rejectDatabaseEnvelope', () => {
         // `warn`, not `error`: a 422 is the request's fault, not a server failure worth paging.
         expect(mockedLogger.warn).toHaveBeenCalledWith('login - Invalid identifier', {
             status: 422,
-            error: { name: 'BSONError', code: undefined }
+            error: { name: 'BSONError', code: undefined, stack: expect.any(String) }
         });
         expect(mockedLogger.error).not.toHaveBeenCalled();
     });
@@ -500,7 +500,7 @@ describe('personal data in database-error logs', () => {
         );
 
     const makeLeakyValidation = () =>
-        Object.assign(new Error(`User validation failed: email: \`${EMAIL}\` is not valid`), {
+        Object.assign(new Error(`User validation failed:\n  email: \`${EMAIL}\` is not valid`), {
             name: 'ValidationError'
         });
 
@@ -516,7 +516,11 @@ describe('personal data in database-error logs', () => {
         expect(loggedText()).not.toContain(EMAIL);
         expect(mockedLogger.warn).toHaveBeenCalledWith(expect.any(String), {
             status: 409,
-            error: { name: 'MongoServerError', code: 11_000 }
+            error: {
+                name: 'MongoServerError',
+                code: 11_000,
+                stack: expect.stringContaining('    at ')
+            }
         });
     });
 
@@ -524,6 +528,8 @@ describe('personal data in database-error logs', () => {
         rejectDatabaseEnvelope('ctx', makeLeakyValidation());
 
         expect(loggedText()).not.toContain(EMAIL);
+        // The frames survive: an operator can still see where the error came from.
+        expect(loggedText()).toContain('errors.test.ts');
     });
 
     it('leaves an error that is not a database error unchanged for the logger', () => {
