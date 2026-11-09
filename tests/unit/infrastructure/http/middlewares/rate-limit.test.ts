@@ -173,6 +173,7 @@ const capturingResponse = () => {
         response: asStub<Response>({
             status,
             setHeader: jest.fn(),
+            append: jest.fn(),
             getHeader: jest.fn(),
             removeHeader: jest.fn()
         }),
@@ -414,5 +415,28 @@ describe('refuseRateLimited — what the refusal says', () => {
             })
         );
         expect(t('generic.error-rate-limited')).toMatch(/\S/);
+    });
+
+    it('names its budget once and sends one wait: Retry-After equals details.retryAfter', () => {
+        const { response, json } = capturingResponse();
+
+        refuseRateLimited({ namespace: 'policy-test', audited: false }, 42)(
+            routeRequest(),
+            response
+        );
+
+        expect(json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                errors: [
+                    expect.objectContaining({
+                        details: { policy: 'policy-test', retryAfter: 42 }
+                    })
+                ]
+            })
+        );
+        expect(response.setHeader).toHaveBeenCalledWith('Retry-After', '42');
+        // No limiter announced it (a budget charged by hand), so the refusal lists it with r=0.
+        expect(response.append).toHaveBeenCalledTimes(1);
+        expect(response.append).toHaveBeenCalledWith('RateLimit', '"policy-test";r=0;t=42');
     });
 });

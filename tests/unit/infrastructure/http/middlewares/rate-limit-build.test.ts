@@ -181,13 +181,16 @@ describe('buildRateLimiter — the limit', () => {
     });
 
     it('answers a refusal with its own entry and a Retry-After of at least a second', async () => {
-        const limiter = buildRateLimiter(budgetOf(1));
+        const budget = budgetOf(1);
+        const limiter = buildRateLimiter(budget);
         await hit(limiter);
 
         const { headers, status } = await hit(limiter);
 
         expect(status).toBe(429);
         expect(headers.ratelimit).toMatch(/;r=0;t=\d+$/);
+        // The refusal lists its budget once, not once from the limiter and once from the envelope.
+        expect(String(headers.ratelimit).split(`"${budget.namespace}";`)).toHaveLength(2);
         expect(Number(headers['retry-after'])).toBeGreaterThanOrEqual(1);
     });
 });

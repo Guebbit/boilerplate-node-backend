@@ -18,7 +18,6 @@ import { isIPv4 } from 'node:net';
 import type { Request, RequestHandler, Response } from 'express';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import type { Options, RateLimitInfo, Store } from 'express-rate-limit';
-import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { recordAudit, coreAuditActions } from '@infrastructure/observability/audit';
 import { rateLimitRefusalsTotal } from '@infrastructure/observability/metrics-rate-limit';
@@ -26,10 +25,10 @@ import { rateLimitStore } from '@infrastructure/http/middlewares/rate-limit-stor
 import { rateLimitBudgetConfig, rateLimitConfig } from '@infrastructure/http/config';
 import { callerContextOf } from '@infrastructure/http/request';
 import { refuseAntibot } from '@infrastructure/http/middlewares/antibot-log';
+import { generateRateLimited, rateLimitItem } from '@infrastructure/http/response';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import { pseudonymise } from '@infrastructure/security/pseudonymise';
 import type { CallerContext, RateLimitBudget } from '@types';
-import { ERROR_CODES } from '@api/error-codes';
 import { infrastructureRateLimitData } from './rate-limits.generated';
 
 /**
@@ -142,7 +141,7 @@ const announceBudget = (budget: BudgetFacts, request: Request, response: Respons
     );
     response.append(
         'RateLimit',
-        `${name};r=${String(Math.max(0, info.remaining))};t=${String(secondsUntil(info.resetTime))}`
+        rateLimitItem(budget.namespace, Math.max(0, info.remaining), secondsUntil(info.resetTime))
     );
 };
 
@@ -155,14 +154,17 @@ const announceBudget = (budget: BudgetFacts, request: Request, response: Respons
  * The global brake does not: a port scan would just bury the trail in noise.
  */
 export const refuseRateLimited =
-    (budget: Pick<RateLimitBudget, 'namespace' | 'audited'> & BudgetFacts) =>
+    (
+        budget: Pick<RateLimitBudget, 'namespace' | 'audited'> & BudgetFacts,
+        handChargedSeconds?: number
+    ) =>
     (request: Request, response: Response): Response => {
-        // With the library's own headers off it sets no `Retry-After` either, so it is written here
-        // (RFC 9110 §10.2.3) beside the budget's `RateLimit` entry. A budget charged by hand has no
-        // info to read and has already set its own.
+        // With the library's own headers off it sets no `Retry-After` either: `rejectResponse`
+        // writes it (RFC 9110 §10.2.3) from the wait below, beside the budget's `RateLimit` entry.
+        // A budget charged by hand has no info to read, so its caller passes the wait it computed.
         announceBudget(budget, request, response);
         const info = rateLimitInfoOf(request, infoSlotOf(budget));
-        if (info) response.setHeader('Retry-After', String(secondsUntil(info.resetTime)));
+        const seconds = info ? secondsUntil(info.resetTime) : (handChargedSeconds ?? 1);
 
         recordBudgetRefusal(budget, callerContextOf(request), {
             route: request.path,
@@ -174,9 +176,13 @@ export const refuseRateLimited =
          * `installRequestContext` mounts the request logger, so a 429 short-circuits before
          * anything else would record it, leaving the global brake with no trace at all.
          */
-        return refuseAntibot('rate-limit', request, response, 429, [
-            { code: ERROR_CODES.RATE_LIMITED, message: t('generic.error-rate-limited') }
-        ]);
+        return refuseAntibot(
+            'rate-limit',
+            request,
+            response,
+            429,
+            generateRateLimited(seconds, { details: { policy: budget.namespace } }).errors
+        );
     };
 
 /**

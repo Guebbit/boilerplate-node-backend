@@ -107,7 +107,26 @@ describe('the route door — signup and reset', () => {
             expect(refused.status).toBe(429);
             expect(Number(refused.headers['retry-after'])).toBeGreaterThanOrEqual(1);
             expect(refused.body.errors[0].code).toBe('RATE_LIMITED');
+            // One wait, three places: the header, the body, and the budget's own RateLimit item.
+            expect(refused.body.errors[0].details).toEqual({
+                policy: 'mail-recipient',
+                retryAfter: Number(refused.headers['retry-after'])
+            });
+            expect(refused.headers.ratelimit).toBe(
+                `"mail-recipient";r=0;t=${refused.headers['retry-after']}`
+            );
+            expect(refused.headers['ratelimit-policy']).toBeUndefined();
             expect(other).toBe(200);
+        }));
+
+    it('names no mailbox budget on a request that was allowed', () =>
+        withBudget(5, async () => {
+            const app = await routeBehindLimiter();
+
+            const allowed = await supertest(app).post('/mail').send({ email: 'ok@example.com' });
+
+            expect(allowed.status).toBe(200);
+            expect(allowed.headers.ratelimit).toBeUndefined();
         }));
 
     it('lets a body naming no address through, for validation to answer', () =>
@@ -137,6 +156,12 @@ describe('the service doors — the recipient is chosen by the server', () => {
             expect(sent.success).toBe(true);
             expect(asReject(refused).status).toBe(429);
             expect(asReject(refused).errors[0].code).toBe('RATE_LIMITED');
+            // The same body as the route-side door: the wait, and the budget that refused.
+            expect(asReject(refused).errors[0].details).toEqual({
+                policy: 'mail-recipient',
+                retryAfter: expect.any(Number)
+            });
+            expect(asReject(refused).errors[0].details?.retryAfter).toBeGreaterThanOrEqual(1);
         }));
 
     it('counts a refusal the service answers, as a limiter would', () =>

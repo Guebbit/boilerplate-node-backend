@@ -119,7 +119,7 @@ export const settleVerdict = <T>(
     onMatch: () => Promise<ResponseSuccess<T> | ResponseReject>
 ): Promise<ResponseSuccess<T> | ResponseReject> => {
     if (verdict === 'matched') return onMatch();
-    return verdict === 'locked' ? Promise.resolve(rejectLocked()) : rejectWrongCode(user);
+    return verdict === 'locked' ? Promise.resolve(rejectLocked(user)) : rejectWrongCode(user);
 };
 
 /**

@@ -11,7 +11,7 @@
  * anchor, the window, and text that is already translated.
  */
 
-import { generateReject } from '@infrastructure/http/response';
+import { generateRateLimited } from '@infrastructure/http/response';
 import type { ResponseReject } from '@infrastructure/http/response';
 import type { ErrorCode } from '@api/error-codes';
 
@@ -47,10 +47,4 @@ export const cooldownRemaining = (
  * @param seconds - what {@link cooldownRemaining} returned
  */
 export const resendTooSoon = (code: ErrorCode, message: string, seconds: number): ResponseReject =>
-    generateReject(429, [
-        {
-            code,
-            message,
-            details: { retryAfter: seconds }
-        }
-    ]);
+    generateRateLimited(seconds, { code, message });

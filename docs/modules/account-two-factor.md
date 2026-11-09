@@ -198,7 +198,7 @@ MFA Factors"; NIST SP 800-63B).
 
 Every check of an **armed** factor — those calls, and the login challenge's code step — shares one
 per-account cap of **wrong** codes: ten lock the account's 2FA checks for 15 minutes, answering
-`429` before any code is compared, and the owner is mailed once (`account.two-factor-locked`). The
+`429` before any code is compared (its `Retry-After`, and the same number in `details.retryAfter`, is the lock's time left), and the owner is mailed once (`account.two-factor-locked`). The
 counter is a Mongo field on the user, not a Redis budget: the write is free, it survives a cache
 outage, and one count covers every place a code is typed (NIST SP 800-63B allows up to 100). The
 attempt is **reserved before it is compared** — one atomic `findOneAndUpdate` — because a

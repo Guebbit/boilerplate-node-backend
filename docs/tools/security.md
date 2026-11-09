@@ -547,7 +547,11 @@ RateLimit: "global";r=97;t=41, "login";r=4;t=880
 
 - The name is the budget's `namespace` in the table above; `q` is the limit, `w` the window in
   seconds, `r` what is left, `t` seconds to the reset.
-- A refusal (`429`) carries the same two headers plus `Retry-After` (at least one second).
+- A refusal (`429`) carries the same two headers plus `Retry-After`, the same number as
+  `details.retryAfter` (at least one second). The refusing budget is always listed in `RateLimit`
+  with `r=0` and `t` equal to `Retry-After`, and named in `details.policy`, even a mailbox budget
+  charged by hand that has no `RateLimit-Policy` item. Cooldowns and the 2FA lock send
+  `Retry-After` only.
 - We write them ourselves instead of using express-rate-limit's `draft-8` writer: that one always
   adds `pk`, a truncated unsalted hash of the caller's key (an IPv4 address for the global brake),
   which a shared cache would replay to other visitors. No identifier of the caller is sent.

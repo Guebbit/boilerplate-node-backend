@@ -18,6 +18,7 @@
 
 import {
     fieldError,
+    generateRateLimited,
     generateReject,
     generateSuccess,
     resolveErrorTitle,
@@ -77,6 +78,35 @@ describe('generateSuccess', () => {
 
 /** The `code` a given status maps to — the single fact every status test below asserts. */
 const codeFor = (status: number) => generateReject(status, ['y']).errors[0].code;
+
+describe('generateRateLimited', () => {
+    it('is a 429 RATE_LIMITED with the generic text, and always names the wait', () => {
+        const rejection = generateRateLimited(30);
+
+        expect(rejection.status).toBe(429);
+        expect(rejection.errors).toEqual([
+            {
+                code: 'RATE_LIMITED',
+                message: t('generic.error-rate-limited'),
+                details: { retryAfter: 30 }
+            }
+        ]);
+    });
+
+    it('keeps the caller code, text and details, and the wait wins a clash', () => {
+        const rejection = generateRateLimited(7, {
+            code: ERROR_CODES.TWO_FACTOR_RESEND_TOO_SOON,
+            message: 'Wait',
+            details: { policy: 'x', retryAfter: 999 }
+        });
+
+        expect(rejection.errors[0]).toEqual({
+            code: 'TWO_FACTOR_RESEND_TOO_SOON',
+            message: 'Wait',
+            details: { policy: 'x', retryAfter: 7 }
+        });
+    });
+});
 
 describe('generateReject', () => {
     it('builds structured error items from plain string errors', () => {
@@ -464,6 +494,25 @@ describe('rejectResponse', () => {
         ]);
 
         expect(setHeader).toHaveBeenCalledWith('Retry-After', '42');
+    });
+
+    it('lists the refusing budget in RateLimit with r=0, unless a limiter already did', () => {
+        const fresh = makeResponseStub();
+        const append = jest.fn();
+        Reflect.set(fresh, 'append', append);
+        const announced = makeResponseStub();
+        const appendAgain = jest.fn();
+        Reflect.set(announced, 'append', appendAgain);
+        Reflect.set(announced, 'getHeader', (name: string) =>
+            name === 'RateLimit' ? '"mail";r=0;t=9' : undefined
+        );
+        const refusal = generateRateLimited(9, { details: { policy: 'mail' } }).errors;
+
+        rejectResponse(fresh, 429, refusal);
+        rejectResponse(announced, 429, refusal);
+
+        expect(append).toHaveBeenCalledWith('RateLimit', '"mail";r=0;t=9');
+        expect(appendAgain).not.toHaveBeenCalled();
     });
 
     it('defaults a 503 to a Retry-After hint, and keeps one a caller set', () => {
