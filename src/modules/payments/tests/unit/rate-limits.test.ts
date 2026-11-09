@@ -72,3 +72,15 @@ describe('paymentIntentLimiter', () => {
         expect(pooled.skipSuccessfulRequests).not.toBe(true);
     });
 });
+
+describe('webhookLimiter', () => {
+    it('counts refused deliveries only, per address block, and leaves the trail to the metric and the alert', () => {
+        const webhook = budget('payment-webhook');
+
+        expect(webhook.keyedBy).toBe(KEYED_BY_ADDRESS_BLOCK);
+        expect(webhook.keyGenerator).toBe(addressBlockOf);
+        expect(webhook.skipSuccessfulRequests).toBe(true);
+        // A forged flood would bury the audit trail in rate-limit rows.
+        expect(webhook.audited).toBe(false);
+    });
+});

@@ -7,7 +7,7 @@
 
 import type { Order, OrderTimelineEntry } from '@types';
 import type { OrderDocument, OrderEventDocument } from './model';
-import { TIMELINE_AUDIENCE, isBuyerVisible } from './domain';
+import { TIMELINE_AUDIENCE } from './domain';
 import { decryptPii } from '@infrastructure/security/pii-encryption';
 import { timelineNoteAad } from './pii';
 
@@ -56,15 +56,13 @@ export const presentTimelineEntry = (
 };
 
 /**
- * The rows of an order a given audience may read, in the order they were stored.
+ * Present a page of an order's rows for one reader. The audience filter is the query's job
+ * (`BUYER_VISIBLE_TYPES`), so a buyer's page and its count agree.
  *
- * @param events - every stored row of the order
+ * @param events - the page's stored rows, already narrowed to what the reader may see
  * @param reader - who is reading
  */
 export const presentTimeline = (
     events: readonly OrderEventDocument[],
     reader: 'buyer' | 'staff'
-): OrderTimelineEntry[] =>
-    events
-        .filter((event) => reader === 'staff' || isBuyerVisible(event.type))
-        .map((event) => presentTimelineEntry(event, reader));
+): OrderTimelineEntry[] => events.map((event) => presentTimelineEntry(event, reader));

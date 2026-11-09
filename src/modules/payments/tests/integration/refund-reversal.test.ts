@@ -14,6 +14,7 @@ import { orderService } from '@modules/orders';
 import { resetDomainEvents } from '@kernel/events';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { paymentService } from '@modules/payments/services';
+import { deliver } from '@modules/payments/tests/deliver';
 import { paymentRepository } from '@modules/payments/repository';
 import {
     PAYMENT_REFUNDED,
@@ -62,8 +63,8 @@ const settledRefund = async (amount = '30.00') => {
 };
 
 /** Deliver the provider's webhook for one refund. */
-const deliver = (providerRef: string, refundRef: string) =>
-    paymentService.applyWebhookDelivery({ id: 'evt', providerRef, refundRef }, 'fake');
+const deliverRefund = (providerRef: string, refundRef: string) =>
+    deliver({ id: 'evt', providerRef, refundRef });
 
 /** The order's stamped payment status. */
 const stampOf = (orderId: string) =>
@@ -78,7 +79,7 @@ describe('a settled refund the provider takes back', () => {
         expect(await stampOf(orderId)).toBe('partially_refunded');
 
         setFakeLateRefundFailure(refundRef, 'lost_or_stolen_card');
-        await deliver(providerRef, refundRef);
+        await deliverRefund(providerRef, refundRef);
 
         const payment = await paymentRepository.findByOrderId(orderId);
         expect(payment?.refunds[0]).toMatchObject({
@@ -108,7 +109,7 @@ describe('a settled refund the provider takes back', () => {
         await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), { amount: '20.00' });
 
         setFakeLateRefundFailure(refundRef);
-        await deliver(providerRef, refundRef);
+        await deliverRefund(providerRef, refundRef);
 
         expect(await stampOf(orderId)).toBe('partially_refunded');
     });
@@ -116,10 +117,10 @@ describe('a settled refund the provider takes back', () => {
     it('changes nothing on a redelivery, nor on a success report after the failure', async () => {
         const { orderId, providerRef, refundRef } = await settledRefund();
         setFakeLateRefundFailure(refundRef);
-        await deliver(providerRef, refundRef);
-        await deliver(providerRef, refundRef);
+        await deliverRefund(providerRef, refundRef);
+        await deliverRefund(providerRef, refundRef);
         setFakeRefundOutcome(refundRef, { status: 'succeeded' });
-        await deliver(providerRef, refundRef);
+        await deliverRefund(providerRef, refundRef);
 
         const payment = await paymentRepository.findByOrderId(orderId);
         expect(payment?.refunds[0].status).toBe('failed');
@@ -132,7 +133,7 @@ describe('a settled refund the provider takes back', () => {
         withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { providerRef, refundRef } = await settledRefund();
             setFakeLateRefundFailure(refundRef);
-            await deliver(providerRef, refundRef);
+            await deliverRefund(providerRef, refundRef);
             const send = jest.spyOn(fakePaymentProvider, 'refund').mockClear();
             const read = jest.spyOn(fakePaymentProvider, 'retrieveRefund').mockClear();
 
@@ -145,7 +146,7 @@ describe('a settled refund the provider takes back', () => {
     it('is closed by a hand settle, which announces it again; a late redelivery is a no-op', async () => {
         const { orderId, payment, refundId, providerRef, refundRef } = await settledRefund();
         setFakeLateRefundFailure(refundRef);
-        await deliver(providerRef, refundRef);
+        await deliverRefund(providerRef, refundRef);
         const offered = await paymentService.getForOrder(orderId, asAdmin());
         expect(offered.data?.actions?.settleByHand).toEqual([refundId]);
         expect(offered.data?.actions?.cancelRefund).toEqual([]);
@@ -156,7 +157,7 @@ describe('a settled refund the provider takes back', () => {
             asAdmin(),
             callerContextAs('admin')
         );
-        await deliver(providerRef, refundRef);
+        await deliverRefund(providerRef, refundRef);
 
         expect(settled.success).toBe(true);
         const after = await paymentRepository.findByOrderId(orderId);
@@ -183,7 +184,7 @@ describe('a webhook that beats refund()', () => {
             send(...args).then((made) => {
                 setFakeLateRefundFailure(made.refundRef, 'declined');
                 // The provider's report arrives before our own answer does.
-                return deliver(providerRef, made.refundRef).then(() => made);
+                return deliverRefund(providerRef, made.refundRef).then(() => made);
             })
         );
 
@@ -204,7 +205,7 @@ describe('a webhook that beats refund()', () => {
         // A redelivered failure report changes nothing and announces nothing.
         const refundRef = refundRefOfRecord(String(payment?.refunds[0]._id));
         if (!refundRef) throw new Error('the provider made no refund');
-        await deliver(providerRef, refundRef);
+        await deliverRefund(providerRef, refundRef);
         await settleOutboxNudges();
         expect(await events(PAYMENT_REFUND_FAILED)).toBe(1);
         const again = await paymentService.listAttention();

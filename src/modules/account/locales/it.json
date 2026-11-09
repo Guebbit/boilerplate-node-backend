@@ -17,9 +17,6 @@
         "delete": {
             "token-not-found": "Token non valido o scaduto, riprova."
         },
-        "update": {
-            "email-already-used": "L'email è già stata utilizzata."
-        },
         "password-change": {
             "wrong-current": "La password attuale non è corretta."
         },
@@ -53,6 +50,9 @@
             "token-not-found": "Token non valido o scaduto, riprova."
         },
         "email-change": {
+            "already-current": "Questo è già il tuo indirizzo email.",
+            "already-pending": "Questo indirizzo è già in attesa di conferma. Usa il pulsante di reinvio per ricevere di nuovo il link.",
+            "already-used": "L'email è già stata utilizzata.",
             "too-soon": "Una modifica dell'email è appena stata richiesta. Attendi un momento prima di richiederne un'altra.",
             "token-not-found": "Token non valido o scaduto, riprova."
         },

@@ -82,6 +82,15 @@ export const isBuyerVisible = (type: OrderTimelineType): boolean =>
     TIMELINE_AUDIENCE[type] === 'buyer';
 
 /**
+ * Every type the buyer may read: what a buyer's timeline query narrows to, so the page and its
+ * count hold only rows the buyer can see.
+ */
+export const BUYER_VISIBLE_TYPES: readonly OrderTimelineType[] = Object.entries(TIMELINE_AUDIENCE)
+    // `Object.entries` loses the key type; the table is declared `Record<OrderTimelineType, …>`.
+    .filter(([, audience]) => audience === 'buyer')
+    .map(([type]) => type as OrderTimelineType);
+
+/**
  * The contract's entry variant for one type: the one whose `type` enum holds it. Distributive
  * over the generated union, so a type several variants could share is still answered by one.
  * (`Extract` would return `never` for a variant whose `type` is a subset of a wider enum.)

@@ -15,6 +15,8 @@ import { orderService } from '@modules/orders';
 import { resetDomainEvents } from '@kernel/events';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { paymentService } from '@modules/payments/services';
+import { deliver } from '@modules/payments/tests/deliver';
+import { registerPaymentProvider } from '@modules/payments/providers/registry';
 import { paymentRepository } from '@modules/payments/repository';
 import {
     PAYMENT_DISPUTE_OPENED,
@@ -81,8 +83,8 @@ const report = (over: Partial<ProviderDisputeState> = {}): ProviderDisputeState 
 });
 
 /** Deliver one dispute report the way the webhook route hands it to the service. */
-const deliver = (providerRef: string, over: Partial<ProviderDisputeState> = {}) =>
-    paymentService.applyWebhookDelivery(setFakeDispute(providerRef, report(over)), 'fake');
+const deliverReport = (providerRef: string, over: Partial<ProviderDisputeState> = {}) =>
+    deliver(setFakeDispute(providerRef, report(over)));
 
 /** The payment as the shop's staff read it. */
 const staffView = (orderId: string) =>
@@ -105,7 +107,7 @@ describe('a dispute is reported', () => {
         const { orderId, providerRef } = await paidOrder();
         const before = await orderService.getById(orderId);
 
-        await deliver(providerRef);
+        await deliverReport(providerRef);
 
         const view = await staffView(orderId);
         expect(view?.disputes).toEqual([
@@ -135,7 +137,7 @@ describe('a dispute is reported', () => {
 
     it('is shown to staff alone, never to the payer', async () => {
         const { orderId, providerRef } = await paidOrder();
-        await deliver(providerRef);
+        await deliverReport(providerRef);
         const payment = await paymentRepository.findByOrderId(orderId);
 
         const payer = await paymentService.getForOrder(
@@ -149,10 +151,10 @@ describe('a dispute is reported', () => {
 
     it('ignores a report older than the stored one, and announces nothing for a repeat', async () => {
         const { orderId, providerRef } = await paidOrder();
-        await deliver(providerRef, { status: 'under_review', observedAt: at(30) });
+        await deliverReport(providerRef, { status: 'under_review', observedAt: at(30) });
 
-        await deliver(providerRef, { status: 'needs_response', observedAt: at(10) });
-        await deliver(providerRef, { status: 'under_review', observedAt: at(30) });
+        await deliverReport(providerRef, { status: 'needs_response', observedAt: at(10) });
+        await deliverReport(providerRef, { status: 'under_review', observedAt: at(30) });
 
         const view = await staffView(orderId);
         expect(view?.disputes?.[0]).toMatchObject({ status: 'under_review', observedAt: when(30) });
@@ -163,10 +165,10 @@ describe('a dispute is reported', () => {
 
     it('applies a newer report as an update, and closes the timeline once', async () => {
         const { orderId, providerRef } = await paidOrder();
-        await deliver(providerRef);
+        await deliverReport(providerRef);
 
-        await deliver(providerRef, { status: 'lost', observedAt: at(60) });
-        await deliver(providerRef, { status: 'lost', observedAt: at(61) });
+        await deliverReport(providerRef, { status: 'lost', observedAt: at(60) });
+        await deliverReport(providerRef, { status: 'lost', observedAt: at(61) });
 
         const view = await staffView(orderId);
         expect(view?.disputes?.[0]).toMatchObject({ status: 'lost', closedAt: when(61) });
@@ -178,17 +180,21 @@ describe('a dispute is reported', () => {
 
     it('lets a closed dispute flip: a late win gives the room back, a reopened one clears closedAt', async () => {
         const { orderId, providerRef } = await paidOrder();
-        await deliver(providerRef);
-        await deliver(providerRef, { status: 'lost', observedAt: at(60) });
+        await deliverReport(providerRef);
+        await deliverReport(providerRef, { status: 'lost', observedAt: at(60) });
         const lost = await staffView(orderId);
         expect(lost?.actions?.refund).toBe(false);
 
-        await deliver(providerRef, { status: 'won', fundsWithdrawn: false, observedAt: at(120) });
+        await deliverReport(providerRef, {
+            status: 'won',
+            fundsWithdrawn: false,
+            observedAt: at(120)
+        });
 
         const won = await staffView(orderId);
         expect(won?.disputes?.[0]).toMatchObject({ status: 'won', closedAt: when(120) });
         expect(won?.actions?.refund).toBe(true);
-        await deliver(providerRef, { status: 'needs_response', observedAt: at(180) });
+        await deliverReport(providerRef, { status: 'needs_response', observedAt: at(180) });
         const reopened = await staffView(orderId);
         expect(reopened?.disputes?.[0].closedAt).toBeUndefined();
         expect(reopened?.actions?.refund).toBe(false);
@@ -197,12 +203,11 @@ describe('a dispute is reported', () => {
     it('drops a report for an intent it does not know, another provider, or another currency', async () => {
         const { orderId, providerRef } = await paidOrder();
 
-        await deliver('fake_pi_unknown');
-        await paymentService.applyWebhookDelivery(
-            setFakeDispute(providerRef, report()),
-            'some-other-provider'
-        );
-        await deliver(providerRef, { currency: 'USD' });
+        await deliverReport('fake_pi_unknown');
+        // Authentic, but arriving at an endpoint the payment's provider does not own.
+        registerPaymentProvider({ ...fakePaymentProvider, name: 'some-other-provider' });
+        await deliver(setFakeDispute(providerRef, report()), 'some-other-provider');
+        await deliverReport(providerRef, { currency: 'USD' });
 
         const view = await staffView(orderId);
         expect(view?.disputes).toBeUndefined();
@@ -214,7 +219,7 @@ describe('a dispute is reported', () => {
 describe('the refund door while a dispute stands', () => {
     it('answers 409 PAYMENT_DISPUTED for an open chargeback and greys the action out', async () => {
         const { orderId, providerRef } = await paidOrder();
-        await deliver(providerRef);
+        await deliverReport(providerRef);
 
         const asked = await refund(orderId, '10.00');
 
@@ -228,7 +233,7 @@ describe('the refund door while a dispute stands', () => {
 
     it('keeps refunds allowed during an inquiry', async () => {
         const { orderId, providerRef } = await paidOrder();
-        await deliver(providerRef, { kind: 'inquiry', fundsWithdrawn: false });
+        await deliverReport(providerRef, { kind: 'inquiry', fundsWithdrawn: false });
 
         const asked = await refund(orderId, '10.00');
 
@@ -239,7 +244,7 @@ describe('the refund door while a dispute stands', () => {
 
     it('takes a lost chargeback off what is left: more than the rest is a 422', async () => {
         const { orderId, providerRef } = await paidOrder();
-        await deliver(providerRef, { status: 'lost', amount: '70.00', observedAt: at(5) });
+        await deliverReport(providerRef, { status: 'lost', amount: '70.00', observedAt: at(5) });
 
         const tooMuch = await refund(orderId, '40.00');
         const fits = await refund(orderId, '30.00');
@@ -254,7 +259,7 @@ describe('a refund the chargeback blocks', () => {
     it('fails final as disputed without asking the provider, and is not settleable meanwhile', async () => {
         await withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { orderId, providerRef } = await paidOrder();
-            await deliver(providerRef);
+            await deliverReport(providerRef);
             const send = jest.spyOn(fakePaymentProvider, 'refund').mockClear();
 
             // The order is canceled: the listener tries to give the money back.
@@ -281,12 +286,12 @@ describe('a refund the chargeback blocks', () => {
 
     it('is reported returned once the chargeback is lost (N10-a), with the normal refund event', async () => {
         const { orderId, providerRef } = await paidOrder();
-        await deliver(providerRef);
+        await deliverReport(providerRef);
         await refundForOrder(orderId).catch(() => undefined);
         const payment = await paymentRepository.findByOrderId(orderId);
         const refundId = String(payment?.refunds[0]._id);
 
-        await deliver(providerRef, { status: 'lost', observedAt: at(60) });
+        await deliverReport(providerRef, { status: 'lost', observedAt: at(60) });
         const offered = await staffView(orderId);
         expect(offered?.actions?.settleByHand).toEqual([refundId]);
         const settled = await paymentService.settleRefundByHand(
@@ -303,12 +308,16 @@ describe('a refund the chargeback blocks', () => {
 
     it('may only be voided once the shop won', async () => {
         const { orderId, providerRef } = await paidOrder();
-        await deliver(providerRef);
+        await deliverReport(providerRef);
         await refundForOrder(orderId).catch(() => undefined);
         const payment = await paymentRepository.findByOrderId(orderId);
         const refundId = String(payment?.refunds[0]._id);
 
-        await deliver(providerRef, { status: 'won', fundsWithdrawn: false, observedAt: at(60) });
+        await deliverReport(providerRef, {
+            status: 'won',
+            fundsWithdrawn: false,
+            observedAt: at(60)
+        });
 
         const view = await staffView(orderId);
         expect(view?.actions?.settleByHand).toEqual([]);
@@ -321,7 +330,7 @@ describe('the dispute on the staff reads', () => {
         const { orderId, providerRef } = await paidOrder();
         await refund(orderId, '30.00');
 
-        await deliver(providerRef, { amount: '70.00' });
+        await deliverReport(providerRef, { amount: '70.00' });
 
         const attention = await paymentService.listAttention();
         expect(attention.items).toEqual([
@@ -340,11 +349,11 @@ describe('the dispute on the staff reads', () => {
 
     it('leaves a dispute under review off the list, and omits alreadyRefunded when nothing went back', async () => {
         const { providerRef } = await paidOrder();
-        await deliver(providerRef);
+        await deliverReport(providerRef);
         const shown = await paymentService.listAttention();
         expect(shown.items[0].alreadyRefunded).toBeUndefined();
 
-        await deliver(providerRef, { status: 'under_review', observedAt: at(10) });
+        await deliverReport(providerRef, { status: 'under_review', observedAt: at(10) });
 
         const after = await paymentService.listAttention();
         expect(after.items).toEqual([]);
@@ -353,11 +362,15 @@ describe('the dispute on the staff reads', () => {
     it('filters the payments list to those with a dispute still open', async () => {
         const { providerRef } = await paidOrder();
         await paidOrder();
-        await deliver(providerRef);
+        await deliverReport(providerRef);
 
         const open = await paymentService.listPayments({ disputed: true }, asAdmin());
         const all = await paymentService.listPayments({ disputed: false }, asAdmin());
-        await deliver(providerRef, { status: 'won', fundsWithdrawn: false, observedAt: at(10) });
+        await deliverReport(providerRef, {
+            status: 'won',
+            fundsWithdrawn: false,
+            observedAt: at(10)
+        });
         const closed = await paymentService.listPayments({ disputed: true }, asAdmin());
 
         expect(open.items).toHaveLength(1);

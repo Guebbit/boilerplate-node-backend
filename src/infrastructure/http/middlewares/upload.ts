@@ -11,7 +11,7 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 // multer is the `multipart/form-data` body parser for Express. It populates `request.file` /
 // `request.files` and, with diskStorage, writes the bytes to disk before the handler runs.
 // `FileFilterCallback` is the signature of the accept/reject callback used below.
-import multer, { type FileFilterCallback, type Multer } from 'multer';
+import multer, { MulterError, type FileFilterCallback, type Multer } from 'multer';
 // `randomBytes` = cryptographically secure RNG. Deliberately not `Math.random()`: predictable
 // filenames would let someone guess the URL of another user's upload.
 import { randomBytes } from 'node:crypto';
@@ -73,7 +73,7 @@ export const resolveUploadDestination = (
     // Unknown field → reject. Whitelist rather than blacklist: an unexpected field name is
     // more likely an attack or a client bug than a legitimate upload.
     if (file.fieldname !== IMAGE_UPLOAD_FIELD) {
-        callback(new Error(`Unsupported upload field: ${file.fieldname}`), '');
+        callback(new MulterError('LIMIT_UNEXPECTED_FILE', file.fieldname), '');
         return;
     }
 
@@ -124,7 +124,7 @@ const fileStorage = multer.diskStorage({
 
 /**
  * Raised by {@link fileFilter} for a part whose declared type is not an accepted image. It is not
- * an app error: {@link refuseUnsupportedType} turns it into the 415 before it can reach the
+ * an app error: {@link answerUploadError} turns it into the 415 before it can reach the
  * central handler.
  */
 class UnsupportedUploadTypeError extends Error {}
@@ -135,7 +135,7 @@ class UnsupportedUploadTypeError extends Error {}
  * Runs before the file is written, so an obviously-wrong upload never touches disk. Not a real
  * type check — `mimetype` is client-supplied and unverified; the bytes are checked after the
  * write by {@link validateUploadedImages}. A wrong type is refused with an error (answered as the
- * 415 by {@link refuseUnsupportedType}), never `callback(null, false)`: that drops the file and
+ * 415 by {@link answerUploadError}), never `callback(null, false)`: that drops the file and
  * the request succeeds, so the sender is never told.
  *
  * @param request - the in-flight Express request (unused here)
@@ -209,24 +209,46 @@ const withLocaleRestored =
     (middleware: RequestHandler): RequestHandler =>
     (request, response, next) =>
         middleware(request, response, (error?: unknown) => {
-            const proceed = () => (error ? refuseUnsupportedType(error, response, next) : next());
+            const proceed = () => (error ? answerUploadError(error, response, next) : next());
             if (request.locale) runWithLocaleContext(createLocaleContext(request.locale), proceed);
             else proceed();
         });
 
 /**
- * Answers {@link UnsupportedUploadTypeError} with the 415 the contract already declares, listing
- * the accepted types in `details.accepted` like the Content-Type guard does. Any other error goes
- * on to the central handler. Runs inside the restored locale context, so the message is
+ * Whether multer handed back a parse failure of the multipart BODY: busboy's plain `Error`
+ * (`Boundary not found`, `Unexpected end of form`, `Malformed part header`). Not a `MulterError`
+ * (the error handler already answers those) and not an OS failure, which carries a `syscall`
+ * (a full disk is the server's fault and stays 500).
+ *
+ * @param error - what multer passed to its callback
+ */
+const isMalformedMultipart = (error: unknown): error is Error =>
+    error instanceof Error && !(error instanceof MulterError) && !('syscall' in error);
+
+/**
+ * Answers every error multer hands back that is about the REQUEST: {@link UnsupportedUploadTypeError}
+ * with the 415 the contract already declares (listing the accepted types in `details.accepted`
+ * like the Content-Type guard does), and a malformed multipart body as a 400 client error, the
+ * `status` + `expose` contract the central handler already reads for body-parser. Anything else
+ * goes on to the central handler. Runs inside the restored locale context, so the message is
  * translated.
  *
  * @param error - what multer passed to its callback
  * @param response - answered directly with the 415
- * @param next - receives any error that is not an unsupported type
+ * @param next - receives the 400 client error, or any error that is not about the request
  */
-const refuseUnsupportedType = (error: unknown, response: Response, next: NextFunction): void => {
+const answerUploadError = (error: unknown, response: Response, next: NextFunction): void => {
     if (!(error instanceof UnsupportedUploadTypeError)) {
-        next(error);
+        // `cause` keeps busboy's own error for the log; `expose` is the thrower's statement that
+        // this describes the request, not the server.
+        next(
+            isMalformedMultipart(error)
+                ? Object.assign(new Error('Malformed multipart body', { cause: error }), {
+                      status: 400,
+                      expose: true
+                  })
+                : error
+        );
         return;
     }
     rejectResponse(response, 415, [

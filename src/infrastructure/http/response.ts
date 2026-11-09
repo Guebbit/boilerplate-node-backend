@@ -277,6 +277,51 @@ export const generateReject = (status = 400, errors: (string | ResponseErrorItem
     }) as ResponseReject;
 
 /**
+ * The only door to a 429: `rejectResponse` turns `details.retryAfter` into `Retry-After`, so a
+ * refusal built here cannot leave the wait out.
+ *
+ * `details.policy` (a budget's namespace) is the other key `rejectResponse` reads, to list that
+ * budget in `RateLimit` with `r=0`.
+ *
+ * @param retryAfter - whole seconds, at least 1, until THIS caller's refusal ends (a budget's window, a cooldown, a lock)
+ * @param item - the code, text and extra details; defaults to `RATE_LIMITED` with the generic text
+ */
+export const generateRateLimited = (
+    retryAfter: number,
+    item: { code?: ErrorCode; message?: string; details?: Record<string, unknown> } = {}
+): ResponseReject =>
+    generateReject(429, [
+        {
+            code: item.code ?? ERROR_CODES.RATE_LIMITED,
+            message: item.message ?? t('generic.error-rate-limited'),
+            details: { ...item.details, retryAfter }
+        }
+    ]);
+
+/**
+ * One item of the `RateLimit` header: `"<name>";r=<remaining>;t=<seconds>`.
+ * https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/
+ *
+ * @param name - the budget's namespace
+ * @param remaining - requests left in the window
+ * @param seconds - whole seconds until the window resets
+ */
+export const rateLimitItem = (name: string, remaining: number, seconds: number): string =>
+    `${JSON.stringify(name)};r=${String(remaining)};t=${String(seconds)}`;
+
+/**
+ * Whether the response already lists the budget `name` in its `RateLimit` header.
+ *
+ * @param response - the response being answered
+ * @param name - the budget's namespace
+ */
+const listsBudget = (response: Response, name: string): boolean => {
+    const header = response.getHeader('RateLimit');
+    const value = Array.isArray(header) ? header.join(',') : String(header ?? '');
+    return value.includes(`${JSON.stringify(name)};`);
+};
+
+/**
  * The wait, in seconds, a refusal's first `details.retryAfter` names — `undefined` when none does.
  *
  * @param rejection - the envelope about to be sent
@@ -369,6 +414,16 @@ export const rejectResponse = (
     // `Retry-After` is the header form of what `details.retryAfter` already says (RFC 9110 §10.2.3).
     if (status === 429 && retryAfter !== undefined)
         response.setHeader('Retry-After', String(retryAfter));
+    // A refusing budget is always listed with `r=0`, even one no limiter announced (a mailbox
+    // charged by hand). Only here, on the refusal: a success never names a budget (draft §8.2).
+    const policy = rejection.errors[0].details?.policy;
+    if (
+        status === 429 &&
+        retryAfter !== undefined &&
+        typeof policy === 'string' &&
+        !listsBudget(response, policy)
+    )
+        response.append('RateLimit', rateLimitItem(policy, 0, retryAfter));
     // A 503 carries a wait hint too (RFC 9110 §15.6.4); a guard that knows better sets it first.
     if (status === 503 && !response.hasHeader('Retry-After'))
         response.setHeader('Retry-After', String(SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS));

@@ -111,6 +111,11 @@ export const sitemapService = {
     listProducts: async (page: number): Promise<SitemapItemLoose[] | null> => {
         const languages = servedLanguages();
         const size = productsPerFile(languages.tags.length);
+        // A page past the last never reaches the page query: its `skip` stays bounded by the
+        // catalogue, not by what the caller typed.
+        const total = await productService.countListed();
+        if (page > Math.ceil(total / size)) return null;
+
         const products = await productService.listPublicPage(page, size);
         if (products.length === 0) return null;
 

@@ -56,3 +56,15 @@ export class RefundLeftOpenError extends Error {
         this.name = 'RefundLeftOpenError';
     }
 }
+
+/**
+ * A webhook arrived for a provider name no adapter is installed under: nobody here can sign a
+ * delivery for it, so it is not a delivery at all. The controller answers 404.
+ */
+export class WebhookProviderUnknownError extends Error {
+    /** @param providerName - the name the URL carried */
+    constructor(readonly providerName: string) {
+        super(`No payment provider is installed under "${providerName}"`);
+        this.name = 'WebhookProviderUnknownError';
+    }
+}

@@ -36,6 +36,7 @@ import {
     type ProviderPaymentState,
     type ProviderWebhookEvent
 } from '../providers';
+import { paymentProviderRegistry } from '../providers/registry';
 import { paymentRepository } from '../repository';
 import {
     CONFIRMABLE_PAYMENT_STATUSES,
@@ -44,6 +45,7 @@ import {
     SETTLEABLE_PAYMENT_STATUSES,
     SUCCESS_SETTLEABLE_PAYMENT_STATUSES
 } from '../domain';
+import type { IncomingHttpHeaders } from 'node:http';
 import type { PaymentDocument, RefundRecord } from '../model';
 import { payerScope } from './scope';
 import {
@@ -57,7 +59,7 @@ import { syncProviderRefunds } from './external-refunds';
 import { applyDisputeDelivery } from './disputes';
 import { recordDecline } from './announce';
 import { PAYMENT_AMOUNT_MISMATCH, PAYMENT_SUCCEEDED } from '../events';
-import { notPayable, paymentNotFound } from './errors';
+import { notPayable, paymentNotFound, WebhookProviderUnknownError } from './errors';
 import { ERROR_CODES } from '@api/error-codes';
 
 /** What a settlement did, for a caller that has to turn it into an HTTP answer. */
@@ -679,7 +681,34 @@ export const syncPayment = (
     });
 
 /**
+ * The one way a webhook delivery moves money: resolve the provider by name, let its adapter verify
+ * the signature and decode the body, then apply the verified event. Takes the provider NAME, never
+ * a provider object: a caller could hand in one that accepts anything.
+ *
+ * @param providerName - the endpoint's provider, from the path
+ * @param rawBody - the body exactly as received; a signature covers exact bytes
+ * @param headers - every request header; the adapter picks the signature from them
+ * @throws {WebhookProviderUnknownError} when no adapter is installed under that name
+ * @throws {WebhookRejected} when the signature does not verify or the body is not an event
+ */
+export const receiveWebhook = (
+    providerName: string,
+    rawBody: Buffer,
+    headers: IncomingHttpHeaders
+): Promise<void> =>
+    Promise.resolve()
+        .then(() => paymentProviderRegistry.resolve(providerName))
+        .then((provider) => {
+            if (!provider) throw new WebhookProviderUnknownError(providerName);
+            return provider
+                .parseWebhook(rawBody, headers)
+                .then((event) => applyWebhookDelivery(event, provider.name));
+        });
+
+/**
  * Apply a webhook delivery the provider has already been authenticated for.
+ *
+ * @internal The step beneath {@link receiveWebhook}: it trusts the body, so only the door calls it.
  *
  * The delivery names an intent and nothing else is believed from it: the payment's state is
  * re-read from the provider (`retrieve`) and THAT is settled. A provider does not promise delivery

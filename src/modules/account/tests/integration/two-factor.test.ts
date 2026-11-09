@@ -1277,6 +1277,12 @@ describe('the per-account wrong-code lock', () => {
         expect(refused.status).toBe(429);
         // The lock is a wrong-code budget: it answers with the rate limiter's own code.
         expect(refused.body.errors[0].code).toBe('RATE_LIMITED');
+        // The wait is the lock's time left: the header and the body say the same number.
+        const wait = Number(refused.headers['retry-after']);
+        expect(Number.isInteger(wait)).toBe(true);
+        expect(wait).toBeGreaterThanOrEqual(1);
+        expect(wait).toBeLessThanOrEqual(900);
+        expect(refused.body.errors[0].details).toEqual({ retryAfter: wait });
         expect(await lockStateOf(user.id)).toEqual({
             failures: 10,
             lockedUntil: expect.any(Date)
@@ -1360,6 +1366,11 @@ describe('the per-account wrong-code lock', () => {
 
         expect(response.status).toBe(429);
         expect(response.headers['set-cookie']).toBeUndefined();
+        // The lock was planted 60 s ahead, so the wait is what is left of it, not the full 900 s.
+        const wait = Number(response.headers['retry-after']);
+        expect(wait).toBeGreaterThanOrEqual(58);
+        expect(wait).toBeLessThanOrEqual(60);
+        expect(response.body.errors[0].details.retryAfter).toBe(wait);
     });
 
     it('is cleared by a completed password reset', async () => {

@@ -15,6 +15,7 @@ import { inventoryService } from '@modules/inventory';
 import { resetDomainEvents } from '@kernel/events';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { paymentService } from '@modules/payments/services';
+import { deliver } from '@modules/payments/tests/deliver';
 import { paymentRepository } from '@modules/payments/repository';
 import paymentsModule from '@modules/payments/module';
 import {
@@ -176,8 +177,8 @@ describe('a settled refund the bank sent back', () => {
         mockEnqueueEmail.mockClear();
 
         setFakeLateRefundFailure(refundRef, 'expired_or_canceled_card');
-        await paymentService.applyWebhookDelivery({ id: 'evt', providerRef, refundRef }, 'fake');
-        await paymentService.applyWebhookDelivery({ id: 'evt', providerRef, refundRef }, 'fake');
+        await deliver({ id: 'evt', providerRef, refundRef });
+        await deliver({ id: 'evt', providerRef, refundRef });
         await settle();
 
         expect(mailsOf('payments.refund-undeliverable')).toHaveLength(1);

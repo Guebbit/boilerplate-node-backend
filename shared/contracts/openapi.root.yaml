@@ -145,7 +145,7 @@ x-error-codes:
     RATE_LIMITED:
         {
             status: 429,
-            description: "The caller spent a rate-limit budget: a request limiter, a mailbox's send budget, or an account's wrong-code budget (the 2FA lock). Carries `Retry-After` when the wait is known."
+            description: "The caller spent a rate-limit budget: a request limiter, a mailbox's send budget, or an account's wrong-code budget (the 2FA lock). Carries `Retry-After`, and `details.retryAfter` with the same seconds; `details.policy` names the budget when there is one."
         }
     TOO_MANY_REQUESTS:
         {
@@ -518,32 +518,35 @@ components:
             required: false
             description: >-
                 The rate-limit budgets this request passed, as a list in the current IETF draft's
-                syntax (`draft-ietf-httpapi-ratelimit-headers`): `"login";q=5;w=900` is a budget
-                named `login` that allows `q` requests per `w` seconds. One list item per budget the
-                request passed, named as in the budget table. Any response may carry it; no
-                identifier of the caller is ever included.
+                syntax (`draft-ietf-httpapi-ratelimit-headers`):
+                `"global";q=100;w=60, "credentials-identity";q=10;w=900` is two budgets, each
+                allowing `q` requests per `w` seconds. One list item per budget the request passed,
+                named by the budget's `namespace` (the budget table in `docs/tools/security.md`).
+                Any response may carry it; no identifier of the caller is ever included.
             schema:
                 type: string
 
         RateLimit:
             required: false
             description: >-
-                What is left of each budget in `RateLimit-Policy`, same names and order:
-                `"login";r=3;t=600` is 3 requests remaining, and the window resets in 600 seconds.
-                Back off before `r` reaches 0. Any response may carry it.
+                What is left of each budget in `RateLimit-Policy`, in the same order:
+                `"global";r=97;t=41, "credentials-identity";r=9;t=880` is 97 and 9 requests left,
+                resetting in 41 and 880 seconds. Back off before `r` reaches 0. Any response may
+                carry it. Ignore it on a response served from a cache (`Age` > 0). On a `429`, the budget that
+                refused is always listed with `r=0` and `t` equal to `Retry-After`, even one with no
+                `RateLimit-Policy` item. It is never listed on a success.
             schema:
                 type: string
 
         Retry-After:
             required: false
             description: >-
-                How long to wait before trying again, in whole seconds (RFC 9110 §10.2.3). A `503`
-                always carries a rough hint, not a promise. A `429` carries the time until the budget
-                resets where the refusal knows it; one that does not (a spent per-account allowance)
-                sends none, and the wait is then in the error `details`.
+                How long to wait before trying again, in whole seconds (RFC 9110 §10.2.3). A `429` always carries it: the seconds (at least 1)
+                until the refusal that answered ends (a budget's window, a cooldown, the 2FA lock);
+                the same number is in the error's `details.retryAfter`. A `503` carries a rough hint.
             schema:
                 type: integer
-                minimum: 0
+                minimum: 1
 
         WWW-Authenticate:
             required: true
@@ -682,7 +685,7 @@ components:
                     schema:
                         $ref: '#/components/schemas/Problem'
         TooManyRequests:
-            description: The caller has spent a rate-limit budget and must wait. The wait is in the standard `RateLimit`/`Retry-After` headers, and — where the endpoint has a budget of its own to report, like a resend cooldown — in the error `details` too.
+            description: The caller has spent a rate-limit budget, or hit a cooldown or the 2FA lock, and must wait. The wait is in `Retry-After` and in the error's `details.retryAfter` (the same seconds). A budget that refused is also named in `details.policy` and listed in `RateLimit` with `r=0`.
             headers:
                 Cache-Control:
                     $ref: '#/components/headers/CacheControlNoStore'
@@ -739,7 +742,10 @@ components:
             default: 10
             minimum: 1
             maximum: 100
-            description: Optional override; server may clamp to a max
+            description: >-
+                Rows per page, a whole number from 1 to 100. Absent or empty: the deployment's default
+                (10 unless `NODE_SETTINGS_PAGINATION_PAGE_SIZE` sets another). Anything else, 0
+                included, is a 422; nothing is clamped.
         Id:
             type: string
             minLength: 1
@@ -918,7 +924,9 @@ components:
                         Optional structured metadata for programmatic handling. Any refusal about
                         one request field names it in `details.field`, whatever its `code`: a
                         dotted path into the body (`shippingAddress.zip`), so a client can show the
-                        message under that input.
+                        message under that input. A 429 names its wait in `details.retryAfter`
+                        (whole seconds, the `Retry-After` value) and, when a budget refused, that
+                        budget's name in `details.policy`.
 
         # Every 4xx/5xx answers this, as `application/problem+json` (RFC 9457). Written flat, not as
         # an `allOf` over a base: `additionalProperties: false` is evaluated per subschema, so it

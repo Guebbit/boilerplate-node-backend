@@ -42,6 +42,7 @@ const RATE_LIMITED = [
     'POST /password/reset/confirm',
     'POST /restore',
     'POST /password',
+    'POST /email-change',
     'POST /reauth',
     'POST /email-verification/confirm',
     'POST /email-change/confirm',
@@ -54,7 +55,7 @@ const RATE_LIMITED = [
 ];
 
 /** The credential routes that run `isAuth` first, and so key their per-account budget on the signed-in account. */
-const SESSION_KEYED = new Set(['POST /password', 'POST /reauth']);
+const SESSION_KEYED = new Set(['POST /password', 'POST /email-change', 'POST /reauth']);
 
 /** Routes that act on the caller's own account and therefore demand a live session. */
 const AUTHENTICATED = [
@@ -63,6 +64,7 @@ const AUTHENTICATED = [
     'PATCH /',
     'DELETE /',
     'POST /password',
+    'POST /email-change',
     'POST /reauth',
     'GET /reauth',
     'POST /reauth/methods/:method/send',
@@ -90,6 +92,7 @@ describe('account routes — what is mounted', () => {
             'GET /',
             'PUT /',
             'PATCH /',
+            'POST /email-change',
             'DELETE /email-change',
             'POST /email-change/resend',
             'DELETE /',

@@ -90,7 +90,7 @@ const undo = (token: string) => api().post('/account/email-change/undo').send({ 
 
 /** Request an email change as a session that may. */
 const requestChange = (bearer: string, email = 'new@example.com') =>
-    api().patch('/account').set('Authorization', bearer).send({ email });
+    api().post('/account/email-change').set('Authorization', bearer).send({ email });
 
 describe('the identity routes, for an account with a second factor', () => {
     it('challenge a session that proved only a password, naming `otp` in details.methods', async () => {

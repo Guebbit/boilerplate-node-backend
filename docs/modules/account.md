@@ -146,7 +146,7 @@ challenge — see [OAuth](./account-oauth.md#two-consequences-worth-naming).
 
 Two **kinds** of email verification share one mechanism, and the distinction is the whole design.
 One proves the address an account **already has** — signup, and the explicit re-send. The other
-proves the address a `PUT`/`PATCH /account` change has **asked for**. They are stored under different
+proves the address a `POST /account/email-change` request has **asked for**. They are stored under different
 `verificationtokens.type` values (`verify` and `email-change`), and neither can do the other's work: a signup
 token that could swap in a `pendingEmail` would be an account takeover with an extra step.
 
@@ -166,10 +166,11 @@ proven address — until the new one is confirmed.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 50}}}%%
 flowchart TB
-    P["PUT/PATCH /account<br/><i>email: new@…</i>"] --> C{"which address?"}
-    C -->|"the current one"| O["no-op<br/><i>a pending change, if any, is untouched</i>"]
-    C -->|"taken by another account"| R["409<br/><i>email or pendingEmail</i>"]
-    C -->|"any other"| W["pendingEmail set"]
+    P["POST /account/email-change<br/><i>email: new@… · always a fresh session</i>"] --> C{"which address?"}
+    C -->|"the current one"| O["409 EMAIL_ALREADY_CURRENT<br/><i>a pending change, if any, is untouched</i>"]
+    C -->|"the pending one"| O2["409 EMAIL_CHANGE_ALREADY_PENDING<br/><i>nothing mailed</i>"]
+    C -->|"taken by another account"| R["409 EMAIL_ALREADY_USED<br/><i>email or pendingEmail</i>"]
+    C -->|"any other"| W["pendingEmail set<br/><i>replaces a pending one</i>"]
     W --> N["notice → OLD address<br/><i>carries the 7-day undo link</i>"]
     W --> V["verification link → NEW address<br/><i>email-change token · 24h</i>"]
     V --> F["POST /account/email-change/confirm"]
@@ -182,8 +183,8 @@ flowchart TB
     classDef warn fill:#fee2e2,stroke:#dc2626,color:#111827;
     classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
     class P,F,D,Q,U entry;
-    class R,N warn;
-    class O,W,V,V2,S,X done;
+    class R,N,O,O2 warn;
+    class W,V,V2,S,X done;
 ```
 
 The flow has four states, read from `pendingEmail` and `previousEmail`, never stored. Which event
@@ -214,14 +215,19 @@ Three things in the flow above are decisions rather than mechanics:
   warning that arrives before a takeover is a warning; one that arrives after is a receipt. It
   carries no token and no link that acts — "this wasn't me" is a password change and a
   logout-everywhere, both of which already exist.
+- **The email has its own door, not a field of the profile.** `POST /account/email-change {email}`
+  sits behind an unconditional step-up (`sensitive`, plus an `otp` proof when a second factor is
+  armed), where the profile edit (`PUT`/`PATCH /account`) asks for nothing and carries no `email`.
+  The change has mails, a guard and a pacing of its own, so it is an action
+  ([write-methods](../api/write-methods.md#action-or-field)), and no guard has to read a body to
+  know whether to step in. It is a POST because it creates the pending change.
 - **Cancelling is its own explicit action, not a side effect of re-typing the current address.**
-  `PUT /account`'s `email` is required — every replace, including a phone-only edit, names it — so
-  treating "same address" as "cancel" would let a routine save silently drop a pending change
-  the caller never asked to drop. `DELETE /account/email-change` is the only thing that cancels
-  one.
-- **Resending is its own action too, and it mails the new address only.** Sending the pending
-  address again through `PUT`/`PATCH /account` is a no-op (a double-submitted save must not mail
-  twice), so `POST /account/email-change/resend` is the explicit way to ask for the link again.
+  Asking for the current address is a `409 EMAIL_ALREADY_CURRENT`, so a retried request can never
+  drop a pending change. `DELETE /account/email-change` is the only thing that cancels one.
+- **Resending is its own action too, and it mails the new address only.** Asking for the pending
+  address again is a `409 EMAIL_CHANGE_ALREADY_PENDING` (a double-submitted request must not mail
+  twice), so `POST /account/email-change/resend` is the explicit way to ask for the link again. A
+  different address while one is pending replaces it, revokes the earlier link and mails both again.
   The old address was told once, when the change was requested; telling it on every resend would
   read like a takeover alert. It uses `POST /account/email-verification/resend`'s cooldown and mailbox budget and
   answers `200 { resendAfter }` like it, so the button counts down from the server's number; when

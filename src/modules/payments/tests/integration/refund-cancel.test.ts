@@ -19,6 +19,7 @@ import {
 import { resetDomainEvents } from '@kernel/events';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { paymentService } from '@modules/payments/services';
+import { deliver } from '@modules/payments/tests/deliver';
 import { paymentRepository } from '@modules/payments/repository';
 import { PAYMENT_REFUNDED, PAYMENT_REFUND_CANCELED } from '@modules/payments/events';
 import paymentsModule from '@modules/payments/module';
@@ -318,7 +319,7 @@ describe('the order stamp after a cancel', () => {
             currency: 'EUR',
             status: 'succeeded'
         });
-        await paymentService.applyWebhookDelivery({ id: 'evt', providerRef, refundRef }, 'fake');
+        await deliver({ id: 'evt', providerRef, refundRef });
         expect(await stampOf(orderId)).toBe('partially_refunded');
         const payment = await paymentOf(orderId);
         const ours = payment.refunds.find((record) => record.reason !== 'external');

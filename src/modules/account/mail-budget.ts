@@ -25,9 +25,7 @@ import {
 } from '@infrastructure/http/middlewares/rate-limit';
 import { canonicalMailbox } from '@infrastructure/persistence/normalize-email';
 import { pseudonymise } from '@infrastructure/security/pseudonymise';
-import { generateReject, type ResponseReject } from '@infrastructure/http/response';
-import { t } from '@infrastructure/i18n';
-import { ERROR_CODES } from '@api/error-codes';
+import { generateRateLimited, type ResponseReject } from '@infrastructure/http/response';
 import { accountRateLimitData } from './rate-limits.generated';
 
 /**
@@ -66,13 +64,9 @@ export const mailRecipientRefusal = (
         if (allowed) return undefined;
 
         recordBudgetRefusal(MAIL_RECIPIENT_BUDGET, context);
-        return generateReject(429, [
-            {
-                code: ERROR_CODES.RATE_LIMITED,
-                message: t('generic.error-rate-limited'),
-                details: { retryAfter: retryAfterSeconds }
-            }
-        ]);
+        return generateRateLimited(retryAfterSeconds, {
+            details: { policy: MAIL_RECIPIENT_BUDGET.namespace }
+        });
     });
 
 /**
@@ -98,7 +92,6 @@ export const mailRecipientLimiter: RequestHandler = (request: Request, response,
             next();
             return;
         }
-        response.setHeader('Retry-After', String(retryAfterSeconds));
-        refuseRateLimited(MAIL_RECIPIENT_BUDGET)(request, response);
+        refuseRateLimited(MAIL_RECIPIENT_BUDGET, retryAfterSeconds)(request, response);
     });
 };

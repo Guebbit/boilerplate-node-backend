@@ -18,6 +18,7 @@ import { orderService } from '@modules/orders';
 import invoicingModule from '@modules/invoicing/module';
 import { invoicingService } from '@modules/invoicing';
 import { paymentService } from '@modules/payments/services';
+import { deliver } from '@modules/payments/tests/deliver';
 import { paymentRepository } from '@modules/payments/repository';
 import { PAYMENT_AMOUNT_MISMATCH, PAYMENT_SUCCEEDED } from '@modules/payments/events';
 import { paymentsAuditActions } from '@modules/payments/audit';
@@ -213,9 +214,7 @@ describe('the other doors into the same settlement', () => {
         await fakePaymentProvider.confirm(providerRef, GOOD_METHOD);
         setFakeReceipt(providerRef, { amountReceived: '1.00' });
 
-        await expect(
-            paymentService.applyWebhookDelivery({ id: 'evt_mismatch', providerRef }, 'fake')
-        ).resolves.toBeUndefined();
+        await expect(deliver({ id: 'evt_mismatch', providerRef })).resolves.toBeUndefined();
 
         expect((await orderService.getById(orderId))!.status).toBe('canceled');
         expect((await paymentRepository.findByOrderId(orderId))!.status).toBe('succeeded');

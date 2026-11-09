@@ -50,7 +50,7 @@ only when the order is why the screen exists, never for records staff manage (th
 
 | Kind | Order | Lists |
 | --- | --- | --- |
-| log | newest first | webhook deliveries · audit logs · observability audit · stock movements · refunds |
+| log | newest first | webhook deliveries · audit logs · observability audit · stock movements · refunds · an order's timeline |
 | queue | by urgency, index-backed | inventory levels (scarcest first) · preorder allowances (most outstanding first) · preorder fulfillment orders (earliest expected first) and their product summary (earliest promise first) |
 | dictionary | natural key, ascending | locale entries (both the language's and one app's) |
 

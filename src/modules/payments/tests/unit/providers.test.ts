@@ -60,6 +60,28 @@ describe('webhook signatures', () => {
         expect(() => verifyWebhookSignature(body, 't=1,v1=ab')).toThrow(WebhookRejected);
     });
 
+    it('refuses a header over the contract length as malformed, before any hashing', () => {
+        const timestamp = Math.floor(Date.now() / 1000);
+        const genuine = signedWith('cap-test-secret', body, timestamp);
+        const padded = `${genuine},${'v1=a,'.repeat(40)}`;
+
+        expect(padded.length).toBeGreaterThan(200);
+        expect(() => verifyWebhookSignature(body, padded)).toThrow('Malformed signature header');
+    });
+
+    it('reads only the first four v1 values, so a genuine one buried deeper is not found', () => {
+        const timestamp = Math.floor(Date.now() / 1000);
+        const genuine = v1Of(signedWith('cap-test-secret', body, timestamp));
+        const padding = 'v1=a,'.repeat(4);
+
+        expect(() => verifyWebhookSignature(body, `t=${timestamp},${padding}${genuine}`)).toThrow(
+            'Signature does not match'
+        );
+        expect(() =>
+            verifyWebhookSignature(body, `t=${timestamp},${padding.slice(5)}${genuine}`)
+        ).not.toThrow();
+    });
+
     describe('a ring of secrets, for rotating the provider key', () => {
         const OLD = 'old-payment-webhook-secret';
         const NEW = 'new-payment-webhook-secret';

@@ -131,6 +131,16 @@ export const cancelPendingEmail = (user: UserDocument): Promise<UserDocument> =>
 };
 
 /**
+ * Park a requested address as `pendingEmail`, replacing any earlier one. `email` itself is never
+ * touched: it changes only when {@link applyEmailChange} swaps a proven address in. No collision or
+ * pacing check here; `account` asked both before calling.
+ */
+export const setPendingEmail = (user: UserDocument, email: string): Promise<UserDocument> => {
+    user.pendingEmail = email;
+    return userRepository.save(user);
+};
+
+/**
  * Stamp that an inactive account has been warned, so the reaper (`reap:inactive-accounts`)
  * does not warn it twice. The one field this operation may touch.
  */

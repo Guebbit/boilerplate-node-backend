@@ -16,6 +16,7 @@ import { orderService } from '@modules/orders';
 import { resetDomainEvents } from '@kernel/events';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { paymentService } from '@modules/payments/services';
+import { deliver } from '@modules/payments/tests/deliver';
 import { paymentRepository } from '@modules/payments/repository';
 import { PAYMENT_REFUNDED } from '@modules/payments/events';
 import paymentsModule from '@modules/payments/module';
@@ -84,8 +85,8 @@ const stampOf = (orderId: string) =>
     orderService.getById(orderId).then((order) => order?.paymentStatus);
 
 /** Deliver the provider's refund event. */
-const deliver = (providerRef: string, refundRef: string) =>
-    paymentService.applyWebhookDelivery({ id: 'evt', providerRef, refundRef }, 'fake');
+const deliverRefund = (providerRef: string, refundRef: string) =>
+    deliver({ id: 'evt', providerRef, refundRef });
 
 /** How many `payment.refunded` rows the outbox holds. */
 const refundedEvents = () => outboxEventModel.countDocuments({ name: PAYMENT_REFUNDED });
@@ -101,7 +102,7 @@ const overtaken = async () => {
         currency: 'EUR',
         status: 'succeeded'
     });
-    await deliver(providerRef, refundRef);
+    await deliverRefund(providerRef, refundRef);
     return { orderId };
 };
 
@@ -115,8 +116,8 @@ describe('a refund made in the dashboard', () => {
             createdAt: new Date('2026-03-01T10:00:00.000Z')
         });
 
-        await deliver(providerRef, refundRef);
-        await deliver(providerRef, refundRef);
+        await deliverRefund(providerRef, refundRef);
+        await deliverRefund(providerRef, refundRef);
 
         const payment = await paymentOf(orderId);
         expect(payment.refunds).toHaveLength(1);
@@ -155,7 +156,7 @@ describe('a refund made in the dashboard', () => {
             status: 'succeeded'
         });
 
-        await deliver(providerRef, first);
+        await deliverRefund(providerRef, first);
 
         const payment = await paymentOf(orderId);
         expect(payment.refunds.map((refund) => refund.amount).toSorted()).toEqual([
@@ -175,12 +176,12 @@ describe('a refund made in the dashboard', () => {
             status: 'pending'
         });
 
-        await deliver(providerRef, refundRef);
+        await deliverRefund(providerRef, refundRef);
         expect(await refundsOf(orderId)).toHaveLength(0);
 
         const { setFakeRefundOutcome } = await import('@scenarios/support/doubles/payments/fake');
         setFakeRefundOutcome(refundRef, { status: 'succeeded' });
-        await deliver(providerRef, refundRef);
+        await deliverRefund(providerRef, refundRef);
         expect(await refundsOf(orderId)).toHaveLength(1);
     });
 
@@ -197,7 +198,7 @@ describe('a refund made in the dashboard', () => {
             status: 'succeeded'
         });
 
-        await deliver(providerRef, failed);
+        await deliverRefund(providerRef, failed);
 
         expect(await refundsOf(orderId)).toHaveLength(0);
     });
@@ -210,7 +211,7 @@ describe('a refund made in the dashboard', () => {
             status: 'succeeded'
         });
 
-        await deliver(providerRef, refundRef);
+        await deliverRefund(providerRef, refundRef);
 
         const payment = await paymentOf(orderId);
         expect(payment.amountRefunded).toBe('130.00');
@@ -225,7 +226,7 @@ describe('a refund that is ours', () => {
         const payment = await paymentOf(orderId);
         const refundRef = refundRefOfRecord(String(payment.refunds[0]._id)) ?? '';
 
-        await deliver(providerRef, refundRef);
+        await deliverRefund(providerRef, refundRef);
 
         expect(await refundsOf(orderId)).toHaveLength(1);
     });
@@ -244,7 +245,7 @@ describe('a refund that is ours', () => {
             });
             const refundRef = refundRefOfRecord(String(failed.refunds[0]._id)) ?? '';
 
-            await deliver(providerRef, refundRef);
+            await deliverRefund(providerRef, refundRef);
 
             const payment = await paymentOf(orderId);
             expect(payment.refunds).toHaveLength(1);

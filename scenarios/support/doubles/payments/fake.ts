@@ -156,7 +156,7 @@ const disputes = new Map<string, Map<string, ProviderDisputeState>>();
  *
  * @param providerRef - the intent the dispute is on
  * @param dispute - the dispute's state; `observedAt` orders it against earlier ones
- * @returns the delivery to hand to `applyWebhookDelivery`, or to sign with {@link signFakeDelivery}
+ * @returns the delivery to sign with {@link signFakeDelivery} and hand to `paymentService.receiveWebhook`
  */
 export const setFakeDispute = (
     providerRef: string,
@@ -185,7 +185,8 @@ export const fakeDisputeOf = (
 
 /**
  * A delivery as the provider would send it: the exact body and the header that verifies it. For
- * the tests and levers that go through the real webhook route instead of calling the service.
+ * the tests and levers that hand a delivery to `paymentService.receiveWebhook`, or post it to the
+ * real webhook route.
  *
  * @param event - the delivery from {@link setFakeDispute}
  */
@@ -539,7 +540,7 @@ export const fakePaymentProvider: PaymentProvider = {
      * verified exactly as a real one's would be, so the route's defences are exercised for real.
      *
      * The body is NOT validated here: the port parses every adapter's event against the contract's
-     * schema before any lookup (`applyWebhookDelivery`), so this double relies on it exactly as a
+     * schema before any lookup (`applyWebhookDelivery`, beneath `receiveWebhook`), so this double relies on it exactly as a
      * real adapter may. `strictQuery` drops unknown query paths but does nothing for a JSON body,
      * and that parse is the only guard against `{ "$ne": null }` standing where a `providerRef`
      * string belongs.

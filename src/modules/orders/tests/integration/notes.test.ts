@@ -115,7 +115,9 @@ describe('POST /orders/{id}/timeline/notes', () => {
             { $set: { orderId: second._id } }
         );
 
-        await expect(orderService.readTimeline(String(second._id), asAdmin())).rejects.toThrow();
+        await expect(
+            orderService.readTimeline(String(second._id), asAdmin(), {})
+        ).rejects.toThrow();
     });
 
     it('carries the note, without its author, in the buyer`s data export', async () => {

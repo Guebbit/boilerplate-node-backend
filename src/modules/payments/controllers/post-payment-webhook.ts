@@ -10,7 +10,7 @@
  * 2. **The RAW body**, never a re-serialised object: a signature covers exact bytes.
  * 3. **Applied once**, behind the service: every effect is a conditional write, so a redelivered
  *    event settles nothing twice. A provider retries until it gets a 2xx.
- * 4. **200 for anything authentic**, including events this module ignores. A non-2xx tells the
+ * 4. **204 for anything authentic**, including events this module ignores. A non-2xx tells the
  *    provider the delivery failed, and it comes back harder. Only an unverifiable body is a 400,
  *    because that is not a delivery — and a genuine fault is left to become a 500, since that IS
  *    a retry worth having.
@@ -30,40 +30,43 @@ import { callerContextOf } from '@infrastructure/http/request';
 import { recordSecurityEvent } from '@infrastructure/observability/security-events';
 import { paymentsAuditActions } from '../audit';
 import { WebhookRejected } from '../providers';
-import { paymentProviderRegistry } from '../providers/registry';
-import { paymentService } from '../services';
+import { paymentService, WebhookProviderUnknownError } from '../services';
+
+/**
+ * Whether the request announced no body at all: no `Transfer-Encoding`, and a `Content-Length`
+ * that is absent or zero. Such a request is the CALLER's mistake, not a broken parser ordering.
+ */
+const sentNoBody = (headers: Request['headers']): boolean =>
+    !headers['transfer-encoding'] && (headers['content-length'] ?? '0') === '0';
 
 /** Handles `POST /payments/webhook/:provider`. */
 export const postPaymentWebhook = (request: Request, response: Response) => {
-    // `express.json`'s `verify` hook keeps the buffer for this route alone (see `app/security.ts`);
-    // an absent one means that ordering changed and every signature would now fail to verify.
+    // `express.json`'s `verify` hook keeps the buffer for this route alone (see `app/security.ts`).
     const { rawBody, headers } = request;
     if (!rawBody) {
+        // Only a body that WAS sent and still left no buffer means the ordering changed (every
+        // signature would now fail to verify); an empty request is a plain 400, no alarm.
         // Stryker disable all
-        logger.error({
-            message:
-                'Payment webhook reached its controller without a raw body — the parser ordering in installSecurity has been changed.'
-        });
+        if (!sentNoBody(headers))
+            logger.error({
+                message:
+                    'Payment webhook reached its controller without a raw body — the parser ordering in installSecurity has been changed.'
+            });
         // Stryker restore all
         rejectResponse(response, 400, [t('payments.webhook-unverified')]);
         return;
     }
 
-    return Promise.resolve()
-        .then(() => paymentProviderRegistry.resolve(String(request.params.provider)))
-        .then((provider) => {
-            if (!provider) {
+    return paymentService
+        .receiveWebhook(String(request.params.provider), rawBody, headers)
+        .then(() => {
+            noContentResponse(response);
+        })
+        .catch((error: unknown) => {
+            if (error instanceof WebhookProviderUnknownError) {
                 rejectResponse(response, 404, [t('payments.webhook-not-configured')]);
                 return;
             }
-            return provider
-                .parseWebhook(rawBody, headers)
-                .then((event) => paymentService.applyWebhookDelivery(event, provider.name))
-                .then(() => {
-                    noContentResponse(response);
-                });
-        })
-        .catch((error: unknown) => {
             if (error instanceof WebhookRejected) {
                 // `error.message` IS the reason — 'Malformed signature header', 'Signature
                 // timestamp outside tolerance', 'Signature does not match', 'Body is not valid

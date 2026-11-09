@@ -94,7 +94,7 @@ export { ORDER_STATUS_TRAITS, statusesWhere } from './status-traits';
 export type { OrderStatusTraits } from './status-traits';
 
 /** What an order's timeline may say, and which audience each type is for. */
-export { TIMELINE_AUDIENCE, isBuyerVisible } from './timeline';
+export { TIMELINE_AUDIENCE, BUYER_VISIBLE_TYPES, isBuyerVisible } from './timeline';
 export type { OrderTimelineEntryAudience, OrderTimelineType, TimelineEntryInput } from './timeline';
 
 /** The orders CSV: its columns, and one order as one row. */

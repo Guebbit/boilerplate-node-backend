@@ -10,6 +10,7 @@ import { type UserDocument } from '@modules/users';
 import { accountUserService } from '@modules/users/friends/account';
 import {
     generateReject,
+    generateRateLimited,
     generateSuccess,
     type ResponseSuccess,
     type ResponseReject
@@ -118,11 +119,22 @@ const MFA_LOCK_MINUTES = MFA_LOCK_MS / MINUTE_MS;
  * The rejection a locked account earns: 429, before any code was compared. The lock is a
  * per-account wrong-code budget, the same brake a login's own budgets use, so it answers with
  * their `RATE_LIMITED` code and a client already renders it.
+ *
+ * The wait is the lock's time left, read off the already loaded user.
+ *
+ * @param user - the account that was refused, as loaded before the reservation
+ * @param now - the clock; a parameter so a test pins it
  */
-export const rejectLocked = (): ResponseReject =>
-    generateReject(429, [
-        { code: ERROR_CODES.RATE_LIMITED, message: t('account.two-factor.locked') }
-    ]);
+export const rejectLocked = (user: UserDocument, now = new Date()): ResponseReject => {
+    // A lock set by a concurrent request after this user was loaded is not on the document yet:
+    // the full length is then the honest upper bound.
+    const lockedUntil = user.mfaLockedUntil;
+    const retryAfter =
+        lockedUntil && lockedUntil > now
+            ? Math.max(1, Math.ceil((lockedUntil.getTime() - now.getTime()) / 1000))
+            : MFA_LOCK_MS / 1000;
+    return generateRateLimited(retryAfter, { message: t('account.two-factor.locked') });
+};
 
 /**
  * Tell the account holder, out of band, that wrong codes just locked their 2FA checks. Fire-and-

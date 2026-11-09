@@ -43,7 +43,7 @@ export const probes: Probe[] = [
     },
     {
         name: 'Probe: rate limit (send repeatedly)',
-        why: `A wrong password on purpose. One send only answers 401 — the identity budget (\`NODE_AUTH_RATE_LIMIT_MAX\`, 10 by default) counts failed attempts, and a rate limiter has nothing to answer with until it is exhausted. Send this same request 10+ times in a row to see the 429, a status the contract never declares because it belongs to middleware rather than to any operation.`,
+        why: `A wrong password on purpose. One send only answers 401 — the identity budget (\`NODE_AUTH_RATE_LIMIT_MAX\`, 10 by default) counts failed attempts, and a rate limiter has nothing to answer with until it is exhausted. Send this same request 10+ times in a row to see the 429.`,
         method: 'POST',
         path: '/account/login',
         body: {
