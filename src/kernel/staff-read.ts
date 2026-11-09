@@ -5,7 +5,7 @@
  * (`display:<Subject>` or `read:<Subject>`) is recorded, and not when the record is their own. Detail reads only — a list
  * would write one entry per page, and the entry that matters is the one naming a record.
  *
- * See: docs/theory/defences/authentication.md
+ * See: docs/theory/defences/authorization.md#a-rule-is-not-a-licence-over-everyone
  */
 
 import type { Request } from 'express';
