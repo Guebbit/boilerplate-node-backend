@@ -15,8 +15,8 @@ rules:
       module: users
       scope: tenant
       description: >-
-          Change someone else's profile: username, image, locale, phone, website, and the role
-          (only for a holder of `assign:Role`). Never a credential, and never `active`.
+          Change someone else's profile: username, image, locale, phone, website. Never a
+          credential, never `active`, and never the role (that is `assign:Role`).
     - action: ban
       subject: User
       module: users

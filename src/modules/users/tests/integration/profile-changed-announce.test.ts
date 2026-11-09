@@ -36,11 +36,9 @@ describe('user.profile_changed', () => {
     it('is written by the owner’s own edit', async () => {
         const user = await createUser({ email: 'self-edit@example.com', username: 'selfedit' });
 
-        await userService.updateOwnProfile(
-            await userModel.findById(user.id).orFail(),
-            { phone: '+391234567890' },
-            callerContextAs('customer')
-        );
+        await userService.updateOwnProfile(await userModel.findById(user.id).orFail(), {
+            phone: '+391234567890'
+        });
 
         expect(await payloads()).toMatchObject([{ changed: ['phone'] }]);
     });

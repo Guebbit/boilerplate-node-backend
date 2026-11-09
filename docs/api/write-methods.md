@@ -73,7 +73,8 @@ or not). When either direction has its own effect, guard, permission, audit row 
 is a pair of POST actions, `POST /x/{id}/<verb>` and `POST /x/{id}/<opposite>`, never a PUT/DELETE
 pair (Google [AIP-136](https://google.aip.dev/136): POST for a method with side effects):
 
-- `assign` / `unassign` a task, `place-purchase-hold` / `lift-purchase-hold` on a user.
+- `assign` / `unassign` a task, `place-purchase-hold` / `lift-purchase-hold` on a user, `assign-role` /
+  `revoke-role` on a user (the staff role; naming a different role replaces it, the last write wins).
 - Each answers 200 and the resource. A repeat that finds the target state already reached is 409
   (`<RESOURCE>_ALREADY_<STATE>` or `<RESOURCE>_NOT_<STATE>`). No `Idempotency-Key`: the state
   machine refuses the repeat.
@@ -165,6 +166,9 @@ allowed", with 409 where Google says 400).
   open task on the same situation: `TASK_SUPERSEDED`, with the newer task's id in `details`.
 - `POST /users/{id}/lift-purchase-hold` on an account with no hold and no review flag:
   `USER_PURCHASE_HOLD_NOT_SET`.
+- `POST /users/{id}/revoke-role` on an account with no staff role: `USER_ROLE_NOT_ASSIGNED`;
+  `POST …/assign-role` naming the role it holds already: `USER_ROLE_ALREADY_ASSIGNED`. Both write and
+  audit nothing.
 - `POST /tasks/{id}/unassign` on a task nobody holds: `TASK_NOT_ASSIGNED`; `POST …/assign` to the
   person who holds it already: `TASK_ALREADY_ASSIGNED`. Both write, announce and audit nothing.
 - A retried `DELETE` leaves the same state (RFC 9110 §9.2.2). It is never this refusal. What it
@@ -454,6 +458,11 @@ and the bundler adds the header parameter, the 412 and the response header from 
 | order | `GET /orders/{id}` | `PUT`, `PATCH`, `DELETE /orders/{id}`, `DELETE /orders/{id}/hard` |
 | the caller's account | `GET /account` | `PUT`, `PATCH /account` |
 | example | `GET /examples/{id}` | `PUT`, `PATCH`, `DELETE /examples/{id}` |
+
+The role door (`POST /users/{id}/assign-role`, `/revoke-role`) is not in that column: a POST is a
+state change with its own 409, not an overwrite, so two callers naming different roles both succeed
+and the last write wins. It still moves the row's `editRevision`, so an edit holding an older tag is
+refused.
 
 Not versioned: a resource with no item read to take a tag from (tasks, locales, an address
 inside its book), a resource that has an item read but no `If-Match` (webhook subscriptions) and

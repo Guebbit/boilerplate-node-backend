@@ -2,8 +2,7 @@
  * @module
  * Who may change whom, through `userService` — the refusals an admin write owes after the
  * route's own key: the protection of an account that holds a staff role (only a holder of
- * `assign:Role` may change one, the
- * caller's own excepted), and the same key for handing a role out.
+ * `assign:Role` may change one, the caller's own included), and the same key for the role door.
  *
  * Driven through the service rather than the route so each cell names the caller's role and what
  * the account holds; the route-level matrix is the cross-cutting account-protection suite.
@@ -227,61 +226,112 @@ describe('the protection of staff accounts', () => {
     });
 });
 
-describe('handing out a staff role', () => {
+/** The caller of a role, acting on an account that is not their own. */
+const someoneElse = (role: string) => callerContextAs(role, 'someone-else');
+
+describe('the role door', () => {
     it('refuses a caller without role management, and writes nothing', async () => {
         const target = await accountHolding('customer');
 
-        const result = await userService.updateById(
+        const result = await userService.assignUserRole(
             target.id,
-            { role: 'support' },
-            callerContextAs('moderator', 'someone-else')
+            'support',
+            someoneElse('moderator')
         );
 
-        expect(result).toMatchObject({
-            success: false,
-            status: 403,
-            errors: [{ code: 'ROLE_MANAGEMENT_REQUIRED' }]
-        });
-
+        expect(refusalCode(result)).toBe('ROLE_MANAGEMENT_REQUIRED');
         expect(await heldRole(target.id)).toBeNull();
     });
 
     it('lets an administrator grant a role, and take it away', async () => {
         const target = await accountHolding('customer');
-        const admin = callerContextAs('admin', 'someone-else');
+        const admin = someoneElse('admin');
 
-        const granted = await userService.updateById(target.id, { role: 'support' }, admin);
+        const granted = await userService.assignUserRole(target.id, 'support', admin);
         const grantedRole = await heldRole(target.id);
-        const revoked = await userService.updateById(target.id, { role: null }, admin);
+        const revoked = await userService.revokeUserRole(target.id, admin);
 
         expect([granted.success, revoked.success]).toEqual([true, true]);
         expect(grantedRole).toBe('support');
         expect(await heldRole(target.id)).toBeNull();
     });
 
+    it('replaces the role held with a different one: the last write wins', async () => {
+        const target = await accountHolding('support');
+
+        const result = await userService.assignUserRole(
+            target.id,
+            'moderator',
+            someoneElse('admin')
+        );
+
+        expect(result.success).toBe(true);
+        expect(await heldRole(target.id)).toBe('moderator');
+    });
+
+    it('answers 409 to a repeat of either move, writing and auditing nothing', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const held = await accountHolding('support');
+        const plain = await accountHolding('customer');
+        const admin = someoneElse('admin');
+        auditSpy.mockClear();
+
+        const again = await userService.assignUserRole(held.id, 'Support', admin);
+        const none = await userService.revokeUserRole(plain.id, admin);
+
+        expect([again, none].map((result) => refusalCode(result))).toEqual([
+            'USER_ROLE_ALREADY_ASSIGNED',
+            'USER_ROLE_NOT_ASSIGNED'
+        ]);
+        expect(auditSpy).not.toHaveBeenCalled();
+    });
+
     it('refuses a caller without role management taking a role away', async () => {
         const target = await accountHolding('support');
 
-        const result = await userService.updateById(
-            target.id,
-            { role: null },
-            callerContextAs('moderator', 'someone-else')
-        );
+        const result = await userService.revokeUserRole(target.id, someoneElse('moderator'));
 
         expect(refusalCode(result)).toBe('ROLE_MANAGEMENT_REQUIRED');
         expect(await heldRole(target.id)).toBe('support');
     });
 
-    // A PUT carries `role` on every save; resending the held one changes nothing.
-    it('lets a save resend the role already held', async () => {
-        const self = await accountHolding('admin');
+    it.each(['no-such-role', 'customer'])(
+        'refuses %s with a 422 naming role, and audits the refusal',
+        async (role) => {
+            const auditSpy = observePort(auditPort.emitAuditEvent);
+            const target = await accountHolding('customer');
 
-        const result = await userService.updateById(
-            self.id,
-            { role: 'admin', username: 'same-role' },
-            callerContextAs('admin', self.id)
-        );
+            const result = await userService.assignUserRole(target.id, role, someoneElse('admin'));
 
-        expect(result.success).toBe(true);
+            expect(result).toMatchObject({
+                success: false,
+                status: 422,
+                errors: [{ code: 'VALIDATION_ERROR', details: { field: 'role' } }]
+            });
+            expect(auditSpy).toHaveBeenCalledWith(
+                expect.objectContaining({ action: 'access.role.assigned', outcome: 'failure' })
+            );
+        }
+    );
+
+    it('answers 404 for an account that does not exist', async () => {
+        const missing = '64b7f0000000000000000000';
+
+        const results = await Promise.all([
+            userService.assignUserRole(missing, 'support', someoneElse('admin')),
+            userService.revokeUserRole(missing, someoneElse('admin'))
+        ]);
+
+        expect(results.map((result) => (result as ResponseReject).status)).toEqual([404, 404]);
+    });
+
+    it('moves the account’s revision, since the role lives outside the document', async () => {
+        const target = await accountHolding('customer');
+        const before = await stored(target.id);
+
+        await userService.assignUserRole(target.id, 'support', someoneElse('admin'));
+
+        const after = await stored(target.id);
+        expect(after?.updatedAt).not.toEqual(before?.updatedAt);
     });
 });

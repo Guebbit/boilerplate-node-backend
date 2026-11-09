@@ -11,6 +11,8 @@
         "not-reaper-deleted": "Solo un account eliminato dal processo di inattività può essere cancellato da esso.",
         "not-warned": "Questo account non è mai stato avvisato dell'inattività, quindi il processo non può eliminarlo.",
         "inactive-staff-account": "Un account con un ruolo di staff non viene mai eliminato dal processo di inattività.",
+        "role-already-assigned": "Questo utente ha già questo ruolo.",
+        "role-not-assigned": "Questo utente non ha alcun ruolo di staff da togliere.",
         "role-not-assignable": "Questo ruolo non esiste o non può essere assegnato a un account.",
         "purchase-hold-until-past": "La data di fine deve essere nel futuro.",
         "email": {

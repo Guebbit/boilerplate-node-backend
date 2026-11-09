@@ -21,6 +21,7 @@ import {
 import { onDomainEvent, type DomainEventMap } from '@kernel/events';
 import { resolveAnalyticsProvider } from '@infrastructure/observability/analytics';
 import { router } from './routes';
+import { router as roleRouter } from './role-routes';
 import { userRepository } from './repository';
 import { userService } from './services';
 import { setPersonalDataErasers, setPersonalDataMinimisers } from './erasure-registry';
@@ -63,7 +64,10 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
 /** This module's manifest entry: routes, locales, and the image writeback target. */
 export default {
     name: 'users',
-    mounts: [{ basePath: '/users', routes: router }],
+    mounts: [
+        { basePath: '/users', routes: router },
+        { basePath: '/users', routes: roleRouter }
+    ],
     onRegistered,
     locales: path.join(__dirname, 'locales'),
     templates: path.join(__dirname, 'templates'),

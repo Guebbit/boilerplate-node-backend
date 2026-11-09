@@ -141,7 +141,7 @@ describe('GET /account abilities', () => {
         const { bearer: adminBearer } = await authenticateAs('admin');
         const before = await api().get('/account').set('Authorization', bearer).expect(200);
         await api()
-            .patch(`/users/${String(user._id)}`)
+            .post(`/users/${String(user._id)}/assign-role`)
             .set('Authorization', adminBearer)
             .send({ role: 'support' })
             .expect(200);

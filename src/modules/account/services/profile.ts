@@ -111,13 +111,11 @@ const saveProfile = (
                   )
             : undefined;
 
-        return userService
-            .updateOwnProfile(user, fields, context, announceWithdrawal)
-            .then((result) => {
-                if (withdrawing && result.success) nudgeOutbox();
-                if (!result.success || !emailOutcome.requested) return result;
-                return notifyEmailChangeRequested(result.data, context).then(() => result);
-            });
+        return userService.updateOwnProfile(user, fields, announceWithdrawal).then((result) => {
+            if (withdrawing && result.success) nudgeOutbox();
+            if (!result.success || !emailOutcome.requested) return result;
+            return notifyEmailChangeRequested(result.data, context).then(() => result);
+        });
     });
 };
 

@@ -1,8 +1,8 @@
 /**
  * @module
- * An admin create or update and its role grant are one transaction: the grant is checked, and a
- * refusal audited, before any write; a failure inside it rolls the whole write back instead of
- * leaving a half-made account. Each case forces the role write (and, for a create, any delete that
+ * An admin create or a role door call and its role grant are one transaction: the grant is
+ * checked, and a refusal audited, before any write; a failure inside it rolls the whole write back
+ * instead of leaving a half-made account. Each case forces the role write (and, for a create, any delete that
  * could undo it) to fail, then looks at what is stored. `users` writes; `access`, which it depends
  * on, owns the `membershipModel` write that is forced to fail.
  */
@@ -85,40 +85,16 @@ describe('userService.create', () => {
     });
 });
 
-describe('userService.updateById', () => {
-    it('audits a refused role grant even though nothing was written', async () => {
-        const auditSpy = observePort(auditPort.emitAuditEvent);
-        const user = await createUser({ active: true });
-
-        const result = await userService.updateById(
-            user.id,
-            { username: 'taken-over', role: 'admin' },
-            callerContextAs('moderator')
-        );
-
-        expect(result).toMatchObject({ success: false, status: 403 });
-        expect(auditSpy).toHaveBeenCalledWith(
-            expect.objectContaining({
-                action: accessAuditActions.ROLE_ASSIGNED,
-                outcome: 'failure',
-                targetId: user.id
-            })
-        );
-    });
-
-    it('commits none of the update when its role write fails', async () => {
-        const user = await createUser({ username: 'beforerename' }, 'customer');
+describe('the role door', () => {
+    it('commits neither the stamp nor the role when its role write fails', async () => {
+        const user = await createUser({}, 'customer');
         failMembershipWrites();
 
         await expect(
-            userService.updateById(
-                user.id,
-                { username: 'afterrename', role: 'support' },
-                callerContextAs('admin')
-            )
+            userService.assignUserRole(user.id, 'support', callerContextAs('admin'))
         ).rejects.toThrow('mongo is down');
 
         const refreshed = await userRepository.findById(user.id);
-        expect(refreshed?.username).toBe('beforerename');
+        expect(refreshed?.updatedAt).toEqual(user.updatedAt);
     });
 });

@@ -5,7 +5,7 @@
  * of routes it is asked on.
  */
 import { effectiveRouteTable } from '@tests/routes';
-import { ROUTED_MODULES } from '@tests/routed-modules';
+import { routersOfModule } from '@tests/routed-modules';
 import { PROTECTION_ROWS, UNOWNED_WRITES } from '@tests/account-protection-rows';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
@@ -24,9 +24,10 @@ jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
 /** The HTTP methods that change state. */
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-/** Every write route of `users`, spelled `users ${METHOD} ${path}`. */
+/** Every write route of `users` on any of its routers, spelled `users ${METHOD} ${path}`. */
 const mountedWrites = (): string[] =>
-    effectiveRouteTable(ROUTED_MODULES.users)
+    routersOfModule('users')
+        .flatMap((router) => effectiveRouteTable(router))
         .filter(({ method }) => WRITE_METHODS.has(method))
         .map(({ method, path }) => `users ${method} ${path}`);
 

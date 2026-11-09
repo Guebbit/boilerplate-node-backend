@@ -10,6 +10,12 @@ rules:
       scope: tenant
       credential: false
       description: Hand a staff role to an account or take it away, and change an account that holds one — edit, ban, erase. Held by administrators.
+      # Changing a person's powers is the one admin act a stolen session must not do quietly: the
+      # role door asks a fresh login at the tier minting an API key does.
+      stepUp: critical
+      # A caller without it is told what is missing (`ROLE_MANAGEMENT_REQUIRED`), the answer every
+      # other refusal on a staff account already gives, not a bare `FORBIDDEN`.
+      deniedCode: ROLE_MANAGEMENT_REQUIRED
 
 sets:
     - name: RoleManagement

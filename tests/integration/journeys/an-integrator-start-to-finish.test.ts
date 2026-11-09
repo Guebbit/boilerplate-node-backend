@@ -191,7 +191,7 @@ describe('a key follows its minter', () => {
         // the key no longer resolves at all, so it is refused as a credential (401), not as a
         // caller who lacks the rule (403). Neither key was touched.
         await api()
-            .patch(`/users/${demoted.user.id}`)
+            .post(`/users/${demoted.user.id}/assign-role`)
             .set('Authorization', admin)
             .send({ role: 'editor' })
             .expect(200);

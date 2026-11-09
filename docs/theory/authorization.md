@@ -208,13 +208,16 @@ Five details carry the rule:
   "outranks": what a role can do is exactly the rules its sets bundle.
 - **An API key never manages staff.** `assign:Role` is `credential: false`, so no key can be minted
   with it and none can change a staff account, whoever minted it (Stripe and Shopify keep team
-  management out of API keys the same way).
-- **Changing who holds powers asks for a fresh session.** `POST`, `PUT` and `PATCH /users` that name
-  a role (to grant it, or `null` to take it away), and `POST /users/{id}/activate` / `deactivate`,
-  while the caller holds `assign:Role`, are gated by `requireFreshAuthWhen` at the critical tier,
-  the one minting an API key asks. A stolen session cannot quietly make a second administrator,
-  activate an old one, or lock every other administrator out. A write that names no role is never
-  prompted, and neither is a moderator deactivating a customer. `system` is never handed out at all.
+  management out of API keys the same way). The role door is mounted behind `isAuth` rather than
+  `isAuthOrCredential`, so a key reaching it is refused `401` before any permission is asked.
+- **Changing who holds powers asks for a fresh session.** The role door (`POST /users/{id}/assign-role`
+  and `/revoke-role`) is gated by its key: `assign:Role` carries `stepUp: critical`, the tier minting
+  an API key asks, and `deniedCode: ROLE_MANAGEMENT_REQUIRED`. `POST /users` that names a role (or
+  creates the account deactivated) and `POST /users/{id}/activate` / `deactivate`, while the caller
+  holds `assign:Role`, are gated by `requireFreshAuthWhen` at the same tier. A stolen session cannot
+  quietly make a second administrator, activate an old one, or lock every other administrator out.
+  A write that names no role is never prompted, and neither is a moderator deactivating a customer.
+  `system` is never handed out at all.
 - **An administrator may change another administrator**, and may hand out or take away any role,
   their own included. Locking the shop out of its last administrator is a technician's edit of the
   database to repair, by decision.
