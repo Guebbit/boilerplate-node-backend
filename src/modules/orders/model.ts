@@ -736,8 +736,8 @@ const orderEventSchema = new Schema<OrderEventDocument, OrderEventModel>(
     { minimize: false }
 );
 
-/* The one read: "what happened to THIS order, oldest first". */
-orderEventSchema.index({ orderId: 1, at: 1 }, { name: 'orderevents_orderId_at' });
+/* The one read: "what happened to THIS order, newest first", paged; `_id` closes the order. */
+orderEventSchema.index({ orderId: 1, at: 1, _id: 1 }, { name: 'orderevents_orderId_at_id' });
 /* The free-text reap's query: only rows still holding text, so the index stays as small as the text. */
 orderEventSchema.index(
     { at: 1 },

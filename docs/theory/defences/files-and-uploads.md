@@ -29,6 +29,9 @@ flowchart TB
 Nothing is world-reachable between "multer wrote it" and "the checks passed": staging lives under
 `NODE_UPLOAD_STAGING_PATH` (system temp by default), never under `public/`.
 
+A malformed multipart body (no boundary, cut short) answers 400, not 500: one bad request must not
+drive the 5xx rate.
+
 ## What gets stored
 
 | Attack                             | How it works                                                        | This boilerplate                                                                                                                                                                                                                                                                            |

@@ -390,6 +390,10 @@ that declared status (400/413/415), never the library's own message; a driver fa
 is 500. A middleware that already has the `Response` in hand — file upload validation, for one —
 answers `rejectResponse` directly instead of throwing something for this handler to translate.
 
+A malformed multipart body (no boundary, cut short) is the same contract: the upload middleware
+wraps busboy's plain `Error` as a 400 client error (`status` + `expose`), so it never reaches the
+500 branch. An OS failure (a full disk) is left alone and stays 500.
+
 The JSON parser is non-strict: any JSON value parses (RFC 8259 §2), and a body that is not a JSON
 object (`5`, `"x"`, `true`, `null`, `[]`) answers 422 `VALIDATION_ERROR` from `requireJsonObjectBody`
 before any route (RFC 5789 §2.2). Unparseable JSON stays the parser's 400.

@@ -172,7 +172,7 @@ rules:
     - id: rfc5789-patch-partial
       standard: rfc5789
       section: method
-      rule: A PATCH changes only what the body names, and a PUT on the same resource replaces it whole; the two are never swapped.
+      rule: 'The server MUST apply the entire set of changes the patch document describes atomically: on any failure none of them, and never a partially modified representation meanwhile (§2).'
       source: https://www.rfc-editor.org/rfc/rfc5789#section-2
       evidence:
           [
@@ -186,12 +186,13 @@ rules:
     - id: rfc5789-unsupported-media-415
       standard: rfc5789
       section: error handling
-      rule: A PATCH body in a media type the operation does not declare is 415, and the declared types are the ones the handler really parses.
+      rule: A 415 on a PATCH SHOULD carry an `Accept-Patch` header listing the operation's declared types (§2.2).
       source: https://www.rfc-editor.org/rfc/rfc5789#section-2.2
       evidence:
           [
               src/infrastructure/http/middlewares/content-type.ts,
-              openapi.yaml paths.*.patch.requestBody.content
+              openapi.yaml paths.*.patch.requestBody.content,
+              openapi.yaml components.responses.UnsupportedMediaType
           ]
       lint: possible
       difference: null

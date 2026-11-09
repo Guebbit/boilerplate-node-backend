@@ -186,7 +186,11 @@ describe('handleUncaughtError log content', () => {
             })
         );
 
-        expect(meta.error).toEqual({ name: 'MongoServerError', code: 11_000 });
+        expect(meta.error).toEqual({
+            name: 'MongoServerError',
+            code: 11_000,
+            stack: expect.not.stringContaining('ada@example.com')
+        });
         expect(JSON.stringify([headline, meta])).not.toContain('ada@example.com');
     });
 

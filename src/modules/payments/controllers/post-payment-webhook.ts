@@ -32,17 +32,26 @@ import { paymentsAuditActions } from '../audit';
 import { WebhookRejected } from '../providers';
 import { paymentService, WebhookProviderUnknownError } from '../services';
 
+/**
+ * Whether the request announced no body at all: no `Transfer-Encoding`, and a `Content-Length`
+ * that is absent or zero. Such a request is the CALLER's mistake, not a broken parser ordering.
+ */
+const sentNoBody = (headers: Request['headers']): boolean =>
+    !headers['transfer-encoding'] && (headers['content-length'] ?? '0') === '0';
+
 /** Handles `POST /payments/webhook/:provider`. */
 export const postPaymentWebhook = (request: Request, response: Response) => {
-    // `express.json`'s `verify` hook keeps the buffer for this route alone (see `app/security.ts`);
-    // an absent one means that ordering changed and every signature would now fail to verify.
+    // `express.json`'s `verify` hook keeps the buffer for this route alone (see `app/security.ts`).
     const { rawBody, headers } = request;
     if (!rawBody) {
+        // Only a body that WAS sent and still left no buffer means the ordering changed (every
+        // signature would now fail to verify); an empty request is a plain 400, no alarm.
         // Stryker disable all
-        logger.error({
-            message:
-                'Payment webhook reached its controller without a raw body — the parser ordering in installSecurity has been changed.'
-        });
+        if (!sentNoBody(headers))
+            logger.error({
+                message:
+                    'Payment webhook reached its controller without a raw body — the parser ordering in installSecurity has been changed.'
+            });
         // Stryker restore all
         rejectResponse(response, 400, [t('payments.webhook-unverified')]);
         return;

@@ -10,7 +10,7 @@ import { refundOrderPayment } from '../factories';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
-import { createOrder, toOrderItem, timelineOf } from '@modules/orders/tests/factories';
+import { createOrder, toOrderItem, timelineAs, timelineOf } from '@modules/orders/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
 import { orderService } from '@modules/orders';
 import { paymentService } from '@modules/payments/services';
@@ -186,8 +186,8 @@ describe('a refund', () => {
             status: 201
         });
 
-        const buyer = await orderService.readTimeline(orderId, asCustomer(user.id));
-        const staff = await orderService.readTimeline(orderId, asAdmin());
+        const buyer = await timelineAs(orderId, asCustomer(user.id));
+        const staff = await timelineAs(orderId, asAdmin());
 
         expect(buyer.map(({ type }) => type)).toEqual(['paid', 'refund_issued']);
         expect(staff.map(({ type }) => type)).toEqual(['paid', 'refund_issued', 'refund_failed']);

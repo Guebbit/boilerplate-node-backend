@@ -8,7 +8,7 @@
  */
 
 import { OrderStatus } from '@types';
-import type { OrderTimelineEntry } from '@types';
+import type { AuthContext, OrderTimelineEntry } from '@types';
 import { GetOrderTimeline200Response } from '@api/schemas.zod';
 import { asAdmin } from '@tests/callers';
 import { readTimeline } from '../services/timeline';
@@ -215,17 +215,34 @@ export const setWithdrawUntil = (orderId: string, withdrawUntil: Date | undefine
         .then(() => undefined);
 
 /**
- * An order's timeline as an administrator reads it: every row, actor and staff text included.
- * The rows are parsed through the contract's own response schema, so every test that reads a
- * timeline also proves what the writers stored is what the contract says.
+ * An order's timeline as `authContext` reads it, in story order (oldest first). The live read is a
+ * newest-first page; this takes page 1 at the largest page size and reverses it, so a test reads a
+ * short order's history top to bottom. The page is parsed through the contract's own response
+ * schema, so every test that reads a timeline also proves what the writers stored is what the
+ * contract says.
+ *
+ * @param orderId - the order
+ * @param authContext - the reader
+ */
+export const timelineAs = (
+    orderId: string,
+    authContext: AuthContext | undefined
+): Promise<OrderTimelineEntry[]> =>
+    readTimeline(orderId, authContext, { page: 1, pageSize: 100 }).then((page) =>
+        GetOrderTimeline200Response.parse(page).items.toReversed()
+    );
+
+/**
+ * An order's timeline as an administrator reads it: every row, actor and staff text included,
+ * oldest first (see {@link timelineAs}).
  *
  * @param orderId - the order
  * @param typePrefix - keeps only the types starting with it (`refund`, `return_`); every row when omitted
  */
 export const timelineOf = (orderId: string, typePrefix = ''): Promise<OrderTimelineEntry[]> =>
-    readTimeline(orderId, asAdmin())
-        .then((items) => GetOrderTimeline200Response.parse({ items }).items)
-        .then((rows) => rows.filter(({ type }) => type.startsWith(typePrefix)));
+    timelineAs(orderId, asAdmin()).then((rows) =>
+        rows.filter(({ type }) => type.startsWith(typePrefix))
+    );
 
 /**
  * The last `status_overridden` row of an order's timeline, as an administrator reads it.

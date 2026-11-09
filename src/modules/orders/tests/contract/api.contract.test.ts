@@ -12,7 +12,8 @@ import { api, authenticateAs, authenticateAsRole, loginBearer } from '@tests/htt
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
-import { orderModel } from '../../model';
+import { orderEventModel, orderModel } from '../../model';
+import { toObjectId } from '@infrastructure/persistence/create-repository';
 import { orderRepository } from '../../repository';
 import { markPaid } from '../../friends/payments';
 import { OrderStatus } from '@types';
@@ -589,6 +590,26 @@ describe('GET /orders — sort', () => {
     });
 });
 
+/** A seeded order of a buyer, with one buyer-visible `paid` row an hour back and `notes` staff notes after it. */
+const orderWithNotes = async (notes: number) => {
+    const staff = await authenticateAs('admin');
+    const buyer = await authenticateAsRole('customer');
+    const order = await seedOrderFor(buyer.user);
+    const id = String(order._id);
+    await orderEventModel.create({
+        orderId: order._id,
+        at: new Date(Date.now() - 3_600_000),
+        type: 'paid',
+        data: { method: 'card' }
+    });
+    for (let n = 1; n <= notes; n += 1)
+        await api()
+            .post(`/orders/${id}/timeline/notes`)
+            .set('Authorization', staff.bearer)
+            .send({ text: `note ${String(n)}` });
+    return { staff, buyer, id };
+};
+
 describe('GET /orders/{id}/timeline', () => {
     it('shows staff every row with its actor, and the buyer only theirs, never an actor', async () => {
         const staff = await authenticateAs('admin');
@@ -614,12 +635,12 @@ describe('GET /orders/{id}/timeline', () => {
                 (row) => row.type !== 'invoice_issued'
             )
         ).toMatchObject([
-            { type: 'paid', data: { method: 'card' } },
             {
                 type: 'status_overridden',
                 text: 'a staff-only reason',
                 actor: String(staff.user._id)
-            }
+            },
+            { type: 'paid', data: { method: 'card' } }
         ]);
         expect(asBuyer.status).toBe(200);
         // The invoice row is buyer-visible and lands whenever the async invoice listener finishes,
@@ -630,6 +651,57 @@ describe('GET /orders/{id}/timeline', () => {
         expect(buyerRows).toHaveLength(1);
         expect(buyerRows[0]).toMatchObject({ type: 'paid' });
         for (const row of asBuyer.body.items as object[]) expect(row).not.toHaveProperty('actor');
+    });
+
+    it('pages newest first: the last note leads page 1, the oldest row closes the last page', async () => {
+        const { staff, id } = await orderWithNotes(3);
+
+        const first = await api()
+            .get(`/orders/${id}/timeline?pageSize=2`)
+            .set('Authorization', staff.bearer);
+        const second = await api()
+            .get(`/orders/${id}/timeline?pageSize=2&page=2`)
+            .set('Authorization', staff.bearer);
+
+        expect(first.status).toBe(200);
+        expect(first.body.meta).toEqual({ page: 1, pageSize: 2, totalItems: 4, totalPages: 2 });
+        expect(first.body.items).toMatchObject([{ text: 'note 3' }, { text: 'note 2' }]);
+        expect(second.body.items).toMatchObject([{ text: 'note 1' }, { type: 'paid' }]);
+    });
+
+    it('counts and pages only the rows the buyer may read', async () => {
+        const { buyer, id } = await orderWithNotes(3);
+        await orderEventModel.create({
+            orderId: toObjectId(id),
+            at: new Date(Date.now() - 1_800_000),
+            type: 'paid',
+            data: { method: 'card' }
+        });
+
+        const page = await api()
+            .get(`/orders/${id}/timeline?pageSize=1&page=2`)
+            .set('Authorization', buyer.bearer);
+
+        // Three staff-only notes sit between the two buyer rows' pages without taking a slot.
+        expect(page.status).toBe(200);
+        expect(page.body.meta).toEqual({ page: 2, pageSize: 1, totalItems: 2, totalPages: 2 });
+        expect(page.body.items).toHaveLength(1);
+        expect(page.body.items[0]).toMatchObject({ type: 'paid' });
+    });
+
+    it('refuses a pageSize outside 1..100, a page below 1 and an unknown parameter with 422', async () => {
+        const { staff, id } = await orderWithNotes(0);
+        const statusOf = (query: string) =>
+            api()
+                .get(`/orders/${id}/timeline?${query}`)
+                .set('Authorization', staff.bearer)
+                .then(({ status }) => status);
+
+        const statuses = await Promise.all(
+            ['pageSize=0', 'pageSize=101', 'page=0', 'sort=at'].map((query) => statusOf(query))
+        );
+
+        expect(statuses).toEqual([422, 422, 422, 422]);
     });
 
     it('answers another buyer with the same 404 as an order that does not exist', async () => {
