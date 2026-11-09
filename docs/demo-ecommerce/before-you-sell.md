@@ -6,10 +6,11 @@ are examples. **A real shop has them written, or checked, by a lawyer** who know
 sells to. Nothing on this page is legal advice.
 
 The shipped Terms and Privacy pages carry **no legal wording**. Each opens with a warning that the
-text is missing and a checklist of the sections the real text must cover. Replace the
-`static-pages.terms` and `static-pages.privacy` copy in the frontend's `src/locales/en.json` and <!-- doc-paths:ignore -->
-`it.json` (or edit it at runtime from the admin dictionary) before any real order, and write the
-Privacy page's cookie section.
+text is missing and a checklist of the sections the real text must cover. Replace the placeholder in
+the frontend's `TermsPage.vue` and `PrivacyPage.vue` with the real text, in every language you sell <!-- doc-paths:ignore -->
+in, written in the template and never in locale keys (the admin dictionary can change those at
+runtime). Bump `NODE_TERMS_VERSION` in the same deploy. The steps are in the frontend's
+`INSTALL.md`. <!-- doc-paths:ignore -->
 :::
 
 This page is for someone opening a real shop on top of the demo. It lists what the software cannot
