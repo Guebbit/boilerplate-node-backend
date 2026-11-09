@@ -207,7 +207,7 @@ rules:
               src/app/security.ts,
               src/infrastructure/http/middlewares/method-not-allowed.ts,
               openapi.yaml paths.*.patch.requestBody.content,
-              docs/api/write-methods.md#a-known-path-with-the-wrong-method
+              docs/api/write-methods.md#options-says-what-a-path-accepts
           ]
       lint: no
       difference: null

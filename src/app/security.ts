@@ -21,10 +21,12 @@ import { requireDeclaredContentType } from '@infrastructure/http/middlewares/con
 import { limitJsonDepth, JSON_BODY_TYPES } from '@infrastructure/http/middlewares/json-depth';
 import { requireJsonObjectBody } from '@infrastructure/http/middlewares/json-object';
 import { REQUEST_CONTENT_TYPES } from '@api/request-content-types';
+import { OPERATION_ROUTES } from '@api/operation-routes';
+import { answerOptions } from '@infrastructure/http/middlewares/method-not-allowed';
 import { isAllowedOrigin } from '@infrastructure/http/origins';
 import { dropUnownedValidators } from '@infrastructure/http/preconditions';
 import { appConfig } from './config';
-import { enabledModules } from '../modules';
+import { enabledModules, servedModuleNames } from '../modules';
 
 /**
  * `express.json()`'s own default (`100kb`) is already a bound, but an
@@ -146,7 +148,11 @@ export const installSecurity = (app: Express): void => {
     });
 
     /**
-     * Strict CORS
+     * Strict CORS. `preflightContinue: true` hands every `OPTIONS` on to `answerOptions` below,
+     * so the status and `Allow` never depend on the caller's Origin (a refused Origin would
+     * otherwise fall to Express's own 200 + text body). `cors` still sets its `Access-Control-*`
+     * headers first, and sets none for a refused Origin.
+     * https://github.com/expressjs/cors#configuration-options
      */
     app.use(
         cors({
@@ -171,6 +177,7 @@ export const installSecurity = (app: Express): void => {
                 callback(null, false);
             },
             credentials: true,
+            preflightContinue: true,
             methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
             allowedHeaders: [
                 'Content-Type',
@@ -216,6 +223,12 @@ export const installSecurity = (app: Express): void => {
             ]
         })
     );
+
+    /**
+     * The one `OPTIONS` answer: `Allow`, `Accept-Patch` where PATCH exists, 204 with no length.
+     * Same handler for an allowed, a refused and an absent Origin.
+     */
+    app.use(answerOptions(OPERATION_ROUTES, servedModuleNames, REQUEST_CONTENT_TYPES));
 };
 
 /**

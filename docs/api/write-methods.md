@@ -336,8 +336,8 @@ A path the contract declares, asked with a method it does not give it, answers *
 `Allow` header (RFC 9110 §15.5.6) — never the catch-all's 404. `DELETE /tasks/{id}` is fine,
 `PATCH /tasks/{id}` is a 405 naming `DELETE, GET, HEAD`: a task's `status` is read-only and moves only through its doors.
 
-- **`Allow` is sorted**, with HEAD beside GET. `OPTIONS` is never judged: the CORS layer answers
-  a preflight before any route runs.
+- **`Allow` is sorted**, with HEAD beside GET. `OPTIONS` is never judged by the guard: the one
+  `OPTIONS` answer (below) runs before any router, and `Allow` leaves `OPTIONS` itself out.
 - **A trailing slash is the same path.** `/things/` reads as `/things`.
 - **A literal path wins over a templated one.** `DELETE /products/facets` would otherwise
   read `categories` as the `{id}` of `/products/{id}` and answer 404, so the guard runs a second
@@ -347,6 +347,27 @@ A path the contract declares, asked with a method it does not give it, answers *
 - **Not declared per operation.** The 405 belongs to a request that matched no operation, so no
   operation's `responses` could carry it; its code, `METHOD_NOT_ALLOWED`, is in the contract's
   `x-error-codes`.
+
+## `OPTIONS` says what a path accepts
+
+`OPTIONS` asks a path what it can do (RFC 9110 §9.3.7; RFC 5789 §3.1 for `Accept-Patch`). `cors`
+runs with `preflightContinue: true`, so ONE handler (`answerOptions`, mounted right after it in
+`src/app/security.ts`) answers every `OPTIONS`, whatever the Origin.
+
+| Request | Answer |
+| --- | --- |
+| a path of a served module | 204 + `Allow`; `Accept-Patch` only when `Allow` has `PATCH` |
+| `OPTIONS *`, or a preflight (`Access-Control-Request-Method`) on any path | 204 |
+| a plain `OPTIONS` on a path no served module owns | the 404 problem |
+
+- **No `Content-Length` on the 204** (RFC 9110 §8.6).
+- **Same `Allow` for an allowed, a refused and an absent Origin.** A refused Origin gets no
+  `Access-Control-*` headers, so the browser still fails the call.
+- **`Allow` has no `OPTIONS`**, the same as the 405 guard.
+- **A literal path wins**: `/products/facets` answers `GET, HEAD`, not the `/products/{id}` set.
+- **`Accept-Patch`** is the media types the contract declares for that path's `PATCH` body.
+- **A module this build does not serve** is a 404 for a plain `OPTIONS`, like any other method.
+
 
 The guard is `methodNotAllowed`, built from `api/operation-routes.ts`, which `npm run gen:api`
 derives from the contract's paths and mounted twice in `src/app/routes.ts`: before the routers
