@@ -11,7 +11,7 @@
  * See: docs/tools/security.md#the-rate-limit-budgets
  */
 
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 
 /**
  * One rate-limit budget's DATA — namespace, env var, default, window, key strategy, what it
@@ -64,9 +64,10 @@ export interface RateLimitBudget {
 
     /**
      * Reads a custom outcome instead of the response status — see the payments module's decline
-     * budget, which must count a genuine decline and not the confirm route's other 409.
+     * budget, which must count a genuine decline and not the confirm route's other 409. Gets the
+     * response too (express-rate-limit passes both), for a check that reads the status as well as a flag.
      */
-    requestWasSuccessful?: (request: Request) => boolean;
+    requestWasSuccessful?: (request: Request, response: Response) => boolean;
 
     /**
      * Where `express-rate-limit` stores this limiter's counter on `request`, for a downstream

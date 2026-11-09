@@ -11,7 +11,7 @@
  * See: docs/tools/security.md#the-rate-limit-budgets
  */
 
-import type { Request, RequestHandler } from 'express';
+import type { Request, RequestHandler, Response } from 'express';
 import type { RateLimitBudget } from '@types';
 import {
     buildRateLimiter,
@@ -100,11 +100,19 @@ const CREDENTIAL_DEVICE_BUDGET: RateLimitBudget = {
     skip: (request) => !presentsFailingDeviceCookie(request)
 };
 
+/**
+ * Whether a credential attempt succeeded: it answered below 400 AND the OAuth callback did not
+ * flag a failure it redirected (a 302). Without the flag a redirected failure is refunded.
+ */
+const credentialAttemptSucceeded = (request: Request, response: Response): boolean =>
+    !request.credentialAttemptFailed && response.statusCode < 400;
+
 /** Failed attempts from ONE address — defeats spraying a user list. */
 const CREDENTIAL_ADDRESS_BUDGET: RateLimitBudget = {
     ...accountRateLimitData.credentialsAddress,
     keyedBy: KEYED_BY_ADDRESS,
-    skipSuccessfulRequests: true
+    skipSuccessfulRequests: true,
+    requestWasSuccessful: credentialAttemptSucceeded
 };
 
 /** Failed attempts from ONE address block — defeats a proxy pool or an IPv6 allocation. */
@@ -113,6 +121,7 @@ const CREDENTIAL_BLOCK_BUDGET: RateLimitBudget = {
     keyedBy: KEYED_BY_ADDRESS_BLOCK,
     keyGenerator: addressBlockOf,
     skipSuccessfulRequests: true,
+    requestWasSuccessful: credentialAttemptSucceeded,
     requestPropertyName: BLOCK_RATE_LIMIT_PROPERTY
 };
 
@@ -131,6 +140,8 @@ const SHARED_CREDENTIAL_LIMITERS: RequestHandler[] = [
  * The credential budgets for the PUBLIC routes that accept a password or mint a token: login, the
  * token confirms, the second-factor login, OAuth. The per-account budget counts only a request
  * whose body names an account.
+ *
+ * A failure that redirects (OAuth) counts too, through `credentialAttemptFailed`.
  *
  * `skipSuccessfulRequests` on all of them: only FAILURES spend the budget, so a shared address (an
  * office, CI, the e2e suite) is never locked out by people getting it right. Exported as an array

@@ -247,6 +247,9 @@ be read:
 | connect: identity held elsewhere   | `302 ?error=already_linked`     |
 | connect: token missing or spent    | `302 ?error=link_expired`       |
 
+Every row counts against the credential budgets, the `302` ones too: the controller flags the
+failure (`credentialAttemptFailed`) so a redirect is not refunded as a success.
+
 The success path calls the same `issueSession` [`postLogin`](./account-sessions.md) does, with
 `amr: [provider.name]` — so a Google login records **how** it was proved, and the freshness guards
 read it like any other method. It returns no access token: the frontend's
