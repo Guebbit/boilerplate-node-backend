@@ -385,6 +385,9 @@ reason all live on it, and `orders → delivery` is forbidden, so `orders` could
 Filters on the list: `cause` (`preorder`, `backorder`, or `any` wait that carries an agreed date),
 `state`, `productId`, `late` and `dueWithin`.
 
+The board carries no `holdReason`: it is staff-only on the hold itself, and in the buyer's own export
+(see [Holds](#holds)).
+
 | `state`     | The fulfillment order is...                                                                    |
 | ----------- | ---------------------------------------------------------------------------------------------- |
 | `waiting`   | paid and held for stock                                                                        |
