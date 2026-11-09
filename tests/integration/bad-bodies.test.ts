@@ -8,6 +8,7 @@
  * | --- | --- |
  * | Body over `NODE_JSON_BODY_LIMIT` | 413 |
  * | Malformed JSON | 400 |
+ * | A JSON value that is not an object | 422 |
  * | A charset or content-encoding the parser cannot read | 415 |
  * | A content-type the operation does not declare | 415 |
  * | No content-type at all | the route's own answer |
@@ -31,6 +32,7 @@ import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { withoutInstance } from '@tests/problem';
+import { MISSING_ID } from '@tests/ids';
 
 setupTestDb();
 
@@ -87,6 +89,33 @@ describe('a body the parser refused', () => {
 
         expect(response.status).toBe(400);
         expect(response.body.errors[0].code).toBe('BAD_REQUEST');
+    });
+
+    /**
+     * Well-formed JSON that is not an object. The parser is non-strict, so these reach the app, and
+     * the shape guard answers before any route: a route's own body reader would have turned each
+     * into `{}` (a 200 no-op on a PATCH, an unfiltered search, a soft delete on a DELETE).
+     */
+    it.each([
+        ['POST /account/login', 'post', '/account/login', 'application/json'],
+        [
+            'PATCH merge-patch /users/{id}',
+            'patch',
+            `/users/${MISSING_ID}`,
+            'application/merge-patch+json'
+        ],
+        ['POST /orders/search', 'post', '/orders/search', 'application/json'],
+        ['POST /orders/{id}/cancel', 'post', `/orders/${MISSING_ID}/cancel`, 'application/json']
+    ])('answers 422 on a body that is not an object: %s', async (_label, method, url, type) => {
+        for (const body of ['5', '"x"', 'true', 'null', '[]']) {
+            const response = await api()
+                [method as 'post' | 'patch'](url)
+                .set('Content-Type', type)
+                .send(body);
+
+            expect(response.status).toBe(422);
+            expect(response.body.errors[0].code).toBe('VALIDATION_ERROR');
+        }
     });
 
     /**
