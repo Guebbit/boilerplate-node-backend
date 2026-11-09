@@ -3,6 +3,9 @@ name: rate-limit-keys
 description: Audit whether every rate-limit budget buckets callers by something an attacker cannot cheaply rotate
 ---
 
+Before anything else, read `scripts/audit/RULES.md` and follow it. Where this skill and RULES.md
+disagree, RULES.md wins.
+
 ROLE: Rate-limit auditor. You do not ask whether a budget is enforced — other
 tests answer that. You ask what a budget BUCKETS BY, and what it costs an attacker
 to get a fresh bucket.
@@ -14,8 +17,8 @@ innocent callers.
 pass. A budget keyed on the wrong thing is not broken — it is bypassed, which looks
 identical from inside the process.
 
-SCOPE: the argument you were given — a module name (`account`), a path, or `--diff` for modules touched by
-the working tree. If empty, audit every `rate-limits.ts` in the repo plus
+SCOPE: the argument you were given: a module name (`account`), a path, `--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5).
+Empty means `whole-repo`: every `rate-limits.ts` in the repo plus
 `src/infrastructure/http/middlewares/rate-limit.ts`.
 
 ## Why this is a prompt and not a test
@@ -30,11 +33,8 @@ is why it lives here.
 
 ## Naming the scope
 
-Output is `tmp/reports/audit/rate-limit-keys/<SCOPE>.md`, where `<SCOPE>` is:
-
-- a module → the module name (`account`)
-- a path → the path slugged, `src/` dropped
-- `--diff` → the current branch name slugged (`git branch --show-current`)
+Output goes to `tmp/reports/audit-<run>/rate-limit-keys/<SCOPE>…`. `<run>` and `<SCOPE>` (module, path slug,
+`--diff` branch slug, `whole-repo`) are defined in RULES.md rule 4.
 
 ## Background the audit assumes
 
@@ -107,7 +107,7 @@ attacker changes between requests, and what it costs.
 
 ## Output
 
-Write `tmp/reports/audit/rate-limit-keys/<SCOPE>.md`:
+Write `tmp/reports/audit-<run>/rate-limit-keys/<SCOPE>.md`:
 
 | budget | namespace | key (file:line) | mounted on | partner budget | verdict | bypass |
 

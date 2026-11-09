@@ -3,6 +3,9 @@ name: api-zalando
 description: Audit this API's contract, handlers and docs against the Zalando guidelines, reported only
 ---
 
+Before anything else, read `scripts/audit/RULES.md` and follow it. Where this skill and RULES.md
+disagree, RULES.md wins.
+
 ROLE: Guideline reviewer: you read the API against Zalando's rules, and you do not decide.
 
 GOAL: For every rule in `scripts/audit/api-standards.yaml` whose `standard` is `zalando`, give one
@@ -10,19 +13,14 @@ verdict per rule per operation in scope, each with a citation. The audit judges 
 It reports against the Zalando guidelines ONLY. Other standards disagree with it in places; that is
 not this audit's business.
 
-SCOPE: the argument you were given: a module name (`orders`), a path, or `--diff` for modules
-touched by the working tree. If empty, audit the **whole contract**. A difference from a standard is
-rarely introduced by the change that happens to surface it, so an empty scope is NOT "whatever
-`git status` touched".
+SCOPE: the argument you were given: a module name (`orders`), a path, `--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5). Empty means
+`whole-repo`: the **whole contract**. A difference from a standard is rarely introduced by the change
+that happens to surface it.
 
 ## Naming the scope
 
-Output is `tmp/reports/audit/api-zalando/<SCOPE>.md`, where `<SCOPE>` is:
-
-- empty → `full`
-- a module → the module name (`orders`)
-- a path → the path slugged, `src/` dropped (`src/infrastructure/http` → `infrastructure-http`)
-- `--diff` → the current branch name slugged (`git branch --show-current`)
+Output goes to `tmp/reports/audit-<run>/api-zalando/<SCOPE>…`. `<run>` and `<SCOPE>` (module, path slug,
+`--diff` branch slug, `whole-repo`) are defined in RULES.md rule 4.
 
 ## Before you start
 
@@ -56,7 +54,7 @@ Output is `tmp/reports/audit/api-zalando/<SCOPE>.md`, where `<SCOPE>` is:
       target's currency.
 3. A doc that contradicts the code: say which side is wrong, and cite the section.
 4. A finding a rule could catch mechanically: verdict `LINT-CANDIDATE` with the JSONPath. It is
-   REPORTED only, never turned into a Spectral rule, and you change no file.
+   REPORTED only, never turned into a Spectral rule.
 
 ## Verdicts
 
@@ -70,13 +68,13 @@ Output is `tmp/reports/audit/api-zalando/<SCOPE>.md`, where `<SCOPE>` is:
 
 ## Output
 
-Write `tmp/reports/audit/api-zalando/<SCOPE>.md`: the bundle's mtime, the scope, then a table of
+Write `tmp/reports/audit-<run>/api-zalando/<SCOPE>.md`: the bundle's mtime, the scope, then a table of
 
 | rule id | operation | verdict | evidence (file:line) | section | fix side |
 
 `fix side` is `contract`, `code`, `docs` or `standard` (the standard is the one that fits worse).
 Then list the `VIOLATION` and `LINT-CANDIDATE` rows again, worst first.
 
-Do NOT change any file. No citation, no finding: an absence claim names the grep that found
+No citation, no finding: an absence claim names the grep that found
 nothing. Three real violations over thirty maybes. The report is disposable; see
 `docs/tools/ai-auditing.md`.

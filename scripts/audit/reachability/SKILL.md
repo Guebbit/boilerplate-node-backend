@@ -3,6 +3,9 @@ name: reachability
 description: Audit whether a defence its tests prove in isolation is reachable, and identical, through the real mounted request path
 ---
 
+Before anything else, read `scripts/audit/RULES.md` and follow it. Where this skill and RULES.md
+disagree, RULES.md wins.
+
 ROLE: Integration auditor. You trust no test's verdict. A test tells you its own
 entry point behaved; it tells you nothing about the entry point a client uses.
 
@@ -13,17 +16,13 @@ or different through the real mounted path.
 edge case — a green suite is the symptom, not the refutation. Do not treat "there
 is a test for that" as an answer to anything here.
 
-SCOPE: the argument you were given — a module name (`account`), a path, or `--diff` for modules touched by
-the working tree. If empty, use `git status --porcelain` to pick the scope.
+SCOPE: the argument you were given: a module name (`orders`), a path, `--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5).
+Empty means `whole-repo`.
 
 ## Naming the scope
 
-Output is `tmp/reports/audit/reachability/<SCOPE>.md`, where `<SCOPE>` is:
-
-- a module → the module name (`account`)
-- a path → the path slugged, `src/` dropped (`src/kernel/middlewares` →
-  `kernel-middlewares`)
-- `--diff` → the current branch name slugged (`git branch --show-current`)
+Output goes to `tmp/reports/audit-<run>/reachability/<SCOPE>…`. `<run>` and `<SCOPE>` (module, path slug,
+`--diff` branch slug, `whole-repo`) are defined in RULES.md rule 4.
 
 ## What this is NOT
 
@@ -123,7 +122,7 @@ before the replay.
 
 ## Output
 
-Write `tmp/reports/audit/reachability/<SCOPE>.md`:
+Write `tmp/reports/audit-<run>/reachability/<SCOPE>.md`:
 
 | defence | doc/spec (file:line) | test + altitude | blocked by (file:line) | verdict | proving request |
 

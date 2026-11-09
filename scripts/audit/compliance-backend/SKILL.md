@@ -3,6 +3,9 @@ name: compliance-backend
 description: Audit this backend against the shared compliance registry's backend-responsibility rules
 ---
 
+Before anything else, read `scripts/audit/RULES.md` and follow it. Where this skill and RULES.md
+disagree, RULES.md wins.
+
 ROLE: Compliance reviewer, not a security or code reviewer. You check what this backend
 publishes, records and enforces against a cross-legal-domain rule list — not against this repo's
 own docs' aspirations.
@@ -10,22 +13,15 @@ own docs' aspirations.
 GOAL: For every rule in `scripts/audit/compliance-rules.yaml` whose `responsibility` is `backend`
 or `both`, decide whether it applies here, and if so whether it is met.
 
-SCOPE: the argument you were given — a module name (`orders`), a path, or `--diff` for modules touched by the working
-tree. If empty, audit the **whole repo** — unlike the other audits, an empty scope here is NOT
-"whatever `git status` touched": a compliance gap is almost never introduced by the change that
-happens to surface it. The unsubscribe rule has been violated (harmlessly, today) since the first
+SCOPE: the argument you were given: a module name (`orders`), a path, `--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5).
+Empty means `whole-repo`: a compliance gap is almost never introduced by the change that happens to
+surface it. The unsubscribe rule has been violated (harmlessly, today) since the first
 transactional-only template, not since the last commit.
 
 ## Naming the scope
 
-Every output file is named `<SCOPE>`, derived one way only:
-
-- empty → `full`
-- a module → the module name (`orders`)
-- a path → the path slugged, `src/` dropped (`src/infrastructure/http` → `infrastructure-http`)
-- `--diff` → the current branch name slugged (`git branch --show-current`)
-
-Never invent a batch number.
+Output goes to `tmp/reports/audit-<run>/compliance-backend/<SCOPE>…`. `<run>` and `<SCOPE>` (module, path slug,
+`--diff` branch slug, `whole-repo`) are defined in RULES.md rule 4.
 
 ## Steps
 
@@ -52,7 +48,7 @@ Never invent a batch number.
 
 ## Output
 
-Write `tmp/reports/audit/compliance-backend/<SCOPE>.findings.md`, a table of:
+Write `tmp/reports/audit-<run>/compliance-backend/<SCOPE>.findings.md`, a table of:
 
 | id | title | applicability | verdict | evidence | severity | references |
 
@@ -62,7 +58,6 @@ rows to the terminal, most severe first.
 
 Rules:
 
-- Do NOT change any file. This is a report.
 - A finding needs a citation. No citation, no finding.
 - `NOT-APPLICABLE` needs a reason too — silently skipping a rule is not allowed.
 - `tmp/reports/` is gitignored. These files are working evidence, not deliverables — the conclusions

@@ -1,10 +1,11 @@
 #!/usr/bin/env tsx
 /**
  * @module
- * Writes the `code-shape` audit's shallow candidates to `tmp/reports/audit/code-shape/shallow.json`.
+ * Writes the `code-shape` audit's shallow candidates to `<out>/shallow.json`, `<out>` being this
+ * run's report folder (`scripts/audit/RULES.md` rule 4).
  *
- * Usage: `npm run audit:shallow -- [path...]` — repo-relative prefixes, `src scripts scenarios` by
- * default. Kept apart from `./shallow-candidates.ts` so its unit test can import the counting
+ * Usage: `npm run audit:shallow -- --out <dir> [path...]` — repo-relative prefixes, `src scripts
+ * scenarios` by default. Kept apart from `./shallow-candidates.ts` so its unit test can import the counting
  * without running this.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -17,8 +18,23 @@ import { REPO_ROOT } from '../../../modules-on-disk';
 /** Scanned when no path is given: the code that ships or builds what ships. */
 const DEFAULT_SCOPE = ['src', 'scripts', 'scenarios'];
 
-/** Where the report lands — gitignored working evidence, like every audit report. */
-const OUTPUT = path.join(REPO_ROOT, 'tmp', 'reports', 'audit', 'code-shape', 'shallow.json');
+/** Position of `--out` on the command line, or -1. */
+const outIndex = process.argv.indexOf('--out');
+
+/** The report folder, from `--out <dir>`: the audit writes nowhere else (RULES.md rule 1). */
+const outDirectory: string | undefined = outIndex === -1 ? undefined : process.argv[outIndex + 1];
+
+if (outDirectory === undefined) {
+    throw new Error('usage: npm run audit:shallow -- --out <report-folder> [path...]');
+}
+
+/** The arguments with `--out <dir>` taken out: what is left is the scope paths. */
+const scopeArguments = process.argv
+    .slice(2)
+    .filter((_, index) => index + 2 !== outIndex && index + 2 !== outIndex + 1);
+
+/** Where the report lands. */
+const OUTPUT = path.resolve(REPO_ROOT, outDirectory, 'shallow.json');
 
 /**
  * TypeScript: reads `tsconfig.json` and expands its `include` globs into the file list a program
@@ -35,7 +51,7 @@ const parsed = ts.parseJsonConfigFileContent(rawConfig, ts.sys, REPO_ROOT);
 const program = ts.createProgram({ rootNames: parsed.fileNames, options: parsed.options });
 
 /** The scope asked for on the command line, or the default. */
-const scope = process.argv.length > 2 ? process.argv.slice(2) : DEFAULT_SCOPE;
+const scope = scopeArguments.length > 0 ? scopeArguments : DEFAULT_SCOPE;
 
 /** The candidate lists. */
 const report = findShallowCandidates(program, REPO_ROOT, scope);

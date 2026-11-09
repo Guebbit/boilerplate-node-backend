@@ -1,8 +1,8 @@
 ---
 name: audit-reachability
 description: Audit whether a defence its tests prove in isolation is reachable, and identical, through the real mounted request path
-argument-hint: <module|path|--diff>  (default: modules touched by the working tree)
-allowed-tools: Read, Glob, Grep, Write, Bash(git diff:*), Bash(git status:*), Bash(git branch:*), Bash(git log:*), Bash(ls:*), Bash(2brain query:*)
+argument-hint: <module|path|--diff|whole-repo>  (default: whole-repo)
+allowed-tools: Read, Glob, Grep, Write, Bash(git diff:*), Bash(git status:*), Bash(git branch --show-current), Bash(git log:*), Bash(ls:*), Bash(2brain query:*), Bash(npm run audit:check-clean:*)
 ---
 
 Read `scripts/audit/reachability/SKILL.md` and follow it. The scope is: $ARGUMENTS

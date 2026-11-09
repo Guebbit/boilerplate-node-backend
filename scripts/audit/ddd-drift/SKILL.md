@@ -3,24 +3,23 @@ name: ddd-drift
 description: Audit whether the DDD the docs describe still matches the code — who drives whose state, named questions vs read tables, domain placement, subdomain depth, stale counts
 ---
 
+Before anything else, read `scripts/audit/RULES.md` and follow it. Where this skill and RULES.md
+disagree, RULES.md wins.
+
 ROLE: Context-map reviewer. Lint already holds the walls between modules. You judge what lint
 cannot see: who drives whose state, where a rule lives, and whether the pages still describe the code.
 
 GOAL: Find where the code and the DDD pages have drifted apart, and say which side is wrong. This
 audit only reports. It never edits code, tests or documentation.
 
-SCOPE: the argument you were given — a module name (`orders`), a path, or `--diff` for the branch's
-changes. If empty, the scope is the whole repo (`all`). Drift is relational and is rarely introduced
-by the change that reveals it, so `--diff` is a starting point, not a boundary.
+SCOPE: the argument you were given: a module name (`orders`), a path, `--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5).
+Empty means `whole-repo`. Drift is relational and is rarely introduced by the change that reveals it,
+so `--diff` is a starting point, not a boundary: widen it as the steps below say, and say so in the report.
 
 ## Naming the scope
 
-Output is `tmp/reports/audit/ddd-drift/<SCOPE>.md`, where `<SCOPE>` is:
-
-- a module → the module name (`orders`)
-- a path → the path slugged, `src/` dropped (`src/infrastructure/http` → `infrastructure-http`)
-- `--diff` → the current branch name slugged (`git branch --show-current`)
-- empty → `all`
+Output goes to `tmp/reports/audit-<run>/ddd-drift/<SCOPE>…`. `<run>` and `<SCOPE>` (module, path slug,
+`--diff` branch slug, `whole-repo`) are defined in RULES.md rule 4.
 
 ## What this audit is not
 
@@ -131,7 +130,7 @@ repeat an answer an existing flag or key already gives. If a run finds none of t
 
 ## Output
 
-`tmp/reports/audit/ddd-drift/<SCOPE>.md`, in this order:
+`tmp/reports/audit-<run>/ddd-drift/<SCOPE>.md`, in this order:
 
 - **Claims table** — `| claim (file:line) | code says (file:line) | match |`
 - **Findings** — `| class | where | rule broken (doc file:line) | drift / DELIBERATE / NOT-TRACED | wrong side | severity | smallest fix |`
@@ -142,7 +141,7 @@ worth saying.
 
 ## Rules
 
-- **Report only.** Write nothing but the report under `tmp/reports/audit/ddd-drift/`. Do NOT edit
+- **Report only.** Write nothing but the report under `tmp/reports/audit-<run>/ddd-drift/`. Do NOT edit
   source, tests, documentation, contracts or config. Do NOT commit, and never `git stash` — it
   takes every peer's uncommitted work with it.
 - Every row cites the code and the doc, each by `file:line`. A row with one side missing is not a finding.

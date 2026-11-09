@@ -163,7 +163,7 @@ skill's own `scripts/` is the one place a filename repeats a folder's word.
 | `scripts/audit/*/SKILL.md`                                        | The ten audit prompts. Each is registered with Claude Code by a pointer under `.claude/skills/`.                                                                         | [AI Auditing](../tools/ai-auditing.md)                                             |
 | `scripts/audit/compliance-rules.yaml`                             | The compliance registry both compliance prompts read, one rule per backend or frontend responsibility.                                                                   | [AI Auditing](../tools/ai-auditing.md)                                             |
 | `scripts/audit/code-shape/scripts/shallow-candidates.ts`          | Counts, through the TypeScript checker, what the `code-shape` audit judges: small functions with 1–2 users, pass-throughs, optional parameters never passed, lazy files. | [AI Auditing](../tools/ai-auditing.md#code-shape-the-tools-count-the-model-judges) |
-| `scripts/audit/code-shape/scripts/generate-shallow-candidates.ts` | Its CLI — `npm run audit:shallow -- <paths>`. Writes `tmp/reports/audit/code-shape/shallow.json`.                                                                        | [AI Auditing](../tools/ai-auditing.md#code-shape-the-tools-count-the-model-judges) |
+| `scripts/audit/code-shape/scripts/generate-shallow-candidates.ts` | Its CLI — `npm run audit:shallow -- --out <run folder> <paths>`. Writes `<run folder>/shallow.json`.                                                                     | [AI Auditing](../tools/ai-auditing.md#code-shape-the-tools-count-the-model-judges) |
 
 ## Docs — `scripts/docs/`
 

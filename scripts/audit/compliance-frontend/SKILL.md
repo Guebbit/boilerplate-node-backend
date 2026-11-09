@@ -3,6 +3,9 @@ name: compliance-frontend
 description: Audit the paired frontend against the shared compliance registry's frontend-responsibility rules
 ---
 
+Before anything else, read `scripts/audit/RULES.md` and follow it. Where this skill and RULES.md
+disagree, RULES.md wins.
+
 ROLE: Compliance reviewer, not a security or code reviewer. You check what the paired frontend
 publishes, renders and enforces against a cross-legal-domain rule list — not against either
 repo's own docs' aspirations.
@@ -14,21 +17,16 @@ REPO: this prompt reads the registry from this repo (`boilerplate-node-backend`)
 evidence against the sibling checkout at `../boilerplate-vue-frontend`. If that checkout is not
 present at that path, stop and say so — do not guess at a different location.
 
-SCOPE: the argument you were given — an area (`checkout`, `account`), a path inside the frontend repo, or `--diff` for
-areas the frontend's working tree touched. If empty, audit the **whole frontend repo** — unlike
-the other audits, an empty scope here is NOT "whatever `git status` touched": a compliance gap is
-almost never introduced by the change that happens to surface it.
+SCOPE: the argument you were given: an area (`checkout`, `account`), a path inside the frontend repo,
+`--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5). Empty means `whole-repo`: the **whole frontend repo**. A compliance gap is
+almost never introduced by the change that happens to surface it. `--diff` is read in the frontend
+repo (its `git status` and its `main`).
 
 ## Naming the scope
 
-Every output file is named `<SCOPE>`, derived one way only:
-
-- empty → `full`
-- an area → the area name (`checkout`)
-- a path → the path slugged, `src/` dropped
-- `--diff` → the frontend repo's current branch name slugged (`git -C ../boilerplate-vue-frontend branch --show-current`)
-
-Never invent a batch number.
+Output goes to `tmp/reports/audit-<run>/compliance-frontend/<SCOPE>…`. `<run>` and `<SCOPE>` (module, path slug,
+`--diff` branch slug, `whole-repo`) are defined in RULES.md rule 4.
+For `--diff` the branch is the frontend repo's (`git -C ../boilerplate-vue-frontend branch --show-current`).
 
 ## Steps
 
@@ -57,7 +55,7 @@ Never invent a batch number.
 
 ## Output
 
-Write `tmp/reports/audit/compliance-frontend/<SCOPE>.findings.md` (in THIS repo — the report is
+Write `tmp/reports/audit-<run>/compliance-frontend/<SCOPE>.findings.md` (in THIS repo — the report is
 audit tooling output, kept with the other audit reports regardless of which repo it inspected), a
 table of:
 
@@ -69,7 +67,6 @@ rows to the terminal, most severe first.
 
 Rules:
 
-- Do NOT change any file, in either repo. This is a report.
 - A finding needs a citation. No citation, no finding.
 - `NOT-APPLICABLE` needs a reason too — silently skipping a rule is not allowed.
 - `tmp/reports/` is gitignored. These files are working evidence, not deliverables — the conclusions

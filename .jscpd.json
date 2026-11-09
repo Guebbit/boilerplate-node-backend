@@ -4,6 +4,5 @@
     "ignore": ["**/*.generated.ts", "src/modules/*/tests/**"],
     "minTokens": 50,
     "similarity": 0.85,
-    "reporters": ["json"],
-    "output": "tmp/reports/audit/code-shape/jscpd"
+    "reporters": ["json"]
 }
