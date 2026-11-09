@@ -219,8 +219,8 @@ flowchart TD
 
 **Before dispatch** reads `fulfillment.shipped`, not the order's status: an order that shipped in part
 is still `processing`, and refunding it whole would refund goods the buyer already holds. A withdrawal
-that loses a race against a shipment is opened again as what the order now is — a return, never a full
-refund.
+that loses a race against a shipment is opened again as what the order now is — a return, not a cancel:
+the refund waits for the goods.
 
 - **Before dispatch the Return is a record, not a flow.** The order is still in the shop's hands, so
   `orders`' cancel already does everything — refund in full, release the stock hold. The Return

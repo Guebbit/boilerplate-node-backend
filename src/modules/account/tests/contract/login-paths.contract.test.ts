@@ -293,7 +293,10 @@ describe.each(ARMED_ATTEMPTS)('%s on an account with a second factor armed', (_n
         expect(setCookie(response, '__Host-session')).toBeUndefined();
         expect(setCookie(response, 'isAuth')).toBeUndefined();
         // Password answers 200 with the challenge in the body, OAuth redirects to the MFA page.
-        if (response.status === 302) expect(response.headers.location).toContain('mfa');
-        else expect(response.body).toHaveProperty('challenge');
+        const signal =
+            response.status === 302
+                ? response.headers.location
+                : Object.keys(response.body as object).join(',');
+        expect(signal).toMatch(response.status === 302 ? /mfa/ : /challenge/);
     });
 });

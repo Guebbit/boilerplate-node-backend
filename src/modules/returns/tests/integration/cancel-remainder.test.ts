@@ -1087,6 +1087,24 @@ describe('GET /returns/options', () => {
     });
 });
 
+/** The outcome when the shipment beat the withdrawal: a return of what left. */
+const SHIPMENT_FIRST = {
+    order: OrderStatus.shipped,
+    shipped: true,
+    withdrawn: true,
+    shipments: 1,
+    returns: [{ kind: 'return', status: 'approved', lines: 1 }]
+};
+
+/** The outcome when the withdrawal beat the shipment: a cancel, closed at birth, nothing shipped. */
+const WITHDRAWAL_FIRST = {
+    order: OrderStatus.canceled,
+    shipped: false,
+    withdrawn: true,
+    shipments: 0,
+    returns: [{ kind: 'return', status: 'closed', lines: 0 }]
+};
+
 describe('returning goods that shipped in part', () => {
     it('lets a return take only as many units as have shipped, and no more', async () => {
         customers += 1;
@@ -1139,7 +1157,7 @@ describe('returning goods that shipped in part', () => {
         expect(await shipmentsOf(orderId)).toHaveLength(1);
     });
 
-    it('turns a withdrawal that loses a race against a shipment into a return, never a full refund', async () => {
+    it('settles a withdrawal racing a shipment as one sequential order would: a return of what left, or a cancel with nothing shipped', async () => {
         customers += 1;
         const user = await createUser({ email: `cancel-${customers}@example.com` });
         const shirt = await createProduct({ title: 'Shirt', price: '30.00', onHand: 10 });
@@ -1165,18 +1183,23 @@ describe('returning goods that shipped in part', () => {
 
         const stored = await readOrder(orderId);
         const returns = await returnRepository.findByOrderId(orderId);
-        if (shipped.success) {
-            // The shipment won: the order is not canceled, and the withdrawal is a return of what left.
-            expect(stored?.status).toBe(OrderStatus.shipped);
-            expect(withdrawn.success).toBe(true);
-            expect(returns).toHaveLength(1);
-            expect(returns[0]).toMatchObject({ kind: 'return', status: 'approved' });
-            expect(returns[0].lines).toHaveLength(1);
-        } else {
-            // The cancel won: nothing shipped, and the shipment was refused.
-            expect(stored?.status).toBe(OrderStatus.canceled);
-            expect(await shipmentsOf(orderId)).toEqual([]);
-        }
+        const shipments = await shipmentsOf(orderId);
+        const observed = {
+            order: stored?.status,
+            shipped: shipped.success,
+            withdrawn: withdrawn.success,
+            shipments: shipments.length,
+            returns: returns.map(({ kind, status, lines }) => ({
+                kind,
+                status,
+                lines: lines.length
+            }))
+        };
+
+        // One assertion over the whole outcome: a hybrid (shipped and canceled) matches neither.
+        expect(observed).toEqual(
+            observed.order === OrderStatus.shipped ? SHIPMENT_FIRST : WITHDRAWAL_FIRST
+        );
     });
 });
 

@@ -8,6 +8,7 @@
  * See: docs/reference/data.md
  */
 
+import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { model, Schema } from 'mongoose';
 import type { Document, Model, Types } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
@@ -131,6 +132,11 @@ export const webhookSubscriptionSchema = new Schema<
     },
     { timestamps: true }
 );
+
+/**
+ * The edit counter behind this resource's `ETag` and `If-Match` — see `@infrastructure/persistence/revision-plugin`.
+ */
+webhookSubscriptionSchema.plugin(revisionPlugin);
 
 // "This tenant's subscriptions", and "which subscriptions want event X" — the two questions
 // `publish` and the admin list both ask.

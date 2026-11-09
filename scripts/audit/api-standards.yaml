@@ -83,7 +83,7 @@ rules:
               src/app/security.ts
           ]
       lint: no
-      difference: [if-match-edit-version]
+      difference: [if-match-edit-version, unversioned-writes]
 
     # RFC 9111, caching.
     - id: rfc9111-no-store-on-errors

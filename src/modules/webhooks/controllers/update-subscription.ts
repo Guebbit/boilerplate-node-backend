@@ -18,7 +18,7 @@ import { viewSubscription } from '../services/actions';
  */
 export const { replace: replaceWebhookSubscription, update: updateWebhookSubscription } =
     createUpdateController({
-        versioned: false,
+        versioned: true,
         entity: 'webhookSubscription',
         notFoundKey: 'generic.error-item-gone',
         replaceSchema: ReplaceWebhookSubscriptionBody,

@@ -19,6 +19,7 @@ import {
     normalizeTag
 } from './model';
 import type { LocaleDocument, LocaleEntryDocument, TranslationDocument } from './model';
+import { fencedSave } from '@infrastructure/persistence/versioning';
 import { createRepository, type Repository } from '@infrastructure/persistence/create-repository';
 import { setAndUnset } from '@infrastructure/persistence/changes';
 import type {
@@ -171,7 +172,13 @@ const listKeys = (locale: string, app: LocaleApp): Promise<string[]> =>
  */
 const bumpRevision = (tag: string): Promise<number> =>
     localeModel
-        .findOneAndUpdate({ tag }, { $inc: { revision: 1 } }, { returnDocument: 'after' })
+        .findOneAndUpdate(
+            { tag },
+            { $inc: { revision: 1 } },
+            // `timestamps: false`: a dictionary write is not an edit of the language, so it must
+            // not move the edit counter an open name-edit form's `If-Match` compares with.
+            { returnDocument: 'after', timestamps: false }
+        )
         .exec()
         .then((updated) => updated?.revision ?? 0);
 
@@ -615,6 +622,13 @@ export const localeRepository: Repository<LocaleDocument, Language> & {
     deleteLocaleCascade: (locale: LocaleDocument) => Promise<LocaleCascadeCounts>;
 } = {
     ...localeBase,
+    // The route names a language by its tag, so the precondition is keyed by the tag, not `_id`.
+    save: (document, session) =>
+        fencedSave(
+            document,
+            () => document.save(session ? { session } : undefined),
+            normalizeTag(document.tag)
+        ),
     findByTag,
     list,
     listInactiveTags,

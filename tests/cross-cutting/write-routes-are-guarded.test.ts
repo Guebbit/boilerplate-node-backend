@@ -347,17 +347,14 @@ describe('every write route is guarded by default', () => {
 
             const identityIndex = identityGuardIndex(guards);
 
-            if (exception === undefined) {
-                // The default: authenticated, then holding the route's key, in that order.
-                expect(identityIndex).toBeGreaterThanOrEqual(0);
-                expect(guards).toContain('requirePermissionGuard');
-                expect(identityIndex).toBeLessThan(guards.indexOf('requirePermissionGuard'));
-                return;
-            }
+            const permissionIndex = guards.indexOf('requirePermissionGuard');
+            const isDefault = exception === undefined;
 
-            expect(guards).not.toContain('requirePermissionGuard');
-            if (exception.requiresAuth) expect(identityIndex).toBeGreaterThanOrEqual(0);
-            else expect(identityIndex).toBe(-1);
+            // The default: authenticated, then holding the route's key, in that order. An
+            // exception holds no key, and is authenticated only when it says so.
+            expect(permissionIndex !== -1).toBe(isDefault);
+            expect(identityIndex !== -1).toBe(isDefault || exception.requiresAuth);
+            expect(identityIndex < permissionIndex).toBe(isDefault);
         });
     }
 });

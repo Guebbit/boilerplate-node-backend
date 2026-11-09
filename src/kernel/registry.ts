@@ -95,16 +95,17 @@ export interface TranslatableTarget {
     collection: string;
 
     /**
-     * Whether `entityId` currently names a real document on {@link collection} — checked before
-     * ANY translation write, so a missing entity answers the contract's declared 404 instead of
-     * writing orphan translation rows first and only discovering the miss when {@link writeDerived}
-     * runs. Supplied by the OWNING module, same reasoning as {@link writeDerived}: `locales` cannot
-     * resolve the target's Mongoose model by collection name to check this itself.
+     * The entity's edit counter (its version) when `entityId` currently names a real document on
+     * {@link collection}, or `undefined` when it names none. Read before ANY translation write, so
+     * a missing entity answers the contract's declared 404 instead of writing orphan translation
+     * rows first; and it is the version the translations' `ETag` is derived from. Supplied by the
+     * OWNING module, same reasoning as {@link writeDerived}: `locales` cannot resolve the target's
+     * Mongoose model by collection name to read this itself.
      *
      * @param entityId - the id exactly as it arrived on the request path — may be malformed
-     * @returns whether a document with this id exists
+     * @returns the counter (`0` for a row that has none yet), or `undefined` for no such document
      */
-    exists: (entityId: string) => Promise<boolean>;
+    revisionOf: (entityId: string) => Promise<number | undefined>;
 
     /**
      * Field names on this collection a translation row may carry. Validated against at write

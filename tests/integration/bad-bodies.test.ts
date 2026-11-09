@@ -11,6 +11,7 @@
  * | A JSON value that is not an object | 422 |
  * | A charset or content-encoding the parser cannot read | 415 |
  * | A content-type the operation does not declare | 415 |
+ * | Malformed multipart (no boundary, cut short) | 400 |
  * | No content-type at all | the route's own answer |
  *
  * The last row is the one easy to get wrong twice. Express 5 leaves `request.body` UNDEFINED
@@ -179,6 +180,35 @@ describe('a body the parser refused', () => {
 
         expect(JSON.stringify(response.body)).not.toContain('JSON');
         expect(JSON.stringify(response.body)).not.toContain('position');
+    });
+});
+
+describe('a malformed multipart body', () => {
+    /** A customer upload door and a staff one: both sit behind multer. */
+    const UPLOAD_ROUTES = [
+        { method: 'put' as const, path: '/account', role: 'user' as const },
+        { method: 'post' as const, path: '/products', role: 'admin' as const }
+    ];
+
+    const MALFORMED_BODIES = [
+        ['no boundary', 'multipart/form-data', '--X\r\nfoo'],
+        ['cut short', 'multipart/form-data; boundary=X', '--X\r\nfoo']
+    ] as const;
+
+    it.each(
+        UPLOAD_ROUTES.flatMap((route) =>
+            MALFORMED_BODIES.map(([label, type, body]) => ({ route, label, type, body }))
+        )
+    )('answers 400 on $route.method $route.path with $label', async ({ route, type, body }) => {
+        const { bearer } = await authenticateAs(route.role);
+
+        const response = await api()
+            [route.method](route.path)
+            .set('Authorization', bearer)
+            .set('Content-Type', type)
+            .send(body);
+
+        expect(response.status).toBe(400);
     });
 });
 

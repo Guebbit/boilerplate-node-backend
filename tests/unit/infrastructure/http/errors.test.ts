@@ -13,6 +13,7 @@ import { asStub } from '@tests/stub';
 import {
     ConflictError,
     databaseErrorInterpreter,
+    loggableDatabaseError,
     isInfrastructureError,
     rejectDatabaseEnvelope,
     rejectDatabaseError
@@ -325,7 +326,7 @@ describe('rejectDatabaseError', () => {
         // `warn`, not `error`: a 422 is the request's fault, not a server failure worth paging.
         expect(mockedLogger.warn).toHaveBeenCalledWith('getProducts - Invalid identifier', {
             status: 422,
-            error
+            error: { name: 'BSONError', code: undefined, stack: expect.any(String) }
         });
         expect(mockedLogger.error).not.toHaveBeenCalled();
     });
@@ -463,13 +464,12 @@ describe('rejectDatabaseEnvelope', () => {
     it('logs the operation and the interpreter detail, with the status as metadata', () => {
         // The half a `Response`-less caller would otherwise lose: this is the only record that the
         // failure happened at all, and the only place the driver's own words are kept.
-        const error = makeBsonError();
-        rejectDatabaseEnvelope('login', error);
+        rejectDatabaseEnvelope('login', makeBsonError());
 
         // `warn`, not `error`: a 422 is the request's fault, not a server failure worth paging.
         expect(mockedLogger.warn).toHaveBeenCalledWith('login - Invalid identifier', {
             status: 422,
-            error
+            error: { name: 'BSONError', code: undefined, stack: expect.any(String) }
         });
         expect(mockedLogger.error).not.toHaveBeenCalled();
     });
@@ -479,5 +479,62 @@ describe('rejectDatabaseEnvelope', () => {
 
         expect(JSON.stringify(envelope)).not.toContain('shard-02');
         expect(envelope.message).toBe('Internal Server Error');
+    });
+});
+
+/** Everything the mocked logger was handed, flattened so a stray copy anywhere is caught. */
+const loggedText = () =>
+    JSON.stringify([mockedLogger.warn.mock.calls, mockedLogger.error.mock.calls]);
+
+describe('personal data in database-error logs', () => {
+    /*
+     * Both doors a `.catch` uses log through one scrub: a duplicate-key message names the email
+     * and a ValidationError quotes the rejected value, and log redaction never reads message text.
+     */
+    const EMAIL = 'someone@example.com';
+
+    const makeLeakyDuplicateKey = () =>
+        Object.assign(
+            new Error(`E11000 duplicate key error index: email_1 dup key: { email: "${EMAIL}" }`),
+            { name: 'MongoServerError', code: 11_000 }
+        );
+
+    const makeLeakyValidation = () =>
+        Object.assign(new Error(`User validation failed:\n  email: \`${EMAIL}\` is not valid`), {
+            name: 'ValidationError'
+        });
+
+    it.each([
+        [
+            'rejectDatabaseError',
+            (error: unknown) => rejectDatabaseError(makeResponseStub(), 'ctx', error)
+        ],
+        ['rejectDatabaseEnvelope', (error: unknown) => rejectDatabaseEnvelope('ctx', error)]
+    ])('%s logs a duplicate key without the email, keeping name and code', (_door, door) => {
+        door(makeLeakyDuplicateKey());
+
+        expect(loggedText()).not.toContain(EMAIL);
+        expect(mockedLogger.warn).toHaveBeenCalledWith(expect.any(String), {
+            status: 409,
+            error: {
+                name: 'MongoServerError',
+                code: 11_000,
+                stack: expect.stringContaining('    at ')
+            }
+        });
+    });
+
+    it('logs a ValidationError without the rejected value', () => {
+        rejectDatabaseEnvelope('ctx', makeLeakyValidation());
+
+        expect(loggedText()).not.toContain(EMAIL);
+        // The frames survive: an operator can still see where the error came from.
+        expect(loggedText()).toContain('errors.test.ts');
+    });
+
+    it('leaves an error that is not a database error unchanged for the logger', () => {
+        const error = new Error('connection reset');
+
+        expect(loggableDatabaseError(error)).toBe(error);
     });
 });

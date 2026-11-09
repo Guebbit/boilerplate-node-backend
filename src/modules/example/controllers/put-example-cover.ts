@@ -16,7 +16,10 @@ import { t } from '@infrastructure/i18n';
 import { catchAs, namedHandler, refused } from '@infrastructure/http/controller';
 import { exampleService } from '../services';
 
-/** PUT /examples/:id/cover — replace the cover with the uploaded image. */
+/**
+ * PUT /examples/:id/cover — replace the cover with the uploaded image.
+ * No `If-Match`: no GET on this URL; a cover upload replaces the file whole.
+ */
 export const putExampleCover = namedHandler(
     'putExampleCover',
     (request: Request, response: Response) => {

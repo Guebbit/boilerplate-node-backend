@@ -118,8 +118,8 @@ describe('the protection of staff accounts', () => {
             callerContextAs(callerRole, 'someone-else')
         );
 
-        if (expected === 'allowed') expect(result.success).toBe(true);
-        else expect(refusalCode(result)).toBe(expected);
+        const allowed = expected === 'allowed';
+        expect(allowed ? result.success : refusalCode(result)).toBe(allowed ? true : expected);
     });
 
     it('leaves a protected account untouched, and records the failed attempt', async () => {

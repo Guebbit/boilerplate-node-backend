@@ -124,14 +124,10 @@ describe('every guarded route agrees with the role file, for every tenant person
                     fillParams(route.path)
                 ).set('Authorization', bearer);
 
-                if (allowed) {
-                    // Not necessarily 200 — a route may still 404 or 422 on a placeholder id or an
-                    // empty body — but never 403: that would be the route disagreeing with the role
-                    // file about a grant the file says this role holds.
-                    expect(response.status).not.toBe(403);
-                } else {
-                    expect(response.status).toBe(403);
-                }
+                // Allowed is not necessarily 200 — a route may still 404 or 422 on a placeholder id or
+                // an empty body — but never 403: that would be the route disagreeing with the role
+                // file about a grant the file says this role holds.
+                expect(response.status === 403).toBe(!allowed);
             }
         }
     );

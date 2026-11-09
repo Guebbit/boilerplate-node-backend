@@ -7,7 +7,7 @@
  * checks and fences it, and the error interpreter that answers 412. A unit test of any one of
  * them cannot say the caller's stale edit actually did not land.
  *
- * Versioned today: products, users, orders and the caller's own account. The version is the row's
+ * Versioned today: products, users, orders, webhook subscriptions and the caller's own account. The version is the row's
  * `editRevision` counter (see `src/infrastructure/persistence/versioning.ts`).
  */
 import { Types, connection } from 'mongoose';
@@ -23,6 +23,8 @@ import {
 } from '@modules/orders/tests/factories';
 import { productModel } from '@modules/products/model';
 import { productRepository } from '@modules/products/repository';
+import { webhookSubscriptionModel } from '@modules/webhooks/model';
+import { webhookSubscriptionRepository } from '@modules/webhooks/repository';
 import { userModel } from '@modules/users/model';
 import { userRepository } from '@modules/users/repository';
 import { setPassword } from '@modules/users/services/credentials';
@@ -33,6 +35,8 @@ import {
     versionOf,
     etagOf as etagFor
 } from '@infrastructure/persistence/versioning';
+import { localeModel } from '@modules/locales/model';
+import { localeRepository } from '@modules/locales/repository';
 import { givenLocale } from '@modules/locales/tests/factories';
 
 setupTestDb();
@@ -52,6 +56,8 @@ interface Resource {
     expected: (n: number) => unknown;
     /** Reads back the one field `edit` writes, by row id. */
     stored: (id: string) => Promise<unknown>;
+    /** The query string its DELETE takes; a resource with one delete tier takes none. */
+    deleteQuery?: string;
 }
 
 /** The four versioned resources. Each edit touches one field no lifecycle rule guards. */
@@ -107,6 +113,39 @@ const RESOURCES: Resource[] = [
         edit: (n) => ({ username: `me-${n.toString()}` }),
         expected: (n) => `me-${n.toString()}`,
         stored: (id) => userModel.findById(id).then((row) => row?.username)
+    },
+    {
+        name: 'a webhook subscription',
+        collection: 'webhooksubscriptions',
+        seed: async () => {
+            const { bearer } = await authenticateAs('admin');
+            const created = await api()
+                .post('/webhooks/subscriptions')
+                .set('Authorization', bearer)
+                .send({ url: 'https://example.test/inbox', eventTypes: ['order.paid'] })
+                .expect(201);
+            const id = String(created.body.id);
+            const path = `/webhooks/subscriptions/${id}`;
+            return { path, readPath: path, bearer, id };
+        },
+        deleteQuery: '',
+        edit: (n) => ({ description: `edit-${n.toString()}` }),
+        expected: (n) => `edit-${n.toString()}`,
+        stored: (id) => webhookSubscriptionModel.findById(id).then((row) => row?.description)
+    },
+    {
+        name: 'a language',
+        collection: 'locales',
+        // Addressed by its tag, versioned by its row: the one resource whose path id is not its `_id`.
+        seed: async () => {
+            const { bearer } = await authenticateAs('admin');
+            const language = await givenLocale('pt-BR');
+            const path = '/locales/pt-BR';
+            return { path, readPath: path, bearer, id: String(language._id) };
+        },
+        edit: (n) => ({ name: `Portugues ${'x'.repeat(n)}` }),
+        expected: (n) => `Portugues ${'x'.repeat(n)}`,
+        stored: (id) => localeModel.findById(id).then((row) => row?.name)
     }
 ];
 
@@ -242,8 +281,72 @@ describe.each(RESOURCES)('conditional writes on $name', (resource) => {
     });
 });
 
+describe('a language: what moves its edit tag', () => {
+    it('matches a lowercase tag in the path, and answers the stored tag', async () => {
+        const { readPath, bearer } = await resourceNamed('a language').seed();
+        const tag = etagOf(await api().get(readPath).set('Authorization', bearer));
+
+        const write = await api()
+            .patch('/locales/pt-br')
+            .set('Authorization', bearer)
+            .set('If-Match', tag)
+            .send({ name: 'Portugues' });
+
+        expect(write.status).toBe(200);
+    });
+
+    it('is not moved by a dictionary write, so an open name form still saves', async () => {
+        const { path, readPath, bearer, id } = await resourceNamed('a language').seed();
+        const tag = etagOf(await api().get(readPath).set('Authorization', bearer));
+        const before = await storedRevision('locales', id);
+
+        await localeRepository.bumpRevision('pt-BR');
+        const write = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', tag)
+            .send({ name: 'Portugues' });
+
+        expect(await storedRevision('locales', id)).toBe(Number(before) + 1);
+        expect(write.status).toBe(200);
+    });
+
+    it('is moved by switching the language off, so an open form gets 412', async () => {
+        const { path, readPath, bearer } = await resourceNamed('a language').seed();
+        const tag = etagOf(await api().get(readPath).set('Authorization', bearer));
+        await api().post('/locales/pt-BR/deactivate').set('Authorization', bearer).expect(200);
+
+        const write = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', tag)
+            .send({ name: 'Portugues' });
+
+        expect(write.status).toBe(412);
+    });
+});
+
+describe('a webhook subscription: delivery bookkeeping is not an edit', () => {
+    it('keeps an earlier tag valid after a delivery failure was recorded', async () => {
+        const { path, readPath, bearer, id } = await resourceNamed('a webhook subscription').seed();
+        const tag = etagOf(await api().get(readPath).set('Authorization', bearer));
+
+        await webhookSubscriptionRepository.recordOutcome(id, false);
+        const write = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', tag)
+            .send({ description: 'after-failure' });
+
+        expect(write.status).toBe(200);
+    });
+});
+
 /** Resources that also take a DELETE by id — the account deletes through its own two-step flow. */
-const DELETABLE = RESOURCES.filter((resource) => resource.name !== "the caller's own account");
+const DELETABLE = RESOURCES.filter(
+    // A language's delete is unconditional: its cascade removes the rows before the language.
+    (resource) => resource.name !== "the caller's own account" && resource.name !== 'a language'
+);
 
 describe.each(DELETABLE)('conditional DELETE on $name', (resource) => {
     it('refuses a stale tag and keeps the row', async () => {
@@ -253,7 +356,7 @@ describe.each(DELETABLE)('conditional DELETE on $name', (resource) => {
         await api().patch(path).set('Authorization', bearer).send(resource.edit(1)).expect(200);
 
         const response = await api()
-            .delete(`${path}?hardDelete=true`)
+            .delete(`${path}${resource.deleteQuery ?? '?hardDelete=true'}`)
             .set('Authorization', bearer)
             .set('If-Match', etagOf(read));
 
@@ -267,7 +370,7 @@ describe.each(DELETABLE)('conditional DELETE on $name', (resource) => {
         const read = await api().get(readPath).set('Authorization', bearer);
 
         const response = await api()
-            .delete(`${path}?hardDelete=true`)
+            .delete(`${path}${resource.deleteQuery ?? '?hardDelete=true'}`)
             .set('Authorization', bearer)
             .set('If-Match', etagOf(read));
 
@@ -382,6 +485,104 @@ describe('a product edited only through the locales translations route', () => {
             .send({ tags: ['late'] });
 
         expect(write.status).toBe(412);
+    });
+});
+
+/** One locale's PATCH body: `n` makes two saves differ. */
+const italian = (n: number) => ({
+    it: { fields: { title: `Titolo ${'x'.repeat(n)}` }, origin: 'human' }
+});
+
+describe('the translations route of a product, fenced on the product', () => {
+    beforeEach(() => Promise.all([givenLocale('en'), givenLocale('it')]));
+
+    it('writes on the tag its own GET handed out, and answers the new one for the next save', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const path = `/locales/translations/product/${product.id}`;
+        const read = await api().get(path).set('Authorization', bearer);
+
+        const first = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', etagOf(read))
+            .send(italian(1));
+        const second = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', etagOf(first))
+            .send(italian(2));
+
+        expect(first.status).toBe(200);
+        expect(second.status).toBe(200);
+    });
+
+    it('answers 412 and writes no row when the product was edited since the read', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const path = `/locales/translations/product/${product.id}`;
+        const tag = etagOf(await api().get(path).set('Authorization', bearer));
+        await api()
+            .patch(`/products/${product.id}`)
+            .set('Authorization', bearer)
+            .send({ tags: ['edited'] })
+            .expect(200);
+
+        const stale = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', tag)
+            .send(italian(1));
+        const after = await api().get(path).set('Authorization', bearer);
+
+        expect(stale.status).toBe(412);
+        expect(after.body.translations).toEqual([]);
+    });
+
+    it('refuses a stale PUT the same way', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const path = `/locales/translations/product/${product.id}`;
+        const tag = etagOf(await api().get(path).set('Authorization', bearer));
+        await api()
+            .patch(`/products/${product.id}`)
+            .set('Authorization', bearer)
+            .send({ tags: ['edited'] })
+            .expect(200);
+
+        const stale = await api()
+            .put(path)
+            .set('Authorization', bearer)
+            .set('If-Match', tag)
+            .send({ en: { fields: { title: 'A late English title' } }, ...italian(1) });
+
+        expect(stale.status).toBe(412);
+    });
+
+    it('is not refused by a stock move, which is not an edit', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const path = `/locales/translations/product/${product.id}`;
+        const tag = etagOf(await api().get(path).set('Authorization', bearer));
+
+        await productRepository.syncStockCache(product.id, { onHand: 3, reserved: 1 });
+        const write = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', tag)
+            .send(italian(1));
+
+        expect(write.status).toBe(200);
+    });
+
+    it('answers 404 on a read of a product that does not exist', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .get(`/locales/translations/product/${new Types.ObjectId().toString()}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
     });
 });
 

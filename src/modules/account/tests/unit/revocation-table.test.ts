@@ -27,19 +27,17 @@ describe('the revocation table', () => {
         ]);
     });
 
-    it.each(CAUSES)(
-        '%s: a caller that keeps its session rode the epoch in its own write',
-        (cause) => {
-            if (REVOCATION[cause].callerKeeps) expect(REVOCATION[cause].epoch).toBe('with-write');
-        }
-    );
+    it('has a caller that keeps its session ride the epoch in its own write', () => {
+        const keepers = CAUSES.filter((cause) => REVOCATION[cause].callerKeeps);
 
-    it.each(CAUSES)(
-        '%s: a caller that keeps its session is never told it was compromised',
-        (cause) => {
-            if (REVOCATION[cause].callerKeeps) expect(REVOCATION[cause].announce).toBe(false);
-        }
-    );
+        expect(keepers.filter((cause) => REVOCATION[cause].epoch !== 'with-write')).toEqual([]);
+    });
+
+    it('never tells a caller that keeps its session that it was compromised', () => {
+        const keepers = CAUSES.filter((cause) => REVOCATION[cause].callerKeeps);
+
+        expect(keepers.filter((cause) => REVOCATION[cause].announce)).toEqual([]);
+    });
 
     it('limits one cause to a single session mode: refresh-token reuse, which only `jwt` has', () => {
         expect(CAUSES.filter((cause) => REVOCATION[cause].modes === 'jwt')).toEqual([

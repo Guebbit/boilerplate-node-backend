@@ -356,10 +356,10 @@ describe('the render bounds', () => {
             pdf.mockImplementationOnce(() => new Promise(() => undefined));
 
             const render = renderHtmlToPdf('<p>hung</p>');
-            const outcome = expect(render).rejects.toBeInstanceOf(RenderTimeoutError);
-            await jest.advanceTimersByTimeAsync(20_001);
-
-            await outcome;
+            await Promise.all([
+                expect(render).rejects.toBeInstanceOf(RenderTimeoutError),
+                jest.advanceTimersByTimeAsync(20_001)
+            ]);
             // Closed once, by the deadline: never twice, which would reject and replace the answer.
             expect(close).toHaveBeenCalledTimes(1);
         });

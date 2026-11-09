@@ -253,7 +253,7 @@ describe.each(
 
         await fuzzAs(operation, undefined, world, REFUSED_CALLER_RUNS, (response) => {
             neverCrashesOffContract(response);
-            if (operation.requiresAuth) expect(response.status).toBe(401);
+            expect(operation.requiresAuth && response.status !== 401).toBe(false);
         });
     }, 120_000);
 });

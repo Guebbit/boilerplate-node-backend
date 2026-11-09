@@ -112,25 +112,28 @@ describe('the invariants', () => {
         ).rejects.toThrow(AccessInvariantError);
     });
 
-    it('refuses to grant what the granter does not hold', async () => {
+    it('refuses a granter who does not hold assign:Role', async () => {
         const shop = await accessService.ensureTenant('shop', 'The Shop');
 
         // The single most common way these systems fail: a role editor that lets a support agent
-        // hand somebody the keys they do not have themselves.
+        // hand out roles without the one permission that allows it.
         await expect(
             accessService.assignRole('person-1', String(shop._id), 'tenant', 'admin', ['read:Task'])
         ).rejects.toThrow(/privilege-escalation/);
     });
 
-    it('allows a granter to hand over exactly what they hold', async () => {
+    it('lets a holder of assign:Role grant an assignable tenant role', async () => {
         const shop = await accessService.ensureTenant('shop', 'The Shop');
         // A role's keys are a pure YAML lookup now — no membership or tenant involved in reading
         // what `admin` holds, only in who holds it.
         const granter = permissionsOfRole('admin');
 
-        await expect(
-            accessService.assignRole('person-1', String(shop._id), 'tenant', 'manager', granter)
-        ).resolves.toBeDefined();
+        await accessService.assignRole('person-1', String(shop._id), 'tenant', 'manager', granter);
+
+        expect(await accessService.rolesOf('person-1', String(shop._id))).toEqual({
+            tenant: 'manager',
+            platform: null
+        });
     });
 
     it('removes even the last member who can administer a shop, leaving it with none', async () => {

@@ -15,6 +15,7 @@ import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
  * PUT /cart/shipping-method
  * Sets, or clears (`null`), the shipping method the cart plans to ship by. Returns the updated
  * cart, priced against the choice.
+ * No `If-Match`: no GET on this URL; the cart has its own line rules.
  */
 export const putCartShippingMethod = (
     request: Request<unknown, unknown, SetCartShippingMethodRequest>,
