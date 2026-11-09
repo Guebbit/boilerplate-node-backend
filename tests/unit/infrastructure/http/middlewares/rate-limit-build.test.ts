@@ -311,8 +311,6 @@ describe('buildRateLimiter — escalation', () => {
     });
 });
 
-describe('buildRateLimiter — store errors', () => {});
-
 describe('chargeBudget', () => {
     it('allows hits up to the limit and refuses past it', async () => {
         const budget = budgetOf(2);

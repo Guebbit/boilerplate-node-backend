@@ -53,7 +53,7 @@ paths:
             summary: List payments (staff)
             description: >-
                 Every payment in the shop, newest first, for the staff Payments page. Needs
-                `display:Payment`; the payer reads their own through `GET /payments/orders/{orderId}`.
+                `display:Payment`; the payer reads their own through `GET /orders/{id}/payments`.
                 `displayStatus` filters by the label the page shows, and the server maps each label to
                 the stored fields behind it. Each row carries its order's `orderNumber` and `email`,
                 composed from `orders`. Each row carries `actions` for the caller, so a client never
@@ -899,7 +899,7 @@ components:
                     description: >-
                         How the money moved. `card` for anything that went through the provider
                         port; the other three are set only by `POST
-                        /payments/orders/{orderId}/offline`, from what the admin chose there.
+                        /orders/{id}/payments`, from what the admin chose there.
                 reference:
                     type: string
                     maxLength: 120
@@ -913,7 +913,7 @@ components:
                     description: >-
                         When the money actually arrived, as the admin recording it reported —
                         possibly earlier than `createdAt`. Set only by `POST
-                        /payments/orders/{orderId}/offline`; absent from a card payment.
+                        /orders/{id}/payments`; absent from a card payment.
                 clientSecret:
                     type: string
                     description: >-

@@ -367,7 +367,9 @@ components:
                 pattern: '^("[A-Za-z0-9_-]{1,200}"|[A-Za-z0-9_-]{1,200})$'
             description: >
                 An opaque, client-generated value (a UUID by convention) that makes a retried
-                write safe. Repeating this request with the SAME key and the SAME body replays
+                write safe. A key belongs to its caller (the account, or the address on a public
+                route): two callers sending the same value never see each other's replies.
+                Repeating this request with the SAME key and the SAME body replays
                 the first response (`Idempotent-Replayed: true`, no repeated write) instead of
                 running it again; the same key with a DIFFERENT body answers 422; a key still
                 being processed by another in-flight request answers 409. Omitting the header

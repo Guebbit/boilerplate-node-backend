@@ -469,7 +469,7 @@ components:
                 ordered:
                     type: integer
                     minimum: 0
-                    description: Lifetime units claimed through `preorder` movements in the ledger, given back or not.
+                    description: Lifetime units claimed through `backorder` movements in the ledger, given back or not.
 
         PreorderLevelsResponse:
             type: object

@@ -421,8 +421,8 @@ name. It needs a `reason` and writes a `status_overridden` row on the
 itself, and recording an arrival has no forced variant either.
 
 - `POST /orders/{id}/status-override` with `{ to, reason }` moves the status
-  alone, forward to `processing`/`shipped`/`delivered` only. No shipped email — but webhooks still fire,
-  since a subscriber's own view of the order genuinely changed.
+  alone, forward to `processing`/`shipped`/`delivered` only. No shipped email and no webhook: an override never lands on `paid`, the only status change
+  a subscriber hears, and the shipments it cuts for `delivery` are silent too.
 
 The status-only door announces `order.status_overridden {orderId, from, to, at}` through the outbox,
 in its own transaction, and [`delivery`](./delivery.md#the-status-override) listens: forward to
@@ -796,11 +796,11 @@ never pause anyone. The same limit and window only FLAG the account for a person
 are two doors to the same act, the cancel button and a withdrawal through `POST /returns` before
 dispatch, and both count.
 
-| Count                | What it counts                                                                                                                                             | What happens                                                            |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| **Pause** (and flag) | UNPAID cancels by the buyer, by either door (cause `customer` or `withdrawal`), plus orders whose reservation ran out unpaid (cause `reservation_expired`) | checkout answers `409`, for at most 7 days; staff are mailed ("paused") |
-| **Flag only**        | PAID cancels by the buyer, by either door                                                                                                                  | nothing is paused; staff are mailed ("review only"), once               |
-| Never counts         | a cancel by staff, an erasure, a payment mismatch; returns after delivery                                                                                  |                                                                         |
+| Count                | What it counts                                                                                                                                             | What happens                                                                                                                               |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Pause** (and flag) | UNPAID cancels by the buyer, by either door (cause `customer` or `withdrawal`), plus orders whose reservation ran out unpaid (cause `reservation_expired`) | checkout answers `409`, for at most 7 days; staff are mailed ("paused")                                                                    |
+| **Flag only**        | PAID cancels by the buyer, by either door                                                                                                                  | nothing is paused; an `account_review` task opens (`user.review_flagged`), and its notice reaches UserBanning staff by bell and mail, once |
+| Never counts         | a cancel by staff, an erasure, a payment mismatch; returns after delivery                                                                                  |                                                                                                                                            |
 
 Both counts read the order timeline (`canceled` rows: `by` and, for the system's causes, `cause`),
 only the rows after the last hold was set or staff last acted on the account (set or lifted a hold),
@@ -817,7 +817,7 @@ flowchart TD
     unpaid -- no --> paid{"paid pile<br/>reached the limit?"}
     paid -- yes --> flag["users — flagPurchaseHoldReview<br/>one atomic write: flag only"]
     flag --> flagged{"this call set it?"}
-    flagged -- yes --> notify2["audit row + mail to staff: review only"]
+    flagged -- yes --> notify2["audit row + account_review task<br/>(its notice mails UserBanning staff)"]
     flagged -- no --> done
     paid -- no --> done
 ```

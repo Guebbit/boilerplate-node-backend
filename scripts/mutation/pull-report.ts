@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { REPORT_PATH } from './baseline';
-import type { GitHubArtifact } from './github-artifacts';
+import type { GitHubArtifact, MissingReason } from './github-artifacts';
 import { REPORT_ARTIFACT, newestReport } from './github-artifacts';
 
 /** `execFile`, promise-shaped: arguments are passed as a list, never through a shell. */
@@ -84,13 +84,40 @@ const foldBaseline = (): number =>
         { stdio: 'inherit' }
     ).status ?? 2;
 
+/**
+ * One line per way {@link newestReport} can come up empty, each saying what to do next.
+ *
+ * @param reason - which rule emptied the list
+ * @param artifacts - the listing the reason was drawn from
+ * @returns the error text
+ */
+const missingMessage = (reason: MissingReason, artifacts: readonly GitHubArtifact[]): string => {
+    const named = artifacts.filter((artifact) => artifact.name === REPORT_ARTIFACT);
+    if (reason === 'none-uploaded')
+        return (
+            `no ${REPORT_ARTIFACT} artifact exists: no sweep of main has reached its merge job ` +
+            '(it runs only after a green preflight). Check `gh workflow list --all` and ' +
+            '`gh run list --workflow mutation.yml --branch main`.'
+        );
+    if (reason === 'none-from-main')
+        return (
+            `${REPORT_ARTIFACT} artifacts exist only for other branches: ` +
+            `${[...new Set(named.map((artifact) => artifact.workflow_run.head_branch))].join(', ')}.`
+        );
+    const newest =
+        named
+            .map((artifact) => artifact.created_at)
+            .toSorted()
+            .at(-1) ?? 'unknown';
+    return `every ${REPORT_ARTIFACT} artifact from main has expired (newest ${newest}): re-run the sweep.`;
+};
+
 // Exit 1 when no sweep has uploaded a report yet, or GitHub cannot be reached.
 listArtifacts()
     .then((artifacts) => {
-        const artifact = newestReport(artifacts);
-        if (!artifact)
-            throw new Error(`no unexpired ${REPORT_ARTIFACT} artifact from a sweep of main`);
-        return install(artifact);
+        const found = newestReport(artifacts);
+        if ('missing' in found) throw new Error(missingMessage(found.missing, artifacts));
+        return install(found.artifact);
     })
     .then(() => {
         process.exitCode = foldBaseline();
