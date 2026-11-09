@@ -503,6 +503,8 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
   `tests/cross-cutting/cache-policy-declared.test.ts` walks the mounted routers and holds them
   equal to the `x-cache` operations, both ways.
   The sitemap streams its XML and carries no `ETag`, so it is not one of them.
+- **`no-store` reads get no declared `304`**: a compliant cache never revalidates them. A client that
+  sends `If-None-Match` anyway is still answered per RFC 9110 §13.1.2, undeclared.
 - **Browsers** may send `If-Match` and read `ETag` cross-origin: both are in the CORS allow and
   expose lists.
 

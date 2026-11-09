@@ -39,7 +39,7 @@ export const previewDraftLanguage = (
     request.locale = context.locale;
     request.t = context.t;
     response.set('Content-Language', draft);
-    markDraftPreview(request, response);
+    markDraftPreview(response);
 
     runWithLocaleContext(context, next);
 };

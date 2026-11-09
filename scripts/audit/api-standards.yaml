@@ -8,7 +8,9 @@
 #               idempotency-key | google-aip | zalando
 #   section     the part of the standard the rule comes from (a name, not a number).
 #   rule        one testable sentence about THIS API.
-#   source      the clause, as a URL. The audit re-reads it; the sentence above is a summary.
+#   house       optional: what this API adds on top of the standard (a house choice, not the RFC).
+#   source      the clause, as a URL, or a list of URLs when the rule joins several clauses. The
+#               audit re-reads each; the sentence above is a summary.
 #   evidence    where to look: contract JSONPaths (root openapi.yaml), code paths, docs pages.
 #   lint        possible = a mechanical finding is REPORTED only, never turned into a Spectral rule.
 #               no = judgement only.
@@ -60,19 +62,28 @@ rules:
       lint: no
       difference: line-answers-parent
 
-    - id: rfc9110-conditional-writes
+    - id: rfc9110-conditional-requests
       standard: rfc9110
       section: conditional requests
-      rule: Every versioned resource sends an `ETag`, honours `If-Match` on its writes, and its docs table lists exactly the resources that do.
-      source: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1
+      rule: An origin server that receives `If-Match` MUST evaluate it before performing the method, using the strong comparison (§13.1.1), and one that receives `If-None-Match` on a request that selects a representation MUST evaluate it, answering a GET or HEAD whose tag matches with 304 (§13.1.2).
+      house: Every read the contract declares a `304` on (`x-cache` other than `no-store`) sends an `ETag` (RFC 9110 §8.8.3 SHOULD), the two-part `"<editRevision>.<digest>"` one on a versioned item read, and the versioned-resources table lists exactly the `x-versioned` paths (docs/api/write-methods.md#conditional-writes-etag-and-if-match).
+      source:
+          [
+              https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1,
+              https://www.rfc-editor.org/rfc/rfc9110#section-13.1.2,
+              https://www.rfc-editor.org/rfc/rfc9110#section-8.8.3
+          ]
       evidence:
           [
               docs/api/write-methods.md#which-resources-are-versioned,
               scripts/contracts/openapi-bundle.ts,
-              src/infrastructure/http/preconditions.ts
+              src/infrastructure/http/preconditions.ts,
+              src/infrastructure/persistence/versioning.ts,
+              src/infrastructure/http/middlewares/cache.ts,
+              src/app/security.ts
           ]
       lint: no
-      difference: if-match-edit-version
+      difference: [if-match-edit-version]
 
     # RFC 9111, caching.
     - id: rfc9111-no-store-on-errors

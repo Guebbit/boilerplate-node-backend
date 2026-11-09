@@ -75,7 +75,7 @@ visitor.
 | Decision | `cacheable = !draftPreview && scopeKey(request)`. The flag wins over `scopeKey`             |
 | Redis    | No key is built, nothing is read, nothing is written. `armCacheWrite` refuses a second time |
 | Headers  | `private, no-store` on GET and POST. `privateNoCache` keeps it. `Vary` is unchanged         |
-| 304      | `If-None-Match` / `If-Modified-Since` are dropped, as `noStore` does                        |
+| 304      | Evaluated as on every read (RFC 9110 §13.1.2); only the same preview answer can match       |
 | Order    | Mount before `setCache`: its key is built from `request.locale`                             |
 
 Why not trust `scopeKey`: a custom role or an API key can hold `display:Locale` without

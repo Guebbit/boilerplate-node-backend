@@ -1137,7 +1137,7 @@ describe('a draft preview', () => {
     it('wins over a scopeKey that says the caller shares the visitors entry: no read, private, no-store', async () => {
         const { response, headers } = createResponse();
         const request = getRequest();
-        markDraftPreview(request, response);
+        markDraftPreview(response);
         const next = jest.fn() as NextFunction;
 
         await setCache(60, { tags: ['products'], keyParameters: [], scopeKey: GUEST_SCOPE })(
@@ -1160,7 +1160,7 @@ describe('a draft preview', () => {
             locale: 'de',
             headers: {}
         });
-        markDraftPreview(request, response);
+        markDraftPreview(response);
 
         await setCache(60, {
             tags: ['products'],
@@ -1192,18 +1192,9 @@ describe('a draft preview', () => {
         expect(mockedCache.setCacheValue).not.toHaveBeenCalled();
     });
 
-    it('drops conditional request headers, so no 304 can answer without a body', () => {
-        const { response } = createResponse();
-        const headers = { 'if-none-match': '"abc"', 'if-modified-since': 'Wed, 21 Oct 2015' };
-
-        markDraftPreview(asStub<Request>({ headers }), response);
-
-        expect(headers).toEqual({});
-    });
-
     it('leaves privateNoCache from downgrading it to no-cache', () => {
         const { response, headers } = createResponse();
-        markDraftPreview(asStub<Request>({ headers: {} }), response);
+        markDraftPreview(response);
 
         privateNoCache(asStub<Request>({ headers: {} }), response, jest.fn() as NextFunction);
 
@@ -1228,7 +1219,7 @@ describe('noStore', () => {
         expect(response.locals.noStore).toBe(true);
     });
 
-    it('drops conditional request headers, so a stale ETag cannot short-circuit to a bodyless 304', () => {
+    it('leaves the conditional headers for Express to evaluate (RFC 9110 §13.1.2)', () => {
         const { response } = createResponse();
         const headers: Record<string, string> = {
             'if-none-match': '"abc"',
@@ -1237,8 +1228,8 @@ describe('noStore', () => {
 
         noStore(asStub<Request>({ headers }), response, jest.fn() as NextFunction);
 
-        expect(headers['if-none-match']).toBeUndefined();
-        expect(headers['if-modified-since']).toBeUndefined();
+        expect(headers['if-none-match']).toBe('"abc"');
+        expect(headers['if-modified-since']).toBe('Wed, 21 Oct 2015 07:28:00 GMT');
     });
 
     it('calls next', () => {

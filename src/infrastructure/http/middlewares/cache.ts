@@ -651,27 +651,24 @@ export const invalidateCache =
 
 /**
  * Whether this response is a staff preview of a draft language — see {@link markDraftPreview}.
- * `setCache` and `privateNoCache` read it, so the preview never reaches Redis or a 304.
+ * `setCache` and `privateNoCache` read it, so the preview never reaches Redis or a stored copy.
  */
 export const isDraftPreview = (response: Response): boolean =>
     response.locals.draftPreview === true;
 
 /**
- * Mark the response as a draft preview: `private, no-store`, no conditional answer, and a flag
- * the cache middlewares above honour (no key built, no Redis read, no Redis write).
+ * Mark the response as a draft preview: `private, no-store`, and a flag the cache middlewares
+ * above honour (no key built, no Redis read, no Redis write).
  *
  * Mounted BEFORE `setCache`, whose key is built from `request.locale`: run after it, a draft
  * answer would be stored under a live language's key.
  * See docs/tools/redis-cache.md#draft-previews
  */
-export const markDraftPreview = (request: Request, response: Response): void => {
+export const markDraftPreview = (response: Response): void => {
     response.locals.draftPreview = true;
     response.set('Cache-Control', 'private, no-store');
     response.vary('Authorization');
     response.vary('Accept-Language');
-    // Same reason as `noStore`: a non-compliant client would otherwise get a bodyless 304.
-    delete request.headers['if-none-match'];
-    delete request.headers['if-modified-since'];
 };
 
 /**
@@ -684,17 +681,14 @@ export const markDraftPreview = (request: Request, response: Response): void => 
  * storing and revalidating, which is exactly the 304 path that causes this.
  *
  * Marks `response.locals.noStore` for `setCache` above to check and refuse — see that guard.
+ *
+ * No credential is minted on a GET, so a 304 here can only confirm bytes the caller already
+ * holds: a client that sends `If-None-Match` anyway is answered per RFC 9110 §13.1.2.
  */
-export const noStore = (request: Request, response: Response, next: NextFunction) => {
+export const noStore = (_request: Request, response: Response, next: NextFunction) => {
     // A draft preview keeps its `private`: `no-store` either way, but the answer is one person's.
     response.set('Cache-Control', isDraftPreview(response) ? 'private, no-store' : 'no-store');
     response.locals.noStore = true;
-
-    // `no-store` only stops a COMPLIANT client from revalidating. A non-compliant one sending
-    // `If-None-Match` regardless would still get a 304 from Express' own freshness check —
-    // dropping the conditional headers here means this endpoint can only answer a full body.
-    delete request.headers['if-none-match'];
-    delete request.headers['if-modified-since'];
 
     next();
 };
