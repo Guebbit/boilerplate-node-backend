@@ -54,6 +54,17 @@ describe('POST /payments/webhook/:provider without a body', () => {
         expect(errorLog).not.toHaveBeenCalled();
     });
 
+    it('answers 400 and logs no error for a bodyless POST the JSON parser skips', async () => {
+        // `text/plain` is not parsed, so no raw body is kept: the only bodyless shape that reaches
+        // the controller with `rawBody` unset (an empty JSON request keeps an empty buffer).
+        const response = await webhookApp(true)
+            .post('/payments/webhook/fake')
+            .set('Content-Type', 'text/plain');
+
+        expect(response.status).toBe(400);
+        expect(errorLog).not.toHaveBeenCalled();
+    });
+
     it('still logs the parser-ordering error when a body was sent but no raw body arrived', async () => {
         const response = await webhookApp(false)
             .post('/payments/webhook/fake')
