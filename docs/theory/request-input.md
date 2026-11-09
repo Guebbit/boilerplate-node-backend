@@ -174,18 +174,15 @@ spelled, purely on the strength of its transport. OR has no such asymmetry — t
 a hard delete is for someone to have asked for one, and the only way to avoid one is for nobody
 to have.
 
-**An unparseable enum filter narrows; an unparseable enum on a write is refused.** The same input,
-two dispositions, because the safe direction differs:
+**A value outside an enum is refused, on a read as on a write.**
 
-| Where           | Value outside the closed set                                   |
-| --------------- | -------------------------------------------------------------- |
-| absent          | the filter is not applied                                      |
-| a READ's filter | matches nothing — never widened to "return everything"         |
-| a WRITE's field | 422, from the generated Zod enum, before any handler code runs |
+| Where                              | Value outside the closed set                                   |
+| ---------------------------------- | -------------------------------------------------------------- |
+| absent                             | the filter is not applied                                      |
+| a READ's filter or a WRITE's field | 422, from the generated Zod enum, before any handler code runs |
 
-A read can fail closed and still answer; a write has no safe narrowing of a value it cannot
-understand, only a rejection. `status` on orders is the live pair — the read filter in
-`src/modules/orders` and the write-side enum in the generated Zod schema.
+A typo never reads as "no rows": the caller learns its filter was wrong. `request-contract.test.ts`
+walks every enum query parameter.
 
 ## Declaring it
 
