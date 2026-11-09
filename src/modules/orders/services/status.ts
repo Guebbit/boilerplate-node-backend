@@ -22,6 +22,8 @@ import {
     UNDELIVERABLE_EVENT,
     isDigitalOnlyOrder,
     isPayable,
+    NO_FULFILLMENT,
+    settlementFor,
     type OrderEventName,
     type TimelineEntryInput,
     conformityUntilFrom,
@@ -206,8 +208,9 @@ export const markShipped = (
 
 /**
  * Report that a shipment was reported lost while the order was `shipped`: units are open again, so
- * the order goes back to `processing`. `delivery`'s lost-parcel act calls this inside its own
- * transaction, only when the order is `shipped`; from any other status it matches nothing.
+ * the order goes back to `processing`. Reached through {@link reopenForFulfillment} from `delivery`'s
+ * lost-parcel act and its replacement reopening, inside their transactions; from any other status it
+ * matches nothing.
  * @param orderId - the order the lost shipment belongs to
  * @param session - the act's transaction; this move commits with the loss or not at all
  * @param actor - the staff member who reported the loss, for the order's history
@@ -222,8 +225,8 @@ export const markReopened = (
 /**
  * Report that a replacement under the legal guarantee is being sent: the returned units are open
  * again on a `delivered` order, so it goes back to `processing` and ships through the ordinary
- * door. `returns`' receive calls this inside its own transaction; from any other status it
- * matches nothing.
+ * door. Reached through {@link reopenForFulfillment} from `delivery`'s `reship.ts`, inside the
+ * transaction of `returns`' receive; from any other status it matches nothing.
  * @param orderId - the order the replacement belongs to
  * @param session - the receipt's transaction; this move commits with it or not at all
  * @param actor - the staff member who received the goods, for the order's history
@@ -384,6 +387,76 @@ export const markUndeliverable = (
               }
             : null
     );
+
+/** What {@link settleFulfillment} did: the post-commit callback, when the settlement canceled. */
+export interface FulfillmentSettlement {
+    /** Set when the order ended `canceled` (a lost parcel); the transaction's owner calls it AFTER the commit. */
+    reportCanceled: (() => void) | undefined;
+}
+
+/**
+ * Move the order's status when its stored fulfillment summary says it is due, and only then. The
+ * summary is read inside the act's transaction, after `recordFulfillmentProgress` wrote it, so the
+ * status and the summary it follows cannot disagree. `delivery` states the fact (the summary is
+ * written); `orders` picks the edge, from {@link settlementFor}.
+ *
+ * Never called by the summary write itself: an admin override to `shipped` commits before its
+ * sync runs, and settling from "units remain" there would undo it.
+ * @param orderId - the order
+ * @param at - the instant the clock starts for a completed order: the last arrival, or the cancel
+ * @param session - the act's transaction
+ * @param actor - the staff member whose act this is, for the timeline; absent for the system
+ * @returns what was done (nothing is also an answer), or `null` when a move was due and did not land
+ *   (the order was not where the move needs it)
+ */
+export const settleFulfillment = (
+    orderId: string,
+    at: Date,
+    session: ClientSession,
+    actor?: string | null
+): Promise<FulfillmentSettlement | null> =>
+    orderRepository.findInSession(orderId, session).then((order) => {
+        if (!order) return null;
+        const move = settlementFor(order.status, order.fulfillment ?? NO_FULFILLMENT);
+        const settled = { reportCanceled: undefined };
+        if (!move) return settled;
+        if (move === 'undeliverable')
+            return markUndeliverable(orderId, session).then((result) =>
+                result ? { reportCanceled: result.reportCanceled } : null
+            );
+        const moved =
+            move === 'ship'
+                ? markShipped(orderId, session, actor)
+                : move === 'deliver'
+                  ? markDelivered(orderId, at, session, actor)
+                  : markFulfillmentComplete(orderId, at, session, actor);
+        return moved.then((result) => (result ? settled : null));
+    });
+
+/**
+ * Put the order back to being fulfilled, because units are open again: a `shipped` order (a lost
+ * parcel) takes `reopen`, a `delivered` one (a replacement) takes `reship`, a `processing` one is
+ * already there. Any other status cannot be sent to.
+ * @param orderId - the order
+ * @param session - the caller's transaction; the move commits with it or not at all
+ * @param actor - the staff member whose act this is, for the order's history
+ * @returns `true` when the order is now `processing`, `null` when it could not be put there
+ */
+export const reopenForFulfillment = (
+    orderId: string,
+    session: ClientSession,
+    actor?: string | null
+): Promise<true | null> =>
+    orderRepository.findInSession(orderId, session).then((order) => {
+        if (order?.status === OrderStatus.processing) return true;
+        if (order?.status !== OrderStatus.shipped && order?.status !== OrderStatus.delivered)
+            return null;
+        const move =
+            order.status === OrderStatus.delivered
+                ? markReshipped(orderId, session, actor)
+                : markReopened(orderId, session, actor);
+        return move.then((moved) => (moved ? true : null));
+    });
 
 /**
  * Report where an order's money stands once a refund exists. `payments`' own door for this — the

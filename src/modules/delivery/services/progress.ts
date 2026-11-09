@@ -7,7 +7,6 @@
  */
 
 import type { ClientSession } from 'mongoose';
-import { OrderStatus } from '@types';
 import { canProcessOrder, orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { ERROR_CODES } from '@api/error-codes';
@@ -73,69 +72,26 @@ export const startFulfillment = async (
 };
 
 /**
- * The order's status move failed to land: it was not where the act needed it. The act aborts.
- * @param moved - what the `orders` door answered
- */
-const expectMoved = (moved: OrderDocument | null): void => {
-    if (!moved) refuse(409, ERROR_CODES.ORDER_NOT_PROCESSING, 'delivery.not-processing');
-};
-
-/**
- * Move the order's status when the summary says it is due — and only then:
- *
- * | The summary says | The order moves |
- * | --- | --- |
- * | units remain, or nothing shipped | nowhere |
- * | nothing remains, a shipment is still out | `processing → shipped` |
- * | nothing remains, every shipment arrived | `shipped → delivered`, or both at once from `processing` |
- * | nothing remains, nothing out, nothing ever arrived | `processing → canceled` (cause `lost`) |
- *
- * The third row from `processing` is the one named double move: a digital fulfillment, or a remainder
- * canceled after every shipment had already arrived. The last row is a lost parcel whose remainder
- * was canceled and refunded: the order never delivered anything, so it does not claim to have.
+ * Ask `orders` to settle its status from the summary the act just wrote, and refuse the act when a
+ * move was due and did not land. `orders` picks the edge (ship, deliver, both at once, or the
+ * lost-parcel cancel); this module only states that the goods moved.
  *
  * @param orderId - the order
- * @param status - the order's status as the summary write left it
- * @param summary - where the goods stand
  * @param at - the instant the clock starts for a completed order: the last arrival, or the cancel
  * @param session - the act's transaction
  * @param actor - the staff member whose act this is, for the order's timeline; absent for the system
  * @returns a report-after-commit callback when the settlement canceled the order (a lost parcel);
  *   the caller owns the transaction, so it calls it once that commits
+ * @throws {ActRefusal} 409 `ORDER_NOT_PROCESSING` when a due move found the order elsewhere
  */
 export const settleOrder = (
     orderId: string,
-    status: OrderStatus,
-    summary: FulfillmentReport,
     at: Date,
     session: ClientSession,
     actor?: string | null
-): Promise<(() => void) | undefined> => {
-    if (summary.remaining > 0 || !summary.shipped) return Promise.resolve(undefined);
-
-    if (summary.undelivered > 0)
-        return status === OrderStatus.processing
-            ? orderService
-                  .markShipped(orderId, session, actor)
-                  .then(expectMoved)
-                  .then(() => undefined)
-            : Promise.resolve(undefined);
-
-    // A digital fulfillment is a shipment born delivered, so `lastDeliveredAt` covers it too.
-    if (status === OrderStatus.processing && !summary.lastDeliveredAt)
-        return orderService.markUndeliverable(orderId, session).then((settled) => {
-            expectMoved(settled?.order ?? null);
-            return settled?.reportCanceled;
-        });
-    if (status === OrderStatus.processing)
-        return orderService
-            .markFulfillmentComplete(orderId, at, session, actor)
-            .then(expectMoved)
-            .then(() => undefined);
-    if (status === OrderStatus.shipped)
-        return orderService
-            .markDelivered(orderId, at, session, actor)
-            .then(expectMoved)
-            .then(() => undefined);
-    return Promise.resolve(undefined);
-};
+): Promise<(() => void) | undefined> =>
+    orderService.settleFulfillment(orderId, at, session, actor).then((settled) => {
+        if (!settled)
+            return refuse(409, ERROR_CODES.ORDER_NOT_PROCESSING, 'delivery.not-processing');
+        return settled.reportCanceled;
+    });

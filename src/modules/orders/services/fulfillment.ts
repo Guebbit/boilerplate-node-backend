@@ -17,7 +17,7 @@ import { isPayable, type FulfillmentSummary } from '../domain';
 
 /**
  * Report where the goods stand, replacing the last report. The write is conditional on the order
- * still being fulfillable (`paid`, `processing` or `shipped`), which is what makes a shipment and
+ * still being fulfillable (`paid`, `processing`, `shipped` or `delivered`), which is what makes a shipment and
  * a cancel racing each other resolve to exactly one winner.
  *
  * @param orderId - the order

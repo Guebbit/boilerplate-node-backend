@@ -136,10 +136,8 @@ const lostAct = async (
 
     // Units are open again, so a `shipped` order is being fulfilled once more.
     await reportProgress(orderId, session);
-    if (order.status === 'shipped') {
-        const moved = await orderService.markReopened(orderId, session, context.caller.id);
-        if (!moved) return refuseNotLosable();
-    }
+    const processing = await orderService.reopenForFulfillment(orderId, session, context.caller.id);
+    if (!processing) return refuseNotLosable();
 
     await announceLost(
         shipment,

@@ -78,8 +78,8 @@ const fulfillAct = async (
     );
     // From `paid` the act makes the `start` move itself, before the summary and the settle read it.
     await startFulfillment(order, session, actor);
-    const progress = await reportProgress(orderId, session);
-    await settleOrder(orderId, progress.order.status, progress.summary, at, session, actor);
+    await reportProgress(orderId, session);
+    await settleOrder(orderId, at, session, actor);
     await announceShipped(shipment, session, actor);
     await announceDelivered(shipment, session, actor);
 

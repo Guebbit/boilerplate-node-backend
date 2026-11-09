@@ -10,6 +10,7 @@ import {
     NO_FULFILLMENT,
     fulfillmentStatusFilter,
     fulfillmentStatusOf,
+    settlementFor,
     type FulfillmentSummary
 } from '../../domain';
 
@@ -152,5 +153,53 @@ describe('fulfillmentStatusFilter', () => {
         expect(selected).toEqual(expected);
         // Every value is reachable by some sample, so an empty answer cannot pass for the right one.
         expect(expected.length).toBeGreaterThan(0);
+    });
+});
+
+describe('settlementFor', () => {
+    const arrived = new Date('2026-04-10T15:00:00Z');
+
+    it.each<[string, OrderStatus, Partial<FulfillmentSummary>, string | undefined]>([
+        ['units remain', OrderStatus.processing, { shipped: true, remaining: 1 }, undefined],
+        ['nothing shipped', OrderStatus.processing, { remaining: 0 }, undefined],
+        [
+            'the last unit left, a shipment is out',
+            OrderStatus.processing,
+            { shipped: true, undelivered: 1 },
+            'ship'
+        ],
+        [
+            'a shipment is out and the order is already shipped',
+            OrderStatus.shipped,
+            { shipped: true, undelivered: 1 },
+            undefined
+        ],
+        [
+            'everything arrived, from processing',
+            OrderStatus.processing,
+            { shipped: true, lastDeliveredAt: arrived },
+            'complete'
+        ],
+        [
+            'everything arrived, from shipped',
+            OrderStatus.shipped,
+            { shipped: true, lastDeliveredAt: arrived },
+            'deliver'
+        ],
+        [
+            'nothing ever arrived, from processing',
+            OrderStatus.processing,
+            { shipped: true },
+            'undeliverable'
+        ],
+        ['nothing ever arrived, from shipped', OrderStatus.shipped, { shipped: true }, 'deliver'],
+        [
+            'everything arrived, already delivered',
+            OrderStatus.delivered,
+            { shipped: true, lastDeliveredAt: arrived },
+            undefined
+        ]
+    ])('%s', (_name, status, fields, expected) => {
+        expect(settlementFor(status, summary(fields))).toBe(expected);
     });
 });

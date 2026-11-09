@@ -56,6 +56,39 @@ export const shipsAwaitedStock = (
     (to === OrderStatus.shipped || to === OrderStatus.delivered) && summary.awaitingStock > 0;
 
 /**
+ * The status move a fulfillment summary makes due. `ship` and `deliver` are the plain forward
+ * moves, `complete` is the double move to `delivered` in one act, `undeliverable` is the lost-parcel
+ * settlement that cancels.
+ */
+export type SettlementMove = 'ship' | 'deliver' | 'complete' | 'undeliverable';
+
+/**
+ * Which status move, if any, the summary makes due for an order in `status`:
+ *
+ * | The summary says | The order moves |
+ * | --- | --- |
+ * | units remain, or nothing shipped | nowhere |
+ * | nothing remains, a shipment is still out | `processing -> shipped` |
+ * | nothing remains, every shipment arrived | `shipped -> delivered`, or both at once from `processing` |
+ * | nothing remains, nothing out, nothing ever arrived | `processing -> canceled` (cause `lost`) |
+ *
+ * A digital fulfillment is a shipment born delivered, so `lastDeliveredAt` covers it too.
+ * @param status - the order's status as the summary write left it
+ * @param summary - where the goods stand
+ * @returns the move, or `undefined` when nothing is due
+ */
+export const settlementFor = (
+    status: OrderStatus,
+    summary: FulfillmentSummary
+): SettlementMove | undefined => {
+    if (summary.remaining > 0 || !summary.shipped) return undefined;
+    if (summary.undelivered > 0) return status === OrderStatus.processing ? 'ship' : undefined;
+    if (status === OrderStatus.processing)
+        return summary.lastDeliveredAt ? 'complete' : 'undeliverable';
+    return status === OrderStatus.shipped ? 'deliver' : undefined;
+};
+
+/**
  * Whether every remaining unit is held back — the order has goods to send and none of them may go.
  * @param summary - the order's fulfillment summary
  */

@@ -16,6 +16,7 @@ import {
     markFulfillmentComplete
 } from '../../services/status';
 import { orderService } from '../../services';
+import { NO_FULFILLMENT, type FulfillmentSummary } from '../../domain';
 import { ORDER_STATUS_CHANGED } from '../../events';
 import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { nudgeOutbox, outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
@@ -301,4 +302,176 @@ describe('two callers racing the same move', () => {
         await settleOutboxNudges();
         expect(events).toHaveLength(1);
     });
+});
+
+/**
+ * Write the summary the way `delivery` does, then ask `orders` to settle, in one transaction: the
+ * order reads its own stored summary, as it does inside a real act.
+ */
+const settleAfterSummary = (
+    orderId: string,
+    fields: Partial<FulfillmentSummary>,
+    at: Date,
+    session: ClientSession
+) =>
+    orderService
+        .recordFulfillmentProgress(orderId, { ...NO_FULFILLMENT, ...fields }, session)
+        .then(() => orderService.settleFulfillment(orderId, at, session, 'admin-1'));
+
+describe('settleFulfillment', () => {
+    it('ships a processing order once the last unit left and a shipment is out', async () => {
+        const order = await seedOrder(OrderStatus.processing);
+
+        const settled = await inTransaction((session) =>
+            settleAfterSummary(
+                String(order._id),
+                { shipped: true, undelivered: 1 },
+                new Date(),
+                session
+            )
+        );
+
+        expect(settled).toEqual({ reportCanceled: undefined });
+        expect(await readOrder(String(order._id)).then((one) => one?.status)).toBe(
+            OrderStatus.shipped
+        );
+    });
+
+    it('delivers a shipped order once every shipment arrived, the clock from the arrival', async () => {
+        const order = await seedOrder(OrderStatus.shipped);
+
+        await inTransaction((session) =>
+            settleAfterSummary(
+                String(order._id),
+                { shipped: true, lastDeliveredAt: new Date('2026-06-01T08:00:00Z') },
+                new Date('2026-06-01T08:00:00Z'),
+                session
+            )
+        );
+
+        const stored = await readOrder(String(order._id));
+        expect(stored?.status).toBe(OrderStatus.delivered);
+        expect(stored?.withdrawUntil?.toISOString()).toBe('2026-07-01T23:59:59.999Z');
+    });
+
+    it('completes a processing order in one act when everything arrived', async () => {
+        const order = await seedOrder(OrderStatus.processing);
+
+        await inTransaction((session) =>
+            settleAfterSummary(
+                String(order._id),
+                { shipped: true, lastDeliveredAt: new Date() },
+                new Date(),
+                session
+            )
+        );
+
+        expect(await readOrder(String(order._id)).then((one) => one?.status)).toBe(
+            OrderStatus.delivered
+        );
+    });
+
+    it('cancels with cause lost when nothing ever arrived, handing back the report callback', async () => {
+        const order = await seedOrder(OrderStatus.processing);
+
+        const settled = await inTransaction((session) =>
+            settleAfterSummary(String(order._id), { shipped: true }, new Date(), session)
+        );
+
+        expect(settled?.reportCanceled).toEqual(expect.any(Function));
+        expect(await readOrder(String(order._id)).then((one) => one?.status)).toBe(
+            OrderStatus.canceled
+        );
+    });
+
+    it('moves nothing while units remain', async () => {
+        const order = await seedOrder(OrderStatus.processing);
+
+        const settled = await inTransaction((session) =>
+            settleAfterSummary(
+                String(order._id),
+                { shipped: true, remaining: 2, undelivered: 1 },
+                new Date(),
+                session
+            )
+        );
+
+        expect(settled).toEqual({ reportCanceled: undefined });
+        expect(await readOrder(String(order._id)).then((one) => one?.status)).toBe(
+            OrderStatus.processing
+        );
+        expect(await outboxEventModel.countDocuments()).toBe(0);
+    });
+
+    it('leaves an order an override already moved to shipped alone when a delivery lands, units remaining', async () => {
+        const order = await seedOrder(OrderStatus.shipped);
+
+        const settled = await inTransaction((session) =>
+            settleAfterSummary(
+                String(order._id),
+                { shipped: true, remaining: 3, lastDeliveredAt: new Date() },
+                new Date(),
+                session
+            )
+        );
+
+        expect(settled).toEqual({ reportCanceled: undefined });
+        expect(await readOrder(String(order._id)).then((one) => one?.status)).toBe(
+            OrderStatus.shipped
+        );
+        expect(await outboxEventModel.countDocuments()).toBe(0);
+    });
+
+    it('answers null for an order that does not exist', async () => {
+        const settled = await inTransaction((session) =>
+            orderService.settleFulfillment('64b7f0f0f0f0f0f0f0f0f0f0', new Date(), session)
+        );
+
+        expect(settled).toBeNull();
+    });
+});
+
+describe('reopenForFulfillment', () => {
+    it.each([OrderStatus.shipped, OrderStatus.delivered])(
+        'steps a %s order back to processing, announcing the move',
+        async (status) => {
+            const order = await seedOrder(status);
+
+            const reopened = await inTransaction((session) =>
+                orderService.reopenForFulfillment(String(order._id), session, 'admin-1')
+            );
+
+            expect(reopened).toBe(true);
+            expect(await readOrder(String(order._id)).then((one) => one?.status)).toBe(
+                OrderStatus.processing
+            );
+            expect(await outboxEventModel.countDocuments({ name: ORDER_STATUS_CHANGED })).toBe(1);
+        }
+    );
+
+    it('is a no-op on an order that is already processing', async () => {
+        const order = await seedOrder(OrderStatus.processing);
+
+        const reopened = await inTransaction((session) =>
+            orderService.reopenForFulfillment(String(order._id), session)
+        );
+
+        expect(reopened).toBe(true);
+        expect(await outboxEventModel.countDocuments()).toBe(0);
+    });
+
+    it.each([OrderStatus.pending, OrderStatus.paid, OrderStatus.canceled])(
+        'answers null for a %s order and writes nothing',
+        async (status) => {
+            const order = await seedOrder(status);
+
+            const reopened = await inTransaction((session) =>
+                orderService.reopenForFulfillment(String(order._id), session)
+            );
+
+            expect(reopened).toBeNull();
+            expect(await readOrder(String(order._id)).then((one) => one?.status)).toBe(status);
+            expect(await outboxEventModel.countDocuments()).toBe(0);
+        }
+    );
 });

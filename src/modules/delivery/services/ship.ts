@@ -127,14 +127,7 @@ const shipAct = async (
     await startFulfillment(order, session, actor);
 
     const progress = await reportProgress(orderId, session);
-    await settleOrder(
-        orderId,
-        progress.order.status,
-        progress.summary,
-        shipment.shippedAt,
-        session,
-        actor
-    );
+    await settleOrder(orderId, shipment.shippedAt, session, actor);
     await announceShipped(shipment, session, actor, progress.summary.remaining);
 
     return { shipment, order, remainingUnits: progress.summary.remaining };

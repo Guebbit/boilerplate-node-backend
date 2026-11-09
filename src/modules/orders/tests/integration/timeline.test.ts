@@ -19,6 +19,7 @@ import { orderService } from '../../services';
 import { withdrawUntilFrom } from '../../domain';
 import { orderEventModel } from '../../model';
 import { cancelForErasureById } from '../../services/cancel';
+import { markShipped, markDelivered, markFulfillmentComplete } from '../../services/status';
 
 setupTestDb();
 
@@ -64,13 +65,8 @@ describe('what each move writes', () => {
 
         await orderService.markPaid(id, 'card', { actor: 'cashier-1', method: 'cash' });
         await orderService.markProcessing(id, undefined, 'admin-1');
-        await orderService.markShipped(id, undefined, 'admin-1');
-        await orderService.markDelivered(
-            id,
-            new Date('2026-05-01T09:00:00Z'),
-            undefined,
-            'admin-2'
-        );
+        await markShipped(id, undefined, 'admin-1');
+        await markDelivered(id, new Date('2026-05-01T09:00:00Z'), undefined, 'admin-2');
 
         const rows = await timelineOf(id);
         expect(rows.map(({ type, actor }) => [type, actor])).toEqual([
@@ -90,10 +86,10 @@ describe('what each move writes', () => {
         const digital = await orderOfBuyer(2, OrderStatus.processing, { digital: true });
 
         await withTransaction((session) =>
-            orderService.markFulfillmentComplete(String(physical._id), new Date(), session)
+            markFulfillmentComplete(String(physical._id), new Date(), session)
         );
         await withTransaction((session) =>
-            orderService.markFulfillmentComplete(String(digital._id), new Date(), session)
+            markFulfillmentComplete(String(digital._id), new Date(), session)
         );
 
         expect(typesOf(await timelineOf(String(physical._id)))).toEqual(['shipped', 'delivered']);

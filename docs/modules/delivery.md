@@ -434,9 +434,8 @@ sequenceDiagram
     D->>O: shipStock(lines)
     O->>I: take those units off the shelf, per line
     D->>O: recordFulfillmentProgress(summary)
-    alt nothing remains anywhere
-        D->>O: markShipped
-    end
+    D->>O: settleFulfillment(orderId, at)
+    Note over O: ships only when nothing remains anywhere
     D->>D: shipment.shipped → the outbox
     Note over D: commit
     D-->>S: 201 + the shipment
@@ -568,7 +567,7 @@ restocks nothing. What the order then ends as depends on whether anything ever a
 | nothing at all                                | `canceled`     | nothing was delivered, so `delivered` would be untrue                                     |
 
 The second row is our choice, not Shopify's: Shopify leaves such an order open and refunded unless the
-merchant cancels it. We settle it for them, with `settleOrder` asking `orders`' `markUndeliverable`
+merchant cancels it. We settle it for them, with `settleOrder` asking `orders`' `settleFulfillment`, which picks the lost-parcel cancel
 (cause `lost`, the system's, `refund: false` because the remainder cancel already refunded). Nothing
 else runs: no withdrawal or guarantee clock, no `delivered` row, no second refund, no second stock
 release, and no mail (the loss and the refund were already mailed). The `canceled` row is the

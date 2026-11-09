@@ -71,14 +71,7 @@ const deliverAct = async (
         return refuse(409, ERROR_CODES.DELIVERY_NOT_DELIVERABLE, 'delivery.not-deliverable');
 
     const progress = await reportProgress(orderId, session);
-    await settleOrder(
-        orderId,
-        progress.order.status,
-        progress.summary,
-        progress.summary.lastDeliveredAt ?? at,
-        session,
-        context.caller.id
-    );
+    await settleOrder(orderId, progress.summary.lastDeliveredAt ?? at, session, context.caller.id);
     await announceDelivered(shipment, session, context.caller.id);
 
     return { shipment, order, wasLost };
