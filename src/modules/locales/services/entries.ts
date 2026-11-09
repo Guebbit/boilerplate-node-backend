@@ -238,19 +238,11 @@ export const removeEntry = (
 /**
  * Rejects a bulk import whose keys cannot be stored, before anything is read or written.
  *
- * A key outside 1 to 200 characters is a 422, two keys equal once trimmed a 409; an empty
- * `merge` is a 422 (nothing to change). `null` keys take part: a `null` for a key that is not
+ * A key outside 1 to 200 characters is a 422, two keys equal once trimmed a 409. `null`
+ * keys take part: a `null` for a key that is not
  * stored is a no-op, but a key that could never exist is still a malformed request.
  */
-const rejectBadBatch = (
-    inputs: readonly EntryChange[],
-    mode: 'replace' | 'merge'
-): ResponseReject | undefined => {
-    if (mode === 'merge' && inputs.length === 0)
-        return generateReject(422, [
-            { code: ERROR_CODES.LOCALE_ENTRIES_EMPTY, message: t('locales.error-entries-empty') }
-        ]);
-
+const rejectBadBatch = (inputs: readonly EntryChange[]): ResponseReject | undefined => {
     const keys = inputs.map(({ key }) => key);
 
     const badKey = keys.find((key) => !isKeyLengthValid(key));
@@ -300,7 +292,7 @@ export const importEntries = async (
         value
     }));
 
-    const badBatch = rejectBadBatch(inputs, mode);
+    const badBatch = rejectBadBatch(inputs);
     if (badBatch) return badBatch;
 
     // A key being deleted is outside every collision check below: it will not exist afterwards.

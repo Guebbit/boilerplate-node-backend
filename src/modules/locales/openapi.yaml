@@ -12,7 +12,6 @@ x-error-codes:
     LOCALE_ENTRY_KEY_EXISTS: { status: 409, description: 'The key is already translated in this language and app, or a batch names it twice.' }
     LOCALE_ENTRY_KEY_COLLISION: { status: 409, description: 'The key is a strict dotted prefix of another key, or has one as a prefix: no dictionary tree can hold both.' }
     LOCALE_ENTRY_KEY_INVALID: { status: 422, description: 'The key is empty, longer than 200 characters, or has an empty or reserved segment.' }
-    LOCALE_ENTRIES_EMPTY: { status: 422, description: 'A merge patch named no entry at all.' }
     LOCALE_APP_UNKNOWN: { status: 422, description: 'No app with that id is configured on this deployment — see `GET /locales/apps`.' }
     LOCALE_ENTITY_TYPE_UNKNOWN: { status: 404, description: 'The entity type is not a registered translatable.' }
     LOCALE_ENTITY_NOT_FOUND: { status: 404, description: 'The module that owns the entity type holds no entity with that id.' }
@@ -1395,8 +1394,8 @@ components:
                         maxLength: 2000
                     description: >-
                         Translation key to text, or to `null` to delete it. A `null` for a key that
-                        is not stored is a no-op, not an error. An empty map is a 422 — enforced at
-                        write time.
+                        is not stored is a no-op, not an error. An empty map changes nothing
+                        and answers 200.
 
                         A key is 1 to 200 characters once trimmed, and two keys that are the same
                         once trimmed are a 409. A key being written (a string) is refused when it is

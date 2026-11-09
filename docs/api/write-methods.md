@@ -594,6 +594,7 @@ A new date filter picks one of the three; a fourth spelling needs a card.
 | `PUT /cart/shipping-method`, `PUT /locales/{locale}/apps/{app}/entries/{entryId}`, `PUT /account/addresses/{id}/default` | no PATCH | one field, or none; a PATCH would say exactly what the PUT says |
 | `POST /payments`, `POST /orders/{id}/payments` | 200 when they refresh or convert the order's one payment row | one payment per order is a database fact |
 | `PUT`/`PATCH /locales/{locale}/apps/{app}/entries` | the app is a path segment; the body is `{ entries: { <key>: text } }`, and under PATCH a `null` deletes its key | a PUT replaces exactly what the GET on the same URI lists; the map is a real merge patch (RFC 7396) |
+| `PATCH /locales/translations/{entityType}/{id}` | an empty `fields` for a locale is a 422 | a locale with no fields is not a translation; deleting one is the locale's own `null` |
 
 ## How it is kept true
 
