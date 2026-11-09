@@ -1,4 +1,8 @@
 import { findLiveToken, spendLiveToken } from '@modules/account/services/tokens';
+import {
+    completeEmailChange,
+    completeEmailVerification
+} from '@modules/account/services/verification';
 /**
  * @module
  * The self-service account surface — profile update, password change, session revocation, email
@@ -325,7 +329,7 @@ describe('completeEmailChange', () => {
         );
         const loaded = await userRepository.findByIdWithCredentials(user.id);
 
-        const saved = await accountService.completeEmailChange(loaded!, testCallerContext);
+        const saved = await completeEmailChange(loaded!, testCallerContext);
 
         expect(saved.email).toBe('after@example.com');
         expect(saved.verifiedAt).toBeInstanceOf(Date);
@@ -810,7 +814,7 @@ describe('completeEmailVerification', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser({});
 
-        const saved = await accountService.completeEmailVerification(user, testCallerContext);
+        const saved = await completeEmailVerification(user, testCallerContext);
 
         expect(saved.verifiedAt).toBeInstanceOf(Date);
         const stored = await userRepository.findById(user.id);

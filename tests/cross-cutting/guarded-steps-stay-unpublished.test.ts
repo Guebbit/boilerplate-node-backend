@@ -165,6 +165,8 @@ const { checker, leaksOf } = guardOver(program);
  * proves the tag is still read. Every one is the shop's, so a stripped checkout has none.
  */
 const KNOWN_STEPS = [
+    ['account', 'linkProviderToSignedInAccount'],
+    ['account', 'loginOrCreateFromOAuth'],
     ['inventory', 'applyTransition'],
     ['payments', 'performRefund'],
     ['payments', 'settlePayment']
