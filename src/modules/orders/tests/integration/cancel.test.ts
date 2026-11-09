@@ -426,10 +426,10 @@ describe('cancelOnRequestById — the payment-window-expired email', () => {
     });
 
     /*
-     * A card hold's expiry mails the buyer: thirty minutes is long enough to abandon a checkout
-     * tab and wonder later where the order went, so silence is not an option.
+     * A hold's expiry mails the buyer: the hold is long enough to abandon a checkout tab and
+     * wonder later where the order went, so silence is not an option.
      */
-    it('sends the card-expired email when a card order times out with no context', async () => {
+    it('sends the hold-expired email when a card order times out with no context', async () => {
         mockEnqueueEmail.mockClear();
         const user = await createUser();
         const product = await createProduct();
@@ -441,7 +441,7 @@ describe('cancelOnRequestById — the payment-window-expired email', () => {
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template] = mockEnqueueEmail.mock.calls[0];
         expect(envelope.to).toBe(user.email);
-        expect(template).toBe('orders.order-card-expired');
+        expect(template).toBe('orders.order-hold-expired');
     });
 
     it("never sends it for the customer's own cancel, even of a bank_transfer order", async () => {
@@ -484,7 +484,7 @@ describe('cancelOnRequestById — the payment-window-expired email', () => {
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template] = mockEnqueueEmail.mock.calls[0];
         expect(envelope.to).toBe(order.email);
-        expect(template).toBe('orders.order-card-expired');
+        expect(template).toBe('orders.order-hold-expired');
     });
 
     it('does not send the expiry email for a system cancel that is not the reservation sweep', async () => {

@@ -805,7 +805,7 @@ stateDiagram-v2
   the withdrawal notice, for every method. This module sends the **instructions** when it opens the
   payment, and **"no transfer received"** when the order was cancelled because the hold ran out — by
   the call whose write moved the payment to `canceled`, so one cancel mails once. The buyer's own
-  cancel is answered by `orders`' cancel mail alone. A card hold's expiry stays `orders`'.
+  cancel is answered by `orders`' cancel mail alone. Any other hold's expiry stays `orders`'.
 - **A cancelled transfer payment is kept a year**, not the thirty days of every other abandoned
   attempt (`TRANSFER_PAYMENT_RETENTION_DAYS`), so the reference still finds the order when a late
   transfer shows up. See [Matching a transfer back to its order](#matching-a-transfer-back-to-its-order).

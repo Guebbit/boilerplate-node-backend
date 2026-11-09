@@ -42,11 +42,16 @@ afterEach(() => {
     jest.restoreAllMocks();
 });
 
+/** How a seeded order was paid; `'unset'` writes no method, as a staff-created order has none. */
+type SeededMethod = 'card' | 'bank_transfer' | 'unset';
+
 /** An order for one product, optionally paid by `paymentMethod`. */
-const seedOrder = async (paymentMethod: 'card' | 'bank_transfer' = 'card') => {
+const seedOrder = async (paymentMethod: SeededMethod = 'card') => {
     const user = await createUser();
     const product = await createProduct();
-    const order = await createOrder(user, [toOrderItem(product, 1)], { paymentMethod });
+    const order = await createOrder(user, [toOrderItem(product, 1)], {
+        ...(paymentMethod === 'unset' ? {} : { paymentMethod })
+    });
     return { user, order, orderId: String(order._id) };
 };
 
@@ -87,10 +92,12 @@ describe('order.created sends the placed-order mail', () => {
 });
 
 describe('order.canceled sends the mail its cause picks', () => {
-    it.each<[CancelCause, 'card' | 'bank_transfer', string[]]>([
+    it.each<[CancelCause, SeededMethod, string[]]>([
         ['customer', 'card', ['orders.order-canceled']],
         ['operator', 'bank_transfer', ['orders.order-canceled']],
-        ['reservation_expired', 'card', ['orders.order-card-expired']],
+        ['reservation_expired', 'card', ['orders.order-hold-expired']],
+        // A staff-created order has no method; its buyer was sent the confirmation, so is told.
+        ['reservation_expired', 'unset', ['orders.order-hold-expired']],
         // A transfer nobody sent is answered by `payments`.
         ['reservation_expired', 'bank_transfer', []],
         ['withdrawal', 'card', []],

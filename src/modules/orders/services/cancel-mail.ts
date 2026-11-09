@@ -7,12 +7,12 @@
 
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import type { DomainEventMap } from '@kernel/events';
-import { cardHoldExpiredEmail, orderCanceledEmail } from '../emails';
+import { holdExpiredEmail, orderCanceledEmail } from '../emails';
 import { CANCEL_CAUSES } from './cancel';
 import { mailBuyerOfOrder } from './notify';
 
 /**
- * Tell the buyer their order was canceled, or that its card hold ran out. A bank transfer nobody
+ * Tell the buyer their order was canceled, or that its hold ran out unpaid. A bank transfer nobody
  * sent is answered by `payments`, which owns the transfer's deadline, so its expiry is not mailed
  * here. A cause with its own acknowledgement, or with nobody to tell, sends nothing.
  * @param payload - the `order.canceled` fact
@@ -27,8 +27,9 @@ export const mailOrderCanceled = ({
 
     return mailBuyerOfOrder(orderId, (order, locale, name) => {
         if (kind === 'reservation-expiry') {
+            // Only a transfer is skipped: `payments` owns its deadline and mails its expiry.
             if (order.paymentMethod === 'bank_transfer') return;
-            const mail = cardHoldExpiredEmail(locale, order);
+            const mail = holdExpiredEmail(locale, order);
             // eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects (it logs its own failure)
             void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
             return;
