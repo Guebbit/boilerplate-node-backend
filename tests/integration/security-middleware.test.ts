@@ -43,8 +43,8 @@ describe('trust proxy', () => {
      * `src/app/security.ts` does with `NODE_TRUST_PROXY_HOPS`, and a synthetic app built with
      * Express's own default (`trust proxy` unset) would pass whether or not that code ran at
      * all. `src/app/security.ts` mounts the global `rateLimiter` ahead of every route; it
-     * keys its bucket on `request.ip` with no override, so its `RateLimit-Remaining` header
-     * is a direct read on what Express resolved `request.ip` to.
+     * keys its bucket on `request.ip` with no override, so the `r` of its `"global"` `RateLimit`
+     * item is a direct read on what Express resolved `request.ip` to.
      *
      * Two requests, two DIFFERENT forged `X-Forwarded-For` values, from the one real socket
      * address this test process holds: if `X-Forwarded-For` were consulted, each would open its

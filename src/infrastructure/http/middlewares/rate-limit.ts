@@ -120,8 +120,8 @@ type BudgetFacts = Pick<RateLimitBudget, 'namespace' | 'requestPropertyName'> &
  * https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/
  *
  * Written by us, not by express-rate-limit: its `draft-8` writer always adds `pk`, a truncated
- * unsalted hash of the caller's key (an IPv4 address for the global budget) that a shared cache
- * would replay to other visitors. Nothing here names the caller.
+ * unsalted hash of the caller's key (an IPv4 address for the global budget). `pk` identifies the
+ * caller, so nothing here sends it.
  *
  * @param budget - the budget whose limiter ran
  * @param request - carries the limiter's {@link RateLimitInfo}; absent when it skipped or passed on a store error
