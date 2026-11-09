@@ -203,12 +203,12 @@ directory) and streamed from there for `NODE_INVOICE_PDF_RETENTION_DAYS` (30); t
 `providers/index.ts` declares `EInvoicingProvider`, shaped after `payments/providers` (one
 interface, one shipped implementation, an env var choosing between them): `pdf`
 (`providers/pdf.ts`) is the only one this boilerplate ships, rendering through the
-EJS + Puppeteer pipeline (`renderHtmlToPdf`). `issue` returns the PDF bytes the buyer downloads;
-the contract, the routes and the controllers are PDF-only. Italy's SdI and the EU's Peppol network are
-integrations, not built here — both transmit a structured document to a third party and get back a
-delivery outcome, a shape genuinely different from "hand back some bytes", so a real adapter's
-`issue` would also need to report that outcome onto the document. Left for whoever builds the
-first one.
+EJS + Puppeteer pipeline (`renderHtmlToPdf`). `render` returns the PDF bytes the buyer downloads,
+and must be a pure render: it runs again on every download that finds no stored copy (always, with
+`NODE_INVOICE_PDF_RETENTION_DAYS=0`). The contract, the routes and the controllers are PDF-only.
+Italy's SdI and the EU's Peppol network are integrations, not built here: both transmit a
+structured document to a third party and get back a delivery outcome. That is a separate one-time
+step at issue (`services/issue-invoice.ts`, `issue-credit-note.ts`), designed by the first adapter.
 
 ## The order timeline
 
@@ -221,7 +221,7 @@ aborts both, so each document leaves exactly one row.
 
 | Variable                             | Default                 | Meaning                                                                                                     |
 | ------------------------------------ | ----------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `NODE_EINVOICING_PROVIDER`           | `pdf`                   | Which e-invoicing provider issues a document — see above                                                    |
+| `NODE_EINVOICING_PROVIDER`           | `pdf`                   | Which e-invoicing provider renders a document — see above                                                   |
 | `NODE_INVOICING_RATE_LIMIT_MAX`      | `20`                    | Invoice/credit-note renders allowed per window, per ACCOUNT — every hit spawns a Chromium launch            |
 | `NODE_INVOICE_PDF_RETENTION_DAYS`    | `30`                    | Days a rendered PDF is kept for the next download; `0` stores nothing                                       |
 | `NODE_INVOICE_BUYER_RETENTION_YEARS` | `10`                    | Years after the end of the issue year that the buyer block stays on a document; see [Retention](#retention) |

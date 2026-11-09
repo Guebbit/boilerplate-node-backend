@@ -15,10 +15,10 @@ import { asStub } from '@tests/stub';
 import type { CreditNoteDocument, InvoiceDocument } from '../../model';
 import * as documentStore from '@infrastructure/adapters/document-store';
 
-const issue = jest.fn();
+const renderDocument = jest.fn();
 
 jest.mock('../../providers', () => ({
-    resolveEInvoicingProvider: () => ({ issue: (document: unknown) => issue(document) })
+    resolveEInvoicingProvider: () => ({ render: (document: unknown) => renderDocument(document) })
 }));
 
 /*
@@ -43,10 +43,10 @@ beforeEach(async () => {
     root = await mkdtemp(path.join(tmpdir(), 'invoicing-render-'));
     setEnvironment({ NODE_DOCUMENT_STORE_PATH: root });
     setEnvironment({ NODE_INVOICE_PDF_RETENTION_DAYS: '30' });
-    issue.mockReset();
+    renderDocument.mockReset();
     // A distinct body per call, so "the stored one" and "a fresh one" can be told apart.
     let calls = 0;
-    issue.mockImplementation(() => {
+    renderDocument.mockImplementation(() => {
         calls += 1;
         return Promise.resolve(Buffer.from(`pdf-${String(calls)}`));
     });
@@ -94,7 +94,7 @@ describe('the stored copy of a rendered invoice', () => {
         const first = await renderInvoicePdf(invoice);
         const second = await renderInvoicePdf(invoice);
 
-        expect(issue).toHaveBeenCalledTimes(1);
+        expect(renderDocument).toHaveBeenCalledTimes(1);
         expect(second.toString()).toBe(first.toString());
     });
 
@@ -106,7 +106,7 @@ describe('the stored copy of a rendered invoice', () => {
             `invoice-${'a'.repeat(24)}.pdf`,
             `invoice-${'b'.repeat(24)}.pdf`
         ]);
-        expect(issue).toHaveBeenCalledTimes(2);
+        expect(renderDocument).toHaveBeenCalledTimes(2);
     });
 
     it('keeps a credit note in the same store, apart from the invoice', async () => {
@@ -117,7 +117,7 @@ describe('the stored copy of a rendered invoice', () => {
 
         expect(await storedNames()).toEqual([`credit-note-${id}.pdf`, `invoice-${id}.pdf`]);
         // Two renders: the invoice, and the credit note's first. Its second came from disk.
-        expect(issue).toHaveBeenCalledTimes(2);
+        expect(renderDocument).toHaveBeenCalledTimes(2);
     });
 
     it('renders again once the file has been reaped', async () => {
@@ -127,7 +127,7 @@ describe('the stored copy of a rendered invoice', () => {
 
         await renderInvoicePdf(invoice);
 
-        expect(issue).toHaveBeenCalledTimes(2);
+        expect(renderDocument).toHaveBeenCalledTimes(2);
     });
 });
 
@@ -139,7 +139,7 @@ describe('a retention of 0', () => {
         await renderInvoicePdf(invoice);
         await renderInvoicePdf(invoice);
 
-        expect(issue).toHaveBeenCalledTimes(2);
+        expect(renderDocument).toHaveBeenCalledTimes(2);
         expect(await readdir(root)).toEqual([]);
     });
 });
