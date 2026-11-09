@@ -217,6 +217,27 @@ export const fencedSave = <T>(
 };
 
 /**
+ * The filter that fences a query update (`updateOne`) on the open precondition: the document's
+ * counter must be one the caller's header names. Uses the precondition up, like
+ * {@link fencedSave}.
+ *
+ * Version `0` also matches a row with no counter yet (Mongo's `null` matches a missing field); a
+ * header that parses to no version gives an empty `$in`, so nothing matches and the write is a 412.
+ *
+ * @param key - the id the route names the row by
+ * @param path - the counter's path on the row, normally {@link EDIT_REVISION}
+ * @returns `{}` when there is no precondition about this row, or it is `*`
+ */
+export const preconditionFilter = (key: string, path: string): Record<string, unknown> => {
+    const precondition = takePrecondition({}, key);
+    if (!precondition || precondition.etags === 'any') return {};
+    const versions = precondition.etags
+        .map((tag) => versionOfTag(tag))
+        .filter((version) => version !== undefined);
+    return { [path]: { $in: versions.includes(0) ? [...versions, null] : versions } };
+};
+
+/**
  * What a document `deleteOne()` resolves to: the driver's count of rows it removed.
  */
 export interface DeleteOutcome {

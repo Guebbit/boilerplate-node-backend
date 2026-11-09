@@ -20,6 +20,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
+import { setEtag, withIfMatch } from '@infrastructure/http/preconditions';
 import { requireId } from '@infrastructure/http/ids';
 import { t } from '@infrastructure/i18n';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
@@ -62,10 +63,12 @@ const writeEntityTranslations =
         const body = parseBody(schema, request.body, response);
         if (!body) return;
 
-        return write(entityType, id, body, callerContextOf(request))
+        return withIfMatch(request, id, () => write(entityType, id, body, callerContextOf(request)))
             .then((result) => {
                 if (refused(response, result)) return;
 
+                // The owner's new tag, so the caller's next save needs no re-read.
+                setEtag(response, result.data);
                 return successResponse(response, result.data);
             })
             .catch(catchAs(response, operation));

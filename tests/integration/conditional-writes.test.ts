@@ -472,6 +472,104 @@ describe('a product edited only through the locales translations route', () => {
     });
 });
 
+/** One locale's PATCH body: `n` makes two saves differ. */
+const italian = (n: number) => ({
+    it: { fields: { title: `Titolo ${'x'.repeat(n)}` }, origin: 'human' }
+});
+
+describe('the translations route of a product, fenced on the product', () => {
+    beforeEach(() => Promise.all([givenLocale('en'), givenLocale('it')]));
+
+    it('writes on the tag its own GET handed out, and answers the new one for the next save', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const path = `/locales/translations/product/${product.id}`;
+        const read = await api().get(path).set('Authorization', bearer);
+
+        const first = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', etagOf(read))
+            .send(italian(1));
+        const second = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', etagOf(first))
+            .send(italian(2));
+
+        expect(first.status).toBe(200);
+        expect(second.status).toBe(200);
+    });
+
+    it('answers 412 and writes no row when the product was edited since the read', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const path = `/locales/translations/product/${product.id}`;
+        const tag = etagOf(await api().get(path).set('Authorization', bearer));
+        await api()
+            .patch(`/products/${product.id}`)
+            .set('Authorization', bearer)
+            .send({ tags: ['edited'] })
+            .expect(200);
+
+        const stale = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', tag)
+            .send(italian(1));
+        const after = await api().get(path).set('Authorization', bearer);
+
+        expect(stale.status).toBe(412);
+        expect(after.body.translations).toEqual([]);
+    });
+
+    it('refuses a stale PUT the same way', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const path = `/locales/translations/product/${product.id}`;
+        const tag = etagOf(await api().get(path).set('Authorization', bearer));
+        await api()
+            .patch(`/products/${product.id}`)
+            .set('Authorization', bearer)
+            .send({ tags: ['edited'] })
+            .expect(200);
+
+        const stale = await api()
+            .put(path)
+            .set('Authorization', bearer)
+            .set('If-Match', tag)
+            .send({ en: { fields: { title: 'A late English title' } }, ...italian(1) });
+
+        expect(stale.status).toBe(412);
+    });
+
+    it('is not refused by a stock move, which is not an edit', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const path = `/locales/translations/product/${product.id}`;
+        const tag = etagOf(await api().get(path).set('Authorization', bearer));
+
+        await productRepository.syncStockCache(product.id, { onHand: 3, reserved: 1 });
+        const write = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', tag)
+            .send(italian(1));
+
+        expect(write.status).toBe(200);
+    });
+
+    it('answers 404 on a read of a product that does not exist', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .get(`/locales/translations/product/${new Types.ObjectId().toString()}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+    });
+});
+
 describe('a user whose role is handed out at the door', () => {
     it('moves the ETag, so an edit holding the old tag is refused', async () => {
         const { bearer } = await authenticateAs('admin');

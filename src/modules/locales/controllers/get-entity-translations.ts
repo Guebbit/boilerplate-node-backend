@@ -9,6 +9,7 @@ import { successResponse } from '@infrastructure/http/response';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import { requireId } from '@infrastructure/http/ids';
 import { t } from '@infrastructure/i18n';
+import { setEtag } from '@infrastructure/http/preconditions';
 import { localeService } from '../services';
 
 /**
@@ -30,6 +31,8 @@ export const getEntityTranslations = (
         .then((result) => {
             if (refused(response, result)) return;
 
+            // The owner's tag, so a translation save can send `If-Match`.
+            setEtag(response, result.data);
             return successResponse(response, result.data);
         })
         .catch(catchAs(response, 'getEntityTranslations'));

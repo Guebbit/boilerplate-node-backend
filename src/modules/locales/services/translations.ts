@@ -24,6 +24,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
+import { carryVersion, rearmPrecondition } from '@infrastructure/persistence/versioning';
 import { withTransaction } from '@infrastructure/runtime/database';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
@@ -337,13 +338,20 @@ const applyTranslationBatch = async (
 
     // Checked before any write: a missing (or malformed) entity id must never leave orphan
     // translation rows behind for a document that was never there to translate.
-    if (!(await target.exists(entityId))) return entityNotFound(entityType, entityId);
+    if ((await target.revisionOf(entityId)) === undefined)
+        return entityNotFound(entityType, entityId);
 
     const translatedBy = context?.caller.id ?? undefined;
-    // One transaction: the rows, the derived index column (see `writePlannedTranslations`'s
-    // docblock) and the document's tag. Rows outside the document changed, so its tag must move
-    // with them, and no `PUT` carrying the still-valid tag may land between the two writes.
+    // One transaction: the document's tag, the rows and the derived index column (see
+    // `writePlannedTranslations`'s docblock). Rows outside the document changed, so its tag must
+    // move with them, and no `PUT` carrying the still-valid tag may land between the writes.
     await withTransaction(async (session) => {
+        // The driver re-runs this callback on a transient conflict; each run must compare the
+        // caller's `If-Match` again, or the retry would write unchecked over the conflicting edit.
+        rearmPrecondition();
+        // First, so a stale `If-Match` is refused (412) before any row is written. The fence is
+        // the OWNER's counter: a translation save and a product edit refuse each other on purpose.
+        await target.markEdited(entityId, session);
         await writePlannedTranslations(
             entityType,
             entityId,
@@ -352,7 +360,6 @@ const applyTranslationBatch = async (
             translatedBy,
             session
         );
-        await target.markEdited(entityId, session);
     });
 
     await invalidateCacheTagsLogged([target.cacheTag]);
@@ -455,12 +462,22 @@ export const getEntityTranslations = (
     const target = translatableTarget(entityType);
     if (!target) return Promise.resolve(entityTypeUnknown(entityType));
 
-    return translationRepository.findEntityTranslations(entityType, entityId).then((rows) =>
-        generateSuccess({
-            entityType,
-            entityId,
-            translations: translationRepository.normalize(rows),
-            fields: target.fields
-        })
-    );
+    return Promise.all([
+        target.revisionOf(entityId),
+        translationRepository.findEntityTranslations(entityType, entityId)
+    ]).then(([revision, rows]) => {
+        if (revision === undefined) return entityNotFound(entityType, entityId);
+        // The owner's counter rides beside the result, so the `ETag` can be derived from it.
+        return generateSuccess(
+            carryVersion(
+                { editRevision: revision },
+                {
+                    entityType,
+                    entityId,
+                    translations: translationRepository.normalize(rows),
+                    fields: target.fields
+                }
+            )
+        );
+    });
 };

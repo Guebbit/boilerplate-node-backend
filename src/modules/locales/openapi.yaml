@@ -744,6 +744,9 @@ paths:
     # never the entity's own write path. `entityType` is a `translatables` registry key (`product`
     # in V1); the entity's OWN contract is untouched by this feature and never sees this shape.
     /locales/translations/{entityType}/{id}:
+        # Bundler: adds the `If-Match` parameter and 412 to the writes listed, and `ETag` to the 200s.
+        # The tag is the OWNING entity's (product, example), not a counter of its own.
+        x-versioned: [get, put, patch]
         get:
             tags: [Locales]
             summary: Read every translation an entity has
