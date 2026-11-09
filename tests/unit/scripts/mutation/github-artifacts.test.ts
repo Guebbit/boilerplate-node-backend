@@ -34,7 +34,7 @@ describe('newestReport', () => {
             artifact(2, '2026-10-01T03:00:00Z')
         ]);
 
-        expect(chosen?.workflow_run.id).toBe(3);
+        expect(chosen).toHaveProperty('artifact.workflow_run.id', 3);
     });
 
     it('skips an artifact past its retention, which can no longer be downloaded', () => {
@@ -43,7 +43,7 @@ describe('newestReport', () => {
             artifact(2, '2026-10-01T03:00:00Z', { expired: true })
         ]);
 
-        expect(chosen?.workflow_run.id).toBe(1);
+        expect(chosen).toHaveProperty('artifact.workflow_run.id', 1);
     });
 
     it('skips a run of another branch, whose scores belong to that branch’s code', () => {
@@ -52,7 +52,7 @@ describe('newestReport', () => {
             artifact(2, '2026-10-01T03:00:00Z', { branch: 'feature' })
         ]);
 
-        expect(chosen?.workflow_run.id).toBe(1);
+        expect(chosen).toHaveProperty('artifact.workflow_run.id', 1);
     });
 
     it("skips another artifact, such as the diff job's partial report", () => {
@@ -61,10 +61,39 @@ describe('newestReport', () => {
             artifact(2, '2026-10-01T03:00:00Z', { name: 'mutation-diff' })
         ]);
 
-        expect(chosen?.workflow_run.id).toBe(1);
+        expect(chosen).toHaveProperty('artifact.workflow_run.id', 1);
     });
 
-    it('answers nothing when no sweep has uploaded one yet', () => {
-        expect(newestReport([])).toBeUndefined();
+    it('names none-uploaded when no sweep has uploaded one yet', () => {
+        expect(newestReport([])).toEqual({ missing: 'none-uploaded' });
+    });
+
+    it('names none-uploaded when only other artifacts exist', () => {
+        expect(
+            newestReport([artifact(1, '2026-09-01T03:00:00Z', { name: 'mutation-diff' })])
+        ).toEqual({
+            missing: 'none-uploaded'
+        });
+    });
+
+    it('names none-from-main when every report is from another branch', () => {
+        expect(newestReport([artifact(1, '2026-09-01T03:00:00Z', { branch: 'feature' })])).toEqual({
+            missing: 'none-from-main'
+        });
+    });
+
+    it('names all-expired when every report from main is past its retention', () => {
+        expect(newestReport([artifact(1, '2026-09-01T03:00:00Z', { expired: true })])).toEqual({
+            missing: 'all-expired'
+        });
+    });
+
+    it('names all-expired, not none-from-main, for an expired main report beside a fresh feature one', () => {
+        expect(
+            newestReport([
+                artifact(1, '2026-09-01T03:00:00Z', { expired: true }),
+                artifact(2, '2026-10-01T03:00:00Z', { branch: 'feature' })
+            ])
+        ).toEqual({ missing: 'all-expired' });
     });
 });

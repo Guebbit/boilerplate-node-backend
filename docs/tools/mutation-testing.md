@@ -1389,6 +1389,14 @@ npm run mutation:pull     # newest unexpired report from a sweep of main, baseli
 git diff mutation-baseline.json
 ```
 
+When there is nothing to pull, the error names which of three cases it hit:
+
+| Message starts                                            | Meaning                                      | What to do                                                                    |
+| --------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------- |
+| `no mutation-report artifact exists`                      | no sweep of `main` has reached its merge job | `gh workflow list --all`; `gh run list --workflow mutation.yml --branch main` |
+| `mutation-report artifacts exist only for other branches` | only non-`main` runs uploaded                | dispatch the sweep on `main`                                                  |
+| `every mutation-report artifact from main has expired`    | the newest is past its 90 days               | re-run the sweep                                                              |
+
 **Cost.** The shard count follows the scope's line total (`SHARD_LINES` in
 `scripts/mutation/ci/waves.ts`), so wave 1 fills and the rest spills into wave 2. Measured on the
 2026-09-27 sweep: a median 0.43 runner-minutes per line at two workers (a floor — the shards that
