@@ -1689,8 +1689,50 @@ export default tseslint.config(
              * https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/no-focused-tests.md
              * https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/no-disabled-tests.md
              */
+            /*
+             * The plugin's recommended set. `no-conditional-expect` is the one that bites: a check
+             * inside an `if` is skipped when the branch is, and the test stays green.
+             * See `docs/reference/tests.md`, "A test never checks inside a branch".
+             * https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/no-conditional-expect.md
+             */
+            ...pluginJest.configs['flat/recommended'].rules,
             'jest/no-focused-tests': 'error',
             'jest/no-disabled-tests': 'error',
+            /*
+             * `expect-expect`: the helpers that assert on a spec's behalf count as an `expect`.
+             * https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/expect-expect.md
+             */
+            'jest/expect-expect': [
+                'error',
+                {
+                    assertFunctionNames: [
+                        'expect',
+                        'expect*',
+                        'assert*',
+                        'asSuccess',
+                        'asReject',
+                        'fuzzAs',
+                        'runRow',
+                        'accepts',
+                        'refuses',
+                        'request.**.expect',
+                        'api.**.expect'
+                    ]
+                }
+            ],
+            /*
+             * `no-standalone-expect`: `describeCases` registers `it`s, so an `expect` in its callback is in a test.
+             * https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/no-standalone-expect.md
+             */
+            'jest/no-standalone-expect': [
+                'error',
+                { additionalTestBlockFunctions: ['describeCases'] }
+            ],
+            /*
+             * `valid-title`: a `describe` named by a variable (a module or route name) is fine.
+             * https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/valid-title.md
+             */
+            'jest/valid-title': ['error', { ignoreTypeOfDescribeName: true }],
             /*
              * One level more than production code gets. A spec that walks a table exhaustively —
              * every actor against every from-status against every to-status — is at four levels by
@@ -1698,6 +1740,18 @@ export default tseslint.config(
              * asserting. The limit still holds where nesting is logic rather than enumeration.
              */
             'max-depth': ['error', 4]
+        }
+    },
+
+    /**
+     * Support helpers register `it`s and export them for suites to call: both rules read a file
+     * that is not itself a suite as a mistake.
+     */
+    {
+        files: ['tests/support/**'],
+        rules: {
+            'jest/no-export': 'off',
+            'jest/expect-expect': 'off'
         }
     },
 

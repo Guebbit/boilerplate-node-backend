@@ -61,7 +61,8 @@ describe('STAFF_ROUTES', () => {
             const { sets } = STAFF_ROUTES[code];
 
             // A `per-notice` route names no sets of its own: the producer's are checked where it emits.
-            if (sets !== 'per-notice') for (const set of sets) expect(declared).toContain(set);
+            const named = sets === 'per-notice' ? [] : sets;
+            expect(named.filter((set) => !declared.has(set))).toEqual([]);
         }
     );
 

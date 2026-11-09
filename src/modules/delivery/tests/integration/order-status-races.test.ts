@@ -34,6 +34,24 @@ setupTestDb();
 
 afterEach(() => jest.restoreAllMocks());
 
+/** The shipment won: the cancel was refused and nothing was canceled. */
+const SHIPMENT_WON = {
+    ship: 201,
+    cancel: 409,
+    order: OrderStatus.shipped,
+    shipments: 1,
+    fulfillmentOrder: 'closed'
+};
+
+/** The cancel won: the shipment was refused, and every fulfillment order followed it. */
+const CANCEL_WON = {
+    ship: 409,
+    cancel: 200,
+    order: OrderStatus.canceled,
+    shipments: 0,
+    fulfillmentOrder: 'canceled'
+};
+
 describe('two admins racing the same ship door', () => {
     it('ships once: one 201, the rest refused, one email, one shipment', async () => {
         const { user, bearer } = await authenticateAs('admin');
@@ -123,20 +141,16 @@ describe('a ship racing a cancel of the whole order', () => {
         const stored = await readOrder(String(order._id));
         const shipments = await shipmentsOf(String(order._id));
         const [after] = await fulfillmentOrdersOf(String(order._id));
-        if (ship.status === 201) {
-            // The shipment won: the cancel was refused and nothing was canceled.
-            expect(cancel.status).toBe(409);
-            expect(stored?.status).toBe(OrderStatus.shipped);
-            expect(shipments).toHaveLength(1);
-            expect(after.status).toBe('closed');
-        } else {
-            // The cancel won: the shipment was refused, and every fulfillment order followed it.
-            expect(cancel.status).toBe(200);
-            expect(ship.status).toBe(409);
-            expect(stored?.status).toBe(OrderStatus.canceled);
-            expect(shipments).toEqual([]);
-            expect(after.status).toBe('canceled');
-        }
+        const observed = {
+            ship: ship.status,
+            cancel: cancel.status,
+            order: stored?.status,
+            shipments: shipments.length,
+            fulfillmentOrder: after.status
+        };
+
+        // One whole outcome, either way: a hybrid matches neither.
+        expect(observed).toEqual(observed.ship === 201 ? SHIPMENT_WON : CANCEL_WON);
     });
 });
 

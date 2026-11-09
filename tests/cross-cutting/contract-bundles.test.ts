@@ -94,8 +94,7 @@ describe('every contract bundle', () => {
 
         for (const bundle of CONTRACT_BUNDLES.filter((candidate) => !isGenerated(candidate))) {
             const file = path.relative(REPO_ROOT, bundle.output);
-            if (bundle.shared === false) expect(guarded).not.toContain(file);
-            else expect(guarded).toContain(file);
+            expect(guarded.has(file)).toBe(bundle.shared !== false);
         }
     });
 });

@@ -163,6 +163,22 @@ How to build what passes:
 - Read [Coverage & Confidence](../tools/coverage-and-confidence.md) for what a surviving or
   `NoCoverage` mutant means.
 
+### A test never checks inside a branch
+
+`eslint-plugin-jest`'s `flat/recommended` set is in the lint gate (`eslint.config.ts`, the Jest
+block). The one that shapes how a spec is written is `jest/no-conditional-expect`: an `expect`
+inside an `if`, a `catch` or a `?:` is refused, because when the branch is skipped the test is
+green and checked nothing.
+
+- A table row that differs per case: put the difference in the **expected value**
+  (`expect(x).toBe(isDefault)`), or filter and assert the bad set is empty
+  (`expect(bad).toEqual([])`).
+- A race with two legal outcomes: read every value first, then one `toEqual` against the whole
+  outcome each order allows. A hybrid then matches neither.
+- A check that only holds when a module is deployed: `expect(found > 0).toBe(isDeployed('x'))`.
+- A branch with no honest unconditional form takes a described `eslint-disable`. There are two
+  (`malformed-ids.test.ts`, `spec-identity.test.ts`); a third is a sign to rewrite, not to disable.
+
 ---
 
 ## `tests/cross-cutting/` — rules that hold across every module

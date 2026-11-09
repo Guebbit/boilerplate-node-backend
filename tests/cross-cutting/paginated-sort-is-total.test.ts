@@ -90,6 +90,6 @@ describe('every paged $sort is total', () => {
         // `find().sort().skip()` instead, which this regex (deliberately syntactic — see the
         // module docblock) does not match.
         // `orders` is the one that does, so without it there may be nothing to find.
-        if (isDeployed('orders')) expect(pagedSortStages().length).toBeGreaterThanOrEqual(1);
+        expect(pagedSortStages().length > 0).toBe(isDeployed('orders'));
     });
 });

@@ -58,9 +58,11 @@ describe('the declared rules', () => {
     });
 
     it('name a deniedCode some module actually declares', () => {
-        for (const rule of PERMISSION_RULES) {
-            if (rule.deniedCode) expect(ERROR_CODES).toHaveProperty(rule.deniedCode);
-        }
+        const undeclared = PERMISSION_RULES.filter(
+            ({ deniedCode }) => deniedCode && !Object.hasOwn(ERROR_CODES, deniedCode)
+        );
+
+        expect(undeclared.map(({ id }) => id)).toEqual([]);
     });
 
     it('has lower-case staff actions, each naming at least one implied action', () => {

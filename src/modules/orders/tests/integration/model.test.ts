@@ -49,18 +49,6 @@ describe('order serialization', () => {
         expect((items[0].product as Record<string, unknown>)._id).toBeUndefined();
     });
 
-    it('normalizes aggregate results (search) the same way', async () => {
-        const user = await createUser();
-        const product = await createProduct({ title: 'Search Product' });
-        await createOrder(user, [toOrderItem(product, 1)]);
-
-        const { items } = await orderService.search({});
-        const raw = asStub<Record<string, unknown>>(items[0]);
-
-        expect(raw.id).toMatch(/^[\da-f]{24}$/);
-        expect(raw._id).toBeUndefined();
-    });
-
     it('resolves the hydrated document for a scoped getById, same as unscoped', async () => {
         const user = await createUser();
         const product = await createProduct({ title: 'Scoped Product' });

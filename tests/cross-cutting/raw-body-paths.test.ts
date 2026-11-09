@@ -20,8 +20,9 @@ describe('rawBodyPaths', () => {
 
         // `payments` is the module that verifies a provider's signature over the raw body; with it
         // gone, an empty sweep is the right answer and only the module walk itself is checked.
-        if (isDeployed('payments')) expect(declaring.length).toBeGreaterThan(0);
-        else expect(enabledModules.length).toBeGreaterThan(0);
+        expect(isDeployed('payments') ? declaring.length : enabledModules.length).toBeGreaterThan(
+            0
+        );
     });
 
     it('resolves every declared path to a route mounted on the same module’s router', () => {

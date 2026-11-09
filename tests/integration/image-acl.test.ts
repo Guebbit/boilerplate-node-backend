@@ -86,6 +86,7 @@ const doors: Door[] = [
 
 describe('imageUrl is never a client-named path', () => {
     let victimUrl: string;
+    let victimCreatedStatus: number;
     let adminBearer: string;
     let userBearer: string;
     let userId: string;
@@ -105,8 +106,13 @@ describe('imageUrl is never a client-named path', () => {
             .field('translations', JSON.stringify({ en: { title: 'Victim' } }))
             .field('price', '10')
             .attach('imageUpload', PNG_BYTES, { filename: 'v.png', contentType: 'image/png' });
-        expect(created.status).toBe(201);
+        victimCreatedStatus = created.status;
         victimUrl = created.body.imageUrl as string;
+    });
+
+    // The setup's own premise, asserted in a test: an `expect` in a hook is not attributed to one.
+    it('starts from a victim that exists as an uploaded file', () => {
+        expect(victimCreatedStatus).toBe(201);
         expect(fileExists(victimUrl)).toBe(true);
     });
 

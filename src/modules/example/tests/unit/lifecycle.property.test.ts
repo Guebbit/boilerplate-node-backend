@@ -28,8 +28,8 @@ describe('the lifecycle, over every status and every set of keys', () => {
         fc.assert(
             fc.property(anyStatus(), anyPermits(), (status, permits) => {
                 const actions = exampleActionsFor(status, permits);
-                for (const event of EVENTS)
-                    if (actions[event]) expect(canApply(event, status)).toBe(true);
+                const opened = EVENTS.filter((event) => actions[event]);
+                expect(opened.filter((event) => !canApply(event, status))).toEqual([]);
             }),
             RUN
         );
@@ -39,8 +39,8 @@ describe('the lifecycle, over every status and every set of keys', () => {
         fc.assert(
             fc.property(anyStatus(), anyPermits(), (status, permits) => {
                 const actions = exampleActionsFor(status, permits);
-                for (const event of EVENTS)
-                    if (actions[event]) expect(statusAfter(event)).not.toBe(status);
+                const opened = EVENTS.filter((event) => actions[event]);
+                expect(opened.filter((event) => statusAfter(event) === status)).toEqual([]);
             }),
             RUN
         );

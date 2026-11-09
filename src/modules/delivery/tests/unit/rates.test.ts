@@ -117,7 +117,7 @@ describe('methodFitsWeight', () => {
     });
 });
 
-describe('SHIPPING_METHODS', () => {
+describe('SHIPPING_METHODS table shape', () => {
     it('gives every method a non-negative price', () => {
         // The table this shop quotes from is committed data, not user input — this is the canary
         // for a typo that would otherwise only surface as a wrong number at checkout.

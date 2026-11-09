@@ -46,6 +46,6 @@ describe('the translatables registry', () => {
     it('has an entry whenever `products`, the module that registers one, is deployed', () => {
         // The canary for the two checks above: an empty registry must mean "nothing translatable
         // is deployed", never "the manifest stopped being read".
-        if (isDeployed('products')) expect(entries.length).toBeGreaterThan(0);
+        expect(entries.length > 0).toBe(isDeployed('products'));
     });
 });
