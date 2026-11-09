@@ -34,9 +34,9 @@ CLAUDE.md
 # The three shared authorization artefacts. Committed with identical bytes in the PHP twin, which
 # formats YAML with dprint rather than Prettier. Two formatters over one shared file is a silent
 # fork — the same reasoning that excludes the Spectral rulesets over there.
-shared/authorization-keys.yaml
-shared/authorization-roles.yaml
-shared/authorization-conformance.yaml
+shared/authorization-keys.generated.yaml
+shared/rules/authorization-roles.yaml
+shared/cases/authorization.cases.yaml
 
 # The same working notes `.gitignore` excludes. Prettier does not read `.gitignore`, so without
 # this an untracked plan doc still fails `prettier:check` — a formatting gate on a file that is

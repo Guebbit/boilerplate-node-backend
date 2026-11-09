@@ -32,7 +32,7 @@ language is kept per context rather than shared.
 | Term           | What it means here                                                                                                                                          |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Tenant**     | The shop (or the platform) a role is held in. A membership is always one person, one tenant, one role.                                                      |
-| **Membership** | The stored ASSIGNMENT of a role to a user in a tenant. A role's own permissions are never stored — they live in `shared/authorization-roles.yaml`.          |
+| **Membership** | The stored ASSIGNMENT of a role to a user in a tenant. A role's own permissions are never stored — they live in `shared/rules/authorization-roles.yaml`.    |
 | **Audience**   | `guest`, `unverified` or `customer`: what a request is before any staff role is added, computed from the session and `verifiedAt`, never stored or granted. |
 
 ## `addresses`
@@ -184,12 +184,12 @@ language is kept per context rather than shared.
 
 ## `users`
 
-| Term            | What it means here                                                                                                               |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **User**        | The person record. Owns identity and the `role` name; owns no credentials workflow — see `account`.                              |
-| **Role**        | A named permission set on the User (`shared/authorization-roles.yaml`), not a boolean — see [authorization](./authorization.md). |
-| **Token**       | A single-use secret bound to a user and a purpose (a `verificationtokens` row, its kind from a closed list).                     |
-| **Soft delete** | A destroyed account, kept for the audit trail. The cart and wishlist go only with a hard delete.                                 |
+| Term            | What it means here                                                                                                                     |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **User**        | The person record. Owns identity and the `role` name; owns no credentials workflow — see `account`.                                    |
+| **Role**        | A named permission set on the User (`shared/rules/authorization-roles.yaml`), not a boolean — see [authorization](./authorization.md). |
+| **Token**       | A single-use secret bound to a user and a purpose (a `verificationtokens` row, its kind from a closed list).                           |
+| **Soft delete** | A destroyed account, kept for the audit trail. The cart and wishlist go only with a hard delete.                                       |
 
 ## `webhooks`
 

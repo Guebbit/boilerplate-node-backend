@@ -69,7 +69,10 @@ export const SHARED_FILES: readonly SharedFile[] = [
      * `<frontend>/contracts/permission-vocabulary.ts`, so the frontend's `PermissionAction` cannot drift from the
      * vocabulary the backend enforces.
      */
-    { backend: 'shared/authorization-keys.yaml', frontend: 'contracts/authorization-keys.yaml' },
+    {
+        backend: 'shared/authorization-keys.generated.yaml',
+        frontend: 'contracts/authorization-keys.yaml'
+    },
     /*
      * The frontend paths the backend links to in mail and sitemaps. The frontend's tests walk its
      * router against this file, so a renamed route fails there instead of in a reader's inbox.

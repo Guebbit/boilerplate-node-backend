@@ -109,7 +109,7 @@ describe('SHARED_FILES', () => {
 
         expect(backendPaths).toContain(OPENAPI);
         expect(backendPaths).toContain(ASYNCAPI);
-        expect(backendPaths).toContain('shared/authorization-keys.yaml');
+        expect(backendPaths).toContain('shared/authorization-keys.generated.yaml');
         expect(backendPaths).toContain('shared/rules/frontend-links.yaml');
         expect(backendPaths).toContain('shared/rules/cookies.yaml');
         expect(backendPaths).toContain('scenarios/support/tls/webhook-sink-ca.pem');

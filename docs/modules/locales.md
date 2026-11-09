@@ -85,7 +85,7 @@ Staff holding `display:Locale` see a draft whole: the manifest row and the dicti
 interface), and, by choosing it in the switcher, its product text on the catalogue reads
 ([below](#previewing-a-draft)). Entity text can be written into it from the editor's language
 tabs. Going live is the one flag. Switching a language off keeps its
-text; deleting it (refused while it is on) removes its UI strings and its entity text.
+text; deleting it (allowed while it is on) removes its UI strings and its entity text.
 
 The flag moves through two action endpoints, never through `PUT`/`PATCH`: `POST
 /locales/{locale}/activate` and `/deactivate`, both on `update:Locale`. They refuse a move to the
@@ -232,13 +232,13 @@ is a 422 too — deleting it would leave the entity with nothing to fall back to
 
 ### What happens when the translated thing goes away
 
-| event                          | what happens to its translation rows                                                                                                                                                                                                                  |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A product is **soft**-deleted  | Rows survive — a restore must not come back with no name in any language.                                                                                                                                                                             |
-| A product is **hard**-deleted  | Rows are removed in the SAME transaction as the product row and its outbox event, through `@kernel/translation`'s port — never via the `product.deleted` event, which fires on both delete paths with an identical payload and can't tell them apart. |
-| A language is deleted          | Its rows cascade with it, the way `localeEntrySchema` rows already do (`src/modules/locales/repository.ts`'s `deleteLocaleCascade`), reported back as a count.                                                                                        |
-| A language is only deactivated | Nothing — deactivating hides a language, it doesn't retire it.                                                                                                                                                                                        |
-| The FALLBACK locale itself     | Cannot be deleted or deactivated (`src/modules/locales/services/languages.ts`'s `rejectFallbackLocale`) — every entity's source row lives in it.                                                                                                      |
+| event                          | what happens to its translation rows                                                                                                                                                                                                               |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A product is **soft**-deleted  | Rows survive — a restore must not come back with no name in any language.                                                                                                                                                                          |
+| A product is **hard**-deleted  | Rows are removed in the SAME transaction as the product row and its outbox event, through `@kernel/translation`'s port — never via the `product.deleted` event, which fires on both delete paths and carries `hardDelete`, not the rows to remove. |
+| A language is deleted          | Its rows cascade with it, the way `localeEntrySchema` rows already do (`src/modules/locales/repository.ts`'s `deleteLocaleCascade`), reported back as a count.                                                                                     |
+| A language is only deactivated | Nothing — deactivating hides a language, it doesn't retire it.                                                                                                                                                                                     |
+| The FALLBACK locale itself     | Cannot be deleted or deactivated (`src/modules/locales/services/languages.ts`'s `rejectFallbackLocale`) — every entity's source row lives in it.                                                                                                   |
 
 ## Removing it
 
@@ -267,7 +267,7 @@ Every rule this module declares and who holds it, role by role. The rule is what
 
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
-`src/modules/*/authorization.yaml` and the roles in `shared/authorization-roles.yaml`, asked of the
+`src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
 evaluator — [Authorization](../theory/authorization.md) explains the model.
 
 <!-- permissions:end -->

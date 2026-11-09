@@ -94,7 +94,7 @@ describe('the address book: /account/addresses', () => {
         ).toEqual(['office']);
     });
 
-    it('refuses `default` in a PUT or PATCH body — it is no longer a field of one address', async () => {
+    it('refuses `default` in a PATCH body — it is not a field of one address', async () => {
         const { bearer } = await authenticateAs('user');
         const added = await api()
             .post('/account/addresses')

@@ -362,7 +362,7 @@ describe('the credit notes of an order the caller may read but not its money', (
         expect(response.body).toEqual({ items: [] });
     });
 
-    it('answers the warehouse a download with the same 404 a stranger gets', async () => {
+    it('answers the warehouse a download 404 ORDER_CREDIT_NOTE_NOT_ISSUED', async () => {
         const { orderId, creditNoteId } = await refundedOrder();
         const warehouse = await authenticateAsRole('warehouse');
 

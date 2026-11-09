@@ -2,7 +2,7 @@
  * @module
  * Contract-derived authorization sweep: every route that mounts an identity guard must answer 401
  * to a callerless request, and every route behind `requirePermission` must agree with
- * `shared/authorization-roles.yaml` for EACH tenant persona a person can log in as: the two
+ * `shared/rules/authorization-roles.yaml` for EACH tenant persona a person can log in as: the two
  * audiences with no stored role (`unverified`, `customer` — an account with no membership IS the
  * customer), and every preset tenant role, the administrator included. One table-driven case per
  * route, rather than one hand-written 401/403 case per module's own contract file: the guard

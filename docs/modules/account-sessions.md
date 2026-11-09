@@ -208,11 +208,11 @@ into `startSession` (a first session, guarded) and `continueSession` (a re-mint,
 what the call proved: a verified code adds `otp` to what the caller held, a password change claims
 `['pwd']` alone.
 
-::: warning Both are optional, and absent means infinitely old
-A token signed before these claims existed carries neither. Every reader treats a missing
-`auth_time` as `0` rather than trusting it, so a pre-existing session is asked to re-authenticate at
-its first sensitive action instead of reading as freshly authenticated. Fail-closed, in the only
-direction that is safe.
+::: warning A missing `auth_time` fails closed in both modes
+In jwt mode both claims are required: `carriesTokenClaims` refuses a token without `auth_time` or
+`amr` as `malformed`, so it never reaches a guard. In cookie mode `authTime` is an optional field on
+the session row, and a row without one reads as `0` (infinitely old), so the caller is asked to
+re-authenticate at the first sensitive action instead of reading as freshly authenticated.
 :::
 
 `POST /account/reauth` is how a caller refreshes `auth_time` without logging out — re-prove who you
@@ -495,7 +495,7 @@ every "I may be compromised" event also moves `tokensValidAfter` on the user, an
 | Event                                 | Epoch moves                                                                      | The caller                                                                              |
 | ------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | logout everywhere                     | yes                                                                              | signed out too                                                                          |
-| password change or reset              | yes, and pending one-time tokens and MFA challenges are purged                   | survives: new session in the response                                                   |
+| password change or reset              | yes, and pending one-time tokens and MFA challenges are purged                   | signed out too                                                                          |
 | 2FA factor armed, removed or disabled | yes                                                                              | survives: refresh cookie re-minted, the client's next `/refresh` swaps the access token |
 | email change confirmed                | yes                                                                              | the confirming request is usually the mailbox, not a session                            |
 | email change undone ("not me")        | yes, FIRST, before the address is touched, and pending links purged              | n/a: the undo link is the credential                                                    |
@@ -567,6 +567,11 @@ flowchart TD
     class N ok;
     class F,X bad;
 ```
+
+Reuse is detected at the token endpoint only, as RFC 9700 §4.14.2 has it. A stale refresh token
+presented at `POST /account/logout`, or carried into a sign-in, deletes its own family and records
+no reuse, by design: that already ends the sign-in a thief could use, and logout answers `204` either
+way.
 
 The grace window (`NODE_TOKEN_ROTATION_GRACE_MS`, default 10s) exists for one reason: two requests
 racing on the SAME cookie — two tabs waking together, an interceptor retrying — both present the

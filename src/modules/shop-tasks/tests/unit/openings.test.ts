@@ -13,7 +13,6 @@ import {
     consentDueOpening,
     disputeAwaitingBankOpening,
     disputeOpening,
-    FTC_JURISDICTIONS,
     paidWithoutHoldOpening,
     refundOwedOpening,
     refundRefusedOpening,
@@ -71,14 +70,22 @@ describe('consentDueOpening — a delay the buyer must be asked about', () => {
         expect(consentDueOpening(delay({ promisedAt: undefined }), 'IT')).toBeUndefined();
     });
 
-    it.each(FTC_JURISDICTIONS)('opens for a shop in %s, whatever the destination', (country) => {
-        expect(consentDueOpening(delay({ shipCountry: 'IT' }), country)).toBeDefined();
-        expect(consentDueOpening(delay({ shipCountry: undefined }), country)).toBeDefined();
-    });
+    // The six jurisdictions the FTC Rule binds (docs/modules/shop-tasks.md): written out, not read
+    // from the constant under test.
+    it.each(['US', 'PR', 'GU', 'VI', 'AS', 'MP'])(
+        'opens for a shop in %s, whatever the destination',
+        (country) => {
+            expect(consentDueOpening(delay({ shipCountry: 'IT' }), country)).toBeDefined();
+            expect(consentDueOpening(delay({ shipCountry: undefined }), country)).toBeDefined();
+        }
+    );
 
-    it.each(FTC_JURISDICTIONS)('opens for a shop elsewhere shipping to %s', (shipCountry) => {
-        expect(consentDueOpening(delay({ shipCountry }), 'DE')).toBeDefined();
-    });
+    it.each(['US', 'PR', 'GU', 'VI', 'AS', 'MP'])(
+        'opens for a shop elsewhere shipping to %s',
+        (shipCountry) => {
+            expect(consentDueOpening(delay({ shipCountry }), 'DE')).toBeDefined();
+        }
+    );
 
     it.each([['DE'], [undefined]])(
         'never opens for a shop outside the rule shipping to %s',

@@ -97,7 +97,7 @@ and no more:
 | ------------------ | ------------------------------------------------------------------ | ---------------------------------- | ---------------------------------------- |
 | **Rule**           | one `action` on one `subject`, optionally narrowed by conditions   | `display:Order`, `create:Refund`   | the owning module's `authorization.yaml` |
 | **Permission set** | a named bundle of rules, per module                                | `OrderDisplay`, `PaymentRefunding` | the same file, beside its rules          |
-| **Role**           | a list of sets, nothing else: no level, no rank, no inherited bits | `support`, `moderator`             | `shared/authorization-roles.yaml`        |
+| **Role**           | a list of sets, nothing else: no level, no rank, no inherited bits | `support`, `moderator`             | `shared/rules/authorization-roles.yaml`  |
 
 A rule's id is `<action>:<subject>` and no two rules share one. A guard asks for an action on a
 subject, `requirePermission('display', 'Order')`; it never names a set or a role, and a route
@@ -115,13 +115,13 @@ own-rows rule is the **action**, and that is why the vocabulary has two staff ac
 Every signed-in account holds `read:Order`, so a guard that accepted it for the staff list would
 let every customer in. The staff door asks `display:Order`, which no customer holds. A holder of
 `display:Order` also passes a plain `read` check, because the ability emits the implied rule beside
-it (`implies:` in `shared/authorization-keys.yaml`): one query serves a customer's own rows and a
+it (`implies:` in `shared/authorization-keys.generated.yaml`): one query serves a customer's own rows and a
 staff member's every row. A subject with no own-rows rule keeps plain `read`, so `read:Task` is
 the staff door of the inbox.
 
 **There is no wildcard of any kind.** No `manage`, no `all`. `admin` lists every declared tenant
 set **by name** (bar the ones every signed-in account already gets from its
-[audience](#everyone-is-a-customer-first)), spelled out in `shared/authorization-roles.yaml` like
+[audience](#everyone-is-a-customer-first)), spelled out in `shared/rules/authorization-roles.yaml` like
 every other role, so a set a new module needs is a line added to that file. The conformance suite
 refuses a declared rule the list omits. See the file's own header note for why.
 
@@ -143,7 +143,7 @@ unrepresentable rather than discouraged.
 Three supporting rules: ids are stored in credentials, so an action and a subject are **stable**
 (renaming one is a migration); a **module declares its own rules and sets**, so deleting a module
 deletes them; and **roles are data, permissions are code** — a role's sets live in
-`shared/authorization-roles.yaml` alone, the one definition every deployment and the PHP twin share,
+`shared/rules/authorization-roles.yaml` alone, the one definition every deployment and the PHP twin share,
 and a deployment may never invent a rule, because a rule nothing checks grants nothing while looking
 like it grants something. A role's ASSIGNMENT — who holds it, where — is the one thing the database
 stores; see [Where it lives](#where-it-lives).
@@ -171,7 +171,7 @@ flowchart LR
 ```
 
 So a staff role lists only the staff sets it adds, and the audience roles in
-`shared/authorization-roles.yaml` hold every own-rows rule of the shop. A rule an account holds
+`shared/rules/authorization-roles.yaml` hold every own-rows rule of the shop. A rule an account holds
 twice would say one thing in two places, so `tests/unit/kernel/permissions.test.ts` refuses a staff
 role that lists an audience rule. Verifying an address is one write (`verifiedAt`), with nothing to
 promote; an operator who types an address in sets it the same way.
@@ -314,7 +314,7 @@ freshly proved session is demanded, and whether an API key can be minted with it
 The model is stored, evaluated, compiled into every scoped read, published to the client and
 enforced per rule.
 
-- **`shared/authorization-keys.yaml`** — every rule and permission set, with each rule's subject, scope, conditions and step-up
+- **`shared/authorization-keys.generated.yaml`** — every rule and permission set, with each rule's subject, scope, conditions and step-up
   tier, and the `implies:` map of the staff actions. **`-roles.yaml`** — the presets both seeders read. **`-conformance.yaml`** — dozens of
   cases, most of them denials, run by both backends. All three byte-identical in the PHP twin.
 - **`kernel/permissions.ts`** turns an account's audience and its two role names into the rules for

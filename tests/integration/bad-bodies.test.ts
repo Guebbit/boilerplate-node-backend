@@ -307,7 +307,7 @@ describe('hostile content in a well-formed body', () => {
     /**
      * One end-to-end statement that an ordinary route does not pollute the prototype. The ledger
      * path and the serializer are covered elsewhere; what was missing is the plain case, and it
-     * is expected green — Zod strips unknown keys on every schema-validated route.
+     * is expected green — body schemas are strict (`z.strictObject`), so an unknown key is refused.
      */
     it('does not let a __proto__ key in a body reach Object.prototype', async () => {
         const response = await api()

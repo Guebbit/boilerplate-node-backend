@@ -3,7 +3,7 @@
 # Committed with identical bytes in `boilerplate-node-backend` and
 # `boilerplate-php-laravel-backend`, and read by both seeders rather than restated in each.
 #
-# WHY THIS FILE EXISTS AT ALL. `authorization-keys.yaml` (the rules and the sets) and `authorization-conformance.yaml` make
+# WHY THIS FILE EXISTS AT ALL. `authorization-keys.generated.yaml` (the rules and the sets) and `authorization.cases.yaml` make
 # the two implementations *agree*; only this one makes them the same **product**. The PHP twin
 # stores roles in a table via `spatie/laravel-permission` and the Node twin does not store them
 # that way at all, so two independently written seeders would produce two different shops that
@@ -34,7 +34,7 @@
 # mine, `display:Order` is every row), so nothing has to be inferred from which wildcard a role
 # happens to hold. `admin` lists every declared tenant set that the `customer` audience does not
 # already give, for the same reason every other role does: a set nothing lists grants nothing —
-# see `authorization-keys.yaml`'s closing note.
+# see `authorization-keys.generated.yaml`'s closing note.
 
 version: 1
 
@@ -179,9 +179,9 @@ roles:
       description: >-
           Unrestricted within this shop, and only within it — and note that it says nothing
           about the platform. One role cannot reach both scopes, which is the point. Every tenant
-          set the `customer` audience does not already give is listed below by name; the conformance
-          suite refuses any other declared tenant rule this list omits, so adding a set here can
-          never again be optional.
+          set the `customer` audience does not already give is listed below by name;
+          `tests/cross-cutting/authorization-keys.test.ts` (`isUnrestrictedRole`) refuses any other
+          declared tenant rule this list omits, so adding a set here can never again be optional.
       sets: &admin_sets
           - ProductDisplay
           - ProductManagement

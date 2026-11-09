@@ -51,7 +51,7 @@ describe('user routes — what is mounted', () => {
 });
 
 describe('user routes — authorization', () => {
-    it.each(ALL)('%s is reachable only by an authenticated admin', (signature) => {
+    it.each(ALL)('%s carries an identity guard, then a permission guard', (signature) => {
         const guards = guardsOn(router, signature);
 
         // All three, in order. `getAuth` populates the context, the identity guard demands one,

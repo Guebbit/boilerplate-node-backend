@@ -83,7 +83,7 @@ describe('localeService.updateEntry — the audit row', () => {
         expect(metadataOf(auditSpy, localeAuditActions.ADMIN_LOCALE_ENTRY_UPDATED)).toEqual({
             locale: 'es',
             app: FRONTEND,
-            key: 'cart.title',
+            entryKey: 'cart.title',
             changedFields: ['value']
         });
     });

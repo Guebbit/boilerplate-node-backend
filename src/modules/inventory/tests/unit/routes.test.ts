@@ -34,7 +34,7 @@ describe('inventory routes', () => {
         'POST /levels/:productId/receive',
         'POST /levels/:productId/adjust',
         'POST /reservations/sweep'
-    ])('%s is reachable only by an authenticated admin', (signature) => {
+    ])('%s carries an identity guard, then a permission guard', (signature) => {
         const guards = guardsOn(router, signature);
 
         expect(guards).toContain('getAuth');

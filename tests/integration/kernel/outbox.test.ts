@@ -250,6 +250,81 @@ describe('a relay that dies mid-dispatch', () => {
     });
 });
 
+describe('a relay whose lease was taken over mid-dispatch', () => {
+    /** The token a peer relay holds after taking the row over. */
+    const PEER_TOKEN = 'peer-relay-token';
+
+    /** The lease expiry a peer relay holds after taking the row over. */
+    const PEER_LOCKED_UNTIL = new Date(Date.now() + 60_000);
+
+    /** Stand in for a peer taking the row over while this relay's consumer is still running. */
+    const peerTakesOver = (): Promise<unknown> =>
+        outboxEventModel
+            .updateOne({}, { $set: { leaseToken: PEER_TOKEN, lockedUntil: PEER_LOCKED_UNTIL } })
+            .exec();
+
+    it('records no failure, no metric and no dead notice for a consumer that fails late', async () => {
+        const announced: unknown[] = [];
+        onDomainEvent(OUTBOX_EVENT_DEAD, (fact) => {
+            announced.push(fact);
+        });
+        onDomainEvent('test.outbox', () =>
+            peerTakesOver().then(() => {
+                throw new Error('consumer down');
+            })
+        );
+        await write(1);
+
+        expect(await relayOutbox()).toEqual({ published: 0, retried: 0, dead: 0 });
+
+        expect(await outboxEventModel.findOne().lean()).toMatchObject({
+            status: 'pending',
+            attempts: 0,
+            leaseToken: PEER_TOKEN,
+            lockedUntil: PEER_LOCKED_UNTIL
+        });
+        expect(announced).toEqual([]);
+    });
+
+    it('parks nothing and announces nothing when the last attempt fails late', async () => {
+        const announced: unknown[] = [];
+        onDomainEvent(OUTBOX_EVENT_DEAD, (fact) => {
+            announced.push(fact);
+        });
+        await withEnvironmentOverrides({ NODE_OUTBOX_MAX_ATTEMPTS: '1' }, async () => {
+            onDomainEvent('test.outbox', () =>
+                peerTakesOver().then(() => {
+                    throw new Error('consumer down');
+                })
+            );
+            await write(1);
+
+            expect(await relayOutbox()).toEqual({ published: 0, retried: 0, dead: 0 });
+        });
+
+        expect(await outboxEventModel.findOne().lean()).toMatchObject({
+            status: 'pending',
+            attempts: 0,
+            leaseToken: PEER_TOKEN,
+            lockedUntil: PEER_LOCKED_UNTIL
+        });
+        expect(announced).toEqual([]);
+    });
+
+    it('leaves the row pending under the peer when the consumer succeeds late', async () => {
+        onDomainEvent('test.outbox', () => peerTakesOver().then(() => undefined));
+        await write(1);
+
+        expect(await relayOutbox()).toEqual({ published: 0, retried: 0, dead: 0 });
+
+        expect(await outboxEventModel.findOne().lean()).toMatchObject({
+            status: 'pending',
+            leaseToken: PEER_TOKEN,
+            lockedUntil: PEER_LOCKED_UNTIL
+        });
+    });
+});
+
 /** A state change stand-in: one document in a collection the test can read back. */
 const marks = (): Promise<number> => mongoose.connection.collection('marks').countDocuments();
 

@@ -980,7 +980,7 @@ components:
                 username:
                     type: string
                 # The STAFF role this person holds inside the shop, by name — one of the presets in
-                # `shared/authorization-roles.yaml`. Absent for a plain customer: `guest`,
+                # `shared/rules/authorization-roles.yaml`. Absent for a plain customer: `guest`,
                 # `unverified` and `customer` are computed per request, never stored or granted.
                 # A NAME rather than a key list: roles are data a deployment may edit, and
                 # publishing the keys would freeze each account at the permissions its role held on
@@ -1023,9 +1023,8 @@ components:
                     type: string
                 website:
                     type: string
-                # "Never asked" and "denied" are the same answer, arrived at differently — the
-                # gate is opt-in, so only `true` captures anything
-                # (`observability/analytics/index.ts`).
+                # Absent: never asked; `false`: declined. The gate treats both as no capture,
+                # since only `true` captures anything (`observability/analytics/index.ts`).
                 analyticsConsent:
                     type: boolean
                 # When the visitor chose, for the record GDPR Art. 7(1) asks a controller to be able

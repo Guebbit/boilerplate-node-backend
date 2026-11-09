@@ -35,7 +35,7 @@ beforeEach(() => {
         'rules:\n    - action: read\n      subject: Translation\n'
     );
     write(
-        'shared/authorization-roles.yaml',
+        'shared/rules/authorization-roles.yaml',
         [
             'roles:',
             '    - name: clerk',
@@ -50,12 +50,8 @@ beforeEach(() => {
         ].join('\n')
     );
     write(
-        'shared/authorization-conformance.yaml',
+        'shared/cases/authorization.cases.yaml',
         [
-            'admin: &admin',
-            '    - display:Order',
-            '    - read:User',
-            '',
             'cases:',
             '    - name: an order is readable',
             '      caller: { id: a, permissions: [display:Order] }',
@@ -92,7 +88,7 @@ describe('the shared authorization files after a module is removed', () => {
     it('drops the grants from a role, keeping an empty list parseable', () => {
         stripRoleGrants(root, readRemovedAuthorization(root, ['orders']));
 
-        const roles = read('shared/authorization-roles.yaml');
+        const roles = read('shared/rules/authorization-roles.yaml');
         expect(roles).not.toContain('Order');
         expect(roles).toContain('sets: []');
         expect(roles).toContain('- UserDisplay');
@@ -101,7 +97,7 @@ describe('the shared authorization files after a module is removed', () => {
     it('drops cases about the removed subject and cases whose caller held only removed rules', () => {
         stripConformanceCases(root, readRemovedAuthorization(root, ['orders']));
 
-        const conformance = read('shared/authorization-conformance.yaml');
+        const conformance = read('shared/cases/authorization.cases.yaml');
         expect(conformance).not.toContain('an order is readable');
         expect(conformance).not.toContain('nothing left to hold');
         expect(conformance).toContain('permissions: [read:User]');

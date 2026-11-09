@@ -41,7 +41,7 @@ flowchart LR
 shop's own staff.
 
 This module owns the tenant-facing door onto the same collection: `GET /audit`, gated on
-`read:AuditLog` — held by `admin` only in `shared/authorization-roles.yaml`.
+`read:AuditLog` — held by `admin` only in `shared/rules/authorization-roles.yaml`.
 Same rows, same shape, different audience: `observability`'s route answers "what happened across
 every shop", this module's own route answers "what happened in mine". Enabling this module without
 `observability` gives a working `GET /audit` and no platform-wide view — a legitimate build, just a
@@ -131,6 +131,8 @@ is returned as a keyed digest (`hmac:…`): the operator can correlate "this add
 incidents" and never read the address. An operator watching an installation needs the incidents,
 and holding no shop key was never meant to include reading a shop's customers.
 
+The stored row's `metadata` is credential-scrubbed before it is written (a `password` or `token` key becomes `[REDACTED]`), exactly as the log line's is; `ip` stays raw in the row on purpose.
+
 ## What an update records
 
 Every `*.updated` audit row says what the edit moved, through one pure helper,
@@ -155,7 +157,7 @@ returns no previous value (the backorder limit), it reads first.
 | `order.updated`                              |                                                          | email                                  |
 | `admin.task.status_updated`                  | status                                                   | admin notes                            |
 | `admin.locale.updated`                       | name, native name, direction, active                     |                                        |
-| `admin.locale_entry.updated`                 |                                                          | value (the key rides along)            |
+| `admin.locale_entry.updated`                 |                                                          | value (`entryKey` rides along)         |
 | `admin.backorder.limit.set`                  | backorder limit                                          |                                        |
 | `example.updated`                            |                                                          | title, body                            |
 
@@ -177,7 +179,7 @@ Every rule this module declares and who holds it, role by role. The rule is what
 
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
-`src/modules/*/authorization.yaml` and the roles in `shared/authorization-roles.yaml`, asked of the
+`src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
 evaluator — [Authorization](../theory/authorization.md) explains the model.
 
 <!-- permissions:end -->

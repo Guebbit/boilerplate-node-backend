@@ -51,7 +51,7 @@ describe('observability routes — the two guard styles', () => {
     });
 
     it.each(['GET /health', 'GET /metrics/overview', 'GET /audit'])(
-        '%s takes the ordinary admin chain',
+        '%s carries an identity guard, then a permission guard',
         (signature) => {
             const guards = guardsOn(router, signature);
 

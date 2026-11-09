@@ -8,7 +8,7 @@
         "not-shippable": "This fulfillment order cannot ship right now",
         "not-physical": "This fulfillment order has nothing to ship — fulfil it instead",
         "not-digital": "This fulfillment order has physical items — ship it instead of fulfilling it",
-        "lines-invalid": "The lines name a product that is not here, or more than remains",
+        "lines-invalid": "The lines name a product that is not here, more than remains, or the same product twice",
         "not-holdable": "Only an open fulfillment order can be put on hold",
         "not-releasable": "This fulfillment order is not on hold, or waits for stock and is released only by it arriving",
         "not-deliverable": "This shipment has already been delivered, or its order cannot take a delivery now",

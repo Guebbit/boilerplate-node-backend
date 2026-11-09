@@ -6,7 +6,7 @@
  * them untouched, `--check` in `complete`.
  *
  * ONE TABLE per page, and only generated ones. What a role DECLARES is prose on the page, written by hand from
- * `shared/authorization-roles.yaml`'s own `title` and `description` — that file documents itself,
+ * `shared/rules/authorization-roles.yaml`'s own `title` and `description` — that file documents itself,
  * and a generated copy of its set lists said less than the descriptions it ignored.
  *
  * What it answers cannot be written by hand, which is why this survives: `admin` alone holds most
@@ -255,7 +255,7 @@ const moduleBody = (pageModules: readonly string[]): string => {
         '',
         '✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·',
         'Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in',
-        '`src/modules/*/authorization.yaml` and the roles in `shared/authorization-roles.yaml`, asked of the',
+        '`src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the',
         'evaluator — [Authorization](../theory/authorization.md) explains the model.'
     ].join('\n');
 };

@@ -256,12 +256,12 @@ export interface ProductQuantity {
 /** The verdict {@link checkShipLines} returns. */
 export type ShipLinesVerdict =
     | { ok: true; lines: ProductQuantity[] }
-    | { ok: false; reason: 'nothing-remains' | 'unknown-product' | 'too-many' };
+    | { ok: false; reason: 'nothing-remains' | 'unknown-product' | 'too-many' | 'duplicate' };
 
 /**
  * Decide which lines a shipment carries. No lines asked for means everything that remains; lines
  * asked for must each name a product on the fulfillment order and stay within what remains of it.
- * The same product named twice counts once, summed.
+ * The same product named twice is refused.
  * Alike on purpose; each module owns its "what remains"; free to diverge.
  *
  * @param lines - the fulfillment order's lines
@@ -281,18 +281,17 @@ export const checkShipLines = (
         return all.length > 0 ? { ok: true, lines: all } : { ok: false, reason: 'nothing-remains' };
     }
 
-    const summed = new Map<string, number>();
-    for (const { productId, quantity } of requested)
-        summed.set(productId, (summed.get(productId) ?? 0) + quantity);
-
-    for (const [productId, quantity] of summed) {
+    const seen = new Set<string>();
+    for (const { productId, quantity } of requested) {
+        if (seen.has(productId)) return { ok: false, reason: 'duplicate' };
+        seen.add(productId);
         if (!left.has(productId)) return { ok: false, reason: 'unknown-product' };
         if (quantity > (left.get(productId) ?? 0)) return { ok: false, reason: 'too-many' };
     }
 
     return {
         ok: true,
-        lines: [...summed].map(([productId, quantity]) => ({ productId, quantity }))
+        lines: requested.map(({ productId, quantity }) => ({ productId, quantity }))
     };
 };
 

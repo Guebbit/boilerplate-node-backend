@@ -43,7 +43,7 @@ describe('the committed ops rules files', () => {
         ['shared/rules/images.yaml', imagesSchema],
         ['shared/rules/outbox.yaml', outboxSchema],
         ['shared/rules/defaults.yaml', defaultsSchema],
-        ['shared/authorization-keys.yaml', stepUpDocumentSchema]
+        ['shared/authorization-keys.generated.yaml', stepUpDocumentSchema]
     ] as const)('%s satisfies its schema', (file, schema) => {
         expect(schema.safeParse(yamlOf(file)).success).toBe(true);
     });

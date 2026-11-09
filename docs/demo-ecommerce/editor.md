@@ -105,7 +105,7 @@ become a mischarge: the same account that rewrites a title can reach the price.
 The separation still exists at the level of KEYS. `Translation` is its own CASL subject, entirely
 separate from `Product`, so `update:Translation` grants no way to touch a price by itself — a
 deployment that wants a words-only person cuts a role holding the `create`/`update`/`delete:Locale` and `read`/`update:Translation`
-keys and gets exactly that. `shared/authorization-conformance.yaml` pins it.
+keys and gets exactly that. `shared/cases/authorization.cases.yaml` pins it.
 :::
 
 ## The words we used

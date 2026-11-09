@@ -89,7 +89,7 @@ describe('order routes — authorization', () => {
 
     it('gates the override door behind its own permission, not the ordinary write one', () => {
         // A distinct key (`override:Order`), so `update:Order` alone never reaches this
-        // door — see `shared/authorization-keys.yaml`'s `stepUp: critical` on it.
+        // door — see `shared/authorization-keys.generated.yaml`'s `stepUp: critical` on it.
         expect(guardsOn(router, 'POST /:id/status-override')).toContain('requirePermissionGuard');
     });
 

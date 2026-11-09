@@ -8,7 +8,7 @@
  * See: docs/tools/winston.md
  */
 
-import { auditLogger } from '@infrastructure/adapters/logger';
+import { auditLogger, redactCredentials } from '@infrastructure/adapters/logger';
 import { getActiveSpanContext } from '@infrastructure/observability/tracer';
 import { AuditEntryItemActorRole, AuditEntryItemLevel, AuditEntryItemOutcome } from '@types';
 import type { AuthorizationScope, CallerContext } from '@types';
@@ -103,7 +103,7 @@ export interface AuditEvent {
     /** What was acted upon, e.g. 'product' — with `targetId`, the object of the action. */
     targetType?: string;
     targetId?: string;
-    /** Action-specific extras. Anything here passes through the logger's redaction pipeline. */
+    /** Action-specific extras. Credentials are scrubbed on both copies; personal fields on the log line only. */
     metadata?: Record<string, unknown>;
 }
 
@@ -158,13 +158,23 @@ export const emitAuditEvent = (event: AuditEvent): void => {
     // Level mirrors the outcome, so an ops alert on `level: warn` in the audit stream picks up
     // failed logins and permission denials without needing to know the action vocabulary.
     const level = event.outcome === 'success' ? 'info' : ('warn' as const);
+    // Credentials are scrubbed once here so the log line and the stored row get the same
+    // metadata; personal fields stay raw in the row (docs/theory/data-protection.md) and are
+    // handled by the logger's own pipeline for the line.
+    const scrubbed: AuditEvent = {
+        ...event,
+        // A single narrowing cast: the walk returns `unknown`, but it copies a record to a record.
+        ...(event.metadata && {
+            metadata: redactCredentials(event.metadata) as Record<string, unknown>
+        })
+    };
     // `logger.log(level, message, meta)` — the action doubles as the log message, and the whole
     // event object is attached as structured metadata.
-    auditLogger.log(level, event.action, event);
+    auditLogger.log(level, event.action, scrubbed);
 
     if (!auditSink) return;
 
-    const entry: AuditEntry = { ...event, timestamp: new Date(), level };
+    const entry: AuditEntry = { ...scrubbed, timestamp: new Date(), level };
     // Belt and braces: the sink contract forbids throwing, and this catch is what makes a sink
     // that breaks the contract anyway unable to take down the request that triggered it.
     // eslint-disable-next-line no-restricted-syntax -- the sink contract forbids throwing; this contains a sink that breaks it anyway

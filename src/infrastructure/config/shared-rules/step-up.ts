@@ -1,6 +1,6 @@
 /**
  * @module
- * The schema of the `stepUp:` block in `shared/authorization-keys.yaml`: how recent a sign-in
+ * The schema of the `stepUp:` block in `shared/authorization-keys.generated.yaml`: how recent a sign-in
  * must be, per tier, in seconds. Read through a loose wrapper, since the rest of the document is
  * `kernel/permissions.ts`'s business.
  *
@@ -20,5 +20,5 @@ export const stepUpWindowsSchema = z.strictObject({
     sensitive: seconds
 });
 
-/** The slice of `authorization-keys.yaml` this schema reads. */
+/** The slice of `authorization-keys.generated.yaml` this schema reads. */
 export const stepUpDocumentSchema = z.looseObject({ stepUp: stepUpWindowsSchema });

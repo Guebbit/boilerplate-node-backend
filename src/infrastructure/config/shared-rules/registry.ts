@@ -1,7 +1,7 @@
 /**
  * @module
  * Every shared rules file with its schema, in one list. `regenerate` reads it to write
- * `shared/rules/schemas/<name>.schema.json`, and the `.generated.ts` of an entry that declares
+ * `shared/rules/schemas/<name>.generated.schema.json`, and the `.generated.ts` of an entry that declares
  * one; the boot-time loaders read the same schemas.
  *
  * Relative imports only: see `src/infrastructure/config/shared-rules/load.ts`.

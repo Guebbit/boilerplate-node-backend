@@ -1,20 +1,20 @@
 /**
  * @module
  * The edits a new module still makes OUTSIDE its own folder, as pure text transforms. Today that
- * is four files, and each is here because something reads a hand-kept list:
+ * is three files, and each is here because something reads a hand-kept list:
  *
  * | file                                            | when                  | why a module is named there                  |
  * | ----------------------------------------------- | --------------------- | -------------------------------------------- |
  * | `src/modules.ts`                                | always                | the registry: import, array, `ModuleName`    |
- * | `shared/authorization-roles.yaml`               | the module has a set  | admin (and so system) lists every set by name |
- * | `shared/authorization-conformance.yaml`         | the module has a set  | its fixture copy of the admin list           |
+ * | `shared/rules/authorization-roles.yaml`               | the module has a set  | admin (and so system) lists every set by name |
+ * | `shared/cases/authorization.cases.yaml`         | the module has a set  | its fixture copy of the admin list           |
  * | `tests/cross-cutting/replace-patch-parity.test.ts` | a Replace/Update pair | the exact set of PUT/PATCH pairs          |
  *
  * Each transform throws when its anchor is gone, so a file that changed shape refuses the
  * scaffold before anything is written instead of being silently skipped.
  */
 
-import { permissionRules, permissionSetName, type ModuleNames } from './names';
+import { permissionSetName, type ModuleNames } from './names';
 import { registerModule } from './registry';
 
 /** One edit to an existing file. */
@@ -92,13 +92,8 @@ const addParityEntry = (source: string, names: ModuleNames): string => {
 export const centralEdits = (names: ModuleNames): CentralEdit[] => [
     { path: 'src/modules.ts', apply: (source) => registerModule(source, names) },
     {
-        path: 'shared/authorization-roles.yaml',
+        path: 'shared/rules/authorization-roles.yaml',
         apply: (source) => appendToList(source, 'sets: &admin_sets', [permissionSetName(names)])
-    },
-    {
-        path: 'shared/authorization-conformance.yaml',
-        apply: (source) =>
-            appendToList(source, 'admin-permissions: &admin_permissions', permissionRules(names))
     },
     {
         path: 'tests/cross-cutting/replace-patch-parity.test.ts',

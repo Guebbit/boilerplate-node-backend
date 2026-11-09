@@ -307,6 +307,23 @@ describe('POST /delivery/fulfillment-orders/{id}/shipments', () => {
         expect(response.body.errors[0].code).toBe('DELIVERY_LINES_INVALID');
     });
 
+    it('matches the error contract for a product named twice within what remains', async () => {
+        const { bearer, fulfillmentOrderId, productId } = await adminWithOrder(2);
+
+        const response = await api()
+            .post(`/delivery/fulfillment-orders/${fulfillmentOrderId}/shipments`)
+            .set('Authorization', bearer)
+            .send({
+                lines: [
+                    { productId, quantity: 1 },
+                    { productId, quantity: 1 }
+                ]
+            });
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].code).toBe('DELIVERY_LINES_INVALID');
+    });
+
     it('matches the error contract for a digital fulfillment order — nothing here would ride in a parcel', async () => {
         const { user, bearer } = await authenticateAs('admin');
         const digital = await createProduct({ requiresShipping: false });

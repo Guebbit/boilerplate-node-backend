@@ -1,6 +1,6 @@
 # Permission Vocabulary
 
-The permission vocabulary is written **once**, in `shared/authorization-keys.yaml`, and generated into
+The permission vocabulary is written **once**, in `shared/authorization-keys.generated.yaml`, and generated into
 both repos as closed TypeScript lists, so a misspelled permission fails at compile time instead of
 quietly answering "no".
 
@@ -27,7 +27,7 @@ scope or step-up tier. `requirePermission`, `holds` and `callerForSubject` take
 flowchart LR
     ROOT["shared/contracts/<br/>authorization-keys.root.yaml<br/><i>you edit this</i>"]
     BUNDLE["regenerate"]
-    KEYS["shared/authorization-keys.yaml"]
+    KEYS["shared/authorization-keys.generated.yaml"]
     GEN["gen:permission-vocabulary<br/>(also run by gen:api)"]
     BE["api/permission-vocabulary.ts<br/><i>gitignored</i>"]
     SYNC["sync:frontend<br/><i>copies the yaml</i>"]
@@ -40,7 +40,7 @@ flowchart LR
 
 | Side     | Reads                                                 | Writes                                          | Committed?            |
 | -------- | ----------------------------------------------------- | ----------------------------------------------- | --------------------- |
-| Backend  | `shared/authorization-keys.yaml`                      | `api/permission-vocabulary.ts`                  | no, like `api/`       |
+| Backend  | `shared/authorization-keys.generated.yaml`            | `api/permission-vocabulary.ts`                  | no, like `api/`       |
 | Frontend | `<frontend>/contracts/authorization-keys.yaml` (copy) | `<frontend>/contracts/permission-vocabulary.ts` | yes, like `routes.ts` |
 
 `regenerate` runs `gen:permission-vocabulary` **before** `contracts:bundle`: the bundler loads the kernel,

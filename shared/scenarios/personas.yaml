@@ -15,7 +15,7 @@
 #   pendingEmail      the address it asked to move to and has not confirmed, or null
 #   analyticsConsent  opted in to analytics (the consent gate is opt-in)
 #
-# Every account's memberships name a role from `shared/authorization-roles.yaml`. A customer holds
+# Every account's memberships name a role from `shared/rules/authorization-roles.yaml`. A customer holds
 # none: it is computed from `verified`, never granted.
 
 # Base32, 160 bits. One secret for every authenticator: a demo fixture gains nothing from seven.

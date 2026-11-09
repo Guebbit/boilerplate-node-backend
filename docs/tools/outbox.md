@@ -35,15 +35,16 @@ sequenceDiagram
 
 ## What it guarantees
 
-| Property              | How                                                                                       |
-| --------------------- | ----------------------------------------------------------------------------------------- |
-| Atomic with the write | `enqueueOutboxEvent(name, payload, aggregateId, session)` — the session is required       |
-| At-least-once         | A row is `published` only after every consumer returned. A crash in between redelivers it |
-| Idempotent consumers  | Every delivery of one event carries the same `meta.eventId` (the row's id)                |
-| Ordered per aggregate | The oldest unpublished row of an aggregate blocks its later rows                          |
-| Retries with backoff  | 5s, doubling, capped at 1h                                                                |
-| Poison handling       | After the last attempt the row is `dead`: metric, alert, log — and it stops blocking      |
-| Cleanup               | Published rows expire by TTL (`NODE_OUTBOX_RETENTION_DAYS`). Dead rows stay for a human   |
+| Property              | How                                                                                                                  |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Atomic with the write | `enqueueOutboxEvent(name, payload, aggregateId, session)` — the session is required                                  |
+| At-least-once         | A row is `published` only after every consumer returned. A crash in between redelivers it                            |
+| One writer per claim  | Each claim carries a random `leaseToken`; a result write must match it, so a relay whose lease lapsed writes nothing |
+| Idempotent consumers  | Every delivery of one event carries the same `meta.eventId` (the row's id)                                           |
+| Ordered per aggregate | The oldest unpublished row of an aggregate blocks its later rows                                                     |
+| Retries with backoff  | 5s, doubling, capped at 1h                                                                                           |
+| Poison handling       | After the last attempt the row is `dead`: metric, alert, log — and it stops blocking                                 |
+| Cleanup               | Published rows expire by TTL (`NODE_OUTBOX_RETENTION_DAYS`). Dead rows stay for a human                              |
 
 **Exactly-once is not promised.** A consumer where a duplicate does harm (stock, money, webhook
 fan-out) dedupes on `meta.eventId`; a mail may repeat, see [rabbitmq.md](rabbitmq.md). `webhooks`
@@ -222,11 +223,11 @@ There is deliberately no admin API: dead events are a defect to fix, not a queue
 
 ## Operating it
 
-| Variable                     | Default | Meaning                                                       |
-| ---------------------------- | ------- | ------------------------------------------------------------- |
-| `NODE_OUTBOX_MAX_ATTEMPTS`   | `10`    | Failed dispatches before `dead`                               |
-| `NODE_OUTBOX_LEASE_SECONDS`  | `60`    | A relay's claim on one row. Keep above the slowest consumer   |
-| `NODE_OUTBOX_RETENTION_DAYS` | `7`     | Days a published row is kept (TTL index; `db:sync` to change) |
+| Variable                     | Default | Meaning                                                                                                                                           |
+| ---------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_OUTBOX_MAX_ATTEMPTS`   | `10`    | Failed dispatches before `dead`                                                                                                                   |
+| `NODE_OUTBOX_LEASE_SECONDS`  | `60`    | A relay's claim on one row. Keep above the slowest consumer; a relay that outlives it loses its result: the write is dropped and a warning logged |
+| `NODE_OUTBOX_RETENTION_DAYS` | `7`     | Days a published row is kept (TTL index; `db:sync` to change)                                                                                     |
 
 | Signal                          | Meaning                                                        |
 | ------------------------------- | -------------------------------------------------------------- |
@@ -251,7 +252,7 @@ mark rows published with nobody listening.
   exists makes the relay deliver the row again, and once it exists the record is the durable
   intent (the refund sweep finishes it with the same idempotency key), so a provider refusal is
   logged and the row is answered. A row that fails every attempt is parked `dead` and
-  `outbox_events_dead_total` pages: after about an hour of backoff the database or the code is
+  `outbox_events_dead_total` pages: after about 40 minutes of backoff with the defaults the database or the code is
   broken, which is worth a page.
 - **Delivery is after the response.** Every event above is published by the relay, not inside the
   request, so a listener sees it milliseconds later and a test that asserts the effect awaits

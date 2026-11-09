@@ -113,6 +113,25 @@ describe('unsupportedKeywords', () => {
 
         expect(unsupportedKeywords(spec)).toEqual(['nullable']);
     });
+
+    it('accepts `unevaluatedProperties: false`, which holds for declared-properties-only draws', () => {
+        const spec = specOf({
+            A: { allOf: [{ type: 'object' }], unevaluatedProperties: false } as SchemaNode
+        });
+
+        expect(unsupportedKeywords(spec)).toEqual([]);
+    });
+
+    it.each([true, { type: 'string' }])(
+        'still reports `unevaluatedProperties` when its value is %j',
+        (value) => {
+            const spec = specOf({
+                A: { allOf: [{ type: 'object' }], unevaluatedProperties: value } as SchemaNode
+            });
+
+            expect(unsupportedKeywords(spec)).toEqual(['unevaluatedProperties']);
+        }
+    );
 });
 
 describe('arbitraryFor', () => {

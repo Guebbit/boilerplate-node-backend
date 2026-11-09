@@ -19,7 +19,7 @@ export const orderRouter = Router();
 orderRouter.get('/:id/payments', getAuth, isAuth, getOrderPayments);
 
 // POST /orders/:id/payments — the admin recording money by hand. Same `stepUp` arrangement as the
-// refund: `create:Payment` carries it in `shared/authorization-keys.yaml`.
+// refund: `create:Payment` carries it in `shared/authorization-keys.generated.yaml`.
 orderRouter.post(
     '/:id/payments',
     getAuth,

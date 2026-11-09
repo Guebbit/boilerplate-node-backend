@@ -89,7 +89,7 @@ the ten; they exist to be _looked at_, not signed into.
 
 Ten roles, each a job somebody actually does. They are described here rather than in the theory
 pages because this is where you pick an account to log in as. Each one is defined in
-`shared/authorization-roles.yaml`, the same file the PHP twin seeds from — which is what makes both
+`shared/rules/authorization-roles.yaml`, the same file the PHP twin seeds from — which is what makes both
 backends ship the same shop rather than two that merely pass the same tests.
 
 **`guest`, `unverified` and `customer`** — not roles anybody is granted: the audience a request

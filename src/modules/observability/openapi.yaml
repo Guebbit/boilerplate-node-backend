@@ -28,7 +28,7 @@ paths:
                         text/event-stream:
                             schema:
                                 type: string
-                # Guarded by `requireUnrestrictedViaCookie`: an EventSource cannot set an Authorization
+                # Guarded by `requirePermissionViaCookie`: an EventSource cannot set an Authorization
                 # header, so the HttpOnly refresh cookie is the credential here.
                 '401':
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized'
@@ -46,10 +46,10 @@ paths:
 
                 This is NOT the liveness probe the container HEALTHCHECK calls (`GET /livez`) or
                 the readiness probe a load balancer calls (`GET /readyz`) — this is the detailed,
-                authenticated view for a dashboard. Nothing here performs I/O; every dependency is read from the connection
-                state its adapter already maintains.
+                authenticated view for a dashboard. `dependencies` performs no I/O: each is read from the connection state its adapter
+                already maintains. `jobs` and `queues` read live.
 
-                Requires admin role.
+                Requires the operator role (`read:ObservabilitySnapshot`).
             operationId: getObservabilityHealth
             security:
                 - bearerAuth: []
@@ -117,7 +117,7 @@ paths:
             description: |
                 Key operational metrics derived from Prometheus counters/histograms,
                 returned as structured JSON for dashboard KPI cards and charts.
-                Requires admin role.
+                Requires the operator role (`read:ObservabilitySnapshot`).
             operationId: getObservabilityMetricsOverview
             security:
                 - bearerAuth: []

@@ -221,7 +221,7 @@ Three things in the flow above are decisions rather than mechanics:
   address (one that is neither the current nor the already-pending address) is held to one a
   minute per account, answering `429 EMAIL_CHANGE_TOO_SOON` with `details.retryAfter`, like the
   resend button. The caller is signed in, so the answer can be honest. A password-reset request is
-  paced the same way but SILENTLY: inside the minute it answers the same `200` and sends nothing,
+  paced the same way but SILENTLY: inside the minute it answers the same `204` and sends nothing,
   because a `429` would tell a stranger which addresses have an account. Both also spend the
   recipient's mailbox budget ([security](../tools/security.md#mail-to-one-mailbox-the-victim-s-budget)),
   which a refused request does not.

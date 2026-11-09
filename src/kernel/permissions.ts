@@ -1,8 +1,8 @@
 /**
  * @module
  * The declared permission rules and sets, and the preset roles, read from the two shared artefacts
- * that the PHP twin reads byte-for-byte identically — `shared/authorization-keys.yaml` and
- * `shared/authorization-roles.yaml`.
+ * that the PHP twin reads byte-for-byte identically — `shared/authorization-keys.generated.yaml` and
+ * `shared/rules/authorization-roles.yaml`.
  *
  * Three layers, the CanCan model as Solidus uses it: a RULE is one action on one subject, a SET
  * is a named bundle of rules, a ROLE is a list of sets. A rule's id is `<action>:<subject>`.
@@ -58,7 +58,7 @@ import {
 export const ruleId = (action: string, subject: string): string => `${action}:${subject}`;
 
 /**
- * The action vocabulary a declared RULE may carry, generated from `shared/authorization-keys.yaml`'s
+ * The action vocabulary a declared RULE may carry, generated from `shared/authorization-keys.generated.yaml`'s
  * `actions:` so the type and the Zod schema below draw on the one list. `manage` is deliberately
  * absent: there is no wildcard of any kind, so nothing declares it as ITS action.
  * See docs/tools/permission-vocabulary.md.
@@ -130,7 +130,7 @@ export interface PermissionRule {
     credential?: boolean;
 }
 
-/** Runtime shape for one entry of `shared/authorization-keys.yaml`'s `rules` list. */
+/** Runtime shape for one entry of `shared/authorization-keys.generated.yaml`'s `rules` list. */
 const permissionRuleSchema = z.object({
     module: z.string(),
     // Circular at runtime (the list is the YAML's own subjects); it only narrows the type.
@@ -157,7 +157,7 @@ export interface PermissionSet {
     rules: readonly string[];
 }
 
-/** Runtime shape for one entry of `shared/authorization-keys.yaml`'s `sets` list. */
+/** Runtime shape for one entry of `shared/authorization-keys.generated.yaml`'s `sets` list. */
 const permissionSetSchema = z.object({
     // Circular at runtime (the list is the YAML's own set names); it only narrows the type.
     name: z.enum(PERMISSION_SET_NAMES),
@@ -172,7 +172,7 @@ export interface PresetRole {
     scope: AuthorizationScope;
     title: string;
     description: string;
-    /** The names of the permission sets the role lists, as `shared/authorization-roles.yaml` writes them. */
+    /** The names of the permission sets the role lists, as `shared/rules/authorization-roles.yaml` writes them. */
     sets: readonly string[];
     /** The ids of every rule the role's sets bundle, expanded once when the file is read. */
     permissions: readonly string[];
@@ -183,7 +183,7 @@ export interface PresetRole {
     assignable?: boolean;
 }
 
-/** Runtime shape for one entry of `shared/authorization-roles.yaml`'s `roles` list, before its sets are expanded. */
+/** Runtime shape for one entry of `shared/rules/authorization-roles.yaml`'s `roles` list, before its sets are expanded. */
 const presetRoleSchema = z.object({
     name: z.string(),
     scope: z.enum(AUTHORIZATION_SCOPES),
@@ -204,7 +204,7 @@ export const AUDIENCE_NAMES = ['guest', 'unverified', 'customer'] as const;
 /** One of {@link AUDIENCE_NAMES}. */
 export type AudienceName = (typeof AUDIENCE_NAMES)[number];
 
-/** An audience role as `shared/authorization-roles.yaml` declares it: a name for a list of sets. */
+/** An audience role as `shared/rules/authorization-roles.yaml` declares it: a name for a list of sets. */
 export interface AudienceRole {
     title: string;
     description: string;
@@ -213,7 +213,7 @@ export interface AudienceRole {
     permissions: readonly string[];
 }
 
-/** Runtime shape for one entry of `shared/authorization-roles.yaml`'s `audience` block, before its sets are expanded. */
+/** Runtime shape for one entry of `shared/rules/authorization-roles.yaml`'s `audience` block, before its sets are expanded. */
 const audienceRoleSchema = z.object({
     title: z.string(),
     description: z.string(),
@@ -221,7 +221,7 @@ const audienceRoleSchema = z.object({
 });
 
 /**
- * The full shape of `shared/authorization-keys.yaml`. `version` and `scopes` are validated for
+ * The full shape of `shared/authorization-keys.generated.yaml`. `version` and `scopes` are validated for
  * shape (a malformed one should still fail loudly) even though only the rest is read downstream.
  * Exported so a unit test can assert on malformed fixtures directly, rather than reaching for the
  * private `readShared`/filesystem path this module resolves at import.
@@ -235,7 +235,7 @@ export const keysDocumentSchema = z.object({
     sets: z.array(permissionSetSchema)
 });
 
-/** The full shape of `shared/authorization-roles.yaml`, before its sets are expanded. See {@link keysDocumentSchema}. */
+/** The full shape of `shared/rules/authorization-roles.yaml`, before its sets are expanded. See {@link keysDocumentSchema}. */
 export const rolesDocumentSchema = z.object({
     version: z.number(),
     roles: z.array(presetRoleSchema),
@@ -273,11 +273,11 @@ const readShared = <T>(file: string, schema: z.ZodType<T>): T => {
     return result.data;
 };
 
-/** The parsed, validated `authorization-keys.yaml`. */
-const keysDocument = readShared('authorization-keys.yaml', keysDocumentSchema);
+/** The parsed, validated `authorization-keys.generated.yaml`. */
+const keysDocument = readShared('authorization-keys.generated.yaml', keysDocumentSchema);
 
 /** The parsed, validated `authorization-roles.yaml`, its sets not yet expanded. */
-const rolesDocument = readShared('authorization-roles.yaml', rolesDocumentSchema);
+const rolesDocument = readShared('rules/authorization-roles.yaml', rolesDocumentSchema);
 
 /** A declared rule together with its id — what every lookup below hands back. */
 export interface DeclaredRule extends PermissionRule {
@@ -298,7 +298,7 @@ const byId = new Map<string, DeclaredRule>(PERMISSION_RULES.map((rule) => [rule.
 
 if (byId.size !== PERMISSION_RULES.length) {
     throw new Error(
-        '[permissions] shared/authorization-keys.yaml declares two rules with one action and subject.'
+        '[permissions] shared/authorization-keys.generated.yaml declares two rules with one action and subject.'
     );
 }
 
@@ -452,7 +452,7 @@ export const permissionsOfRole = (name: string): readonly string[] => {
     if (!role) {
         throw new Error(
             `[permissions] "${name}" is not a declared role. ` +
-                `Add it to shared/authorization-roles.yaml, or correct the caller's role.`
+                `Add it to shared/rules/authorization-roles.yaml, or correct the caller's role.`
         );
     }
 
@@ -463,7 +463,7 @@ export const permissionsOfRole = (name: string): readonly string[] => {
  * The caller a request with no session is evaluated as.
  *
  * A value in the model rather than a null branch: `guest` is an audience role like any other,
- * declared in `shared/authorization-roles.yaml`, so "what may a stranger do" is answered in the
+ * declared in `shared/rules/authorization-roles.yaml`, so "what may a stranger do" is answered in the
  * same file and by the same evaluator as every other role. Tenant scope, because an
  * unauthenticated request never acts over the installation — a stranger still browses the one
  * shop, `DEPLOYMENT_TENANT_ID`.
@@ -508,7 +508,7 @@ export const assertDeclared = (action: string, subject: string): DeclaredRule =>
     }
 
     throw new Error(
-        `[permissions] "${ruleId(action, subject)}" is not declared in shared/authorization-keys.yaml. ` +
+        `[permissions] "${ruleId(action, subject)}" is not declared in shared/authorization-keys.generated.yaml. ` +
             `Roles are data; permissions are code — declare the rule beside its module's routes first.`
     );
 };

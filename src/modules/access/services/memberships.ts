@@ -223,7 +223,7 @@ export const DEPLOYMENT_TENANT_SLUG = 'shop';
 
 /**
  * The shop, with no accounts in it — what a fresh deployment needs to boot. The presets need no
- * seeding step: `kernel/permissions.ts` reads them from `shared/authorization-roles.yaml` at
+ * seeding step: `kernel/permissions.ts` reads them from `shared/rules/authorization-roles.yaml` at
  * import, so they exist the moment the process starts.
  *
  * Idempotent and safe to run against a live database with no `NODE_ENV` guard: the write is an
@@ -243,7 +243,7 @@ export const bootstrapAccess = (name: string): Promise<TenantDocument> =>
  * members of those roles. A role that cannot be assigned (`system`) never matches.
  *
  * @param tenantId - the shop
- * @param sets - permission set names (`UserBanning`, ...), as `shared/authorization-roles.yaml` lists them
+ * @param sets - permission set names (`UserBanning`, ...), as `shared/rules/authorization-roles.yaml` lists them
  * @returns the member ids, without duplicates
  */
 export const membersHolding = (tenantId: string, sets: readonly string[]): Promise<string[]> => {

@@ -89,7 +89,7 @@ creates the product and then receives the opening count with an `Idempotency-Key
 call fails the product stays at zero, a valid state, and the page says to add stock from Inventory.
 
 **An edit says what it changed.** `admin.product.updated` carries `metadata.changes` with `{ from, to }`
-for every non-text field an update (PUT or PATCH) actually moved, `null` meaning unset: `price`,
+for every non-text field an update (PUT or PATCH) actually moved, an absent key meaning unset: `price`,
 `taxClass`, `rateType`, `active`, `purchasable`, `allowBackorder`, `weight`, `requiresShipping`,
 `noWithdrawal`, `sku`, `categories`, `tags`, `releaseDate` and `restockDate`. Those decide what a
 buyer pays, what VAT is charged, what shipping weighs, the buyer's right of withdrawal and whether
@@ -390,7 +390,7 @@ Every rule this module declares and who holds it, role by role. The rule is what
 
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
-`src/modules/*/authorization.yaml` and the roles in `shared/authorization-roles.yaml`, asked of the
+`src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
 evaluator — [Authorization](../theory/authorization.md) explains the model.
 
 <!-- permissions:end -->

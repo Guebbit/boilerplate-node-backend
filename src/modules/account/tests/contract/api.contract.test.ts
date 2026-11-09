@@ -1080,7 +1080,7 @@ describe('POST /account/logout', () => {
         expect(await statusOfSession(jwtCookie)).toBe(401);
     });
 
-    it('answers 200 with no cookie at all — the caller already has what they asked for', async () => {
+    it('answers 204 with no cookie at all — the caller already has what they asked for', async () => {
         const response = await api().post('/account/logout');
 
         expect(response.status).toBe(204);

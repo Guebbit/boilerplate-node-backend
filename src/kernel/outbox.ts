@@ -11,11 +11,14 @@
  * Failure:    retried with exponential backoff, parked as `dead` after the last attempt.
  *             A dead row never blocks its aggregate.
  * Relayers:   the writer nudges one right after commit (fast path), and `sweep:outbox` runs one
- *             every minute (the backstop). Both are safe together — a row is claimed by a lease.
+ *             every minute (the backstop). Both are safe together — a row is claimed by a lease,
+ *             and each claim carries its own `leaseToken`: a relay whose lease lapsed mid-dispatch
+ *             finds the token changed, writes nothing and counts nothing (a warning is logged).
  *
  * See: docs/tools/outbox.md
  */
 
+import { randomUUID } from 'node:crypto';
 import mongoose, { model, Schema } from 'mongoose';
 import type { ClientSession, Document, Model } from 'mongoose';
 import { extractErrorMessage } from '@guebbit/js-toolkit';
@@ -34,6 +37,7 @@ import {
 } from './events';
 import { outboxConfig } from '@kernel/config';
 import { outboxRuleData } from './outbox.generated';
+import { applySerialization } from '@infrastructure/persistence/serialize';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { DAY_SECONDS } from '@domain-primitives/time';
 
@@ -72,6 +76,8 @@ export interface OutboxEventDocument extends Document {
     nextAttemptAt: Date;
     /** A relay's claim on the row. Expires on its own, so a crashed relay frees it. */
     lockedUntil?: Date;
+    /** Random per claim. Every result write must carry it, so a stale claim's write misses. */
+    leaseToken?: string;
     lastError?: string;
     /** Set on publish; the TTL index below reads it to clean published rows. */
     publishedAt?: Date;
@@ -91,11 +97,18 @@ const outboxEventSchema = new Schema<OutboxEventDocument, OutboxEventModel>(
         attempts: { type: Number, default: 0 },
         nextAttemptAt: { type: Date, required: true },
         lockedUntil: { type: Date },
+        leaseToken: { type: String },
         lastError: { type: String },
         publishedAt: { type: Date }
     },
     { timestamps: { createdAt: true, updatedAt: false } }
 );
+
+/*
+ * Wire shape: the claim's token is relay bookkeeping, never a fact about the event, so a
+ * serialized row (`toJSON`) does not carry it.
+ */
+applySerialization(outboxEventSchema, { omit: ['leaseToken'] });
 
 /**
  * Days a PUBLISHED row is kept before Mongo's TTL index removes it. Dead rows have no
@@ -208,10 +221,11 @@ const findHeads = (limit: number): Promise<OutboxRow[]> => {
 /**
  * Take the row's lease. One atomic write, so of two relays reaching the same row exactly one wins.
  *
- * @returns whether this caller now holds the row
+ * @returns the claim's fresh token and the row's attempts so far, or `null` when a peer holds it
  */
-const claim = (row: OutboxRow): Promise<boolean> => {
+const claim = (row: OutboxRow): Promise<{ token: string; attempts: number } | null> => {
     const now = new Date();
+    const token = randomUUID();
     return outboxEventModel
         .findOneAndUpdate(
             {
@@ -219,10 +233,18 @@ const claim = (row: OutboxRow): Promise<boolean> => {
                 status: 'pending',
                 $or: [{ lockedUntil: { $exists: false } }, { lockedUntil: { $lt: now } }]
             },
-            { $set: { lockedUntil: new Date(now.getTime() + outboxLeaseSeconds() * 1000) } }
+            {
+                $set: {
+                    lockedUntil: new Date(now.getTime() + outboxLeaseSeconds() * 1000),
+                    leaseToken: token
+                }
+            },
+            // Mongoose: `returnDocument: 'after'` returns the row as updated, so `attempts` is the stored value.
+            // https://mongoosejs.com/docs/api/query.html#Query.prototype.findOneAndUpdate()
+            { returnDocument: 'after' }
         )
         .exec()
-        .then((claimed) => claimed !== null);
+        .then((claimed) => (claimed === null ? null : { token, attempts: claimed.attempts }));
 };
 
 /**
@@ -240,40 +262,73 @@ const dispatch = (row: OutboxRow): Promise<string | undefined> =>
         (error: unknown) => extractErrorMessage(error, String(error))
     );
 
-/** Mark a dispatched row published. Conditional, so a row a peer already finished is left alone. */
-const markPublished = (row: OutboxRow): Promise<unknown> =>
+/** Logged when a result write misses: the claim lapsed and a peer owns the row now. */
+const warnLeaseLost = (row: OutboxRow): void => {
+    // Stryker disable next-line all
+    logger.warn({
+        message: 'Outbox: lease lost, consumer outlived NODE_OUTBOX_LEASE_SECONDS',
+        eventId: String(row._id)
+    });
+};
+
+/**
+ * Mark a dispatched row published. Conditional on the claim's token, so a relay that outlived its
+ * lease writes nothing over the peer that took the row.
+ *
+ * @returns `published`, or `skipped` when the lease was lost
+ */
+const markPublished = (row: OutboxRow, token: string): Promise<'published' | 'skipped'> =>
     outboxEventModel
         .updateOne(
-            { _id: row._id, status: 'pending' },
-            { $set: { status: 'published', publishedAt: new Date() }, $unset: { lockedUntil: 1 } }
+            { _id: row._id, status: 'pending', leaseToken: token },
+            {
+                $set: { status: 'published', publishedAt: new Date() },
+                $unset: { lockedUntil: 1, leaseToken: 1 }
+            }
         )
-        .exec();
+        .exec()
+        .then(({ matchedCount }) => {
+            if (matchedCount > 0) return 'published' as const;
+            warnLeaseLost(row);
+            return 'skipped' as const;
+        });
 
 /**
  * Record a failed dispatch: reschedule with backoff, or park the row once the attempts are spent.
  *
+ * @param row - the row being settled
  * @param reason - what went wrong, kept in `lastError`
- * @returns `dead` when the row was parked, `retried` otherwise
+ * @param claimed - this relay's claim: its token, and the attempts stored when it took the row
+ * @returns `dead` when the row was parked, `retried` otherwise, `skipped` when the lease was lost
  */
-const markFailed = (row: OutboxRow, reason: string): Promise<'retried' | 'dead'> => {
-    const attempts = row.attempts + 1;
+const markFailed = (
+    row: OutboxRow,
+    reason: string,
+    claimed: { token: string; attempts: number }
+): Promise<'retried' | 'dead' | 'skipped'> => {
+    // The token fences every other writer, so the attempts read at claim are still the stored ones.
+    const attempts = claimed.attempts + 1;
     const isDead = attempts >= outboxMaxAttempts();
     const lastError = `${row.name}: ${reason} (attempt ${String(attempts)})`;
     return outboxEventModel
         .updateOne(
-            { _id: row._id, status: 'pending' },
+            { _id: row._id, status: 'pending', leaseToken: claimed.token },
             {
+                $inc: { attempts: 1 },
                 $set: {
-                    attempts,
                     lastError,
                     status: isDead ? 'dead' : 'pending',
                     nextAttemptAt: new Date(Date.now() + outboxBackoffMs(attempts))
                 },
-                $unset: { lockedUntil: 1 }
+                $unset: { lockedUntil: 1, leaseToken: 1 }
             }
         )
         .exec()
-        .then(() => {
+        .then(({ matchedCount }) => {
+            if (matchedCount === 0) {
+                warnLeaseLost(row);
+                return 'skipped' as const;
+            }
             if (isDead)
                 // Stryker disable next-line all
                 logger.error({
@@ -293,12 +348,12 @@ const markFailed = (row: OutboxRow, reason: string): Promise<'retried' | 'dead'>
 
 /** Claim, dispatch and settle one head row. */
 const relayOne = (row: OutboxRow): Promise<keyof RelayResult | 'skipped'> =>
-    claim(row).then((won) => {
-        if (!won) return 'skipped';
+    claim(row).then((claimed) => {
+        if (!claimed) return 'skipped';
         return dispatch(row).then((failure) =>
             failure === undefined
-                ? markPublished(row).then(() => 'published' as const)
-                : markFailed(row, failure)
+                ? markPublished(row, claimed.token)
+                : markFailed(row, failure, claimed)
         );
     });
 

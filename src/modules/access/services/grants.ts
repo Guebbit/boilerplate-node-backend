@@ -4,7 +4,7 @@
  * `assign:Role`. Every rule here is a REFUSAL rather than a note in a docblock — the check
  * that is not executed is the check that is not true.
  *
- * See: docs/theory/authorization.md · `shared/authorization-roles.yaml`
+ * See: docs/theory/authorization.md · `shared/rules/authorization-roles.yaml`
  */
 
 import type { AuthorizationScope, CallerContext } from '@types';
@@ -58,7 +58,7 @@ type GrantVerdict = { lowered: string } | { refusal: GrantRefusal };
  *
  *   - **a role nothing declares** — assigning a name no row and no preset defines produces a
  *     member who can do nothing and looks like a member who can. There is no role editor in this
- *     codebase: a role's permissions come only from `shared/authorization-roles.yaml`'s presets,
+ *     codebase: a role's permissions come only from `shared/rules/authorization-roles.yaml`'s presets,
  *     never a caller-supplied list, so every key a resolved role can hold is already a declared
  *     one by construction —`tests/cross-cutting/authorization-keys.test.ts` is what proves that
  *     for every preset, once, rather than this function re-checking it on every grant. `customer`,
@@ -99,7 +99,7 @@ const checkGrant = (
                 kind: 'unknown_role',
                 message:
                     `[access] "${roleName}" is not a role in this ${scope} scope. ` +
-                    `Declare it in shared/authorization-roles.yaml first, or assign one that exists.`
+                    `Declare it in shared/rules/authorization-roles.yaml first, or assign one that exists.`
             }
         };
     }
@@ -138,11 +138,11 @@ export const validateGrant = (
 /**
  * The roles a granter may assign in a scope: every preset of that scope that the write path's own
  * rule ({@link validateGrant}) would accept. A client builds its role picker from this, so the
- * picker and the `409` can never disagree. It has no authority: the write re-checks.
+ * picker and the `403`/`422` refusal can never disagree. It has no authority: the write re-checks.
  *
  * @param scope - the scope the roles are assigned in
  * @param granter - the keys the person making the grant holds in that scope
- * @returns the role names, in the order `shared/authorization-roles.yaml` declares them
+ * @returns the role names, in the order `shared/rules/authorization-roles.yaml` declares them
  */
 export const grantableRoles = (scope: AuthorizationScope, granter: readonly string[]): string[] =>
     PRESET_ROLES.filter(

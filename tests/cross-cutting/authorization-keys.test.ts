@@ -63,7 +63,7 @@ describe('the declared rules', () => {
         }
     });
 
-    it('imply only actions the vocabulary declares, and only on a subject that has the plain rule or none', () => {
+    it('has lower-case staff actions, each naming at least one implied action', () => {
         for (const [staff, plain] of Object.entries(IMPLIED_ACTIONS)) {
             expect(staff).toMatch(/^[a-z]+$/);
             expect(plain.length).toBeGreaterThan(0);
@@ -131,7 +131,7 @@ describe('the preset roles', () => {
     // (`read:ObservabilitySnapshot`), so holding it alone already satisfies "every platform
     // rule". That is NOT the same claim as "operator is a super-admin" — `operator` still holds no
     // tenant rule, so it cannot touch a single shop's content, which is the invariant that
-    // actually matters and is asserted elsewhere (`shared/authorization-roles.yaml`'s own
+    // actually matters and is asserted elsewhere (`shared/rules/authorization-roles.yaml`'s own
     // description, and the contract suite). This pins today's fact so a second platform rule being
     // declared — which would make it false — is a deliberate change to notice, not a surprise.
     it('marks operator unrestricted in platform scope, today — one declared platform rule', () => {

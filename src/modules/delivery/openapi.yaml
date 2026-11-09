@@ -375,7 +375,7 @@ paths:
             operationId: shipFulfillmentOrder
             x-error-codes:
                 '409': [DELIVERY_NOT_PHYSICAL, DELIVERY_NOT_SHIPPABLE, IDEMPOTENCY_IN_FLIGHT, ORDER_NOT_PROCESSING]
-                '422': [IDEMPOTENCY_KEY_MISMATCH]
+                '422': [DELIVERY_LINES_INVALID, IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: []
             parameters:

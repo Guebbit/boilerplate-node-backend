@@ -176,12 +176,12 @@ refuses a commit where one of them is stale ([below](#the-pre-commit-hook)).
 | `openapi.yaml`                                                  | spectral · orval · Prism · the frontend                                                                 | no — gitignored, rebuilt by `postinstall` |
 | `asyncapi.yaml` · `asyncapi.public.yaml`                        | `gen:asyncapi` · `lint:asyncapi` · the frontend's realtime pipeline · `GET /webhooks/events`            | no — gitignored, rebuilt by `postinstall` |
 | `api/models/` · `api/schemas.zod.ts`                            | `@types` and the services that validate input                                                           | no — gitignored, rebuilt by `postinstall` |
-| `api/permission-vocabulary.ts`                                  | `kernel/permissions.ts` — the action vocabulary, from `shared/authorization-keys.yaml` (see [Permission Vocabulary](../tools/permission-vocabulary.md)) | no — gitignored, rebuilt by `postinstall` |
+| `api/permission-vocabulary.ts`                                  | `kernel/permissions.ts` — the action vocabulary, from `shared/authorization-keys.generated.yaml` (see [Permission Vocabulary](../tools/permission-vocabulary.md)) | no — gitignored, rebuilt by `postinstall` |
 | `src/types/asyncapi.generated.ts`                               | every SSE, domain-event and queue call site                                                             | no — gitignored, rebuilt by `postinstall` |
 | every other `*.generated.ts` (`src/`, `scenarios/`)             | this repo's own code only — built from the shared rules and the scenario files                          | no — gitignored, rebuilt by `postinstall` |
 | `contract.{bruno,insomnia,mockoon,postman}.*`                   | you, and whoever explores the API without running it                                                    | no — generated on demand, see above       |
-| `shared/authorization-keys.yaml`                                | `kernel/permissions.ts` at boot · the PHP twin — assembled by `regenerate` from each module's `authorization.yaml` | yes — read at boot and handed to the twin |
-| `shared/rules/schemas/*.schema.json`                            | the PHP twin, which validates with them and cannot rebuild them                                         | yes                                       |
+| `shared/authorization-keys.generated.yaml`                                | `kernel/permissions.ts` at boot · the PHP twin — assembled by `regenerate` from each module's `authorization.yaml` | yes — read at boot and handed to the twin |
+| `shared/rules/schemas/*.generated.schema.json`                            | the PHP twin, which validates with them and cannot rebuild them                                         | yes                                       |
 | `docker/crontab`                                                | the production host bind-mounts it, with no dev tools                                                   | yes                                       |
 | `docker/Dockerfile.dockerignore`                                | `docker build` in CI, before any npm runs                                                               | yes                                       |
 | the generated tables inside `docs/` pages                       | readers; they sit inside hand-written pages                                                             | yes                                       |
@@ -217,7 +217,7 @@ file you did not stage is not in the commit, and that is the thing the refusal e
 
 The frontend holds **byte-identical copies** of the six shared files in `SHARED_FILES`
 (`scripts/pairing/spec-identity.ts`): the two bundles it consumes — `openapi.yaml` and
-`asyncapi.public.yaml` — `shared/authorization-keys.yaml` (for its `actions:` list only) and three
+`asyncapi.public.yaml` — `shared/authorization-keys.generated.yaml` (for its `actions:` list only) and three
 webhook-sink TLS PEMs, and never bundles or authors them. The
 four client collections stay here, and are not committed at all: they are derived from
 `openapi.yaml`, so a copy there could not disagree without the spec disagreeing first, and nothing

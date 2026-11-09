@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * `shared/authorization-keys.yaml`, assembled from one fragment per module plus a root residual
+ * `shared/authorization-keys.generated.yaml`, assembled from one fragment per module plus a root residual
  * file for the app-level rules — `npm run regenerate`.
  *
  * Each rule and set is defined in its own module's `authorization.yaml`, so a module's rules
@@ -11,7 +11,7 @@
  * maps: every entry here is a flat, self-contained list item with no cross-fragment reference to
  * resolve, so a structural merge would buy nothing and risks the stringifier re-wrapping a
  * description or re-quoting a scalar. A straight splice keeps every authored byte, which matters
- * more here than for AsyncAPI — `shared/authorization-keys.yaml` is read by the PHP twin too.
+ * more here than for AsyncAPI — `shared/authorization-keys.generated.yaml` is read by the PHP twin too.
  *
  * `--check` asserts the committed file is not stale, the same contract every bundle in
  * `scripts/contracts/bundle-registry.ts` makes — kept separate from that registry because `shared`
@@ -35,7 +35,7 @@ const ROOT_FILE = path.join(REPO_ROOT, 'shared', 'contracts', 'authorization-key
 const CORE_FILE = path.join(REPO_ROOT, 'shared', 'contracts', 'authorization-keys.core.yaml');
 
 /** The committed bundle every backend reads at boot. */
-const OUTPUT_FILE = path.join(REPO_ROOT, 'shared', 'authorization-keys.yaml');
+const OUTPUT_FILE = path.join(REPO_ROOT, 'shared', 'authorization-keys.generated.yaml');
 
 /** Where the root file's `rules:` section goes — a YAML comment, so the file still parses as one document with no `rules` field of its own. */
 const RULES_MARKER = '# %AUTHORIZATION_RULES%';

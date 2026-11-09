@@ -345,7 +345,8 @@ writes the row directly and calls `settlePayment`.
 
 The amount is always the order's own total; a partial or over-payment is out of scope, handled by
 hand and off-system. Recording is refused with `PAYMENT_ORDER_NOT_PAYABLE` once the order is no
-longer `pending` (including a second attempt at the same order), and with `PAYMENT_IN_FLIGHT` while
+longer `pending` (including a second attempt at the same order), except a late transfer on a
+canceled order, which is recorded and owed back, and with `PAYMENT_IN_FLIGHT` while
 a card charge on the same order is still `requires_action` or `processing` — the provider could
 still land that charge on its own, and recording money too would risk charging twice. A card
 attempt that never got that far (`requires_confirmation`, `declined`) is simply overwritten: the row
@@ -660,8 +661,10 @@ A canceled record is closed for good: the refund sweep never claims it (`cancele
 retryable), `isOpenRefund` is false for it, so it is on no attention list and does not make the
 payment read `refund_pending`, and it can be neither settled by hand nor canceled again. A claim by
 the sweep between the read and the write makes the conditional write miss: the check runs again
-against the record as it now stands. The order's `paymentStatus` stamp is written only when a
-refund settles, so a void, which never settled, leaves it as it is.
+against the record as it now stands. The order's `paymentStatus` stamp is recomputed by a cancel
+when the payment holds a settled refund, because an open record blocks `refunded`: cancelling the
+last one, after the rest came back from the dashboard, moves the order to `refunded`. A cancel with
+no settled refund leaves the stamp as it is.
 
 Every other refund dispatches to the provider named on the payment's own `provider` field — never
 the deployment's currently configured one — so a refund of an older payment still reaches the
@@ -1207,7 +1210,7 @@ Every rule this module declares and who holds it, role by role. The rule is what
 
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
-`src/modules/*/authorization.yaml` and the roles in `shared/authorization-roles.yaml`, asked of the
+`src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
 evaluator — [Authorization](../theory/authorization.md) explains the model.
 
 <!-- permissions:end -->

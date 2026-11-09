@@ -371,7 +371,7 @@ export const callerContextOf = (request: {
  * The ONE place the tenant-scope narrowing happens. `requirePermission` has already refused a
  * platform caller on a tenant key by the time a controller runs, so the throw is unreachable
  * through a correctly guarded route — it exists because that invariant lives in
- * `shared/authorization-keys.yaml`, which no type can see, and because {@link STRANGER} (the
+ * `shared/authorization-keys.generated.yaml`, which no type can see, and because {@link STRANGER} (the
  * fallback for a request no guard resolved) is deliberately platform-scoped.
  *
  * @param request - the same shape {@link callerContextOf} reads

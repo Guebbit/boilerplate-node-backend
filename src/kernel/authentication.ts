@@ -112,22 +112,6 @@ export const registerCredentialResolver = (implementation: CredentialResolver): 
     credentialResolver = implementation;
 };
 
-/**
- * The registered resolver, for the one caller that must reject without one.
- *
- * Unregistered is a real state, not a misconfiguration: a build with no `account` module has no
- * authentication. `resolveBearer` and `resolveCookie` answer a `malformed` miss for it (a guest),
- * as `resolveCredential` does; the stream guard asks for the resolver itself and refuses without.
- * @throws {Error} when no module has registered one
- */
-const requireResolver = (): AuthResolver => {
-    if (!resolver)
-        throw new Error(
-            'No auth resolver is registered: this build has no module providing authentication.'
-        );
-    return resolver;
-};
-
 /** What a session credential resolves to in a build with no `account` module: nobody. */
 const NO_SESSION = { miss: 'malformed' as const };
 
@@ -141,9 +125,12 @@ export const resolveBearer = (
 ): Promise<Resolution<AuthContext | undefined>> =>
     Promise.resolve().then(() => resolver?.fromBearer(token, options) ?? NO_SESSION);
 
-/** Resolve the session cookie of an SSE stream, keeping what its recheck needs. */
+/**
+ * Resolve the session cookie of an SSE stream, keeping what its recheck needs. With no resolver
+ * registered (a build with no `account`) it is a `malformed` miss, like {@link resolveCookie}.
+ */
 export const watchCookie = (token: string): Promise<Resolution<StreamWatch>> =>
-    Promise.resolve().then(() => requireResolver().watchCookie(token));
+    Promise.resolve().then(() => resolver?.watchCookie(token) ?? NO_SESSION);
 
 /** Resolve the session cookie's value; a `malformed` miss when no resolver is registered. */
 export const resolveCookie = (

@@ -130,7 +130,7 @@ export const createEntry = async (
         outcome: 'success',
         targetType: 'locale_entry',
         targetId: String(entry._id),
-        metadata: { locale: language.tag, app, key: payload.key }
+        metadata: { locale: language.tag, app, entryKey: payload.key }
     });
 
     refreshOverlay();
@@ -190,7 +190,7 @@ export const updateEntry = (
                     // The key, not the new text. An audit trail records that the Spanish product
                     // title changed and who changed it; storing the copy itself would make the trail
                     // a second, unmanaged copy of the dictionary.
-                    metadata: { locale: tag, app, key: saved.key, ...moved }
+                    metadata: { locale: tag, app, entryKey: saved.key, ...moved }
                 });
 
                 refreshOverlay();
@@ -225,7 +225,7 @@ export const removeEntry = (
                 outcome: 'success',
                 targetType: 'locale_entry',
                 targetId: entryId,
-                metadata: { locale: tag, app, key }
+                metadata: { locale: tag, app, entryKey: key }
             });
 
             refreshOverlay();

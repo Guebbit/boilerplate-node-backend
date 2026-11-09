@@ -1,5 +1,5 @@
 /**
- * The permission vocabulary has ONE home: `shared/authorization-keys.yaml`.
+ * The permission vocabulary has ONE home: `shared/authorization-keys.generated.yaml`.
  *
  * `api/permission-vocabulary.ts` is generated from it, and `kernel/permissions.ts` (and through it
  * the Zod schema that validates every key) imports the result. This holds the two ends of that
@@ -23,7 +23,7 @@ import { requirePermission } from '@kernel/middlewares/authorizations';
 import { REPO_ROOT } from '@tests/paths';
 
 const yaml = parse(
-    readFileSync(path.join(REPO_ROOT, 'shared', 'authorization-keys.yaml'), 'utf8')
+    readFileSync(path.join(REPO_ROOT, 'shared', 'authorization-keys.generated.yaml'), 'utf8')
 ) as {
     actions: string[];
     scopes: Record<string, string>;

@@ -210,8 +210,8 @@ paths:
             description: |
                 Replaces the product identified by `{id}` in the path (RFC 9110 §9.3.4) — every
                 writable scalar field is required, since none of them but `taxClass`/`rateType`/
-                `sku`/`weight`/`releaseDate` has a legal "cleared" state, and an omitted one of
-                those five is cleared, not left alone. The image is outside the representation: it is set by an
+                `sku`/`weight`/`releaseDate`/`restockDate` has a legal "cleared" state, and an omitted one of
+                those six is cleared, not left alone. The image is outside the representation: it is set by an
                 upload, cleared by an explicit `imageUrl: null`, and kept when a PUT never mentions
                 it — a client cannot send the current path back. `translations` is the whole set as well: it must
                 name the fallback locale, and every stored locale it leaves out is deleted. To
@@ -1182,8 +1182,8 @@ components:
                     type: boolean
                 restockDate:
                     $ref: '#/components/schemas/RestockDate'
-                # Derived, never stored: `active && purchasable && releaseDate > now`. Turns false by
-                # itself when the date passes, so nothing has to run on the release day.
+                # Derived, never stored: the description below says what it asks (visibility, sale, stock,
+                # a preorder's allowance, a backorder). Nothing has to run on a date to flip it.
                 buyable:
                     type: boolean
                     readOnly: true

@@ -16,8 +16,12 @@ import { z } from 'zod';
 /** The repo-root `shared/cases/` directory. */
 const CASES_DIRECTORY = path.join(__dirname, '..', '..', 'shared', 'cases');
 
-/** What every case carries: one sentence saying what it proves. */
-export const caseBase = z.object({ name: z.string().min(1) });
+/**
+ * What every case carries: one sentence saying what it proves. Strict, so a typo'd or unknown key
+ * in a cases file is refused instead of dropped, which would silently switch off its check in
+ * both backends.
+ */
+export const caseBase = z.strictObject({ name: z.string().min(1) });
 
 /**
  * Registers one `it` per case of `shared/cases/<file>.cases.yaml`.
@@ -38,7 +42,7 @@ export const describeCases = <T extends { name: string }>(
     const document: unknown = parse(
         readFileSync(path.join(CASES_DIRECTORY, `${file}.cases.yaml`), 'utf8')
     );
-    const { cases } = z.object({ cases: z.array(caseSchema) }).parse(document);
+    const { cases } = z.strictObject({ cases: z.array(caseSchema) }).parse(document);
 
     describe(`shared cases: ${file}`, () => {
         it.each(cases.map((one) => [one.name, one] as const))('%s', async (_name, one) => {

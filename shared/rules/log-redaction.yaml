@@ -53,9 +53,10 @@ sensitiveKeyFragments:
 
 # Personal data: not credentials, so the log mode (`NODE_LOG_PERSONAL_FIELDS`) decides hash,
 # redact or plain. Kept apart from the credentials on purpose.
+# A mail recipient is logged as `email`; `to` is the transition and diff key (`{ from, to }`)
+# and stays readable.
 personalFields:
     - email
-    - to
     - ip
     - phone
     - street

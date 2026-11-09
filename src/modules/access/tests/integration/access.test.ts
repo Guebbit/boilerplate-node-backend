@@ -40,7 +40,7 @@ setupTestDb();
 afterEach(() => jest.restoreAllMocks());
 
 describe('the preset roles', () => {
-    // No seeding, no editing: a role's permissions live in `shared/authorization-roles.yaml`
+    // No seeding, no editing: a role's permissions live in `shared/rules/authorization-roles.yaml`
     // alone — `kernel/permissions.ts` reads them at import, there is no database row to seed or
     // to edit. `tests/cross-cutting/authorization-conformance.test.ts` is where the YAML itself
     // gets exercised; this file is membership storage only.
@@ -218,7 +218,7 @@ describe('the invariants', () => {
     });
 
     // `deleteRole` and the editable per-tenant role it operated on are gone — presets are the
-    // sole authority now, defined in `shared/authorization-roles.yaml` alone, and nothing
+    // sole authority now, defined in `shared/rules/authorization-roles.yaml` alone, and nothing
     // deletes a preset at runtime.
 });
 

@@ -13,7 +13,7 @@
  *             than reaching a wider read through a shortcut — `admin` included, who lists every
  *             declared tenant set by name like everyone else.
  *
- * See `docs/theory/authorization.md`, and `shared/authorization-keys.yaml` for the keys
+ * See `docs/theory/authorization.md`, and `shared/authorization-keys.generated.yaml` for the keys
  * themselves — a file the PHP twin reads byte-for-byte identically.
  */
 
@@ -179,7 +179,7 @@ export const holds = <TSubject extends PermissionSubject>(
  * caller (an administrator) holds every set. An unknown set name is held by nobody.
  *
  * @param caller - the caller, in tenant scope
- * @param setName - a set declared in `shared/authorization-keys.yaml`, e.g. `PaymentRefunding`
+ * @param setName - a set declared in `shared/authorization-keys.generated.yaml`, e.g. `PaymentRefunding`
  */
 export const holdsSet = (caller: Caller, setName: string): boolean => {
     const set = PERMISSION_SETS.find((candidate) => candidate.name === setName);

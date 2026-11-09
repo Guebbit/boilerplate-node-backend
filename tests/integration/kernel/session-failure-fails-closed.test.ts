@@ -1,8 +1,14 @@
+import cookieParser from 'cookie-parser';
 import express from 'express';
 import supertest from 'supertest';
 import { handleUncaughtError } from '@app/error-handling';
 import { registerAuthResolver } from '@kernel/authentication';
-import { getAuth, isAuth } from '@kernel/middlewares/authorizations';
+import {
+    getAuth,
+    isAuth,
+    requirePermissionViaCookie,
+    requireSessionViaCookie
+} from '@kernel/middlewares/authorizations';
 
 /**
  * A failure resolving a session is a fault, not a guest — over real HTTP, through `getAuth`,
@@ -10,16 +16,19 @@ import { getAuth, isAuth } from '@kernel/middlewares/authorizations';
  *
  * Only a MISS is a refused token, and it answers 401 `invalid_token` on every route except one
  * whose contract takes no sign-in. Every other rejection reaches the handler (500, or 503 for an
- * outage).
+ * outage). The two live-stream cookie guards follow the same rule.
  */
 
 /** What the faked resolver does with a bearer token. */
 const fromBearer = jest.fn<Promise<unknown>, [string]>();
 
+/** What the faked resolver does with a stream's session cookie. */
+const watchCookie = jest.fn<Promise<unknown>, [string]>();
+
 registerAuthResolver({
     fromBearer: (token) => fromBearer(token) as never,
     fromCookie: () => Promise.resolve({ miss: 'malformed' }),
-    watchCookie: () => Promise.resolve({ miss: 'malformed' }),
+    watchCookie: (token) => watchCookie(token) as never,
     cookieAuthenticates: () => false,
     clearDeadCookie: jest.fn()
 });
@@ -36,6 +45,18 @@ app.get('/protected', getAuth, isAuth, (_request, response) => {
 app.post('/account/login', getAuth, (_request, response) => {
     response.status(200).json({ ok: true });
 });
+// The two live-stream routes: signed in is enough, or one rule is asked.
+app.use(cookieParser());
+app.get('/stream/session', requireSessionViaCookie(), (_request, response) => {
+    response.status(200).json({ ok: true });
+});
+app.get(
+    '/stream/permission',
+    requirePermissionViaCookie('read', 'ObservabilitySnapshot'),
+    (_request, response) => {
+        response.status(200).json({ ok: true });
+    }
+);
 app.use(handleUncaughtError);
 
 describe('a session that cannot be resolved', () => {
@@ -107,4 +128,53 @@ describe('a session that cannot be resolved', () => {
 
         expect(response.status).toBe(200);
     });
+});
+
+describe('a stream cookie that cannot be resolved', () => {
+    beforeEach(() => {
+        watchCookie.mockReset();
+    });
+
+    it.each(['/stream/session', '/stream/permission'])(
+        'answers 503 on %s when the resolver reports an outage',
+        async (path) => {
+            watchCookie.mockRejectedValue(
+                Object.assign(new Error('server selection timed out'), {
+                    name: 'MongooseServerSelectionError'
+                })
+            );
+
+            const response = await supertest(app)
+                .get(path)
+                .set('Cookie', '__Host-session=stream.token');
+
+            expect(response.status).toBe(503);
+        }
+    );
+
+    it.each(['/stream/session', '/stream/permission'])(
+        'answers 500 on %s when the resolver throws something unexpected',
+        async (path) => {
+            watchCookie.mockRejectedValue(new Error('something nobody anticipated'));
+
+            const response = await supertest(app)
+                .get(path)
+                .set('Cookie', '__Host-session=stream.token');
+
+            expect(response.status).toBe(500);
+        }
+    );
+
+    it.each(['/stream/session', '/stream/permission'])(
+        'still answers 401 on %s for a refused cookie',
+        async (path) => {
+            watchCookie.mockResolvedValue({ miss: 'expired' });
+
+            const response = await supertest(app)
+                .get(path)
+                .set('Cookie', '__Host-session=stream.token');
+
+            expect(response.status).toBe(401);
+        }
+    );
 });

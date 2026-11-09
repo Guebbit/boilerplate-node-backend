@@ -47,13 +47,15 @@ describe('the admin set list', () => {
 `;
 
     it('append the new set after the last entry, at its indentation', () => {
-        expect(editFor('shared/authorization-roles.yaml')(yamlList)).toContain(
+        expect(editFor('shared/rules/authorization-roles.yaml')(yamlList)).toContain(
             '          - BetaDisplay\n          - ScaffoldProbeManagement\n\n    - name: system'
         );
     });
 
     it('refuse a file whose anchor is gone', () => {
-        expect(() => editFor('shared/authorization-roles.yaml')('roles: []\n')).toThrow(/anchor/);
+        expect(() => editFor('shared/rules/authorization-roles.yaml')('roles: []\n')).toThrow(
+            /anchor/
+        );
     });
 });
 

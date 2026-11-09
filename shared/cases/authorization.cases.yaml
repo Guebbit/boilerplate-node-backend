@@ -14,101 +14,18 @@
 # is the messenger.
 #
 # READING A CASE:
-#   caller    the resolved caller — never a role name, because roles are data and this file
-#             tests the model. `scope` is `tenant` or `platform`, never both.
-#   action    one of the actions in `authorization-keys.yaml`.
+#   caller    the resolved caller. `scope` is `tenant` or `platform`, never both. It holds rules
+#             in one of two ways: a raw `permissions` list, for a case about the model itself, or
+#             a preset `role` that each side expands from `rules/authorization-roles.yaml` (plus
+#             that `audience`'s rules, when one is named). A role case follows the product when
+#             a role changes; a raw list pins one rule.
+#   action    one of the actions in `authorization-keys.generated.yaml`.
 #   subject   the CASL subject type.
 #   resource  the row's attributes. Absent means the question is about the ACTION alone
 #             ("may this caller create products at all?"), which is what a route guard asks.
 #   expect    allow | deny
 
 version: 1
-
-# Every tenant rule a verified `admin` effectively holds: the rules of the `customer` audience plus
-# the sets `authorization-roles.yaml` lists for `admin`, expanded to rule ids — spelled out once and
-# reused via YAML anchor below, for cases that need "the most privileged tenant caller
-# conceivable" rather than one specific rule. That is every declared tenant rule. Kept identical to
-# the expansion of those sets BY HAND: there is no schema link between the files, so a rule added
-# to one and not the other is a review problem, not a machine-caught one.
-admin-permissions: &admin_permissions
-    - read:Product
-    - display:Product
-    - create:Product
-    - update:Product
-    - delete:Product
-    - read:Order
-    - display:Order
-    - create:Order
-    - update:Order
-    - delete:Order
-    - override:Order
-    - export:Order
-    - read:Payment
-    - display:Payment
-    - create:Payment
-    - create:Refund
-    - read:Stats
-    - read:StockLevel
-    - create:StockMovement
-    - update:StockLevel
-    - sweep:StockLevel
-    - update:Shipment
-    - start:Shipment
-    - read:Return
-    - update:Return
-    - receive:Return
-    - read:Task
-    - update:Task
-    - delete:Task
-    - read:Locale
-    - display:Locale
-    - create:Locale
-    - update:Locale
-    - delete:Locale
-    - read:Translation
-    - update:Translation
-    - read:User
-    - create:User
-    - update:User
-    - ban:User
-    - delete:User
-    - read:AuditLog
-    - read:WebhookSubscription
-    - create:WebhookSubscription
-    - update:WebhookSubscription
-    - delete:WebhookSubscription
-    - read:ApiKey
-    - create:ApiKey
-    - delete:ApiKey
-    - assign:Role
-    - checkout:Cart
-    - read:Example
-    - create:Example
-    - update:Example
-    - delete:Example
-    - display:Example
-    - admin:Example
-
-# Every tenant rule `moderator` holds — kept identical to the expansion of `authorization-roles.yaml`'s
-# own `moderator` sets by hand, like the admin copy above.
-moderator-permissions: &moderator_permissions
-    - read:User
-    - create:User
-    - update:User
-    - ban:User
-    - delete:User
-    - display:Order
-    - update:Order
-    - display:Payment
-    - create:Payment
-    - create:Refund
-    - read:Return
-    - update:Return
-    - read:AuditLog
-    - read:Example
-    - create:Example
-    - update:Example
-    - delete:Example
 
 cases:
     # =============================================================================================
@@ -123,7 +40,7 @@ cases:
       expect: deny
 
     - name: a shop admin cannot read platform operational data
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: *admin_permissions }
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, role: admin, audience: customer }
       action: read
       subject: ObservabilitySnapshot
       resource: {}
@@ -137,7 +54,7 @@ cases:
       expect: allow
 
     - name: holding every declared tenant rule still never satisfies a bare manage action
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: *admin_permissions }
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, role: admin, audience: customer }
       action: manage
       subject: ObservabilitySnapshot
       resource: {}
@@ -164,14 +81,14 @@ cases:
     # =============================================================================================
 
     - name: a shop admin cannot read another shop's order
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: *admin_permissions }
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, role: admin, audience: customer }
       action: read
       subject: Order
       resource: { tenantId: shop_2, userId: usr_9 }
       expect: deny
 
     - name: a shop admin can read their own shop's order
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: *admin_permissions }
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, role: admin, audience: customer }
       action: read
       subject: Order
       resource: { tenantId: shop_1, userId: usr_9 }
@@ -508,7 +425,7 @@ cases:
       expect: allow
 
     - name: an unknown subject is denied rather than defaulted, even for the most privileged caller
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: *admin_permissions }
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, role: admin, audience: customer }
       action: read
       subject: NoSuchThing
       resource: { tenantId: shop_1 }
@@ -517,8 +434,8 @@ cases:
     # =============================================================================================
     # The editor. Everything the shop says and shows, in every registered language: the catalogue
     # record, the dictionary, and the words on a translatable entity — nothing about stock, an
-    # order, or a person. Spelled out in full because there is no `manage` wildcard —
-    # this is exactly `shared/authorization-roles.yaml`'s `editor` grant.
+    # order, or a person. The cases name the `editor` role, so they follow
+    # `shared/rules/authorization-roles.yaml`.
     # =============================================================================================
 
     - name: an editor may add a product
@@ -527,19 +444,7 @@ cases:
               id: usr_7,
               scope: tenant,
               tenantId: shop_1,
-              permissions:
-                  [
-                      display:Product,
-                      create:Product,
-                      update:Product,
-                      delete:Product,
-                      display:Locale,
-                      create:Locale,
-                      update:Locale,
-                      delete:Locale,
-                      read:Translation,
-                      update:Translation
-                  ]
+              role: editor
           }
       action: create
       subject: Product
@@ -552,19 +457,7 @@ cases:
               id: usr_7,
               scope: tenant,
               tenantId: shop_1,
-              permissions:
-                  [
-                      display:Product,
-                      create:Product,
-                      update:Product,
-                      delete:Product,
-                      display:Locale,
-                      create:Locale,
-                      update:Locale,
-                      delete:Locale,
-                      read:Translation,
-                      update:Translation
-                  ]
+              role: editor
           }
       action: read
       subject: Product
@@ -577,19 +470,7 @@ cases:
               id: usr_7,
               scope: tenant,
               tenantId: shop_1,
-              permissions:
-                  [
-                      display:Product,
-                      create:Product,
-                      update:Product,
-                      delete:Product,
-                      display:Locale,
-                      create:Locale,
-                      update:Locale,
-                      delete:Locale,
-                      read:Translation,
-                      update:Translation
-                  ]
+              role: editor
           }
       action: read
       subject: Order
@@ -602,19 +483,7 @@ cases:
               id: usr_7,
               scope: tenant,
               tenantId: shop_1,
-              permissions:
-                  [
-                      display:Product,
-                      create:Product,
-                      update:Product,
-                      delete:Product,
-                      display:Locale,
-                      create:Locale,
-                      update:Locale,
-                      delete:Locale,
-                      read:Translation,
-                      update:Translation
-                  ]
+              role: editor
           }
       action: read
       subject: User
@@ -685,9 +554,8 @@ cases:
       expect: deny
 
     # =============================================================================================
-    # The moderator. Accounts, orders and payments — and the audit trail those three write to.
-    # Spelled out in full for the same reason the editor's cases are: this is exactly
-    # `shared/authorization-roles.yaml`'s `moderator` grant.
+    # The moderator. Accounts, orders and payments. The cases name the `moderator` role, so they
+    # follow `shared/rules/authorization-roles.yaml`. The action history is the admin's alone.
     # =============================================================================================
 
     - name: a moderator may ban an account
@@ -696,7 +564,7 @@ cases:
               id: usr_9,
               scope: tenant,
               tenantId: shop_1,
-              permissions: *moderator_permissions
+              role: moderator
           }
       action: ban
       subject: User
@@ -709,7 +577,7 @@ cases:
               id: usr_9,
               scope: tenant,
               tenantId: shop_1,
-              permissions: *moderator_permissions
+              role: moderator
           }
       action: read
       subject: Order
@@ -722,25 +590,25 @@ cases:
               id: usr_9,
               scope: tenant,
               tenantId: shop_1,
-              permissions: *moderator_permissions
+              role: moderator
           }
       action: create
       subject: Refund
       resource: { tenantId: shop_1, userId: usr_2 }
       expect: allow
 
-    - name: a moderator may read the action history
+    - name: a moderator may not read the action history
       caller:
           {
               id: usr_9,
               scope: tenant,
               tenantId: shop_1,
-              permissions: *moderator_permissions
+              role: moderator
           }
       action: read
       subject: AuditLog
       resource: { tenantId: shop_1 }
-      expect: allow
+      expect: deny
 
     - name: a moderator may not change what a product costs
       caller:
@@ -748,7 +616,7 @@ cases:
               id: usr_9,
               scope: tenant,
               tenantId: shop_1,
-              permissions: *moderator_permissions
+              role: moderator
           }
       action: update
       subject: Product
@@ -829,21 +697,21 @@ cases:
     # =============================================================================================
 
     - name: a moderator may update an order
-      caller: { id: usr_9, scope: tenant, tenantId: shop_1, permissions: *moderator_permissions }
+      caller: { id: usr_9, scope: tenant, tenantId: shop_1, role: moderator }
       action: update
       subject: Order
       resource: { tenantId: shop_1, userId: usr_2 }
       expect: allow
 
     - name: a moderator may not delete an order
-      caller: { id: usr_9, scope: tenant, tenantId: shop_1, permissions: *moderator_permissions }
+      caller: { id: usr_9, scope: tenant, tenantId: shop_1, role: moderator }
       action: delete
       subject: Order
       resource: { tenantId: shop_1, userId: usr_2 }
       expect: deny
 
     - name: a moderator may not place an order on someone's behalf
-      caller: { id: usr_9, scope: tenant, tenantId: shop_1, permissions: *moderator_permissions }
+      caller: { id: usr_9, scope: tenant, tenantId: shop_1, role: moderator }
       action: create
       subject: Order
       resource: { tenantId: shop_1 }
@@ -852,7 +720,7 @@ cases:
     # Staff are customers too: the audience's rules are unioned with the role's, so what a staff
     # member holds on top is only the staff rules. The caller below is an administrator.
     - name: an administrator may check out
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: *admin_permissions }
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, role: admin, audience: customer }
       action: checkout
       subject: Cart
       resource: { tenantId: shop_1 }
@@ -887,14 +755,14 @@ cases:
       expect: deny
 
     - name: only a role manager may assign a role
-      caller: { id: usr_2, scope: tenant, tenantId: shop_1, permissions: *moderator_permissions }
+      caller: { id: usr_2, scope: tenant, tenantId: shop_1, role: moderator }
       action: assign
       subject: Role
       resource: { tenantId: shop_1 }
       expect: deny
 
     - name: an administrator may assign a role
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: *admin_permissions }
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, role: admin, audience: customer }
       action: assign
       subject: Role
       resource: { tenantId: shop_1 }

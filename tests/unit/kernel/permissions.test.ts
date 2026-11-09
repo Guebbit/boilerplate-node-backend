@@ -1,6 +1,6 @@
 /**
  * @module
- * `shared/authorization-keys.yaml` and `shared/authorization-roles.yaml` are parsed against a Zod
+ * `shared/authorization-keys.generated.yaml` and `shared/rules/authorization-roles.yaml` are parsed against a Zod
  * schema at import, not merely cast — see `permissions.ts`'s own docblock. A malformed file must
  * fail loudly, naming what was wrong, rather than load a rule that silently never matches.
  */
