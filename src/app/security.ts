@@ -229,18 +229,30 @@ export const installRequestParsing = (app: Express): void => {
      * gets it; every other route does not, which is why this is a prefix test rather than an
      * unconditional copy of every body the API receives.
      */
-    app.use(
-        express.json({
-            limit: jsonBodyLimit(),
-            type: JSON_BODY_TYPES,
-            verify: (request, _response, buffer) => {
-                // One cast, with a reason: `express.json` types its `verify` hook against the bare
-                // `http.IncomingMessage` the parser sees. It is the same object express has
-                // already decorated — `rawBody` is declared on it in `globals.d.ts`.
-                const decorated = request as Request;
-                if (isRawBodyPath(decorated.url)) decorated.rawBody = Buffer.from(buffer);
-            }
-        })
+    const jsonParser = express.json({
+        limit: jsonBodyLimit(),
+        type: JSON_BODY_TYPES,
+        verify: (request, _response, buffer) => {
+            // One cast, with a reason: `express.json` types its `verify` hook against the bare
+            // `http.IncomingMessage` the parser sees. It is the same object express has
+            // already decorated — `rawBody` is declared on it in `globals.d.ts`.
+            const decorated = request as Request;
+            if (isRawBodyPath(decorated.url)) decorated.rawBody = Buffer.from(buffer);
+        }
+    });
+
+    /*
+     * A GET or HEAD body is never parsed: `request.body` stays `undefined` whatever the route reads.
+     *
+     * Why: content on a GET has no defined semantics (RFC 9110 §9.3.1, §9.3.2) and Zalando says it
+     * "must be ignored on server side". Fastify skips it by default too. Parsed, it would reach a
+     * cache key built from the body before the query, and an anonymous caller could store one
+     * answer under another caller's key.
+     */
+    app.use((request, response, next) =>
+        request.method === 'GET' || request.method === 'HEAD'
+            ? next()
+            : jsonParser(request, response, next)
     );
 
     // Right after the parser: a body nested past the depth limit is refused before any walker

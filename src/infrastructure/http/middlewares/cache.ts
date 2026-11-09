@@ -265,7 +265,8 @@ const keySpelling = (raw: unknown, ordered: boolean): string | undefined => {
  * `Object.hasOwn`, not `in`: the latter walks the prototype chain, so a parameter named
  * `toString` would count as present on every request. Body BEFORE query, which is the `search`
  * surface's own precedence — the key has to be built from the same value the controller will
- * read, or the two disagree about which request this entry answers.
+ * read, or the two disagree about which request this entry answers. The body half holds only for
+ * a POST: a GET or HEAD body is never parsed (`app/security.ts`), so it is `undefined` here.
  *
  * @param request - the incoming request
  * @param sortedKeyParameters - the declared parameter names, sorted

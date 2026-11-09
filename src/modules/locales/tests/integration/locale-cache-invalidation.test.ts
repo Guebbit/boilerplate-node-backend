@@ -169,3 +169,26 @@ describe('the cached dictionary is per app', () => {
         expect(other.body.messages).toEqual({ cart: { title: 'Quiosque' } });
     });
 });
+
+describe('a body on a GET never reaches the cache key', () => {
+    it("does not store one app's dictionary under another app's key", async () => {
+        setEnvironment({ NODE_LOCALE_APPS_EXTRA: 'kiosk=Kiosk' });
+        const { bearer } = await authenticateAs('admin');
+        await givenPublishedLanguage(bearer);
+        await api()
+            .post('/locales/pt/apps/kiosk/entries')
+            .set('Authorization', bearer)
+            .send({ key: 'cart.title', value: 'Quiosque' });
+
+        // Anonymous: asks for demo-fe in the query, but names kiosk in a body the key must not read.
+        const poisoning = await api()
+            .get('/locales/pt/messages?app=demo-fe')
+            .send({ app: 'kiosk' });
+        expect(poisoning.body.messages).toEqual({ cart: { title: 'Carrinho' } });
+
+        const honest = await api().get('/locales/pt/messages?app=kiosk');
+
+        expect(honest.headers['cache-status']).toContain('fwd=miss');
+        expect(honest.body.messages).toEqual({ cart: { title: 'Quiosque' } });
+    });
+});

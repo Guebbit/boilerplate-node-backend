@@ -48,7 +48,8 @@ export const mergedSearchInput = (
     extendInput?: SearchControllerSpec<ZodType, unknown>['extendInput']
 ): Record<string, unknown> => {
     // readInput: merges params/query/body into one object, per the `search` surface's
-    // rules — see docs/theory/request-input.md. `id` is a batch filter (an array), so it
+    // rules — see docs/theory/request-input.md. A body exists only on `POST …/search`: a GET's
+    // is never parsed (`app/security.ts`), so `request.body` is `undefined` there. `id` is a batch filter (an array), so it
     // goes through `stringArrays`, not `ids` — `ids` collapses a repeated key to its first
     // entry, which is correct for `update`/`delete` (one row) but would silently turn
     // `?id=a&id=b` into `?id=a` here.

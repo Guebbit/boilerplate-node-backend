@@ -64,20 +64,20 @@ reason: adding one fails that test once, which is the prompt to update this page
 
 | Surface  | Sources (highest first) | Used by                                                                                                          |
 | -------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `search` | body, query             | the endpoints with a `POST …/search` sibling (`example`, `orders`, `payments`, `tasks`, `products`, `users`)     |
+| `search` | body (POST only), query | the endpoints with a `POST …/search` sibling (`example`, `orders`, `payments`, `tasks`, `products`, `users`)     |
 | `list`   | query                   | the GET-only collection reads, which have no such sibling                                                        |
 | `write`  | params, body            | the item writes whose id rides in the path and whose fields ride in the body                                     |
 | `create` | body                    | `createProduct`, `createUser`, and the PUT/PATCH factory's body, `updateProduct` included (its id is read apart) |
 | `delete` | params, query           | the three soft/hard delete controllers' `hardDelete` flag; their `id` is `path` (a DELETE has no body)           |
 | `path`   | params                  | `requireId`'s default, for a path id with no body to fall back on                                                |
 
-`search` and `list` differ on one question: **is there a route that can carry a body?** A GET
-cannot — RFC 9110 §9.3.1 gives content on a GET no defined semantics and the Fetch spec refuses to
-send it, so the paired frontend could never use one — which makes `search` on a GET-only route a
-claim about a source no client has. Where such a route is also cached the claim is worse than
-decorative: `setCache` keys on the declared **query** parameters, so a body-borne filter is
-invisible to the key. Give a collection read a real DTO form by adding `POST /x/search`, not by
-declaring a body on its GET.
+`search` and `list` differ on one question: **is there a route that can carry a body?** Only a
+`POST …/search` can. A GET or HEAD body is never parsed (`src/app/security.ts` skips the JSON
+parser for those methods), so `request.body` is `undefined` there whatever surface the controller
+names. That is RFC 9110 §9.3.1 and §9.3.2 (content on a GET has no defined semantics), Zalando's
+"must be ignored on server side", and the Fetch spec refuses to send one anyway. It also means a
+cache key cannot be built from a body the controller will not read. Give a collection read a real
+DTO form by adding `POST /x/search`, not by declaring a body on its GET.
 
 | Endpoint(s)                                                      | Parameter                                       | Sources (highest first)              | Treatment                                                                               |
 | ---------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------- |
