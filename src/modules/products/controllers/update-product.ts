@@ -45,5 +45,5 @@ export const { replace: replaceProduct, update: updateProduct } = createUpdateCo
     keptWhenOmitted: ['imageUrl'],
     // PUT only: every locale the product holds and the body left out becomes a `null` delete.
     completeReplace: (id, changes) => productService.clearOmittedLocales(id, changes),
-    present: (product, request) => productService.toProduct(product, request.caller)
+    present: (product, request) => productService.presentForCaller(product, request.caller)
 });

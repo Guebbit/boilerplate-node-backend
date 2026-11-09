@@ -78,14 +78,24 @@ export const getByIdForCaller = (
 ): Promise<Product | null | undefined> => {
     if (!id) return Promise.resolve(undefined);
 
-    return productRepository.findByIdScoped(id, scope).then((product) => {
-        if (!product) return product;
-
-        return resolveToLocale(product)
-            .then((resolved) => withTranslations(product, resolved, context.caller))
-            .then((visible) => redactStock(visible, canSeeStock(context.caller)));
-    });
+    return productRepository
+        .findByIdScoped(id, scope)
+        .then((product) => (product ? presentForCaller(product, context.caller) : product));
 };
+
+/**
+ * A stored product as `GET /products/:id` answers this caller: the request's language, the
+ * `translations` for a holder of `read:Translation`, the stock counters for a holder of
+ * `read:StockLevel`. The write routes answer with this too, so a write's body is the product's
+ * own read (AIP-133/134/164).
+ *
+ * @param product - the stored document
+ * @param caller - `request.caller`, or `undefined` for a path with no request (sees no counters)
+ */
+export const presentForCaller = (product: ProductDocument, caller?: Caller): Promise<Product> =>
+    resolveToLocale(product)
+        .then((resolved) => withTranslations(product, resolved, caller))
+        .then((visible) => redactStock(visible, canSeeStock(caller)));
 
 /**
  * The resolved product plus its `translations`, for a caller who may read them; untouched

@@ -79,8 +79,11 @@ export const createProduct = (
                 rejectResponse(response, result.status, result.errors);
                 return;
             }
-            const product = productService.toProduct(result.data, request.caller);
-            createdResponse<Product>(response, product, `/products/${product.id}`);
+            return productService
+                .presentForCaller(result.data, request.caller)
+                .then((product) =>
+                    createdResponse<Product>(response, product, `/products/${product.id}`)
+                );
         })
         .catch((error: unknown) => {
             rejectDatabaseError(response, 'createProduct', error);

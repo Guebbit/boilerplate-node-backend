@@ -26,13 +26,13 @@ import {
     viewFulfillmentOrder
 } from './actions';
 import { restorableIds, viewShipmentOf } from './found';
-import { ensureFulfillmentOrders } from './ensure';
 import { presentFulfillmentOrder } from '../presenter';
 
 /**
- * The fulfillment orders of one of the caller's orders, each with its own `actions`. Makes them
- * first when a paid order has none — the safety net behind the `paid` listener. An order that is
- * not paid yet answers `[]`: absence is the answer, never a 404.
+ * The fulfillment orders of one of the caller's orders, each with its own `actions`. Reads only:
+ * they are made by the `paid` listener, by `start`, by a preorder allocation or by an operator
+ * reviving a dead `paid` event. An order that has none yet answers `[]`: absence is the answer,
+ * never a 404.
  *
  * @param orderId - the order
  * @param authContext - the caller; sees only their own, staff see anyone's
@@ -46,26 +46,19 @@ export const listFulfillmentOrdersForOrder = (
 
         const standing = standingOn(authContext);
 
-        return ensureFulfillmentOrders(orderId)
-            .then(() =>
-                Promise.all([
-                    fulfillmentOrderRepository.findByOrderId(orderId),
-                    orderService.getById(orderId)
-                ])
-            )
-            .then(([fulfillmentOrders, fresh]) => {
-                // The order as `ensure` left it: its status may have moved while it ran.
-                const current = fresh ?? order;
-                return generateSuccess(
+        return fulfillmentOrderRepository
+            .findByOrderId(orderId)
+            .then((fulfillmentOrders) =>
+                generateSuccess(
                     fulfillmentOrders.map((fulfillmentOrder) =>
                         presentFulfillmentOrder(
                             fulfillmentOrder,
-                            fulfillmentOrderActions(fulfillmentOrder, current, standing),
+                            fulfillmentOrderActions(fulfillmentOrder, order, standing),
                             standing.staff
                         )
                     )
-                );
-            });
+                )
+            );
     });
 
 /**

@@ -31,7 +31,7 @@ export interface ShipEverythingOptions {
 }
 
 /**
- * The order's fulfillment orders, made first if it has none — what `GET /orders/:id/fulfillment-orders` does.
+ * The order's fulfillment orders, made first if it has none, as the `paid` listener would.
  * @param orderId - the order
  */
 export const fulfillmentOrdersOf = (orderId: string): Promise<FulfillmentOrderDocument[]> =>

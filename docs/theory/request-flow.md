@@ -387,6 +387,10 @@ that declared status (400/413/415), never the library's own message; a driver fa
 is 500. A middleware that already has the `Response` in hand — file upload validation, for one —
 answers `rejectResponse` directly instead of throwing something for this handler to translate.
 
+The JSON parser is non-strict: any JSON value parses (RFC 8259 §2), and a body that is not a JSON
+object (`5`, `"x"`, `true`, `null`, `[]`) answers 422 `VALIDATION_ERROR` from `requireJsonObjectBody`
+before any route (RFC 5789 §2.2). Unparseable JSON stays the parser's 400.
+
 ### A status-only failure is still translated
 
 A refusal that carries no text of its own (a bare 404 from the catch-all, a 409, a 412) answers

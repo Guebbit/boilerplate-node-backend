@@ -252,7 +252,7 @@ export const fulfillmentOrderRepository: Repository<
     /**
      * Make a fulfillment order unless its `{ orderId, number }` already exists — what makes "made
      * when the order is paid" idempotent. `$setOnInsert` never touches an existing document, so a
-     * retried listener or a read racing it leaves what is there alone.
+     * retried listener leaves what is there alone.
      *
      * Mongoose `updateOne` with `upsert`: https://mongoosejs.com/docs/api/model.html#Model.updateOne()
      * @param orderId - the order

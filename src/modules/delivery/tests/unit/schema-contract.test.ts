@@ -1,7 +1,7 @@
 /**
  * @module
  * The two schemas' contract. `{ orderId, number }` unique is the same exactly-once device the
- * payment schema uses: a fulfillment order made twice (a retried listener, a read racing it) and a
+ * payment schema uses: a fulfillment order made twice (a retried listener) and a
  * shipment taking a number another already took are both refused by the database, not by a hope.
  */
 

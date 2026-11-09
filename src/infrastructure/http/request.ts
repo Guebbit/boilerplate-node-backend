@@ -97,8 +97,9 @@ export type RequestSurface = 'search' | 'list' | 'write' | 'create' | 'delete' |
  * The sources each surface reads, HIGHEST precedence first — a CLOSED set, so precedence is a
  * property of the surface, not an ad hoc choice per controller.
  *
- * `search` reads body before query (unifies `POST .../search` and `GET ?text=`); `list` is
- * query-only (a GET has no body semantics per RFC 9110); `write` reads params before body, for a
+ * `search` reads body before query (unifies `POST .../search` and `GET ?text=`; a GET's body is
+ * never parsed, so only the POST has one); `list` is query-only (a GET has no body semantics per
+ * RFC 9110); `write` reads params before body, for a
  * route that carries an id in its path; `create` is body-only, for a route that never does —
  * declaring `write` there would claim a `params` source no such route offers; `delete` reads
  * params, then query, except `hardDelete` which is `anyTrue` and escapes ranking; `path` is

@@ -19,6 +19,7 @@ import cookieParser from 'cookie-parser';
 import { rateLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { requireDeclaredContentType } from '@infrastructure/http/middlewares/content-type';
 import { limitJsonDepth, JSON_BODY_TYPES } from '@infrastructure/http/middlewares/json-depth';
+import { requireJsonObjectBody } from '@infrastructure/http/middlewares/json-object';
 import { REQUEST_CONTENT_TYPES } from '@api/request-content-types';
 import { isAllowedOrigin } from '@infrastructure/http/origins';
 import { appConfig } from './config';
@@ -229,23 +230,44 @@ export const installRequestParsing = (app: Express): void => {
      * gets it; every other route does not, which is why this is a prefix test rather than an
      * unconditional copy of every body the API receives.
      */
-    app.use(
-        express.json({
-            limit: jsonBodyLimit(),
-            type: JSON_BODY_TYPES,
-            verify: (request, _response, buffer) => {
-                // One cast, with a reason: `express.json` types its `verify` hook against the bare
-                // `http.IncomingMessage` the parser sees. It is the same object express has
-                // already decorated — `rawBody` is declared on it in `globals.d.ts`.
-                const decorated = request as Request;
-                if (isRawBodyPath(decorated.url)) decorated.rawBody = Buffer.from(buffer);
-            }
-        })
+    const jsonParser = express.json({
+        limit: jsonBodyLimit(),
+        // Any JSON value parses (RFC 8259 §2); the shape is judged by `requireJsonObjectBody` below,
+        // so a scalar or `null` body is a 422 like any other wrong shape, never the parser's 400.
+        strict: false,
+        type: JSON_BODY_TYPES,
+        verify: (request, _response, buffer) => {
+            // One cast, with a reason: `express.json` types its `verify` hook against the bare
+            // `http.IncomingMessage` the parser sees. It is the same object express has
+            // already decorated — `rawBody` is declared on it in `globals.d.ts`.
+            const decorated = request as Request;
+            if (isRawBodyPath(decorated.url)) decorated.rawBody = Buffer.from(buffer);
+        }
+    });
+
+    /*
+     * A GET or HEAD body is never parsed: `request.body` stays `undefined` whatever the route reads.
+     *
+     * Why: content on a GET has no defined semantics (RFC 9110 §9.3.1, §9.3.2) and Zalando says it
+     * "must be ignored on server side". Fastify skips it by default too. Parsed, it would reach a
+     * cache key built from the body before the query, and an anonymous caller could store one
+     * answer under another caller's key.
+     */
+    app.use((request, response, next) =>
+        request.method === 'GET' || request.method === 'HEAD'
+            ? next()
+            : jsonParser(request, response, next)
     );
 
     // Right after the parser: a body nested past the depth limit is refused before any walker
     // (fingerprint, cache key, schema) can overflow the stack on it.
     app.use(limitJsonDepth);
+
+    // After the depth guard, before idempotency fingerprinting and every route: a body that is not
+    // a JSON object is a 422 (RFC 5789 §2.2). A raw-body (webhook) path keeps whatever it was sent.
+    app.use((request, response, next) =>
+        isRawBodyPath(request.url) ? next() : requireJsonObjectBody(request, response, next)
+    );
 
     // cookie-parser: fills `request.cookies` from the `Cookie` header (no secret: nothing is signed).
     // https://github.com/expressjs/cookie-parser#readme

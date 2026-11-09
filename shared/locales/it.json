@@ -2,6 +2,7 @@
     "generic": {
         "error-client-error": "Qualcosa è andato storto con la richiesta.",
         "error-bad-request": "Impossibile leggere la richiesta.",
+        "error-body-not-object": "Il corpo della richiesta deve essere un oggetto JSON.",
         "error-content-too-large": "La richiesta supera la dimensione accettata da questo endpoint.",
         "error-method-not-allowed": "Questo endpoint non risponde a quel metodo.",
         "error-unsupported-media-type": "Questo endpoint non accetta quel tipo di contenuto.",

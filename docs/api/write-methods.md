@@ -189,6 +189,10 @@ The item reads, and what each is scoped by:
 
 A row the caller may not see, an unknown id and a malformed one are the same 404.
 
+A successful write answers the resource exactly as a GET by the same caller reads it (AIP-133/134/164):
+the same language, the same `translations` and stock counters for the same grants. `POST /products`,
+`PUT` and `PATCH /products/{id}` and `POST /products/{id}/restore` are the example.
+
 ### Search → 200
 
 `POST /x/search` is a read that needs a body — see
