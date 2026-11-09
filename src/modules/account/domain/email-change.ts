@@ -33,7 +33,7 @@ export const EMAIL_CHANGE_EVENTS = [
 /**
  * One thing that happens to an email change.
  *
- * - `request`: a new address is asked for (`PUT`/`PATCH /account`).
+ * - `request`: a new address is asked for (`POST /account/email-change`).
  * - `resend`:  the proof link is mailed again.
  * - `confirm`: the proof link is spent; the pending address becomes the address.
  * - `cancel`:  the owner drops the pending address (`DELETE /account/email-change`).

@@ -383,16 +383,16 @@ describe('the "remember me" choice survives every re-mint', () => {
 });
 
 describe('PUT /account', () => {
-    // A PUT body IS the new resource (RFC 9110 §9.3.4) — `email`/`username` are
+    // A PUT body IS the new resource (RFC 9110 §9.3.4) — `username` and `analyticsConsent` are
     // the Replace schema's `required` set, and an omitted optional field (`locale`, `phone`, …)
-    // is cleared rather than left alone.
-    it('replaces the profile, requiring email, username and analyticsConsent', async () => {
-        const { user, bearer } = await authenticateAs('user');
+    // is cleared rather than left alone. The email is not part of it: `POST /account/email-change`.
+    it('replaces the profile, requiring username and analyticsConsent', async () => {
+        const { bearer } = await authenticateAs('user');
 
         const response = await api()
             .put('/account')
             .set('Authorization', bearer)
-            .send({ email: user.email, username: 'replaced-self', analyticsConsent: false });
+            .send({ username: 'replaced-self', analyticsConsent: false });
 
         expect(response.status).toBe(200);
         expect(response.body.username).toBe('replaced-self');
@@ -405,18 +405,30 @@ describe('PUT /account', () => {
         const response = await api()
             .put('/account')
             .set('Authorization', bearer)
-            .send({ email: user.email, username: user.username });
+            .send({ username: user.username });
 
         expect(response.status).toBe(422);
     });
 
     it('refuses a body missing the required username', async () => {
-        const { user, bearer } = await authenticateAs('user');
+        const { bearer } = await authenticateAs('user');
 
         const response = await api()
             .put('/account')
             .set('Authorization', bearer)
-            .send({ email: user.email });
+            .send({ analyticsConsent: false });
+
+        expect(response.status).toBe(422);
+    });
+
+    it('refuses an email, which has its own door', async () => {
+        const { user, bearer } = await authenticateAs('user');
+
+        const response = await api().put('/account').set('Authorization', bearer).send({
+            email: 'brand-new@example.com',
+            username: user.username,
+            analyticsConsent: false
+        });
 
         expect(response.status).toBe(422);
     });
@@ -446,54 +458,41 @@ const staleButRefreshedBearer = async (jwtCookie: string): Promise<`Bearer ${str
     return bearerForCookie(jwtCookie);
 };
 
-describe("PUT /account's step-up depends on whether the email actually changes", () => {
+describe("POST /account/email-change's step-up for an account with no second factor", () => {
     afterEach(() => jest.useRealTimers());
 
-    it('does not demand a fresh session for a re-cased resend of the current address', async () => {
-        freezeDate();
-        const { user, jwtCookie } = await loginRemembered();
-        const bearer = await staleButRefreshedBearer(jwtCookie);
-
-        const response = await api().put('/account').set('Authorization', bearer).send({
-            email: user.email.toUpperCase(),
-            username: user.username,
-            analyticsConsent: false
-        });
-
-        expect(response.status).toBe(200);
-    });
-
-    it('demands a fresh session for a genuine email change', async () => {
-        freezeDate();
-        const { user, jwtCookie } = await loginRemembered();
-        const bearer = await staleButRefreshedBearer(jwtCookie);
-
-        const response = await api().put('/account').set('Authorization', bearer).send({
-            email: 'brand-new@example.com',
-            username: user.username,
-            analyticsConsent: false
-        });
-
-        expect(response.status).toBe(401);
-    });
-});
-
-describe("PATCH /account's step-up for an account with no second factor", () => {
-    afterEach(() => jest.useRealTimers());
-
-    it('demands a fresh session for an email change, and writes nothing', async () => {
+    it('demands a fresh session, and writes nothing', async () => {
         freezeDate();
         const { user, jwtCookie } = await loginRemembered();
         const bearer = await staleButRefreshedBearer(jwtCookie);
 
         const response = await api()
-            .patch('/account')
+            .post('/account/email-change')
             .set('Authorization', bearer)
             .send({ email: 'brand-new@example.com' });
 
         expect(response.status).toBe(401);
-        const stored = await userRepository.findById(user.id);
+        const stored = await userRepository.findByIdWithCredentials(user.id);
         expect(stored?.email).toBe(user.email);
+        expect(stored?.pendingEmail).toBeUndefined();
+    });
+
+    it('does not make a profile edit ask for one: PUT and PATCH /account carry no email', async () => {
+        freezeDate();
+        const { user, jwtCookie } = await loginRemembered();
+        const bearer = await staleButRefreshedBearer(jwtCookie);
+
+        const put = await api().put('/account').set('Authorization', bearer).send({
+            username: user.username,
+            analyticsConsent: false
+        });
+        const patch = await api()
+            .patch('/account')
+            .set('Authorization', bearer)
+            .send({ username: 'renamed-stale' });
+
+        expect(put.status).toBe(200);
+        expect(patch.status).toBe(200);
     });
 });
 
@@ -532,12 +531,14 @@ describe('PATCH /account', () => {
 
         expect(response.status).toBe(422);
     });
+});
 
+describe('POST /account/email-change', () => {
     it('holds a new address as pending rather than changing email immediately', async () => {
         const { user, bearer } = await authenticateAs('user');
 
         const response = await api()
-            .patch('/account')
+            .post('/account/email-change')
             .set('Authorization', bearer)
             .send({ email: 'fresh-address@example.com' });
 
@@ -558,7 +559,7 @@ describe('PATCH /account', () => {
         });
 
         const response = await api()
-            .patch('/account')
+            .post('/account/email-change')
             .set('Authorization', bearer)
             .send({ email: 'taken@example.com' });
 
@@ -569,7 +570,7 @@ describe('PATCH /account', () => {
         const { bearer } = await authenticateAs('user');
 
         const response = await api()
-            .patch('/account')
+            .post('/account/email-change')
             .set('Authorization', bearer)
             .send({ email: 'not-an-email' });
 
@@ -603,7 +604,7 @@ describe('DELETE /account/email-change', () => {
     it('cancels a pending change explicitly', async () => {
         const { bearer } = await authenticateAs('user');
         await api()
-            .patch('/account')
+            .post('/account/email-change')
             .set('Authorization', bearer)
             .send({ email: 'someone-else-typed-this@example.com' });
 
@@ -628,7 +629,10 @@ describe('DELETE /account/email-change', () => {
 const requestChangeAndWait = async (address: string) => {
     freezeDate();
     const session = await loginWithCookie({ verifiedAt: new Date() });
-    await api().patch('/account').set('Authorization', session.bearer).send({ email: address });
+    await api()
+        .post('/account/email-change')
+        .set('Authorization', session.bearer)
+        .send({ email: address });
     advanceDate(61_000);
     return session;
 };
@@ -1333,12 +1337,12 @@ describe('POST /account/email-verification/resend and /account/email-verificatio
     });
 });
 
-describe('PATCH /account (email change) and /account/email-change/confirm', () => {
+describe('POST /account/email-change and /account/email-change/confirm', () => {
     it('notifies the OLD address and mails a link to the NEW one, the moment the change is requested', async () => {
         const { user, bearer } = await loginWithCookie({ verifiedAt: new Date() });
 
         const response = await api()
-            .patch('/account')
+            .post('/account/email-change')
             .set('Authorization', bearer)
             .send({ email: 'new-address@example.com' });
 
@@ -1352,7 +1356,7 @@ describe('PATCH /account (email change) and /account/email-change/confirm', () =
     it('confirming the token swaps pendingEmail into email and re-verifies the account', async () => {
         const { user, bearer } = await loginWithCookie({ verifiedAt: new Date() });
         await api()
-            .patch('/account')
+            .post('/account/email-change')
             .set('Authorization', bearer)
             .send({ email: 'new-address@example.com' });
         const token = verifyTokenFromMail();
@@ -1368,7 +1372,7 @@ describe('PATCH /account (email change) and /account/email-change/confirm', () =
     it('round-trips a plus-tag address: confirms, and GET /account shows it', async () => {
         const { bearer } = await loginWithCookie({ verifiedAt: new Date() });
         const changeRequest = await api()
-            .patch('/account')
+            .post('/account/email-change')
             .set('Authorization', bearer)
             .send({ email: 'ada+shop@mail.example.photography' });
         expect(changeRequest.status).toBe(200);
@@ -1388,7 +1392,7 @@ describe('PATCH /account (email change) and /account/email-change/confirm', () =
     it('keeps authenticating under the OLD address until the token is spent', async () => {
         const { user, bearer } = await loginWithCookie({ verifiedAt: new Date() });
         await api()
-            .patch('/account')
+            .post('/account/email-change')
             .set('Authorization', bearer)
             .send({ email: 'new-address@example.com' });
 
@@ -1414,7 +1418,7 @@ describe('PATCH /account (email change) and /account/email-change/confirm', () =
     it('revokes every other session on a confirmed email change', async () => {
         const { user, bearer, jwtCookie } = await loginWithCookie({ verifiedAt: new Date() });
         await api()
-            .patch('/account')
+            .post('/account/email-change')
             .set('Authorization', bearer)
             .send({ email: 'new-address@example.com' });
         const token = verifyTokenFromMail();
@@ -1438,7 +1442,7 @@ describe('PATCH /account (email change) and /account/email-change/confirm', () =
     it('an `email-change` token is refused by the plain verify-confirm', async () => {
         const { bearer } = await loginWithCookie({ verifiedAt: new Date() });
         await api()
-            .patch('/account')
+            .post('/account/email-change')
             .set('Authorization', bearer)
             .send({ email: 'new-address@example.com' });
         const token = verifyTokenFromMail();
@@ -1471,7 +1475,7 @@ describe('PATCH /account (email change) and /account/email-change/confirm', () =
             verifiedAt: new Date()
         });
         await api()
-            .patch('/account')
+            .post('/account/email-change')
             .set('Authorization', changer.bearer)
             .send({ email: 'contested@example.com' });
         const token = verifyTokenFromMail();

@@ -4,9 +4,8 @@
  * `createUpdateController` factory. Both act on the CALLER's own record: there is no id anywhere
  * in the request, only `request.authContext.id` (see `idFrom` below).
  *
- * A changed email's side effects (the pending-change notice, the fresh verification link) are
- * `accountService.updateProfile`'s own business — see docs/modules/account.md#proving-an-address
- * — not this controller's.
+ * The email is not a field here: it starts at `POST /account/email-change`, see
+ * docs/modules/account.md#proving-an-address.
  */
 
 import { callerContextOf } from '@infrastructure/http/request';

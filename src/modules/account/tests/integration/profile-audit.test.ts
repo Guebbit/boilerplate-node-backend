@@ -22,22 +22,15 @@ setupTestDb();
 afterEach(() => jest.restoreAllMocks());
 
 describe('accountService.updateProfile — the audit row of an own edit', () => {
-    it('names the email when this call asked for a change, and never carries its value', async () => {
+    it('records the preference change with its values, and names no email', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
 
-        await accountService.updateProfile(
-            user.id,
-            { email: 'new@example.com', locale: 'it' },
-            testCallerContext
-        );
+        await accountService.updateProfile(user.id, { locale: 'it' }, testCallerContext);
 
         const row = auditSpy.mock.calls
             .map(([entry]) => entry)
             .find((entry) => entry.action === accountAuditActions.AUTH_PROFILE_UPDATED);
-        expect(row?.metadata).toEqual({
-            changes: { locale: { from: 'en', to: 'it' } },
-            changedFields: ['email']
-        });
+        expect(row?.metadata).toEqual({ changes: { locale: { from: 'en', to: 'it' } } });
     });
 });

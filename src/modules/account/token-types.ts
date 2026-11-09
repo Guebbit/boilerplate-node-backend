@@ -25,7 +25,7 @@ export const ACCOUNT_RESTORE_TOKEN_TYPE = 'account-restore';
 export const EMAIL_VERIFY_TOKEN_TYPE = 'verify';
 
 /**
- * The `type` of an email-CHANGE link — proves the address a `PUT/PATCH /account` change has ASKED
+ * The `type` of an email-CHANGE link — proves the address a `POST /account/email-change` request has ASKED
  * FOR (`user.pendingEmail`), never the one it already has. A distinct type from
  * {@link EMAIL_VERIFY_TOKEN_TYPE}, not a reuse: spending one must not do the other's work, since a
  * signup-verify token swapping in a `pendingEmail` would be a bug with an account takeover on the
