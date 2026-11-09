@@ -428,13 +428,17 @@ describe('the review flag', () => {
         expect(results.filter(Boolean)).toHaveLength(1);
     });
 
-    it('is set in the same write as an automatic hold', async () => {
+    it('is set when an automatic hold is taken, stamped with the hold’s own setAt', async () => {
         const buyer = await createUser();
 
         await takeAutomaticPurchaseHold(buyer.id, inDays(1), testCallerContext, AUTOMATIC_BASIS);
 
         const stored = await userRepository.findById(buyer.id);
-        expect(stored?.purchaseHoldFlaggedAt).toBeInstanceOf(Date);
+        // A Date guard first: two `undefined`s would compare equal below.
+        expect(stored?.purchaseHold?.setAt).toBeInstanceOf(Date);
+        expect(stored?.purchaseHoldFlaggedAt?.getTime()).toBe(
+            stored?.purchaseHold?.setAt.getTime()
+        );
     });
 
     it('outlives the hold: the nightly sweep removes the hold and keeps the flag', async () => {
@@ -530,6 +534,10 @@ describe('takeAutomaticPurchaseHold', () => {
             reason: 'staff',
             note: 'staff review'
         });
+        // The conditional write lost, so it must not have flagged the account either (placing a
+        // manual hold clears the flag first, so none is left over).
+        const stored = await userRepository.findById(buyer.id);
+        expect(stored?.purchaseHoldFlaggedAt).toBeUndefined();
     });
 
     it('takes a new hold once the earlier one has ended', async () => {
