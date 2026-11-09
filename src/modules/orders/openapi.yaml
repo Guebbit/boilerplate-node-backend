@@ -43,6 +43,8 @@ x-personal-data:
 
 paths:
     /orders:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         get:
             x-cache: private-no-cache
             tags: [Orders]
@@ -417,6 +419,8 @@ paths:
     # Undoes a soft delete. A separate verb because DELETE must be safe to repeat (RFC 9110
     # §9.2.2): a retried DELETE never brings a record back.
     /orders/{id}/restore:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Orders]
             summary: Restore order
@@ -466,6 +470,8 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
     /orders/{id}/cancel:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Orders]
             summary: Cancel order
@@ -657,6 +663,8 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
     /orders/{id}/status-override:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Orders]
             summary: Force-correct an order's status by hand

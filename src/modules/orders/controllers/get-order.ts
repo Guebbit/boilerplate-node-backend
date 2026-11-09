@@ -10,7 +10,6 @@ import { orderService } from '../services';
 import { rejectResponse } from '@infrastructure/http/response';
 import { requireId } from '@infrastructure/http/ids';
 import { catchAs } from '@infrastructure/http/controller';
-import { setEtag } from '@infrastructure/http/preconditions';
 import { recordStaffRead } from '@kernel/staff-read';
 import { ordersAuditActions } from '../audit';
 import { buyerIdOf } from '../domain';
@@ -43,8 +42,7 @@ export const getOrderItem = (
                 targetId: id,
                 ownerId: buyerIdOf(order)
             });
-            // The version an edit sends back as `If-Match`.
-            setEtag(response, order);
+            // `respondWithOrder` stamps the version an edit sends back as `If-Match`.
             // The body carries what THIS caller may do to the order, so the client renders its
             // controls from the server's answer rather than from a copy of the lifecycle.
             return respondWithOrder(response, order, request.authContext, 'getOrderItem');

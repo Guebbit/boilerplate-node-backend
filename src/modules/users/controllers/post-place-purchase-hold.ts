@@ -8,6 +8,7 @@
 import type { Request, Response } from 'express';
 import { PlaceUserPurchaseHoldBody } from '@api/schemas.zod';
 import { successResponse } from '@infrastructure/http/response';
+import { answerAsResource } from '@infrastructure/http/preconditions';
 import { requireId } from '@infrastructure/http/ids';
 import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, namedHandler, parseBody, refused } from '@infrastructure/http/controller';
@@ -38,6 +39,8 @@ export const postPlacePurchaseHold = namedHandler(
                 return userService
                     .toUserContract(result.data, callerContextOf(request).caller)
                     .then((user) => {
+                        // The user's real tag, and the resource it belongs to (RFC 9110 §8.8.3).
+                        answerAsResource(response, user, `/users/${user.id}`);
                         successResponse(response, user, 200);
                     });
             })

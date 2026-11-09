@@ -454,10 +454,42 @@ sequenceDiagram
 
 A resource is versioned when its item read hands out an `ETag` **and** its write honours `If-Match`.
 A PUT answer never carries a validator: every PUT here transforms what it stores, and RFC 9110 §9.3.4
-forbids a validator on the answer then. `dropPutValidators` (`http/preconditions.ts`) strips it
+forbids a validator on the answer then. `dropUnownedValidators` (`http/preconditions.ts`) strips it
 whatever the controller or Express set.
 The contract says so with one marker on the path item — `x-versioned: [get, put, patch, delete]` —
 and the bundler adds the header parameter, the 412 and the response header from it.
+
+#### A create, a restore or an action answers the real tag
+
+A write that answers a versioned resource hands back **that resource's tag**, plus
+`Content-Location` naming it (RFC 9110 §8.8.3, §15.3.2, §6.4.2 rule 7: without `Content-Location` a
+POST answer's body is "unidentified", and its tag ambiguous). The next edit then needs no read:
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+    C->>S: POST /users/{id}/assign-role
+    S-->>C: 200 + ETag "5.q81x…" + Content-Location /users/{id}
+    C->>S: PATCH /users/{id} + If-Match "5.q81x…"
+    S-->>C: 200 (not 412)
+```
+
+- **Who:** creates (products, users, examples, orders, cart checkout, webhook subscriptions),
+  restores (products, users, orders) and actions (user activation, role, purchase hold; order cancel,
+  override, process; example publish, archive, unarchive; subscription enable, disable).
+- **How:** the controller calls `answerAsResource(response, row, uri)`: `setEtag` plus
+  `Content-Location`, in the path convention `Location` uses. The body must be what a `GET` on that
+  URI returns right after (§8.7); users share `toUserContract`, products `presentForCaller`.
+- **The hook marks, it does not guess.** `setEtag` marks the response; on any write that is not a
+  PUT, `dropUnownedValidators` removes an `ETag` that nothing marked. That is Express's byte-hash,
+  which no `If-Match` accepts. On a PUT it removes every validator, whoever set it.
+- **Replays:** an idempotent retry replays `ETag` and `Content-Location` and keeps the tag.
+- **Not tagged:** signup and login (nothing to edit yet), a search, a delete. A POST that answers a
+  row nobody can edit later answers no tag.
+- **Contract:** `x-versioned: [post]` on the create's or the action's own path item. The bundler adds
+  `ETag` and `Content-Location` (both required) to its 2xx, and no `If-Match` or 412. The optional
+  app-level `ETag` is left off every write answer.
 
 | Resource | Read that sends `ETag` | Writes that take `If-Match` |
 | --- | --- | --- |
@@ -578,7 +610,8 @@ edit form.
 ### For a client
 
 1. Keep the `ETag` of the record the form loaded.
-2. Send it back as `If-Match` on the save; take the new `ETag` from a PATCH's 200. After a PUT, re-read
+2. Send it back as `If-Match` on the save; take the new `ETag` from a PATCH's 200, or from a create's
+   or an action's answer (its `Content-Location` says which resource it is for). After a PUT, re-read
    with GET: a PUT answer carries no `ETag` or `Last-Modified` (RFC 9110 §9.3.4).
 3. On 412 the record changed under you: re-read it, show the user what is different, resend.
 
@@ -610,10 +643,11 @@ A new date filter picks one of the three; a fourth spelling needs a card.
 | --- | --- |
 | `createUpdateController` — [Request Flow](../theory/request-flow.md#put-replaces-patch-merges) | one PUT/PATCH pipeline for every factory-backed resource |
 | `tests/cross-cutting/replace-patch-parity.test.ts` | a PUT and a PATCH schema declaring different fields |
-| `tests/support/response-contract.ts` | a 201 without its `Location`, a status the operation does not document |
+| `tests/support/response-contract.ts` | a 201 without its `Location`, a status the operation does not document, a write answering an `ETag` that is not the API's own or that its operation never declares |
+| `tests/contract/etag-on-every-answer.test.ts` | a create, a restore or an action whose tag its own `If-Match` refuses, a tag on a write with no resource, a replay that lost the tag |
 | `tests/contract/write-methods.test.ts` | an empty string stored, an undeclared type accepted, a `Location` missing or wrong, a 412 the contract does not declare, an `ETag` a versioned 200 forgot |
 | `tests/integration/conditional-writes.test.ts` | a stale `If-Match` that still wrote, two editors on one tag both winning, a translations-only or role-only edit that left the tag alone, a non-edit write that moved it |
 | `tests/integration/persistence/revision.test.ts` | a counter that repeats under two writers, moves for a non-edit, or misses a form of write (`save`, `updateOne`, `updateMany`, `findOneAndUpdate`, a pipeline) |
-| `tests/unit/scripts/contracts/openapi-bundle.test.ts` | an `x-versioned` marker that did not reach the bundled operation |
+| `tests/unit/scripts/contracts/openapi-bundle.test.ts` | an `x-versioned` marker (read, write or `post`) that did not reach the bundled operation |
 | `tests/contract/request-contract.test.ts` | a body the contract refuses being accepted |
 | `tests/fuzz/endpoints.fuzz.test.ts` | a hostile body answered with a 5xx |

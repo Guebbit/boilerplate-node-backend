@@ -8,6 +8,7 @@
 import type { Request, Response } from 'express';
 import type { Order } from '@types';
 import { successResponse } from '@infrastructure/http/response';
+import { answerAsResource } from '@infrastructure/http/preconditions';
 import { callerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
 import { deliveryService } from '../services';
@@ -24,6 +25,8 @@ export const postProcessOrder = (request: Request<{ id?: string }>, response: Re
         .processOrder(orderId, request.authContext, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
+            // The order's real tag, and the resource it belongs to (RFC 9110 §8.8.3).
+            answerAsResource(response, result.data, `/orders/${result.data.id}`);
             successResponse<Order>(response, result.data);
         })
         .catch(catchAs(response, 'postProcessOrder'));

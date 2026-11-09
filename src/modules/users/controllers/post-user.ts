@@ -8,6 +8,7 @@
 import type { Request, Response } from 'express';
 import { userService } from '../services';
 import { rejectResponse, createdResponse } from '@infrastructure/http/response';
+import { answerAsResource } from '@infrastructure/http/preconditions';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { parseBody } from '@infrastructure/http/controller';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
@@ -63,7 +64,10 @@ export const createUser = (
             return userService
                 .toUserContract(result.data, callerContextOf(request).caller)
                 .then((contract) => {
-                    createdResponse<User>(response, contract, `/users/${contract.id}`);
+                    const location = `/users/${contract.id}`;
+                    // The new user's real tag, and the resource it belongs to (RFC 9110 §8.8.3).
+                    answerAsResource(response, contract, location);
+                    createdResponse<User>(response, contract, location);
                 });
         })
         .catch((error: unknown) => {

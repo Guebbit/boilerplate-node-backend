@@ -318,7 +318,7 @@ are untouched by it. One step runs after it, on the bundled document rather than
 merging `x-app-level-responses` into every operation, since a `$ref` has to be resolved first for an
 operation to be reachable exactly once — see `scripts/contracts/openapi-bundle.ts`. A second such
 step reads the `x-versioned: [methods]` marker a fragment puts on a path item, and hangs the shared
-`If-Match` parameter, the 412 and the `ETag` header on exactly the operations it lists — see
+`If-Match` parameter, the 412 and the `ETag` header on exactly the operations it lists (a listed `post` gets `ETag` and `Content-Location`, no `If-Match`) — see
 [Conditional writes](./write-methods.md#conditional-writes-etag-and-if-match).
 
 What this buys:

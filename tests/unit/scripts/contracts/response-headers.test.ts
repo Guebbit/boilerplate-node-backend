@@ -69,14 +69,15 @@ describe('withAppLevelHeaders', () => {
         expect(own?.['404']).toEqual({ $ref: '#/components/responses/NotFound' });
     });
 
-    it('leaves `ETag` off a PUT answer, because a PUT carries no validator, and on every other method', () => {
+    it('leaves `ETag` off every write answer, because only an operation that answers a real tag declares one', () => {
         const document_ = asStub<OpenApiDocument>({
             openapi: '3.1.0',
             'x-app-level-headers': { ETag: 'EntityTag' },
             paths: {
                 '/item': {
                     put: { responses: { '200': { description: 'replaced' } } },
-                    patch: { responses: { '200': { description: 'merged' } } }
+                    patch: { responses: { '200': { description: 'merged' } } },
+                    get: { responses: { '200': { description: 'read' } } }
                 }
             }
         });
@@ -87,7 +88,11 @@ describe('withAppLevelHeaders', () => {
             description: 'replaced',
             headers: {}
         });
-        expect(paths?.['/item']?.patch?.responses?.['200']).toHaveProperty('headers', {
+        expect(paths?.['/item']?.patch?.responses?.['200']).toEqual({
+            description: 'merged',
+            headers: {}
+        });
+        expect(paths?.['/item']?.get?.responses?.['200']).toHaveProperty('headers', {
             ETag: { $ref: '#/components/headers/EntityTag' }
         });
     });
