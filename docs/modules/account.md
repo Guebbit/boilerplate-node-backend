@@ -128,6 +128,15 @@ vouches for the address), so it is a `customer` from its first request. Verifyin
 is one field written on the account, with no role to promote. An admin create is the one signup that
 may also grant a staff role, see [`users`](./users.md#creating-and-updating-with-a-role).
 
+**The first password of a staff-created account is its holder's first screen, so it carries the
+Terms.** The setup mail links the Terms and the privacy notice (the person's first contact from us,
+GDPR Art. 14(3)(b)) and opens `account-setup`, the reset page in setup mode. `POST
+/account/password/reset/confirm` takes an optional `termsAccepted: true`. An account with no Terms
+record needs it: without it the answer is a 422 naming `termsAccepted`, only after the link is
+found and before it is spent, so the same link still works. With it, the password write also
+stamps `termsAcceptedAt` and `termsVersion`. The same rule covers "forgot password" on an account
+that never accepted. An account that already has a record ignores the field.
+
 ::: tip Both entries owe the second factor
 The OAuth callback checks `twoFactorEnabledAt` like the password login does and issues the same
 challenge — see [OAuth](./account-oauth.md#two-consequences-worth-naming).

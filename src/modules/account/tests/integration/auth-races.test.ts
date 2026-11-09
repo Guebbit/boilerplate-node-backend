@@ -304,7 +304,8 @@ describe('one-time tokens under contention', () => {
             api().post('/account/password/reset/confirm').send({
                 token: 'one-time-reset-token',
                 password: REPLACEMENT_PASSWORD,
-                passwordConfirm: REPLACEMENT_PASSWORD
+                passwordConfirm: REPLACEMENT_PASSWORD,
+                termsAccepted: true
             })
         );
 

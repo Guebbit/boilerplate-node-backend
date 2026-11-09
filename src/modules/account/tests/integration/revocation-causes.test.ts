@@ -119,7 +119,8 @@ const viaPasswordReset: Trigger = async () => {
                 .send({
                     token: 'reset-me',
                     password: REPLACEMENT_PASSWORD,
-                    passwordConfirm: REPLACEMENT_PASSWORD
+                    passwordConfirm: REPLACEMENT_PASSWORD,
+                    termsAccepted: true
                 })
                 .then(() => undefined)
     };

@@ -23,7 +23,8 @@ import {
     exportReadyEmail,
     greetableName
 } from '@modules/account/emails';
-import { accountExportLink, accountFrontendLink } from '@modules/account/config';
+import { accountExportLink, accountFrontendLink, accountTermsLink } from '@modules/account/config';
+import { privacyFrontendLink } from '@modules/users';
 import { setEnvironment } from '@tests/environment';
 
 const NAME = 'Ada Lovelace';
@@ -41,14 +42,14 @@ const restoredByStaff = (locale: string, name: string) => accountRestoredEmail(l
 
 /**
  * The four that exist to deliver a link, paired with the `accountFrontendLink` kind each must
- * delegate to. `setupRequestEmail` shares `resetRequestEmail`'s kind deliberately — both spend a
- * `password`-type token at `POST /account/password/reset/confirm` (see `password-reset-request.ts`'s
- * `requestAccountSetup`) — so it's excluded from the "each token to its own kind" case below.
+ * delegate to. `setupRequestEmail` has its own `setup` kind: it spends the same `password`-type
+ * token at `POST /account/password/reset/confirm`, but from the page that asks for the Terms tick
+ * (see `password-reset-request.ts`'s `requestAccountSetup`).
  */
 const LINK_EMAILS = [
     ['verifyRequestEmail', verifyRequestEmail, 'account.verify-request', 'verify'],
     ['resetRequestEmail', resetRequestEmail, 'account.reset-request', 'reset'],
-    ['setupRequestEmail', setupRequestEmail, 'account.setup-request', 'reset'],
+    ['setupRequestEmail', setupRequestEmail, 'account.setup-request', 'setup'],
     ['deletionScheduledEmail', scheduledWithDate, 'account.deletion-scheduled', 'restore']
 ] as const;
 
@@ -111,6 +112,15 @@ describe('account emails — the action links', () => {
         const remove = scheduledWithDate('en', NAME, TOKEN).data.linkUrl as string;
 
         expect(new Set([verify, reset, remove]).size).toBe(3);
+    });
+
+    it('links the Terms and the privacy notice in the setup mail, the first contact from us', () => {
+        const { data } = setupRequestEmail('it', NAME, TOKEN);
+
+        expect(data.termsUrl).toBe(accountTermsLink('it'));
+        expect(data.privacyUrl).toBe(privacyFrontendLink('it'));
+        expect(new URL(data.termsUrl as string).pathname).toBe('/it/terms');
+        expect(new URL(data.privacyUrl as string).pathname).toBe('/it/privacy');
     });
 
     it('carries the recipient"s own locale into the link, not just the copy', () => {

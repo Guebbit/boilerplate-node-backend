@@ -11,6 +11,7 @@ import { markVerified } from './verification';
 import { findLiveToken, spendLiveToken, refuseLink } from './tokens';
 import {
     generateReject,
+    fieldError,
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
@@ -22,16 +23,22 @@ import { accountAuditActions } from '../audit';
 import { recordAccountAudit } from './caller';
 import { validatePasswordChange, writePassword } from './password';
 import { PASSWORD_RESET_TOKEN_TYPE } from '../token-types';
+import { termsAcceptance } from '../consent-record';
+import { t } from '@infrastructure/i18n';
 
 /**
  * The write a completed reset rides along on: the proven mailbox verifies the address, and the
  * 2FA wrong-code counter and lock clear. Someone who can read the mailbox has the account's own
  * recovery path, so the lock holds nothing back from them.
+ *
+ * An account with no Terms record (staff created it) gets its holder's own record in this same
+ * write: the first password set is the first screen that person acts on.
  */
 const markResetCompleted = (user: UserDocument): void => {
     user.mfaFailures = 0;
     user.mfaLockedUntil = undefined;
     markVerified(user);
+    if (!user.termsAcceptedAt) Object.assign(user, termsAcceptance());
 };
 
 /**
@@ -107,14 +114,25 @@ const resetLinkRefused = (context: CallerContext): ResponseReject =>
  * @param token - the token from the mailed link
  * @param password - the new password
  * @param context - the caller
+ * @param termsAccepted - the holder's tick; required while the account has no Terms record
  */
 const resetWith = (
     user: UserDocument,
     token: string,
     password: string,
-    context: CallerContext
-): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    assertPasswordNotBreached(password).then((breachErrors) => {
+    context: CallerContext,
+    termsAccepted: boolean | undefined
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
+    // After the link was found, so only the holder of a live token ever sees this refusal; before
+    // the spend, so the link survives and the page can ask again.
+    if (!user.termsAcceptedAt && termsAccepted !== true)
+        return Promise.resolve(
+            generateReject(422, [
+                fieldError('termsAccepted', t('account.reset.terms-not-accepted'))
+            ])
+        );
+
+    return assertPasswordNotBreached(password).then((breachErrors) => {
         if (breachErrors.length > 0) return generateReject(422, breachErrors);
 
         return spendLiveToken(PASSWORD_RESET_TOKEN_TYPE, token).then((spentByThisRequest) =>
@@ -125,6 +143,7 @@ const resetWith = (
                 : resetLinkRefused(context)
         );
     });
+};
 
 /**
  * `POST /account/password/reset/confirm` — the whole reset, in the order that never burns a link for a
@@ -138,21 +157,26 @@ const resetWith = (
  * @param password - the new password
  * @param passwordConfirm - the repeat
  * @param context - the caller
- * @returns the account on success; a 422 for a bad password pair, a breached password, or a link
+ * @param termsAccepted - the holder's Terms tick, needed only when the account holds no record
+ * @returns the account on success; a 422 for a bad password pair, a missing Terms tick, a breached
+ *   password, or a link
  *   that is unknown, expired or already used — the last three read alike on purpose
  */
 export const completePasswordReset = (
     token: string,
     password: string,
     passwordConfirm: string,
-    context: CallerContext
+    context: CallerContext,
+    termsAccepted?: boolean
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     const errors = validatePasswordChange(password, passwordConfirm);
     if (errors.length > 0) return Promise.resolve(generateReject(422, errors));
 
     return findLiveToken(PASSWORD_RESET_TOKEN_TYPE, token)
         .then((user) =>
-            user ? resetWith(user, token, password, context) : resetLinkRefused(context)
+            user
+                ? resetWith(user, token, password, context, termsAccepted)
+                : resetLinkRefused(context)
         )
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 };

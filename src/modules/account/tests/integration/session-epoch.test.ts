@@ -199,7 +199,8 @@ describe('the events that move the epoch', () => {
         const response = await api().post('/account/password/reset/confirm').send({
             token: 'pending-password',
             password: REPLACEMENT_PASSWORD,
-            passwordConfirm: REPLACEMENT_PASSWORD
+            passwordConfirm: REPLACEMENT_PASSWORD,
+            termsAccepted: true
         });
 
         expect(response.status).toBe(204);

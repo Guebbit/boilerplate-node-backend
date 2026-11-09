@@ -86,7 +86,8 @@ const resetWith = (token: string) =>
     api().post('/account/password/reset/confirm').send({
         token,
         password: REPLACEMENT_PASSWORD,
-        passwordConfirm: REPLACEMENT_PASSWORD
+        passwordConfirm: REPLACEMENT_PASSWORD,
+        termsAccepted: true
     });
 
 /** Makes every parked row due now, so the next relay pass does not wait out its backoff. */

@@ -12,8 +12,14 @@ import { country, email, int, text } from '@infrastructure/config/fields';
 import { frontendLink, FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
 import { DAY_MS, HOUR_MS, oneCalendarMonthLaterUtc } from '@domain-primitives/time';
 
-/** The five token-bearing account links — one per kind of proof a link can carry. */
-export type AccountLinkKind = 'verify' | 'reset' | 'restore' | 'email-change' | 'email-undo';
+/** The six token-bearing account links — one per kind of proof a link can carry. */
+export type AccountLinkKind =
+    | 'verify'
+    | 'reset'
+    | 'setup'
+    | 'restore'
+    | 'email-change'
+    | 'email-undo';
 
 /**
  * The frontend link templates, the two mail-link lifetimes, how long a data export is kept, the
@@ -30,10 +36,12 @@ export const accountConfig = defineConfig({
     shape: {
         NODE_FRONTEND_LINK_VERIFY: text({ default: FRONTEND_LINK_RULES.links.verify }),
         NODE_FRONTEND_LINK_RESET: text({ default: FRONTEND_LINK_RULES.links.reset }),
+        NODE_FRONTEND_LINK_SETUP: text({ default: FRONTEND_LINK_RULES.links.setup }),
         NODE_FRONTEND_LINK_RESTORE: text({ default: FRONTEND_LINK_RULES.links.restore }),
         NODE_FRONTEND_LINK_EMAIL_CHANGE: text({ default: FRONTEND_LINK_RULES.links.emailChange }),
         NODE_FRONTEND_LINK_EMAIL_UNDO: text({ default: FRONTEND_LINK_RULES.links.emailUndo }),
         NODE_FRONTEND_LINK_EXPORT: text({ default: FRONTEND_LINK_RULES.links.export }),
+        NODE_FRONTEND_LINK_TERMS: text({ default: FRONTEND_LINK_RULES.links.terms }),
         NODE_PASSWORD_RESET_TTL_MS: int({ default: HOUR_MS, min: 1 }),
         NODE_INACTIVE_ACCOUNT_DAYS: int({ default: 0, min: 0 }),
         NODE_INACTIVE_MINIMISE_DAYS: int({ default: 1095, min: 0 }),
@@ -66,14 +74,15 @@ export const accountConfig = defineConfig({
 const LINK_ENV_VAR = {
     verify: 'NODE_FRONTEND_LINK_VERIFY',
     reset: 'NODE_FRONTEND_LINK_RESET',
+    setup: 'NODE_FRONTEND_LINK_SETUP',
     restore: 'NODE_FRONTEND_LINK_RESTORE',
     'email-change': 'NODE_FRONTEND_LINK_EMAIL_CHANGE',
     'email-undo': 'NODE_FRONTEND_LINK_EMAIL_UNDO'
 } as const satisfies Record<AccountLinkKind, string>;
 
 /**
- * A link into the paired frontend for one of the five token-bearing kinds — signup, reset,
- * restore, email-change, email-undo.
+ * A link into the paired frontend for one of the six token-bearing kinds — signup, reset,
+ * setup, restore, email-change, email-undo.
  *
  * @param kind - which link — picks both the env var and the default template
  * @param parameters - `locale` the email is written in; `token` the link must carry
@@ -95,6 +104,15 @@ export const accountFrontendLink = (
  */
 export const accountExportLink = (locale: string): string =>
     frontendLink(accountConfig().NODE_FRONTEND_LINK_EXPORT, locale);
+
+/**
+ * A link into the paired frontend's Terms of Service page, for the mail that is a person's first
+ * contact from us (the setup mail).
+ *
+ * @param locale - the mail's own locale
+ */
+export const accountTermsLink = (locale: string): string =>
+    frontendLink(accountConfig().NODE_FRONTEND_LINK_TERMS, locale);
 
 /**
  * When an account whose owner asked to delete it at `requestedAt` is erased: the configured grace,

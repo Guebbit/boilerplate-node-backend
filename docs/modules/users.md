@@ -148,7 +148,8 @@ sequenceDiagram
 without one and always mails a setup link (`USER_SETUP_REQUESTED`, handled in
 [`account`](./account.md); it rides the [outbox](../tools/outbox.md) in the account's own
 transaction, so a lost mail is retried and a refused grant sends none), so no administrator ever types, sees or resets another person's
-password, second factor or sign-in email. Each row also carries an [`actions` block](#actions) with
+password, second factor or sign-in email. The setup page is where its holder accepts the Terms
+(see [`account`](./account.md)); creating the row stamps no Terms record. Each row also carries an [`actions` block](#actions) with
 the rank and the account's state already applied, which is what a screen renders its buttons from.
 
 `phone` is stored AES-256-GCM under `NODE_PII_ENCRYPTION_KEY`

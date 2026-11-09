@@ -19,6 +19,8 @@ export const frontendLinksSchema = z.strictObject({
         verify: template,
         /** Choose a new password. */
         reset: template,
+        /** Choose the first password of an account staff created. */
+        setup: template,
         /** Undo an account deletion. */
         restore: template,
         /** Confirm a new e-mail address. */
@@ -34,7 +36,9 @@ export const frontendLinksSchema = z.strictObject({
         /** The contact page, pre-filled for an account question. */
         contact: template,
         /** The privacy notice. */
-        privacy: template
+        privacy: template,
+        /** The Terms of Service. */
+        terms: template
     }),
     /** Staff screens a work-notice mail links to, under the frontend's `/<locale>/`. */
     staffPages: z.strictObject({

@@ -3,7 +3,12 @@
  * turns a resolved template into a URL, so the four kinds' env vars and default templates live
  * here, not in infrastructure.
  */
-import { accountConfig, accountFrontendLink, deletionPurgeAt } from '@modules/account/config';
+import {
+    accountConfig,
+    accountFrontendLink,
+    accountTermsLink,
+    deletionPurgeAt
+} from '@modules/account/config';
 import { withoutEnvironmentInThisFile, setEnvironment } from '@tests/environment';
 
 withoutEnvironmentInThisFile([
@@ -30,6 +35,16 @@ describe('accountFrontendLink — the default template per kind', () => {
         );
     });
 
+    it('builds the setup link on its own page, apart from the reset one', () => {
+        expect(accountFrontendLink('setup', { locale: 'en', token: TOKEN })).toBe(
+            `http://localhost:8080/en/account-setup#token=${TOKEN}`
+        );
+    });
+
+    it('builds the Terms link', () => {
+        expect(accountTermsLink('en')).toBe('http://localhost:8080/en/terms');
+    });
+
     it('builds the restore link', () => {
         expect(accountFrontendLink('restore', { locale: 'en', token: TOKEN })).toBe(
             `http://localhost:8080/en/account-restore#token=${TOKEN}`
@@ -43,8 +58,8 @@ describe('accountFrontendLink — the default template per kind', () => {
     });
 
     it('gives every kind a distinct path, so one token can never be mistaken for another flow', () => {
-        const urls = (['verify', 'reset', 'restore', 'email-change'] as const).map((kind) =>
-            accountFrontendLink(kind, { locale: 'en', token: TOKEN })
+        const urls = (['verify', 'reset', 'setup', 'restore', 'email-change'] as const).map(
+            (kind) => accountFrontendLink(kind, { locale: 'en', token: TOKEN })
         );
 
         expect(new Set(urls).size).toBe(urls.length);

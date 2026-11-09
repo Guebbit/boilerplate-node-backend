@@ -94,7 +94,8 @@ describe('the notice after a signed-in password change', () => {
             'reset-link',
             REPLACEMENT_PASSWORD,
             REPLACEMENT_PASSWORD,
-            testCallerContext
+            testCallerContext,
+            true
         );
 
         expect(mailsOf('account.password-changed')).toEqual([]);

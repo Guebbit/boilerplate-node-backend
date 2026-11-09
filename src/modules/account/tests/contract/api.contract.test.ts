@@ -772,14 +772,16 @@ describe('POST /account/password/reset/confirm', () => {
         const weakAttempt = await api().post('/account/password/reset/confirm').send({
             token: 'a-fresh-reset-token',
             password: WEAK_PASSWORD,
-            passwordConfirm: WEAK_PASSWORD
+            passwordConfirm: WEAK_PASSWORD,
+            termsAccepted: true
         });
         expect(weakAttempt.status).toBe(422);
 
         const validAttempt = await api().post('/account/password/reset/confirm').send({
             token: 'a-fresh-reset-token',
             password: REPLACEMENT_PASSWORD,
-            passwordConfirm: REPLACEMENT_PASSWORD
+            passwordConfirm: REPLACEMENT_PASSWORD,
+            termsAccepted: true
         });
         expect(validAttempt.status).toBe(204);
     });
