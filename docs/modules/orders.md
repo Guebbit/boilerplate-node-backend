@@ -421,8 +421,8 @@ name. It needs a `reason` and writes a `status_overridden` row on the
 itself, and recording an arrival has no forced variant either.
 
 - `POST /orders/{id}/status-override` with `{ to, reason }` moves the status
-  alone, forward to `processing`/`shipped`/`delivered` only. No shipped email — but webhooks still fire,
-  since a subscriber's own view of the order genuinely changed.
+  alone, forward to `processing`/`shipped`/`delivered` only. No shipped email and no webhook: an override never lands on `paid`, the only status change
+  a subscriber hears, and the shipments it cuts for `delivery` are silent too.
 
 The status-only door announces `order.status_overridden {orderId, from, to, at}` through the outbox,
 in its own transaction, and [`delivery`](./delivery.md#the-status-override) listens: forward to

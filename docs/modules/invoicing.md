@@ -73,7 +73,8 @@ hard-delete refusal read instead of asking this module whether the freeze actual
 ## Issuing a document
 
 Two domain-event listeners, `module.ts`'s whole `subscribe()`, are the ONLY way either document is
-ever created. No route requests one into existence.
+ever created. No route requests one into existence. An order with no lines gets no invoice: there is
+nothing to invoice, and `issueInvoice` answers nothing for it.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%

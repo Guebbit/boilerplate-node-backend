@@ -761,9 +761,13 @@ trail.
 
 ## Configuration
 
-| Variable                        | Default | Meaning                                                                              |
-| ------------------------------- | ------- | ------------------------------------------------------------------------------------ |
-| `NODE_HOLD_NOTE_RETENTION_DAYS` | `365`   | Days without a change before `reap:delivery` unsets a fulfillment order's `holdNote` |
+| Variable                                  | Default | Meaning                                                                                                                                                                                                   |
+| ----------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_HOLD_NOTE_RETENTION_DAYS`           | `365`   | Days without a change before `reap:delivery` unsets a fulfillment order's `holdNote`                                                                                                                      |
+| `NODE_DELIVERY_UNDELIVERED_REMINDER_DAYS` | `14`    | Days a physical shipment may stay `shipped` before the staff digest counts it undelivered. Declared by [`shop-tasks`](./shop-tasks.md), which owns the digest; `deliveryDigest` only receives the number. |
+
+The undelivered count takes physical shipments still `shipped` past that age. A lost parcel, a delivered
+one and a digital fulfillment are all left out.
 
 ## The return address
 

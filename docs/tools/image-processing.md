@@ -180,6 +180,10 @@ a record with no image at all, which has no `imageUrl` and is drawn with the fro
 | `NODE_QUARANTINE_RETENTION_HOURS` | `24`                                | Age at which `reap:quarantine` unlinks a leftover file                                            |
 | `NODE_MAX_UPLOAD_BYTES`           | `5242880` (5 MB)                    | Largest file multer accepts, per file — its own default is unlimited, so this is the only ceiling |
 
+Besides the file size, multer bounds the shape of an upload (`middlewares/upload.ts`): at most 1 file
+part, 32 non-file fields of at most 100 KiB each, and 64 parts in all. Past any of them the request is
+refused with the matching `LIMIT_*` code (400 for a count or a field name, 413 for a size).
+
 ## Maintenance
 
 - **`npm run job reap:quarantine`** — deletes quarantine files older than

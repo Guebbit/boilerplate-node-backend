@@ -175,6 +175,13 @@ if each of THEIR endpoints were at fault. `domain#shouldAutoDisable` requires BO
 (`WebhookSubscriptionDocument.failingSince`, stamped on the first failure after a success and
 cleared on the next one, and on a re-enable, so a disabled subscription turned back on starts a fresh streak) — `webhook_subscriptions_auto_disabled_total` counts how often it fires.
 
+**A delivery whose subscription was switched off, or deleted, while it waited ends `exhausted` at once.**
+No attempt is made, so the failure streak above is untouched: a disabled subscription never counts a
+second time against itself.
+
+**The 10 s delivery timeout is one budget for the whole attempt, DNS resolution included.** A resolver
+that hangs spends the same seconds as a slow endpoint, then the attempt fails like any other.
+
 **Delayed retry rides the cron container, not the broker.** `webhookdeliveries.nextAttemptAt`
 carries when a failed row is due again; `npm run job sweep:webhook-retries` (`sweep:webhook-retries`)
 — one of two jobs in `docker/crontab` that run every minute instead of nightly, the other being `sweep:outbox` — publishes every due
