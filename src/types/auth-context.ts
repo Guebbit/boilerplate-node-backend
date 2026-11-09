@@ -188,8 +188,8 @@ export interface CallerContext {
     /**
      * The api-key behind {@link caller} — `request.credentialId` — absent for every request that
      * resolved a human session instead. Sibling to {@link actorRoleName} rather than a replacement
-     * for it, and kept only for the audit trail's `actorCredentialId`: a row can say "acted via
-     * key `sk_a1b2c3d4`" instead of attributing machine traffic to the human who created the key.
+     * for it. The audit trail's `actorCredentialId` reads it ("acted via key `sk_a1b2c3d4`"), and a
+     * rule that asks "is this the caller's own record" reads it too: a key is never its minter.
      */
     actorCredentialId?: string;
     /** The caller's address, as Express resolved it (trust-proxy aware). */

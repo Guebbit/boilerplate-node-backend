@@ -49,6 +49,15 @@ services:
             - '--providers.file.watch=true'
             - '--entrypoints.web.address=:80'
             - '--entrypoints.websecure.address=:443'
+            # Whole-request read limit, body included (default 60s, which cuts a slow upload).
+            # Keep it >= NODE_HTTP_REQUEST_TIMEOUT_MS + NODE_HTTP_HEADERS_TIMEOUT_MS of every client.
+            # https://doc.traefik.io/traefik/routing/entrypoints/#respondingtimeouts
+            - '--entrypoints.websecure.transport.respondingTimeouts.readTimeout=135s'
+            # Idle time before Traefik drops a connection to an app (default 90s). Keep it below
+            # every client's NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS: the proxy closes first, so it never
+            # reuses a socket Node already closed (502).
+            # https://doc.traefik.io/traefik/routing/overview/#transport-configuration
+            - '--serversTransport.forwardingTimeouts.idleConnTimeout=4s'
             # Port 80 only redirects. Traefik exempts the ACME HTTP challenge from the redirect, so
             # certificate issuance below still works.
             # https://doc.traefik.io/traefik/routing/entrypoints/#redirection
@@ -94,7 +103,8 @@ services:
             # (`forwardedHeaders.insecure` is off by default) and writes the real peer's address, so
             # `request.ip` is the caller. With `0` every client is the proxy: the global budget and
             # each per-address login and signup budget become site-wide, and every audit row names
-            # the proxy. A client env file that sets its own value still wins.
+            # the proxy. A client env file that sets its own value still wins. `.env-example` leaves the
+            # variable commented out so this default applies.
             # https://doc.traefik.io/traefik/routing/entrypoints/#forwarded-headers
             NODE_TRUST_PROXY_HOPS: '${NODE_TRUST_PROXY_HOPS:-1}'
 

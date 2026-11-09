@@ -263,6 +263,30 @@ describe('assign and unassign', () => {
         });
     });
 
+    it('announces nothing when a person takes the task themselves', async () => {
+        const worker = await createUser({ username: 'sam' }, 'support');
+        const task = await fileContact();
+
+        await taskService.assign(
+            String(task._id),
+            worker.id,
+            callerContextAs('support', worker.id)
+        );
+
+        expect(await outboxEventModel.countDocuments({ name: 'task.assigned' })).toBe(0);
+    });
+
+    it('announces it when a key takes the task for the person who minted it', async () => {
+        const worker = await createUser({ username: 'sam' }, 'support');
+        const task = await fileContact();
+        const viaKey = { ...callerContextAs('support', worker.id), actorCredentialId: 'key-1' };
+
+        await taskService.assign(String(task._id), worker.id, viaKey);
+
+        const rows = await outboxEventModel.find({ name: 'task.assigned' }).lean().exec();
+        expect(rows).toHaveLength(1);
+    });
+
     it('takes a new task into progress and names the assignee', async () => {
         const worker = await createUser({ username: 'sam' }, 'support');
         const task = await fileContact();

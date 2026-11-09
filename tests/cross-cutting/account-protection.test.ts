@@ -11,7 +11,8 @@
  */
 import { api, authenticateAsRole } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-import { credentialHolding } from '@tests/credentials';
+import { credentialHolding, credentialOf } from '@tests/credentials';
+import { userRepository } from '@modules/users/tests/factories';
 import { PRESET_ROLES } from '@kernel/permissions';
 import {
     createOwner,
@@ -79,7 +80,11 @@ const runRow = async (row: ProtectionRow, callerRole: string) => {
             owner: await createOwner('owner-platform', null, 'operator'),
             expected: mayManage ? 'passed' : 'ROLE_MANAGEMENT_REQUIRED'
         },
-        { kind: 'self', owner: { user: caller.user, role: callerRole }, expected: 'passed' }
+        {
+            kind: 'self',
+            owner: { user: caller.user, role: callerRole },
+            expected: mayManage ? 'passed' : 'ROLE_MANAGEMENT_REQUIRED'
+        }
     ];
 
     const outcomes: Record<string, string> = {};
@@ -116,6 +121,9 @@ describe('the protection of staff accounts, row by row', () => {
     }
 });
 
+/** The users keys a credential can be minted with: `delete:User` is session-only. */
+const KEY_MINTABLE = new Set(['update:User', 'ban:User']);
+
 /** `PATCH /users/:id` as an API key, reduced to its outcome. */
 const patchAsKey = async (secret: string, owner: Owner): Promise<string> =>
     outcomeOf(
@@ -136,6 +144,25 @@ describe('an API key holds exactly the keys it was minted with', () => {
             'ROLE_MANAGEMENT_REQUIRED'
         ]);
     });
+
+    // A key carries its minter's id: it must not be taken for the minter, whatever it holds.
+    it.each(PROTECTION_ROWS.filter((row) => KEY_MINTABLE.has(row.key)))(
+        'is refused its own minter on $route',
+        async (row) => {
+            const secret = await credentialHolding([row.key]);
+            const resolved = await credentialOf(secret);
+            const minterId = resolved?.caller.id;
+            const minter = await userRepository.findById(minterId ?? '');
+            if (!minter) throw new Error('the key resolved to no minter');
+
+            const response = await send(
+                `Bearer ${secret}`,
+                row.prepare({ user: minter, role: 'admin' })
+            );
+
+            expect(outcomeOf(response)).toBe('ROLE_MANAGEMENT_REQUIRED');
+        }
+    );
 
     it('cannot be minted with role management, so no key ever reaches a staff account', async () => {
         await expect(credentialHolding(['update:User', 'assign:Role'])).rejects.toThrow(

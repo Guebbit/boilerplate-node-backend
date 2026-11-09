@@ -65,7 +65,7 @@ x-error-codes:
     ROLE_MANAGEMENT_REQUIRED:
         {
             status: 403,
-            description: "The caller holds the permission this route requires, but the change needs `assign:Role`, which they do not hold: it would hand out a staff role, or it would change an account that holds one. Staff without it change customers only, and a role they may not give is refused here before any role name is judged. The caller's own account is never refused."
+            description: "The caller holds the permission this route requires, but the change needs `assign:Role`, which they do not hold: it would hand out a staff role, or it would change an account that holds one. Staff without it change customers only, and a role they may not give is refused here before any role name is judged. The caller's own account is judged like any other, and an API key never acts on the account that minted it."
         }
     NOT_FOUND:
         {
@@ -1190,8 +1190,8 @@ components:
             description: >-
                 What the requesting caller may do to this account, one flag per endpoint. Each is the
                 route's permission key AND the protection of staff accounts: an account that holds a
-                staff role is `false` for all of them unless the caller holds `assign:Role`; the
-                caller's own account is judged by the keys alone. A flag also reads the account's
+                staff role is `false` for all of them unless the caller holds `assign:Role`, the
+                caller's own account and an API key's minter included. A flag also reads the account's
                 state, so a control never offers a move the server would refuse with a 409.
             properties:
                 update:
@@ -1205,8 +1205,8 @@ components:
                     type: boolean
                     description: >-
                         Whether the `role` field of `PUT`/`PATCH /users/{id}` would be accepted —
-                        `update` AND the caller holds `assign:Role`. No rule refuses the caller's
-                        own account.
+                        `update` AND the caller holds `assign:Role`. The caller's own account is
+                        judged like any other.
                 delete:
                     type: boolean
                     description: >-

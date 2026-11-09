@@ -95,31 +95,13 @@ describe('staffHoldersAmong', () => {
 });
 
 describe('mayChangeAccount', () => {
-    // [account holds a staff role, caller is the account, caller holds assign:Role, expected]
+    // [account holds a staff role, caller holds assign:Role, expected]
     it.each([
-        [false, false, false, true],
-        [true, false, false, false],
-        [true, true, false, true],
-        [true, false, true, true]
-    ])(
-        'staff account %s, own account %s, assign:Role %s: %s',
-        (holdsStaffRole, own, holdsAssignRole, expected) => {
-            expect(
-                mayChangeAccount(
-                    { id: own ? 'owner' : 'caller', holdsAssignRole },
-                    { id: 'owner', holdsStaffRole }
-                )
-            ).toBe(expected);
-        }
-    );
-
-    it('never lets an anonymous caller change a staff account', () => {
-        expect(
-            mayChangeAccount(
-                { id: null, holdsAssignRole: false },
-                { id: 'owner', holdsStaffRole: true }
-            )
-        ).toBe(false);
+        [false, false, true],
+        [true, false, false],
+        [true, true, true]
+    ])('staff account %s, assign:Role %s: %s', (holdsStaffRole, holdsAssignRole, expected) => {
+        expect(mayChangeAccount({ holdsAssignRole }, { holdsStaffRole })).toBe(expected);
     });
 });
 
@@ -141,12 +123,14 @@ describe('canChangeAccount', () => {
         ).toBe(expected);
     });
 
-    it('lets the caller change their own account, whatever they hold', async () => {
+    it('judges the caller’s own account like any other', async () => {
         hold('me', 'support');
+        hold('boss', 'admin');
 
-        expect(await accessService.canChangeAccount(callerContextAs('support', 'me'), 'me')).toBe(
-            true
-        );
+        expect([
+            await accessService.canChangeAccount(callerContextAs('support', 'me'), 'me'),
+            await accessService.canChangeAccount(callerContextAs('admin', 'boss'), 'boss')
+        ]).toEqual([false, true]);
     });
 
     it('skips the check for the system actor', async () => {

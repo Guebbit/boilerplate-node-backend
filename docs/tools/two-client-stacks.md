@@ -158,10 +158,16 @@ docker compose --env-file "clients/acme/.env" \
   client's `app` and round-robins across them.
 - **Port 80 only redirects** to 443; Traefik exempts the ACME HTTP challenge, so issuance still
   works.
-- **Trust proxy.** The overlay sets `NODE_TRUST_PROXY_HOPS` to `1` (a client env file that sets its
-  own value still wins): Traefik drops an untrusted `X-Forwarded-For` and writes the real peer, so
+- **Trust proxy.** The overlay sets `NODE_TRUST_PROXY_HOPS` to `1` unless the client file sets it
+  (`.env-example` leaves it commented): Traefik drops an untrusted `X-Forwarded-For` and writes the real peer, so
   `request.ip` is the caller. With `0` every client is the proxy, and one attacker's failed logins
   exhaust the per-address budget for everyone.
+- **Proxy timeouts vs app timeouts (read).** Traefik's `readTimeout` is `135s`, at least the app's
+  `NODE_HTTP_REQUEST_TIMEOUT_MS` + `NODE_HTTP_HEADERS_TIMEOUT_MS`, so a slow upload ends on the
+  app's side, not on Traefik's 60 s default. See `applyServerTimeouts` in `src/app/security.ts`.
+- **Proxy timeouts vs app timeouts (idle).** Traefik's `idleConnTimeout` is `4s`, below the app's
+  `NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS`: the proxy closes idle connections first, so it never reuses a
+  socket Node closed (a 502).
 
 **Verified against a real Traefik, not a real certificate:** a route file in the watched directory
 produced the router `acme@file` with the file's exact `Host(...)` rule and `certResolver`; a second

@@ -723,7 +723,7 @@ The correct value is the **number of proxies you actually run**, so Express coun
 right-hand end of `X-Forwarded-For` — the part a client cannot forge. `NODE_TRUST_PROXY_HOPS`
 carries it, and `0` (the default) means "no proxy, use the socket address", which is right for local
 development and for the compose stack, where the API is published directly. The Traefik overlay sets
-it to `1`.
+it to `1` unless the client file sets it (`.env-example` leaves it commented).
 
 `0` is handed to Express as `false`, and that is what lets express-rate-limit spot the one mistake
 worth a warning: an `X-Forwarded-For` arriving while no proxy is counted. The library checks **once

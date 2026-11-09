@@ -269,7 +269,7 @@ sudo sysctl --system
 ```
 
 Then set `NODE_TRUST_PROXY_HOPS` to the number of proxies in front (usually `1`; the Traefik overlay
-below sets it for you). It defaults to `0`, which reads the caller's address from the socket — with a proxy in front, that is the proxy's
+below sets it to `1` unless the client file sets it, and `.env-example` leaves it commented). It defaults to `0`, which reads the caller's address from the socket — with a proxy in front, that is the proxy's
 address for every request, so every caller shares one rate-limit bucket and every audit row names
 the proxy. See [trust proxy](./tools/security.md#trust-proxy-and-the-two-ways-to-get-it-wrong).
 

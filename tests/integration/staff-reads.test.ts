@@ -11,6 +11,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { OrderStatus } from '@types';
 import { carryOrderTo } from '@modules/delivery/tests/factories';
+import { credentialHolding, credentialOf } from '@tests/credentials';
 import { createSystemTask, findAllTasks } from '@modules/tasks/tests/factories';
 
 setupTestDb();
@@ -82,6 +83,22 @@ describe('GET /users/{id}', () => {
             .set('Authorization', admin.bearer);
 
         expect(viewed()).toEqual([]);
+    });
+
+    it('records a key opening the account of the person who minted it', async () => {
+        const secret = await credentialHolding(['read:User']);
+        const resolved = await credentialOf(secret);
+        const minterId = resolved?.caller.id;
+        auditSpy.mockClear();
+
+        const response = await api()
+            .get(`/users/${minterId}`)
+            .set('Authorization', `Bearer ${secret}`);
+
+        expect(response.status).toBe(200);
+        expect(viewed()).toEqual([
+            expect.objectContaining({ action: 'admin.user.viewed', targetId: minterId })
+        ]);
     });
 
     it('does not record the list', async () => {

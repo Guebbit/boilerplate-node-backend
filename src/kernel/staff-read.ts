@@ -2,7 +2,9 @@
  * @module
  * The audit entry for staff reading someone else's record: `admin.<resource>.viewed`. A customer
  * reading their own order is not an event, so only a caller holding the resource's staff read rule
- * (`display:<Subject>` or `read:<Subject>`) is recorded, and not when the record is their own. Detail reads only — a list
+ * (`display:<Subject>` or `read:<Subject>`) is recorded, and not when the record is their own.
+ * "Own" means a session caller's own record: a key shares its minter's id, so a key reading its
+ * minter is recorded. Detail reads only — a list
  * would write one entry per page, and the entry that matters is the one naming a record.
  *
  * See: docs/theory/defences/authorization.md#a-rule-is-not-a-licence-over-everyone
@@ -24,13 +26,13 @@ export interface StaffReadTarget {
     targetType: string;
     /** The record's id. */
     targetId: string;
-    /** Whose record it is, when known; a read of the caller's own record is not recorded. */
+    /** Whose record it is, when known; a session caller's read of their own record is not recorded. */
     ownerId?: string;
 }
 
 /**
  * Record a staff read of another person's record. A no-op for a caller without the wide-read key
- * and for a read of the caller's own record.
+ * and for a session caller's read of their own record.
  *
  * @param request - the detail request, already past `getAuth`
  * @param target - what was read, and by which key staff is recognised
@@ -38,7 +40,13 @@ export interface StaffReadTarget {
 export const recordStaffRead = (request: Request, target: StaffReadTarget): void => {
     const { caller } = request;
     if (!caller || !heldRules(caller).has(target.key)) return;
-    if (target.ownerId !== undefined && target.ownerId === caller.id) return;
+    // A key carries its minter's id but is not the minter: only a session reads its own record.
+    if (
+        request.credentialId === undefined &&
+        target.ownerId !== undefined &&
+        target.ownerId === caller.id
+    )
+        return;
 
     recordAudit(callerContextOf(request), {
         action: target.action,
