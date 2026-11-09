@@ -80,6 +80,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
     },
     'account PUT /': { requiresAuth: true, reason: "editing the caller's own profile" },
     'account PATCH /': { requiresAuth: true, reason: "editing the caller's own profile" },
+    'account POST /email-change': {
+        requiresAuth: true,
+        reason: "asking to change the caller's own sign-in address, behind a fresh session"
+    },
     'account DELETE /email-change': {
         requiresAuth: true,
         reason: "cancelling a pending change to the caller's own profile"

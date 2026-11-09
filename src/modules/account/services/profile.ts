@@ -1,19 +1,12 @@
 /**
  * @module
- * The profile a person edits about themselves: `PUT`/`PATCH /account`. The email field is handed
- * to `./email-change`, the password to `./password`.
+ * The profile a person edits about themselves: `PUT`/`PATCH /account`. The email starts at
+ * `./email-change`, the password at `./password`.
  */
 
 import type { ClientSession } from 'mongoose';
-import { t } from '@infrastructure/i18n';
-import { mailRecipientRefusal } from '../mail-budget';
-import { resendCooldownRemaining } from './verification';
-import { EMAIL_CHANGE_TOKEN_TYPE } from '../token-types';
-import { resendTooSoon } from '../cooldown';
-import { ERROR_CODES } from '@api/error-codes';
 import {
     generateSuccess,
-    generateReject,
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
@@ -25,11 +18,6 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
-import {
-    applyEmailChangeRequest,
-    notifyEmailChangeRequested,
-    type EmailChangeOutcome
-} from './email-change';
 import { withOwnAccount } from './caller';
 import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import { ACCOUNT_ANALYTICS_CONSENT_WITHDRAWN } from '../events';
@@ -61,10 +49,7 @@ export const getOwnProfile = (
  * `readUploadedImage` call.
  */
 type ProfileFields = Partial<
-    Pick<
-        UpdateAccountRequest,
-        'email' | 'username' | 'locale' | 'phone' | 'website' | 'analyticsConsent'
-    >
+    Pick<UpdateAccountRequest, 'username' | 'locale' | 'phone' | 'website' | 'analyticsConsent'>
 > & {
     /** The server-decided path (`readUploadedImage`), or `null` to remove — never a client's string. */
     imageUrl?: string | null;
@@ -73,105 +58,43 @@ type ProfileFields = Partial<
 };
 
 /**
- * The tail of {@link writeProfile} once the change is not paced: the mailbox budget, the write,
- * and the two mails a genuine email change owes.
+ * Persists the parsed fields. The consent withdrawal, when this call makes one, is announced in the
+ * same transaction as the save.
  *
  * @param user - the loaded account
  * @param fields - the validated profile fields
- * @param emailOutcome - what {@link applyEmailChangeRequest} decided
- * @param context - the caller
  */
-const saveProfile = (
+const writeProfile = (
     user: UserDocument,
-    fields: ProfileFields,
-    emailOutcome: EmailChangeOutcome,
-    context: CallerContext
+    fields: ProfileFields
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    // A genuine change mails the NEW address, which the caller chose: spent against that mailbox's
-    // budget BEFORE anything is saved, so a refused change leaves `pendingEmail` as it was.
-    const budget =
-        emailOutcome.requested && user.pendingEmail
-            ? mailRecipientRefusal(user.pendingEmail, context)
-            : Promise.resolve(undefined);
-
     // Judged before the write assigns onto the document. Only a stored `true` has anything captured
     // under it: `undefined` never opted in, and `false → false` withdrew already.
     const withdrawing = user.analyticsConsent === true && fields.analyticsConsent === false;
 
-    return budget.then((refusal) => {
-        if (refusal) return refusal;
+    // The outbox row commits with the save, so it exists exactly when the withdrawal does.
+    const announceWithdrawal = withdrawing
+        ? (session: ClientSession) =>
+              enqueueOutboxEvent(
+                  ACCOUNT_ANALYTICS_CONSENT_WITHDRAWN,
+                  { userId: user.id },
+                  user.id,
+                  session
+              )
+        : undefined;
 
-        // The outbox row commits with the save, so it exists exactly when the withdrawal does.
-        const announceWithdrawal = withdrawing
-            ? (session: ClientSession) =>
-                  enqueueOutboxEvent(
-                      ACCOUNT_ANALYTICS_CONSENT_WITHDRAWN,
-                      { userId: user.id },
-                      user.id,
-                      session
-                  )
-            : undefined;
-
-        return accountUserService
-            .updateOwnProfile(user, fields, announceWithdrawal)
-            .then((result) => {
-                if (withdrawing && result.success) nudgeOutbox();
-                if (!result.success || !emailOutcome.requested) return result;
-                return notifyEmailChangeRequested(result.data, context).then(() => result);
-            });
+    return accountUserService.updateOwnProfile(user, fields, announceWithdrawal).then((result) => {
+        if (withdrawing && result.success) nudgeOutbox();
+        return result;
     });
 };
 
 /**
- * Persists the parsed fields, then sends the change mail when — and only when — this call is what
- * set `pendingEmail`. `email` is never forwarded: {@link applyEmailChangeRequest} has already run
- * and is the only writer of `email`/`pendingEmail` on this path.
- * @param emailOutcome - {@link applyEmailChangeRequest}'s verdict for this request's `email`
- */
-const writeProfile = (
-    user: UserDocument,
-    fields: ProfileFields,
-    emailOutcome: EmailChangeOutcome,
-    context: CallerContext
-): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    if (emailOutcome.conflict)
-        return Promise.resolve(
-            generateReject(409, [
-                {
-                    code: ERROR_CODES.EMAIL_ALREADY_USED,
-                    message: t('account.update.email-already-used')
-                }
-            ])
-        );
-
-    // A genuine change mails two addresses, so it is paced like the resend button: one a minute per
-    // account. Answered before the mailbox budget is touched, so a paced request spends nothing.
-    // The caller is signed in and the answer says nothing about any other account, so unlike the
-    // reset request this can be honest about why.
-    return (
-        emailOutcome.requested
-            ? resendCooldownRemaining(user, EMAIL_CHANGE_TOKEN_TYPE)
-            : Promise.resolve(0)
-    ).then((wait) => {
-        if (wait > 0)
-            return resendTooSoon(
-                ERROR_CODES.EMAIL_CHANGE_TOO_SOON,
-                t('account.email-change.too-soon'),
-                wait
-            );
-
-        return saveProfile(user, fields, emailOutcome, context);
-    });
-};
-
-/**
- * Update the caller's own profile — email, username, locale, image. `changes` are already validated
- * against the contract at the edge.
+ * Update the caller's own profile — username, locale, image, phone, website, consent. `changes` are
+ * already validated against the contract at the edge.
  * Narrower than the admin `userService.updateById`: no `admin`/`active`/`password` — those belong to
- * `/users` and to {@link passwordChangeWithCurrent}, which proves the current password first.
- * `email` never reaches `accountUserService.updateOwnProfile` directly — {@link applyEmailChangeRequest} routes it
- * through `pendingEmail` instead, so `verified` (describing the account's CURRENT address) is
- * untouched by a change still waiting to be proven.
+ * `/users` and to {@link passwordChangeWithCurrent}, which proves the current password first. No
+ * `email` either: that starts at `POST /account/email-change`, see `./email-change`.
  */
 export const updateProfile = (
     userId: string,
@@ -180,26 +103,20 @@ export const updateProfile = (
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
     // Credentials included by default: the update saves this same document. The shape was checked
     // once, at the edge (`update-account.ts`'s factory), so nothing here parses it again.
-    withOwnAccount(userId, (user) =>
-        applyEmailChangeRequest(user, changes.email).then((emailOutcome) => {
-            // Read before the write assigns onto the document. `email` counts only when this call
-            // is what asked for the change.
-            const metadata = accountUserService.userAuditChanges(user, {
-                ...changes,
-                email: emailOutcome.requested ? changes.email : undefined
-            });
+    withOwnAccount(userId, (user) => {
+        // Read before the write assigns onto the document.
+        const metadata = accountUserService.userAuditChanges(user, changes);
 
-            return writeProfile(user, changes, emailOutcome, context).then((result) => {
-                if (result.success)
-                    recordAudit(context, {
-                        action: accountAuditActions.AUTH_PROFILE_UPDATED,
-                        outcome: 'success',
-                        metadata
-                    });
-                return result;
-            });
-        })
-    )
+        return writeProfile(user, changes).then((result) => {
+            if (result.success)
+                recordAudit(context, {
+                    action: accountAuditActions.AUTH_PROFILE_UPDATED,
+                    outcome: 'success',
+                    metadata
+                });
+            return result;
+        });
+    })
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error))
         .then((result) => {
             if (!result.success) return result;

@@ -450,7 +450,7 @@ export const userSchema = new Schema<UserDocument, UserModel>(
             default: null
         },
         /*
-         * The address a pending `PUT /account` email change is waiting to prove — see the field's
+         * The address a pending `POST /account/email-change` is waiting to prove — see the field's
          * own doc comment on `UserRecord`. `select: false` for the same reason as `password`: an
          * address in flight is as credential-adjacent as a token, not public profile data.
          */

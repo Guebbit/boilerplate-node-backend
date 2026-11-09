@@ -147,7 +147,7 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
     advanceDate(901_000);
     const stale = await bearerForCookie(third.cookie);
     const refused = await api()
-        .patch('/account')
+        .post('/account/email-change')
         .set('Authorization', stale)
         .send({ email: ACCOUNT.movedTo });
     expect(refused.status).toBe(401);
@@ -164,7 +164,7 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
     const { token, sessionToken } = reauthed.body as { token?: string; sessionToken?: string };
     const fresh = `Bearer ${token ?? sessionToken ?? ''}`;
     await api()
-        .patch('/account')
+        .post('/account/email-change')
         .set('Authorization', fresh)
         .send({ email: ACCOUNT.movedTo })
         .expect(200);

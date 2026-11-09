@@ -24,7 +24,7 @@ describe('an email change request', () => {
         const { user, bearer } = await authenticateAs('user');
 
         const response = await api()
-            .patch('/account')
+            .post('/account/email-change')
             .set('Authorization', bearer)
             .send({ email: 'new@example.com' });
 

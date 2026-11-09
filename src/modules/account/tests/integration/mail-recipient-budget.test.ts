@@ -181,14 +181,14 @@ describe('the service doors — the recipient is chosen by the server', () => {
             const first = await createUser({ email: 'one@example.com', verifiedAt: new Date() });
             const second = await createUser({ email: 'two@example.com', verifiedAt: new Date() });
             // Each change request spends one mail to the victim mailbox; the resend would be the third.
-            await accountService.updateProfile(
+            await accountService.requestEmailChange(
                 first.id,
-                { email: 'pending+1@example.com' },
+                'pending+1@example.com',
                 testCallerContext
             );
-            await accountService.updateProfile(
+            await accountService.requestEmailChange(
                 second.id,
-                { email: 'pending+2@example.com' },
+                'pending+2@example.com',
                 testCallerContext
             );
 
@@ -204,15 +204,15 @@ describe('the service doors — the recipient is chosen by the server', () => {
         withBudget(1, async () => {
             const first = await createUser({ email: 'one@example.com', verifiedAt: new Date() });
             const second = await createUser({ email: 'two@example.com', verifiedAt: new Date() });
-            await accountService.updateProfile(
+            await accountService.requestEmailChange(
                 first.id,
-                { email: 'change+1@example.com' },
+                'change+1@example.com',
                 testCallerContext
             );
 
-            const refused = await accountService.updateProfile(
+            const refused = await accountService.requestEmailChange(
                 second.id,
-                { email: 'change+2@example.com' },
+                'change+2@example.com',
                 testCallerContext
             );
 
@@ -221,27 +221,23 @@ describe('the service doors — the recipient is chosen by the server', () => {
             expect(stored?.pendingEmail).toBeUndefined();
         }));
 
-    it('does not charge a change that is a no-op (the current or the already-pending address)', () =>
+    it('answers the current or the already-pending address with its own 409, not a 429 from the budget', () =>
         withBudget(1, async () => {
             const user = await createUser({ email: 'one@example.com', verifiedAt: new Date() });
-            await accountService.updateProfile(
+            await accountService.requestEmailChange(user.id, 'noop@example.com', testCallerContext);
+
+            const again = await accountService.requestEmailChange(
                 user.id,
-                { email: 'noop@example.com' },
+                'noop@example.com',
+                testCallerContext
+            );
+            const current = await accountService.requestEmailChange(
+                user.id,
+                'one@example.com',
                 testCallerContext
             );
 
-            const again = await accountService.updateProfile(
-                user.id,
-                { email: 'noop@example.com' },
-                testCallerContext
-            );
-            const current = await accountService.updateProfile(
-                user.id,
-                { email: 'one@example.com' },
-                testCallerContext
-            );
-
-            expect(again.success).toBe(true);
-            expect(current.success).toBe(true);
+            expect(asReject(again).status).toBe(409);
+            expect(asReject(current).status).toBe(409);
         }));
 });

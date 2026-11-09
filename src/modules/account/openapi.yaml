@@ -13,8 +13,10 @@ tags:
       description: The signed-in user's own account - profile, credentials, two-factor, data export and deletion.
 
 x-error-codes:
-    EMAIL_ALREADY_USED: { status: 409, description: 'Another account already holds this email address — on signup, or on a profile email change.' }
+    EMAIL_ALREADY_CURRENT: { status: 409, description: 'The requested address is the one the account already has, so there is nothing to change.' }
+    EMAIL_ALREADY_USED: { status: 409, description: 'Another account already holds this email address — on signup, or on an email change.' }
     EMAIL_ALREADY_VERIFIED: { status: 409, description: 'The account''s email address is verified already, so there is nothing to resend.' }
+    EMAIL_CHANGE_ALREADY_PENDING: { status: 409, description: 'This address is already the pending one, and its link is on the way — `POST /account/email-change/resend` mails it again.' }
     EMAIL_CHANGE_TOO_SOON: { status: 429, description: 'An email change was already requested for this account in the last minute — carries `details.retryAfter`.' }
     EMAIL_VERIFY_RESEND_TOO_SOON: { status: 429, description: 'A verification email was already sent recently — carries `details.retryAfter`.' }
     SESSION_IDLE: { status: 401, description: 'A staff or admin session saw no real request for longer than `NODE_SESSION_IDLE_TIME_STAFF`, and ended. Sign in again. A shopper never gets this.' }
@@ -65,10 +67,8 @@ paths:
         put:
             tags: [Account]
             summary: Replace own profile
-            description: Replaces every writable field of the authenticated user's own profile — email, username, locale (RFC 9110 §9.3.4, an omitted optional field is cleared). The image is outside the representation — set by an upload, cleared by an explicit `imageUrl` null, kept when a PUT never mentions it. `analyticsConsent` is required — it has no cleared state, so a PUT always states it and consent is never reset or withdrawn by a forgotten field. Role, account state and password are out of scope — the first two belong to the admin `/users` endpoints, the password to `POST /account/password`. Changing the email does NOT take effect immediately — it is held as `pendingEmail` until `POST /account/email-change/confirm` proves the new address, and a notice carrying a 7-day one-time undo link (`POST /account/email-change/undo`) is sent to the OLD address the moment the change is requested. Changing the email needs a fresh session; an account with a second factor armed also needs an `otp` proof in it (`401 REAUTH_REQUIRED` with `details.methods`). Sending the CURRENT address, the address already PENDING, or any other value that resolves to no change is a no-op — it neither starts, restarts nor cancels anything; cancel an already-pending change with `DELETE /account/email-change`, or have its link mailed again with `POST /account/email-change/resend`.
+            description: Replaces every writable field of the authenticated user's own profile — username, locale (RFC 9110 §9.3.4, an omitted optional field is cleared). The image is outside the representation — set by an upload, cleared by an explicit `imageUrl` null, kept when a PUT never mentions it. `analyticsConsent` is required — it has no cleared state, so a PUT always states it and consent is never reset or withdrawn by a forgotten field. Role, account state, email and password are out of scope — the first two belong to the admin `/users` endpoints, the email to `POST /account/email-change`, the password to `POST /account/password`. An `email` in the body is refused with 422 like any unknown field.
             operationId: replaceAccount
-            x-error-codes:
-                '401': [REAUTH_REQUIRED]
             security:
                 - bearerAuth: []
             requestBody:
@@ -88,18 +88,14 @@ paths:
                             schema:
                                 $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Account'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                # Changing the email to an address another account already holds.
-                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `uploadLimiter` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
         patch:
             tags: [Account]
             summary: Update own profile
-            description: Merges the given fields into the authenticated user's own profile — email, username, locale, image (RFC 7396, an omitted field is left unchanged, `null` clears an optional one). Role, account state and password are out of scope — the first two belong to the admin `/users` endpoints, the password to `POST /account/password`. Changing the email does NOT take effect immediately — it is held as `pendingEmail` until `POST /account/email-change/confirm` proves the new address, and a notice carrying a 7-day one-time undo link (`POST /account/email-change/undo`) is sent to the OLD address the moment the change is requested. Changing the email needs a fresh session; an account with a second factor armed also needs an `otp` proof in it (`401 REAUTH_REQUIRED` with `details.methods`). Sending the CURRENT address, or the address already PENDING, is a no-op — it neither starts, restarts nor cancels anything; cancel an already-pending change with `DELETE /account/email-change`, or have its link mailed again with `POST /account/email-change/resend`.
+            description: Merges the given fields into the authenticated user's own profile — username, locale, image (RFC 7396, an omitted field is left unchanged, `null` clears an optional one). Role, account state, email and password are out of scope — the first two belong to the admin `/users` endpoints, the email to `POST /account/email-change`, the password to `POST /account/password`. An `email` in the body is refused with 422 like any unknown field.
             operationId: updateAccount
-            x-error-codes:
-                '401': [REAUTH_REQUIRED]
             security:
                 - bearerAuth: []
             requestBody:
@@ -122,8 +118,6 @@ paths:
                             schema:
                                 $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Account'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                # Changing the email to an address another account already holds.
-                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `uploadLimiter` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
@@ -156,10 +150,40 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
 
     /account/email-change:
+        post:
+            tags: [Account]
+            summary: Request an email change
+            description: Starts a change of the account's sign-in and recovery address. The new address is held as `pendingEmail` until `POST /account/email-change/confirm` proves it, and a notice carrying a 7-day one-time undo link (`POST /account/email-change/undo`) is sent to the OLD address the moment the change is requested. A different address while one is already pending replaces it, revokes the earlier link and mails both addresses again. Needs a fresh session, always; an account with a second factor armed also needs an `otp` proof in it (`401 REAUTH_REQUIRED` with `details.methods`). Answers 409 `EMAIL_ALREADY_CURRENT` for the address the account already has and `EMAIL_CHANGE_ALREADY_PENDING` for the one already pending (nothing is mailed; `POST /account/email-change/resend` mails it again), and 409 `EMAIL_ALREADY_USED` when another account holds it. Answers 429 `EMAIL_CHANGE_TOO_SOON` inside the minute after the previous request. Cancel a pending change with `DELETE /account/email-change`.
+            operationId: requestEmailChange
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
+                '409': [EMAIL_ALREADY_CURRENT, EMAIL_ALREADY_USED, EMAIL_CHANGE_ALREADY_PENDING]
+                '429': [EMAIL_CHANGE_TOO_SOON]
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RequestEmailChangeRequest'
+            responses:
+                '200':
+                    description: The change is pending; both addresses have been mailed
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Account'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                # `sessionCredentialLimiters` sit in front of this route, and the service paces a
+                # request inside the previous one's minute — see routes.ts.
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
         delete:
             tags: [Account]
             summary: Cancel a pending email change
-            description: Discards a pending `pendingEmail` change started by `PUT`/`PATCH /account`, without proving it. A no-op when nothing is pending — a client does not need to check `GET /account` first.
+            description: Discards a pending `pendingEmail` change started by `POST /account/email-change`, without proving it. A no-op when nothing is pending — a client does not need to check `GET /account` first.
             operationId: cancelPendingEmailChange
             security:
                 - bearerAuth: []
@@ -171,7 +195,7 @@ paths:
         post:
             tags: [Account]
             summary: Resend the pending email confirmation
-            description: Mails the NEW (pending) address a fresh confirmation link — and only that address; the old one is not told again. The previous link stops working, since only the newest one counts. Answers 200 with `resendAfter`, the seconds a client counts down before offering the button again — the same shape as `POST /account/email-verification/resend`. A no-op, answering 200 with `resendAfter` 0 and mailing nothing, when nothing is pending, so a client does not need to check `GET /account` first. Sending the pending address again through `PUT`/`PATCH /account` does nothing, which is why this route exists. Answers 429 inside the previous send's cooldown (the same 60 seconds as `POST /account/email-verification/resend`, with `details.retryAfter` naming the wait) and spends the same per-account budget on a failure, so a client that waits never sees one. No fresh-auth guard — it mails an address the caller already asked for and changes nothing about the account.
+            description: Mails the NEW (pending) address a fresh confirmation link — and only that address; the old one is not told again. The previous link stops working, since only the newest one counts. Answers 200 with `resendAfter`, the seconds a client counts down before offering the button again — the same shape as `POST /account/email-verification/resend`. A no-op, answering 200 with `resendAfter` 0 and mailing nothing, when nothing is pending, so a client does not need to check `GET /account` first. Sending the pending address again through `POST /account/email-change` is refused with 409, which is why this route exists. Answers 429 inside the previous send's cooldown (the same 60 seconds as `POST /account/email-verification/resend`, with `details.retryAfter` naming the wait) and spends the same per-account budget on a failure, so a client that waits never sees one. No fresh-auth guard — it mails an address the caller already asked for and changes nothing about the account.
             operationId: resendPendingEmail
             security:
                 - bearerAuth: []
@@ -671,7 +695,7 @@ paths:
         post:
             tags: [Auth]
             summary: Confirm a pending email change
-            description: Completes the email-change flow started by `PUT /account`. Validates the one-time `email-change` token sent to the NEW address and, if valid, swaps `pendingEmail` into `email`, marks the account verified, and revokes every refresh token — the same treatment `POST /account/password` gives a password change, since an email change is the stronger takeover primitive of the two. A `verify` token from the signup flow is refused here, and this token is refused by `/account/email-verification/confirm` — the two prove different things.
+            description: Completes the email-change flow started by `POST /account/email-change`. Validates the one-time `email-change` token sent to the NEW address and, if valid, swaps `pendingEmail` into `email`, marks the account verified, and revokes every refresh token — the same treatment `POST /account/password` gives a password change, since an email change is the stronger takeover primitive of the two. A `verify` token from the signup flow is refused here, and this token is refused by `/account/email-verification/confirm` — the two prove different things.
             operationId: confirmEmailChange
             security: []
             requestBody:
@@ -1934,8 +1958,6 @@ components:
             type: object
             additionalProperties: false
             properties:
-                email:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
                 username:
                     type: string
                     minLength: 3
@@ -1967,8 +1989,6 @@ components:
             type: object
             additionalProperties: false
             properties:
-                email:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
                 username:
                     type: string
                     minLength: 3
@@ -1997,10 +2017,8 @@ components:
         ReplaceAccountRequest:
             type: object
             additionalProperties: false
-            required: [email, username, analyticsConsent]
+            required: [username, analyticsConsent]
             properties:
-                email:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
                 username:
                     type: string
                     minLength: 3
@@ -2026,10 +2044,8 @@ components:
         ReplaceAccountRequestMultipart:
             type: object
             additionalProperties: false
-            required: [email, username, analyticsConsent]
+            required: [username, analyticsConsent]
             properties:
-                email:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
                 username:
                     type: string
                     minLength: 3
@@ -2052,6 +2068,15 @@ components:
                     minLength: 1
                 analyticsConsent:
                     type: boolean
+
+        # POST /account/email-change — the one field the change needs.
+        RequestEmailChangeRequest:
+            type: object
+            additionalProperties: false
+            required: [email]
+            properties:
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
 
         ChangePasswordRequest:
             type: object
