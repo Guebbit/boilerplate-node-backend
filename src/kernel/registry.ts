@@ -120,6 +120,7 @@ export interface TranslatableTarget {
      * (see {@link ImageTarget.writeback} for the same shape), so `locales` never has to find the
      * target's Mongoose model by collection name to reach it. `session` joins the write to the
      * caller's transaction (a product write commits its row, its translations and this together).
+     * A `null` field is removed from the document, never stored as `''`.
      */
     writeDerived: (
         entityId: string,
