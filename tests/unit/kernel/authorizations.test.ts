@@ -678,6 +678,21 @@ describe('getAuth in cookie mode', () => {
         expect(next).toHaveBeenCalledTimes(1);
     });
 
+    it('says the answer varies on Cookie, even for a request with none', async () => {
+        const response = makeResponseStub();
+        const noCookie = asStub<Request>({
+            cookies: {},
+            header: jest.fn(),
+            get: jest.fn(),
+            path: '/products',
+            method: 'GET',
+            headers: {}
+        });
+        await runUntilNext(getAuth, noCookie, response);
+
+        expect(response.vary).toHaveBeenCalledWith('Cookie');
+    });
+
     it('ignores the cookie in jwt mode, where it opens only the SSE streams', async () => {
         cookieAuthenticates = false;
 
@@ -686,6 +701,15 @@ describe('getAuth in cookie mode', () => {
 
         expect(fromRefreshToken).not.toHaveBeenCalled();
         expect(request.authContext).toBeUndefined();
+    });
+
+    it('does not name Cookie in jwt mode', async () => {
+        cookieAuthenticates = false;
+
+        const response = makeResponseStub();
+        await runUntilNext(getAuth, makeCookieModeRequest(), response);
+
+        expect(response.vary).not.toHaveBeenCalled();
     });
 });
 

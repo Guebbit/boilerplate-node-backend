@@ -500,7 +500,8 @@ components:
             required: false
             description: >-
                 The request headers the answer depends on (RFC 9110 section 12.5.5), so a cache keeps
-                one copy per value: always `Origin`, plus `Accept-Language` where the locale picks the body.
+                one copy per value: always `Origin`, plus `Accept-Language` where the locale picks the body, plus
+                `Authorization` on every cached or private read, plus `Cookie` there in cookie mode.
             schema:
                 type: string
 

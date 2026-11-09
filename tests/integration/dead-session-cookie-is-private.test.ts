@@ -52,3 +52,19 @@ describe('GET /products in cookie mode', () => {
         expect(response.headers['cache-control']).toMatch(/^public, max-age=/);
     });
 });
+
+describe('Vary on a public read', () => {
+    it('names Cookie in cookie mode, where the cookie picks the caller', async () => {
+        const response = await api().get('/products');
+
+        expect(response.headers.vary).toContain('Cookie');
+    });
+
+    it('does not name Cookie in jwt mode', async () => {
+        setEnvironment({ NODE_SESSION_MODE: 'jwt' });
+
+        const response = await api().get('/products');
+
+        expect(response.headers.vary).not.toContain('Cookie');
+    });
+});
