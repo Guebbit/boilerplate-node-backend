@@ -7,7 +7,7 @@
  * checks and fences it, and the error interpreter that answers 412. A unit test of any one of
  * them cannot say the caller's stale edit actually did not land.
  *
- * Versioned today: products, users, orders and the caller's own account. The version is the row's
+ * Versioned today: products, users, orders, webhook subscriptions and the caller's own account. The version is the row's
  * `editRevision` counter (see `src/infrastructure/persistence/versioning.ts`).
  */
 import { Types, connection } from 'mongoose';
@@ -23,6 +23,8 @@ import {
 } from '@modules/orders/tests/factories';
 import { productModel } from '@modules/products/model';
 import { productRepository } from '@modules/products/repository';
+import { webhookSubscriptionModel } from '@modules/webhooks/model';
+import { webhookSubscriptionRepository } from '@modules/webhooks/repository';
 import { userModel } from '@modules/users/model';
 import { userRepository } from '@modules/users/repository';
 import {
@@ -50,6 +52,8 @@ interface Resource {
     expected: (n: number) => unknown;
     /** Reads back the one field `edit` writes, by row id. */
     stored: (id: string) => Promise<unknown>;
+    /** The query string its DELETE takes; a resource with one delete tier takes none. */
+    deleteQuery?: string;
 }
 
 /** The four versioned resources. Each edit touches one field no lifecycle rule guards. */
@@ -105,6 +109,25 @@ const RESOURCES: Resource[] = [
         edit: (n) => ({ username: `me-${n.toString()}` }),
         expected: (n) => `me-${n.toString()}`,
         stored: (id) => userModel.findById(id).then((row) => row?.username)
+    },
+    {
+        name: 'a webhook subscription',
+        collection: 'webhooksubscriptions',
+        seed: async () => {
+            const { bearer } = await authenticateAs('admin');
+            const created = await api()
+                .post('/webhooks/subscriptions')
+                .set('Authorization', bearer)
+                .send({ url: 'https://example.test/inbox', eventTypes: ['order.paid'] })
+                .expect(201);
+            const id = String(created.body.id);
+            const path = `/webhooks/subscriptions/${id}`;
+            return { path, readPath: path, bearer, id };
+        },
+        deleteQuery: '',
+        edit: (n) => ({ description: `edit-${n.toString()}` }),
+        expected: (n) => `edit-${n.toString()}`,
+        stored: (id) => webhookSubscriptionModel.findById(id).then((row) => row?.description)
     }
 ];
 
@@ -240,6 +263,22 @@ describe.each(RESOURCES)('conditional writes on $name', (resource) => {
     });
 });
 
+describe('a webhook subscription: delivery bookkeeping is not an edit', () => {
+    it('keeps an earlier tag valid after a delivery failure was recorded', async () => {
+        const { path, readPath, bearer, id } = await resourceNamed('a webhook subscription').seed();
+        const tag = etagOf(await api().get(readPath).set('Authorization', bearer));
+
+        await webhookSubscriptionRepository.recordOutcome(id, false);
+        const write = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', tag)
+            .send({ description: 'after-failure' });
+
+        expect(write.status).toBe(200);
+    });
+});
+
 /** Resources that also take a DELETE by id — the account deletes through its own two-step flow. */
 const DELETABLE = RESOURCES.filter((resource) => resource.name !== "the caller's own account");
 
@@ -251,7 +290,7 @@ describe.each(DELETABLE)('conditional DELETE on $name', (resource) => {
         await api().patch(path).set('Authorization', bearer).send(resource.edit(1)).expect(200);
 
         const response = await api()
-            .delete(`${path}?hardDelete=true`)
+            .delete(`${path}${resource.deleteQuery ?? '?hardDelete=true'}`)
             .set('Authorization', bearer)
             .set('If-Match', etagOf(read));
 
@@ -265,7 +304,7 @@ describe.each(DELETABLE)('conditional DELETE on $name', (resource) => {
         const read = await api().get(readPath).set('Authorization', bearer);
 
         const response = await api()
-            .delete(`${path}?hardDelete=true`)
+            .delete(`${path}${resource.deleteQuery ?? '?hardDelete=true'}`)
             .set('Authorization', bearer)
             .set('If-Match', etagOf(read));
 

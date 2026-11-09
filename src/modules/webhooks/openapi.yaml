@@ -99,6 +99,8 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
     /webhooks/subscriptions/{id}:
+        # Bundler: adds the `If-Match` parameter and 412 to the writes listed, and `ETag` to the 200s.
+        x-versioned: [get, put, patch, delete]
         get:
             tags: [Webhooks]
             summary: Get one webhook subscription

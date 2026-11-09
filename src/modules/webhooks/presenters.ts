@@ -12,6 +12,7 @@ import type {
     WebhookDelivery,
     WebhookDeliveryActions
 } from '@types';
+import { carryVersion } from '@infrastructure/persistence/versioning';
 import type { StoredWebhookSubscription } from './repository';
 import type { WebhookSubscriptionDocument, WebhookDeliveryDocument } from './model';
 
@@ -26,10 +27,11 @@ import type { WebhookSubscriptionDocument, WebhookDeliveryDocument } from './mod
 export const presentWebhookSubscription = (
     document: WebhookSubscriptionDocument,
     actions: WebhookSubscriptionActions
-): WebhookSubscription => ({
-    ...(document.toJSON() as StoredWebhookSubscription),
-    actions
-});
+): WebhookSubscription =>
+    carryVersion(document, {
+        ...(document.toJSON() as StoredWebhookSubscription),
+        actions
+    });
 
 /**
  * `.toJSON()` applies the model's `_id` → `id` transform; the document is typed as stored, not as

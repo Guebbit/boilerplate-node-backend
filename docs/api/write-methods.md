@@ -461,15 +461,19 @@ and the bundler adds the header parameter, the 412 and the response header from 
 | order | `GET /orders/{id}` | `PUT`, `PATCH`, `DELETE /orders/{id}`, `DELETE /orders/{id}/hard` |
 | the caller's account | `GET /account` | `PUT`, `PATCH /account` |
 | example | `GET /examples/{id}` | `PUT`, `PATCH`, `DELETE /examples/{id}` |
+| webhook subscription | `GET /webhooks/subscriptions/{id}` | `PUT`, `PATCH`, `DELETE /webhooks/subscriptions/{id}` |
 
 The role door (`POST /users/{id}/assign-role`, `/revoke-role`) is not in that column: a POST is a
 state change with its own 409, not an overwrite, so two callers naming different roles both succeed
 and the last write wins. It still moves the row's `editRevision`, so an edit holding an older tag is
 refused.
 
-Not versioned: a resource with no item read to take a tag from (tasks, locales, an address
-inside its book), a resource that has an item read but no `If-Match` (webhook subscriptions) and
-anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declared.
+Not versioned: a resource with no item read to take a tag from (tasks, an address inside its book)
+and anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declared.
+
+A webhook subscription's delivery bookkeeping (the failure streak, the auto-disable) writes with
+`timestamps: false`, so a delivery outcome never moves the edit counter and never refuses an open
+edit form.
 
 ### What the tag is
 
