@@ -699,10 +699,10 @@ describe('GET /payments/{id}', () => {
         expect(response.body.id).toBe(paymentId);
     });
 
-    it('answers 404 for an id that is not one', async () => {
+    it('answers 404 for an id nothing holds', async () => {
         const { bearer } = await authenticateAs('user');
 
-        const response = await api().get('/payments/not-an-id').set('Authorization', bearer);
+        const response = await api().get(`/payments/${MISSING_ID}`).set('Authorization', bearer);
 
         expect(response.status).toBe(404);
     });
@@ -980,14 +980,6 @@ describe('GET /payments/{id}/refunds/{refundId}', () => {
             404, 404, 404
         ]);
     });
-
-    it('answers 401 without a session', async () => {
-        const { paymentId, refundId } = await refundedPayment();
-
-        const response = await api().get(`/payments/${paymentId}/refunds/${refundId}`);
-
-        expect(response.status).toBe(401);
-    });
 });
 
 /**
@@ -1062,16 +1054,6 @@ describe('POST /payments/{id}/refunds/{refundId}/settle', () => {
 
         expect(noRefund.status).toBe(404);
         expect(noPayment.status).toBe(404);
-    });
-
-    it('refuses the buyer: only an operator holding create:Refund may say money went back', async () => {
-        const { paymentId, refunded, buyerBearer } = await cashRefundOwed();
-
-        const response = await api()
-            .post(`/payments/${paymentId}/refunds/${String(refunded.refunds[0].id)}/settle`)
-            .set('Authorization', buyerBearer);
-
-        expect(response.status).toBe(403);
     });
 
     it('answers a stale session 401 REAUTH_REQUIRED and settles nothing', async () => {
@@ -1174,17 +1156,6 @@ describe('POST /payments/{id}/refunds/{refundId}/cancel', () => {
             .send({ note: NOTE });
 
         expect(response.status).toBe(404);
-    });
-
-    it('refuses the buyer: only an operator holding create:Refund may void a refund', async () => {
-        const { paymentId, refunded, buyerBearer } = await cashRefundOwed();
-
-        const response = await api()
-            .post(`/payments/${paymentId}/refunds/${String(refunded.refunds[0].id)}/cancel`)
-            .set('Authorization', buyerBearer)
-            .send({ note: NOTE });
-
-        expect(response.status).toBe(403);
     });
 
     it('answers a stale session 401 REAUTH_REQUIRED and voids nothing', async () => {
@@ -1372,18 +1343,6 @@ describe('GET /payments?transferReference=', () => {
         expect(response.body.items.map((row: { orderId: string }) => row.orderId)).toEqual([
             String(order._id)
         ]);
-    });
-
-    it('refuses a caller without display:Payment', async () => {
-        const { reference } = await transferOrderOf();
-        const { bearer } = await authenticateAsRole('customer');
-
-        const response = await api()
-            .get('/payments')
-            .query({ transferReference: reference })
-            .set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
     });
 
     it('is gone at the old lookup address', async () => {

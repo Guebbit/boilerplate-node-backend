@@ -145,10 +145,4 @@ describe('GET /shop-tasks/summary', () => {
             ['inventory', 'returns', 'salesOrders', 'salesPreorders'].toSorted()
         );
     });
-
-    it('answers 401 without a session', async () => {
-        const response = await api().get('/shop-tasks/summary');
-
-        expect(response.status).toBe(401);
-    });
 });

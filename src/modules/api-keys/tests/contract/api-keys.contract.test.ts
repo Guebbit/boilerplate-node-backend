@@ -139,16 +139,6 @@ describe('GET /api-keys/:id', () => {
 
         expect([unknown.status, malformed.status]).toEqual([404, 404]);
     });
-
-    it('refuses a caller without read:ApiKey with 403', async () => {
-        const { bearer: adminBearer } = await authenticateAsRole('admin');
-        const id = await mintOne(adminBearer);
-        const { bearer } = await authenticateAsRole('customer');
-
-        const response = await api().get(`/api-keys/${id}`).set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
-    });
 });
 
 describe('POST /api-keys', () => {

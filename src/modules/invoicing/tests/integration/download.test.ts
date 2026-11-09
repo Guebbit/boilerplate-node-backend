@@ -182,14 +182,6 @@ describe('GET /orders/{id}/invoice', () => {
         expect(viewedActions()).toEqual(['admin.invoice.viewed']);
         auditSpy.mockRestore();
     });
-
-    it('answers 404 for an unusable id, not a 422', async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api().get('/orders/not-an-id/invoice').set('Authorization', bearer);
-
-        expect(response.status).toBe(404);
-    });
 });
 
 describe('GET /orders/{id}/invoice — when the render queue is full', () => {

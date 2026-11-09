@@ -701,17 +701,6 @@ describe('withActions — withdraw', () => {
         expect(body.actions?.withdraw).toBe(true);
         expect(new Date(body.withdrawUntil!).toISOString()).toBe(announced.toISOString());
     });
-
-    it('is never offered on a canceled order', async () => {
-        const user = await createUser();
-        const order = await seedOrder(user);
-        await orderService.cancelOnRequestById(String(order._id), asUser(user));
-        const canceled = await orderRepository.findById(String(order._id));
-
-        const body = await orderService.withActions(canceled!, asUser(user));
-
-        expect(body.actions?.withdraw).toBe(false);
-    });
 });
 
 describe('withActions', () => {

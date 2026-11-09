@@ -558,12 +558,6 @@ describe('GET /delivery/shipments/{id}', () => {
 
         expect([unknown.status, malformed.status]).toEqual([404, 404]);
     });
-
-    it('refuses an anonymous caller with 401', async () => {
-        const response = await api().get(`/delivery/shipments/${MISSING_ID}`);
-
-        expect(response.status).toBe(401);
-    });
 });
 
 describe('GET /delivery/fulfillment-orders/{id}', () => {
@@ -614,12 +608,6 @@ describe('GET /delivery/fulfillment-orders/{id}', () => {
             .set('Authorization', bearer);
 
         expect([unknown.status, malformed.status]).toEqual([404, 404]);
-    });
-
-    it('refuses an anonymous caller with 401', async () => {
-        const response = await api().get(`/delivery/fulfillment-orders/${MISSING_ID}`);
-
-        expect(response.status).toBe(401);
     });
 });
 
@@ -1092,15 +1080,6 @@ describe('GET /delivery/fulfillment-orders/release-date-impact', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-    });
-
-    it('is refused to an editor, who may move a date but not read orders', async () => {
-        const { productId } = await adminWithPreorder();
-        const { bearer } = await authenticateAsRole('editor');
-
-        const response = await api().get(url).query({ productId }).set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
     });
 });
 

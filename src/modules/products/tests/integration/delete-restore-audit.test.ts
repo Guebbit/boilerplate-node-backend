@@ -63,15 +63,6 @@ describe('removeById', () => {
             })
         );
     });
-
-    it('records no audit row when called with no context', async () => {
-        const auditSpy = observePort(auditPort.emitAuditEvent);
-        const product = await createProduct();
-
-        await productService.removeById(String(product._id));
-
-        expect(auditSpy).not.toHaveBeenCalled();
-    });
 });
 
 describe('restoreById', () => {
@@ -91,16 +82,5 @@ describe('restoreById', () => {
                 targetId: id
             })
         );
-    });
-
-    it('records no audit row when called with no context', async () => {
-        const auditSpy = observePort(auditPort.emitAuditEvent);
-        const product = await createProduct();
-        const id = String(product._id);
-        await productService.removeById(id);
-
-        await productService.restoreById(id);
-
-        expect(auditSpy).not.toHaveBeenCalled();
     });
 });

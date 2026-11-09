@@ -37,12 +37,6 @@ describe('GET /stock-alerts', () => {
         expect(response.status).toBe(200);
         expect(response.body.items).toMatchObject([{ productId }]);
     });
-
-    it('refuses a caller who is not signed in', async () => {
-        const response = await api().get('/stock-alerts');
-
-        expect(response.status).toBe(401);
-    });
 });
 
 describe('POST /stock-alerts', () => {
@@ -99,12 +93,6 @@ describe('POST /stock-alerts', () => {
         expect([malformed.status, missing.status]).toEqual([422, 422]);
     });
 
-    it('refuses a caller who is not signed in', async () => {
-        const response = await api().post('/stock-alerts').send({ productId: MISSING_ID });
-
-        expect(response.status).toBe(401);
-    });
-
     it('answers a POST on the old product URL 405, naming the one method the URL keeps', async () => {
         const { bearer } = await authenticateAsRole('customer');
 
@@ -139,11 +127,5 @@ describe('DELETE /stock-alerts/{productId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-    });
-
-    it('refuses a caller who is not signed in', async () => {
-        const response = await api().delete(`/stock-alerts/${MISSING_ID}`);
-
-        expect(response.status).toBe(401);
     });
 });

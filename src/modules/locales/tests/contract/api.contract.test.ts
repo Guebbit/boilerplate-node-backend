@@ -9,7 +9,7 @@
 
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, authenticateAs, authenticateAsRole } from '@tests/http';
+import { api, authenticateAs } from '@tests/http';
 import { credentialHolding } from '@tests/credentials';
 import { listSupportedLocales, getDefaultLocale, getFallbackLocale } from '@infrastructure/i18n';
 import { translator } from '@infrastructure/i18n';
@@ -610,14 +610,6 @@ describe('POST /locales/:locale/activate and /deactivate', () => {
         expect(response.status).toBe(404);
         expect(response.body.errors[0].code).toBe('LOCALE_LANGUAGE_NOT_FOUND');
     });
-
-    it('is closed to a customer', async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api().post('/locales/pt/deactivate').set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
-    });
 });
 
 /** The `actions` block of one language in a `GET /locales` answer. */
@@ -906,19 +898,6 @@ describe('GET /locales/:locale/apps/:app/entries/:entryId', () => {
 
         expect([unknown.status, malformed.status, otherApp.status]).toEqual([404, 404, 404]);
     });
-
-    it('refuses a caller without update:Locale with 403', async () => {
-        const { bearer: adminBearer } = await authenticateAs('admin');
-        await createLanguage(adminBearer);
-        const entryId = await createEntry(adminBearer, 'pt', 'cart.title', 'Carrinho');
-        const { bearer } = await authenticateAsRole('customer');
-
-        const response = await api()
-            .get(`/locales/pt/apps/demo-fe/entries/${entryId}`)
-            .set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
-    });
 });
 
 describe('PUT and DELETE /locales/:locale/apps/:app/entries/:entryId', () => {
@@ -997,29 +976,6 @@ describe('PUT and DELETE /locales/:locale/apps/:app/entries/:entryId', () => {
             .put(`/locales/pt/apps/demo-fe/entries/${MISSING_ID}`)
             .set('Authorization', bearer)
             .send({ value: 'x' });
-
-        expect(response.status).toBe(404);
-    });
-
-    it('404s on a malformed entry id, as for an unknown one, rather than answering 500', async () => {
-        const { bearer } = await authenticateAs('admin');
-        await createLanguage(bearer);
-
-        const response = await api()
-            .put('/locales/pt/apps/demo-fe/entries/not-an-id')
-            .set('Authorization', bearer)
-            .send({ value: 'x' });
-
-        expect(response.status).toBe(404);
-    });
-
-    it('404s on a malformed entry id for the delete route too', async () => {
-        const { bearer } = await authenticateAs('admin');
-        await createLanguage(bearer);
-
-        const response = await api()
-            .delete('/locales/pt/apps/demo-fe/entries/not-an-id')
-            .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
     });

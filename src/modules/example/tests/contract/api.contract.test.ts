@@ -5,10 +5,11 @@
  * example is a 404, never a 403, so an id says nothing about who owns it. Behavioural rules live
  * in the integration suite; these make sure each declared response is actually reached.
  *
- * No bare 401 or 403 case here: the authorization sweep (`tests/contract/authorization-contract.test.ts`)
- * asks every guarded route for both, as every role, and a case that checks more than the status
- * (an error `code`, a row left untouched) is the only one a contract file adds. A module copied
- * from this one should not add them back.
+ * No bare 401, 403 or malformed-id case here: the authorization sweep
+ * (`tests/contract/authorization-contract.test.ts`) asks every guarded route for the first two, as
+ * every role, and `tests/integration/malformed-ids.test.ts` sends every id position its malformed
+ * spellings. A case that checks more than the status (an error `code`, a row left untouched) is the
+ * only one a contract file adds. A module copied from this one should not add them back.
  */
 
 import '@tests/contract';
@@ -307,10 +308,6 @@ describe('GET /examples/{id}', () => {
     it('answers 404 for an id nothing holds', async () => {
         expect(await statusOf(api().get(`/examples/${MISSING_ID}`))).toBe(404);
     });
-
-    it('answers 404, as for an id nothing holds, for an id no ObjectId can be built from', async () => {
-        expect(await statusOf(api().get(`/examples/${MALFORMED_ID}`))).toBe(404);
-    });
 });
 
 describe('PUT and PATCH /examples/{id}', () => {
@@ -445,17 +442,6 @@ describe('PUT and PATCH /examples/{id}', () => {
             .send({ title: 'Edited by staff' });
 
         expect(response.status).toBe(200);
-    });
-
-    it('answers 404 for a malformed id, as it does for an unknown one', async () => {
-        const { bearer } = await authenticateAsRole('editor');
-
-        const response = await api()
-            .patch(`/examples/${MALFORMED_ID}`)
-            .set('Authorization', bearer)
-            .send({ title: 'x' });
-
-        expect(response.status).toBe(404);
     });
 });
 

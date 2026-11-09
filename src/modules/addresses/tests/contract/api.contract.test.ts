@@ -298,10 +298,4 @@ describe('GET /account/addresses/{addressId}', () => {
 
         expect([unknown.status, malformed.status, others.status]).toEqual([404, 404, 404]);
     });
-
-    it('answers 401 without a session', async () => {
-        const response = await api().get(`/account/addresses/${MISSING_ID}`);
-
-        expect(response.status).toBe(401);
-    });
 });

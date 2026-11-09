@@ -14,16 +14,6 @@ import { MISSING_ID } from '@tests/ids';
 
 setupTestDb();
 
-/**
- * An id no ObjectId can be built from.
- *
- * `Id` is a storage-neutral string in the contract, so every id-taking route makes its own
- * Mongo-shaped check. In a path it answers as an unknown id does: 404. In the body of
- * `POST /wishlist/items` it is a malformed field: 422. Both are declared responses, and a
- * declared response nothing sends is a contract nobody is holding the API to.
- */
-const MALFORMED_ID = 'not-an-object-id';
-
 /** Logs a user in and saves one product, returning both. */
 const authenticateWithWishlist = async () => {
     const { bearer } = await authenticateAs('user');
@@ -105,16 +95,6 @@ describe('POST /wishlist/items', () => {
         ]);
     });
 
-    it('matches the error contract for a malformed product id: 422, it is a body field', async () => {
-        const { bearer } = await authenticateAs('user');
-        const response = await api()
-            .post('/wishlist/items')
-            .set('Authorization', bearer)
-            .send({ productId: MALFORMED_ID });
-
-        expect(response.status).toBe(422);
-    });
-
     it('matches the error contract for a missing productId', async () => {
         const { bearer } = await authenticateAs('user');
         const response = await api().post('/wishlist/items').set('Authorization', bearer).send({});
@@ -176,16 +156,6 @@ describe('DELETE /wishlist/items/{productId}', () => {
 
         expect(response.status).toBe(404);
     });
-
-    it('matches the error contract for a malformed product id', async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api()
-            .delete(`/wishlist/items/${MALFORMED_ID}`)
-            .set('Authorization', bearer);
-
-        expect(response.status).toBe(404);
-    });
 });
 
 describe('POST /wishlist/items/{productId}/move-to-cart', () => {
@@ -215,16 +185,6 @@ describe('POST /wishlist/items/{productId}/move-to-cart', () => {
 
         const response = await api()
             .post(`/wishlist/items/${MISSING_ID}/move-to-cart`)
-            .set('Authorization', bearer);
-
-        expect(response.status).toBe(404);
-    });
-
-    it('matches the error contract for a malformed product id', async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api()
-            .post(`/wishlist/items/${MALFORMED_ID}/move-to-cart`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);

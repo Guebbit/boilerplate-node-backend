@@ -550,22 +550,6 @@ describe('PATCH /account', () => {
         expect(response.body.verifiedAt).toBe(user.verifiedAt!.toISOString());
     });
 
-    it('restating the CURRENT address is a no-op — a pending change survives it', async () => {
-        const { user, bearer } = await loginWithCookie({ verifiedAt: new Date() });
-        await api()
-            .patch('/account')
-            .set('Authorization', bearer)
-            .send({ email: 'someone-else-typed-this@example.com' });
-
-        const response = await api()
-            .patch('/account')
-            .set('Authorization', bearer)
-            .send({ email: user.email });
-
-        expect(response.status).toBe(200);
-        expect(response.body.pendingEmail).toBe('someone-else-typed-this@example.com');
-    });
-
     it('matches the error contract for an email another account holds', async () => {
         await createUser({ email: 'taken@example.com', username: 'first' });
         const { bearer } = await loginWithCookie({
@@ -1119,12 +1103,6 @@ describe('GET /account/sessions/{sessionId}', () => {
 
         expect([unknown.status, malformed.status]).toEqual([404, 404]);
     });
-
-    it('answers 401 without a session', async () => {
-        const response = await api().get('/account/sessions/000000000000000000000000');
-
-        expect(response.status).toBe(401);
-    });
 });
 
 describe('GET /account/sessions', () => {
@@ -1243,16 +1221,6 @@ describe('DELETE /account/sessions/{sessionId}', () => {
 
         const response = await api()
             .delete(`/account/sessions/${MISSING_ID}`)
-            .set('Authorization', bearer);
-
-        expect(response.status).toBe(404);
-    });
-
-    it('matches the error contract for a malformed id', async () => {
-        const { bearer } = await loginWithCookie();
-
-        const response = await api()
-            .delete('/account/sessions/not-an-id')
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);

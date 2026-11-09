@@ -98,17 +98,6 @@ describe('GET /inventory/levels/{productId}', () => {
 
         expect([unknown.status, malformed.status]).toEqual([404, 404]);
     });
-
-    it('refuses a customer with 403', async () => {
-        const { bearer } = await authenticateAs('user');
-        const product = await createProduct({ onHand: 7 });
-
-        const response = await api()
-            .get(`/inventory/levels/${String(product._id)}`)
-            .set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
-    });
 });
 
 describe('GET /inventory/movements', () => {
