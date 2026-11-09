@@ -11,8 +11,9 @@ ROLE: Error-contract reviewer: the lint proved the media type, you judge whether
 GOAL: For every rule in `scripts/audit/api-standards.yaml` whose `standard` is `rfc9457`, give every
 operation in scope one verdict per rule, each with a citation. Operations that share a verdict and its
 cause share one row (see Output). The audit judges whether every runtime error is a problem document with honest members.
-It reports against RFC 9457 problem details ONLY, plus the `house` clauses the registry pins to its rules. Other standards disagree with it in places; that is
-not this audit's business.
+It reports against RFC 9457 problem details, plus the `house` clauses the registry pins to its rules.
+When a precedence is given, a rule a higher standard overrides is listed once under **Superseded by a
+higher standard**, not judged.
 
 SCOPE: the argument you were given: a module name (`orders`), a path, `--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5). Empty means
 `whole-repo`: the **whole contract**. A difference from a standard is rarely introduced by the change
@@ -37,16 +38,28 @@ Output goes to `tmp/reports/audit-<run>/api-rfc9457/<SCOPE>…`. `<run>` and `<S
     - Spectral `shared/contracts/spectral.yaml` (security on every operation, no `nullable`, errors are
       `application/problem+json`, the 2xx body is an object, replace is PUT and update is PATCH,
       operationId shape, schema names, camelCase parameters, `maxLength`, `names-in-us-english-*`)
-    - Spectral: errors are `application/problem+json`; `x-not-problem` is the declared opt-out
-    - `tests/cross-cutting/contract-error-declarations.test.ts` (every code is in `x-error-codes`)
-    - `tests/fuzz/endpoints.fuzz.test.ts`
+    - Spectral: a 4xx/5xx that declares content declares only `application/problem+json`
+      (`x-not-problem` is the opt-out). Spectral sees only responses that declare `content`: a
+      bodiless 4xx/5xx is not seen.
+    - `tests/support/response-contract.ts`: every Jest error answer with a JSON body is
+      `application/problem+json` and matches its schema; no code check.
+    - `tests/cross-cutting/contract-error-declarations.test.ts`: a path id implies a declared 404.
+    - `tests/fuzz/endpoints.fuzz.test.ts`: never a 5xx, every status documented (statuses, not codes).
       A guarded rule gets one line ("guarded by X") and no verdict hunt.
 5. If this audit is part of a run of several, the USER gives the order of precedence first
    ("RFC 9110 > Google AIP > Zalando"). Ask for it if you were not given one. Never pick it.
 
 ## Steps
 
-1. List the operations in scope from the bundle (Grep for every place that answers an error without `rejectResponse` (`res.status(4`, `res.status(5`, `.sendStatus(`, `.json({ error`), then compare with the `x-not-problem` operations.)
+1. List the operations in scope from the bundle.
+   1b. Find every answer not built by `rejectResponse` (`src/infrastructure/http/response.ts`): grep
+   `\.(status|sendStatus|writeHead)\(|\.statusCode\s*=[^=]` over `src/**/*.ts`, tests excluded,
+   minus `response.ts`; judge each hit by hand (a computed status like `/readyz`, an untyped
+   `.send(` like the metrics 500). Compare the hits with the responses marked `x-not-problem`.
+   1c. Check `src/app/` for a `clientError` listener; without one, Node answers 400/408/413/431 itself
+   with no body.
+   1d. Sweep the no-`scope` catalogue codes listed on no operation; for a guard-made code
+   (`deniedCode`, `stepUp`, `requireFreshAuth*`), check every mount of that guard.
 2. For each rule, check three sources and reach ONE verdict: the contract (the operation, its
    responses, its headers), the handler (controller, then service, never only the route), and the
    docs page that describes it.
@@ -99,3 +112,17 @@ one cause; the per-rule totals give house apart (`VIOLATION 4 (house 3)`).
 No citation, no finding: an absence claim names the grep that found
 nothing. Three real violations over thirty maybes. The report is disposable; see
 `docs/tools/ai-auditing.md`.
+
+### Outside the rules
+
+One line per finding no rule judges: a clause of the standard no rule covers, or a doc, contract or
+code text found on the way that disagrees with another. Each line: what, file:line, fix side
+(`contract`, `code`, `docs`, or `registry` = a clause that needs a rule). A finding that belongs to
+another standard's audit names that audit. No verdict, and not in the per-rule totals. Write "None."
+when empty.
+
+### Superseded by a higher standard
+
+Required. `| rule id | yields to (standard · clause) | theory row | why |`, no verdict column. If
+empty, write "none: no precedence given" or "none: no higher standard in the given precedence
+overrides a rule of this one".

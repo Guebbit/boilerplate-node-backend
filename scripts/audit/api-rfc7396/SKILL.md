@@ -11,8 +11,9 @@ ROLE: Merge-patch reviewer: you judge what a body does to the stored document.
 GOAL: For every rule in `scripts/audit/api-standards.yaml` whose `standard` is `rfc7396`, give every
 operation in scope one verdict per rule, each with a citation. Operations that share a verdict and its
 cause share one row (see Output). The audit judges whether `null` clears, an absent key keeps, and an array replaces, in the code and not only in the docs.
-It reports against RFC 7396 JSON Merge Patch ONLY, plus the `house` clauses the registry pins to its rules. Other standards disagree with it in places; that is
-not this audit's business.
+It reports against RFC 7396 JSON Merge Patch, plus the `house` clauses the registry pins to its rules.
+When a precedence is given, a rule a higher standard overrides is listed once under **Superseded by a
+higher standard**, not judged.
 
 SCOPE: the argument you were given: a module name (`orders`), a path, `--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5). Empty means
 `whole-repo`: the **whole contract**. A difference from a standard is rarely introduced by the change
@@ -38,8 +39,18 @@ Output goes to `tmp/reports/audit-<run>/api-rfc7396/<SCOPE>…`. `<run>` and `<S
       `application/problem+json`, the 2xx body is an object, replace is PUT and update is PATCH,
       operationId shape, schema names, camelCase parameters, `maxLength`, `names-in-us-english-*`)
     - `tests/cross-cutting/contract-responses-never-null.test.ts` (a response never carries null; a request may)
-    - `tests/contract/request-contract.test.ts` (merge-patch and `null` payloads from the contract)
+    - `tests/contract/request-contract.test.ts`, the cases "… accepts null for the nullable …": every
+      top-level body field whose type lists `'null'` is ACCEPTED (no 415/422, no 5xx) under each
+      declared media type. Not a guard for what `null` then does, for `null` refused on a field that may
+      not be cleared, or for `null` inside a nested map: `rfc7396-null-deletes` is still hunted.
       A guarded rule gets one line ("guarded by X") and no verdict hunt.
+
+    Settled by reading, not a guard: a top-level body that is not an object (RFC 7396 §2: it would
+    replace the whole resource; §5 lets the server refuse it). `express.json` (strict,
+    `src/app/security.ts`) refuses a scalar or `null` as 400 `entity.parse.failed`; an array reaches the
+    route's generated Zod object or record schema and is a 422. Re-check only if a route parses its own
+    body or the parser loses `strict`. No rule, no row.
+
 5. If this audit is part of a run of several, the USER gives the order of precedence first
    ("RFC 9110 > Google AIP > Zalando"). Ask for it if you were not given one. Never pick it.
 
@@ -49,6 +60,10 @@ Output goes to `tmp/reports/audit-<run>/api-rfc7396/<SCOPE>…`. `<run>` and `<S
 2. For each rule, check three sources and reach ONE verdict: the contract (the operation, its
    responses, its headers), the handler (controller, then service, never only the route), and the
    docs page that describes it.
+    - `rfc7396-null-deletes`: a body whose schema is generic (the translations door's `string|null`
+      fields, which serve every registered entity) is judged per registered entity: against the rules
+      that entity hands `locales` (its `translatables` entry in `module.ts`, typed by
+      `TranslatableTarget`), not against the door's schema. Name the entities checked.
 3. A doc that contradicts the code: say which side is wrong, and cite the section.
 4. A finding a rule could catch mechanically: verdict `LINT-CANDIDATE` with the JSONPath. It is
    REPORTED only, never turned into a Spectral rule.
@@ -98,3 +113,17 @@ one cause; the per-rule totals give house apart (`VIOLATION 4 (house 3)`).
 No citation, no finding: an absence claim names the grep that found
 nothing. Three real violations over thirty maybes. The report is disposable; see
 `docs/tools/ai-auditing.md`.
+
+### Outside the rules
+
+One line per finding no rule judges: a clause of the standard no rule covers, or a doc, contract or
+code text found on the way that disagrees with another. Each line: what, file:line, fix side
+(`contract`, `code`, `docs`, or `registry` = a clause that needs a rule). A finding that belongs to
+another standard's audit names that audit. No verdict, and not in the per-rule totals. Write "None."
+when empty.
+
+### Superseded by a higher standard
+
+Required. `| rule id | yields to (standard · clause) | theory row | why |`, no verdict column. If
+empty, write "none: no precedence given" or "none: no higher standard in the given precedence
+overrides a rule of this one".

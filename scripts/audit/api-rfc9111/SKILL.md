@@ -11,8 +11,9 @@ ROLE: Cache reviewer: you judge whether a shared cache could ever serve the wron
 GOAL: For every rule in `scripts/audit/api-standards.yaml` whose `standard` is `rfc9111`, give every
 operation in scope one verdict per rule, each with a citation. Operations that share a verdict and its
 cause share one row (see Output). The audit judges whether every read declares its cache answer and no error, personal or cookie-setting answer can be stored.
-It reports against RFC 9111 caching ONLY, plus the `house` clauses the registry pins to its rules. Other standards disagree with it in places; that is
-not this audit's business.
+It reports against RFC 9111 caching, plus the `house` clauses the registry pins to its rules.
+When a precedence is given, a rule a higher standard overrides is listed once under **Superseded by a
+higher standard**, not judged.
 
 SCOPE: the argument you were given: a module name (`orders`), a path, `--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5). Empty means
 `whole-repo`: the **whole contract**. A difference from a standard is rarely introduced by the change
@@ -108,3 +109,17 @@ one cause; the per-rule totals give house apart (`VIOLATION 4 (house 3)`).
 No citation, no finding: an absence claim names the grep that found
 nothing. Three real violations over thirty maybes. The report is disposable; see
 `docs/tools/ai-auditing.md`.
+
+### Outside the rules
+
+One line per finding no rule judges: a clause of the standard no rule covers, or a doc, contract or
+code text found on the way that disagrees with another. Each line: what, file:line, fix side
+(`contract`, `code`, `docs`, or `registry` = a clause that needs a rule). A finding that belongs to
+another standard's audit names that audit. No verdict, and not in the per-rule totals. Write "None."
+when empty.
+
+### Superseded by a higher standard
+
+Required. `| rule id | yields to (standard · clause) | theory row | why |`, no verdict column. If
+empty, write "none: no precedence given" or "none: no higher standard in the given precedence
+overrides a rule of this one".

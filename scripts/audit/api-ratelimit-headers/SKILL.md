@@ -11,8 +11,9 @@ ROLE: Header-syntax reviewer: you check the fields against the draft as it stand
 GOAL: For every rule in `scripts/audit/api-standards.yaml` whose `standard` is `ratelimit-headers`, give every
 operation in scope one verdict per rule, each with a citation. Operations that share a verdict and its
 cause share one row (see Output). The audit judges whether `RateLimit` and `RateLimit-Policy` are well-formed and named after real budgets.
-It reports against the IETF RateLimit headers draft ONLY, plus the `house` clauses the registry pins to its rules. Other standards disagree with it in places; that is
-not this audit's business.
+It reports against the IETF RateLimit headers draft, plus the `house` clauses the registry pins to its rules.
+When a precedence is given, a rule a higher standard overrides is listed once under **Superseded by a
+higher standard**, not judged.
 
 SCOPE: the argument you were given: a module name (`orders`), a path, `--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5). Empty means
 `whole-repo`: the **whole contract**. A difference from a standard is rarely introduced by the change
@@ -37,7 +38,14 @@ Output goes to `tmp/reports/audit-<run>/api-ratelimit-headers/<SCOPE>…`. `<run
     - Spectral `shared/contracts/spectral.yaml` (security on every operation, no `nullable`, errors are
       `application/problem+json`, the 2xx body is an object, replace is PUT and update is PATCH,
       operationId shape, schema names, camelCase parameters, `maxLength`, `names-in-us-english-*`)
-    - `tests/cross-cutting/request-headers-conformance.test.ts` and `tests/cross-cutting/rate-limit-budgets.test.ts`
+    - `tests/cross-cutting/request-headers-conformance.test.ts`
+    - `tests/unit/infrastructure/http/middlewares/rate-limit-build.test.ts`: the syntax every
+      `buildRateLimiter` budget writes (named items, `q`/`w`/`r`/`t`, no `pk`, no `X-RateLimit-*`,
+      stacked budgets all shown, a skipped limiter adds nothing, its own 429 names it with `r=0`). It
+      does not see budgets charged by hand (`chargeBudget`, `mail-recipient`'s doors), cooldowns or
+      the 2FA lock.
+    - `tests/cross-cutting/rate-limit-budgets.test.ts`: the budget set (unique names, env vars and
+      namespaces, one declaration each, only the global brake passes a store outage).
     - `scripts/contracts/response-headers.ts` (declares both fields on every response)
       A guarded rule gets one line ("guarded by X") and no verdict hunt.
 5. If this audit is part of a run of several, the USER gives the order of precedence first
@@ -45,10 +53,20 @@ Output goes to `tmp/reports/audit-<run>/api-ratelimit-headers/<SCOPE>…`. `<run
 
 ## Steps
 
-1. List the operations in scope from the bundle (FIRST open the draft (`https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/`) and write down its number and date. The registry says draft-11 (expires 2026-11-24) when it was written; the latest draft wins.)
+0. FIRST open the draft (`https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/`) and
+   write down its number and date. The registry says draft-11 (expires 2026-11-24) when it was
+   written; the latest draft wins.
+1. List the operations in scope from the bundle.
 2. For each rule, check three sources and reach ONE verdict: the contract (the operation, its
    responses, its headers), the handler (controller, then service, never only the route), and the
-   docs page that describes it.
+   docs page that describes it. Start where the gaps were:
+    - `grep -rnE '\b429\b' src`: every 429 goes through `generateRateLimited`, not
+      `generateReject(429`. Hand-made ones: `chargeBudget` callers, `resendTooSoon`, `rejectLocked`,
+      `refuseRateLimited`.
+    - On a 429, `t` equals `Retry-After`.
+    - Every budget with `escalation`: check `w` and `t` against the escalated wait.
+    - What a public-cacheable response carries: advisory fields only, no `pk`; the draft's §7.3
+      caching line is in the docs.
 3. A doc that contradicts the code: say which side is wrong, and cite the section.
 4. A finding a rule could catch mechanically: verdict `LINT-CANDIDATE` with the JSONPath. It is
    REPORTED only, never turned into a Spectral rule.
@@ -98,3 +116,17 @@ one cause; the per-rule totals give house apart (`VIOLATION 4 (house 3)`).
 No citation, no finding: an absence claim names the grep that found
 nothing. Three real violations over thirty maybes. The report is disposable; see
 `docs/tools/ai-auditing.md`.
+
+### Outside the rules
+
+One line per finding no rule judges: a clause of the standard no rule covers, or a doc, contract or
+code text found on the way that disagrees with another. Each line: what, file:line, fix side
+(`contract`, `code`, `docs`, or `registry` = a clause that needs a rule). A finding that belongs to
+another standard's audit names that audit. No verdict, and not in the per-rule totals. Write "None."
+when empty.
+
+### Superseded by a higher standard
+
+Required. `| rule id | yields to (standard · clause) | theory row | why |`, no verdict column. If
+empty, write "none: no precedence given" or "none: no higher standard in the given precedence
+overrides a rule of this one".

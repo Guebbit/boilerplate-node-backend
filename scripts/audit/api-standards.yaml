@@ -202,7 +202,7 @@ rules:
     - id: rfc9457-errors-extension
       standard: rfc9457
       section: extension members
-      rule: The `errors` extension is never empty, and every `errors[].code` is in the operation's `x-error-codes` under that status.
+      rule: "The `errors` extension is never empty, and every code with no `scope` in the catalogue is in the operation's `x-error-codes` under its status."
       source: https://www.rfc-editor.org/rfc/rfc9457#section-3.2
       evidence: [openapi.yaml paths.*.*.x-error-codes, docs/api/errors.md#the-errors-extension]
       lint: possible
@@ -250,13 +250,17 @@ rules:
     - id: rfc7396-null-deletes
       standard: rfc7396
       section: semantics
-      rule: In a merge-patch body `null` removes the member (or clears it) and is accepted only on a field the contract marks nullable in requests.
+      rule: A `null` member in a merge patch removes that member from the target, at any depth (inside a keyed map it removes the key).
+      house: '`null` is accepted only on a field whose request type lists `null`; anywhere else it is a 422 (docs/api/write-methods.md#empty-null-omitted).'
       source: https://www.rfc-editor.org/rfc/rfc7396#section-2
       evidence:
           [
               docs/api/write-methods.md#patch-—-json-merge-patch,
               docs/api/write-methods.md#empty-null-omitted,
-              openapi.yaml paths.*.patch.requestBody
+              openapi.yaml paths.*.patch.requestBody,
+              src/kernel/registry.ts TranslatableTarget,
+              src/modules/*/module.ts translatables,
+              src/modules/locales/services/translations.ts
           ]
       lint: no
       difference: null
@@ -275,12 +279,19 @@ rules:
       lint: no
       difference: null
 
-    - id: rfc7396-arrays-replace
+    - id: rfc7396-value-replaces
       standard: rfc7396
       section: semantics
-      rule: An array in a merge patch replaces the stored array whole; a keyed map follows the rule its docs page states.
+      rule: A member whose patch value is neither `null` nor an object replaces the stored member whole (a scalar is set; an array replaces the whole array, no element merged); an object value merges into the stored member by the same rules, one level down.
       source: https://www.rfc-editor.org/rfc/rfc7396#section-2
-      evidence: [docs/api/write-methods.md#put-—-replace, src/modules/*/services]
+      evidence:
+          [
+              docs/api/write-methods.md#patch-—-json-merge-patch,
+              src/modules/*/services,
+              src/modules/products/services/translated-write.ts,
+              src/modules/locales/services/translations.ts,
+              src/modules/locales/services/entries.ts
+          ]
       lint: no
       difference: null
 
@@ -342,13 +353,18 @@ rules:
       lint: no
       difference: null
 
-    - id: ratelimit-declared-in-contract
+    - id: ratelimit-server-behavior
       standard: ratelimit-headers
-      section: field presence
-      rule: Both fields are declared on the responses that send them, and a refusal (429) carries them too.
+      section: server behavior
+      rule: 'A server MAY send `RateLimit` and `RateLimit-Policy` on any status, a 429 included; when a response carries both `Retry-After` and `RateLimit`, `Retry-After` SHOULD NOT point earlier than the end of the effective window (§6). Judge the window of the policies at `r=0`, the ones the wait is for.'
       source: https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/
-      evidence: [openapi.yaml paths.*.*.responses.*.headers, scripts/contracts/response-headers.ts]
-      lint: possible
+      evidence:
+          [
+              src/infrastructure/http/middlewares/rate-limit.ts,
+              src/infrastructure/http/response.ts,
+              docs/tools/security.md#response-headers
+          ]
+      lint: no
       difference: null
 
     # IETF Idempotency-Key header, latest draft (draft-08 when written; re-check it).
@@ -427,11 +443,11 @@ rules:
     - id: aip-standard-before-custom
       standard: google-aip
       section: AIP-121 / AIP-136, methods
-      rule: A write that fits Get, List, Create, Update or Delete uses it; a custom verb exists only for a state change those cannot say.
+      rule: 'A write that fits Get, List, Create, Update or Delete uses it; a custom verb exists only for a state change those cannot say; a Create MUST return the resource itself (AIP-133).'
       source: https://google.aip.dev/136
       evidence: [openapi.yaml paths.*.post, docs/api/write-methods.md#action-or-field]
       lint: no
-      difference: null
+      difference: line-answers-parent
 
     - id: aip-custom-method-uri
       standard: google-aip
@@ -472,7 +488,7 @@ rules:
     - id: aip-delete-and-state
       standard: google-aip
       section: AIP-135 / AIP-164 / AIP-216, delete and state
-      rule: A DELETE has no body and removes the resource; a soft delete returns the resource; a refused state transition is a precondition failure.
+      rule: 'A DELETE has no body and removes the resource, and a Delete SHOULD return Empty (AIP-135); a soft delete returns the resource; a refused state transition is a precondition failure.'
       source: https://google.aip.dev/135
       evidence:
           [
@@ -481,7 +497,7 @@ rules:
               docs/api/write-methods.md#repeating-an-action-409
           ]
       lint: no
-      difference: [revoke-keeps-row, conflict-409]
+      difference: [revoke-keeps-row, conflict-409, line-answers-parent]
 
     # Zalando RESTful API guidelines.
     - id: zalando-snake-case-properties

@@ -11,8 +11,7 @@ ROLE: Guideline reviewer: you read the API against Zalando's rules, and you do n
 GOAL: For every rule in `scripts/audit/api-standards.yaml` whose `standard` is `zalando`, give every
 operation in scope one verdict per rule, each with a citation. Operations that share a verdict and its
 cause share one row (see Output). The audit judges where names, enums, paging, money and errors differ from Zalando's rules, and whether each difference is written down.
-It reports against the Zalando guidelines ONLY, plus the `house` clauses the registry pins to its rules. Other standards disagree with it in places; that is
-not this audit's business. When a precedence is given, a rule a higher standard overrides is listed
+It reports against the Zalando guidelines, plus the `house` clauses the registry pins to its rules. When a precedence is given, a rule a higher standard overrides is listed
 once under **Superseded by a higher standard**, not judged.
 
 SCOPE: the argument you were given: a module name (`orders`), a path, `--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5). Empty means
@@ -105,6 +104,14 @@ one cause; the per-rule totals give house apart (`VIOLATION 4 (house 3)`).
 No citation, no finding: an absence claim names the grep that found
 nothing. Three real violations over thirty maybes. The report is disposable; see
 `docs/tools/ai-auditing.md`.
+
+### Outside the rules
+
+One line per finding no rule judges: a clause of the standard no rule covers, or a doc, contract or
+code text found on the way that disagrees with another. Each line: what, file:line, fix side
+(`contract`, `code`, `docs`, or `registry` = a clause that needs a rule). A finding that belongs to
+another standard's audit names that audit. No verdict, and not in the per-rule totals. Write "None."
+when empty.
 
 ### Superseded by a higher standard
 
