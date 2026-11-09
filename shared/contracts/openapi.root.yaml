@@ -1400,6 +1400,8 @@ paths:
                     description: Ready to receive traffic.
                 '503':
                     description: Booting, draining, or the database is unreachable.
+                    # A probe reads the status and nothing else, so the body is empty on purpose.
+                    x-not-problem: true
                     headers:
                         Cache-Control:
                             $ref: '#/components/headers/CacheControlNoStore'

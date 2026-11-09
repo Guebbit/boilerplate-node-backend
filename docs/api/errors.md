@@ -163,6 +163,7 @@ operation, so the contract describes them once, in the root document's descripti
 
 One `Problem` schema is the body of every shared error response (`BadRequest` … `InternalError`),
 declared under `application/problem+json` only. A local Spectral rule,
-`error-responses-are-problem-json`, refuses any other 4xx/5xx content type; the Prometheus 500
-opts out with `x-not-problem: true`. Every Jest response is checked for the media type too
+`error-responses-are-problem-json`, refuses any other 4xx/5xx content type, and
+`error-responses-have-a-body` refuses one with no body at all; the Prometheus 500 and the
+`/readyz` 503 opt out with `x-not-problem: true`. Every Jest response is checked for the media type too
 (`tests/support/response-contract.ts`).
