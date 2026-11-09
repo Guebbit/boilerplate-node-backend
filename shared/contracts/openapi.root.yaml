@@ -1300,6 +1300,7 @@ paths:
 
     /config:
         get:
+            x-cache: 'max-age: 60'
             tags: [System]
             summary: What a client needs to boot, before it has a session
             description: |
@@ -1321,7 +1322,7 @@ paths:
                     description: The deployment's public configuration
                     headers:
                         Cache-Control:
-                            description: A short public lifetime; the values only change with a restart.
+                            description: '`public, max-age=60`. The values change only with a restart.'
                             schema:
                                 type: string
                     content:
