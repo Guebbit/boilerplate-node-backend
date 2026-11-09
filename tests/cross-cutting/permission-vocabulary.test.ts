@@ -47,10 +47,11 @@ describe('permission vocabulary', () => {
     it('carries every rule, set and tier the kernel loaded', () => {
         expect(PERMISSION_RULES.map((rule) => rule.id)).toEqual([...PERMISSION_RULE_IDS]);
         expect(PERMISSION_SETS.map((set) => set.name)).toEqual([...PERMISSION_SET_NAMES]);
-        for (const rule of PERMISSION_RULES) {
-            expect(yaml.actions).toContain(rule.action);
-            if (rule.stepUp !== undefined) expect(STEP_UP_TIERS).toContain(rule.stepUp);
-        }
+        for (const rule of PERMISSION_RULES) expect(yaml.actions).toContain(rule.action);
+        const unknownTiers = PERMISSION_RULES.filter(
+            ({ stepUp }) => stepUp !== undefined && !STEP_UP_TIERS.includes(stepUp)
+        );
+        expect(unknownTiers.map(({ id }) => id)).toEqual([]);
     });
 
     it('maps each subject to the actions of the rules declared on it', () => {

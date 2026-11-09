@@ -143,8 +143,10 @@ describe('applySerialization — universal guarantees', () => {
                 const reserved = new Set(['_id', '__v', 'id']);
                 const serialized = buildTransform()({ ...body });
 
-                for (const key of Object.keys(body))
-                    if (!reserved.has(key)) expect(Object.hasOwn(serialized, key)).toBe(true);
+                const dropped = Object.keys(body).filter(
+                    (key) => !reserved.has(key) && !Object.hasOwn(serialized, key)
+                );
+                expect(dropped).toEqual([]);
             }),
             RUN
         );

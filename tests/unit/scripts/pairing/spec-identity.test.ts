@@ -342,6 +342,7 @@ describe(`the paired frontend at ${siblingRoot}`, () => {
     (siblingPresent ? it : it.skip)('carries byte-identical copies of every shared file', () => {
         const comparisons = compareSharedFiles(siblingRoot);
 
+        // eslint-disable-next-line jest/no-standalone-expect -- `(cond ? it : it.skip)` is a test the rule cannot see; the expect is inside it
         expect(formatSharedFileProblems(comparisons, siblingRoot)).toBe('');
     });
 });

@@ -147,10 +147,11 @@ describe('every side effect is published from one layer', () => {
         const sites = callSites();
 
         expect(moduleFiles().length).toBeGreaterThan(0);
-        for (const marker of Object.keys(EXPECTED_LAYER))
-            // Only shop modules publish a domain event, so without them there is none to find.
-            if (marker !== 'emitDomainEvent' || isDeployed('orders'))
-                expect(sites.get(marker)!.length).toBeGreaterThan(0);
+        // Only shop modules publish a domain event, so without them there is none to find.
+        const expected = Object.keys(EXPECTED_LAYER).filter(
+            (marker) => marker !== 'emitDomainEvent' || isDeployed('orders')
+        );
+        expect(expected.filter((marker) => (sites.get(marker)?.length ?? 0) === 0)).toEqual([]);
     });
 
     it('publishes each one from the layer that owns it, or says why not', () => {

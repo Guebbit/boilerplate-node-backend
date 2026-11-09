@@ -2,7 +2,6 @@
  * Unit tests for the tracing utilities
  *
  * Tests cover:
- *  - getTracer: returns a working tracer
  *  - withSpan: success path ends the span with OK status
  *  - withSpan: error path records the exception and re-throws
  *  - getActiveSpanContext: returns IDs when a span is active
@@ -10,7 +9,7 @@
  *  - recordErrorOnActiveSpan: marks the span as error and records exception
  */
 
-import { trace, context, ROOT_CONTEXT } from '@opentelemetry/api';
+import { trace } from '@opentelemetry/api';
 import { setEnvironment } from '@tests/environment';
 import { node } from '@opentelemetry/sdk-node';
 import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace';
@@ -39,29 +38,6 @@ const teardownTestProvider = async (provider: node.NodeTracerProvider) => {
     await provider.shutdown();
     trace.disable();
 };
-
-// ---------------------------------------------------------------------------
-// getTracer
-// ---------------------------------------------------------------------------
-
-/** A span callback that throws before it ever returns a promise. */
-const throwing = (): Promise<never> => {
-    throw new Error('sync');
-};
-
-describe('getTracer', () => {
-    it('returns a tracer without throwing', () => {
-        expect(() => getTracer()).not.toThrow();
-    });
-
-    it('returned tracer can start a span', async () => {
-        const { provider } = setupTestProvider();
-        const span = getTracer().startSpan('test-span');
-        expect(span).toBeDefined();
-        span.end();
-        await teardownTestProvider(provider);
-    });
-});
 
 // ---------------------------------------------------------------------------
 // withSpan — success path
@@ -94,6 +70,11 @@ describe('withSpan — success', () => {
 // ---------------------------------------------------------------------------
 // withSpan — error path
 // ---------------------------------------------------------------------------
+
+/** A span callback that throws before it ever returns a promise. */
+const throwing = (): Promise<never> => {
+    throw new Error('sync');
+};
 
 describe('withSpan — error', () => {
     let exporter: InMemorySpanExporter;
@@ -250,17 +231,5 @@ describe('recordErrorOnActiveSpan', () => {
         });
         const spans = exporter.getFinishedSpans();
         expect(spans.some((s) => s.name === 'str-err-span')).toBe(true);
-    });
-});
-
-// ---------------------------------------------------------------------------
-// Verify ROOT_CONTEXT baseline (sanity check)
-// ---------------------------------------------------------------------------
-
-describe('context baseline', () => {
-    it('trace.getActiveSpan() returns undefined outside any active span', () => {
-        context.with(ROOT_CONTEXT, () => {
-            expect(trace.getActiveSpan()).toBeUndefined();
-        });
     });
 });

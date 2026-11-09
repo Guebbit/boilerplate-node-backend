@@ -109,7 +109,7 @@ describe('planMergeLine', () => {
             expect(resulting).toBeLessThanOrEqual(LINE_MAX);
             expect(add).toBeLessThanOrEqual(facts.requested);
             // A product that is not shown takes nothing.
-            if (!facts.listed) expect(add).toBe(0);
+            expect(!facts.listed && add > 0).toBe(false);
         });
 
         it.each(grid)('names a reason exactly when the line did not land as asked: %j', (facts) => {

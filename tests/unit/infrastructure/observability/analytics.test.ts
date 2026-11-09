@@ -178,6 +178,9 @@ describe('the umami provider', () => {
 
     it('bounds the request, so a hung Umami cannot hold a socket for minutes per event', () => {
         configureUmami();
+        // Jest's fake timers do not fire `AbortSignal.timeout` (probed on Jest 30 / Node 24), so
+        // the bound is read off the call. Pass-through spy: the real signal still reaches fetch.
+        const timeoutSpy = jest.spyOn(AbortSignal, 'timeout');
         emitAnalyticsEvent({
             analyticsConsent: true,
             distinctId: 'u1',
@@ -185,7 +188,12 @@ describe('the umami provider', () => {
         });
 
         const [, init] = (fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
-        expect(init.signal).toBeInstanceOf(AbortSignal);
+        expect(timeoutSpy).toHaveBeenCalledTimes(1);
+        const [ms] = timeoutSpy.mock.calls[0] ?? [0];
+        expect(ms).toBeGreaterThan(0);
+        expect(ms).toBeLessThan(60_000);
+        expect(init.signal).toBe(timeoutSpy.mock.results[0]?.value);
+        timeoutSpy.mockRestore();
     });
 
     it('tolerates a trailing slash on the host, because someone will paste one', () => {
