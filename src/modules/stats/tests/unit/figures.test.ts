@@ -3,7 +3,7 @@
  * shipping and VAT are charged-minus-refunded, and that nothing is divided by zero orders.
  */
 import { toMinorUnits } from '@domain-primitives/money';
-import { addRawFigures, emptyRawFigures, figuresOf, rateOf } from '../../services/figures';
+import { addRawFigures, emptyRawFigures, figuresOf, rateOf } from '../../domain/figures';
 
 /** Minor units of a EUR amount. */
 const eur = (amount: number) => toMinorUnits(amount, 'EUR');

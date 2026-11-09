@@ -9,7 +9,7 @@ import { invoicingService } from '@modules/invoicing';
 import { orderService } from '@modules/orders';
 import { returnService } from '@modules/returns';
 import type { SalesStats } from '@types';
-import { addRawFigures, emptyRawFigures, figuresOf, type RawFigures } from './figures';
+import { addRawFigures, emptyRawFigures, figuresOf, type RawFigures } from '../domain/figures';
 import type { Period, WithoutLimits } from './range';
 import { shopCurrency } from '@modules/shop';
 

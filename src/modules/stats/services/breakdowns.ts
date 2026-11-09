@@ -19,7 +19,7 @@ import type {
     ProductSeries,
     ProductStats
 } from '@types';
-import { rateOf } from './figures';
+import { rateOf } from '../domain/figures';
 import type { Period, WithoutLimits } from './range';
 
 /**
