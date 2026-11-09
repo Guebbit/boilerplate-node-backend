@@ -106,7 +106,8 @@ side in [`tactical-ddd.md`](../theory/tactical-ddd.md#action-endpoints-execute-u
 
 A **line** is a part of a per-user parent with no life of its own: a cart line, a saved product, a
 back-in-stock request, an OAuth link, a webhook subscription's secret. It is written through the
-parent, never on a URL of its own.
+parent. It has no read of its own: where a line has a URL, that URL only adds, changes or removes
+the line.
 
 | Parent                    | Line collection         | Add                                  | Change                              | Remove                                            |
 | ------------------------- | ----------------------- | ------------------------------------ | ----------------------------------- | ------------------------------------------------- |
@@ -126,7 +127,7 @@ parent, never on a URL of its own.
 - Names: a line add is `create*` (`add*` for a cart line, which may grow instead), its removal
   `delete*` or `remove*`, its change `update*`.
 
-Why: a 201 says a resource was created at a URL, and a line has none (RFC 9110 §9.3.3 makes the
+Why: a 201 says a resource was created at a URL, and a line has no read of its own to name (RFC 9110 §9.3.3 makes the
 `Location` of a 201 a SHOULD; §9.3.4 makes a PUT that creates a MUST-201). The parent is what the
 client re-renders, so the parent is the answer (§15.3.1: a 200 carries "the result of the
 action"). Medusa v2 (`POST`/`DELETE /store/carts/{id}/line-items[/{line_id}]`), BigCommerce

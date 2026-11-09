@@ -60,7 +60,7 @@ rules:
               tests/support/spec-walk.ts
           ]
       lint: no
-      difference: line-answers-parent
+      difference: [line-answers-parent, signup-refusal-201]
 
     - id: rfc9110-conditional-requests
       standard: rfc9110
