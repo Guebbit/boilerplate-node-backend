@@ -3,6 +3,7 @@ import type { ClientSession } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { withTransaction } from '@infrastructure/runtime/database';
+import { outboxEventsDeadTotal } from '@infrastructure/observability/metrics-outbox';
 import {
     markDomainEventsWired,
     onDomainEvent,
@@ -45,6 +46,12 @@ const subscribe = (failWhen: (n: number) => boolean = () => false): void => {
         seen.push({ n, eventId: meta.eventId });
     });
 };
+
+/** What the dead-row counter holds; the registry outlives a test, so a case compares before and after. */
+const deadCounted = (): Promise<number> =>
+    outboxEventsDeadTotal
+        .get()
+        .then(({ values }) => values.reduce((sum, { value }) => sum + value, 0));
 
 /** Write one event in its own committed transaction. */
 const write = (n: number, aggregateId = 'agg-1'): Promise<void> =>
@@ -182,6 +189,22 @@ describe('relayOutbox', () => {
             expect(announced).toEqual([
                 { eventId: String(row?._id), eventName: 'test.outbox', aggregateId: 'agg-dead' }
             ]);
+        });
+    });
+
+    it('counts each parked row once, for the alert on dead events', async () => {
+        await withEnvironmentOverrides({ NODE_OUTBOX_MAX_ATTEMPTS: '1' }, async () => {
+            subscribe(() => true);
+            await write(1, 'agg-a');
+            await write(2, 'agg-b');
+            const before = await deadCounted();
+
+            expect(await relayOutbox()).toMatchObject({ dead: 2 });
+
+            expect(await deadCounted()).toBe(before + 2);
+            // A second pass finds nothing left to park, so the counter stays put.
+            await relayOutbox();
+            expect(await deadCounted()).toBe(before + 2);
         });
     });
 
