@@ -47,7 +47,7 @@ describe('userActionsFor — the keys', () => {
         expect(userActionsFor(liveAccount, false, callerOf('admin')).assignRole).toBe(true);
     });
 
-    it('does not refuse the role to the caller’s own account: no rule says so', () => {
+    it('offers the role on the caller’s own account to a holder of assign:Role', () => {
         expect(userActionsFor({ id: 'me' }, true, callerOf('admin', 'me')).assignRole).toBe(true);
     });
 });
@@ -59,8 +59,8 @@ describe('userActionsFor — the protection of staff accounts', () => {
         expect(Object.values(actions).every((allowed) => !allowed)).toBe(true);
     });
 
-    it('is judged by the keys alone on the caller’s own account', () => {
-        expect(userActionsFor({ id: 'me' }, true, callerOf('moderator', 'me')).update).toBe(true);
+    it('judges the caller’s own account like any other', () => {
+        expect(userActionsFor({ id: 'me' }, true, callerOf('moderator', 'me')).update).toBe(false);
     });
 });
 

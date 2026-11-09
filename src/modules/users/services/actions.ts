@@ -42,10 +42,7 @@ export const userActionsFor = (
 ): UserActions => {
     const held = heldRules(caller);
     const holdsAssignRole = held.has('assign:Role');
-    const reachable = mayChangeAccount(
-        { id: caller.id, holdsAssignRole },
-        { id: user.id, holdsStaffRole: ownerHoldsRole }
-    );
+    const reachable = mayChangeAccount({ holdsAssignRole }, { holdsStaffRole: ownerHoldsRole });
     const mayUpdate = reachable && held.has('update:User');
     const mayDelete = reachable && held.has('delete:User');
     const mayBan = reachable && held.has('ban:User');

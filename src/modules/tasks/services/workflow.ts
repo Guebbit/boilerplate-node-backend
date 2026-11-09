@@ -208,7 +208,8 @@ const mayBeAssigned = (userId: string, routeSet: string): Promise<boolean> =>
 /**
  * Give the task to someone and, when it is a colleague, write the `task.assigned` row in the same
  * transaction: the assignment and its notice stand or fall together, and the relay redelivers the
- * notice. Taking your own task announces nothing: you know.
+ * notice. Taking your own task announces nothing: you know. A key taking the task for its minter
+ * is not the minter: the notice goes out.
  *
  * `assignedAt` is read once, inside the announcement, so the receiver's dedupe key
  * (`task-assigned:<id>:<assignedAt>`) is the same on every redelivery of the stored row.
@@ -226,7 +227,7 @@ const assignAndAnnounce = (
     announceInTransaction(
         (session) => taskRepository.assign(id, assigneeId, session),
         (task) =>
-            assigneeId === context.caller.id
+            assigneeId === context.caller.id && context.actorCredentialId === undefined
                 ? []
                 : {
                       name: TASK_ASSIGNED,

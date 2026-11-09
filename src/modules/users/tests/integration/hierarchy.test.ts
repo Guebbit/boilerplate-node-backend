@@ -145,7 +145,7 @@ describe('the protection of staff accounts', () => {
         );
     });
 
-    it('lets anyone edit their own account, whatever they hold', async () => {
+    it('judges the caller’s own account like any other', async () => {
         const admin = await accountHolding('admin');
         const support = await accountHolding('support');
 
@@ -162,7 +162,8 @@ describe('the protection of staff accounts', () => {
             )
         ]);
 
-        expect(own.map((result) => result.success)).toEqual([true, true]);
+        expect(own.map((result) => result.success)).toEqual([true, false]);
+        expect(refusalCode(own[1])).toBe('ROLE_MANAGEMENT_REQUIRED');
     });
 
     it('refuses every role but a role manager the platform operator’s account', async () => {
@@ -273,12 +274,12 @@ describe('handing out a staff role', () => {
 
     // A PUT carries `role` on every save; resending the held one changes nothing.
     it('lets a save resend the role already held', async () => {
-        const self = await accountHolding('support');
+        const self = await accountHolding('admin');
 
         const result = await userService.updateById(
             self.id,
-            { role: 'support', username: 'same-role' },
-            callerContextAs('support', self.id)
+            { role: 'admin', username: 'same-role' },
+            callerContextAs('admin', self.id)
         );
 
         expect(result.success).toBe(true);

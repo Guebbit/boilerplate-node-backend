@@ -201,7 +201,9 @@ customers only: a moderator who may erase accounts erases customers, never the a
 
 Five details carry the rule:
 
-- **Your own account is exempt**, so a support agent still edits their own profile.
+- **Your own account is not exempt.** A staff member without `assign:Role` changes their own
+  profile at `/account`, not at `/users/{id}`. An API key shares its minter's id, so a key acting
+  on the account that minted it is refused the same way.
 - **A role is only a list of sets.** There is no `level`, no rank between staff roles, and no
   "outranks": what a role can do is exactly the rules its sets bundle.
 - **An API key never manages staff.** `assign:Role` is `credential: false`, so no key can be minted
@@ -221,13 +223,11 @@ Five details carry the rule:
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 45}}}%%
 flowchart TD
     accTitle: How a write on an account is decided
-    accDescr: The route first requires its rule. A write on the caller's own account is allowed. Otherwise an account that holds no staff role may be changed, and one that does needs the role-management rule, else the answer is ROLE_MANAGEMENT_REQUIRED.
+    accDescr: The route first requires its rule. An account that holds no staff role may be changed, and one that does needs the role-management rule, else the answer is ROLE_MANAGEMENT_REQUIRED.
 
     K{"holds the route's rule?"} -- no --> F403["403 FORBIDDEN"]
-    K -- yes --> O{"the caller's own account?"}
-    O -- yes --> OK["allowed"]
-    O -- no --> H{"does the account hold a staff role?"}
-    H -- no --> OK
+    K -- yes --> H{"does the account hold a staff role?"}
+    H -- no --> OK["allowed"]
     H -- yes --> R{"holds assign:Role?"}
     R -- yes --> OK
     R -- no --> OUT["403 ROLE_MANAGEMENT_REQUIRED<br/><i>audited as security.forbidden</i>"]

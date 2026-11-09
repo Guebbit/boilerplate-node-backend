@@ -49,17 +49,18 @@ export const staffHoldersAmong = (userIds: readonly string[]): Promise<Set<strin
 
 /**
  * The protection rule itself, as a pure question: may a caller change this account? Yes when the
- * account holds no staff role, or is the caller's own, or the caller holds `assign:Role`. The one
+ * account holds no staff role, or the caller holds `assign:Role`. The caller's own account is not
+ * a case: a key shares its minter's id, so "own" would let a key act on its minter. The one
  * place the rule is written: {@link canChangeAccount} asks it after a lookup, and `users` asks it
  * of a whole page of rows after one batched lookup.
  *
- * @param caller - who is asking: their id and whether they hold `assign:Role`
+ * @param caller - who is asking: whether they hold `assign:Role`
  * @param account - the account in question: its id and whether it holds a staff role
  */
 export const mayChangeAccount = (
-    caller: { id: string | null | undefined; holdsAssignRole: boolean },
-    account: { id: string; holdsStaffRole: boolean }
-): boolean => !account.holdsStaffRole || caller.id === account.id || caller.holdsAssignRole;
+    caller: { holdsAssignRole: boolean },
+    account: { holdsStaffRole: boolean }
+): boolean => !account.holdsStaffRole || caller.holdsAssignRole;
 
 /**
  * May this caller change the account `accountId`? An account that holds a staff role may only be
@@ -69,8 +70,10 @@ export const mayChangeAccount = (
  * Answers yes, without a lookup, for:
  *
  *   - the system actor — a sweep or the reaper acts for nobody;
- *   - the caller's OWN account;
  *   - a holder of `assign:Role`.
+ *
+ * The caller's own account is judged like any other: a staff member without `assign:Role` does
+ * not change their own, and a key never changes its minter's.
  *
  * The caller is required, not optional: a missing one would have to answer yes or no, and a "yes"
  * by convention is a protection that fails open. A path with no request behind it (self-erasure)
@@ -80,16 +83,13 @@ export const mayChangeAccount = (
  * @param accountId - the account about to be changed
  */
 export const canChangeAccount = (context: CallerContext, accountId: string): Promise<boolean> => {
-    const caller = {
-        id: context.caller.id,
-        holdsAssignRole: holds(context.caller, 'assign', 'Role')
-    };
-    // The worst case, a staff account, already passes for self and for `assign:Role`: no lookup.
-    if (context.caller.system || mayChangeAccount(caller, { id: accountId, holdsStaffRole: true }))
+    const caller = { holdsAssignRole: holds(context.caller, 'assign', 'Role') };
+    // The worst case, a staff account, already passes for a holder of `assign:Role`: no lookup.
+    if (context.caller.system || mayChangeAccount(caller, { holdsStaffRole: true }))
         return Promise.resolve(true);
 
     return holdsStaffRole(accountId).then((staff) =>
-        mayChangeAccount(caller, { id: accountId, holdsStaffRole: staff })
+        mayChangeAccount(caller, { holdsStaffRole: staff })
     );
 };
 
