@@ -26,10 +26,10 @@ export const clearDeliveredCode = (entry: DeliveredCodeState): void => {
     for (const field of DELIVERED_CODE_FIELDS) entry[field] = undefined;
 };
 /**
- * Set an account's password — `account/services/password.ts`'s `passwordChange` is the only
- * caller, itself the funnel both a password reset and an authenticated password change go
- * through. Takes the already-loaded, already-validated account: `passwordChange` refuses a weak
- * or breached password well before this point, so nothing here re-checks either.
+ * Set an account's password — `account/services/password.ts`'s `writePassword` is the only
+ * caller, the final write both a password reset and an authenticated password change go through.
+ * Takes the already-loaded, already-validated account: each door refuses a weak or breached
+ * password with its own breach check well before this point, so nothing here re-checks either.
  *
  * @param user - the account, carrying its credential fields
  * @param password - the new password, already accepted

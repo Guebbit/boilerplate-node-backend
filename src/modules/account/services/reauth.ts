@@ -210,7 +210,7 @@ const proveOtp = (
 /**
  * Re-authenticate an already-signed-in caller — the verification half of `POST /account/reauth`.
  * Proves the method, then the second-factor code when one was sent, and audits the attempt; re-minting the session (a fresh `auth_time`) is the
- * CONTROLLER's job, the same split `passwordChange` keeps from `postPasswordChange`.
+ * CONTROLLER's job, the same split `passwordChangeWithCurrent` keeps from `postPasswordChange`.
  *
  * Not `login`'s path: its dummy-compare exists to stop an ANONYMOUS caller telling "no such
  *               account" from "wrong password" by timing. The access token already names who asks.

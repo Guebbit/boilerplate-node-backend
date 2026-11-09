@@ -245,9 +245,9 @@ export const resendPendingEmailVerificationFor = (
  * and there is no role to promote.
  *
  * Mutates `verifiedAt` on the document, unpersisted — the caller's own `save` covers it.
- * `password-reset.ts#completePasswordReset` is the one caller, passing this as `passwordChange`'s
- * `beforeSave`, so a verification lands in the same write as the new password — a spent reset
- * token proves the same mailbox a verify token does. `completeEmailVerification`/
+ * `password-reset.ts#markResetCompleted` is the one caller, and the reset passes that to
+ * `writePassword` as `beforeSave`, so a verification lands in the same write as the new password —
+ * a spent reset token proves the same mailbox a verify token does. `completeEmailVerification`/
  * `completeEmailChange` below do NOT call this: they call the equivalent `userService` operation
  * directly, which mutates and persists in one step.
  *
@@ -296,7 +296,7 @@ export const completeEmailVerification = (
  * {@link completeEmailVerification}.
  *
  * The revoke is deliberate: an email change is the stronger takeover primitive of the two, and
- * this is the same treatment `passwordChange` already gives a changed password
+ * this is the same treatment `writePassword` already gives a changed password
  * (docs/modules/account.md#proving-an-address). The epoch moves in the swap's own save, so no
  * failing second write can leave the old sessions live; only the refresh-token cleanup is separate.
  * @param user - the token's holder, loaded with credentials (`pendingEmail`)
