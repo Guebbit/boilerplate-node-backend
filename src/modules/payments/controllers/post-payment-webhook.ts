@@ -10,7 +10,7 @@
  * 2. **The RAW body**, never a re-serialised object: a signature covers exact bytes.
  * 3. **Applied once**, behind the service: every effect is a conditional write, so a redelivered
  *    event settles nothing twice. A provider retries until it gets a 2xx.
- * 4. **200 for anything authentic**, including events this module ignores. A non-2xx tells the
+ * 4. **204 for anything authentic**, including events this module ignores. A non-2xx tells the
  *    provider the delivery failed, and it comes back harder. Only an unverifiable body is a 400,
  *    because that is not a delivery — and a genuine fault is left to become a 500, since that IS
  *    a retry worth having.

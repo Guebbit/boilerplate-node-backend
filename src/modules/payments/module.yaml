@@ -13,9 +13,10 @@ rateLimits:
         defaultMax: 60
         windowMs: shared
         bounds:
-            Deliveries to `POST /payments/webhook/{provider}`, spent by success — the traffic being
-            bounded.
-        audited: true
+            Refused deliveries to `POST /payments/webhook/{provider}`, per address block; a verified
+            one is refunded. Not audited because a forged flood would bury the trail; the refusal
+            metric and the signature-failure alert still fire.
+        audited: false
     # Both payment-velocity budgets (and the intent one) are fixed at one hour: the duration is part
     # of what the budget means, not an artefact of the shared browsing window.
     paymentsConfirmAttempts:
