@@ -4,10 +4,8 @@
  */
 
 import type { ClientSession } from 'mongoose';
-import { t } from '@infrastructure/i18n';
 import {
     generateSuccess,
-    generateReject,
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
@@ -18,7 +16,6 @@ import { rearmPrecondition } from '@infrastructure/persistence/versioning';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { CallerContext, UpdateUserByIdRequest, WithServerImage } from '@types';
-import { accessService } from '@modules/access';
 import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import { phoneAad, type UserDocument } from '../model';
 import { userRepository } from '../repository';
@@ -26,6 +23,7 @@ import { usersAuditActions } from '../audit';
 import { USER_PROFILE_CHANGED, type UserChangedField } from '../events';
 import { enqueueIfPending } from './image';
 import { userAuditChanges } from './audit-changes';
+import { withClearedAccount } from './cleared-account';
 
 /**
  * Update an existing user document. Returns a result envelope instead of throwing, the protocol
@@ -234,12 +232,4 @@ export const updateById = (
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
     // The plain finder: an admin edit touches no credential, and the pending address is the
     // owner's to read (`GET /account`), so it stays unloaded and out of the answer.
-    userRepository.findById(id).then((user) => {
-        // Returned, not thrown: a thrown miss is indistinguishable from a genuine database error
-        // at the `.catch()` that has to tell them apart.
-        if (!user) return generateReject(404, [t('users.not-found')]);
-
-        return accessService
-            .roleProtectedRefusal(context, id)
-            .then((refusal) => refusal ?? applyUpdate(user, data, context));
-    });
+    withClearedAccount(id, context, (user) => applyUpdate(user, data, context));

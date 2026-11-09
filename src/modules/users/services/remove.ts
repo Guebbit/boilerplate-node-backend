@@ -19,13 +19,13 @@ import type { CallerContext } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import type { AfterErase } from '@kernel/registry';
 import { ERROR_CODES } from '@api/error-codes';
-import { accessService } from '@modules/access';
 import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
 import { personalDataErasers } from '../erasure-registry';
 import { usersAuditActions } from '../audit';
 import { USER_DELETION_CANCELED, USER_ERASED } from '../events';
 import { markSessionsEnded } from './credentials';
+import { withClearedAccount } from './cleared-account';
 import { personalDataSubjectOf } from './personal-data-subject';
 
 /**
@@ -228,45 +228,34 @@ export const restoreById = (
     id: string,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    userRepository.findById(id).then((user) => {
-        if (!user) return generateReject(404, [t('users.not-found')]);
+    withClearedAccount(id, context, (user) => {
+        if (!user.deletedAt)
+            return generateReject(409, [
+                { code: ERROR_CODES.USER_NOT_DELETED, message: t('users.not-deleted') }
+            ]);
+        if (user.deletedBy === 'owner') return restoreScheduled(user, context);
 
-        return accessService.roleProtectedRefusal(context, id).then((refusal) => {
-            if (refusal) return refusal;
-            if (!user.deletedAt)
-                return generateReject(409, [
-                    { code: ERROR_CODES.USER_NOT_DELETED, message: t('users.not-deleted') }
-                ]);
-            if (user.deletedBy === 'owner') return restoreScheduled(user, context);
-
-            user.deletedAt = undefined;
-            user.deletedBy = undefined;
-            return userRepository.save(user).then((saved) => {
-                recordAudit(context, {
-                    action: usersAuditActions.ADMIN_USER_RESTORED,
-                    outcome: 'success',
-                    targetType: 'user',
-                    targetId: id
-                });
-                return generateSuccess(saved, 200);
+        user.deletedAt = undefined;
+        user.deletedBy = undefined;
+        return userRepository.save(user).then((saved) => {
+            recordAudit(context, {
+                action: usersAuditActions.ADMIN_USER_RESTORED,
+                outcome: 'success',
+                targetType: 'user',
+                targetId: id
             });
+            return generateSuccess(saved, 200);
         });
     });
 
 /**
  * Remove a user by ID (soft or hard delete). Fetches the document, refuses a staff account the
  * caller may not manage, then delegates to remove().
- * @param context - the caller: forwarded to {@link remove} for the audit row, and judged by {@link roleProtectedRefusal}
+ * @param context - the caller: forwarded to {@link remove} for the audit row, and judged by {@link withClearedAccount}
  */
 export const removeById = (
     id: string,
     hardDelete = false,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseSuccess<undefined> | ResponseReject> =>
-    userRepository.findById(id).then((user) => {
-        if (!user) return generateReject(404, [t('users.not-found')]);
-
-        return accessService
-            .roleProtectedRefusal(context, id)
-            .then((refusal) => refusal ?? remove(user, hardDelete, context));
-    });
+    withClearedAccount(id, context, (user) => remove(user, hardDelete, context));

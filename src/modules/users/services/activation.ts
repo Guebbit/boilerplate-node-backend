@@ -21,34 +21,13 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { recordAudit } from '@infrastructure/observability/audit';
 import { ERROR_CODES } from '@api/error-codes';
 import type { CallerContext } from '@types';
-import { accessService } from '@modules/access';
 import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
 import { usersAnalyticsEvents } from '../analytics';
 import { usersAuditActions } from '../audit';
 import { USER_DEACTIVATED } from '../events';
 import { markSessionsEnded } from './credentials';
-
-/**
- * Load the account and clear what any switch must clear: it exists, and the caller may change it.
- *
- * @param id - the account
- * @param context - the caller
- * @param next - what to do with the loaded account once cleared
- */
-const withClearedAccount = (
-    id: string,
-    context: CallerContext,
-    next: (user: UserDocument) => Promise<ResponseSuccess<UserDocument> | ResponseReject>
-): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    userRepository.findById(id).then((user) => {
-        // Returned, not thrown: a thrown miss is indistinguishable from a database error.
-        if (!user) return generateReject(404, [t('users.not-found')]);
-
-        return accessService
-            .roleProtectedRefusal(context, id)
-            .then((refusal) => refusal ?? next(user));
-    });
+import { withClearedAccount } from './cleared-account';
 
 /**
  * Let a deactivated account sign in again. Sessions it held stay ended: its owner logs in anew.
