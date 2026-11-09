@@ -135,4 +135,23 @@ describe('GET /account abilities', () => {
         expect(first.headers.etag).toMatch(/^"\d+\.[\w-]+"$/);
         expect(write.status).toBe(200);
     });
+
+    it('refuses a PATCH /account whose tag was read before a role change: the role moves the edit part', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const { bearer: adminBearer } = await authenticateAs('admin');
+        const before = await api().get('/account').set('Authorization', bearer).expect(200);
+        await api()
+            .patch(`/users/${String(user._id)}`)
+            .set('Authorization', adminBearer)
+            .send({ role: 'support' })
+            .expect(200);
+
+        const write = await api()
+            .patch('/account')
+            .set('Authorization', bearer)
+            .set('If-Match', before.headers.etag)
+            .send({ username: 'renamed-after-role-change' });
+
+        expect(write.status).toBe(412);
+    });
 });
