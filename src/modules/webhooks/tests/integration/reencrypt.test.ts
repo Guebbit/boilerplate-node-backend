@@ -7,6 +7,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { callerAs } from '@tests/callers';
+import { asSuccess } from '@tests/response';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { createUser } from '@modules/users/tests/factories';
 import { keyVersionOf } from '@infrastructure/security/versioned-secret';
@@ -23,9 +24,12 @@ const ROTATED_WEBHOOK_KEY = 'v2:new-webhook-key-material,v1:test-webhook-secret-
 describe('webhooks reencrypt', () => {
     it('moves a ring secret to v2 and it still decrypts under its entry id', async () => {
         await createUser();
-        await createSubscription(
-            { url: 'https://example.com/hook', eventTypes: ['*'] },
-            { caller: callerAs('manager'), analyticsConsent: false }
+        // A `*` stream needs every event's read rule, so only an admin gets one.
+        asSuccess(
+            await createSubscription(
+                { url: 'https://example.com/hook', eventTypes: ['*'] },
+                { caller: callerAs('admin'), analyticsConsent: false }
+            )
         );
 
         await withEnvironmentOverrides(
