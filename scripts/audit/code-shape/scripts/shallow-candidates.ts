@@ -53,7 +53,7 @@ export interface FunctionFacts {
     forwardsTo?: string;
     /** Optional parameters no call site supplies — reported only when every use is a direct call. */
     optionalNeverPassed: string[];
-    /** Exported from a file a module barrel re-exports. */
+    /** Exported from a file a module barrel re-exports whole, or re-exported by this name. */
     published: boolean;
 }
 
@@ -67,7 +67,7 @@ export interface FileFacts {
     exports: number;
     /** Files that import or re-export it, dynamic `import()` included. */
     importedBy: string[];
-    /** Re-exported, directly or through another file, by a module barrel. */
+    /** Re-exported whole, directly or through another file, by a module barrel; a name taken alone does not count. */
     published: boolean;
 }
 
@@ -326,6 +326,48 @@ const moduleFileOf = (
 };
 
 /**
+ * What one `export … from` hands on: everything (`export *`, `export * as ns`), or only the
+ * named exports (`export { a, b as c } from`), by their name in the source file.
+ */
+type ReExported = 'all' | Set<string>;
+
+/**
+ * Re-export edges: file → the file it re-exports from → what it takes from it.
+ */
+type ReExportEdges = Map<string, Map<string, ReExported>>;
+
+/**
+ * The names an `export … from` declaration takes from its source file.
+ *
+ * @param declaration - the export declaration
+ * @returns `'all'` for `export *` and `export * as ns`, else the source-side names
+ */
+const reExportedBy = (declaration: ts.ExportDeclaration): ReExported => {
+    const clause = declaration.exportClause;
+    if (!clause || ts.isNamespaceExport(clause)) return 'all';
+    // `propertyName` is the source-side name in `export { source as alias }`.
+    return new Set(clause.elements.map((element) => (element.propertyName ?? element.name).text));
+};
+
+/**
+ * Adds an edge, merging with an earlier one between the same two files.
+ *
+ * @param edges - the edges so far
+ * @param from - the re-exporting file
+ * @param to - the file re-exported from
+ * @param taken - what the declaration takes
+ */
+const linkReExport = (edges: ReExportEdges, from: string, to: string, taken: ReExported): void => {
+    const targets = edges.get(from) ?? new Map<string, ReExported>();
+    const before = targets.get(to);
+    targets.set(
+        to,
+        before === 'all' || taken === 'all' ? 'all' : new Set([...(before ?? []), ...taken])
+    );
+    edges.set(from, targets);
+};
+
+/**
  * Who imports each file, and which files each one re-exports.
  *
  * @param program - the program
@@ -335,10 +377,10 @@ const moduleFileOf = (
 const collectImports = (
     program: ts.Program,
     relativeOf: (fileName: string) => string
-): { importers: Map<string, Set<string>>; reExports: Map<string, Set<string>> } => {
+): { importers: Map<string, Set<string>>; reExports: ReExportEdges } => {
     const checker = program.getTypeChecker();
     const importers = new Map<string, Set<string>>();
-    const reExports = new Map<string, Set<string>>();
+    const reExports: ReExportEdges = new Map();
     const link = (edges: Map<string, Set<string>>, from: string, to: string): void => {
         edges.set(from, (edges.get(from) ?? new Set<string>()).add(to));
     };
@@ -349,7 +391,8 @@ const collectImports = (
             if (target) {
                 const imported = relativeOf(target.fileName);
                 link(importers, imported, file);
-                if (ts.isExportDeclaration(node.parent)) link(reExports, file, imported);
+                if (ts.isExportDeclaration(node.parent))
+                    linkReExport(reExports, file, imported, reExportedBy(node.parent));
             }
             ts.forEachChild(node, visit);
         };
@@ -359,23 +402,52 @@ const collectImports = (
 };
 
 /**
- * Every file a module barrel re-exports, directly or through an intermediate `index.ts`.
- *
- * @param reExports - re-export edges, file → files it re-exports
- * @returns the published files
+ * What module barrels publish: files re-exported whole, and the names taken from the others.
  */
-const publishedFiles = (reExports: Map<string, Set<string>>): Set<string> => {
-    const published = new Set<string>();
+interface Published {
+    /** Files a barrel re-exports with `export *`, directly or through an intermediate `index.ts`. */
+    whole: Set<string>;
+    /** File → the names a barrel re-exports from it by name, for files not published whole. */
+    named: Map<string, Set<string>>;
+}
+
+/**
+ * Follows re-exports from every module barrel. A file reached only by `export { a } from` is
+ * published for `a` alone, and the walk does not continue through it: the rest of that file
+ * is still a sibling-invisible file, which the alternative (widening to the whole file) would
+ * wrongly call published.
+ *
+ * @param reExports - re-export edges
+ * @returns the published files and names
+ */
+const publishedFiles = (reExports: ReExportEdges): Published => {
+    const whole = new Set<string>();
+    const named = new Map<string, Set<string>>();
     const queue = [...reExports.keys()].filter((file) => BARREL.test(file));
     for (let file = queue.shift(); file !== undefined; file = queue.shift()) {
-        for (const next of reExports.get(file) ?? []) {
-            if (published.has(next)) continue;
-            published.add(next);
-            queue.push(next);
+        for (const [next, taken] of reExports.get(file) ?? []) {
+            if (taken !== 'all') {
+                named.set(next, new Set([...(named.get(next) ?? []), ...taken]));
+            } else if (!whole.has(next)) {
+                whole.add(next);
+                queue.push(next);
+            }
         }
     }
-    return published;
+    for (const file of whole) named.delete(file);
+    return { whole, named };
 };
+
+/**
+ * Whether a barrel publishes one exported name of a file.
+ *
+ * @param published - what the barrels publish
+ * @param file - the repo-relative file
+ * @param name - the declaration's name
+ * @returns `true` when the file is published whole, or the name is re-exported by name
+ */
+const publishesName = (published: Published, file: string, name: string): boolean =>
+    published.whole.has(file) || (published.named.get(file)?.has(name) ?? false);
 
 /**
  * Whether a declaration is exported — on itself, or on the `const` statement holding it.
@@ -393,7 +465,7 @@ const isExported = (node: ts.Declaration): boolean =>
  * @param declared - the function
  * @param use - how it is used, `undefined` when nothing uses it
  * @param file - its repo-relative file
- * @param publishedFile - whether a barrel re-exports its file
+ * @param publishedFile - whether a barrel publishes this function by name or with its file
  * @returns its facts
  */
 const factsOf = (
@@ -461,7 +533,14 @@ export const findShallowCandidates = (
             const declared = namedFunctionOf(node);
             const symbol = declared && checker.getSymbolAtLocation(declared.name);
             if (declared && symbol)
-                functions.push(factsOf(declared, usage.get(symbol), file, published.has(file)));
+                functions.push(
+                    factsOf(
+                        declared,
+                        usage.get(symbol),
+                        file,
+                        publishesName(published, file, declared.name.text)
+                    )
+                );
             ts.forEachChild(node, visit);
         };
         visit(sourceFile);
@@ -470,7 +549,7 @@ export const findShallowCandidates = (
             file,
             exports: moduleSymbol ? checker.getExportsOfModule(moduleSymbol).length : 0,
             importedBy: [...(importers.get(file) ?? [])].toSorted(),
-            published: published.has(file)
+            published: published.whole.has(file)
         });
     }
 

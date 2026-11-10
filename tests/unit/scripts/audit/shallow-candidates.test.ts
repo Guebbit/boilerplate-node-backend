@@ -254,4 +254,43 @@ describe('published', () => {
                 ?.published
         ).toBe(true);
     });
+
+    it('publishes a named re-export for that name only, not for the whole file', () => {
+        const report = analyse({
+            'src/modules/shop/index.ts': "export { listed } from './rules/config';",
+            'src/modules/shop/rules/config.ts':
+                'export const listed = (n: number) => n + 1;\nexport const hidden = (n: number) => n + 2;',
+            'src/use.ts':
+                "import { listed } from './modules/shop';\nimport { hidden } from './modules/shop/rules/config';\nexport const a = listed(1);\nexport const b = hidden(1);"
+        });
+
+        expect(
+            Object.fromEntries(report.smallAndRare.map((fn) => [fn.name, fn.published]))
+        ).toEqual({ hidden: false, listed: true });
+        expect(
+            report.lazyFiles.find((entry) => entry.file === 'src/modules/shop/rules/config.ts')
+                ?.published
+        ).toBe(false);
+    });
+
+    it('follows an alias back to the name in the source file', () => {
+        const report = analyse({
+            'src/modules/shop/index.ts': "export { listed as shown } from './rules/config';",
+            'src/modules/shop/rules/config.ts':
+                'export const listed = (n: number) => n + 1;\nexport const used = listed(1);'
+        });
+
+        expect(report.smallAndRare.find((fn) => fn.name === 'listed')?.published).toBe(true);
+    });
+
+    it('publishes the whole file when it is also re-exported with export *', () => {
+        const report = analyse({
+            'src/modules/shop/index.ts':
+                "export { listed } from './rules/config';\nexport * from './rules/config';",
+            'src/modules/shop/rules/config.ts':
+                'export const listed = (n: number) => n + 1;\nexport const other = (n: number) => n + 2;\nexport const x = [listed(1), other(1)];'
+        });
+
+        expect(report.smallAndRare.map((fn) => fn.published)).toEqual([true, true]);
+    });
 });
