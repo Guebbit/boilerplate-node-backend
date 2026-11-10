@@ -11,8 +11,7 @@
 
 import type { SitemapItemLoose } from 'sitemap';
 import { siteConfig } from '@infrastructure/http/config';
-import { getDefaultLocale } from '@infrastructure/i18n/catalog';
-import { listServedLocales } from '@infrastructure/i18n/served';
+import { getDefaultLocale, listServedLocales } from '@infrastructure/i18n';
 import { productPagePath, productService } from '@modules/products';
 import { STATIC_PAGES, sitemapConfig } from './config';
 

@@ -102,21 +102,26 @@ count — so the reader can repeat it.
 
 ### 3 — the verdicts
 
-| Verdict      | Means                                                                   | Used by |
-| ------------ | ----------------------------------------------------------------------- | ------- |
-| **INLINE**   | Put the body back at its one or two call sites and delete the function. | 1, 2, 4 |
-| **MERGE**    | Move the contents into a named sibling file and delete this one.        | 3       |
-| **UNEXPORT** | Used, but only inside its own file — drop the `export`.                 | 5       |
-| **DELETE**   | Nothing uses it.                                                        | 4, 5    |
-| **FIX**      | knip found a real defect: an unlisted dependency, an unresolved import. | 5       |
-| **EXTRACT**  | Real duplication: name the shared function and where it goes.           | 6       |
-| **KEEP**     | It earns its place. Give the reason code below.                         | all     |
+| Verdict      | Means                                                                                                                 | Used by |
+| ------------ | --------------------------------------------------------------------------------------------------------------------- | ------- |
+| **INLINE**   | Put the body back at its one or two call sites and delete the function.                                               | 1, 2, 4 |
+| **MERGE**    | Move the contents into a named sibling file and delete this one.                                                      | 3       |
+| **UNEXPORT** | Used, but only inside its own file — drop the `export`. Runtime values; a type only when nothing exported reaches it. | 5       |
+| **DELETE**   | Nothing uses it.                                                                                                      | 4, 5    |
+| **FIX**      | knip found a real defect: an unlisted dependency, an unresolved import.                                               | 5       |
+| **EXTRACT**  | Real duplication: name the shared function and where it goes.                                                         | 6       |
+| **KEEP**     | It earns its place. Give the reason code below.                                                                       | all     |
 
 KEEP reason codes — one per row, never "seems fine":
 
 - `domain-name` — the name states a business rule the inlined expression would hide.
 - `published` — barrel surface (`published: true`), unused on purpose: `CLAUDE.md` § Module
-  barrels. Never INLINE or DELETE one.
+  barrels. Never INLINE or DELETE one. Published means reachable from
+  `src/modules/<name>/index.ts` through re-exports; any other `index.ts` is an internal barrel and
+  its unused re-export is DELETE.
+- `shape` — a type an exported declaration reaches (field, parameter, return, base, generic,
+  `typeof` member), or a re-exported type in the signature of another re-export that stays. Never
+  UNEXPORT one while that holds.
 - `boundary` — a port, an adapter, or the one wrapper around a third-party call.
 - `seam` — a test replaces it (`jest.mock`, an injected dependency) — cite the test.
 - `slot` — a self-registering extension point: `register*`, a registry entry.
