@@ -7,6 +7,7 @@
  * that question is answered by each module's own `module.yaml`, enforced by
  * `.dependency-cruiser.cjs`, not by anything `registerModules` does at boot.
  */
+import { z } from 'zod';
 import {
     registerModules,
     resolveTranslatables,
@@ -16,6 +17,10 @@ import {
     resolveBrowserEvents,
     type AppModule
 } from '@kernel/registry';
+
+/** One locale's rules for the two stub entities: a single optional string each. */
+const titleRules = z.strictObject({ title: z.string().optional() });
+const bodyRules = z.strictObject({ body: z.string().optional() });
 
 it('calls subscribe on every module that declares one', () => {
     const first = jest.fn();
@@ -60,7 +65,7 @@ describe('resolveTranslatables', () => {
                 translatables: {
                     product: {
                         collection: 'products',
-                        fields: ['title'],
+                        fieldRules: titleRules,
                         cacheTag: 'products',
                         revisionOf: jest.fn(),
                         writeDerived: writeProduct,
@@ -74,7 +79,7 @@ describe('resolveTranslatables', () => {
                 translatables: {
                     page: {
                         collection: 'pages',
-                        fields: ['body'],
+                        fieldRules: bodyRules,
                         cacheTag: 'pages',
                         revisionOf: jest.fn(),
                         writeDerived: writePage,
@@ -88,7 +93,7 @@ describe('resolveTranslatables', () => {
         expect(resolveTranslatables(modules)).toEqual({
             product: {
                 collection: 'products',
-                fields: ['title'],
+                fieldRules: titleRules,
                 cacheTag: 'products',
                 revisionOf: expect.any(Function),
                 writeDerived: writeProduct,
@@ -96,7 +101,7 @@ describe('resolveTranslatables', () => {
             },
             page: {
                 collection: 'pages',
-                fields: ['body'],
+                fieldRules: bodyRules,
                 cacheTag: 'pages',
                 revisionOf: expect.any(Function),
                 writeDerived: writePage,
@@ -112,7 +117,7 @@ describe('resolveTranslatables', () => {
     it('refuses to boot when two modules declare the same entityType, instead of keeping one', () => {
         const target = {
             collection: 'products',
-            fields: ['title'],
+            fieldRules: titleRules,
             cacheTag: 'products',
             revisionOf: jest.fn(),
             writeDerived: jest.fn(),

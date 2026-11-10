@@ -37,7 +37,7 @@ const DOCUMENT_TEMPLATE = path.join(
 export const pdfEInvoicingProvider: EInvoicingProvider = {
     name: 'pdf',
 
-    issue: (document) =>
+    render: (document) =>
         ejs
             // `root: process.cwd()` — the template's `/shared/templates/layouts/...` include is
             // root-relative, so this resolves correctly regardless of this module's own depth

@@ -43,6 +43,8 @@ x-personal-data:
 
 paths:
     /orders:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         get:
             x-cache: private-no-cache
             tags: [Orders]
@@ -152,7 +154,7 @@ paths:
                 '409': [IDEMPOTENCY_IN_FLIGHT, ORDER_INSUFFICIENT_STOCK, ORDER_PRODUCT_UNAVAILABLE]
                 '422': [IDEMPOTENCY_KEY_MISMATCH, ORDER_LINE_LIMIT_EXCEEDED]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['create:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
@@ -203,7 +205,7 @@ paths:
             x-error-codes:
                 '422': [ORDER_EXPORT_TOO_LARGE]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['export:Order']
             parameters:
                 - name: sort
                   in: query
@@ -339,7 +341,7 @@ paths:
                 on this body. See `docs/theory/tactical-ddd.md#who-writes-the-status`.
             operationId: replaceOrderById
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -370,7 +372,7 @@ paths:
                 on this body. See `docs/theory/tactical-ddd.md#who-writes-the-status`.
             operationId: updateOrderById
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -402,7 +404,7 @@ paths:
             x-error-codes:
                 '409': [ORDER_HAS_MONEY_HISTORY, ORDER_INVOICED, ORDER_NOT_CANCELED]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['delete:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/HardDeleteParam'
@@ -417,6 +419,8 @@ paths:
     # Undoes a soft delete. A separate verb because DELETE must be safe to repeat (RFC 9110
     # §9.2.2): a retried DELETE never brings a record back.
     /orders/{id}/restore:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Orders]
             summary: Restore order
@@ -425,7 +429,7 @@ paths:
             x-error-codes:
                 '409': [ORDER_NOT_DELETED]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['delete:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -454,7 +458,7 @@ paths:
                 '409': [ORDER_HAS_MONEY_HISTORY, ORDER_INVOICED, ORDER_NOT_CANCELED]
             x-alias-of: deleteOrderById
             security:
-                - bearerAuth: []
+                - bearerAuth: ['delete:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -466,6 +470,8 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
     /orders/{id}/cancel:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Orders]
             summary: Cancel order
@@ -562,7 +568,7 @@ paths:
                 '409': [IDEMPOTENCY_IN_FLIGHT]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
@@ -601,7 +607,7 @@ paths:
                 row with the note's length, never its text. A second call on the same note is a 404.
             operationId: deleteOrderNote
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - name: eventId
@@ -634,7 +640,7 @@ paths:
                 '409': [ORDER_ADDRESS_LOCKED]
                 '422': [ORDER_SHIP_TO_COUNTRY_NOT_SUPPORTED]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -657,6 +663,8 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
     /orders/{id}/status-override:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Orders]
             summary: Force-correct an order's status by hand
@@ -679,7 +687,7 @@ paths:
             x-error-codes:
                 '409': [ORDER_OVERRIDE_AWAITING_STOCK, ORDER_OVERRIDE_NOT_ALLOWED]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['override:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -2711,6 +2719,9 @@ components:
                 updatedAt:
                     type: string
                     format: date-time
+                    description: >-
+                        When staff or the buyer last edited the order or moved its status.
+                        Reports from payments, delivery and returns don't move it.
                 # Unlike a product or a user, an order carries no `active` flag, so this is the
                 # only thing that distinguishes a hidden order from a live one. A non-admin never
                 # sees a record where it is set — `visibleScope` filters them out — so it appears
@@ -2783,6 +2794,15 @@ components:
                     allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     readOnly: true
                     description: ISO-4217 currency code this order was priced in (e.g. EUR).
+                # Frozen from `NODE_TERMS_VERSION` when checkout placed the order, the way `currency`
+                # is. A staff-placed order carries none.
+                termsVersion:
+                    type: string
+                    readOnly: true
+                    description: >-
+                        The Terms version in force when the buyer placed the order at checkout;
+                        absent on staff-placed orders.
+                    example: '2'
                 # Both derived at serialization from the lines' frozen `taxRate` — never stored.
                 # See `src/modules/orders/domain/tax.ts`.
                 netTotal:
@@ -2903,6 +2923,9 @@ components:
                 updatedAt:
                     type: string
                     format: date-time
+                    description: >-
+                        When staff or the buyer last edited the order or moved its status.
+                        Reports from payments, delivery and returns don't move it.
                 # Unlike a product or a user, an order carries no `active` flag, so this is the
                 # only thing that distinguishes a hidden order from a live one. A non-admin never
                 # sees a record where it is set — `visibleScope` filters them out — so it appears

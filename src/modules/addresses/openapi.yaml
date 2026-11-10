@@ -20,7 +20,7 @@ paths:
         get:
             tags: [Account]
             summary: List saved addresses
-            description: The authenticated user's address book. Whenever it is non-empty, exactly one entry carries `default` — the one checkout ships to when no `addressId` is named.
+            description: 'The authenticated user''s address book. Whenever it is non-empty, exactly one entry carries `default` — the one checkout ships to when no `addressId` is named. Unpaged: the book holds at most `NODE_ADDRESS_BOOK_MAX` entries.'
             operationId: listAddresses
             security:
                 - bearerAuth: []

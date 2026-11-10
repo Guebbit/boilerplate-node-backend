@@ -106,7 +106,8 @@ side in [`tactical-ddd.md`](../theory/tactical-ddd.md#action-endpoints-execute-u
 
 A **line** is a part of a per-user parent with no life of its own: a cart line, a saved product, a
 back-in-stock request, an OAuth link, a webhook subscription's secret. It is written through the
-parent, never on a URL of its own.
+parent. It has no read of its own: where a line has a URL, that URL only adds, changes or removes
+the line.
 
 | Parent                    | Line collection         | Add                                  | Change                              | Remove                                            |
 | ------------------------- | ----------------------- | ------------------------------------ | ----------------------------------- | ------------------------------------------------- |
@@ -126,7 +127,7 @@ parent, never on a URL of its own.
 - Names: a line add is `create*` (`add*` for a cart line, which may grow instead), its removal
   `delete*` or `remove*`, its change `update*`.
 
-Why: a 201 says a resource was created at a URL, and a line has none (RFC 9110 §9.3.3 makes the
+Why: a 201 says a resource was created at a URL, and a line has no read of its own to name (RFC 9110 §9.3.3 makes the
 `Location` of a 201 a SHOULD; §9.3.4 makes a PUT that creates a MUST-201). The parent is what the
 client re-renders, so the parent is the answer (§15.3.1: a 200 carries "the result of the
 action"). Medusa v2 (`POST`/`DELETE /store/carts/{id}/line-items[/{line_id}]`), BigCommerce
@@ -137,7 +138,7 @@ all answer the parent.
 ### A child created under its parent
 
 A **child** with a life of its own (an id, a status, actions of its own) may be created at
-`POST /parent/{id}/children` with no `GET` on that path (it answers 405 with `Allow: POST`), when:
+`POST /parent/{id}/children` with no `GET` on that path (it answers 405 with `Allow: OPTIONS, POST`), when:
 
 1. each child has its own `GET` by id;
 2. all of a parent's children come back from one **named read**;
@@ -276,8 +277,9 @@ changes — Shopify's `PUT …/addresses/{id}/default.json` is the same shape. A
 **A PUT never creates.** A PUT on an id that does not exist is a 404 (a PUT that creates MUST
 answer 201, RFC 9110 §9.3.4, and nothing here has a URL the client may name).
 
-**Offer a PUT only when the body can be the whole resource.** A route that sets two fields of a
-bigger record is a PATCH alone (`PATCH /users/{id}`), never a PUT that clears the rest.
+**Offer a PUT only when the body can be the whole resource.** A route that changes part of a
+bigger record is a PATCH alone (`PATCH /delivery/shipments/{id}` changes only the tracking code),
+never a PUT that clears the rest.
 
 **A server may transform.** RFC 9110 lets the stored state differ from the body. No route does
 today: the one that did, an email held as `pendingEmail` until proven, is its own door now
@@ -312,13 +314,17 @@ The JSON body parser handles only the types it is told to, so a body in any othe
 flowchart LR
     R["write request<br/>with a body"] --> G{"type declared for<br/>this operation?"}
     G -->|"yes"| P["parse, validate, run"]
-    G -->|"no"| E["415 — details.accepted lists the types"]
+    G -->|"no"| E["415 — details.accepted, Accept<br/>and (PATCH) Accept-Patch list the types"]
     N["no body at all"] --> P
 ```
 
 The guard is `requireDeclaredContentType`, built from `api/request-content-types.ts`, which
 `npm run gen:api` derives from the contract's own `requestBody` media types. A request with no
 bytes is not judged: a missing required body is the schema's own 422.
+
+The 415 also sends `Accept` with the declared types, and `Accept-Patch` (the same list) on a
+`PATCH` (RFC 9110 §12.5.1, RFC 5789 §2.2). An operation with no declared body sends neither. The
+`OPTIONS` answer reads the same row (`declaredOperation`), so the two lists never differ.
 
 Any write (`POST`, `PUT`, `PATCH`, `DELETE`) that declares no body is listed with no types at all
 (`types: []`), and the guard refuses ANY body on it, `{}` included, `details.accepted` empty. An
@@ -332,10 +338,12 @@ in the query or the `/hard` path and a body is refused instead of ignored.
 
 A path the contract declares, asked with a method it does not give it, answers **405** with an
 `Allow` header (RFC 9110 §15.5.6) — never the catch-all's 404. `DELETE /tasks/{id}` is fine,
-`PATCH /tasks/{id}` is a 405 naming `DELETE, GET, HEAD`: a task's `status` is read-only and moves only through its doors.
+`PATCH /tasks/{id}` is a 405 naming `DELETE, GET, HEAD, OPTIONS`: a task's `status` is read-only and moves only through its doors.
 
-- **`Allow` is sorted**, with HEAD beside GET. `OPTIONS` is never judged: the CORS layer answers
-  a preflight before any route runs.
+- **`Allow` is sorted**, with HEAD beside GET and `OPTIONS` on every path: every served path
+  answers it, and a 405 must list what the resource supports (RFC 9110 §15.5.6). The 405 and the
+  `OPTIONS` answer (below) take it from one function, so they never disagree. The guard never
+  judges `OPTIONS` itself: that answer runs before any router.
 - **A trailing slash is the same path.** `/things/` reads as `/things`.
 - **A literal path wins over a templated one.** `DELETE /products/facets` would otherwise
   read `categories` as the `{id}` of `/products/{id}` and answer 404, so the guard runs a second
@@ -345,6 +353,27 @@ A path the contract declares, asked with a method it does not give it, answers *
 - **Not declared per operation.** The 405 belongs to a request that matched no operation, so no
   operation's `responses` could carry it; its code, `METHOD_NOT_ALLOWED`, is in the contract's
   `x-error-codes`.
+
+## `OPTIONS` says what a path accepts
+
+`OPTIONS` asks a path what it can do (RFC 9110 §9.3.7; RFC 5789 §3.1 for `Accept-Patch`). `cors`
+runs with `preflightContinue: true`, so ONE handler (`answerOptions`, mounted right after it in
+`src/app/security.ts`) answers every `OPTIONS`, whatever the Origin.
+
+| Request | Answer |
+| --- | --- |
+| a path of a served module | 204 + `Allow`; `Accept-Patch` only when `Allow` has `PATCH` |
+| `OPTIONS *`, or a preflight (`Access-Control-Request-Method`) on any path | 204 |
+| a plain `OPTIONS` on a path no served module owns | the 404 problem |
+
+- **No `Content-Length` on the 204** (RFC 9110 §8.6).
+- **Same `Allow` for an allowed, a refused and an absent Origin.** A refused Origin gets no
+  `Access-Control-*` headers, so the browser still fails the call.
+- **`Allow` lists `OPTIONS`**, the same as the 405.
+- **A literal path wins**: `/products/facets` answers `GET, HEAD, OPTIONS`, not the `/products/{id}` set.
+- **`Accept-Patch`** is the media types the contract declares for that path's `PATCH` body.
+- **A module this build does not serve** is a 404 for a plain `OPTIONS`, like any other method.
+
 
 The guard is `methodNotAllowed`, built from `api/operation-routes.ts`, which `npm run gen:api`
 derives from the contract's paths and mounted twice in `src/app/routes.ts`: before the routers
@@ -451,8 +480,43 @@ sequenceDiagram
 ### Which resources are versioned
 
 A resource is versioned when its item read hands out an `ETag` **and** its write honours `If-Match`.
+A PUT answer never carries a validator: every PUT here transforms what it stores, and RFC 9110 §9.3.4
+forbids a validator on the answer then. `dropUnownedValidators` (`http/preconditions.ts`) strips it
+whatever the controller or Express set.
 The contract says so with one marker on the path item — `x-versioned: [get, put, patch, delete]` —
 and the bundler adds the header parameter, the 412 and the response header from it.
+
+#### A create, a restore or an action answers the real tag
+
+A write that answers a versioned resource hands back **that resource's tag**, plus
+`Content-Location` naming it (RFC 9110 §8.8.3, §15.3.2, §6.4.2 rule 7: without `Content-Location` a
+POST answer's body is "unidentified", and its tag ambiguous). The next edit then needs no read:
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+    C->>S: POST /users/{id}/assign-role
+    S-->>C: 200 + ETag "5.q81x…" + Content-Location /users/{id}
+    C->>S: PATCH /users/{id} + If-Match "5.q81x…"
+    S-->>C: 200 (not 412)
+```
+
+- **Who:** creates (products, users, examples, orders, cart checkout, webhook subscriptions),
+  restores (products, users, orders) and actions (user activation, role, purchase hold; order cancel,
+  override, process; example publish, archive, unarchive; subscription enable, disable).
+- **How:** the controller calls `answerAsResource(response, row, uri)`: `setEtag` plus
+  `Content-Location`, in the path convention `Location` uses. The body must be what a `GET` on that
+  URI returns right after (§8.7); users share `toUserContract`, products `presentForCaller`.
+- **The hook marks, it does not guess.** `setEtag` marks the response; on any write that is not a
+  PUT, `dropUnownedValidators` removes an `ETag` that nothing marked. That is Express's byte-hash,
+  which no `If-Match` accepts. On a PUT it removes every validator, whoever set it.
+- **Replays:** an idempotent retry replays `ETag` and `Content-Location` and keeps the tag.
+- **Not tagged:** signup and login (nothing to edit yet), a search, a delete. A POST that answers a
+  row nobody can edit later answers no tag.
+- **Contract:** `x-versioned: [post]` on the create's or the action's own path item. The bundler adds
+  `ETag` and `Content-Location` (both required) to its 2xx, and no `If-Match` or 412. The optional
+  app-level `ETag` is left off every write answer.
 
 | Resource | Read that sends `ETag` | Writes that take `If-Match` |
 | --- | --- | --- |
@@ -510,7 +574,10 @@ edit form.
   plugin (`persistence/revision-plugin.ts`) adds the `$inc` beside that stamp — through `save()`,
   `updateOne`, `updateMany` and `findOneAndUpdate`, pipeline updates included. A write that is NOT
   an editor's edit passes `timestamps: false` and so never touches either: the stock mirror, the
-  image digest, a session token. An admin's form is never invalidated by a customer logging in.
+  image digest, a session token, a password change, the reaper's warning, and another module's
+  report on an order (a refund or return word, the stamp that money landed, a shipment's
+  fulfillment summary, a guarantee extension). A status move stays an edit, a full shipment
+  included. An admin's form is never invalidated by a customer logging in.
 - **Where the counter lives.** It is the schema's Mongoose version key (`editRevision`, replacing
   `__v` on every versioned schema). It is not called `revision` because `locales` owns a wire
   field of that name with another meaning. It is stripped from every response and carried beside
@@ -533,7 +600,7 @@ edit form.
 | Header | Result |
 | --- | --- |
 | absent | the write runs unconditionally |
-| `"<tag>"` whose edit part matches the stored version | the write runs; the response carries the **new** `ETag` |
+| `"<tag>"` whose edit part matches the stored version | the write runs; a PATCH's response carries the **new** `ETag`, a PUT's carries none |
 | `"<tag>"` whose edit part is old, or the row is gone | **412** `PRECONDITION_FAILED`, nothing written |
 | several tags, `"a", "b"` | matches if any edit part does |
 | `*` | matches any row that exists |
@@ -570,7 +637,9 @@ edit form.
 ### For a client
 
 1. Keep the `ETag` of the record the form loaded.
-2. Send it back as `If-Match` on the save; take the new `ETag` from the 200.
+2. Send it back as `If-Match` on the save; take the new `ETag` from a PATCH's 200, or from a create's
+   or an action's answer (its `Content-Location` says which resource it is for). After a PUT, re-read
+   with GET: a PUT answer carries no `ETag` or `Last-Modified` (RFC 9110 §9.3.4).
 3. On 412 the record changed under you: re-read it, show the user what is different, resend.
 
 ## Date filters
@@ -593,6 +662,7 @@ A new date filter picks one of the three; a fourth spelling needs a card.
 | `PUT /cart/shipping-method`, `PUT /locales/{locale}/apps/{app}/entries/{entryId}`, `PUT /account/addresses/{id}/default` | no PATCH | one field, or none; a PATCH would say exactly what the PUT says |
 | `POST /payments`, `POST /orders/{id}/payments` | 200 when they refresh or convert the order's one payment row | one payment per order is a database fact |
 | `PUT`/`PATCH /locales/{locale}/apps/{app}/entries` | the app is a path segment; the body is `{ entries: { <key>: text } }`, and under PATCH a `null` deletes its key | a PUT replaces exactly what the GET on the same URI lists; the map is a real merge patch (RFC 7396) |
+| `PATCH /locales/translations/{entityType}/{id}` | an empty `fields` for a locale is a 422 | a locale with no fields is not a translation; deleting one is the locale's own `null` |
 
 ## How it is kept true
 
@@ -600,10 +670,11 @@ A new date filter picks one of the three; a fourth spelling needs a card.
 | --- | --- |
 | `createUpdateController` — [Request Flow](../theory/request-flow.md#put-replaces-patch-merges) | one PUT/PATCH pipeline for every factory-backed resource |
 | `tests/cross-cutting/replace-patch-parity.test.ts` | a PUT and a PATCH schema declaring different fields |
-| `tests/support/response-contract.ts` | a 201 without its `Location`, a status the operation does not document |
+| `tests/support/response-contract.ts` | a 201 without its `Location`, a status the operation does not document, a write answering an `ETag` that is not the API's own or that its operation never declares |
+| `tests/contract/etag-on-every-answer.test.ts` | a create, a restore or an action whose tag its own `If-Match` refuses, a tag on a write with no resource, a replay that lost the tag |
 | `tests/contract/write-methods.test.ts` | an empty string stored, an undeclared type accepted, a `Location` missing or wrong, a 412 the contract does not declare, an `ETag` a versioned 200 forgot |
 | `tests/integration/conditional-writes.test.ts` | a stale `If-Match` that still wrote, two editors on one tag both winning, a translations-only or role-only edit that left the tag alone, a non-edit write that moved it |
 | `tests/integration/persistence/revision.test.ts` | a counter that repeats under two writers, moves for a non-edit, or misses a form of write (`save`, `updateOne`, `updateMany`, `findOneAndUpdate`, a pipeline) |
-| `tests/unit/scripts/contracts/openapi-bundle.test.ts` | an `x-versioned` marker that did not reach the bundled operation |
+| `tests/unit/scripts/contracts/openapi-bundle.test.ts` | an `x-versioned` marker (read, write or `post`) that did not reach the bundled operation |
 | `tests/contract/request-contract.test.ts` | a body the contract refuses being accepted |
 | `tests/fuzz/endpoints.fuzz.test.ts` | a hostile body answered with a 5xx |

@@ -29,7 +29,7 @@ describe('the example manifest', () => {
     });
 
     it('makes the title, and only the title, translatable', () => {
-        expect(module.translatables.example.fields).toEqual(['title']);
+        expect(Object.keys(module.translatables.example.fieldRules.shape)).toEqual(['title']);
         expect(module.translatables.example.collection).toBe('examples');
     });
 

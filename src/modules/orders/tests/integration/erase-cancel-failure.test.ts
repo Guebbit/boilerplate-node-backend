@@ -34,7 +34,7 @@ describe('erasing an account whose unpaid order cannot be canceled', () => {
 
         const result = await eraseAsScheduled(user);
 
-        expect(result.success).toBe(true);
+        expect(result).toBe(true);
         expect(await userRepository.findById(user.id)).toBeNull();
         const reloaded = await readOrder(String(order._id));
         expect(reloaded!.userId).toBeUndefined();

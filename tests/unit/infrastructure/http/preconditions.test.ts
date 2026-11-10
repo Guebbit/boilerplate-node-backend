@@ -5,7 +5,13 @@
  */
 import { asStub } from '@tests/stub';
 import type { Request, Response } from 'express';
-import { preconditionOf, setEtag } from '@infrastructure/http/preconditions';
+import {
+    answerAsResource,
+    dropUnownedValidators,
+    keepEtag,
+    preconditionOf,
+    setEtag
+} from '@infrastructure/http/preconditions';
 
 /** A request carrying this `If-Match` (or none). */
 const requestWith = (ifMatch?: string) =>
@@ -101,5 +107,120 @@ describe('setEtag', () => {
         expect(response.json).toBe(original);
         expect(setHeader).not.toHaveBeenCalled();
         expect(json).toHaveBeenCalledWith({});
+    });
+});
+
+/** A response whose head has not been written yet, plus what the head write forwards to. */
+const headOf = (method = 'POST') => {
+    const written = jest.fn();
+    const removeHeader = jest.fn();
+    const setHeader = jest.fn();
+    const response = asStub<Response>({
+        writeHead: written,
+        removeHeader,
+        setHeader,
+        json: jest.fn(),
+        req: { method, headers: {} }
+    });
+    return { response, written, removeHeader, setHeader, request: asStub<Request>({ method }) };
+};
+
+describe('answerAsResource', () => {
+    it('stamps the real tag and names the resource on a write answer', () => {
+        const { response, setHeader } = headOf('POST');
+
+        answerAsResource(response, { editRevision: 4 }, '/users/u1');
+        response.json({ a: 1 });
+
+        expect(setHeader).toHaveBeenCalledWith('Content-Location', '/users/u1');
+        expect(setHeader).toHaveBeenCalledWith('ETag', expect.stringMatching(/^"4\.[\w-]{16}"$/));
+    });
+
+    it.each(['GET', 'HEAD'])('names no resource on a %s: its own URI is the resource', (method) => {
+        const { response, setHeader } = headOf(method);
+
+        answerAsResource(response, { editRevision: 4 }, '/users/u1');
+
+        expect(setHeader).not.toHaveBeenCalledWith('Content-Location', expect.anything());
+    });
+
+    it('answers a row with no version untagged and without a Content-Location', () => {
+        const { response, setHeader } = headOf('POST');
+
+        answerAsResource(response, { title: 'no counter' }, '/things/t1');
+        response.json({});
+
+        expect(setHeader).not.toHaveBeenCalled();
+    });
+});
+
+describe('dropUnownedValidators', () => {
+    it('strips both validators when a PUT answer writes its head, then writes it', () => {
+        const { request, response, written, removeHeader } = headOf('PUT');
+
+        dropUnownedValidators(request, response, jest.fn());
+        response.writeHead(200);
+
+        expect(removeHeader.mock.calls).toEqual([['ETag'], ['Last-Modified']]);
+        expect(written).toHaveBeenCalledTimes(1);
+        expect(written).toHaveBeenCalledWith(200);
+    });
+
+    it('strips a PUT answer tag even when the API made it', () => {
+        const { request, response, removeHeader } = headOf('PUT');
+
+        dropUnownedValidators(request, response, jest.fn());
+        keepEtag(response);
+        response.writeHead(200);
+
+        expect(removeHeader).toHaveBeenCalledWith('ETag');
+    });
+
+    it.each(['POST', 'PATCH', 'DELETE'])("strips Express's own tag from a %s answer", (method) => {
+        const { request, response, removeHeader } = headOf(method);
+
+        dropUnownedValidators(request, response, jest.fn());
+        response.writeHead(200);
+
+        expect(removeHeader.mock.calls).toEqual([['ETag']]);
+    });
+
+    it.each(['POST', 'PATCH', 'DELETE'])('keeps the tag the API made on a %s answer', (method) => {
+        const { request, response, removeHeader } = headOf(method);
+
+        dropUnownedValidators(request, response, jest.fn());
+        setEtag(response, { editRevision: 2 });
+        response.writeHead(200);
+
+        expect(removeHeader).not.toHaveBeenCalled();
+    });
+
+    it('keeps a tag marked with keepEtag, as an idempotent replay does', () => {
+        const { request, response, removeHeader } = headOf('POST');
+
+        dropUnownedValidators(request, response, jest.fn());
+        keepEtag(response);
+        response.writeHead(201);
+
+        expect(removeHeader).not.toHaveBeenCalled();
+    });
+
+    it.each(['GET', 'HEAD'])('leaves a %s answer alone', (method) => {
+        const { request, response, removeHeader } = headOf(method);
+        const head = response.writeHead;
+
+        dropUnownedValidators(request, response, jest.fn());
+
+        expect(response.writeHead).toBe(head);
+        expect(removeHeader).not.toHaveBeenCalled();
+    });
+
+    it('always continues the chain', () => {
+        const next = jest.fn();
+        const { request, response } = headOf('PUT');
+
+        dropUnownedValidators(request, response, next);
+
+        expect(next).toHaveBeenCalledWith();
     });
 });

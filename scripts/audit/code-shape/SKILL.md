@@ -47,6 +47,21 @@ Output goes to `tmp/reports/audit-<run>/code-shape/<SCOPE>…`. `<run>` and `<SC
 
 ## Steps
 
+### 0 — the previous run (RULES.md rules 4 and 8)
+
+Read the newest older `tmp/reports/audit-*/code-shape/` folder, of any scope. Never move, rename or
+write to it. Carry a KEEP only when all four hold:
+
+- (a) that run's header names a sha on a clean tree;
+- (b) `git diff <prev-sha> -- scripts/audit/code-shape/ knip.config.ts .jscpd.json` is empty;
+- (c) this run's fresh counter row matches the previous one (callers or importers, `published`,
+  lines);
+- (d) `git diff <prev-sha> -- <candidate file>` is empty.
+
+Everything else is re-judged. Report every previous row under RULES.md rule 8, with its five
+statuses. A House ruling overrides a carried verdict: the row is listed as `verdict changed`, why =
+`House ruling CS-n`. Condition (b) makes this automatic for any run after a ruling is added.
+
 ### 1 — run the counters
 
 The tools count; you judge. Never count call sites or importers yourself — a text search misses
@@ -62,7 +77,8 @@ npm run audit:duplicates -- --output $OUT/jscpd                # → $OUT/jscpd/
 ```
 
 knip and jscpd always scan the whole repo. Keep only the entries whose file falls inside the scope;
-for a jscpd clone, keep it when EITHER side does.
+for a jscpd clone, keep it when EITHER side does. jscpd reports absolute paths: strip the repo root
+before matching a clone against the scope.
 
 ### 2 — one reviewer per shape, in parallel
 

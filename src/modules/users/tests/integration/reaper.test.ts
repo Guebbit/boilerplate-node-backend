@@ -207,15 +207,13 @@ describe('who soft-deleted the account', () => {
 });
 
 describe('the reaper’s soft delete refusals', () => {
-    it('refuses an account nobody warned: the warning is what makes the deletion fair', async () => {
+    it('rejects an account nobody warned: the warning is what makes the deletion fair', async () => {
         const unwarned = await createUser({ email: 'unwarned@reaper.test', username: 'unwarned' });
 
-        const result = await accountUserService.softDeleteInactive(
-            unwarned,
-            systemCallerContext('User')
-        );
+        await expect(
+            accountUserService.softDeleteInactive(unwarned, systemCallerContext('User'))
+        ).rejects.toThrow('warned');
 
-        expect(result.success).toBe(false);
         expect(await markerOf(unwarned.id)).toBeUndefined();
         expect(await userModel.findById(unwarned.id).exec()).toMatchObject({
             deletedAt: undefined
@@ -233,7 +231,7 @@ describe('the reaper’s soft delete refusals', () => {
             systemCallerContext('User')
         );
 
-        expect(result.success).toBe(false);
+        expect(result).toBe(false);
         expect(await markerOf(staff.id)).toBeUndefined();
     });
 });
@@ -249,18 +247,18 @@ describe('the reaper’s hard delete', () => {
 
         const result = await accountUserService.eraseInactive(marked!, systemCallerContext('User'));
 
-        expect(result.success).toBe(true);
+        expect(result).toBe(true);
         expect(await userModel.findById(user.id).lean().exec()).toBeNull();
     });
 
-    it('refuses a soft delete somebody else made, and leaves the row', async () => {
+    it('rejects a soft delete somebody else made, and leaves the row', async () => {
         const user = await createUser({ email: 'erase-staff@reaper.test', username: 'erasestaff' });
         await userService.removeById(user.id, false, callerContextAs('admin'));
         const marked = await userModel.findById(user.id).exec();
 
-        const result = await accountUserService.eraseInactive(marked!, systemCallerContext('User'));
-
-        expect(result).toMatchObject({ success: false, status: 409 });
+        await expect(
+            accountUserService.eraseInactive(marked!, systemCallerContext('User'))
+        ).rejects.toThrow('soft-deleted');
         expect(await userModel.findById(user.id).lean().exec()).not.toBeNull();
     });
 });

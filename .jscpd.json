@@ -2,6 +2,7 @@
     "path": ["src", "scripts", "scenarios", "tests/support"],
     "format": ["typescript"],
     "ignore": ["**/*.generated.ts", "src/modules/*/tests/**"],
+    "absolute": true,
     "minTokens": 50,
     "similarity": 0.85,
     "reporters": ["json"]

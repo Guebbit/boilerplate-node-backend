@@ -781,7 +781,7 @@ describe('erasing the account', () => {
 
         const removed = await eraseAsScheduled(stored!);
 
-        expect(removed.success).toBe(true);
+        expect(removed).toBe(true);
         await expect(accountExportRepository.findById(result.data.id)).resolves.toBeNull();
         expect(await readdir(root)).toEqual([]);
     });

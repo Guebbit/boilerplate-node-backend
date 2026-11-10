@@ -10,10 +10,6 @@ x-error-codes:
     USER_ALREADY_INACTIVE: { status: 409, description: 'The account is deactivated already: `POST /users/{id}/deactivate` has nothing to do.' }
     USER_ROLE_ALREADY_ASSIGNED: { status: 409, description: 'The account already holds the role named, so `POST /users/{id}/assign-role` has nothing to do.' }
     USER_ROLE_NOT_ASSIGNED: { status: 409, description: 'The account holds no staff role, so `POST /users/{id}/revoke-role` has nothing to take away.' }
-    USER_NOT_WARNED: { status: 409, description: 'The inactivity reaper tried to delete an account that was never warned first. Raised by the reaper, never by a route.' }
-    USER_STAFF_NOT_REAPABLE: { status: 409, description: 'The inactivity reaper met an account holding a staff role and left it alone. Raised by the reaper, never by a route.' }
-    USER_NOT_REAPER_DELETED: { status: 409, description: 'The reaper may only erase an account it soft-deleted itself. Raised by the reaper, never by a route.' }
-    USER_ERASURE_NOT_DUE: { status: 409, description: 'The account''s erasure was claimed by another run, or is not due yet, so this run did nothing.' }
     USER_PURCHASE_HOLD_ALREADY_SET: { status: 409, description: 'The account already holds a staff purchase hold with this end date and note, so placing it again changes nothing.' }
     USER_PURCHASE_HOLD_NOT_SET: { status: 409, description: 'The account has no purchase hold and no review flag, so there is nothing to lift.' }
 
@@ -33,6 +29,8 @@ x-personal-data:
 paths:
     # --------- Users ---------
     /users:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         get:
             x-cache: private-no-cache
             tags: [Users]
@@ -40,8 +38,8 @@ paths:
             description: Returns a paginated list of user accounts.
             operationId: listUsers
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:User']
+                - apiKeyAuth: ['read:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -109,10 +107,11 @@ paths:
             description: Creates a new user account with the supplied email and username, and mails the owner a link to choose their own password (the same email as "forgot your password", worded for "you have no password yet"). No caller can set another person's password, so the body has no password field. Optional image can be uploaded.
             operationId: createUser
             x-error-codes:
+                '401': [REAUTH_REQUIRED]
                 '403': [ROLE_MANAGEMENT_REQUIRED]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['create:User']
+                - apiKeyAuth: ['create:User']
             requestBody:
                 required: true
                 content:
@@ -150,8 +149,8 @@ paths:
             description: Returns the full profile of the user identified by `{id}`. Functionally equivalent to `GET /users?id={id}`.
             operationId: getUserById
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:User']
+                - apiKeyAuth: ['read:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -172,8 +171,8 @@ paths:
             x-error-codes:
                 '403': [ROLE_MANAGEMENT_REQUIRED]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:User']
+                - apiKeyAuth: ['update:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -206,8 +205,8 @@ paths:
             x-error-codes:
                 '403': [ROLE_MANAGEMENT_REQUIRED]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:User']
+                - apiKeyAuth: ['update:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -241,8 +240,9 @@ paths:
             summary: Delete user
             description: Deletes the user identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. A soft delete is one-way and safe to repeat — undo it with `POST /users/{id}/restore`.
             operationId: deleteUserById
+            x-error-codes:
             security:
-                - bearerAuth: []
+                - bearerAuth: ['delete:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/HardDeleteParam'
@@ -254,6 +254,8 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
     /users/{id}/assign-role:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Users]
             summary: Assign a staff role to a user
@@ -267,10 +269,9 @@ paths:
                 Audited as `access.role.assigned`.
             operationId: assignUserRole
             x-error-codes:
-                '403': [ROLE_MANAGEMENT_REQUIRED]
                 '409': [USER_ROLE_ALREADY_ASSIGNED]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['assign:Role']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -293,6 +294,8 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
     /users/{id}/revoke-role:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Users]
             summary: Take a user's staff role away
@@ -302,10 +305,9 @@ paths:
                 session, and only a session: an API key is refused 401. Audited as `access.role.revoked`.
             operationId: revokeUserRole
             x-error-codes:
-                '403': [ROLE_MANAGEMENT_REQUIRED]
                 '409': [USER_ROLE_NOT_ASSIGNED]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['assign:Role']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -324,6 +326,8 @@ paths:
     # repeated buyer cancellations. Both actions need `ban:User`. A hold never blocks paying an
     # existing order, cancelling, a withdrawal, a return or the account's own data rights.
     /users/{id}/place-purchase-hold:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Users]
             summary: Place a purchase hold on a user
@@ -338,8 +342,8 @@ paths:
             x-error-codes:
                 '409': [USER_PURCHASE_HOLD_ALREADY_SET]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['ban:User']
+                - apiKeyAuth: ['ban:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -361,6 +365,8 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
     /users/{id}/lift-purchase-hold:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Users]
             summary: Lift a user's purchase hold
@@ -374,8 +380,8 @@ paths:
             x-error-codes:
                 '409': [USER_PURCHASE_HOLD_NOT_SET]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['ban:User']
+                - apiKeyAuth: ['ban:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -391,6 +397,8 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     /users/{id}/activate:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Users]
             summary: Activate user
@@ -400,10 +408,11 @@ paths:
                 `admin.user.unbanned`.
             operationId: activateUserById
             x-error-codes:
+                '401': [REAUTH_REQUIRED]
                 '409': [USER_ALREADY_ACTIVE]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['ban:User']
+                - apiKeyAuth: ['ban:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -419,6 +428,8 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     /users/{id}/deactivate:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Users]
             summary: Deactivate user
@@ -429,10 +440,12 @@ paths:
                 `admin.user.banned`.
             operationId: deactivateUserById
             x-error-codes:
+                '401': [REAUTH_REQUIRED]
+                '403': [ROLE_MANAGEMENT_REQUIRED]
                 '409': [USER_ALREADY_INACTIVE]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['ban:User']
+                - apiKeyAuth: ['ban:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -450,6 +463,8 @@ paths:
     # Undoes a soft delete. A separate verb because DELETE must be safe to repeat (RFC 9110
     # §9.2.2): a retried DELETE never brings a record back.
     /users/{id}/restore:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Users]
             summary: Restore user
@@ -458,7 +473,7 @@ paths:
             x-error-codes:
                 '409': [USER_ERASURE_DUE, USER_NOT_DELETED]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['delete:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -483,9 +498,10 @@ paths:
             summary: Permanently delete user
             description: Permanently removes the user identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /users/{id}?hardDelete=true`.
             operationId: hardDeleteUserById
+            x-error-codes:
             x-alias-of: deleteUserById
             security:
-                - bearerAuth: []
+                - bearerAuth: ['delete:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -504,8 +520,8 @@ paths:
             operationId: searchUsers
             x-alias-of: listUsers
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:User']
+                - apiKeyAuth: ['read:User']
             requestBody:
                 required: true
                 content:

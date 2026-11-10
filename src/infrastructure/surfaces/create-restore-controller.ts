@@ -10,6 +10,7 @@
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { requireId } from '@infrastructure/http/ids';
+import { answerAsResource } from '@infrastructure/http/preconditions';
 import {
     catchAs,
     namedHandler,
@@ -36,19 +37,22 @@ export interface RestoreControllerSpec<TRow> {
     present: (row: TRow, request: Request) => unknown;
     /** The i18n key answered when the id matches nothing, or is not an id at all. */
     notFoundKey: string;
+    /** The collection's path on this API (`'/orders'`); `<basePath>/<id>` is the restored resource's `Content-Location`. */
+    basePath: string;
 }
 
 /**
  * Build a module's restore controller.
  *
- * @param spec - the three things that differ per entity
+ * @param spec - the four things that differ per entity
  * @returns the express handler, named for the entity it restores (e.g. `restoreOrder`)
  */
 export const createRestoreController = <TRow>({
     entity,
     restore,
     present,
-    notFoundKey
+    notFoundKey,
+    basePath
 }: RestoreControllerSpec<TRow>) => {
     const operation = operationName('restore', entity);
 
@@ -63,6 +67,8 @@ export const createRestoreController = <TRow>({
                 if (refused(response, result)) return;
 
                 return Promise.resolve(present(result.data, request)).then((shaped) => {
+                    // The restored row's real tag, and the resource it belongs to (RFC 9110 §8.8.3).
+                    answerAsResource(response, shaped, `${basePath}/${id}`);
                     successResponse(response, shaped, 200);
                 });
             })

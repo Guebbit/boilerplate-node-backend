@@ -88,6 +88,8 @@ paths:
                 caller may not read: the buyer sees their own, and staff need the payments staff
                 read (`display:Payment`), so the warehouse that packs the order sees none. `id` is
                 what `GET /orders/{id}/credit-notes/{creditNoteId}` downloads.
+
+                Unpaged: one per settled refund of this order.
             operationId: listOrderCreditNotes
             security:
                 - bearerAuth: []

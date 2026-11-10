@@ -37,6 +37,23 @@ const acceptsBody = (request: Request, types: readonly string[]): boolean =>
     types.length > 0 && request.is([...types]) !== false;
 
 /**
+ * The operation a request is, from the generated table: the first row of this method whose path
+ * matches. The table is ordered fewest `{param}` first, so a literal path beats a templated one.
+ * Shared by the 415 and by the `OPTIONS` answer's `Accept-Patch`, so both name the same list.
+ *
+ * @param operations - the operations that declare a request body, most specific first
+ * @param method - upper-case HTTP method
+ * @param path - the request path, without a trailing slash
+ * @returns the matching row, or `undefined` for a route the table does not know
+ */
+export const declaredOperation = (
+    operations: readonly RequestContentType[],
+    method: string,
+    path: string
+): RequestContentType | undefined =>
+    operations.find((candidate) => candidate.method === method && candidate.pattern.test(path));
+
+/**
  * Builds the guard from the generated operation table.
  *
  * Only a request that carries a body is judged: an action POST with no body has nothing to
@@ -53,14 +70,19 @@ export const requireDeclaredContentType = (
 ): RequestHandler => {
     return (request: Request, response: Response, next: NextFunction) => {
         const path = request.path.length > 1 ? request.path.replace(/\/$/, '') : request.path;
-        const operation = operations.find(
-            (candidate) => candidate.method === request.method && candidate.pattern.test(path)
-        );
+        const operation = declaredOperation(operations, request.method, path);
 
         // `request.is` (type-is): `false` when the type is not listed. An empty list means the
         // operation takes no body at all, and `request.is([])` would answer with the request's own
         // type instead of `false`, so that case is decided here.
-        if (operation && carriesBody(request) && !acceptsBody(request, operation.types))
+        if (operation && carriesBody(request) && !acceptsBody(request, operation.types)) {
+            // `Accept` on a 415 names the types the server takes (RFC 9110 §12.5.1); on a PATCH
+            // `Accept-Patch` says it again (RFC 5789 §2.2). A body-less operation names neither.
+            if (operation.types.length > 0) {
+                response.setHeader('Accept', operation.types.join(', '));
+                if (operation.method === 'PATCH')
+                    response.setHeader('Accept-Patch', operation.types.join(', '));
+            }
             return rejectResponse(response, 415, [
                 {
                     code: ERROR_CODES.UNSUPPORTED_MEDIA_TYPE,
@@ -68,6 +90,7 @@ export const requireDeclaredContentType = (
                     details: { accepted: [...operation.types] }
                 }
             ]);
+        }
 
         next();
     };

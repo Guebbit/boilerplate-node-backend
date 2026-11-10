@@ -80,7 +80,7 @@ paths:
             operationId: addCartItem
             x-error-codes:
                 '409': [IDEMPOTENCY_IN_FLIGHT, CART_LINE_LIMIT_REACHED]
-                '422': [IDEMPOTENCY_KEY_MISMATCH]
+                '422': [IDEMPOTENCY_KEY_MISMATCH, CART_QUANTITY_LIMIT]
             security:
                 - bearerAuth: []
             parameters:
@@ -129,6 +129,8 @@ paths:
             summary: Set cart item quantity
             description: Sets the quantity of the cart line for the product identified by `{productId}` in the path — the quantity, not an increment; `POST /cart/items` is the door that adds. A change never creates, so a product the cart holds no line for is 404 `cart.item-not-found`, and a held line whose product the storefront no longer shows is 404 `products.not-found`. Repeating it changes nothing. Returns the updated cart.
             operationId: updateCartItemByProductId
+            x-error-codes:
+                '422': [CART_QUANTITY_LIMIT]
             security:
                 - bearerAuth: []
             parameters:
@@ -182,6 +184,7 @@ paths:
             description: Sets which shipping method (see `GET /delivery/methods`) the cart plans to ship by, ahead of checkout — priced and validated against the basket as it stands right now. `null` clears the choice. Checkout re-validates from scratch regardless of what this endpoint accepted, since the basket may change afterward. Returns the updated cart, including the priced `summary.shippingCost`/`summary.totalPrice`.
             operationId: setCartShippingMethod
             x-error-codes:
+                '404': [CART_SHIPPING_METHOD_NOT_FOUND]
                 '409': [CART_SHIPPING_METHOD_WEIGHT, CART_SHIPPING_NOT_APPLICABLE]
             security:
                 - bearerAuth: []
@@ -224,6 +227,8 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
 
     /cart/checkout:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Orders]
             summary: Checkout (place order from cart)
@@ -231,14 +236,14 @@ paths:
             operationId: checkout
             x-error-codes:
                 '401': [REAUTH_REQUIRED]
-                '404': [CART_ADDRESS_NOT_FOUND]
+                '404': [CART_ADDRESS_NOT_FOUND, CART_SHIPPING_METHOD_NOT_FOUND]
                 # A stored shipping choice the basket no longer fits (gone digital-only, outgrown the method) is not a
                 # refusal here: it reads as no choice, as in `GET /cart`'s `shipping.selected`.
-                '409': [CART_ADDRESS_NOT_APPLICABLE, CART_CHANGED, CART_EMPTY, CART_INSUFFICIENT_STOCK, CART_OPEN_ORDER_LIMIT_REACHED, CART_PAYMENT_METHOD_NOT_AVAILABLE, CART_PURCHASE_HOLD, CART_TOTAL_CHANGED, IDEMPOTENCY_IN_FLIGHT]
+                '409': [CART_ADDRESS_NOT_APPLICABLE, CART_CHANGED, CART_EMPTY, CART_INSUFFICIENT_STOCK, CART_OPEN_ORDER_LIMIT_REACHED, CART_PAYMENT_METHOD_NOT_AVAILABLE, CART_PURCHASE_HOLD, CART_TOTAL_CHANGED, IDEMPOTENCY_IN_FLIGHT, CART_PRODUCT_UNAVAILABLE]
                 # A `billingAddressId` that names none of the caller's addresses is the same 404 as `addressId`.
-                '422': [CART_ADDRESS_REQUIRED, CART_BILLING_ADDRESS_REQUIRED, CART_SHIPPING_METHOD_REQUIRED, CART_SHIP_TO_COUNTRY_NOT_SUPPORTED, IDEMPOTENCY_KEY_MISMATCH]
+                '422': [CART_ADDRESS_REQUIRED, CART_BILLING_ADDRESS_REQUIRED, CART_SHIPPING_METHOD_REQUIRED, CART_SHIP_TO_COUNTRY_NOT_SUPPORTED, IDEMPOTENCY_KEY_MISMATCH, CART_QUANTITY_LIMIT]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['checkout:Cart']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:

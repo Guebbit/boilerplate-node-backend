@@ -12,6 +12,7 @@ import { asStub } from '@tests/stub';
 import type { OpenApiDocument } from '../../../../scripts/contracts/openapi-document';
 import {
     checkOperationErrorCodes,
+    isErrorCodeEntry,
     withAppLevelResponses,
     withErrorCodes,
     withModuleStamps,
@@ -197,6 +198,23 @@ const errorCodesResult = (
  * `x-error-codes`. Driven with a small map rather than the real contract, same split as
  * the other two suites above.
  */
+describe('isErrorCodeEntry', () => {
+    it.each([
+        ['a plain entry', { status: 409, description: 'x' }],
+        ['an app-scoped entry', { status: 422, description: 'x', scope: 'app' }]
+    ])('accepts %s', (_name, entry) => {
+        expect(isErrorCodeEntry(entry)).toBe(true);
+    });
+
+    it.each([
+        ['a missing status', { description: 'x' }],
+        ['a missing description', { status: 409 }],
+        ['an unknown scope', { status: 409, description: 'x', scope: 'worker' }]
+    ])('refuses %s', (_name, entry) => {
+        expect(isErrorCodeEntry(entry)).toBe(false);
+    });
+});
+
 describe('withErrorCodes', () => {
     it('publishes every collected code, sorted', () => {
         const result = errorCodesResult(errorCodesBundle(), {
@@ -277,11 +295,48 @@ describe('withVersionedResources', () => {
         expect(item?.delete?.responses).not.toHaveProperty('412');
     });
 
-    it('throws for a method the path does not declare, or one that is neither read nor write', () => {
+    it('throws for a method the path does not declare, or one that is not a read, a write or a post', () => {
         expect(() => run(versionedPath(['put']))).toThrow(/does not declare/);
         expect(() =>
+            run({ '/widgets/{id}': { 'x-versioned': ['options'], options: { responses: {} } } })
+        ).toThrow(/cannot name options/);
+    });
+
+    it('gives a listed post ETag and Content-Location on every 2xx, and no If-Match or 412', () => {
+        const post = run({
+            '/widgets/{id}': {
+                'x-versioned': ['post'],
+                post: {
+                    parameters: [{ name: 'id' }],
+                    responses: {
+                        '201': { description: 'created' },
+                        '404': { description: 'gone' }
+                    }
+                }
+            }
+        })?.post;
+
+        expect(post?.responses?.['201']).toHaveProperty('headers', {
+            ETag: { $ref: '#/components/headers/ETag' },
+            'Content-Location': { $ref: '#/components/headers/ContentLocation' }
+        });
+        expect(post?.responses?.['404']).not.toHaveProperty('headers');
+        expect(post?.parameters).toEqual([{ name: 'id' }]);
+        expect(post?.responses).not.toHaveProperty('412');
+    });
+
+    it('throws when a listed post has no 2xx, or its 2xx is a $ref', () => {
+        expect(() =>
             run({ '/widgets/{id}': { 'x-versioned': ['post'], post: { responses: {} } } })
-        ).toThrow(/cannot name post/);
+        ).toThrow(/needs a 2xx/);
+        expect(() =>
+            run({
+                '/widgets/{id}': {
+                    'x-versioned': ['post'],
+                    post: { responses: { '200': { $ref: '#/components/responses/Success' } } }
+                }
+            })
+        ).toThrow(/inline 200/);
     });
 
     it('throws when the 200 to hang ETag on is a $ref', () => {

@@ -41,8 +41,8 @@ const purgeOne = (user: UserDocument): Promise<keyof PurgeCounts> => {
 
     return accountUserService
         .eraseScheduledDeletion(user, context)
-        .then((result) => {
-            if (!result.success) return 'skipped';
+        .then((erased) => {
+            if (!erased) return 'skipped';
 
             recordAudit(context, {
                 action: accountAuditActions.AUTH_ACCOUNT_DELETE_COMPLETED,

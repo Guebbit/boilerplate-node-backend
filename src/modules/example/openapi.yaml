@@ -26,6 +26,8 @@ x-personal-data:
 
 paths:
     /examples:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         get:
             x-cache: private-no-cache
             tags: [Examples]
@@ -33,7 +35,7 @@ paths:
             description: Returns the caller's own examples, newest first by default. A caller holding `display:Example` sees everyone's.
             operationId: listExamples
             security:
-                - bearerAuth: []
+                - bearerAuth: ['read:Example']
             # Query only; the DTO form of the same filters is `POST /examples/search`.
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
@@ -71,7 +73,7 @@ paths:
                 '409': [IDEMPOTENCY_IN_FLIGHT]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['create:Example']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
@@ -106,7 +108,7 @@ paths:
             operationId: searchExamples
             x-alias-of: listExamples
             security:
-                - bearerAuth: []
+                - bearerAuth: ['read:Example']
             requestBody:
                 required: true
                 content:
@@ -159,7 +161,7 @@ paths:
             description: Replaces the example's writable fields (RFC 9110 §9.3.4). `title` and `body` are required, since a PUT names the whole representation. The status moves through `POST /examples/{id}/publish|archive|unarchive`.
             operationId: replaceExampleById
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Example']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -185,7 +187,7 @@ paths:
             description: Merges a change into the example (RFC 7396, an omitted field is left unchanged).
             operationId: updateExampleById
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Example']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -214,7 +216,7 @@ paths:
             description: Permanently removes the example identified by `{id}`, and its cover image with it.
             operationId: deleteExampleById
             security:
-                - bearerAuth: []
+                - bearerAuth: ['delete:Example']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -228,6 +230,8 @@ paths:
     # (docs/theory/tactical-ddd.md). No `If-Match`: the write is conditional on the status read, so
     # of two racing moves exactly one lands.
     /examples/{id}/publish:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Examples]
             summary: Publish an example
@@ -240,7 +244,7 @@ paths:
             x-error-codes:
                 '409': [EXAMPLE_NOT_PUBLISHABLE]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Example']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -256,6 +260,8 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     /examples/{id}/archive:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Examples]
             summary: Archive an example
@@ -267,7 +273,7 @@ paths:
             x-error-codes:
                 '409': [EXAMPLE_NOT_ARCHIVABLE]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Example']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -283,6 +289,8 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     /examples/{id}/unarchive:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Examples]
             summary: Return an archived example to draft
@@ -295,7 +303,7 @@ paths:
             x-error-codes:
                 '409': [EXAMPLE_NOT_UNARCHIVABLE]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Example']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -320,7 +328,7 @@ paths:
             description: Replaces the cover image of the example identified by `{id}`. The image is digested in the background; until it is, `imageUrl` is a placeholder.
             operationId: replaceExampleCover
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Example']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:

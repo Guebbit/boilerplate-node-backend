@@ -32,8 +32,8 @@ paths:
                 Requires `read:AuditLog` — held by `admin` in the demo.
             operationId: listAuditEntries
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:AuditLog']
+                - apiKeyAuth: ['read:AuditLog']
             parameters:
                 - name: actor
                   in: query

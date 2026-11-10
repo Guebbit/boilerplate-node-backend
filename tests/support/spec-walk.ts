@@ -97,6 +97,8 @@ interface ParameterObject {
 /** The slice of the OpenAPI document the walk reads. */
 interface SpecDocument {
     paths: Record<string, Record<string, unknown>>;
+    /** The error-code catalogue: every code with its status, description and optional `scope`. */
+    'x-error-codes'?: Record<string, { scope?: string }>;
     components?: {
         schemas?: Record<string, SchemaNode>;
         parameters?: Record<string, ParameterObject>;
@@ -272,17 +274,19 @@ interface HeaderReference {
 }
 
 /**
- * The response headers an operation's documented status MUST send — `required: true`, `$ref`
- * resolved — as lower-case names, which is how Node reports them.
+ * The response headers an operation's documented status declares, `$ref` resolved, as lower-case
+ * names, which is how Node reports them.
  *
  * @param operation - the operation object as the spec writes it
  * @param status - the response status to look up
  * @param spec - the document the references point into
+ * @param requiredOnly - keep only the headers marked `required: true`, which the answer MUST send
  */
-const requiredHeadersOf = (
+const headersOf = (
     operation: Record<string, unknown>,
     status: string,
-    spec: SpecDocument
+    spec: SpecDocument,
+    requiredOnly: boolean
 ): string[] => {
     const written = (
         operation.responses as Record<string, ResponseObject | undefined> | undefined
@@ -298,17 +302,15 @@ const requiredHeadersOf = (
             const resolved = header.$ref
                 ? spec.components?.headers?.[header.$ref.replace('#/components/headers/', '')]
                 : header;
-            return resolved?.required === true;
+            return !requiredOnly || resolved?.required === true;
         })
         .map(([name]) => name.toLowerCase());
 };
 
-/**
- * Every response header the spec requires, per operation and status: `{ createProduct: { '201':
- * ['location'] } }`. What lets the shared `afterEach` fail a 201 that forgot its `Location`.
- */
-export const requiredResponseHeaders = (
-    spec: SpecDocument = readSpec()
+/** The walk behind {@link requiredResponseHeaders} and {@link declaredResponseHeaders}. */
+const responseHeaders = (
+    spec: SpecDocument,
+    requiredOnly: boolean
 ): Record<string, Record<string, string[]>> => {
     const byOperation: Record<string, Record<string, string[]>> = {};
 
@@ -319,12 +321,69 @@ export const requiredResponseHeaders = (
 
             const statuses = Object.keys((operation.responses as object | undefined) ?? {});
             byOperation[operation.operationId] = Object.fromEntries(
-                statuses.map((status) => [status, requiredHeadersOf(operation, status, spec)])
+                statuses.map((status) => [status, headersOf(operation, status, spec, requiredOnly)])
             );
         }
 
     return byOperation;
 };
+
+/**
+ * The error codes the contract lets an answer carry: the catalogue's `scope: app` ones (any
+ * operation may send them) and each operation's own `x-error-codes` list, by status.
+ */
+export interface ErrorCodeIndex {
+    /** Codes any operation may send. */
+    appScoped: ReadonlySet<string>;
+    /** Every code the catalogue declares. */
+    catalogue: readonly string[];
+    /** `{ checkout: { '409': ['CART_EMPTY'] } }`; an operation that lists none is absent. */
+    listed: Record<string, Record<string, readonly string[]>>;
+}
+
+/**
+ * Reads {@link ErrorCodeIndex} off the spec. What lets the shared `afterEach` fail an answer whose
+ * code its operation never documented.
+ */
+export const errorCodeIndex = (spec: SpecDocument = readSpec()): ErrorCodeIndex => {
+    const listed: ErrorCodeIndex['listed'] = {};
+
+    for (const pathItem of Object.values(spec.paths))
+        for (const method of METHODS) {
+            const operation = pathItem[method] as Record<string, unknown> | undefined;
+            const codes = operation?.['x-error-codes'] as
+                | Record<string, readonly string[]>
+                | undefined;
+            if (typeof operation?.operationId === 'string' && codes)
+                listed[operation.operationId] = codes;
+        }
+
+    return {
+        catalogue: Object.keys(spec['x-error-codes'] ?? {}),
+        appScoped: new Set(
+            Object.entries(spec['x-error-codes'] ?? {})
+                .filter(([, entry]) => entry.scope === 'app')
+                .map(([code]) => code)
+        ),
+        listed
+    };
+};
+
+/**
+ * Every response header the spec requires, per operation and status: `{ createProduct: { '201':
+ * ['location'] } }`. What lets the shared `afterEach` fail a 201 that forgot its `Location`.
+ */
+export const requiredResponseHeaders = (
+    spec: SpecDocument = readSpec()
+): Record<string, Record<string, string[]>> => responseHeaders(spec, true);
+
+/**
+ * Every response header the spec declares, required or not, in `requiredResponseHeaders`' shape.
+ * What lets the shared `afterEach` fail an answer that sends a header its operation never documents.
+ */
+export const declaredResponseHeaders = (
+    spec: SpecDocument = readSpec()
+): Record<string, Record<string, string[]>> => responseHeaders(spec, false);
 
 /**
  * Whether one alternative of a `security` list is the empty object `{}`: the "no credential"

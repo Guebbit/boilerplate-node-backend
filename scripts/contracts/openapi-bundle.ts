@@ -27,6 +27,7 @@ import { orderSections } from './section-order';
 import { assembleRoot, readModuleFragments } from './root-assembly';
 import { withBrowserEvents } from './analytics-browser-events';
 import { withCookieAuth } from './cookie-auth';
+import { withPermissionErrorCodes } from './permission-security';
 import { withImageUploadEncoding } from './image-upload-encoding';
 import { webhookEventNames } from './asyncapi-webhook-events';
 import { withFilledEnums } from './fill-enum';
@@ -216,6 +217,12 @@ const VERSIONED_READ_METHODS = new Set(['get']);
 /** The write verbs that take `If-Match` on a versioned path. */
 const VERSIONED_WRITE_METHODS = new Set(['put', 'patch', 'delete']);
 
+/**
+ * The verb that answers the resource's new tag without taking `If-Match`: a create or an action
+ * (RFC 9110 §8.8.3). The marker names it on the path item of the create or the action itself.
+ */
+const VERSIONED_ANSWER_METHODS = new Set(['post']);
+
 /** What {@link withVersionedResources} reads off a path item, beside its operations. */
 interface VersionedPathItem {
     'x-versioned'?: string[];
@@ -236,6 +243,32 @@ const withEtagHeader = (operation: Operation, where: string): void => {
 };
 
 /**
+ * Adds `ETag` and `Content-Location` to every inline 2xx of a create or an action: the answer's tag
+ * is the new resource's, and `Content-Location` says which resource (RFC 9110 §6.4.2 rule 7).
+ * A 2xx that is a `$ref` is refused, as {@link withEtagHeader} refuses it.
+ */
+const withAnswerHeaders = (operation: Operation, where: string): void => {
+    const answered = Object.entries(operation.responses ?? {}).filter(([status]) =>
+        status.startsWith('2')
+    );
+    if (answered.length === 0)
+        throw new Error(
+            `[openapi] ${where}: an \`x-versioned\` post needs a 2xx to hang \`ETag\` on.`
+        );
+    for (const [status, response] of answered) {
+        if ('$ref' in response)
+            throw new Error(
+                `[openapi] ${where}: an \`x-versioned\` operation needs an inline ${status} to hang \`ETag\` on, not a $ref.`
+            );
+        response.headers = {
+            ...response.headers,
+            ETag: { $ref: '#/components/headers/ETag' },
+            'Content-Location': { $ref: '#/components/headers/ContentLocation' }
+        };
+    }
+};
+
+/**
  * Adds the `If-Match` parameter and the `412` to a write operation, leaving anything the
  * operation already declares for itself.
  */
@@ -252,13 +285,14 @@ const withIfMatch = (operation: Operation): void => {
 
 /**
  * Apply every path item's `x-versioned: [methods]` marker: `ETag` on the listed reads and on the
- * listed `put`/`patch` `200`s, and `If-Match` plus `412` on the listed writes.
+ * listed `patch` `200`s, `ETag` plus `Content-Location` on the 2xx of a listed `post`, and
+ * `If-Match` plus `412` on the listed `put`, `patch` and `delete`.
  *
  * Runs on the bundled document for the same reason {@link withAppLevelResponses} does, and the
  * marker STAYS in the published contract — it is the machine-readable list of which resources
  * are versioned, which the contract tests walk.
  *
- * @throws Error if a marker names a method the path item does not declare, or one that is neither read nor write
+ * @throws Error if a marker names a method the path item does not declare, or one that is not a read, a write or a post
  */
 export const withVersionedResources: Step = (document_) => {
     for (const [route, item] of Object.entries(document_.paths ?? {})) {
@@ -271,10 +305,13 @@ export const withVersionedResources: Step = (document_) => {
                     `[openapi] ${route}: x-versioned names ${method}, which it does not declare.`
                 );
             if (VERSIONED_READ_METHODS.has(method)) withEtagHeader(operation, `${method} ${route}`);
+            else if (VERSIONED_ANSWER_METHODS.has(method))
+                withAnswerHeaders(operation, `${method} ${route}`);
             else if (VERSIONED_WRITE_METHODS.has(method)) withIfMatch(operation);
             else throw new Error(`[openapi] ${route}: x-versioned cannot name ${method}.`);
-            if (method === 'put' || method === 'patch')
-                withEtagHeader(operation, `${method} ${route}`);
+            // Only a PATCH answer carries the new tag: a PUT answer carries no validator
+            // (RFC 9110 §9.3.4, enforced by `dropUnownedValidators`).
+            if (method === 'patch') withEtagHeader(operation, `${method} ${route}`);
         }
     }
 };
@@ -325,12 +362,20 @@ export const withNotModified: Step = (document_) => {
     }
 };
 
-/** Narrows a fragment's `x-error-codes` entry to the shape this step requires. */
-const isErrorCodeEntry = (value: unknown): value is ErrorCodeEntry =>
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { status?: unknown }).status === 'number' &&
-    typeof (value as { description?: unknown }).description === 'string';
+/**
+ * Narrows a fragment's `x-error-codes` entry to the shape this step requires: a numeric status, a
+ * string description, and a `scope` that is absent or `app`.
+ */
+export const isErrorCodeEntry = (value: unknown): value is ErrorCodeEntry => {
+    if (typeof value !== 'object' || value === null) return false;
+    // One `as`: the keys are read off an object the checks below are about to narrow.
+    const { status, description, scope } = value as Record<string, unknown>;
+    return (
+        typeof status === 'number' &&
+        typeof description === 'string' &&
+        (scope === undefined || scope === 'app')
+    );
+};
 
 /**
  * Every error code the contract declares, collected straight off the root and every module
@@ -338,7 +383,7 @@ const isErrorCodeEntry = (value: unknown): value is ErrorCodeEntry =>
  * reachable from the root's `paths`/`components` and has no way to see a top-level key nothing
  * ever points at. The same reason {@link moduleOfPath} reads `sectionPaths` off disk instead.
  *
- * @throws Error if two fragments declare the same code, or an entry is missing its status or description
+ * @throws Error if two fragments declare the same code, or an entry is missing its status or description, or has another `scope`
  */
 const collectErrorCodes = (): Record<string, ErrorCodeEntry> => {
     const collected: Record<string, ErrorCodeEntry> = {};
@@ -348,7 +393,7 @@ const collectErrorCodes = (): Record<string, ErrorCodeEntry> => {
         for (const [code, entry] of Object.entries(parsed['x-error-codes'] ?? {})) {
             if (!isErrorCodeEntry(entry))
                 throw new Error(
-                    `[openapi] ${owner}'s x-error-codes.${code} needs a numeric status and a string description.`
+                    `[openapi] ${owner}'s x-error-codes.${code} needs a numeric status, a string description and, if any, \`scope: app\`.`
                 );
             if (Object.hasOwn(collected, code))
                 throw new Error(
@@ -567,6 +612,8 @@ const bundleSteps = (errorCodes: Record<string, ErrorCodeEntry>): readonly Step[
         (document_) => {
             withModuleStamps(document_, moduleOfPath());
         },
+        // The 403 / 401 codes each operation's named permission makes, into its `x-error-codes`.
+        withPermissionErrorCodes,
         // Refuses an operation naming an error code nobody declares.
         (document_) => {
             checkOperationErrorCodes(document_, errorCodes);

@@ -16,5 +16,6 @@ export const restoreProducts = createRestoreController({
     entity: 'product',
     restore: (id, request) => productService.restoreById(id, callerContextOf(request)),
     present: (product, request) => productService.presentForCaller(product, request.caller),
-    notFoundKey: 'products.not-found'
+    notFoundKey: 'products.not-found',
+    basePath: '/products'
 });

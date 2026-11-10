@@ -8,7 +8,7 @@
 
 import type { Express, Request, Response } from 'express';
 import { rejectResponse } from '@infrastructure/http/response';
-import { enabledModules } from '../modules';
+import { enabledModules, servedModuleNames } from '../modules';
 import { methodNotAllowed } from '@infrastructure/http/middlewares/method-not-allowed';
 import { OPERATION_ROUTES } from '@api/operation-routes';
 
@@ -46,8 +46,7 @@ export const installRoutes = (app: Express): void => {
      * declare. Before the routers: otherwise `DELETE /products/facets` reaches the
      * `/products/:id` handler and answers 404, where the contract matches the literal path first.
      */
-    const servedModules = new Set(enabledModules.map(({ name }) => name));
-    app.use(methodNotAllowed(OPERATION_ROUTES, servedModules, true));
+    app.use(methodNotAllowed(OPERATION_ROUTES, servedModuleNames, true));
 
     /**
      * Registered modules, each at the base path its own manifest declares.
@@ -70,7 +69,7 @@ export const installRoutes = (app: Express): void => {
      * 405 + `Allow` for a contract path asked with another method; anything else falls through
      * to the 404 below. Only the modules this build mounts count as known paths.
      */
-    app.use(methodNotAllowed(OPERATION_ROUTES, servedModules));
+    app.use(methodNotAllowed(OPERATION_ROUTES, servedModuleNames));
 
     /**
      * 404 handler — unmatched routes.

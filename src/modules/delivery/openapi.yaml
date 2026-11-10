@@ -42,7 +42,7 @@ paths:
         get:
             tags: [Delivery]
             summary: List shipping methods
-            description: Every shipping method this shop offers — flat rates and free-above thresholds, unfiltered. Public, because what shipping costs is pre-purchase information; the authoritative pricing and weight-fit check happen server-side, against the caller's real basket, at `PUT /cart/shipping-method` and again at checkout — this list is a catalogue, not a quote.
+            description: 'Every shipping method this shop offers — flat rates and free-above thresholds, unfiltered. Public, because what shipping costs is pre-purchase information; the authoritative pricing and weight-fit check happen server-side, against the caller''s real basket, at `PUT /cart/shipping-method` and again at checkout — this list is a catalogue, not a quote. Unpaged: the shop''s configured catalogue.'
             operationId: listShippingMethods
             security: []
             responses:
@@ -66,7 +66,7 @@ paths:
                 item has its own read at `GET /delivery/fulfillment-orders/{id}`.
             operationId: listOrderFulfillmentOrders
             security:
-                - bearerAuth: []
+                - bearerAuth: ['read:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: One of the caller's own orders
@@ -94,7 +94,7 @@ paths:
                 which is also where the `Location` of a newly cut shipment points.
             operationId: listOrderShipments
             security:
-                - bearerAuth: []
+                - bearerAuth: ['read:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: One of the caller's own orders
@@ -110,6 +110,8 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
 
     /orders/{id}/process:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Delivery]
             summary: Process a paid order
@@ -122,8 +124,10 @@ paths:
                 being handed the run of the order record. Refuses an order that is not `paid`
                 with a named 409.
             operationId: processOrder
+            x-error-codes:
+                '409': [ORDER_NOT_PAID]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['start:Shipment']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: The order to process
@@ -156,7 +160,7 @@ paths:
                 else only their own orders'. `delivered` is true once nothing remains and every shipment arrived.
             operationId: listPreorderFulfillmentOrders
             security:
-                - bearerAuth: []
+                - bearerAuth: ['read:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -214,7 +218,7 @@ paths:
                 tab of the preorder board; same audience and scope as the list.
             operationId: summarizePreorderFulfillmentOrders
             security:
-                - bearerAuth: []
+                - bearerAuth: ['read:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -251,7 +255,7 @@ paths:
                 is never cached.
             operationId: previewReleaseDateImpact
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Product', 'display:Order']
             parameters:
                 - name: productId
                   in: query
@@ -294,7 +298,7 @@ paths:
                 is never cached.
             operationId: previewRestockDateImpact
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Product', 'display:Order']
             parameters:
                 - name: productId
                   in: query
@@ -329,7 +333,7 @@ paths:
                 One fulfillment order by its own id, the record `ship`, `fulfill`, `hold` and `release` act on, with the same `actions` they answer. Scoped like the order it belongs to (`read:Order`): a buyer reads their own, staff holding `display:Order` read any. Someone else's, an unknown id and a malformed one are the same 404.
             operationId: getFulfillmentOrder
             security:
-                - bearerAuth: []
+                - bearerAuth: ['read:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: The fulfillment order
@@ -374,10 +378,10 @@ paths:
                 422 means the key was reused with another body.
             operationId: shipFulfillmentOrder
             x-error-codes:
-                '409': [DELIVERY_NOT_PHYSICAL, DELIVERY_NOT_SHIPPABLE, IDEMPOTENCY_IN_FLIGHT, ORDER_NOT_PROCESSING]
+                '409': [DELIVERY_NOT_PHYSICAL, DELIVERY_NOT_SHIPPABLE, IDEMPOTENCY_IN_FLIGHT, ORDER_NOT_PROCESSING, ORDER_NOT_PAID]
                 '422': [DELIVERY_LINES_INVALID, IDEMPOTENCY_KEY_MISMATCH]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Shipment']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: The fulfillment order to ship from
@@ -419,10 +423,10 @@ paths:
                 reused with another body).
             operationId: fulfillFulfillmentOrder
             x-error-codes:
-                '409': [DELIVERY_NOT_DIGITAL, IDEMPOTENCY_IN_FLIGHT]
+                '409': [DELIVERY_NOT_DIGITAL, IDEMPOTENCY_IN_FLIGHT, ORDER_NOT_PAID, ORDER_NOT_PROCESSING]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Shipment']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: The digital fulfillment order to fulfill
@@ -454,7 +458,7 @@ paths:
             x-error-codes:
                 '409': [DELIVERY_NOT_HOLDABLE]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Shipment']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: The fulfillment order to hold
@@ -489,7 +493,7 @@ paths:
             x-error-codes:
                 '409': [DELIVERY_NOT_RELEASABLE]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Shipment']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: The fulfillment order to release
@@ -513,7 +517,7 @@ paths:
                 One shipment by its own id, at the address `PATCH` corrects it. Scoped like the order it belongs to (`read:Order`): a buyer reads their own, staff holding `display:Order` read any. Someone else's shipment, an unknown id and a malformed one are the same 404.
             operationId: getShipment
             security:
-                - bearerAuth: []
+                - bearerAuth: ['read:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: The shipment
@@ -536,7 +540,7 @@ paths:
             x-error-codes:
                 '409': [DELIVERY_NOT_PHYSICAL]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Shipment']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: The shipment to correct
@@ -584,7 +588,7 @@ paths:
             x-error-codes:
                 '409': [DELIVERY_LOST_SUPERSEDED, DELIVERY_NOT_DELIVERABLE]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Shipment']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: The shipment that arrived
@@ -625,7 +629,7 @@ paths:
             x-error-codes:
                 '409': [DELIVERY_NOT_LOSABLE]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Shipment']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: The shipment that did not arrive

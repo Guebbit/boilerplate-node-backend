@@ -25,6 +25,14 @@ import {
 export const clearDeliveredCode = (entry: DeliveredCodeState): void => {
     for (const field of DELIVERED_CODE_FIELDS) entry[field] = undefined;
 };
+
+/** The paths a password write may touch without it being an edit of the profile. */
+const NOT_AN_EDIT_PATHS: ReadonlySet<string> = new Set([
+    'password',
+    'mfaFailures',
+    'mfaLockedUntil'
+]);
+
 /**
  * Set an account's password — `account/services/password.ts`'s `writePassword` is the only
  * caller, the final write both a password reset and an authenticated password change go through.
@@ -41,7 +49,12 @@ export const setPassword = (
     session?: ClientSession
 ): Promise<UserDocument> => {
     user.password = password;
-    return userRepository.save(user, session);
+    // A reset also re-stamps `verifiedAt`, which is on the wire: that is an edit. A plain change
+    // (password and the 2FA lock only, all off the wire) is not, so it must not 412 an open form.
+    const isEdit = user.modifiedPaths().some((path) => !NOT_AN_EDIT_PATHS.has(path));
+    return isEdit
+        ? userRepository.save(user, session)
+        : userRepository.saveWithoutEdit(user, session);
 };
 
 /**
@@ -144,10 +157,8 @@ export const setPendingEmail = (user: UserDocument, email: string): Promise<User
  * Stamp that an inactive account has been warned, so the reaper (`reap:inactive-accounts`)
  * does not warn it twice. The one field this operation may touch.
  */
-export const markInactivityWarned = (user: UserDocument): Promise<UserDocument> => {
-    user.inactivityWarnedAt = new Date();
-    return userRepository.save(user);
-};
+export const markInactivityWarned = (user: UserDocument): Promise<void> =>
+    userRepository.markInactivityWarned(user.id, new Date());
 
 /**
  * Take a write's outcome back onto the loaded copy and leave those paths unmodified, so the

@@ -29,6 +29,7 @@ import type {
 } from './model';
 import { trusted } from 'mongoose';
 import type { UpdateQuery, QueryFilter, UpdateWriteOpResult, ClientSession } from 'mongoose';
+import { fencedSave } from '@infrastructure/persistence/versioning';
 import { EXTERNAL_KEY_QUERY } from '@infrastructure/persistence/external-key-query';
 import {
     createRepository,
@@ -203,6 +204,8 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     touchLastActive: (id: string, now: Date) => Promise<void>;
     touchApiKeyUse: (id: string, now: Date) => Promise<void>;
     markInactivityMinimised: (id: string, at: Date) => Promise<void>;
+    markInactivityWarned: (id: string, at: Date) => Promise<void>;
+    saveWithoutEdit: (user: UserDocument, session?: ClientSession) => Promise<UserDocument>;
     claimPurchaseHold: (id: string, hold: PurchaseHoldRecord, now: Date) => Promise<boolean>;
     claimPurchaseHoldReview: (id: string, now: Date, session?: ClientSession) => Promise<boolean>;
     reduceExpiredPurchaseHolds: (now: Date) => Promise<number>;
@@ -739,6 +742,35 @@ export const userRepository: Repository<UserDocument, UserWire> & {
             )
             .exec()
             .then(() => undefined),
+
+    /**
+     * Stamp that the reaper has warned this account, so it is not warned twice. `timestamps: false`:
+     * the stamp is off the wire and is the reaper's bookkeeping, not an edit of the profile.
+     *
+     * @param id - the account
+     * @param at - the moment to stamp
+     */
+    markInactivityWarned: (id: string, at: Date) =>
+        userModel
+            .updateOne(
+                { _id: toObjectId(id) },
+                { $set: { inactivityWarnedAt: at } },
+                { timestamps: false }
+            )
+            .exec()
+            .then(() => undefined),
+
+    /**
+     * Save a loaded account without stamping `updatedAt`, so `editRevision` does not move: the
+     * write changed nothing an editor can see. Still fenced by an open `If-Match` like `save`.
+     *
+     * @param user - the loaded account, with its changes applied
+     * @param session - the transaction this write belongs to, when the caller owns one
+     */
+    saveWithoutEdit: (user: UserDocument, session?: ClientSession) =>
+        // Mongoose: `timestamps: false` on save skips the `updatedAt` stamp, and with it the
+        // revision plugin's `$inc`. https://mongoosejs.com/docs/timestamps.html
+        fencedSave(user, () => user.save({ session, timestamps: false })),
 
     /**
      * Put an automatic purchase hold on an account, unless one is already in force. One conditional

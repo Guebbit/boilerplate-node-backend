@@ -13,6 +13,7 @@ whose `standard` is that guide, give every operation in scope one verdict per ru
 citation. Operations that share a verdict and its cause share one row
 (see Output). The audit judges where names, enums, paging, methods, money and errors differ from the
 guide, and whether each difference is written down.
+It reports against the chosen guide, plus the `house` clauses the registry pins to its rules.
 
 The other guide is never read, judged or named in the report. The API took one road; the road it
 did not take is not a finding.
@@ -140,6 +141,14 @@ one cause; the per-rule totals give house apart (`VIOLATION 4 (house 3)`).
 No citation, no finding: an absence claim names the grep that found
 nothing. Three real violations over thirty maybes. The report is disposable; see
 `docs/tools/ai-auditing.md`.
+
+### Outside the rules
+
+One line per finding no rule judges: a clause of the standard no rule covers, or a doc, contract or
+code text found on the way that disagrees with another. Each line: what, file:line, fix side
+(`contract`, `code`, `docs`, or `registry` = a clause that needs a rule). A finding that belongs to
+another standard's audit names that audit. No verdict, and not in the per-rule totals. Write "None."
+when empty.
 
 ### Decided by the web rules
 

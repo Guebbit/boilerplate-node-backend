@@ -35,7 +35,7 @@ paths:
         get:
             tags: [Payments]
             summary: List payment methods
-            description: Which methods this deployment offers, so the frontend hard-codes none. `card` is present only when a card payment provider is configured; `bank_transfer` only once its beneficiary and IBAN are configured. With neither the list is empty, and checkout is off until a method is configured. Public — like `GET /delivery/methods`, this is pre-purchase information.
+            description: 'Which methods this deployment offers, so the frontend hard-codes none. `card` is present only when a card payment provider is configured; `bank_transfer` only once its beneficiary and IBAN are configured. With neither the list is empty, and checkout is off until a method is configured. Public — like `GET /delivery/methods`, this is pre-purchase information. Unpaged: at most one per payment method kind.'
             operationId: listPaymentMethods
             security: []
             responses:
@@ -63,7 +63,7 @@ paths:
                 nowhere a payer reads.
             operationId: listPayments
             security:
-                - bearerAuth: []
+                - bearerAuth: ['display:Payment']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -145,9 +145,10 @@ paths:
             description: Freezes one of the caller's `pending` orders into a payment intent — the amount is taken from the order's own lines, so the intent cannot quote a different number than the order shows. Asking again refreshes the same intent (one payment per order is a database fact) and answers 200, so a retry needs no `Idempotency-Key` (a stored replay would hand back the first answer's `clientSecret` for as long as the ledger keeps it). The caller's intents and syncs share one budget per hour (429) — 201 says a payment was created, and a refresh created nothing (RFC 9110 §15.3.2). An order whose money already moved answers 409, and so does a deployment with no card payment provider (`PAYMENT_CARD_NOT_AVAILABLE`). The intent is the thing the card dialog confirms.
             operationId: createPayment
             x-error-codes:
+                '401': [REAUTH_REQUIRED]
                 '409': [PAYMENT_CARD_NOT_AVAILABLE, PAYMENT_IN_FLIGHT, PAYMENT_ORDER_NOT_PAYABLE]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['checkout:Cart']
             requestBody:
                 required: true
                 content:
@@ -185,7 +186,7 @@ paths:
             operationId: searchPayments
             x-alias-of: listPayments
             security:
-                - bearerAuth: []
+                - bearerAuth: ['display:Payment']
             requestBody:
                 required: true
                 content:
@@ -214,7 +215,7 @@ paths:
                 and the cancel path. Needs `display:Payment`.
             operationId: listRefunds
             security:
-                - bearerAuth: []
+                - bearerAuth: ['display:Payment']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -266,7 +267,7 @@ paths:
                 audit row (`payment.amount_mismatch`), not stored state. Needs `display:Payment`.
             operationId: listPaymentAttention
             security:
-                - bearerAuth: []
+                - bearerAuth: ['display:Payment']
             responses:
                 '200':
                     description: The rows
@@ -320,12 +321,11 @@ paths:
             operationId: createRefund
             x-error-codes:
                 '400': [IDEMPOTENCY_KEY_REQUIRED]
-                '401': [REAUTH_REQUIRED]
                 # A provider refusal is not here: it answers 201 with the failed record.
                 '409': [IDEMPOTENCY_IN_FLIGHT, PAYMENT_DISPUTED, PAYMENT_NOT_REFUNDABLE]
-                '422': [IDEMPOTENCY_KEY_MISMATCH]
+                '422': [IDEMPOTENCY_KEY_MISMATCH, PAYMENT_REFUND_EXCEEDS_REMAINING]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['create:Refund']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/RequiredIdempotencyKeyHeader'
@@ -408,11 +408,10 @@ paths:
                 `errors[].code` `REAUTH_REQUIRED`. `Idempotency-Key` is optional.
             operationId: settleRefundByHand
             x-error-codes:
-                '401': [REAUTH_REQUIRED]
                 '409': [IDEMPOTENCY_IN_FLIGHT, PAYMENT_REFUND_IN_FLIGHT, PAYMENT_REFUND_NOT_OPEN]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['create:Refund']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: The payment carrying the refund
@@ -466,11 +465,10 @@ paths:
                 with `errors[].code` `REAUTH_REQUIRED`. `Idempotency-Key` is optional.
             operationId: cancelRefund
             x-error-codes:
-                '401': [REAUTH_REQUIRED]
                 '409': [IDEMPOTENCY_IN_FLIGHT, PAYMENT_REFUND_IN_FLIGHT, PAYMENT_REFUND_NOT_OPEN]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['create:Refund']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: The payment carrying the refund
@@ -554,11 +552,10 @@ paths:
                 caller re-authenticates and retries the same request.
             operationId: recordOrderPayment
             x-error-codes:
-                '401': [REAUTH_REQUIRED]
                 '409': [IDEMPOTENCY_IN_FLIGHT, PAYMENT_IN_FLIGHT, PAYMENT_ORDER_NOT_PAYABLE]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['create:Payment']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: The order the money arrived for. Must still be `pending`, unless it was canceled with its bank transfer on file (a late transfer is recorded too)
@@ -632,7 +629,7 @@ paths:
                 '409': [IDEMPOTENCY_IN_FLIGHT, PAYMENT_DECLINED, PAYMENT_NOT_CONFIRMABLE, PAYMENT_ORDER_NOT_PAYABLE]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['checkout:Cart']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
@@ -679,7 +676,7 @@ paths:
                 '401': [REAUTH_REQUIRED]
                 '409': [PAYMENT_DECLINED, PAYMENT_NOT_CONFIRMABLE]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['checkout:Cart']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:

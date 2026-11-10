@@ -68,3 +68,22 @@ The paired frontend keeps its own copy, the same text except the report root (`r
 
 - Running as a helper agent that cannot write files: return the full report as the final message.
 - The caller saves it.
+
+## 8. Evidence and the previous run
+
+- The report starts with the HEAD sha of every repo the audit read, and whether each tree was clean.
+- A name, title or comment is a claim; what the code calls is the evidence.
+- Re-open every cited `file:line` before writing it: the range exists, and it shows what the row
+  says.
+- Read a library at the version `package-lock.json` resolves. If `node_modules` differs, say so at
+  the top of the report. A library-behaviour row is `not traced` until it is read at the lockfile
+  version (the upstream source at that tag). An audit is read-only, so it cannot run `npm ci`.
+- If a previous run exists (rule 4), add _Since the previous run_. Every earlier finding row appears;
+  none drops silently. Status is one of: fixed / still open / verdict changed / carried / not
+  re-checked. Add a _why_ column: a fix sha, new code, or a re-judgement. Whether a skill may carry a
+  verdict without re-checking it is the skill's own rule.
+
+## 9. Shell
+
+- The shell may be zsh: an unquoted `$VAR` holding several words is ONE argument. Write file lists
+  out, or use an array, and quote globs (`--include="*.ts"`, `'src/**/*.ts'`).

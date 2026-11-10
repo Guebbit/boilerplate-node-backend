@@ -19,7 +19,7 @@ The eight are written to fit together; they do not contradict each other. Two pl
 each is one finding, not two:
 
 - a 304: `rfc9110-conditional-requests` and `rfc9111-validators-and-304`
-- a 429: `rfc6585-429-retry-after` and `ratelimit-declared-in-contract`
+- a 429: `rfc6585-429-retry-after` and `ratelimit-server-behavior`
 
 SCOPE: the argument you were given: a module name (`orders`), a path, `--diff` or `whole-repo`
 (`scripts/audit/RULES.md` rule 5). Empty means `whole-repo`: the **whole contract**. A difference
@@ -101,8 +101,12 @@ Output goes to `tmp/reports/audit-<run>/api-http/<SCOPE>…`. `<run>` and `<SCOP
           on `Origin`, the CORS half of `rfc9111-read-declares-cache`. Nothing on `Cache-Control`,
           nor on `Authorization`, `Accept-Language` or `Cookie` in `Vary`.
     - Part C:
-        - `tests/cross-cutting/replace-patch-parity.test.ts`, `tests/contract/request-contract.test.ts`
-          (merge-patch and `null` payloads from the contract), `tests/contract/request-sources.test.ts`
+        - `tests/cross-cutting/replace-patch-parity.test.ts`, `tests/contract/request-sources.test.ts`
+        - `tests/contract/request-contract.test.ts`, the cases "… accepts null for the nullable …":
+          every top-level body field whose type lists `'null'` is ACCEPTED (no 415/422, no 5xx) under
+          each declared media type. Not a guard for what `null` then does, for `null` refused on a
+          field that may not be cleared, or for `null` inside a nested map: `rfc7396-null-deletes` is
+          still hunted.
         - `tests/contract/write-methods.test.ts` and `tests/integration/bad-bodies.test.ts` (the 415
           on an undeclared type); `scripts/contracts/generate-request-content-types.ts` (the declared
           request media types) and the 415 guard `src/infrastructure/http/middlewares/content-type.ts`
@@ -112,10 +116,28 @@ Output goes to `tmp/reports/audit-<run>/api-http/<SCOPE>…`. `<run>` and `<SCOP
           a refusal as the problem it was…", the proof that a replay carries the header);
           `scripts/contracts/response-headers.ts` declares `Idempotent-Replayed` on 2xx only, so
           non-2xx is still yours to check
+        - Settled by reading, not a guard: a top-level body that is not an object (RFC 7396 §2: it
+          would replace the whole resource; §5 lets the server refuse it). `express.json` (strict,
+          `src/app/security.ts`) refuses a scalar or `null` as 400 `entity.parse.failed`; an array
+          reaches the route's generated Zod object or record schema and is a 422. Re-check only if a
+          route parses its own body or the parser loses `strict`. No rule, no row.
     - Part D:
-        - `tests/cross-cutting/contract-error-declarations.test.ts` (every code is in `x-error-codes`)
-        - `tests/cross-cutting/request-headers-conformance.test.ts` and
-          `tests/cross-cutting/rate-limit-budgets.test.ts`
+        - Spectral: a 4xx/5xx that declares content declares only `application/problem+json`
+          (`x-not-problem` is the opt-out). Spectral sees only responses that declare `content`: a
+          bodiless 4xx/5xx is not seen
+        - `tests/support/response-contract.ts`: every Jest error answer with a JSON body is
+          `application/problem+json` and matches its schema; no code check
+        - `tests/cross-cutting/contract-error-declarations.test.ts`: a path id implies a declared 404
+        - `tests/fuzz/endpoints.fuzz.test.ts`: never a 5xx, every status documented (statuses, not
+          codes)
+        - `tests/cross-cutting/request-headers-conformance.test.ts`
+        - `tests/unit/infrastructure/http/middlewares/rate-limit-build.test.ts`: the syntax every
+          `buildRateLimiter` budget writes (named items, `q`/`w`/`r`/`t`, no `pk`, no `X-RateLimit-*`,
+          stacked budgets all shown, a skipped limiter adds nothing, its own 429 names it with
+          `r=0`). It does not see budgets charged by hand (`chargeBudget`, `mail-recipient`'s doors),
+          cooldowns or the 2FA lock
+        - `tests/cross-cutting/rate-limit-budgets.test.ts`: the budget set (unique names, env vars and
+          namespaces, one declaration each, only the global brake passes a store outage)
         - `scripts/contracts/response-headers.ts` (declares both RateLimit fields on every response)
 
 ## Steps
@@ -140,12 +162,29 @@ Output goes to `tmp/reports/audit-<run>/api-http/<SCOPE>…`. `<run>` and `<SCOP
         - `idempotency-key-*`: every POST or PATCH that moves money, stock or an account. The house
           rule is a MINIMUM (`docs/tools/idempotency.md`, "Named exceptions"): a create with no key
           that no exception names is a finding only if a retry does real harm
-    - Part D: grep for every place that answers an error without `rejectResponse` (`res.status(4`,
-      `res.status(5`, `.sendStatus(`, `.json({ error`), then compare with the `x-not-problem`
-      operations. For the RateLimit fields, start from `rate-limit.ts` and `response.ts`.
+    - Part D:
+        - Find every answer not built by `rejectResponse` (`src/infrastructure/http/response.ts`):
+          grep `\.(status|sendStatus|writeHead)\(|\.statusCode\s*=[^=]` over `src/**/*.ts`, tests
+          excluded, minus `response.ts`; judge each hit by hand (a computed status like `/readyz`, an
+          untyped `.send(` like the metrics 500). Compare the hits with the responses marked
+          `x-not-problem`.
+        - Check `src/app/` for a `clientError` listener; without one, Node answers 400/408/413/431
+          itself with no body.
+        - Sweep the no-`scope` catalogue codes listed on no operation; for a guard-made code
+          (`deniedCode`, `stepUp`, `requireFreshAuth*`), check every mount of that guard.
+        - For the RateLimit fields, start from `rate-limit.ts` and `response.ts`.
 2. For each rule, check three sources and reach ONE verdict: the contract (the operation, its
    responses, its headers), the handler (controller, then service, never only the route), and the
    docs page that describes it.
+    - `rfc7396-null-deletes`: a body whose schema is generic (the translations door's `string|null`
+      fields, which serve every registered entity) is judged per registered entity: against the rules
+      that entity hands `locales` (its `translatables` entry in `module.ts`, typed by
+      `TranslatableTarget`), not against the door's schema. Name the entities checked.
+    - Part D, start where the gaps were: `grep -rnE '\b429\b' src`: every 429 goes through
+      `generateRateLimited`, not `generateReject(429`; hand-made ones are `chargeBudget` callers,
+      `resendTooSoon`, `rejectLocked`, `refuseRateLimited`. On a 429, `t` equals `Retry-After`. Every
+      budget with `escalation`: check `w` and `t` against the escalated wait. What a public-cacheable
+      response carries: advisory fields only, no `pk`; the draft's §7.3 caching line is in the docs.
 3. A doc that contradicts the code: say which side is wrong, and cite the section.
 4. A finding a rule could catch mechanically: verdict `LINT-CANDIDATE` with the JSONPath. It is
    REPORTED only, never turned into a Spectral rule.
@@ -203,3 +242,18 @@ a 429 found in both A and D into one row, and write the one worst-first list. Ke
 No citation, no finding: an absence claim names the grep that found
 nothing. Three real violations over thirty maybes. The report is disposable; see
 `docs/tools/ai-auditing.md`.
+
+### Outside the rules
+
+One line per finding no rule judges: a clause of the standard no rule covers, or a doc, contract or
+code text found on the way that disagrees with another. Each line: what, file:line, fix side
+(`contract`, `code`, `docs`, or `registry` = a clause that needs a rule). A finding that belongs to
+`api-style` or another audit names that audit. No verdict, and not in the per-rule totals. Write
+"None." when empty.
+
+### Superseded by a higher standard
+
+Required. `| rule id | yields to (standard · clause) | theory row | why |`, no verdict column. The web
+rules rank above the style guides, so a style guide never supersedes one. Write "none: no higher
+standard in the given precedence overrides a rule of this one", or the rows the user's precedence
+produces.

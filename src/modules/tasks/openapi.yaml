@@ -57,6 +57,7 @@ paths:
                 refused `401`, so the client refreshes and sends it again as the person.
             operationId: createContactTask
             x-error-codes:
+                '403': [ANTIBOT_VERIFICATION_FAILED]
                 '409': [IDEMPOTENCY_IN_FLIGHT]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
@@ -96,8 +97,8 @@ paths:
                 work first when sorted by `dueAt`.
             operationId: listTasks
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:Task']
+                - apiKeyAuth: ['read:Task']
             # Query only, and the DTO form of the same filters is `POST /tasks/search`. A body
             # on a GET has no defined semantics (RFC 9110 9.3.1) and the Fetch spec rejects it
             # outright, so a browser client cannot send one; worse, `setCache` keys on the
@@ -171,8 +172,8 @@ paths:
             operationId: searchTasks
             x-alias-of: listTasks
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:Task']
+                - apiKeyAuth: ['read:Task']
             requestBody:
                 required: true
                 content:
@@ -199,8 +200,8 @@ paths:
                 the overdue ones and the unassigned ones. Never cached: it is one person's view.
             operationId: getTaskSummary
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:Task']
+                - apiKeyAuth: ['read:Task']
             responses:
                 '200':
                     description: The counts
@@ -222,8 +223,8 @@ paths:
                 or out-of-jurisdiction id is a 404.
             operationId: getTask
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:Task']
+                - apiKeyAuth: ['read:Task']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -242,8 +243,8 @@ paths:
             description: Permanently removes the task identified by `{id}`. Needs `delete:Task` and, for a system task, the task's route set.
             operationId: deleteTask
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['delete:Task']
+                - apiKeyAuth: ['delete:Task']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -265,8 +266,8 @@ paths:
             x-error-codes:
                 '409': [TASK_ALREADY_RESOLVED]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:Task']
+                - apiKeyAuth: ['update:Task']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -293,8 +294,8 @@ paths:
             x-error-codes:
                 '409': [TASK_ALREADY_SPAM]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:Task']
+                - apiKeyAuth: ['update:Task']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -324,8 +325,8 @@ paths:
             x-error-codes:
                 '409': [TASK_ALREADY_OPEN, TASK_SUPERSEDED]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:Task']
+                - apiKeyAuth: ['update:Task']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -356,8 +357,8 @@ paths:
                 '409': [TASK_NOT_OPEN, TASK_ALREADY_ASSIGNED]
                 '422': [TASK_ASSIGNEE_INVALID]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:Task']
+                - apiKeyAuth: ['update:Task']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -389,8 +390,8 @@ paths:
             x-error-codes:
                 '409': [TASK_NOT_ASSIGNED]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:Task']
+                - apiKeyAuth: ['update:Task']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -417,8 +418,8 @@ paths:
                 '409': [IDEMPOTENCY_IN_FLIGHT]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:Task']
+                - apiKeyAuth: ['update:Task']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
