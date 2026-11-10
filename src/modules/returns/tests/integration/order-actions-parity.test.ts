@@ -126,7 +126,7 @@ interface Act {
     door: (caller: Caller, orderId: string) => PromiseLike<{ status: number }>;
 }
 
-/** The acts whose flag is a plain boolean. `override` is swept separately, per destination. */
+/** The acts whose flag is a plain boolean. `overrideStatus` is swept separately, per destination. */
 const ACTS: Act[] = [
     {
         name: 'cancel',
