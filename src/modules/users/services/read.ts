@@ -3,13 +3,13 @@
  * Admin search and single-document reads.
  */
 
-import type { Caller, SearchUsersRequest, User } from '@types';
+import type { Caller, SearchUsersRequest, User, UserListItem } from '@types';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { getDefaultLocale } from '@infrastructure/i18n';
 import { accessService } from '@modules/access';
 import type { UserDocument, UserWire } from '../model';
-import { presentUser } from '../presenter';
+import { presentUser, presentUserListItem } from '../presenter';
 import { userRepository } from '../repository';
 import { userActionsFor } from './actions';
 
@@ -78,8 +78,8 @@ export const staffContacts = (ids: readonly string[]): Promise<StaffContact[]> =
 /**
  * The contract `User` for an already-loaded document: resolves its CURRENT role fresh from the
  * membership store (the document holds none of its own), asks whether it holds a staff role, and
- * hands both to the presenter with the finished `actions`. Single-document counterpart to
- * {@link toUserContracts}.
+ * hands both to the presenter with the finished `actions`. The list rows are
+ * {@link toUserListItems}, a smaller shape.
  *
  * @param user - the account
  * @param caller - `request.caller`, so the row says what that caller may do to it
@@ -101,14 +101,18 @@ export const toUserContract = (user: UserDocument, caller: Caller): Promise<User
         );
 
 /**
- * {@link toUserContract} for a whole page of already-loaded rows: the roles in one `$in` query and
- * who holds a staff role in two more, never a lookup per row. Takes {@link UserWire} — the lean,
- * already-normalised rows `search()` returns.
+ * The staff list's rows for a whole page of already-loaded accounts: the roles in one `$in` query
+ * and who holds a staff role in two more, never a lookup per row. Takes {@link UserWire} — the
+ * lean, already-normalised rows `search()` returns. A row is a {@link UserListItem}, not a `User`:
+ * the list carries what its table shows, and the rest of the record is the audited detail read's.
  *
  * @param rows - the page's accounts
  * @param caller - `request.caller`, so each row says what that caller may do to it
  */
-export const toUserContracts = (rows: readonly UserWire[], caller: Caller): Promise<User[]> => {
+export const toUserListItems = (
+    rows: readonly UserWire[],
+    caller: Caller
+): Promise<UserListItem[]> => {
     const ids = rows.map((user) => user.id);
 
     return Promise.all([
@@ -116,7 +120,7 @@ export const toUserContracts = (rows: readonly UserWire[], caller: Caller): Prom
         accessService.staffHoldersAmong(ids)
     ]).then(([roles, staff]) =>
         rows.map((user) =>
-            presentUser(
+            presentUserListItem(
                 user,
                 roles.get(user.id) ?? null,
                 userActionsFor(

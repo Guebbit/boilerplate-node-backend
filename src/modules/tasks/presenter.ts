@@ -5,7 +5,7 @@
  * tasks). Shared by the contact form's 201, the staff reads and every door.
  */
 
-import type { Task, TaskRef } from '@types';
+import type { Task, TaskListItem, TaskRef } from '@types';
 import { isOpen, type TaskActionFlags } from './domain';
 import type { TaskDocument } from './model';
 
@@ -67,3 +67,46 @@ export const withView = (stored: StoredTask, view: TaskView, now = new Date()): 
  */
 export const presentTask = (document: TaskDocument, view: TaskView): Task =>
     withView(storedTaskOf(document), view);
+
+/** The longest `messagePreview`, in characters: enough to triage a message, not to read it. */
+const PREVIEW_LENGTH = 160;
+
+/**
+ * The message cut for the inbox: whole user-perceived characters (never half a surrogate pair or a
+ * composed emoji), the last of them `…` when anything was cut.
+ * https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/Segmenter
+ *
+ * @param message - the whole message
+ */
+const previewOf = (message: string): string => {
+    const characters = Array.from(new Intl.Segmenter().segment(message), ({ segment }) => segment);
+    return characters.length <= PREVIEW_LENGTH
+        ? message
+        : `${characters.slice(0, PREVIEW_LENGTH - 1).join('')}…`;
+};
+
+/**
+ * One row of the staff inbox: what the inbox renders and the start of the message. The whole
+ * message, the notes and the sender's account are the audited detail read's.
+ *
+ * @param task - the task with its reader's view, as {@link withView} builds it
+ */
+export const presentTaskListItem = (task: Task): TaskListItem => ({
+    id: task.id,
+    source: task.source,
+    kind: task.kind,
+    ...(task.name === undefined ? {} : { name: task.name }),
+    ...(task.email === undefined ? {} : { email: task.email }),
+    subject: task.subject,
+    messagePreview: previewOf(task.message),
+    ...(task.category === undefined ? {} : { category: task.category }),
+    ...(task.orderNumber === undefined ? {} : { orderNumber: task.orderNumber }),
+    ...(task.assigneeId === undefined ? {} : { assigneeId: task.assigneeId }),
+    ...(task.assigneeName === undefined ? {} : { assigneeName: task.assigneeName }),
+    ...(task.dueAt === undefined ? {} : { dueAt: task.dueAt }),
+    overdue: task.overdue,
+    status: task.status,
+    ...(task.respondedAt === undefined ? {} : { respondedAt: task.respondedAt }),
+    createdAt: task.createdAt,
+    actions: task.actions
+});

@@ -15,11 +15,11 @@ import {
 import { callerForSubject } from '@kernel/permissions';
 import { holds } from '@kernel/ability';
 import { orderService } from '@modules/orders';
-import type { AuthContext, Return, ReturnActions } from '@types';
+import type { AuthContext, Return, ReturnActions, ReturnListItem } from '@types';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
-import { presentReturn } from '../presenter';
+import { presentReturn, presentReturnListItem } from '../presenter';
 import { ownOrder } from './ownership';
 import {
     proofOpenedRefund,
@@ -95,8 +95,8 @@ export const withActions = (returned: ReturnDocument, authContext: AuthContext):
 });
 
 /**
- * The returns this caller may see, filtered. Staff filter freely; everyone else is held to their
- * own orders — an `orderId` outside them answers an empty page, never someone else's rows.
+ * The returns this caller may see, filtered, as list items: the table's fields, not the record.
+ * Staff filter freely; everyone else is held to their own orders — an `orderId` outside them answers an empty page, never someone else's rows.
  *
  * @param filters - page, and an optional order, status and reason
  * @param authContext - the caller
@@ -104,7 +104,7 @@ export const withActions = (returned: ReturnDocument, authContext: AuthContext):
 export const listReturns = (
     filters: ReturnFilters,
     authContext: AuthContext
-): Promise<{ items: Return[]; meta: PaginatedMeta }> => {
+): Promise<{ items: ReturnListItem[]; meta: PaginatedMeta }> => {
     const { status, reason, ...rest } = filters;
     const exact = { ...(status ? { status } : {}), ...(reason ? { reason } : {}) };
     const search = (scope: Record<string, unknown>) =>
@@ -112,7 +112,10 @@ export const listReturns = (
 
     const withCallerActions = ({ items, meta }: Awaited<ReturnType<typeof search>>) => {
         const actionsFor = actionsForCaller(authContext);
-        return { items: items.map((row) => ({ ...row, actions: actionsFor(row) })), meta };
+        return {
+            items: items.map((row) => presentReturnListItem(row, actionsFor(row))),
+            meta
+        };
     };
 
     if (isStaff(authContext)) return search({}).then(withCallerActions);

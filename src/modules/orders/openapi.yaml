@@ -2141,6 +2141,56 @@ components:
                 email:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
 
+        # One row of an orders list: what the table renders and nothing else. The buyer's address,
+        # email, lines and notes come only from the audited `GET /orders/{id}`, so paging through
+        # the list leaves no way round the read trail (OWASP API3:2023, Google AIP-157's basic
+        # view). A customer's own list is the same shape.
+        OrderListItem:
+            type: object
+            additionalProperties: false
+            required:
+                [
+                    id,
+                    orderNumber,
+                    status,
+                    paymentStatus,
+                    fulfillmentStatus,
+                    returnStatus,
+                    totalPrice,
+                    currency,
+                    actions
+                ]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderNumber:
+                    type: string
+                    example: '2026-000041'
+                status:
+                    $ref: '#/components/schemas/OrderStatus'
+                paymentStatus:
+                    $ref: '#/components/schemas/OrderPaymentStatus'
+                fulfillmentStatus:
+                    $ref: '#/components/schemas/OrderFulfillmentStatus'
+                returnStatus:
+                    $ref: '#/components/schemas/OrderReturnStatus'
+                totalPrice:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
+                currency:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode'
+                paidAt:
+                    type: string
+                    format: date-time
+                    description: When the order reached `paid`. Absent while unpaid.
+                createdAt:
+                    type: string
+                    format: date-time
+                deletedAt:
+                    type: string
+                    description: Present only on a soft-deleted order, which only staff list.
+                actions:
+                    $ref: '#/components/schemas/OrderActions'
+
         OrdersResponse:
             type: object
             additionalProperties: false
@@ -2149,7 +2199,7 @@ components:
                 items:
                     type: array
                     items:
-                        $ref: '#/components/schemas/Order'
+                        $ref: '#/components/schemas/OrderListItem'
                 meta:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
 

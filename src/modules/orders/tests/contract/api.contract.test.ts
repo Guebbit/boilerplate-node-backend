@@ -127,16 +127,46 @@ describe('GET /orders', () => {
         expect(response.body.items).toEqual([]);
     });
 
-    it('reports the three order totals rather than a single collapsed total', async () => {
+    it('lists a list item: the table’s fields, none of the order’s personal data or lines', async () => {
         const { bearer, user } = await authenticateAs('admin');
+        const order = await seedOrderFor(user);
+        const response = await api().get('/orders').set('Authorization', bearer);
+        const [item] = response.body.items;
+
+        expect(item.id).toBe(String(order._id));
+        expect(Number(item.totalPrice)).toBeGreaterThan(0);
+        expect(item).toHaveProperty('actions');
+        for (const hidden of [
+            'email',
+            'userId',
+            'items',
+            'shippingAddress',
+            'billingAddress',
+            'notes'
+        ]) {
+            expect(item).not.toHaveProperty(hidden);
+        }
+    });
+
+    it('answers a customer’s own list in the same shape', async () => {
+        const { bearer, user } = await authenticateAs('user');
         await seedOrderFor(user);
         const response = await api().get('/orders').set('Authorization', bearer);
-        const [order] = response.body.items;
 
-        expect(order.totalItems).toBe(1);
-        expect(order.totalQuantity).toBe(2);
-        expect(Number(order.totalPrice)).toBeGreaterThan(0);
-        expect(order).not.toHaveProperty('total');
+        expect(response.body.items[0]).not.toHaveProperty('shippingAddress');
+        expect(response.body.items[0]).toHaveProperty('orderNumber');
+    });
+
+    it('keeps the three totals and the address on the order read itself', async () => {
+        const { bearer, user } = await authenticateAs('admin');
+        const order = await seedOrderFor(user);
+        const response = await api()
+            .get(`/orders/${String(order._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.body.totalItems).toBe(1);
+        expect(response.body.totalQuantity).toBe(2);
+        expect(response.body).toHaveProperty('email');
     });
 });
 
