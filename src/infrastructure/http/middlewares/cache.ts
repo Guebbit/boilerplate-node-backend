@@ -73,16 +73,6 @@ const STALE_WHILE_REVALIDATE_SECONDS = 60;
 const STALE_IF_ERROR_SECONDS = 300;
 
 /**
- * Longest TTL allowed outside production, in seconds — the bound on how long a write that bypassed
- * the API (a seed, a one-off script under `scripts/ops/`, a `mongosh` session) can keep serving a stale
- * answer. Production is never clamped, because there the API is the only writer.
- * `NODE_REDIS_CACHE_DEV_TTL_MAX=0` opts out.
- *
- * See: docs/tools/redis-cache.md#writes-that-bypass-the-api
- */
-const getDevelopmentTtlMax = (): number => responseCacheConfig().NODE_REDIS_CACHE_DEV_TTL_MAX;
-
-/**
  * Clamp a route's declared TTL to the development ceiling.
  *
  * Applied where the TTL enters the system (the `setCache` middleware below) rather than at write
@@ -95,7 +85,12 @@ const getDevelopmentTtlMax = (): number => responseCacheConfig().NODE_REDIS_CACH
 export const resolveCacheTtl = (seconds: number): number => {
     if (!isRelaxedEnvironment()) return seconds;
 
-    const max = getDevelopmentTtlMax();
+    // Longest TTL allowed outside production, in seconds: the bound on how long a write that
+    // bypassed the API (a seed, a one-off script under `scripts/ops/`, a `mongosh` session) can
+    // keep serving a stale answer. Production is never clamped, because there the API is the only
+    // writer. `NODE_REDIS_CACHE_DEV_TTL_MAX=0` opts out.
+    // See: docs/tools/redis-cache.md#writes-that-bypass-the-api
+    const max = responseCacheConfig().NODE_REDIS_CACHE_DEV_TTL_MAX;
     if (max <= 0) return seconds;
     return Math.min(seconds, max);
 };

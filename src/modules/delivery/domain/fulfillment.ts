@@ -301,7 +301,7 @@ export const checkShipLines = (
  * anything is written back.
  * @param line - a line, plain or a stored subdocument
  */
-const plainLine = (line: FulfillmentLine): FulfillmentLine => ({
+export const plainLine = (line: FulfillmentLine): FulfillmentLine => ({
     productId: line.productId,
     title: line.title,
     quantity: line.quantity,

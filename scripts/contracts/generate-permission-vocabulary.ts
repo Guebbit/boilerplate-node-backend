@@ -14,23 +14,19 @@
  * Usage: tsx scripts/contracts/generate-permission-vocabulary.ts --in <yaml> --out <path> [--check]
  */
 import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { writeOrCheck } from './generated-file';
 import {
     readPermissionVocabulary,
     renderPermissionVocabulary
 } from './permission-vocabulary-render';
 import { requiredPath } from '../cli';
-
-/** The repo root. `import.meta.url` rather than `__dirname`: this script runs as ESM. */
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+import { REPO_ROOT } from '../modules-on-disk';
 
 /** The permission-key YAML to read, from `--in`. */
-const INPUT = requiredPath('in', ROOT);
+const INPUT = requiredPath('in', REPO_ROOT);
 
 /** The file to generate, from `--out`. */
-const OUTPUT = requiredPath('out', ROOT);
+const OUTPUT = requiredPath('out', REPO_ROOT);
 
 /** The whole generated file's text. */
 const output = renderPermissionVocabulary(readPermissionVocabulary(readFileSync(INPUT, 'utf8')));

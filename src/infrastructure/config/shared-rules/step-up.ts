@@ -13,7 +13,7 @@ import { z } from 'zod';
 const seconds = z.int().positive();
 
 /** The step-up windows: one per tier a rule may name. */
-export const stepUpWindowsSchema = z.strictObject({
+const stepUpWindowsSchema = z.strictObject({
     /** Money and destructive actions. */
     critical: seconds,
     /** Identity and sessions. */

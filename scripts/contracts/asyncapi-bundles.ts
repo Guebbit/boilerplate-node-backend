@@ -249,11 +249,6 @@ export const asyncapiBundle: ContractBundle = {
     output: path.join(REPO_ROOT, 'asyncapi.yaml'),
     shared: false,
     content: () => compile('backend'),
-    sources: () => [
-        ASYNC_ROOT_DOCUMENT,
-        ...sectionsInScope('backend').map((section) => asyncSectionDocument(section)),
-        ...fragmentsFor(sectionsInScope('backend'))
-    ],
     compiled: true
 };
 
@@ -268,10 +263,5 @@ export const asyncapiPublicBundle: ContractBundle = {
     label: 'asyncapi.public.yaml',
     output: path.join(REPO_ROOT, 'asyncapi.public.yaml'),
     content: () => compile('shared'),
-    sources: () => [
-        ASYNC_ROOT_DOCUMENT,
-        ...sectionsInScope('shared').map((section) => asyncSectionDocument(section)),
-        ...fragmentsFor(sectionsInScope('shared'))
-    ],
     compiled: true
 };

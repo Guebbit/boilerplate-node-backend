@@ -32,9 +32,9 @@ import {
 } from '@asyncapi/modelina';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 import { requiredPath } from '../cli';
+import { REPO_ROOT } from '../modules-on-disk';
 import { writeOrCheck } from './generated-file';
 
 /** The slice of an AsyncAPI 3.0 channel this generator reads. */
@@ -89,14 +89,11 @@ interface AsyncApiDocument {
     };
 }
 
-/** The repo root. `import.meta.url` rather than `__dirname`: this script runs as ESM. */
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-
 /** The bundled root contract this generator reads — never a module fragment. */
-const INPUT = path.resolve(ROOT, 'asyncapi.yaml');
+const INPUT = path.resolve(REPO_ROOT, 'asyncapi.yaml');
 
 /** Absolute path of the file to generate, from `--out`. */
-const OUTPUT = requiredPath('out', ROOT);
+const OUTPUT = requiredPath('out', REPO_ROOT);
 
 /*
  * Converts source names into `PascalCase`.

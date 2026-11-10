@@ -12,6 +12,7 @@
  * happened.
  */
 
+import { setTimeout as sleep } from 'node:timers/promises';
 import { orderModel } from '@modules/orders/model';
 import { paymentModel } from '@modules/payments/model';
 import { fulfillmentOrderModel, shipmentModel } from '@modules/delivery/model';
@@ -145,7 +146,7 @@ const settleAuditTrail = async (): Promise<void> => {
         const count = await auditLogModel.countDocuments().exec();
         if (count === previous) return;
         previous = count;
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await sleep(50);
     }
 };
 

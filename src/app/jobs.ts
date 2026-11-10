@@ -20,26 +20,16 @@ import { enabledModules } from '../modules';
 import { appJobData } from './jobs.generated';
 import { HOUR_MS } from '@domain-primitives/time';
 
-/**
- * How long a quarantine file is left alone before it counts as abandoned. 24 hours by default —
- * long enough that a broker outage lasting a normal maintenance window does not lose anything.
- */
-const quarantineRetentionMs = (): number => imageConfig().NODE_QUARANTINE_RETENTION_HOURS * HOUR_MS;
-
-/**
- * How long a spooled file is left alone before it counts as abandoned. One hour by default — a
- * mail job settles in seconds; anything still here past that is a job that died mid-flight.
- */
-const mailSpoolRetentionMs = (): number =>
-    mailFilesConfig().NODE_MAIL_SPOOL_RETENTION_HOURS * HOUR_MS;
-
 /** The jobs no module owns. */
 export const appJobs: readonly JobDeclaration[] = [
     {
         ...appJobData.reapQuarantine,
         run: () => {
             const root = quarantineRoot();
-            return reapDirectory(root, Date.now() - quarantineRetentionMs(), 'Quarantine').then(
+            // A quarantine file is left alone this long before it counts as abandoned: 24 hours by
+            // default, so a broker outage across a normal maintenance window loses nothing.
+            const retentionMs = imageConfig().NODE_QUARANTINE_RETENTION_HOURS * HOUR_MS;
+            return reapDirectory(root, Date.now() - retentionMs, 'Quarantine').then(
                 ({ checked, reaped }) => {
                     logger.info({ message: 'Quarantine reaped.', root, checked, reaped });
                 }
@@ -54,11 +44,15 @@ export const appJobs: readonly JobDeclaration[] = [
     },
     {
         ...appJobData.reapMailSpool,
+        // A spooled file is left alone this long before it counts as abandoned: one hour by default.
+        // A mail job settles in seconds; anything still here past that died mid-flight.
         run: () =>
-            reapSpooled(mailSpoolRetentionMs()).then((reaped) => {
-                if (reaped > 0)
-                    logger.info({ message: 'Spooled mail attachments reaped.', reaped });
-            }),
+            reapSpooled(mailFilesConfig().NODE_MAIL_SPOOL_RETENTION_HOURS * HOUR_MS).then(
+                (reaped) => {
+                    if (reaped > 0)
+                        logger.info({ message: 'Spooled mail attachments reaped.', reaped });
+                }
+            ),
         connectFirst: false
     },
     {

@@ -18,8 +18,6 @@ import { defineProbe } from '@infrastructure/config/define';
 import { paymentsConfig } from '../config';
 import { paymentProviderRegistry } from './registry';
 
-export { registerPaymentProvider } from './registry';
-
 /** Re-exported from `./errors` — see there for why it isn't declared in this file. */
 export { PaymentInFlightError, PaymentProviderError } from './errors';
 

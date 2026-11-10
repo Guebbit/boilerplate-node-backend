@@ -9,6 +9,7 @@
 // Mongoose is the ODM over the MongoDB driver. Importing the default export gives the
 // *singleton* — `mongoose.connect()` mutates global state, so any file that
 // `import`s `mongoose` finds the same live connection.
+import { setTimeout as sleep } from 'node:timers/promises';
 import mongoose from 'mongoose';
 import type { ClientSession } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
@@ -60,14 +61,6 @@ export const isPermanentConnectError = (error: unknown): boolean => {
  * can be noticed.
  */
 export const JOB_MAX_TIME_MS = 10 * MINUTE_MS;
-
-/**
- * Backoff delays should yield to the event loop instead of blocking the whole process.
- *
- * Promisified `setTimeout` — a busy-wait loop here would freeze the event loop and, in a
- * container, block the health-check endpoint from ever answering.
- */
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Accept either a full Mongo URI or host/port/database fragments, URI taking precedence.
@@ -156,7 +149,10 @@ export const start = (maxTimeMs?: number) => {
                     error
                 });
                 // Stryker restore all
-                return wait(delayMs).then(() => attemptConnect(attempt + 1));
+                // Node's promise timer yields to the event loop: a busy-wait here would freeze it and, in a
+                // container, block the health-check endpoint from ever answering.
+                // https://nodejs.org/api/timers.html#timerspromisessettimeoutdelay-value-options
+                return sleep(delayMs).then(() => attemptConnect(attempt + 1));
             }
         );
 

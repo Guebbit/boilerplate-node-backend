@@ -19,13 +19,6 @@ import { logger } from '@infrastructure/adapters/logger';
 import { issueToken, tokenSentAt } from './tokens';
 
 /**
- * How long a reset link works — how long a stolen mailbox stays useful. Tunable because the safe
- * direction is SHORTER, and that trade against a user who reads mail on a delay is a
- * deployment's call, not this file's.
- */
-const passwordResetTokenTtlMs = (): number => accountConfig().NODE_PASSWORD_RESET_TTL_MS;
-
-/**
  * Seconds between two reset mails for one account. A second request inside the window is skipped
  * SILENTLY (see {@link requestPasswordReset}): the same 200, nothing sent.
  */
@@ -53,7 +46,10 @@ const resetRecentlySent = (user: UserDocument): Promise<boolean> =>
  * @returns the plaintext token, for the emailed link only
  */
 const issueResetToken = (user: UserDocument): Promise<string> =>
-    issueToken(user.id, PASSWORD_RESET_TOKEN_TYPE, passwordResetTokenTtlMs());
+    // How long a reset link works: how long a stolen mailbox stays useful. Tunable because the safe
+    // direction is SHORTER, and that trade against a user who reads mail on a delay is a
+    // deployment's call, not this file's.
+    issueToken(user.id, PASSWORD_RESET_TOKEN_TYPE, accountConfig().NODE_PASSWORD_RESET_TTL_MS);
 
 /**
  * Mint a reset link for a known account and queue its mail, unless one went out inside

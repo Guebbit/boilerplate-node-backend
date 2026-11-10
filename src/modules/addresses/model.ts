@@ -8,6 +8,7 @@
 
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
+import { postalAddressPaths } from '@infrastructure/persistence/postal-address-paths';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
 /** A stored address-book entry. */
@@ -43,12 +44,7 @@ export type AddressBookModel = Model<AddressBookDocument>;
 const addressItemSchema = new Schema(
     {
         label: { type: String },
-        fullName: { type: String, required: true },
-        street: { type: String, required: true },
-        city: { type: String, required: true },
-        zip: { type: String, required: true },
-        country: { type: String, required: true },
-        phone: { type: String },
+        ...postalAddressPaths,
         default: { type: Boolean, default: false }
     },
     /* `_id: true` is mongoose's default; spelled out because the WISH to have one is the whole

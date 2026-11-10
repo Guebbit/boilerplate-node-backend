@@ -68,7 +68,7 @@ export const hasPurchaseHoldToClear = (
  *
  * @param user - anything carrying the stored hold and reset mark
  */
-export const countingSinceOf = (
+const countingSinceOf = (
     user: Pick<UserDocument, 'purchaseHold' | 'purchaseHoldResetAt'>
 ): Date | undefined => {
     const marks = [user.purchaseHold?.setAt, user.purchaseHoldResetAt].filter(

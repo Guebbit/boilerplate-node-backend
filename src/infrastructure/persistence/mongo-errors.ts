@@ -15,7 +15,7 @@
  * renamed.
  */
 export const isDuplicateKey = (error: unknown): boolean =>
-    (error as { code?: number } | undefined)?.code === 11_000;
+    typeof error === 'object' && error !== null && 'code' in error && error.code === 11_000;
 
 /**
  * Driver/Mongoose error NAMES that mean "no server was reachable", never a request-shape problem

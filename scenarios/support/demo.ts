@@ -4,7 +4,7 @@
  * {@link installDemo} and {@link restoreScenario} to `createApp` as its extension (`npm run
  * demo`). Nothing under `src/` knows it exists: production has no such routes to mount.
  *
- * Eight routes for the paired frontend's e2e suite, all under `/__test/*`:
+ * Seven routes for the paired frontend's e2e suite, all under `/__test/*`:
  *
  * `POST /__test/restore`   empty the database and put a named scenario back, clearing the outbox
  *                          and putting the clock back to real time
@@ -17,7 +17,8 @@
  *                          the colon as a dash — `reap:orders` is `reap-orders`
  * `GET /__test/jobs`       the lever names of every declared job
  * plus each shop module's own levers, e.g. `POST /__test/payments/refund-failure`, which makes an
- * order's refunds fail (or stop failing) — see `./doubles/<module>/levers.ts`
+ * order's refunds fail (or stop failing), and `POST /__test/payments/dispute` — see
+ * `./doubles/<module>/levers.ts`
  *
  * A scenario is BUILT once per process and REPLAYED thereafter — see {@link buildOnce}.
  * Unauthenticated since the profile only ever binds beside a database `npm run demo` just created.

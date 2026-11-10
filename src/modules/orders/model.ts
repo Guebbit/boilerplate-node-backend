@@ -20,6 +20,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import type { ProductSnapshot } from '@modules/products';
+import { postalAddressPaths } from '@infrastructure/persistence/postal-address-paths';
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { canonicalLocaleSetter } from '@infrastructure/i18n';
@@ -244,17 +245,7 @@ export type OrderModel = Model<OrderDocument>;
  * entry. `_id: false` because the shared `OrderAddress` contract schema is
  * `additionalProperties: false`.
  */
-const orderAddressSchema = new Schema(
-    {
-        fullName: { type: String, required: true },
-        street: { type: String, required: true },
-        city: { type: String, required: true },
-        zip: { type: String, required: true },
-        country: { type: String, required: true },
-        phone: { type: String }
-    },
-    { _id: false }
-);
+const orderAddressSchema = new Schema(postalAddressPaths, { _id: false });
 
 /**
  * Schema for the product snapshot embedded on an order line — `openapi.root.yaml`'s

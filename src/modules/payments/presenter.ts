@@ -15,7 +15,7 @@ import { displayStatusOf, owesBuyerAnotherWay } from './domain';
 import type { PaymentDocument, RefundRecord } from './model';
 
 /** The stored fields only a caller holding `display:Payment` is sent. */
-export interface StaffFields {
+interface StaffFields {
     providerRef?: string;
     refunds: Pick<RefundRecord, 'providerRefundRef' | 'failureReason'>[];
 }

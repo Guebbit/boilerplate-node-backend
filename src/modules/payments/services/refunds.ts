@@ -766,10 +766,6 @@ const notRefundable = (): ResponseReject =>
         { code: ERROR_CODES.PAYMENT_NOT_REFUNDABLE, message: t('payments.not-refundable') }
     ]);
 
-/** The 409 for a payment the buyer's bank disputed: the bank has the money, the answer is evidence. */
-const paymentDisputed = (): ResponseReject =>
-    generateReject(409, [{ code: ERROR_CODES.PAYMENT_DISPUTED, message: t('payments.disputed') }]);
-
 /** What a successful `POST /payments/:id/refunds` answers with: the payment, and the record the request wrote. */
 export interface RefundRequested {
     /** The payment as it now stands. */
@@ -820,7 +816,12 @@ const refundFoundPayment = (
     const invalid = refusalFor(payment, body);
     if (invalid) return Promise.resolve(invalid);
     // An open chargeback: the bank took the money back already, and refunding too pays it twice.
-    if (hasOpenChargeback(payment)) return Promise.resolve(paymentDisputed());
+    if (hasOpenChargeback(payment))
+        return Promise.resolve(
+            generateReject(409, [
+                { code: ERROR_CODES.PAYMENT_DISPUTED, message: t('payments.disputed') }
+            ])
+        );
     // The `PaymentActions.refund` rule. A refund still open counts against what is left, so only
     // an exhausted payment is refused; a second partial refund beside an open one is allowed.
     if (payment.status !== REFUNDABLE_PAYMENT_STATUS || remainingOf(payment) <= 0)
@@ -935,10 +936,9 @@ export const settleRefundByHand = (
     context: CallerContext
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
     paymentRepository.findByIdScoped(paymentId, callerScope(authContext)).then((payment) => {
-        if (!payment) return paymentNotFound();
-        const refund = payment.refunds.find((record) => String(record._id) === refundId);
+        const refund = payment?.refunds.find((record) => String(record._id) === refundId);
         // The same 404 as an unknown payment: a refund id is read only through its payment.
-        if (!refund) return paymentNotFound();
+        if (!payment || !refund) return paymentNotFound();
 
         const refusal = handSettlementRefusal(payment, refund);
         if (refusal) return refusal;
@@ -1074,10 +1074,9 @@ export const cancelRefund = (
     retriesLeft = 3
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
     paymentRepository.findByIdScoped(paymentId, callerScope(authContext)).then((payment) => {
-        if (!payment) return paymentNotFound();
-        const refund = payment.refunds.find((record) => String(record._id) === refundId);
+        const refund = payment?.refunds.find((record) => String(record._id) === refundId);
         // The same 404 as an unknown payment: a refund id is read only through its payment.
-        if (!refund) return paymentNotFound();
+        if (!payment || !refund) return paymentNotFound();
 
         const refusal = cancelRefusal(payment, refund);
         if (refusal) return refusal;

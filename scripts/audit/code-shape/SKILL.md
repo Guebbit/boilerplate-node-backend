@@ -102,26 +102,34 @@ count — so the reader can repeat it.
 
 ### 3 — the verdicts
 
-| Verdict      | Means                                                                   | Used by |
-| ------------ | ----------------------------------------------------------------------- | ------- |
-| **INLINE**   | Put the body back at its one or two call sites and delete the function. | 1, 2, 4 |
-| **MERGE**    | Move the contents into a named sibling file and delete this one.        | 3       |
-| **UNEXPORT** | Used, but only inside its own file — drop the `export`.                 | 5       |
-| **DELETE**   | Nothing uses it.                                                        | 4, 5    |
-| **FIX**      | knip found a real defect: an unlisted dependency, an unresolved import. | 5       |
-| **EXTRACT**  | Real duplication: name the shared function and where it goes.           | 6       |
-| **KEEP**     | It earns its place. Give the reason code below.                         | all     |
+| Verdict      | Means                                                                                                                 | Used by |
+| ------------ | --------------------------------------------------------------------------------------------------------------------- | ------- |
+| **INLINE**   | Put the body back at its one or two call sites and delete the function.                                               | 1, 2, 4 |
+| **MERGE**    | Move the contents into a named sibling file and delete this one.                                                      | 3       |
+| **UNEXPORT** | Used, but only inside its own file — drop the `export`. Runtime values; a type only when nothing exported reaches it. | 5       |
+| **DELETE**   | Nothing uses it.                                                                                                      | 4, 5    |
+| **FIX**      | knip found a real defect: an unlisted dependency, an unresolved import.                                               | 5       |
+| **EXTRACT**  | Real duplication: name the shared function and where it goes.                                                         | 6       |
+| **KEEP**     | It earns its place. Give the reason code below.                                                                       | all     |
 
 KEEP reason codes — one per row, never "seems fine":
 
 - `domain-name` — the name states a business rule the inlined expression would hide.
 - `published` — barrel surface (`published: true`), unused on purpose: `CLAUDE.md` § Module
-  barrels. Never INLINE or DELETE one.
+  barrels. Never INLINE or DELETE one. Published means reachable from
+  `src/modules/<name>/index.ts` through re-exports; any other `index.ts` is an internal barrel and
+  its unused re-export is DELETE.
+- `shape` — a type an exported declaration reaches (field, parameter, return, base, generic,
+  `typeof` member), or a re-exported type in the signature of another re-export that stays. Never
+  UNEXPORT one while that holds.
 - `boundary` — a port, an adapter, or the one wrapper around a third-party call.
 - `seam` — a test replaces it (`jest.mock`, an injected dependency) — cite the test.
 - `slot` — a self-registering extension point: `register*`, a registry entry.
 - `layout` — the module layout asks for the file: `docs/theory/modules.md#what-a-module-contains`.
 - `depth` — inlining would push nesting past `max-depth` or the caller past the comment caps.
+- `shared` — two or more references today (same file counts; a name passed to `.then` counts).
+- `door` — an exported getter, the one access to private module state: another file or a test
+  reads it.
 - `lookalike` — (jscpd) two blocks shaped alike by the contract or a test table, not by shared
   logic; changing one would not mean changing the other.
 - `false-positive` — (knip) the tool cannot see the use; say what uses it. If it will recur, say so:
@@ -137,6 +145,28 @@ Before writing, read the six result sets together:
   idea, no domain name): downgrade it to KEEP `lookalike`.
 - Two copies: EXTRACT only when they must change together. Three or more: EXTRACT. That is Fowler's
   Rule of Three.
+
+## House rulings
+
+The user's decisions on the shape questions that kept flipping between runs. They override a
+carried verdict (step 0) and apply to every reviewer.
+
+| Ruling                  | Text                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Source     |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| Published               | An export is published when it is reachable from `src/modules/<name>/index.ts` through `export *` or a named re-export, directly or transitively. A named re-export publishes that name only. Published exports are never INLINE, DELETE or UNEXPORT for being unused.                                                                                                                                                                                                                                          | CS-4       |
+| Internal barrel         | Every other `index.ts` (a sub-barrel no module barrel re-exports, a port index, an infrastructure facade, `src/types`) is an internal barrel. An unused re-export there is DELETE. KEEP `slot` and KEEP `published` protect the declaration in its own file, never a second re-export.                                                                                                                                                                                                                          | CS-4       |
+| Type in a shape         | A type an exported declaration reaches (field, parameter, return, base, generic argument, `typeof` member) keeps its `export`: KEEP `shape`. A re-exported type that another kept re-export of the same barrel reaches is KEEP `shape` too. UNEXPORT is for runtime values.                                                                                                                                                                                                                                     | CS-5       |
+| Config getter           | An exported getter, wherever it lives, is KEEP `door`: another file or a test reads it. An unexported getter whose body is only `slice().KEY` (optionally times a unit constant) with one caller is INLINE; its docblock becomes a `//` line on the reading line.                                                                                                                                                                                                                                               | CS-7       |
+| Reject factory          | A function returning `ResponseReject` is a Lazy Element like any other. KEEP when it has two or more references (a name passed to `.then` counts), a barrel publishes it, or it computes (takes a parameter, reads more than literals and `t()`). INLINE a no-argument, one-reference one. Never KEEP one as `domain-name`: `ERROR_CODES.X` and the message key already name the refusal. Enumerate with the `(): ResponseReject` grep and count references with `grep -w` across `src/`, minus the definition. | CS-8       |
+| A docblock is no reason | A docblock alone never keeps a one-caller wrapper; its why moves to a `//` comment at the call. Keep it only when it is shared (two or more references), published, a seam, computes something, or its name states a rule the inlined code hides.                                                                                                                                                                                                                                                               | CS-7, CS-8 |
+| Lookalike               | Two domains that merely look alike stay apart: `camelCaseOf` (lodash is not a dependency; `package.json` lists it only as an override).                                                                                                                                                                                                                                                                                                                                                                         | CS-10      |
+| Small shared helper     | A helper of three lines or fewer with one idea and no domain name is KEEP even across three copies: the Lazy Element downgrade in reconcile applies before the Rule of Three (`adapters/pdf.ts`, `adapters/queue.ts`, `kernel/outbox.ts`; `account/services/export.ts` is a different shape). Cite the downgrade, not `lookalike`'s definition: these copies do share logic.                                                                                                                                    | CS-11      |
+
+Also, when the report is written:
+
+- An INLINE whose name is declared in another file is checked as a copy first (EXTRACT, reuse), not
+  inlined blind.
+- An INLINE that drops a function a test calls directly lists that test, to be re-pointed.
 
 ## Output
 

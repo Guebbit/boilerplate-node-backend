@@ -76,6 +76,3 @@ export const frontendLinksSchema = z.strictObject({
     /** Public pages that take no id. The empty string is the home page. */
     staticPages: z.array(z.string())
 });
-
-/** Parsed `frontend-links.yaml`. */
-export type FrontendLinksRules = z.infer<typeof frontendLinksSchema>;

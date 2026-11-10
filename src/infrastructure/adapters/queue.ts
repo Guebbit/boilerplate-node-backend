@@ -466,22 +466,6 @@ export const parkedCounts = (): Promise<{ name: string; parked: number }[]> => {
 };
 
 /**
- * Deployment-wide default: deliveries a job gets before it is parked in
- * {@link deadLetterQueueOf}. A consumer that needs a different number declares it on its own
- * `ConsumeOptions`, next to its handler — not a second environment variable.
- */
-const defaultMaxAttempts = (): number => queueConfig().NODE_QUEUE_MAX_ATTEMPTS;
-
-/**
- * Deployment-wide default: how long a failed job waits in {@link retryQueueOf} before RabbitMQ
- * dead-letters it back onto the work queue. One fixed delay per queue (not per message) is what
- * keeps this ONE retry queue per work queue and sidesteps RabbitMQ's head-of-line expiry rule — a
- * 5s message queued behind a 10-hour one would otherwise wait 10 hours, since a queue only expires
- * from the head.
- */
-const defaultRetryDelaySeconds = (): number => queueConfig().NODE_QUEUE_RETRY_DELAY_SECONDS;
-
-/**
  * The two job-priority levels every work queue supports, named rather than passed as raw numbers
  * so a publish call reads as intent (`'high'`) instead of a magic number whose meaning lives only
  * here. Kept to two on purpose: the idea is one gap, between "most things" and "the few things a
@@ -559,9 +543,13 @@ const AT_LEAST_ONCE_DEAD_LETTERING = {
  */
 const assertJobQueue = (ch: ConfirmChannel, queue: string): Promise<void> => {
     const retryQueue = retryQueueOf(queue);
-    // Always {@link defaultRetryDelaySeconds} — there is no per-consumer override, which is what
-    // keeps producer and consumer trivially agreeing (see the docblock above).
-    const retryDelaySeconds = defaultRetryDelaySeconds();
+    // `NODE_QUEUE_RETRY_DELAY_SECONDS`: how long a failed job waits in {@link retryQueueOf} before
+    // RabbitMQ dead-letters it back onto the work queue. There is no per-consumer override, which
+    // keeps producer and consumer trivially agreeing (see the docblock above). One fixed delay per
+    // queue (not per message) is what keeps this ONE retry queue per work queue and sidesteps
+    // RabbitMQ's head-of-line expiry rule: a 5s message queued behind a 10-hour one would otherwise
+    // wait 10 hours, since a queue only expires from the head.
+    const retryDelaySeconds = queueConfig().NODE_QUEUE_RETRY_DELAY_SECONDS;
 
     return ch
         .assertExchange(DEAD_LETTER_EXCHANGE, 'direct', { durable: true })
@@ -859,7 +847,7 @@ const retryLater = (ch: ConfirmChannel, queue: string, incoming: ConsumeMessage)
  * @param handler - caller's per-message handler
  * @param incoming - the raw delivered message
  * @param maxAttempts - deliveries this queue's jobs get before {@link parkInDead} —
- *   {@link defaultMaxAttempts}, the one deployment-wide number every consumer shares
+ *   `NODE_QUEUE_MAX_ATTEMPTS`, the one deployment-wide number every consumer shares
  */
 const handleDelivery = <TPayload>(
     ch: ConfirmChannel,
@@ -960,7 +948,9 @@ const bindConsumer = <TPayload>(
     options: ConsumeOptions<TPayload>
 ): Promise<void> => {
     const { queue, handler, schema, prefetch = 1 } = options;
-    const maxAttempts = defaultMaxAttempts();
+    // Deliveries a job gets before it is parked in {@link deadLetterQueueOf}: one deployment-wide
+    // number, not a per-consumer option and not a second environment variable.
+    const maxAttempts = queueConfig().NODE_QUEUE_MAX_ATTEMPTS;
 
     return (
         // Same idempotent declaration as on the publish side — the consumer may boot first.
