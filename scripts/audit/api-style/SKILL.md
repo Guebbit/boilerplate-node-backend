@@ -1,27 +1,59 @@
 ---
-name: api-idempotency-key
-description: Audit this API's contract, handlers and docs against the IETF Idempotency-Key draft, reported only
+name: api-style
+description: Audit this API's contract, handlers and docs against one style guide, Zalando unless the API clearly leans Google AIP, reported only
 ---
 
 Before anything else, read `scripts/audit/RULES.md` and follow it. Where this skill and RULES.md
 disagree, RULES.md wins.
 
-ROLE: Retry-safety reviewer: you judge whether a retried write can do its harm twice.
+ROLE: Guideline reviewer: you read the API against ONE style guide's rules, and you do not decide.
 
-GOAL: For every rule in `scripts/audit/api-standards.yaml` whose `standard` is `idempotency-key`, give every
-operation in scope one verdict per rule, each with a citation. Operations that share a verdict and its
-cause share one row (see Output). The audit judges whether every POST or PATCH that moves money, stock or an account takes a key or sits in a published exception class.
-It reports against the IETF Idempotency-Key draft, plus the `house` clauses the registry pins to its rules.
-When a precedence is given, a rule a higher standard overrides is listed once under **Superseded by a
-higher standard**, not judged.
+GOAL: Pick the guide (see "Which guide"). For every rule in `scripts/audit/api-standards.yaml`
+whose `standard` is that guide, give every operation in scope one verdict per rule, each with a
+citation. Operations that share a verdict and its cause share one row
+(see Output). The audit judges where names, enums, paging, methods, money and errors differ from the
+guide, and whether each difference is written down.
+It reports against the chosen guide, plus the `house` clauses the registry pins to its rules.
 
-SCOPE: the argument you were given: a module name (`orders`), a path, `--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5). Empty means
-`whole-repo`: the **whole contract**. A difference from a standard is rarely introduced by the change
-that happens to surface it.
+The other guide is never read, judged or named in the report. The API took one road; the road it
+did not take is not a finding.
+
+SCOPE: the argument you were given: a module name (`orders`), a path, `--diff` or `whole-repo`
+(`scripts/audit/RULES.md` rule 5). Empty means `whole-repo`: the **whole contract**. A difference
+from a standard is rarely introduced by the change that happens to surface it.
+
+## Which guide
+
+Zalando, unless the API clearly leans Google. Nobody has to tell you; you look.
+
+Google signals, read off the bundle:
+
+- errors are `google.rpc.Status`-shaped (`code`, `message`, `details`), not `application/problem+json`
+- custom methods as `:verb` paths (`POST /things/{id}:archive`)
+- paging by `page_token` / `next_page_token`
+- partial updates with a field mask (`update_mask`)
+
+`camelCase` names alone are NOT a lean: plenty of non-Google APIs use them.
+
+- Zero or one signal: Zalando. Say so in one line, with the signals you checked.
+- Two or more: STOP and ask the user, naming the signals found: "This API leans Google AIP. Audit
+  against Google AIP instead of Zalando?" Go on with their answer. Not answered: Zalando.
+
+Write the guide and why at the top of the report. `api-http` checks the first signal on its own,
+since it decides whether the RFC 9457 rules run.
+
+## The web rules come first
+
+The eight HTTP standards (`api-http`) outrank the style guide. A guide rule, or half of one, that a
+web rule already decides is not judged here: it is listed once under **Decided by the web rules**.
+Example: AIP-216's 400 for a refused state change, where RFC 9110 defines 409.
+
+One exception: under Google AIP the error format is Google's (`aip-error-model`) and is judged
+here; `api-http` steps its RFC 9457 rules aside.
 
 ## Naming the scope
 
-Output goes to `tmp/reports/audit-<run>/api-idempotency-key/<SCOPE>…`. `<run>` and `<SCOPE>` (module, path slug,
+Output goes to `tmp/reports/audit-<run>/api-style/<SCOPE>…`. `<run>` and `<SCOPE>` (module, path slug,
 `--diff` branch slug, `whole-repo`) are defined in RULES.md rule 4.
 
 ## Before you start
@@ -31,31 +63,34 @@ Output goes to `tmp/reports/audit-<run>/api-idempotency-key/<SCOPE>…`. `<run>`
 2. Read the "Where we differ, and why" section of `docs/theory/api-standards.md`. A rule whose
    `difference` names a row there gets the verdict `KNOWN-DIFFERENCE` when the difference is what
    you found, with the row `id`.
-3. Read the rules of this standard in `scripts/audit/api-standards.yaml`. Open each `source` and
-   re-read the clause: the `rule` sentence is a summary, the standard is the authority. Check `house`
+3. Read the chosen guide's rules in `scripts/audit/api-standards.yaml`. Open each `source` and
+   re-read the clause: the `rule` sentence is a summary, the guide is the authority. Check `house`
    as well; its docs page is the authority for it.
-4. Name the existing guard and move on for anything already guarded mechanically. Here:
+    - Zalando: the text is `https://opensource.zalando.com/restful-api-guidelines/`; the registry's
+      `section` number is the anchor (`#173`).
+    - Google AIP: `https://google.aip.dev/<number>`.
+4. Name the existing guard and move on for anything already guarded mechanically. Name each guard by
+   file and function or test title, never by line. A guarded rule gets one line ("guarded by X") and
+   no verdict hunt.
     - Spectral `shared/contracts/spectral.yaml` (security on every operation, no `nullable`, errors are
       `application/problem+json`, the 2xx body is an object, replace is PUT and update is PATCH,
-      operationId shape, schema names, camelCase parameters, `maxLength`, `names-in-us-english-*`)
-    - `tests/contract/idempotency.test.ts` (the middleware's own behaviour)
-    - `scripts/contracts/response-headers.ts` (declares `Idempotent-Replayed` on every response of a keyed operation except a 429, which the ledger never sees) and `tests/contract/idempotency.test.ts`, the test "replays a refusal as the problem it was…" (the proof that a replay carries the header)
-      A guarded rule gets one line ("guarded by X") and no verdict hunt.
-5. If this audit is part of a run of several, the USER gives the order of precedence first
-   ("RFC 9110 > Google AIP > Zalando"). Ask for it if you were not given one. Never pick it.
+      operationId shape, schema names, camelCase parameters, `maxLength`, `names-in-us-english-*`,
+      the last also AIP-190)
+    - `tests/cross-cutting/paginated-sort-is-total.test.ts`, `tests/contract/unknown-query-params.test.ts`
 
 ## Steps
 
-0. FIRST open the draft (`https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/`)
-   and write down its number, date and state (Internet-Draft or RFC). The registry says draft-08
-   (2026-10-22) when it was written; the latest draft wins, and its state tells you how much weight
-   to give it against practice.
 1. List the operations in scope from the bundle.
-   1b. The house rule is a MINIMUM (`docs/tools/idempotency.md`, "Named exceptions"): a create with no
-   key that no exception names is a finding only if a retry does real harm.
 2. For each rule, check three sources and reach ONE verdict: the contract (the operation, its
    responses, its headers), the handler (controller, then service, never only the route), and the
    docs page that describes it.
+    - `zalando-money`: scan every amount in each response, starting from the `DecimalAmount` and
+      `NonNegativeDecimalAmount` schemas. Each one needs a `currency` on its own object or on an
+      ancestor in the same answer. Name the scan. A miss is a `VIOLATION` with fix side `contract`,
+      not a `LINT-CANDIDATE`: the rule is `lint: no`. Responses only: a request amount takes the
+      target's currency.
+    - Google AIP: most differences are already rows on the theory page. A hit on one is
+      `KNOWN-DIFFERENCE`, not a violation.
 3. A doc that contradicts the code: say which side is wrong, and cite the section.
 4. A finding a rule could catch mechanically: verdict `LINT-CANDIDATE` with the JSONPath. It is
    REPORTED only, never turned into a Spectral rule.
@@ -64,7 +99,7 @@ Output goes to `tmp/reports/audit-<run>/api-idempotency-key/<SCOPE>…`. `<run>`
 
 | Verdict            | Means                                                                                 |
 | ------------------ | ------------------------------------------------------------------------------------- |
-| `VIOLATION`        | the API contradicts the standard, and no theory row named by the rule says why        |
+| `VIOLATION`        | the API contradicts the guide, and no theory row named by the rule says why           |
 | `KNOWN-DIFFERENCE` | it differs, and the theory row the rule's `difference` names says why; still reported |
 | `LINT-CANDIDATE`   | mechanical: REPORTED only, never turned into a Spectral rule, with the JSONPath       |
 | `SATISFIED`        | checked, and it holds                                                                 |
@@ -80,7 +115,8 @@ named in the rule's `difference`.
 
 ## Output
 
-Write `tmp/reports/audit-<run>/api-idempotency-key/<SCOPE>.md`: the bundle's mtime, the scope, then a table of
+Write `tmp/reports/audit-<run>/api-style/<SCOPE>.md`: the bundle's mtime, the scope, the guide
+and the signals that picked it, then a table of
 
 | # | rule id | operation | verdict | evidence (file:line) | section | fix side |
 
@@ -98,7 +134,6 @@ fix lands: a code path, a schema, a theory row.
   row that judged it.
 
 `fix side` is `contract`, `code`, `docs` or `standard` (the standard is the one that fits worse).
-Rank worst first: harm a retry can do twice (money, stock or an account) > MUST > SHOULD > docs.
 Then list the `VIOLATION` and `LINT-CANDIDATE` rows again, worst first, by impact. On a tie: MUST,
 then house, then SHOULD. A row is one rule, one side (a standard clause or `house`), one verdict and
 one cause; the per-rule totals give house apart (`VIOLATION 4 (house 3)`).
@@ -115,8 +150,8 @@ code text found on the way that disagrees with another. Each line: what, file:li
 another standard's audit names that audit. No verdict, and not in the per-rule totals. Write "None."
 when empty.
 
-### Superseded by a higher standard
+### Decided by the web rules
 
-Required. `| rule id | yields to (standard · clause) | theory row | why |`, no verdict column. If
-empty, write "none: no precedence given" or "none: no higher standard in the given precedence
-overrides a rule of this one".
+One row per guide rule (or half of one) a web rule decides:
+`| rule id | decided by (standard · clause) | theory row | why |`, no verdict column. None: write
+"none".

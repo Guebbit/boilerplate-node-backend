@@ -121,14 +121,14 @@ line per verdict. The totals equal the control's row count, per slice and in a `
 ### Leads
 
 A Lead is a code-vs-spec divergence no test asserts, whether or not a pass-1 row names it. One line
-each: file:line, fix side, and the audit that owns it (`spec-gaps`, `reachability`, `api-rfc9457`…).
+each: file:line, fix side, and the audit that owns it (`spec-gaps`, `reachability`, `api-http`…).
 Leads are not verdicts. This is where spec-gaps' `contradicted` rows land; do not hand them back.
 
 ### Hand-offs
 
 A code the code sends (seen in pass 2, asserted by a test or not) that its operation's
 `x-error-codes` does not list is not drift: it is `rfc9457-errors-extension`, owned by
-`api-rfc9457`. The omission alone never makes a row SPEC-CONFLICT. Grade the row on its other
+`/audit-api-http`. The omission alone never makes a row SPEC-CONFLICT. Grade the row on its other
 merits and note the code in one line (operation, status, code, file:line).
 
 Rules:
