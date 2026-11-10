@@ -31,7 +31,7 @@ import { ordersExportLimiter, ordersNoteLimiter } from './rate-limits';
 import { getOrderTimeline } from './controllers/get-order-timeline';
 import { postOrderNote, deleteOrderNote } from './controllers/order-notes';
 import { postCancelOrder } from './controllers/post-cancel-order';
-import { postOrderStatusOverride } from './controllers/post-order-status-override';
+import { postOrderOverrideStatus } from './controllers/post-order-override-status';
 import { invalidateCache, noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
@@ -96,11 +96,11 @@ router.post(
     postCancelOrder
 );
 
-// POST /orders/:id/status-override — must come before /:id
+// POST /orders/:id/override-status — must come before /:id
 router.post(
-    '/:id/status-override',
+    '/:id/override-status',
     requirePermission('override', 'Order'),
-    postOrderStatusOverride
+    postOrderOverrideStatus
 );
 
 // PUT /orders/:id/shipping-address — staff correcting where an unshipped order goes (a held

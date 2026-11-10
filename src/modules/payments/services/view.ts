@@ -246,7 +246,7 @@ export const withActions = (
             payment.status === REFUNDABLE_PAYMENT_STATUS &&
             remainingOf(payment) > 0 &&
             !hasOpenChargeback(payment),
-        settleByHand: settleableByHand(payment, authContext),
+        settleRefundByHand: settleableByHand(payment, authContext),
         cancelRefund: cancelableRefunds(payment, authContext)
     }
 });

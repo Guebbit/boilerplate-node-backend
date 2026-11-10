@@ -221,16 +221,15 @@ One route may also state a flag in its path rather than as a value. `DELETE /pro
 means what `DELETE /products/:id?hardDelete=true` means; the `routeFlag('hardDelete')` middleware
 (`@infrastructure/http/middlewares/route-flag`) writes it onto `request.params` so the controller keeps a single
 declaration instead of growing a second entry point. Being a param, it does **not** thereby
-outrank a query or body entry that contradicts it: `hardDelete` is declared `anyTrue`, so
-`/products/:id/hard` carrying `{"hardDelete": false}` hard-deletes because one source said
-`true` — not because the path won a ranking.
+outrank a query entry that contradicts it: `hardDelete` is declared `anyTrue`, so
+`/products/:id/hard?hardDelete=false` hard-deletes because one source said `true` — not because
+the path won a ranking.
 
 An `{id}` delete takes no body at all: the 415 guard refuses one (see
 [write-methods.md](../api/write-methods.md#content-type-415)), so a gateway that strips a DELETE body can
-never turn a hard delete into a soft one. The collection form `DELETE /x` reads its id from the
-body alone, so a stray `?id=` cannot name a different record than the body does.
+never turn a hard delete into a soft one.
 
-Every domain that deletes a persisted record offers the same three spellings, and offers them for
+Every domain that deletes a persisted record offers the same two spellings (`?hardDelete=true` and `/{id}/hard`), and offers them for
 the same reason: the shape is a property of the domain, not a decision three route files each make.
 Products, users and orders all do. Cart and tasks do not, and that is a decision rather than an
 omission — a cart line is session-scoped, so there is no record to keep, and `deleteCartItem`

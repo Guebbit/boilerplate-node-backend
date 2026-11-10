@@ -81,7 +81,7 @@ auditor is shown.
 
 The **Mongo collection** exists so `GET /observability/audit` can answer "what has actor X done"
 from the API, with no log backend wired up. It carries a TTL index
-(`NODE_AUDIT_RETENTION_DAYS`, default 90 days) and is allowed to fail: if the write rejects, the
+(`NODE_AUDIT_RETENTION_DAYS`, default 180 days) and is allowed to fail: if the write rejects, the
 request continues and the log line has already gone out.
 
 Why a sink rather than a direct call — `src/infrastructure/**` is the bottom of the dependency graph and

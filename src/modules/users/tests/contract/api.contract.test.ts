@@ -65,6 +65,53 @@ describe('GET /users', () => {
         const { items } = response.body as { items: { id: string; role?: string }[] };
         expect(items.find((item) => item.id === String(user._id))?.role).toBe('admin');
     });
+
+    it('lists a list item: no phone, website or pending address, and the hold as a flag only', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const held = await createUser({
+            email: 'held@example.com',
+            username: 'held',
+            website: 'https://held.example.com',
+            purchaseHold: {
+                until: new Date(Date.now() + 86_400_000),
+                reason: 'staff',
+                note: 'Chargeback pending',
+                setAt: new Date()
+            }
+        });
+        await storePhone(String(held._id), '+390123456789');
+
+        const response = await api().get('/users').set('Authorization', bearer);
+
+        const items = response.body.items as Record<string, unknown>[];
+        const item = items.find((candidate) => candidate.id === String(held._id));
+        expect(item).toMatchObject({ email: 'held@example.com', purchaseHeld: true });
+        expect(item).toHaveProperty('actions');
+        for (const hidden of ['phone', 'website', 'pendingEmail', 'purchaseHold']) {
+            expect(item).not.toHaveProperty(hidden);
+        }
+        expect(JSON.stringify(item)).not.toContain('Chargeback pending');
+    });
+
+    it('keeps the hold’s own details on the account read', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const held = await createUser({
+            email: 'held2@example.com',
+            username: 'held2',
+            purchaseHold: {
+                until: new Date(Date.now() + 86_400_000),
+                reason: 'staff',
+                note: 'Chargeback pending',
+                setAt: new Date()
+            }
+        });
+
+        const response = await api()
+            .get(`/users/${String(held._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.body.purchaseHold).toMatchObject({ note: 'Chargeback pending' });
+    });
 });
 
 // The `?role=` filter itself is gone — `role` is a membership fact now, not a searchable document

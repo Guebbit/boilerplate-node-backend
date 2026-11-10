@@ -79,7 +79,7 @@ siblings win. A nullable `$ref` is `oneOf: [{ $ref }, { type: 'null' }]` (OpenAP
 `resolveSchema()` folds into the referenced node with `'null'` added to its `type`. An earlier
 version rebuilt every `allOf` as an empty object, so a nullable string like `locale` was drawn as `{}` and the operation was refused at the edge on every
 run, 11 of them (the `PUT`/`PATCH` of `/account`, `/users/{id}`, `/products/{id}`, translations,
-`POST /products`, `POST /cart/checkout`, `POST /orders/{id}/status-override`). Green, and testing
+`POST /products`, `POST /cart/checkout`, `POST /orders/{id}/override-status`). Green, and testing
 the validator. `tests/unit/support/spec-walk.test.ts` pins the fold.
 
 ## The merge-patch body

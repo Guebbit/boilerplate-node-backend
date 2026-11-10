@@ -6,7 +6,7 @@
  * See: docs/modules/tasks.md
  */
 
-import type { CallerContext, SearchTasksRequest, Task } from '@types';
+import type { CallerContext, SearchTasksRequest, Task, TaskListItem } from '@types';
 import {
     generateReject,
     generateSuccess,
@@ -20,7 +20,7 @@ import type { TaskDocument } from '../model';
 import { taskRepository } from '../repository';
 import { OPEN_STATUSES } from '../domain';
 import { inJurisdiction, jurisdictionScope } from '../access';
-import { presentTask, withView } from '../presenter';
+import { presentTask, presentTaskListItem, withView } from '../presenter';
 import { assigneeNamesOf, viewerOf } from '../views';
 
 /** What a search may filter on, past the repository's own text and address matching. */
@@ -68,7 +68,7 @@ const scopeOf = (
 
 /**
  * Search tasks by status, kind, source, assignee, overdue, email fragment or free text,
- * paginated — inside the caller's jurisdiction.
+ * paginated — inside the caller's jurisdiction. Rows are list items: a message preview, no notes.
  *
  * @param filters - the validated filters; `page`/`pageSize` may be strings, which
  *   `normalizePagination` coerces and bounds
@@ -77,13 +77,16 @@ const scopeOf = (
 export const search = (
     filters: TaskFilters,
     context: CallerContext
-): Promise<{ items: Task[]; meta: PaginatedMeta }> => {
+): Promise<{ items: TaskListItem[]; meta: PaginatedMeta }> => {
     const now = new Date();
 
     return taskRepository.search(filters, scopeOf(filters, context, now)).then(({ items, meta }) =>
         assigneeNamesOf(items.map((row) => row.assigneeId)).then((names) => {
             const viewer = viewerOf(context.caller, names);
-            return { items: items.map((row) => withView(row, viewer.of(row), now)), meta };
+            return {
+                items: items.map((row) => presentTaskListItem(withView(row, viewer.of(row), now))),
+                meta
+            };
         })
     );
 };

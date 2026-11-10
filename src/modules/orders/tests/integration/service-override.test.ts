@@ -308,6 +308,6 @@ describe('the override event', () => {
 
         const { actions } = await withActions(awaiting!, asAdmin());
 
-        expect(actions?.override).toEqual([OrderStatus.processing]);
+        expect(actions?.overrideStatus).toEqual([OrderStatus.processing]);
     });
 });

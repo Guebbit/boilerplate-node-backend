@@ -306,7 +306,7 @@ and cancel-then-ask-again stays scheduled. The log prints the counts and then th
 No manual check is needed before starting the stack.
 
 **Only if the ledger is lost** (the host, and the newest snapshot's copy): fall back to the audit events, which
-are shorter-lived (`auditlogs` keeps 90 days, `NODE_AUDIT_RETENTION_DAYS`; Loki 7 by default).
+are shorter-lived (`auditlogs` keeps 180 days, `NODE_AUDIT_RETENTION_DAYS`; Loki 7 by default).
 
 - **The database still answers:**
 

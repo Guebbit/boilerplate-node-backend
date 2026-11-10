@@ -1,6 +1,6 @@
 /**
  * @module
- * POST /delivery/shipments/:id/lost
+ * POST /delivery/shipments/:id/mark-lost
  * Staff reporting a parcel lost or damaged in transit.
  */
 
@@ -13,7 +13,7 @@ import { requireId } from '@infrastructure/http/ids';
 import { deliveryService } from '../services';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
-/** Handles `POST /delivery/shipments/:id/lost`. */
+/** Handles `POST /delivery/shipments/:id/mark-lost`. */
 export const postMarkShipmentLost = (request: Request<{ id?: string }>, response: Response) => {
     const id = requireId(request, response, { notFound: 'delivery.shipment-not-found' });
     if (!id) return Promise.resolve();

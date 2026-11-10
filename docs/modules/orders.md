@@ -324,10 +324,10 @@ override all ASK for a move, never assign the field themselves. See
 | Move                                       | Who asks                                                                         | Through                                                                                                                                                                                                                                        |
 | ------------------------------------------ | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pending` → `paid`                         | `system`                                                                         | `payments`' settlement, on confirm                                                                                                                                                                                                             |
-| `paid` → `processing`                      | `system`                                                                         | `POST /orders/{id}/process`, `start:Shipment` — a first shipment or fulfil from `paid` makes it too — or `POST /orders/{id}/status-override`, `override:Order`                                                                                 |
+| `paid` → `processing`                      | `system`                                                                         | `POST /orders/{id}/process`, `start:Shipment` — a first shipment or fulfil from `paid` makes it too — or `POST /orders/{id}/override-status`, `override:Order`                                                                                 |
 | `processing` → `shipped`                   | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/shipments` — only the shipment that leaves **nothing** remaining                                                                                                                                       |
 | `shipped` → `delivered`                    | `system`                                                                         | `POST /delivery/shipments/{id}/deliver` — only the last arrival, with nothing left to ship                                                                                                                                                     |
-| `shipped` → `processing`                   | `system`                                                                         | `POST /delivery/shipments/{id}/lost` — the `reopen` event, one of the two backward moves; `canOverrideTo` stays forward-only, so no override makes it. `order.status_changed` carries it                                                       |
+| `shipped` → `processing`                   | `system`                                                                         | `POST /delivery/shipments/{id}/mark-lost` — the `reopen` event, one of the two backward moves; `canOverrideTo` stays forward-only, so no override makes it. `order.status_changed` carries it                                                  |
 | `delivered` → `processing`                 | `system`                                                                         | A return received with `remedy: replace` — the `reship` event, the second backward move; the replacement leaves through the ordinary shipping door, and its arrival keeps the first `withdrawUntil` and only ever pushes `conformityUntil` out |
 | `processing` → `delivered`                 | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/fulfill` (digital), or a remainder cancel after every shipment arrived — `markFulfillmentComplete`, the one named double move                                                                          |
 | `processing` → `canceled`                  | `system`                                                                         | `markUndeliverable`: a lost parcel's remainder was cancelled and refunded and nothing ever arrived — cause `lost`, `refund: false`, no clock. Outside the actor table, so the system cancels stay on `pending`                                 |
@@ -372,6 +372,11 @@ summary, the status move and the events commit together or not at all.
 | 4   | otherwise (`paid`, `processing`)                                               | its trait's value                   |
 
 The per-status half (rows 1 and 4) is the `fulfillment` trait in [the status traits](#status-traits).
+
+**A list row is an `OrderListItem`.** `GET /orders` and `POST /orders/search` answer what the table
+renders (number, the four statuses, total and currency, dates, `actions`): no email, address, line or
+note. Those come from `GET /orders/{id}`, which is the audited read. See
+[a list row is a list item](../api/responses.md#a-list-row-is-a-list-item).
 
 **Finding an order by the number the customer quotes.** `GET /orders`, `POST /orders/search` and the
 CSV export take an exact, indexed `orderNumber` filter (`orders_orderNumber`, unique: a receipt number
@@ -420,7 +425,7 @@ name. It needs a `reason` and writes a `status_overridden` row on the
 `system`-only, absolute). Shipping from `paid` is no override: the ship act makes `paid → processing`
 itself, and recording an arrival has no forced variant either.
 
-- `POST /orders/{id}/status-override` with `{ to, reason }` moves the status
+- `POST /orders/{id}/override-status` with `{ to, reason }` moves the status
   alone, forward to `processing`/`shipped`/`delivered` only. No shipped email and no webhook: an override never lands on `paid`, the only status change
   a subscriber hears, and the shipments it cuts for `delivery` are silent too.
 

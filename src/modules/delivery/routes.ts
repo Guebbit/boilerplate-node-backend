@@ -152,11 +152,11 @@ router.post(
     requirePermission('update', 'Shipment'),
     postDeliverShipment
 );
-// POST /delivery/shipments/:id/lost — a parcel that will not arrive: its units reopen on the same
+// POST /delivery/shipments/:id/mark-lost — a parcel that will not arrive: its units reopen on the same
 // fulfillment order, the stock hold is topped up and the buyer is told. No step-up: it records a
 // fact about a parcel, the same weight as recording its arrival.
 router.post(
-    '/shipments/:id/lost',
+    '/shipments/:id/mark-lost',
     getAuth,
     isAuth,
     requirePermission('update', 'Shipment'),

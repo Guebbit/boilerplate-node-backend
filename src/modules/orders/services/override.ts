@@ -1,7 +1,7 @@
 /**
  * @module
  * The admin override — the one door that may correct a status with no shipped email and no
- * carrier record: {@link overrideStatus} (`POST /orders/{id}/status-override`). It writes the
+ * carrier record: {@link overrideStatus} (`POST /orders/{id}/override-status`). It writes the
  * status, the history entry, the stock leaving the shelf and the events in ONE transaction, and
  * announces `order.status_overridden` so `delivery` can bring its own records in step — `orders`
  * never touches a shipment itself.
@@ -136,7 +136,7 @@ const awaitingStock = (): ResponseReject =>
     ]);
 
 /**
- * `POST /orders/{id}/status-override` — an override holder moves an order forward with no shipped
+ * `POST /orders/{id}/override-status` — an override holder moves an order forward with no shipped
  * email, for the cases that consequence would be wrong (a manual correction, a parcel that was
  * never going to be tracked through the normal doors). `delivery` hears `order.status_overridden`
  * and keeps its own records in step. Webhooks still fire — a subscriber cares the status moved, not

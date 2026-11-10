@@ -473,7 +473,7 @@ describe('the history reads as a history', () => {
         const oldest = orders[0].createdAt!;
         const daysBack = (Date.now() - oldest.getTime()) / 86_400_000;
         expect(daysBack).toBeGreaterThan(30);
-        // Inside `NODE_AUDIT_RETENTION_DAYS` (90), or the trail behind the oldest order is reaped
+        // Inside `NODE_AUDIT_RETENTION_DAYS` (180), or the trail behind the oldest order is reaped
         // and the dataset contradicts itself in the one screen meant to explain it.
         expect(daysBack).toBeLessThan(90);
     });

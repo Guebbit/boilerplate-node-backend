@@ -132,10 +132,35 @@ An operationId is `<verb><Subject>`. The verbs, in the order a resource uses the
 | `restore` | undo a soft delete |
 
 A domain verb is used only where CRUD would mislead: `revoke`, `cancel`, `unlink`, `clear`,
-`rotate`, `lift`, `place`, `assign`, and `add` for the cart line (the POST grows an existing line).
+`lift`, `place`, `assign`, `mark`, `override`, `resend`, `set`, `correct`, `dismiss`, `logout`,
+`request`, and `add` for the cart line (the POST grows an existing line).
 
 `ById` is the resource's own id; `By<Other>Id` is addressed by another resource's id (today only
 the cart line, addressed by its product: `updateCartItemByProductId`).
+
+### Naming an action
+
+The verb in the URI, the verb in the operationId and the verb in the `actions` flag are one verb
+(Google's [AIP-136](https://google.aip.dev/136): the URI verb matches the name's verb;
+[AIP-190](https://google.aip.dev/190): VerbNoun, no prepositions). There are five shapes, and every
+POST operation fits one of them.
+
+| Shape | Path | operationId | `actions` flag | Example |
+| --- | --- | --- | --- | --- |
+| **An action on a thing** | `POST /<things>/{id}/<verb>[-<object>]` | `<verb><Subject>[<Object>]` | the path segment in camelCase, starting with the same verb | `/mark-lost`, `markShipmentLost`, `markLost` |
+| **A child's action, flagged on its parent** | `POST /<parents>/{id}/<children>/{childId}/<verb>` | `<verb><Child>[<Qualifier>]` | the operationId, with the same qualifier | `…/refunds/{refundId}/settle`, `settleRefundByHand`, `PaymentActions.settleRefundByHand` |
+| **A write that makes or replaces a named thing** | that thing's noun: `/payments`, `/shipments`, `/backup-codes`, `/password/reset` | the domain verb on the noun | the domain verb, where a flag exists | `POST /account/2fa/backup-codes`, `regenerateBackupCodes`; `POST /account/password/reset`, `requestPasswordReset` |
+| **A create on a child collection** (AIP-133) | `POST /<parents>/{id}/<children>` | `create<Child>` | the child noun | `POST /payments/{id}/refunds`, `createRefund`, flag `refund`; `POST /tasks/{id}/notes`, `createTaskNote`, flag `note` |
+| **A login step** | `/login/<step>` | `login<Step>` | none | `/account/login/restore`, `loginRestore` |
+
+- A create's flag is the child noun because it reads as "may add a refund". It is exempt from the
+  verb match on purpose, and is a shape here rather than an exception.
+- A toggle pair uses its domain pair: activate/deactivate, enable/disable, hold/release,
+  place/lift, assign/unassign (an owner), assign/revoke (a grant), archive/unarchive.
+  See [A toggle is a pair of actions](./write-methods.md#a-toggle-is-a-pair-of-actions).
+- **No preposition** in a new name, and no new `ById`. Kept as written house choices: the existing
+  `ById`/`ByProductId`, `ByHand` (a stored domain term), `ToCart`, `ProofOf`.
+- No lint: the shapes are a convention a reviewer applies.
 
 ## Request body names
 

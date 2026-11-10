@@ -261,7 +261,7 @@ for the phone is set up, **only the email** reaches anyone, so someone must read
 ## Everything is written down
 
 Every staff action — a price change, a cancellation, a deleted product — is recorded with who did
-it and when; only an admin reads the record. The record is kept for **90 days** and then disappears on its own.
+it and when; only an admin reads the record. The record is kept for **180 days** and then disappears on its own.
 
 Nobody can turn this off from inside the application, which is the point.
 → [`audit-logs`](../modules/audit-logs.md)
@@ -273,6 +273,6 @@ Nobody can turn this off from inside the application, which is the point.
 | **Soft delete**  | Hidden from customers, kept in the records, restorable. → [`products`](../modules/products.md)               |
 | **Switched off** | Not deleted, just not currently for sale.                                                                    |
 | **Refund**       | Money returned. Happens automatically when a paid order is cancelled. → [`payments`](../modules/payments.md) |
-| **Audit log**    | The 90-day record of who did what, for admins. → [`audit-logs`](../modules/audit-logs.md)                    |
+| **Audit log**    | The 180-day record of who did what, for admins. → [`audit-logs`](../modules/audit-logs.md)                   |
 | **Webhook**      | A message the shop sends to another system when something happens. → [`webhooks`](../modules/webhooks.md)    |
 | **Secret**       | The one-time-shown key that proves a webhook message came from this shop.                                    |

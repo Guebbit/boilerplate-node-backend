@@ -12,7 +12,7 @@
  */
 
 import { presentAccount } from '../presenter';
-import { search, getById, staffContacts, toUserContract, toUserContracts } from './read';
+import { search, getById, staffContacts, toUserContract, toUserListItems } from './read';
 import { activate, deactivate } from './activation';
 import { create } from './create';
 import { updateById } from './update';
@@ -66,5 +66,5 @@ export const userService = {
     // for a response reaches the helper through the service.
     toAccount: presentAccount,
     toUserContract,
-    toUserContracts
+    toUserListItems
 };

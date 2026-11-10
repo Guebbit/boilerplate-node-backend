@@ -46,7 +46,7 @@ const notPaid = (): ResponseReject =>
  * shipment exists to record. Makes the order's fulfillment orders too if the `paid` listener has not
  * yet. Shipping from `paid` makes this move itself, so this door is the optional "mark in
  * progress". No `forced` variant: the admin override (`override:Order`,
- * `POST /orders/{id}/status-override`) is the other reachable path onto `processing`, and adding
+ * `POST /orders/{id}/override-status`) is the other reachable path onto `processing`, and adding
  * a second forcing shape here would only duplicate it.
  * @param orderId - the order to start fulfilling
  * @param authContext - the caller, for the response's own `actions`

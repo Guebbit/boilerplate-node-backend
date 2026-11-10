@@ -1,6 +1,6 @@
 /**
  * @module
- * Admin override controller — `POST /orders/:id/status-override`, the status-only door. Thin
+ * Admin override controller — `POST /orders/:id/override-status`, the status-only door. Thin
  * wiring onto `orderService.overrideStatus`; the route's own `requirePermission('override', 'Order')`
  * has already confirmed the caller holds the (step-up gated) key before this runs.
  */
@@ -15,9 +15,9 @@ import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { respondWithOrder } from './respond';
 
 /**
- * POST /orders/:id/status-override — force `to`, with `reason`, and no parcel/email consequence.
+ * POST /orders/:id/override-status — force `to`, with `reason`, and no parcel/email consequence.
  */
-export const postOrderStatusOverride = (
+export const postOrderOverrideStatus = (
     request: Request<{ id?: string }, unknown, StatusOverrideRequest>,
     response: Response
 ): Promise<void> => {
@@ -36,8 +36,8 @@ export const postOrderStatusOverride = (
                 response,
                 result.data,
                 request.authContext,
-                'postOrderStatusOverride'
+                'postOrderOverrideStatus'
             );
         })
-        .catch(catchAs(response, 'postOrderStatusOverride'));
+        .catch(catchAs(response, 'postOrderOverrideStatus'));
 };

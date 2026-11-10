@@ -683,7 +683,7 @@ paths:
             tags: [Auth]
             summary: Request email verification
             description: Sends a one-time verification token to the authenticated user's email address. The token must then be submitted to `/account/email-verification/confirm`. Signup already sends one automatically; this endpoint re-sends it for the mail that never arrived. Answers 429 inside the previous send's cooldown, so a client that respects `resendAfter` never sees one — unlike a login guess, a SUCCESSFUL call here is the expensive one, since each publishes mail.
-            operationId: requestEmailVerification
+            operationId: resendEmailVerification
             x-error-codes:
                 '409': [EMAIL_ALREADY_VERIFIED]
                 '429': [EMAIL_VERIFY_RESEND_TOO_SOON]

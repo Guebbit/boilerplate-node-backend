@@ -12,6 +12,6 @@ import { int } from '@infrastructure/config/fields';
 export const auditLogsConfig = defineConfig({
     name: 'audit-logs',
     shape: {
-        NODE_AUDIT_RETENTION_DAYS: int({ default: 90, min: 1 })
+        NODE_AUDIT_RETENTION_DAYS: int({ default: 180, min: 1 })
     }
 });

@@ -143,7 +143,7 @@ paths:
                 successful sign-ins): that is a shop admin's `GET /audit`.
                 Every `ip` is a keyed digest (`hmac:` and 12 hex characters), comparable across rows
                 but not readable.
-                Entries are retained for a deployment-configured period (90 days by default) and expire after.
+                Entries are retained for a deployment-configured period (180 days by default) and expire after.
                 `meta.totalItems` counts every incident matching the filters, not just the returned page.
                 Requires the platform operator's observability key.
             operationId: listObservabilityAuditEntries

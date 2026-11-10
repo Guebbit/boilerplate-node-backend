@@ -254,7 +254,7 @@ A sibling reaches `users` through two objects, and the second is for one module 
 `flagPurchaseHoldReview`, the staff admin writes (`create`, `updateById`, `activate`, `deactivate`,
 `removeById`, `restoreById`, `setPurchaseHold`, `liftPurchaseHold`, `assignUserRole`,
 `revokeUserRole`, which check role or grant protection themselves) and the shapers `toAccount`,
-`toUserContract`, `toUserContracts`. `accountUserService` holds every step `account` calls (the doors
+`toUserContract`, `toUserListItems`. `accountUserService` holds every step `account` calls (the doors
 below, credentials, sign-up, the OAuth link, the reaper's reads); they trust that `account` checked.
 `getById`, `findAuthenticatableById` and `toAccount` are the same functions under both names.
 `account` cannot import `userService`, so a new `account`-only function can only go in its own
@@ -289,6 +289,13 @@ and later be erased like anyone else. The purge hands a system context, so the t
 accounts that are live, enabled and have an authenticator app armed, with their address and
 language. An account without an app has its staff role withheld, so it could not act on the notice
 and is left out; so is a banned or deleted one.
+
+## The list row {#the-list-row}
+
+`GET /users` and `POST /users/search` answer a `UserListItem`: identity, role, active, avatar, dates,
+the `purchaseHeld` flag, the review flag and `actions`. No phone, website or pending address, and not
+the hold's reason or note: those are `GET /users/{id}`, the audited read. See
+[a list row is a list item](../api/responses.md#a-list-row-is-a-list-item).
 
 ## Purchase hold
 
