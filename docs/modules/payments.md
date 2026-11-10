@@ -568,7 +568,7 @@ stateDiagram-v2
   provider refusing an open one shows as `refused_refund`, with `reversedAt` as the once-guard.
   A reversed refund cannot be cancelled (it settled once): only paid by hand.
   `payment.refund_reversed` also opens a `refund_reversed` to-do for `PaymentRefunding`, closed when
-  the refund is marked returned (see [shop-tasks](./shop-tasks.md#the-shops-to-dos)).
+  the refund is marked returned (see [shop-tasks](./shop-tasks.md#the-shop-s-to-dos)).
 
 ### Telling the buyer their refund cannot reach the card {#telling-the-buyer}
 
@@ -725,7 +725,7 @@ flowchart TD
 | Shop won                    | a refund refused as `disputed` can only be voided (`cancelRefund`)                                                                           |
 | Unshipped goods             | nothing is held by itself; staff use the existing `high_risk` hold                                                                           |
 
-**To-dos.** The proof the shop owes is the `dispute` to-do; once it is sent (`under_review`) that closes and a `dispute_awaiting_bank` to-do waits for the bank's decision, see [shop-tasks](./shop-tasks.md#the-shops-to-dos).
+**To-dos.** The proof the shop owes is the `dispute` to-do; once it is sent (`under_review`) that closes and a `dispute_awaiting_bank` to-do waits for the bank's decision, see [shop-tasks](./shop-tasks.md#the-shop-s-to-dos).
 
 **Visibility.** The attention list gets `dispute_needs_response` for a dispute waiting on the shop,
 with `since`, `dueBy` (the provider's evidence deadline) and `disputeId` (it has no `refundId`). When

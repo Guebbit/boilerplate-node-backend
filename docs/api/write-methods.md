@@ -17,7 +17,7 @@ form this API applies them, and the few places it deliberately does something el
 | Means | create in a collection, or run an action | replace the whole resource | change part of it |
 | Target | `/products` · `/orders/{id}/cancel` | `/products/{id}` | `/products/{id}` |
 | Body | the new resource, or the action's input | the **full** new representation | only what changes |
-| An omitted field | the server's default | **cleared** (see [PUT](#put-replace)) | left alone |
+| An omitted field | the server's default | **cleared** (see [PUT](#put-—-replace)) | left alone |
 | `null` | 422 — nothing to clear yet | clears | clears |
 | `''` | 422 wherever the field has `minLength: 1` | same | same |
 | Safe to repeat | no — send `Idempotency-Key` | yes (idempotent) | yes, in practice |
@@ -177,7 +177,7 @@ allowed", with 409 where Google says 400).
 - `POST /tasks/{id}/unassign` on a task nobody holds: `TASK_NOT_ASSIGNED`; `POST …/assign` to the
   person who holds it already: `TASK_ALREADY_ASSIGNED`. Both write, announce and audit nothing.
 - A retried `DELETE` is never this refusal: what it answers with nothing left to remove is
-  [DELETE — remove](#delete-remove). The line rule's repeat 200 is for adds only: removing a line
+  [DELETE — remove](#delete-—-remove). The line rule's repeat 200 is for adds only: removing a line
   not held is a 404.
 - The caller's `actions` flag for the move is `false` in that state, so a screen never offers it.
 - Every 409 names a code, and the code is listed in a contract fragment's `x-error-codes`: a bare
@@ -191,7 +191,7 @@ allowed", with 409 where Google says 400).
 200, because an action may carry an effect a repeat must not re-run (enabling resets the failure
 streak). Not 400, which Google's [AIP-216](https://google.aip.dev/216) uses: the lifecycle rule is
 "a refusal that depends on the current state is 409 + code" (RFC 9110 §15.5.10). A `DELETE` is
-not this refusal: see [DELETE — remove](#delete-remove).
+not this refusal: see [DELETE — remove](#delete-—-remove).
 
 ### An item write has an item read
 
@@ -472,7 +472,7 @@ A create body declares no `'null'` type — there is nothing to clear yet, so `n
 An action endpoint (`POST …/activate`) whose target state is already reached is refused, not
 answered with a silent 200: **409** with `<RESOURCE>_ALREADY_<STATE>` and a plain message, as
 Google AIP-216 asks for a state that cannot be moved to, kept at 409 because RFC 9110 §15.5.10
-defines it as a conflict with the current state. `DELETE` stays idempotent: [DELETE — remove](#delete-remove).
+defines it as a conflict with the current state. `DELETE` stays idempotent: [DELETE — remove](#delete-—-remove).
 
 The app-wide ones (400, 413, 415, 429, 500, 503) come from `x-app-level-responses` — see
 [Regenerating](./regenerating.md).

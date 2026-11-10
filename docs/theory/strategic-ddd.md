@@ -10,7 +10,7 @@ longer keep straight, and nothing in this repo has reached that yet. The two che
 land, because they fixed live bugs rather than imposing a shape — see
 [Tactical DDD](./tactical-ddd.md). This page is about what _is_ adopted at the strategic level. What a client may do with a record is
 answered by the server, not left to the client: see
-[Tactical DDD §2](./tactical-ddd.md#2-capabilities-the-server-answers-what-a-client-may-do).
+[Tactical DDD §2](./tactical-ddd.md#_2-capabilities-the-server-answers-what-a-client-may-do).
 
 ::: tip The distinction that matters
 A folder per feature is a **packaging** decision. DDD is a **modelling** one. You can have immaculate

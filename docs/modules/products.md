@@ -266,7 +266,7 @@ Hiding (`active: false`), taking off sale (`purchasable: false`) and removing (s
 all mean the product can no longer be **newly** sold. None of them reaches back into an order
 already placed, and none of them cancels one: an order is a contract snapshot, and the only
 automatic cancel is an unpaid order timing out (the reservation expiry, in
-[`inventory`](./inventory.md#reservations) and [`orders`](./orders.md)).
+[`inventory`](./inventory-reservations.md) and [`orders`](./orders.md)).
 
 - [`inventory`](./inventory.md) deletes the product's `stocklevels` row on a hard delete; hiding
   and taking off sale leave the counters alone, since the product still exists and might come back.
@@ -378,7 +378,7 @@ buyer's own request.
 
 Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
 
-The client does not re-derive these: every `Product` carries `actions { update, delete, restore, hardDelete }`, the server's answer for the caller (`update` needs `update:Product` and `update:Translation`; `restore` also needs the product to be soft-deleted). A caller answered from the cache shared with guests gets all `false`; see [Capabilities](../theory/tactical-ddd.md#2-capabilities-the-server-answers-what-a-client-may-do).
+The client does not re-derive these: every `Product` carries `actions { update, delete, restore, hardDelete }`, the server's answer for the caller (`update` needs `update:Product` and `update:Translation`; `restore` also needs the product to be soft-deleted). A caller answered from the cache shared with guests gets all `false`; see [Capabilities](../theory/tactical-ddd.md#_2-capabilities-the-server-answers-what-a-client-may-do).
 
 <!-- permissions:start -->
 

@@ -420,11 +420,11 @@ Both are **stamped by their owner through `orders`' own service door** (`markPay
 `markReturnStatus`), the way `delivery` reports a shipment. `fulfillmentStatus` reads the summary
 `delivery` reports, so it is derived on read.
 
-| Field               | Values                                                                                      | Stamped by                                                                                    |
-| ------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `paymentStatus`     | `unpaid` · `paid` · `partially_refunded` · `refunded`                                       | `payments` (the refund states); `paid`/`unpaid` from `paidAt`                                 |
-| `fulfillmentStatus` | `unfulfilled` · `in_progress` · `on_hold` · `partially_fulfilled` · `shipped` · `fulfilled` | derived from `status` and `delivery`'s summary ([table](./orders.md#the-fulfillment-summary)) |
-| `returnStatus`      | `none` · `requested` · `in_progress` · `partially_returned` · `returned`                    | `returns`, after every move (`services/projection.ts`)                                        |
+| Field               | Values                                                                                      | Stamped by                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `paymentStatus`     | `unpaid` · `paid` · `partially_refunded` · `refunded`                                       | `payments` (the refund states); `paid`/`unpaid` from `paidAt`                                |
+| `fulfillmentStatus` | `unfulfilled` · `in_progress` · `on_hold` · `partially_fulfilled` · `shipped` · `fulfilled` | derived from `status` and `delivery`'s summary ([table](./orders.md#the-fulfilment-summary)) |
+| `returnStatus`      | `none` · `requested` · `in_progress` · `partially_returned` · `returned`                    | `returns`, after every move (`services/projection.ts`)                                       |
 
 `returnStatus` measures what came back against what the order held **less what a remainder cancel took**:
 a cancelled unit never shipped, so it can never return, and without that a cancel would keep the order

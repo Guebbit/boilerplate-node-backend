@@ -368,7 +368,7 @@ The reminder is a task: a delay that the FTC rule covers (a shop in the United S
 territories, or a buyer shipped to one) opens a `consent_due` task for the staff who hold `OrderEditing`, due 30 days after the agreed date (or on
 the date the buyer last held), and shipping or cancelling closes it. The human rule above is
 unchanged. `promisedAt` on the fulfillment order is the date the buyer holds now; the rule is in
-[shop-tasks](shop-tasks.md#the-shops-to-dos).
+[shop-tasks](shop-tasks.md#the-shop-s-to-dos).
 
 ### The preorder board
 

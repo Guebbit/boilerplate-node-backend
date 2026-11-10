@@ -414,7 +414,7 @@ A status added to the contract fails the build there instead of falling into a d
 `fulfillment` is a value plus whether the summary may refine it: `unfulfilled` (`pending`,
 `canceled`, and `paid` which follows the summary), `in_progress` (`processing`, follows the
 summary), `shipped`, `fulfilled`. The edges between statuses are not traits; they live in the
-[event table](../theory/tactical-ddd.md#1-the-order-lifecycle).
+[event table](../theory/tactical-ddd.md#_1-the-order-lifecycle).
 
 ### The admin override
 
