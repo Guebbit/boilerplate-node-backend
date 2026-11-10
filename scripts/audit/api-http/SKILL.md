@@ -130,14 +130,16 @@ Output goes to `tmp/reports/audit-<run>/api-http/<SCOPE>…`. `<run>` and `<SCOP
           `tests/cross-cutting/limiters-before-the-idempotency-key.test.ts` (every limiter runs
           before the key is claimed, so no 429 is ever stored)
         - Settled by reading, not a guard: a top-level body that is not an object (RFC 7396 §2: it
-          would replace the whole resource; §5 lets the server refuse it). `express.json` (strict,
-          `src/app/security.ts`) refuses a scalar or `null` as 400 `entity.parse.failed`; an array
-          reaches the route's generated Zod object or record schema and is a 422. Re-check only if a
-          route parses its own body or the parser loses `strict`. No rule, no row.
+          would replace the whole resource; §5 lets the server refuse it). `express.json`
+          (`src/app/security.ts`) is non-strict, so any JSON value parses (RFC 8259 §2), and
+          `requireJsonObjectBody` (`src/infrastructure/http/middlewares/json-object.ts`) answers a
+          scalar, `null` or an array with 422 `VALIDATION_ERROR` before any route; unparseable JSON
+          stays a 400. Re-check only if a route parses its own body, or the parser or that
+          middleware changes. No rule, no row.
     - Part D:
         - Spectral: a 4xx/5xx that declares content declares only `application/problem+json`
-          (`x-not-problem` is the opt-out). Spectral sees only responses that declare `content`: a
-          bodiless 4xx/5xx is not seen
+          (`x-not-problem` is the opt-out)
+        - Spectral `error-responses-have-a-body`: a bodiless 4xx/5xx must carry `x-not-problem`
         - `tests/support/response-contract.ts`: every Jest error answer with a JSON body is
           `application/problem+json` and matches its schema; no code check
         - `tests/cross-cutting/contract-error-declarations.test.ts`: a path id implies a declared 404
@@ -147,8 +149,9 @@ Output goes to `tmp/reports/audit-<run>/api-http/<SCOPE>…`. `<run>` and `<SCOP
         - `tests/unit/infrastructure/http/middlewares/rate-limit-build.test.ts`: the syntax every
           `buildRateLimiter` budget writes (named items, `q`/`w`/`r`/`t`, no `pk`, no `X-RateLimit-*`,
           stacked budgets all shown, a skipped limiter adds nothing, its own 429 names it with
-          `r=0`). It does not see budgets charged by hand (`chargeBudget`, `mail-recipient`'s doors),
-          cooldowns or the 2FA lock
+          `r=0`). It does not see budgets charged by hand (`chargeBudget`), cooldowns or the 2FA lock
+        - `src/modules/account/tests/integration/mail-recipient-budget.test.ts`: `mail-recipient`'s
+          doors, the route ones (signup, reset) and the service ones (the resends, the email change)
         - `tests/cross-cutting/rate-limit-budgets.test.ts`: the budget set (unique names, env vars and
           namespaces, one declaration each, only the global brake passes a store outage)
         - `scripts/contracts/response-headers.ts` (declares both RateLimit fields on every response)
@@ -179,10 +182,12 @@ Output goes to `tmp/reports/audit-<run>/api-http/<SCOPE>…`. `<run>` and `<SCOP
           `src/app/security.ts`), and `upload.image()` in the module's `routes.ts` on a multipart PATCH
         - `rfc7396-*`: the `patch` operations that declare `application/merge-patch+json`; read the
           service of each
-        - `idempotency-key-*`: every POST or PATCH that moves money, stock or an account. The house
-          rule is a MINIMUM (`docs/tools/idempotency.md`, "Named exceptions"): a create with no key
-          that no exception names is a finding only if a retry does real harm. Rank worst first: harm
-          a retry can do twice (money, stock, an account) > MUST > SHOULD > docs
+        - `idempotency-key-*`: every POST or PATCH. The house rule
+          (`docs/api/write-methods.md#retrying-a-post`): one whose repeat would write again accepts
+          an optional key, and one whose repeat would move money twice requires it. The rest sit in a
+          class of `docs/tools/idempotency.md` "Named exceptions". A write in neither is a finding.
+          Rank worst first: harm a retry can do twice (money, stock, an account) > MUST > SHOULD >
+          docs
     - Part D:
         - Find every answer not built by `rejectResponse` (`src/infrastructure/http/response.ts`):
           grep `\.(status|sendStatus|writeHead)\(|\.statusCode\s*=[^=]` over `src/**/*.ts`, tests
@@ -190,7 +195,7 @@ Output goes to `tmp/reports/audit-<run>/api-http/<SCOPE>…`. `<run>` and `<SCOP
           untyped `.send(` like the metrics 500). Compare the hits with the responses marked
           `x-not-problem`.
         - Check `src/app/` for a `clientError` listener; without one, Node answers 400/408/413/431
-          itself with no body.
+          itself with no body (the theory row `server-parser-bare-errors`).
         - Sweep the no-`scope` catalogue codes listed on no operation; for a guard-made code
           (`deniedCode`, `stepUp`, `requireFreshAuth*`), check every mount of that guard.
         - For the RateLimit fields, start from `rate-limit.ts` and `response.ts`.
