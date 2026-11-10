@@ -376,13 +376,13 @@ Each standard is written once, in the page that owns it, and carried by `example
 `npm run scaffold:module` writes. A new module that copies either one gets all of them; a change to
 a standard lands in the owning page, the template and the scaffolder in the same commit.
 
-| Standard                                       | Written in                                                                               | Carried as                                                    |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `actions` on every read and write              | [Capabilities](./tactical-ddd.md#2-capabilities-the-server-answers-what-a-client-may-do) | `domain/` rule, `services/actions.ts`, required in the schema |
-| A status change is a door, one per event       | [Write methods](../api/write-methods.md#action-200)                                      | `POST /x/{id}/<event>`, never a field of PUT/PATCH            |
-| A refused lifecycle move is 409 + a code       | [Write methods](../api/write-methods.md)                                                 | `x-error-codes` entry, `details {status}`                     |
-| A resource with an item write has an item read | [Write methods](../api/write-methods.md#an-item-write-has-an-item-read)                  | `GET /x/{id}` through the item factory                        |
-| Every file opens with its role                 | `CLAUDE.md`, Comments                                                                    | the scaffolder's twin-header test against `example`           |
+| Standard                                       | Written in                                                                                | Carried as                                                    |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `actions` on every read and write              | [Capabilities](./tactical-ddd.md#_2-capabilities-the-server-answers-what-a-client-may-do) | `domain/` rule, `services/actions.ts`, required in the schema |
+| A status change is a door, one per event       | [Write methods](../api/write-methods.md#action-→-200)                                     | `POST /x/{id}/<event>`, never a field of PUT/PATCH            |
+| A refused lifecycle move is 409 + a code       | [Write methods](../api/write-methods.md)                                                  | `x-error-codes` entry, `details {status}`                     |
+| A resource with an item write has an item read | [Write methods](../api/write-methods.md#an-item-write-has-an-item-read)                   | `GET /x/{id}` through the item factory                        |
+| Every file opens with its role                 | `CLAUDE.md`, Comments                                                                     | the scaffolder's twin-header test against `example`           |
 
 ### Optional capabilities, and the files that carry them
 

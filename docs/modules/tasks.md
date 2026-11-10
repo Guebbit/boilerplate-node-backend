@@ -99,7 +99,7 @@ task staff closed first does nothing.
 
 **The shop's kinds.** The kinds a payment, stock or delivery situation opens (a refund owed by
 hand, a refused refund, a mismatch, a dispute, a payment with no hold, the delay reminder) belong
-to [`shop-tasks`](./shop-tasks.md#the-shops-to-dos), which opens them through this engine. The
+to [`shop-tasks`](./shop-tasks.md#the-shop-s-to-dos), which opens them through this engine. The
 dedup and replay rules above apply to them unchanged.
 
 ### Jurisdiction
@@ -114,7 +114,7 @@ holds it, and the administrator holds every set, with no special case.
 | `account_review` | `UserBanning` |
 | `export_failed`  | `UserErasure` |
 
-The shop's kinds route to the sets listed in [shop-tasks](./shop-tasks.md#the-shops-to-dos).
+The shop's kinds route to the sets listed in [shop-tasks](./shop-tasks.md#the-shop-s-to-dos).
 
 A visitor task is the inbox's: anyone who may read tasks reads it. A system task is visible
 and workable only to a caller who holds its route set; to anyone else it is a **404**, not a 403 (it
@@ -179,7 +179,7 @@ carries the words and the time, never the author.
 ### Who is told
 
 A task never mails anyone itself. A new one (spam excluded) is announced as `task.opened`
-`{ taskId, kind, routeSet, category? }`, handing one to a colleague as `task.assigned`
+`{ taskId, kind, routeSet, category?, work? }`, handing one to a colleague as `task.assigned`
 (taking your own announces nothing), an open one three days from its due date as `task.due_soon`
 and one that passes it as `task.overdue` (both with the payload of `task.opened`, see
 [the reminders](#the-overdue-reminder)).

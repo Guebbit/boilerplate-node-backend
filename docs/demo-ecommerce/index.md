@@ -87,10 +87,10 @@ the ten; they exist to be _looked at_, not signed into.
 
 ## What each role may do
 
-Ten roles, each a job somebody actually does. They are described here rather than in the theory
-pages because this is where you pick an account to log in as. Each one is defined in
-`shared/rules/authorization-roles.yaml`, the same file the PHP twin seeds from — which is what makes both
-backends ship the same shop rather than two that merely pass the same tests.
+The roles are described here rather than in the theory pages because this is where you pick an account
+to log in as. They are defined in `shared/rules/authorization-roles.yaml`, the same file the PHP twin
+seeds from — which is what makes both backends ship the same shop rather than two that merely pass the
+same tests.
 
 **`guest`, `unverified` and `customer`** — not roles anybody is granted: the audience a request
 belongs to, computed from the session and the account's `verifiedAt`. Every staff role below is
@@ -99,15 +99,9 @@ request and reads published products, the dictionary the shop is rendered in, an
 options; `unverified` is a signed-in account whose address is not proven yet — what `customer` is
 minus the ability to spend.
 
-| Role            | What the job is                                                                                                                                                                                                                                                                                                                              |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`manager`**   | What is for sale, at what price, and what happens to an order after it arrives. Reads stock but does not move it; that is the warehouse's job, and its audit trail.                                                                                                                                                                          |
-| **`warehouse`** | Stock, and getting parcels out of the door. Records movements, and records one order's handover and arrival at a time; may not change what a thing costs or delete it from the catalogue.                                                                                                                                                    |
-| **`support`**   | Messages from people, and accounts that need help. May update a customer's account and may not erase or ban one — that is the admin's and the moderator's, and it expects a freshly proved session.                                                                                                                                          |
-| **`editor`**    | Everything the shop SAYS and SHOWS, in every registered language: the catalogue record itself (price included), the dictionary a shopper reads the shop in — including registering a language the shop has not spoken before — and the words on a product's title and description. Touches no stock, no delivery rule, no order, no account. |
-| **`moderator`** | Accounts, and the orders people place: sorting one out is updating it. May ban an account, reverse a bad charge, and read why either happened.                                                                                                                                                                                               |
-| **`admin`**     | Unrestricted within this shop, and only within it. It says nothing about the platform: one role cannot reach both scopes, which is the point.                                                                                                                                                                                                |
-| **`operator`**  | Runs the installation — health, metrics, the operational audit. Explicitly **not** a super-admin: it holds no shop key and therefore cannot read a single shop's orders, customers or messages. The conformance suite asserts both halves of that.                                                                                           |
+Each staff role is a job somebody actually does, defined in `shared/rules/authorization-roles.yaml`; the
+accounts to log in as, with something to try as each, are in [Test it yourself](./test-me.md), and the
+matrix below says what each one holds.
 
 A role is only a bundle of keys: there is no level and nothing ranks. What protects people is one
 key, `assign:Role`, held by `admin` alone: staff work on customers, and only an administrator

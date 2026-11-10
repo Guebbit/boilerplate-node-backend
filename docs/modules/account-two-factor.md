@@ -161,17 +161,14 @@ per-code ceiling real.
 Reading your own factors is not a privileged act. Changing them is, and every mutation sits behind
 **critical** fresh auth — see [Sessions](./account-sessions.md#freshness-auth-time-and-amr).
 
-| Route                                       | Guard                                                               |
-| ------------------------------------------- | ------------------------------------------------------------------- |
-| `GET /account/2fa`                          | `isAuth` — your own status                                          |
-| `POST /account/2fa/methods/:method/setup`   | critical fresh auth **+** a valid code once any factor is armed     |
-| `POST /account/2fa/methods/:method/send`    | critical fresh auth, `accountCodeSendLimiter`; armed delivered only |
-| `POST /account/2fa/methods/:method/confirm` | critical fresh auth                                                 |
-| `POST /account/2fa/methods/:method/remove`  | critical fresh auth **+** a valid code                              |
-| `POST /account/2fa/disable`                 | critical fresh auth **+** a valid code                              |
-| `POST /account/2fa/backup-codes`            | critical fresh auth **+** a valid code                              |
-| `POST /account/login/2fa/send`              | public — `credentialLimiters`, `mfaSendLimiter`                     |
-| `POST /account/login/2fa`                   | public — `credentialLimiters`, `mfaChallengeLimiter`                |
+Which guard sits on which route is `src/modules/account/routes.ts`. The rule that shapes it:
+
+- `GET /account/2fa` is `isAuth` only: your own status.
+- Every mutation (`setup`, `send`, `confirm`, `remove`, `disable`, `backup-codes`) needs critical fresh
+  auth, and `setup`, `remove`, `disable` and `backup-codes` also need a valid code once any factor is
+  armed. `send` adds `accountCodeSendLimiter` and works for an armed delivered method only.
+- The two login routes (`/account/login/2fa/send`, `/account/login/2fa`) are public, behind
+  `credentialLimiters` and their own limiter.
 
 The two login routes are public because they must be: the caller has no session yet, which is the
 entire point of the step. What stands in for one is the challenge — see

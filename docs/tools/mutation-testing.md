@@ -261,7 +261,7 @@ produces a score that moves on its own, which is the one thing a ratchet cannot 
 
 **Journeys stay excluded** for the contract suite's reason: each one boots the whole app, so
 `enableFindRelatedTests` relates it to nearly every file, and a one-line change would drag the
-lot in. See [Journeys](../reference/tests.md#tests-integration-journeys-one-user-across-modules).
+lot in. See [Journeys](../reference/tests.md#tests-integration-journeys-—-one-user-across-modules).
 
 `tests/cluster/` forks real workers against a Redis and is not part of `npm test` either; neither is
 `tests/broker/`, which needs a real RabbitMQ. `tmp/` and

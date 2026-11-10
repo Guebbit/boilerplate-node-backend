@@ -370,7 +370,7 @@ connection. A handler that outlives the wait is redelivered.
 
 ## Works with
 
-- **[Email & PDF Rendering](./email-and-rendering.md)** — the primary use case for this queue. Controllers publish email jobs instead of calling Nodemailer directly; the `email.worker.ts` consumer sends the email independently. Invoice PDF rendering is NOT queued — see [Invoice PDF rendering](#invoice-pdf-rendering-not-a-queue). → [How it's used](./rabbitmq.md#how-it-s-used)
+- **[Email & PDF Rendering](./email-and-rendering.md)** — the primary use case for this queue. Controllers publish email jobs instead of calling Nodemailer directly; the `email.worker.ts` consumer sends the email independently. Invoice PDF rendering is NOT queued — see [Invoice PDF rendering](#invoice-pdf-rendering-—-not-a-queue). → [How it's used](./rabbitmq.md#how-it-s-used)
 
 ## External references
 

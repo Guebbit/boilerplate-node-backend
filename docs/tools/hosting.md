@@ -80,7 +80,7 @@ flowchart LR
 
 ## 3 · The capability matrix
 
-Prices move every few months — this page stopped tracking them ([§7](#7-keeping-it-true)). What
+Prices move every few months — this page stopped tracking them ([§7](#_7-·-keeping-it-true)). What
 doesn't move nearly as fast is **control**: whether you get a shell, whether a database is a
 managed add-on, where the region is. Those are the questions that actually decide "can I run the
 shipped compose file here."
@@ -91,12 +91,12 @@ shipped compose file here."
 | Root / shell      | A host shell you install things on, versus a shell into a container the platform runs for you |
 | Managed MongoDB   | A first-party database-as-a-service, not just "you can `docker run mongo` yourself"           |
 | EU region         | Where the data can physically live                                                            |
-| HQ jurisdiction   | Whose law governs the company that holds the data — see [§6](#6-the-data-protection-lens)     |
+| HQ jurisdiction   | Whose law governs the company that holds the data — see [§6](#_6-·-the-data-protection-lens)  |
 | Runs this stack   | **As shipped** (compose) · **With changes** (say which) · **No** (say why)                    |
 | Pricing           | Link only — no figure restated here, see the warning above                                    |
 
 A handful of concrete hosts, one or two per category, chosen by the rule in
-[§7](#7-keeping-it-true):
+[§7](#_7-·-keeping-it-true):
 
 | Host                      | Category       | Node/Containers        | Root/shell                             | Managed MongoDB                                    | EU region                          | HQ                   | Runs this stack | Pricing                                                                  | Verified   |
 | ------------------------- | -------------- | ---------------------- | -------------------------------------- | -------------------------------------------------- | ---------------------------------- | -------------------- | --------------- | ------------------------------------------------------------------------ | ---------- |
@@ -122,16 +122,16 @@ manage MongoDB itself** — only Postgres/MySQL/Redis-family engines — so Mong
 own container," the opposite of what "managed" means for every other engine on the same platform.
 
 **Managed Kubernetes** is out of scope for this table entirely — only relevant once
-[a trigger fires](../theory/tenancy.md#9-when-to-revisit-this-decision), and nothing here is
+[a trigger fires](../theory/tenancy.md#_9-·-when-to-revisit-this-decision), and nothing here is
 provider work until then.
 
 ## 4 · How to deploy, per category
 
-| Category           | What actually runs                                                                                                                                                                                                      |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VPS / dedicated    | The compose file as shipped — see [Getting Started — Production](../getting-started-production.md)                                                                                                                      |
-| Container PaaS     | The image `docker build -f docker/Dockerfile.production` produces, plus the platform's own managed Postgres/Redis in place of the bundled ones — none checked manage MongoDB itself, see [§3](#3-the-capability-matrix) |
-| Managed Kubernetes | Not yet — see the trigger list linked above                                                                                                                                                                             |
+| Category           | What actually runs                                                                                                                                                                                                         |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| VPS / dedicated    | The compose file as shipped — see [Getting Started — Production](../getting-started-production.md)                                                                                                                         |
+| Container PaaS     | The image `docker build -f docker/Dockerfile.production` produces, plus the platform's own managed Postgres/Redis in place of the bundled ones — none checked manage MongoDB itself, see [§3](#_3-·-the-capability-matrix) |
+| Managed Kubernetes | Not yet — see the trigger list linked above                                                                                                                                                                                |
 
 ## 5 · Managed backing services — "compatible, not identical"
 

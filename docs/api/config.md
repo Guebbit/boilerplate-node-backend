@@ -1,12 +1,13 @@
 # `GET /config` — the boot answer
 
 One public call carries what a client needs before anyone has signed in: the session settings, the
-sign-in providers, the antibot parameters, who runs the site and which Terms are in force.
+sign-in providers, the antibot parameters, who runs the site, how to reach its support and which Terms are in force.
 
 | Member           | Owner     | What it tells the client                                                         |
 | ---------------- | --------- | -------------------------------------------------------------------------------- |
 | `session`        | `account` | `jwt` or `cookie`, and how long a session lasts per "remember me" tier           |
 | `oauthProviders` | `account` | which "Continue with..." buttons to render; empty when no credentials are set    |
+| `supportEmail`   | (app)     | the one customer-facing support address (`NODE_SUPPORT_EMAIL`)                    |
 | `operator`       | `account` | who runs the site: legal name, postal address, email, phone, VAT, register        |
 | `termsVersion`   | `account` | which text of the Terms is in force                                               |
 | `antibot`        | `antibot` | the active human challenge, its public parameters, and every rung's status       |
@@ -32,7 +33,7 @@ sequenceDiagram
         C->>A: GET /shop
         C->>A: GET /locales
     end
-    A-->>C: session, oauthProviders, antibot, operator, termsVersion
+    A-->>C: session, oauthProviders, antibot, supportEmail, operator, termsVersion
     Note over C,A: signing in
     C->>A: POST /account/login
     A-->>C: token and account (record, abilities, idle clock)

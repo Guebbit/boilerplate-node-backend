@@ -95,7 +95,9 @@ flowchart LR
 ```
 
 The delete is the guard: a request cancelled meanwhile, or answered by a redelivery of the signal,
-finds nothing to delete and sends nothing. A mail that fails is logged; the inbox row stands.
+finds nothing to delete and sends nothing. A mail that fails is logged; the inbox row stands. An account that is locked (banned, or in the grace
+of its own deletion) is not mailed at all: the request is still answered and deleted, the inbox row
+stands.
 
 ## Related pages
 

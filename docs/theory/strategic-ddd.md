@@ -10,7 +10,7 @@ longer keep straight, and nothing in this repo has reached that yet. The two che
 land, because they fixed live bugs rather than imposing a shape — see
 [Tactical DDD](./tactical-ddd.md). This page is about what _is_ adopted at the strategic level. What a client may do with a record is
 answered by the server, not left to the client: see
-[Tactical DDD §2](./tactical-ddd.md#2-capabilities-the-server-answers-what-a-client-may-do).
+[Tactical DDD §2](./tactical-ddd.md#_2-capabilities-the-server-answers-what-a-client-may-do).
 
 ::: tip The distinction that matters
 A folder per feature is a **packaging** decision. DDD is a **modelling** one. You can have immaculate
@@ -278,7 +278,7 @@ way a handle does. What it never publishes, no matter how convenient:
     **A step exactly one other module must call** is not published in the barrel either. The owner
     gives that module a **friend file**, `src/modules/<owner>/friends/<friend>.ts`, and the
     boundaries policy lets only the module named in the file's name import it (the template
-    `friends/{{ from.element.captured.module }}.ts` in `eslint.config.ts`). Three exist:
+    `friends/<the importer's module>.ts` in `eslint.config.ts`). Three exist:
     `users/friends/account.ts` (`accountUserService`, everything `account` calls),
     `users/friends/orders.ts` (`takeAutomaticPurchaseHold`) and `orders/friends/payments.ts`
     (`markPaid`). A friend file opens with why that module is the friend, and the step it carries is

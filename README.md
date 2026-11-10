@@ -97,17 +97,11 @@ Four ideas carry the whole repository:
 
 ## Where things live
 
-|                       |                                                                                             |
-| --------------------- | ------------------------------------------------------------------------------------------- |
-| `src/modules/*`       | the domains — each one deletable                                                            |
-| `src/modules/example` | only an example: the module to copy for a new domain, then delete it once you have your own |
-| `src/kernel`          | registry, domain events, auth primitives                                                    |
-| `src/infrastructure`  | http, persistence, adapters, observability, runtime                                         |
-| `src/app`             | assembly: routes, security, error handling, telemetry, workers                              |
-| `api/`                | generated types and Zod schemas — never edited by hand                                      |
-| `shared/`             | contract fragments and EJS email templates                                                  |
-| `scripts/db/`         | index sync and one-off data scripts                                                         |
-| `scenarios/`          | the demo records and the flow runner, outside `src/` entirely                               |
+The tiers, their folders and their main job are one table: [Layers](./docs/theory/layers.md#quick-map).
+The domains are `src/modules/*` (each one deletable; `src/modules/example` is the one to copy for a new
+domain), the contract and everything generated from it is `api/`, and `shared/` holds what both backends
+read (`rules/`, `cases/`, `locales/`, `scenarios/`, `templates/`, the authorization keys). The demo records
+and the flow runner are `scenarios/`, outside `src/` entirely; index sync and the one-off data scripts are `scripts/db/`.
 
 ---
 
@@ -139,9 +133,6 @@ npm run complete    # build + all tests + lint + format check — several minute
 Exactly what the pre-commit hook runs; `npm run complete:fix` is the same gate with lint and
 formatting fixed rather than reported. Outside it, by hand: `npm run complete:manual`
 (`test:prism`), `npm run mutation`, `npm run test:fuzz`, and `npm run bench`.
-
-Per-suite numbers, so a doubling reads as a regression rather than as a mood:
-[Test timings](./docs/tools/testing-and-docs.md#test-timings).
 
 ---
 

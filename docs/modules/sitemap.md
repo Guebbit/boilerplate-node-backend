@@ -63,6 +63,8 @@ submits"). The line is written by the frontend only when indexing is switched on
 
 - **Always an index.** The address `robots.txt` names never changes as the catalogue grows
   (Shopify and Yoast do the same).
+- **A file the index does not list is a 404:** a `products-N.xml` whose `N` is not a positive whole
+  number, is not a safe integer, or is past the last run.
 - **One `<url>` per language,** each with `xhtml:link rel="alternate"` for every active language and
   an `x-default` pointing at the default language while it is served, otherwise at the first served
   one (a hreflang target must be a page the same sitemap lists). The list is the one language negotiation uses, in tag order: the deployed dictionaries and the registered languages that are switched on, never a switched-off one.
