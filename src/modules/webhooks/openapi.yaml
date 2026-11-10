@@ -14,6 +14,7 @@ x-error-codes:
     WEBHOOK_SUBSCRIPTION_LIMIT_REACHED: { status: 409, description: 'This shop already holds the most webhook subscriptions it may; delete one first.' }
     WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED: { status: 409, description: 'The subscription is already enabled.' }
     WEBHOOK_SUBSCRIPTION_ALREADY_DISABLED: { status: 409, description: 'The subscription is already disabled.' }
+    WEBHOOK_EVENT_READ_REQUIRED: { status: 403, description: 'The filter names an event the caller may not read, so a stream of it cannot be handed to a receiver. Each event declares the rule that reads it (`x-read-rule` in `asyncapi.public.yaml`).' }
     WEBHOOK_SUBSCRIPTION_DISABLED: { status: 409, description: 'The delivery belongs to a subscription that is disabled, so nothing can be sent until it is enabled.' }
 
 paths:
@@ -29,8 +30,8 @@ paths:
                 `POST .../{id}/secrets`).
             operationId: listWebhookSubscriptions
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:WebhookSubscription']
+                - apiKeyAuth: ['read:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -74,12 +75,17 @@ paths:
                 delivery that fails later; `PUT` and `PATCH` run the same check when the `url`
                 changes. It runs again on every delivery, since a subscription's DNS can change
                 after it is created.
+
+                A subscription hands an event stream to a machine, so the caller must hold the read
+                rule of every event it carries (`GET /webhooks/events` marks each one `actions.subscribe`;
+                `*` needs them all). Otherwise 403 `WEBHOOK_EVENT_READ_REQUIRED`, naming the events.
             operationId: createWebhookSubscription
             x-error-codes:
+                '403': [WEBHOOK_EVENT_READ_REQUIRED]
                 '409': [WEBHOOK_SUBSCRIPTION_LIMIT_REACHED]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['create:WebhookSubscription']
+                - apiKeyAuth: ['create:WebhookSubscription']
             requestBody:
                 required: true
                 content:
@@ -111,8 +117,8 @@ paths:
                 shop's subscriptions, whether it never existed or belongs to another shop.
             operationId: getWebhookSubscription
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:WebhookSubscription']
+                - apiKeyAuth: ['read:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -132,10 +138,17 @@ paths:
                 Full replace of url/description/eventTypes — an omitted `description` is cleared.
                 Never touches the secret ring or whether the subscription is on; rotate or drop a
                 secret, enable or disable it, through its own action route below.
+
+                A `PUT`, or a `PATCH` that carries `url` or `eventTypes`, needs the read rule of every
+                event in the stored filter AND in the new one: otherwise a caller could narrow a stream
+                and redirect it in one call. Otherwise 403 `WEBHOOK_EVENT_READ_REQUIRED`. A
+                description-only `PATCH` is not checked.
             operationId: replaceWebhookSubscription
+            x-error-codes:
+                '403': [WEBHOOK_EVENT_READ_REQUIRED]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:WebhookSubscription']
+                - apiKeyAuth: ['update:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -162,10 +175,16 @@ paths:
                 Partial update of url/description/eventTypes. Never touches the secret ring or
                 whether the subscription is on; rotate or drop a secret, enable or disable it,
                 through its own action route below.
+
+                A `PATCH` that carries `url` or `eventTypes` needs the read rule of every event in the
+                stored filter AND in the new one, as `PUT` does; a description-only `PATCH` is not
+                checked. Otherwise 403 `WEBHOOK_EVENT_READ_REQUIRED`.
             operationId: updateWebhookSubscription
+            x-error-codes:
+                '403': [WEBHOOK_EVENT_READ_REQUIRED]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:WebhookSubscription']
+                - apiKeyAuth: ['update:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -194,8 +213,8 @@ paths:
             description: Permanently removes the subscription. Its delivery log is left in place, so past attempts stay auditable.
             operationId: deleteWebhookSubscription
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['delete:WebhookSubscription']
+                - apiKeyAuth: ['delete:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -220,8 +239,8 @@ paths:
             x-error-codes:
                 '409': [WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:WebhookSubscription']
+                - apiKeyAuth: ['update:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -251,8 +270,8 @@ paths:
             x-error-codes:
                 '409': [WEBHOOK_SUBSCRIPTION_ALREADY_DISABLED]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:WebhookSubscription']
+                - apiKeyAuth: ['update:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -281,10 +300,16 @@ paths:
                 most two: adding a third drops the oldest, which is already superseded. A secret is a
                 line of the subscription, so adding one is a `POST` on the line collection and answers
                 200 with the whole subscription (docs/api/write-methods.md).
+
+                A secret signs for the subscription's stored filter, so the caller needs the read rule
+                of every event in it (`actions.createSecret` is false otherwise): 403
+                `WEBHOOK_EVENT_READ_REQUIRED`.
             operationId: createWebhookSubscriptionSecret
+            x-error-codes:
+                '403': [WEBHOOK_EVENT_READ_REQUIRED]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:WebhookSubscription']
+                - apiKeyAuth: ['update:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -308,8 +333,8 @@ paths:
                 of `POST .../secrets`.
             operationId: deleteWebhookSubscriptionSecret
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:WebhookSubscription']
+                - apiKeyAuth: ['update:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - name: secretId
@@ -336,8 +361,8 @@ paths:
             description: Every attempt, newest first, optionally filtered by subscription and status. The order is fixed - this is a log.
             operationId: listWebhookDeliveries
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:WebhookSubscription']
+                - apiKeyAuth: ['read:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -369,8 +394,8 @@ paths:
             description: One row of this shop's delivery log, the same shape the list gives it, with `actions.replay`. Another shop's delivery, an unknown id and a malformed one are the same 404.
             operationId: getWebhookDelivery
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:WebhookSubscription']
+                - apiKeyAuth: ['read:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -394,13 +419,16 @@ paths:
                 row: `attempt` advances exactly like a real queued attempt would (one step forward
                 on a failure with backoff tiers left, unchanged on success or exhaustion), and
                 `status`/`responseCode`/`durationMs`/`error` reflect this replay. Refused while the subscription is
-                disabled (`actions.replay` is false): enable it first.
+                disabled (`actions.replay` is false): enable it first. The stored payload is re-sent, so
+                the caller needs the read rule of the delivery's event (`actions.replay` is false
+                otherwise): 403 `WEBHOOK_EVENT_READ_REQUIRED`.
             operationId: replayWebhookDelivery
             x-error-codes:
+                '403': [WEBHOOK_EVENT_READ_REQUIRED]
                 '409': [WEBHOOK_DELIVERY_IN_PROGRESS, WEBHOOK_SUBSCRIPTION_DISABLED]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:WebhookSubscription']
+                - apiKeyAuth: ['update:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -423,13 +451,14 @@ paths:
                 The events of the modules this deployment runs, read from each one's own
                 `asyncapi.webhooks.yaml` — the same files `asyncapi.public.yaml` is generated from —
                 so this list and what can actually fire can never drift apart. A module that is
-                not deployed lists nothing. See `docs/api/asyncapi-workflow.md`.
+                not deployed lists nothing. Each entry's `actions.subscribe` says whether the caller holds
+                the event's read rule and so may put it in a filter. See `docs/api/asyncapi-workflow.md`.
 
                 Unpaged: the event catalogue of the deployed modules.
             operationId: listWebhookEvents
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:WebhookSubscription']
+                - apiKeyAuth: ['read:WebhookSubscription']
             responses:
                 '200':
                     description: Every event a subscription may filter on
@@ -531,7 +560,7 @@ components:
                     description: Whether `POST /webhooks/subscriptions/{id}/disable` would be accepted — false while it is already disabled.
                 createSecret:
                     type: boolean
-                    description: Whether `POST /webhooks/subscriptions/{id}/secrets` would be accepted.
+                    description: Whether `POST /webhooks/subscriptions/{id}/secrets` would be accepted — false while the stored filter names an event the caller may not read.
                 deleteSecret:
                     type: boolean
                     description: Whether `DELETE /webhooks/subscriptions/{id}/secrets/{secretId}` would be accepted — false while the ring holds a single secret.
@@ -650,7 +679,7 @@ components:
             properties:
                 replay:
                     type: boolean
-                    description: Whether `POST /webhooks/deliveries/{id}/replay` would be accepted — false while the delivery's subscription is disabled or gone.
+                    description: Whether `POST /webhooks/deliveries/{id}/replay` would be accepted — false while the delivery's subscription is disabled or gone, or the caller may not read the delivery's event.
 
         # The events the shop can fire: the channel names of every module's `asyncapi.webhooks.yaml`.
         # Never written here — `x-enum-from` makes the bundler fill it (`scripts/contracts/fill-enum.ts`).
@@ -670,12 +699,20 @@ components:
         WebhookEventCatalogEntry:
             type: object
             additionalProperties: false
-            required: [name]
+            required: [name, actions]
             properties:
                 name:
                     $ref: '#/components/schemas/WebhookEventName'
                 description:
                     type: string
+                actions:
+                    type: object
+                    additionalProperties: false
+                    required: [subscribe]
+                    properties:
+                        subscribe:
+                            type: boolean
+                            description: Whether the caller holds the event's read rule, so may name it in a subscription filter (and `*`, which needs every event, is accepted only when all are true).
 
         CreateWebhookSubscriptionRequest:
             type: object

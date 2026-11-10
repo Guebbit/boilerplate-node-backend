@@ -3,8 +3,8 @@
  * The two collections' queries, and the one invariant that could not be left to a caller: every
  * write to `localeentries` goes through a function below that also bumps `revision`, so no
  * service call can change an entry without moving the number a client uses to know when to
- * re-download. Not a transaction — the two writes are ordered rows-then-counter, so a crash
- * between them only makes a client under-fetch once, never cache a stale dictionary as current.
+ * re-download. The rows and the bump share one transaction: the number is also the `If-Match`
+ * fence of an import, so a row written before its bump would let a stale import slip past it.
  */
 
 import type { ClientSession } from 'mongoose';
@@ -19,7 +19,12 @@ import {
     normalizeTag
 } from './model';
 import type { LocaleDocument, LocaleEntryDocument, TranslationDocument } from './model';
-import { fencedSave } from '@infrastructure/persistence/versioning';
+import {
+    fencedSave,
+    preconditionFilter,
+    PreconditionFailedError,
+    rearmPrecondition
+} from '@infrastructure/persistence/versioning';
 import { createRepository, type Repository } from '@infrastructure/persistence/create-repository';
 import { setAndUnset } from '@infrastructure/persistence/changes';
 import type {
@@ -169,26 +174,57 @@ const listKeys = (locale: string, app: LocaleApp): Promise<string[]> =>
  * `$inc` rather than read-modify-write: two imports finishing at once must produce two bumps, and
  * a read-modify-write would lose one — which is precisely the state that leaves a client believing
  * it is current when it is not.
+ *
+ * @param tag - the language
+ * @param session - the transaction the entry write runs in; omitted, the bump stands alone
  */
-const bumpRevision = (tag: string): Promise<number> =>
+const bumpRevision = (tag: string, session?: ClientSession): Promise<number> =>
     localeModel
         .findOneAndUpdate(
             { tag },
             { $inc: { revision: 1 } },
             // `timestamps: false`: a dictionary write is not an edit of the language, so it must
             // not move the edit counter an open name-edit form's `If-Match` compares with.
-            { returnDocument: 'after', timestamps: false }
+            { returnDocument: 'after', timestamps: false, session }
         )
         .exec()
         .then((updated) => updated?.revision ?? 0);
 
 /**
+ * Refuses (412) when the open `If-Match` no longer names the language's `revision`. A read inside
+ * the import's transaction, so the snapshot it checks is the one the import writes against, and a
+ * bump that lands afterwards conflicts with the import's own bump and re-runs the whole attempt.
+ * Without a precondition there is nothing to check and no query is made.
+ *
+ * @param tag - the language, normalized: the key the controller opened the precondition under
+ * @param session - the import's transaction
+ * @throws {PreconditionFailedError} when no language row carries one of the tag's revisions
+ */
+const fenceRevision = (tag: string, session: ClientSession): Promise<void> => {
+    const fence = preconditionFilter(tag, 'revision');
+    if (Object.keys(fence).length === 0) return Promise.resolve();
+
+    return localeModel
+        .exists({ tag, ...fence })
+        .session(session)
+        .exec()
+        .then((found) => {
+            if (!found) throw new PreconditionFailedError();
+        });
+};
+
+/**
  * Every key of one language, with the value it holds — what an import diffs against, so a key
  * re-sent with its current value is neither written nor counted.
  */
-const valuesByKey = (locale: string, app: LocaleApp): Promise<Map<string, string>> =>
+const valuesByKey = (
+    locale: string,
+    app: LocaleApp,
+    session?: ClientSession
+): Promise<Map<string, string>> =>
     localeEntryModel
         .find({ locale, app })
+        .session(session ?? null)
         .select({ key: 1, value: 1, _id: 0 })
         .lean<{ key: string; value: string }[]>()
         .exec()
@@ -198,46 +234,67 @@ const valuesByKey = (locale: string, app: LocaleApp): Promise<Map<string, string
  * A language's revision as it stands — what a write that changed nothing answers with. Bumping
  * instead would make every client re-download a dictionary that did not move.
  */
-const currentRevision = (tag: string): Promise<number> =>
+const currentRevision = (tag: string, session?: ClientSession): Promise<number> =>
     localeModel
         .findOne({ tag })
+        .session(session ?? null)
         .select({ revision: 1 })
         .lean<{ revision?: number }>()
         .exec()
         .then((language) => language?.revision ?? 0);
 
-/** Insert one entry, and bump. */
+/** Insert one entry, and bump — in one transaction, so no import's fence can fall between. */
 const createEntry = (
     locale: string,
     app: LocaleApp,
     input: EntryInput
 ): Promise<{ entry: LocaleEntryDocument; revision: number }> =>
-    entryBase
-        .create({
-            locale,
-            app,
-            ...input
-        })
-        .then((entry) => bumpRevision(locale).then((revision) => ({ entry, revision })));
+    withTransaction((session) =>
+        entryBase
+            .create({ locale, app, ...input }, session)
+            .then((entry) =>
+                bumpRevision(locale, session).then((revision) => ({ entry, revision }))
+            )
+    );
 
-/** Change one entry's value, and bump — or, for the value it already holds, neither. */
+/**
+ * Change one entry's value, and bump — or, for the value it already holds, neither. One
+ * transaction. A query update rather than `save()`: the driver re-runs the callback on a transient
+ * conflict (the language row is the hot spot), and a document already saved by the first run
+ * would make the retry's `save()` a silent no-op that still bumps.
+ */
 const saveEntryValue = (
     entry: LocaleEntryDocument,
     value: string
 ): Promise<{ entry: LocaleEntryDocument; revision: number }> => {
     if (entry.value === value)
         return currentRevision(entry.locale).then((revision) => ({ entry, revision }));
-    entry.value = value;
-    return entryBase
-        .save(entry)
-        .then((saved) =>
-            bumpRevision(entry.locale).then((revision) => ({ entry: saved, revision }))
-        );
+
+    return withTransaction((session) =>
+        localeEntryModel
+            // Mongoose: `returnDocument: 'after'` answers the updated row; `runValidators` keeps
+            // the schema's rules on a query update, which `save()` ran by default.
+            .findOneAndUpdate(
+                { _id: entry._id },
+                { $set: { value } },
+                { returnDocument: 'after', runValidators: true, session }
+            )
+            .exec()
+            .then((saved) => {
+                if (!saved) throw new Error(`locale entry ${String(entry._id)} no longer exists`);
+                return bumpRevision(entry.locale, session).then((revision) => ({
+                    entry: saved,
+                    revision
+                }));
+            })
+    );
 };
 
-/** Remove one entry, and bump. */
+/** Remove one entry, and bump — in one transaction. */
 const removeEntry = (entry: LocaleEntryDocument): Promise<number> =>
-    entryBase.deleteOne(entry).then(() => bumpRevision(entry.locale));
+    withTransaction((session) =>
+        entryBase.deleteOne(entry, session).then(() => bumpRevision(entry.locale, session))
+    );
 
 /**
  * Write a whole set of entries, and bump once for the batch — unless the batch changed nothing,
@@ -247,35 +304,42 @@ const removeEntry = (entry: LocaleEntryDocument): Promise<number> =>
  * either mode (a `null` for a key that is not stored removes nothing). One `bulkWrite` rather than a loop of upserts: five hundred keys is the
  * size an import actually arrives in.
  *
- * D17e-2: the upsert and the removal run in one transaction — the repo's first. Unlike the
- * revision bump this module's own docblock explains as deliberately non-transactional, a crash
- * between these two has no such grace: `replace` promises the removed keys are gone, and a
- * process dying between the bulk upsert and the `deleteMany` would otherwise leave stale keys
- * silently surviving a caller who asked for exactly the set they sent.
+ * One transaction holds all of it: the fence on the caller's `If-Match`, the diff against what is
+ * stored, the upsert, the removal and the bump. `replace` promises the removed keys are gone, and
+ * a bump outside the transaction would leave a window where a stale import's tag still matches.
+ * An import that changes nothing is still fenced: RFC 9110 §13.1.1 evaluates the condition before
+ * the method, whether or not the method ends up writing.
+ *
+ * @throws {PreconditionFailedError} when the open `If-Match` no longer names the language's revision
  */
-const importEntries = async (
+const importEntries = (
     locale: string,
     app: LocaleApp,
     inputs: EntryChange[],
     { replace }: { replace: boolean }
-): Promise<{ counts: ImportCounts; revision: number }> => {
-    const existing = await valuesByKey(locale, app);
-    const incoming = new Map(
-        inputs.flatMap(({ key, value }): [string, string][] =>
-            value === null ? [] : [[key, value]]
-        )
-    );
-    const nulled = inputs.filter(({ value }) => value === null).map(({ key }) => key);
+): Promise<{ counts: ImportCounts; revision: number }> =>
+    withTransaction(async (session) => {
+        // The driver re-runs this callback on a transient conflict; each run must compare the
+        // caller's `If-Match` again, or the retry would write unchecked over the conflicting edit.
+        rearmPrecondition();
+        await fenceRevision(locale, session);
 
-    const removedKeys = [
-        ...(replace ? [...existing.keys()].filter((key) => !incoming.has(key)) : []),
-        ...nulled.filter((key) => existing.has(key))
-    ];
-    // Only what actually differs is written — `timestamps` would otherwise stamp `updatedAt` on
-    // an unchanged row, and "updated" would count keys re-sent with the value they already had.
-    const changedEntries = [...incoming].filter(([key, value]) => existing.get(key) !== value);
+        const existing = await valuesByKey(locale, app, session);
+        const incoming = new Map(
+            inputs.flatMap(({ key, value }): [string, string][] =>
+                value === null ? [] : [[key, value]]
+            )
+        );
+        const nulled = inputs.filter(({ value }) => value === null).map(({ key }) => key);
 
-    await withTransaction(async (session) => {
+        const removedKeys = [
+            ...(replace ? [...existing.keys()].filter((key) => !incoming.has(key)) : []),
+            ...nulled.filter((key) => existing.has(key))
+        ];
+        // Only what actually differs is written — `timestamps` would otherwise stamp `updatedAt` on
+        // an unchanged row, and "updated" would count keys re-sent with the value they already had.
+        const changedEntries = [...incoming].filter(([key, value]) => existing.get(key) !== value);
+
         // `bulkWrite` is a write, outside Mongoose's global `maxTimeMS` on purpose: its size is the
         // caller's own bounded body, and cutting a transaction's write short is worse than waiting.
         if (changedEntries.length > 0)
@@ -294,22 +358,21 @@ const importEntries = async (
             await localeEntryModel
                 .deleteMany({ locale, app, key: { $in: removedKeys } }, { session })
                 .exec();
+
+        const created = changedEntries.filter(([key]) => !existing.has(key)).length;
+        const counts = {
+            created,
+            updated: changedEntries.length - created,
+            removed: removedKeys.length
+        };
+
+        return {
+            counts,
+            revision: await (changedEntries.length + removedKeys.length > 0
+                ? bumpRevision(locale, session)
+                : currentRevision(locale, session))
+        };
     });
-
-    const created = changedEntries.filter(([key]) => !existing.has(key)).length;
-    const counts = {
-        created,
-        updated: changedEntries.length - created,
-        removed: removedKeys.length
-    };
-
-    return {
-        counts,
-        revision: await (changedEntries.length + removedKeys.length > 0
-            ? bumpRevision(locale)
-            : currentRevision(locale))
-    };
-};
 
 /** What a language's own delete cascaded into, per collection. */
 export interface LocaleCascadeCounts {

@@ -24,6 +24,7 @@ const TABLE: readonly RequestContentType[] = [
         types: ['application/json', 'application/merge-patch+json']
     },
     { method: 'DELETE', pattern: /^\/things\/[^/]+$/, parameterCount: 1, types: [] },
+    { method: 'PUT', pattern: /^\/things\/[^/]+$/, parameterCount: 1, types: ['application/json'] },
     {
         method: 'POST',
         pattern: /^\/things\/[^/]+\/restore$/,
@@ -42,13 +43,21 @@ interface Sent {
     length?: number;
 }
 
+/** What the guard did: its status and body, the headers it set, and whether it let the request on. */
+interface Outcome {
+    status?: number;
+    body?: unknown;
+    headers: Record<string, string>;
+    passed: boolean;
+}
+
 /**
  * Runs the guard once and reports what it did.
  *
  * @param sent - the request to stand in for
  * @returns the status it answered, or `undefined` when it let the request through
  */
-const run = (sent: Sent): { status?: number; body?: unknown; passed: boolean } => {
+const run = (sent: Sent): Outcome => {
     // `path` is a getter on express's prototype, so it is redefined on the instance, not assigned.
     const request = Object.defineProperties(Object.create(express.request) as Request, {
         method: { value: sent.method },
@@ -60,9 +69,11 @@ const run = (sent: Sent): { status?: number; body?: unknown; passed: boolean } =
             }
         }
     });
-    const outcome: { status?: number; body?: unknown; passed: boolean } = { passed: false };
+    const outcome: Outcome = { headers: {}, passed: false };
     const response = asStub<Response>({
-        setHeader: jest.fn(),
+        setHeader: (name: string, value: string) => {
+            outcome.headers[name] = value;
+        },
         getHeader: jest.fn(),
         removeHeader: jest.fn(),
         status: (code: number) => {
@@ -101,6 +112,30 @@ describe('requireDeclaredContentType', () => {
             ]
         });
         expect(outcome.passed).toBe(false);
+    });
+
+    it('names the declared types in Accept and Accept-Patch on a refused PATCH', () => {
+        const { headers } = run({ method: 'PATCH', path: '/things/abc', type: 'text/plain' });
+
+        expect(headers).toMatchObject({
+            Accept: 'application/json, application/merge-patch+json',
+            'Accept-Patch': 'application/json, application/merge-patch+json'
+        });
+    });
+
+    it('names Accept only, not Accept-Patch, on a refused PUT', () => {
+        const { headers } = run({ method: 'PUT', path: '/things/abc', type: 'text/plain' });
+
+        expect(headers.Accept).toBe('application/json');
+        expect(headers).not.toHaveProperty('Accept-Patch');
+    });
+
+    it('names neither header on an operation that declares no body', () => {
+        const outcome = run({ method: 'DELETE', path: '/things/abc', type: 'application/json' });
+
+        expect(outcome.status).toBe(415);
+        expect(outcome.headers).not.toHaveProperty('Accept');
+        expect(outcome.headers).not.toHaveProperty('Accept-Patch');
     });
 
     it('accepts merge-patch on a PATCH that declares it', () => {

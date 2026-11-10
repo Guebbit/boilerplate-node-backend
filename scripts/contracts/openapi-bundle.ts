@@ -27,6 +27,7 @@ import { orderSections } from './section-order';
 import { assembleRoot, readModuleFragments } from './root-assembly';
 import { withBrowserEvents } from './analytics-browser-events';
 import { withCookieAuth } from './cookie-auth';
+import { withPermissionErrorCodes } from './permission-security';
 import { withImageUploadEncoding } from './image-upload-encoding';
 import { webhookEventNames } from './asyncapi-webhook-events';
 import { withFilledEnums } from './fill-enum';
@@ -605,12 +606,15 @@ const bundleSteps = (errorCodes: Record<string, ErrorCodeEntry>): readonly Step[
         withVersionedResources,
         // The headers every answer carries.
         withAppLevelHeaders,
-        // `Idempotent-Replayed` on idempotent writes.
+        // `Idempotent-Replayed` on every answer of an idempotent write but a 429, through
+        // `<Name>Replayable` twins of the shared responses.
         withIdempotentReplay,
         // The `x-module` each operation's owning fragment names, never hand-written.
         (document_) => {
             withModuleStamps(document_, moduleOfPath());
         },
+        // The 403 / 401 codes each operation's named permission makes, into its `x-error-codes`.
+        withPermissionErrorCodes,
         // Refuses an operation naming an error code nobody declares.
         (document_) => {
             checkOperationErrorCodes(document_, errorCodes);

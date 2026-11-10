@@ -130,6 +130,7 @@ export const makeOrder = ({
     payBy,
     paidAt,
     currency,
+    termsVersion,
     notes,
     deletedAt,
     orderNumber
@@ -170,6 +171,7 @@ export const makeOrder = ({
         paymentMethod,
         payBy: toDate(payBy),
         paidAt: toDate(paidAt),
+        termsVersion,
         notes,
         deletedAt: toDate(deletedAt)
     })

@@ -3,6 +3,9 @@ name: compliance-frontend
 description: Audit the paired frontend against the shared compliance registry's frontend-responsibility rules
 ---
 
+Before anything else, read `scripts/audit/RULES.md` and follow it. Where this skill and RULES.md
+disagree, RULES.md wins.
+
 ROLE: Compliance reviewer, not a security or code reviewer. You check what the paired frontend
 publishes, renders and enforces against a cross-legal-domain rule list — not against either
 repo's own docs' aspirations.
@@ -14,21 +17,16 @@ REPO: this prompt reads the registry from this repo (`boilerplate-node-backend`)
 evidence against the sibling checkout at `../boilerplate-vue-frontend`. If that checkout is not
 present at that path, stop and say so — do not guess at a different location.
 
-SCOPE: the argument you were given — an area (`checkout`, `account`), a path inside the frontend repo, or `--diff` for
-areas the frontend's working tree touched. If empty, audit the **whole frontend repo** — unlike
-the other audits, an empty scope here is NOT "whatever `git status` touched": a compliance gap is
-almost never introduced by the change that happens to surface it.
+SCOPE: the argument you were given: an area (`checkout`, `account`), a path inside the frontend repo,
+`--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5). Empty means `whole-repo`: the **whole frontend repo**. A compliance gap is
+almost never introduced by the change that happens to surface it. `--diff` is read in the frontend
+repo (its `git status` and its `main`).
 
 ## Naming the scope
 
-Every output file is named `<SCOPE>`, derived one way only:
-
-- empty → `full`
-- an area → the area name (`checkout`)
-- a path → the path slugged, `src/` dropped
-- `--diff` → the frontend repo's current branch name slugged (`git -C ../boilerplate-vue-frontend branch --show-current`)
-
-Never invent a batch number.
+Output goes to `tmp/reports/audit-<run>/compliance-frontend/<SCOPE>…`. `<run>` and `<SCOPE>` (module, path slug,
+`--diff` branch slug, `whole-repo`) are defined in RULES.md rule 4.
+For `--diff` the branch is the frontend repo's (`git -C ../boilerplate-vue-frontend branch --show-current`).
 
 ## Steps
 
@@ -51,13 +49,14 @@ Never invent a batch number.
     - `responsibility: both` rules: if this side's own evidence already fails the rule, verdict
       `VIOLATION` — that's actionable here regardless of the backend. If this side is fine but the
       rule's overall intent cannot close without the backend half, verdict `NEEDS-BOTH-SIDES` and
-      note "backend half: see /audit:compliance-backend, same id". Never restate the rule's `rule:`
+      note "backend half: see the `compliance-backend` audit's report
+      (`scripts/audit/compliance-backend/`), same id". Never restate the rule's `rule:`
       text in the note — cite it by `id` only; the backend prompt's report is meant to be read
       alongside this one, not duplicated into it.
 
 ## Output
 
-Write `tmp/reports/audit/compliance-frontend/<SCOPE>.findings.md` (in THIS repo — the report is
+Write `tmp/reports/audit-<run>/compliance-frontend/<SCOPE>.findings.md` (in THIS repo — the report is
 audit tooling output, kept with the other audit reports regardless of which repo it inspected), a
 table of:
 
@@ -69,7 +68,6 @@ rows to the terminal, most severe first.
 
 Rules:
 
-- Do NOT change any file, in either repo. This is a report.
 - A finding needs a citation. No citation, no finding.
 - `NOT-APPLICABLE` needs a reason too — silently skipping a rule is not allowed.
 - `tmp/reports/` is gitignored. These files are working evidence, not deliverables — the conclusions
@@ -78,9 +76,17 @@ Rules:
 
 ## Reading the output
 
-| Verdict              | Means                                                                                                                              |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| **VIOLATION**        | The rule applies and this side's evidence fails it — including a `both` rule broken on this side alone.                            |
-| **SATISFIED**        | The rule applies and this side's evidence meets it in full.                                                                        |
-| **NOT-APPLICABLE**   | `applies_when` evaluates false for this app today, reason cited.                                                                   |
-| **NEEDS-BOTH-SIDES** | A `both` rule whose own-side half is fine but whose closure depends on `/audit:compliance-backend` — see that report by rule `id`. |
+| Verdict              | Means                                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **VIOLATION**        | The rule applies and this side's evidence fails it — including a `both` rule broken on this side alone.                               |
+| **SATISFIED**        | The rule applies and this side's evidence meets it in full.                                                                           |
+| **NOT-APPLICABLE**   | `applies_when` evaluates false for this app today, reason cited.                                                                      |
+| **NEEDS-BOTH-SIDES** | A `both` rule whose own-side half is fine but whose closure depends on the `compliance-backend` audit — see that report by rule `id`. |
+
+## Never carry
+
+Every in-scope rule is judged fresh, so `carried` is not used. A rule out of this run's scope is
+`not re-checked`. In _Since the previous run_ (RULES.md rule 8) the _why_ is one of: a fix sha, new
+code, rule text changed (`git diff <prev-sha> -- scripts/audit/compliance-rules.yaml`), or a
+re-judgement. A re-judgement (evidence paths unchanged since the previous sha) names the registry
+text that caused it, so the rule can be tightened.

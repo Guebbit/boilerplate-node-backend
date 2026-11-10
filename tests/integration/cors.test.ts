@@ -106,7 +106,7 @@ describe('CORS', () => {
 
     /**
      * The preflight is where a browser actually learns the answer, and it travels through the
-     * same callback. `cors` short-circuits `OPTIONS` before the router, so a throw here never
+     * same callback. The one `OPTIONS` handler answers it after `cors`, so a throw here never
      * reached a route to begin with — which is exactly why it went unnoticed.
      */
     it('answers a disallowed preflight without the allow header, and without erroring', async () => {
@@ -115,7 +115,7 @@ describe('CORS', () => {
             .set('Origin', DISALLOWED_ORIGIN)
             .set('Access-Control-Request-Method', 'POST');
 
-        expect(response.status).toBeLessThan(500);
+        expect(response.status).toBe(204);
         expect(response.headers['access-control-allow-origin']).toBeUndefined();
     });
 

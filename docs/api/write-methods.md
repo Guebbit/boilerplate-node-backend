@@ -141,7 +141,7 @@ all answer the parent.
 ### A child created under its parent
 
 A **child** with a life of its own (an id, a status, actions of its own) may be created at
-`POST /parent/{id}/children` with no `GET` on that path (it answers 405 with `Allow: POST`), when:
+`POST /parent/{id}/children` with no `GET` on that path (it answers 405 with `Allow: OPTIONS, POST`), when:
 
 1. each child has its own `GET` by id;
 2. all of a parent's children come back from one **named read**;
@@ -344,13 +344,17 @@ The JSON body parser handles only the types it is told to, so a body in any othe
 flowchart LR
     R["write request<br/>with a body"] --> G{"type declared for<br/>this operation?"}
     G -->|"yes"| P["parse, validate, run"]
-    G -->|"no"| E["415 — details.accepted lists the types"]
+    G -->|"no"| E["415 — details.accepted, Accept<br/>and (PATCH) Accept-Patch list the types"]
     N["no body at all"] --> P
 ```
 
 The guard is `requireDeclaredContentType`, built from `api/request-content-types.ts`, which
 `npm run gen:api` derives from the contract's own `requestBody` media types. A request with no
 bytes is not judged: a missing required body is the schema's own 422.
+
+The 415 also sends `Accept` with the declared types, and `Accept-Patch` (the same list) on a
+`PATCH` (RFC 9110 §12.5.1, RFC 5789 §2.2). An operation with no declared body sends neither. The
+`OPTIONS` answer reads the same row (`declaredOperation`), so the two lists never differ.
 
 Any write (`POST`, `PUT`, `PATCH`, `DELETE`) that declares no body is listed with no types at all
 (`types: []`), and the guard refuses ANY body on it, `{}` included, `details.accepted` empty. An
@@ -364,10 +368,12 @@ in the query or the `/hard` path and a body is refused instead of ignored.
 
 A path the contract declares, asked with a method it does not give it, answers **405** with an
 `Allow` header (RFC 9110 §15.5.6) — never the catch-all's 404. `DELETE /tasks/{id}` is fine,
-`PATCH /tasks/{id}` is a 405 naming `DELETE, GET, HEAD`: a task's `status` is read-only and moves only through its doors.
+`PATCH /tasks/{id}` is a 405 naming `DELETE, GET, HEAD, OPTIONS`: a task's `status` is read-only and moves only through its doors.
 
-- **`Allow` is sorted**, with HEAD beside GET. `OPTIONS` is never judged: the CORS layer answers
-  a preflight before any route runs.
+- **`Allow` is sorted**, with HEAD beside GET and `OPTIONS` on every path: every served path
+  answers it, and a 405 must list what the resource supports (RFC 9110 §15.5.6). The 405 and the
+  `OPTIONS` answer (below) take it from one function, so they never disagree. The guard never
+  judges `OPTIONS` itself: that answer runs before any router.
 - **A trailing slash is the same path.** `/things/` reads as `/things`.
 - **A literal path wins over a templated one.** `DELETE /products/facets` would otherwise
   read `categories` as the `{id}` of `/products/{id}` and answer 404, so the guard runs a second
@@ -377,6 +383,27 @@ A path the contract declares, asked with a method it does not give it, answers *
 - **Not declared per operation.** The 405 belongs to a request that matched no operation, so no
   operation's `responses` could carry it; its code, `METHOD_NOT_ALLOWED`, is in the contract's
   `x-error-codes`.
+
+## `OPTIONS` says what a path accepts
+
+`OPTIONS` asks a path what it can do (RFC 9110 §9.3.7; RFC 5789 §3.1 for `Accept-Patch`). `cors`
+runs with `preflightContinue: true`, so ONE handler (`answerOptions`, mounted right after it in
+`src/app/security.ts`) answers every `OPTIONS`, whatever the Origin.
+
+| Request | Answer |
+| --- | --- |
+| a path of a served module | 204 + `Allow`; `Accept-Patch` only when `Allow` has `PATCH` |
+| `OPTIONS *`, or a preflight (`Access-Control-Request-Method`) on any path | 204 |
+| a plain `OPTIONS` on a path no served module owns | the 404 problem |
+
+- **No `Content-Length` on the 204** (RFC 9110 §8.6).
+- **Same `Allow` for an allowed, a refused and an absent Origin.** A refused Origin gets no
+  `Access-Control-*` headers, so the browser still fails the call.
+- **`Allow` lists `OPTIONS`**, the same as the 405.
+- **A literal path wins**: `/products/facets` answers `GET, HEAD, OPTIONS`, not the `/products/{id}` set.
+- **`Accept-Patch`** is the media types the contract declares for that path's `PATCH` body.
+- **A module this build does not serve** is a 404 for a plain `OPTIONS`, like any other method.
+
 
 The guard is `methodNotAllowed`, built from `api/operation-routes.ts`, which `npm run gen:api`
 derives from the contract's paths and mounted twice in `src/app/routes.ts`: before the routers
@@ -529,7 +556,8 @@ sequenceDiagram
 | the caller's account | `GET /account` | `PUT`, `PATCH /account` |
 | example | `GET /examples/{id}` | `PUT`, `PATCH`, `DELETE /examples/{id}` |
 | webhook subscription | `GET /webhooks/subscriptions/{id}` | `PUT`, `PATCH`, `DELETE /webhooks/subscriptions/{id}` |
-| language | `GET /locales/{locale}` | `PUT`, `PATCH /locales/{locale}` (not the `DELETE`: removing a language is unconditional) |
+| language | `GET /locales/{locale}`; `POST /locales` answers its tag | `PUT`, `PATCH /locales/{locale}` (not the `DELETE`: removing a language is unconditional) |
+| a language's dictionary entries | `GET /locales/{locale}/entries`, `GET /locales/{locale}/apps/{app}/entries` | the two imports, `PUT`, `PATCH /locales/{locale}/apps/{app}/entries` (the single-entry writes take none) |
 | translations of an entity | `GET /locales/translations/{entityType}/{id}` | `PUT`, `PATCH /locales/translations/{entityType}/{id}` |
 
 The role door (`POST /users/{id}/assign-role`, `/revoke-role`) is not in that column: a POST is a
@@ -541,9 +569,29 @@ Not versioned: a resource with no item read to take a tag from (tasks, an addres
 and anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declared.
 
 A language is addressed by its tag, so its `If-Match` is keyed by the tag (case-insensitive: `pt-br`
-is `pt-BR`), while the counter lives on its row. Writing a dictionary entry moves the language's
-`revision` (what clients re-fetch on) but not its edit counter or `updatedAt`; switching it on or
-off does move them, so an open name form is refused after a toggle.
+is `pt-BR`), while the counter lives on its row. Switching it on or off moves the edit counter and
+`updatedAt`, so an open name form is refused after a toggle; writing a dictionary entry moves
+neither.
+
+A language's entries are fenced on a second counter of the same row, its `revision` (what clients
+re-fetch on). One counter per language, not per app: both lists, the one app's and the all-apps one
+the export reads, answer it as the version of their `ETag`, so the tag of the export is the tag of
+the import. The cost is one retry: a write to app X refuses an open import into app Y once, and
+that is safe, where a per-app counter could not describe the all-apps list at all.
+
+- **The imports take it.** `PUT` and `PATCH /locales/{locale}/apps/{app}/entries` send the tag of a
+  list read as `If-Match`; a language whose `revision` moved since is a 412 and nothing is written.
+  An import that would change nothing is checked too (RFC 9110 §13.1.1 evaluates the condition
+  before the method). The `PATCH` answers the new tag.
+- **The single-entry writes do not take it**, as the edit of one string is not an overwrite of a
+  list. They move the same counter, and the row and the bump are one transaction, so an import
+  cannot land between the two and pass a fence that has not moved yet.
+- **An import's check and its bump are inside its own transaction** too: the fence is a read of
+  the language row, so a bump that lands afterwards conflicts with the import's own and re-runs
+  the whole attempt against the new counter.
+- **Using a page's tag on the import URL is a house convention** (`if-match-edit-version`): the
+  tag came from a GET with a query, the import has none. The client strips the query when it files
+  a tag, and sends the all-apps list's tag explicitly on an import.
 
 The translations of an entity are fenced on the OWNER's counter (the product's or the example's
 `editRevision`), not on one of their own: a translation save already moves it, and a product read
@@ -553,6 +601,34 @@ purpose; a stock move refuses neither. The read answers 404 for an entity that d
 A webhook subscription's delivery bookkeeping (the failure streak, the auto-disable) writes with
 `timestamps: false`, so a delivery outcome never moves the edit counter and never refuses an open
 edit form.
+
+### The pattern: optimistic locking
+
+The edit counter is a **version number**, the pattern called *optimistic locking*
+([Fowler: Optimistic Offline Lock](https://martinfowler.com/eaaCatalog/optimisticOfflineLock.html)).
+Rails `lock_version`, JPA `@Version` and Kubernetes `resourceVersion` are the same idea.
+`If-Match` is how HTTP carries it.
+
+It is not a nonce, though both are "a value the server checks":
+
+| | Version counter (this) | Nonce |
+| --- | --- | --- |
+| Value | an integer that goes up by one per edit | random |
+| Order | yes: 5 is newer than 4 | none |
+| Shared? | everyone who reads the row gets the same one, until the next edit | each one is issued once |
+| Answers | "has this changed since I read it?" | "have I seen this message before?" |
+| Here | `editRevision`, the edit part of the `ETag` | the `Idempotency-Key` ledger, the OAuth `state`, the ALTCHA antibot challenge |
+
+Three rules keep it honest. Break any one and a lost update gets through:
+
+1. **Check and write in one atomic step.** "Update where the counter is 7, and make it 8"; nothing
+   matched → 412. A check in one step and a write in the next lets a second editor in between.
+   See [What the server does with `If-Match`](#what-the-server-does-with-if-match).
+2. **Every edit moves the counter in the same atomic step as the edit.** A row and its own counter:
+   one update (`$inc`). Many rows under one counter: one transaction. A bump made afterwards leaves
+   a window where the data has changed and the counter still says it has not.
+3. **The tag describes exactly what the client read.** A read that covers a whole set of rows
+   hands out the set's counter, so a write based on that read is checked against the set.
 
 ### What the tag is
 

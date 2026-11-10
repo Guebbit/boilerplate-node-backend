@@ -25,7 +25,7 @@ paths:
                 or 400 buckets. Needs `read:Stats`. Never cached: it is the shop's money.
             operationId: getSalesStats
             security:
-                - bearerAuth: []
+                - bearerAuth: ['read:Stats']
             parameters:
                 - $ref: '#/components/parameters/StatsFromParam'
                 - $ref: '#/components/parameters/StatsToParam'
@@ -53,7 +53,7 @@ paths:
                 `read:Stats`.
             operationId: getProductStats
             security:
-                - bearerAuth: []
+                - bearerAuth: ['read:Stats']
             parameters:
                 - $ref: '#/components/parameters/StatsFromParam'
                 - $ref: '#/components/parameters/StatsToParam'
@@ -83,7 +83,7 @@ paths:
                 Needs `read:Stats`.
             operationId: getProductSalesSeries
             security:
-                - bearerAuth: []
+                - bearerAuth: ['read:Stats']
             parameters:
                 - name: productId
                   in: path
@@ -116,7 +116,7 @@ paths:
                 Needs `read:Stats`.
             operationId: getCategoryStats
             security:
-                - bearerAuth: []
+                - bearerAuth: ['read:Stats']
             parameters:
                 - $ref: '#/components/parameters/StatsFromParam'
                 - $ref: '#/components/parameters/StatsToParam'
@@ -141,7 +141,7 @@ paths:
                 method and provider, with their count and amount. Needs `read:Stats`.
             operationId: getPaymentMixStats
             security:
-                - bearerAuth: []
+                - bearerAuth: ['read:Stats']
             parameters:
                 - $ref: '#/components/parameters/StatsFromParam'
                 - $ref: '#/components/parameters/StatsToParam'
@@ -167,7 +167,7 @@ paths:
                 and refund rate (credit notes ÷ invoices, VAT included). Needs `read:Stats`.
             operationId: getOperationsStats
             security:
-                - bearerAuth: []
+                - bearerAuth: ['read:Stats']
             parameters:
                 - $ref: '#/components/parameters/StatsFromParam'
                 - $ref: '#/components/parameters/StatsToParam'
@@ -193,7 +193,7 @@ paths:
                 account shares one placeholder address. Needs `read:Stats`.
             operationId: getCustomerStats
             security:
-                - bearerAuth: []
+                - bearerAuth: ['read:Stats']
             parameters:
                 - $ref: '#/components/parameters/StatsFromParam'
                 - $ref: '#/components/parameters/StatsToParam'
@@ -218,7 +218,7 @@ paths:
                 the nearest `payBy`) and paid orders not yet shipped. Needs `read:Stats`.
             operationId: getPipelineStats
             security:
-                - bearerAuth: []
+                - bearerAuth: ['read:Stats']
             responses:
                 '200':
                     description: The snapshot

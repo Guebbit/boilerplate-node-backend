@@ -48,7 +48,7 @@ layout and shared parts are declared in one file under `scripts/contracts/`.
 
 | Bundle                   | Verb          | What does it                                                             |
 | ------------------------ | ------------- | ------------------------------------------------------------------------ |
-| `openapi.yaml`           | **compiled**  | `redocly bundle` resolves `$ref` across whole documents, then the root's `x-app-level-responses` (429, 500 and 503 for every operation; 400/413/415 for a body-carrying one; 415 for a body-less write too — none of them any one module's business) is merged into every operation that doesn't already declare its own. A step (`scripts/contracts/image-upload-encoding.ts`) stamps the root's `x-image-upload-types` onto every multipart `imageUpload` part as `encoding.imageUpload.contentType`. A second step (`scripts/contracts/cookie-auth.ts`) adds `cookieAuth` as an alternative to every operation that takes `bearerAuth`, and the origin `403` to its unsafe methods. A step (`scripts/contracts/response-headers.ts`) stamps the root's `x-app-level-headers` (`x-request-id`, `Cache-Control`, `Content-Language`, `Vary`, `RateLimit-Policy`, `RateLimit`, `ETag`) onto every response that does not declare the same header itself, and `Idempotent-Replayed` onto the 2xx of every operation that takes an `Idempotency-Key`. A step (`scripts/contracts/fill-enum.ts`) fills a schema marked `x-enum-from: <source>` with that source's values (after any written `enum`, which is how a module extends another's enum), so the webhook event names are never copied into `webhooks/openapi.yaml`. A step (`scripts/contracts/openapi-extensions.ts`) merges another module's `openapi.<owner>.yaml` variants into the owner's `oneOf` unions ([Extending another module's contract](#extending-another-modules-contract)). An operation's own `x-error-codes: { '<status>': [CODE, ...] }` lists the codes it answers with, and the bundle fails if a name is not in the collected catalogue or sits under another status; a catalogue entry's optional `scope: app` marks a code any operation may send, so none lists it ([what an operation lists](./errors.md#what-an-operation-lists)) |
+| `openapi.yaml`           | **compiled**  | `redocly bundle` resolves `$ref` across whole documents, then the root's `x-app-level-responses` (429, 500 and 503 for every operation; 400/413/415 for a body-carrying one; 415 for a body-less write too — none of them any one module's business) is merged into every operation that doesn't already declare its own. A step (`scripts/contracts/image-upload-encoding.ts`) stamps the root's `x-image-upload-types` onto every multipart `imageUpload` part as `encoding.imageUpload.contentType`. A second step (`scripts/contracts/cookie-auth.ts`) adds `cookieAuth` as an alternative to every operation that takes `bearerAuth`, and the origin `403` to its unsafe methods. A step (`scripts/contracts/response-headers.ts`) stamps the root's `x-app-level-headers` (`x-request-id`, `Cache-Control`, `Content-Language`, `Vary`, `RateLimit-Policy`, `RateLimit`, `ETag`) onto every response that does not declare the same header itself, and `Idempotent-Replayed` onto every response of an operation that takes an `Idempotency-Key` except a 429 (the ledger never sees one), through a `<Name>Replayable` twin of each shared response. A step (`scripts/contracts/fill-enum.ts`) fills a schema marked `x-enum-from: <source>` with that source's values (after any written `enum`, which is how a module extends another's enum), so the webhook event names are never copied into `webhooks/openapi.yaml`. A step (`scripts/contracts/openapi-extensions.ts`) merges another module's `openapi.<owner>.yaml` variants into the owner's `oneOf` unions ([Extending another module's contract](#extending-another-modules-contract)). An operation's own `x-error-codes: { '<status>': [CODE, ...] }` lists the codes it answers with, and the bundle fails if a name is not in the collected catalogue or sits under another status; a catalogue entry's optional `scope: app` marks a code any operation may send, so none lists it ([what an operation lists](./errors.md#what-an-operation-lists)) |
 | `asyncapi.yaml`          | **merged**    | `scripts/contracts/asyncapi-bundles.ts` copies five maps; `$ref`s stay untouched |
 | `asyncapi.public.yaml`   | **merged**    | the same merge over the shared sections only — one `SHARED_SECTIONS` list decides which |
 | the 4 client collections | **generated** | produced whole from `openapi.yaml` + the dataset, nothing on disk between; untracked |
@@ -211,6 +211,31 @@ The bundler stamps the shared `304` on every operation that carries the key. It 
 only: it never boots the app, because the app imports files this same build generates.
 `tests/cross-cutting/cache-policy-declared.test.ts` names the missing or stray operation when a
 router and its `x-cache` disagree. It checks which GETs are cached, not the value.
+
+### The permission on an operation
+
+A route guarded by `requirePermission(action, subject)` names that permission in its fragment, in
+the standard OpenAPI place: the scopes list of the security requirement (OAS 3.1 allows role names
+there for non-OAuth schemes, [spec](https://spec.openapis.org/oas/v3.1.0#security-requirement-object)).
+
+```yaml
+security:
+    - bearerAuth: ['display:Payment']
+    - apiKeyAuth: ['display:Payment']
+```
+
+- Several guards on one route list several names (all must hold). A `router.use` guard counts for
+  every operation under it.
+- `apiKeyAuth` is listed only where an API key may reach the route, and carries the same names.
+- The bundler (`scripts/contracts/permission-security.ts`) reads the names through the kernel's
+  rules and merges into the operation's `x-error-codes`: the rule's `deniedCode` (else `FORBIDDEN`)
+  and `SECOND_FACTOR_ENROLLMENT_REQUIRED` under 403, `REAUTH_REQUIRED` under 401 for a `stepUp`
+  rule. A name no rule declares fails the bundle.
+- Do not write those codes by hand. A code a service makes (`ROLE_MANAGEMENT_REQUIRED` on a user
+  write, say) stays a hand line.
+- `tests/cross-cutting/contract-error-declarations.test.ts` holds the names against the mounted
+  guards, both ways, and the generated lists against the guard's own questions. The SSE streams
+  that authenticate by cookie name no permission: their guard is not a `requirePermission`.
 
 ### Client hints a fragment can put on an operation
 
@@ -424,6 +449,11 @@ and the headers schema every event shares; each event is declared by the module 
 `withSectionFragments` folds them into the section before it joins the bundle: one call, in
 `asyncapi-bundles.ts`. The same collision refusal applies, so two modules claiming one event name
 fail the bundle.
+
+Each channel also carries `x-read-rule`: `public`, or the declared tenant rule (no conditions) a subscriber
+must hold to receive that event. `webhooks/services/catalog.ts` reads it at boot and refuses a channel
+without a usable one; the bundler passes it through untouched into `asyncapi.public.yaml`
+([who may subscribe to what](../modules/webhooks.md#who-may-subscribe-to-what)).
 
 A payload field with a closed set of values `$ref`s the owning module's own REST schema
 (`./openapi.yaml#/components/schemas/ReturnReason`) rather than copying its enum. The bundle has to

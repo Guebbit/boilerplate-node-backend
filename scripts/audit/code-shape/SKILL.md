@@ -3,15 +3,17 @@ name: code-shape
 description: Audit a scope for over-abstraction — shallow functions, pass-throughs, lazy files, speculative generality — and its two neighbours, dead code (knip) and copy-paste (jscpd)
 ---
 
+Before anything else, read `scripts/audit/RULES.md` and follow it. Where this skill and RULES.md
+disagree, RULES.md wins.
+
 ROLE: Design reviewer, not a bug hunter. You ask one question of every candidate: does this piece
 of code earn its place, or would the code read better without it?
 
 GOAL: Give every candidate the tools list a verdict a human can act on in one minute — inline,
 merge, delete, extract, or keep with a reason.
 
-SCOPE: the argument you were given — a module name (`orders`), a path, or `--diff` for modules
-touched by the working tree. If empty, use `git status --porcelain` to pick the scope; if that is
-empty too, the whole of `src scripts scenarios`, and say at the top of the report that it is large.
+SCOPE: the argument you were given: a module name (`orders`), a path, `--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5).
+Empty means `whole-repo`: the paths `.jscpd.json` lists. Say at the top of the report that it is large.
 
 ## The rules this audit enforces
 
@@ -40,14 +42,25 @@ one audit so the report can never tell you to inline a helper and extract the sa
 
 ## Naming the scope
 
-Output is `tmp/reports/audit/code-shape/<SCOPE>.md`, where `<SCOPE>` is:
-
-- a module → the module name (`orders`)
-- a path → the path slugged, `src/` dropped (`src/infrastructure/http` → `infrastructure-http`)
-- `--diff` → the current branch name slugged (`git branch --show-current`)
-- the whole repo → `all`
+Output goes to `tmp/reports/audit-<run>/code-shape/<SCOPE>…`. `<run>` and `<SCOPE>` (module, path slug,
+`--diff` branch slug, `whole-repo`) are defined in RULES.md rule 4.
 
 ## Steps
+
+### 0 — the previous run (RULES.md rules 4 and 8)
+
+Read the newest older `tmp/reports/audit-*/code-shape/` folder, of any scope. Never move, rename or
+write to it. Carry a KEEP only when all four hold:
+
+- (a) that run's header names a sha on a clean tree;
+- (b) `git diff <prev-sha> -- scripts/audit/code-shape/ knip.config.ts .jscpd.json` is empty;
+- (c) this run's fresh counter row matches the previous one (callers or importers, `published`,
+  lines);
+- (d) `git diff <prev-sha> -- <candidate file>` is empty.
+
+Everything else is re-judged. Report every previous row under RULES.md rule 8, with its five
+statuses. A House ruling overrides a carried verdict: the row is listed as `verdict changed`, why =
+`House ruling CS-n`. Condition (b) makes this automatic for any run after a ruling is added.
 
 ### 1 — run the counters
 
@@ -57,13 +70,15 @@ an import alias and a re-export, and a wrong count produces a wrong verdict.
 Translate the scope to paths first: a module is `src/modules/<name>`.
 
 ```bash
-npm run audit:shallow -- <paths>                                          # → tmp/reports/audit/code-shape/shallow.json
-npm run -s audit:unused -- --reporter json > tmp/reports/audit/code-shape/knip.json
-npm run audit:duplicates                                                  # → tmp/reports/audit/code-shape/jscpd/jscpd-report.json
+OUT=tmp/reports/audit-<run>/code-shape
+npm run audit:shallow -- --out $OUT <paths>                    # → $OUT/shallow.json
+npm run -s audit:unused -- --reporter json > $OUT/knip.json
+npm run audit:duplicates -- --output $OUT/jscpd                # → $OUT/jscpd/jscpd-report.json
 ```
 
 knip and jscpd always scan the whole repo. Keep only the entries whose file falls inside the scope;
-for a jscpd clone, keep it when EITHER side does.
+for a jscpd clone, keep it when EITHER side does. jscpd reports absolute paths: strip the repo root
+before matching a clone against the scope.
 
 ### 2 — one reviewer per shape, in parallel
 
@@ -125,7 +140,7 @@ Before writing, read the six result sets together:
 
 ## Output
 
-Write `tmp/reports/audit/code-shape/<SCOPE>.md`:
+Write `tmp/reports/audit-<run>/code-shape/<SCOPE>.md`:
 
 - At the top, the counts: candidates per reviewer, and verdicts per kind.
 - Then one table per reviewer: `| candidate | file:line | verdict | reason |`.
@@ -134,7 +149,6 @@ Write `tmp/reports/audit/code-shape/<SCOPE>.md`:
 
 ## Rules
 
-- Do NOT edit source, config or tests. This is a report; the human decides.
 - Every row cites a `file:line` taken from the tool output, or — reviewer 4 only — the search that
   found it.
 - Never call a function shallow from its name alone. Read its body and its callers.

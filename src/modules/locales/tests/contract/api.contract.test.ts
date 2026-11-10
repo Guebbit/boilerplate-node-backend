@@ -1343,3 +1343,128 @@ describe('GET /locales/:locale/messages?app=', () => {
         expect(response.status).toBe(422);
     });
 });
+
+describe('POST /locales answers the language it created', () => {
+    it('hands out its tag and names the resource it belongs to', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const created = await api().post('/locales').set('Authorization', bearer).send(PORTUGUESE);
+        const read = await api()
+            .get(created.headers['content-location'])
+            .set('Authorization', bearer);
+
+        expect(created.status).toBe(201);
+        expect(created.headers['content-location']).toBe(created.headers.location);
+        // The tag a first edit sends: the same edit part a read of the language answers.
+        expect(created.headers.etag.split('.', 1)[0]).toBe(read.headers.etag.split('.', 1)[0]);
+    });
+});
+
+/** The edit part of an `ETag` (`"<version>.<digest>"`): the number a write compares. */
+const versionOfTag = (tag: string): number => Number(tag.slice(1).split('.', 1)[0]);
+
+describe('the dictionary version: one tag per language, any app', () => {
+    it('answers the language revision as the tag of both lists', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+        await createEntry(bearer, 'pt', 'generic.search', 'Buscar');
+        await createEntry(bearer, 'pt', 'generic.cancel', 'Cancelar');
+
+        const all = await api().get('/locales/pt/entries').set('Authorization', bearer);
+        const one = await api()
+            .get('/locales/pt/apps/demo-fe/entries')
+            .set('Authorization', bearer);
+
+        // Two single-entry writes, two bumps: the counter started at 0.
+        expect(versionOfTag(all.headers.etag)).toBe(2);
+        expect(versionOfTag(one.headers.etag)).toBe(2);
+    });
+
+    it('lets an import through on the tag of the list it was made from, and answers the next', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+        const list = await api().get('/locales/pt/entries').set('Authorization', bearer);
+
+        const imported = await api()
+            .put('/locales/pt/apps/demo-fe/entries')
+            .set('Authorization', bearer)
+            .set('If-Match', list.headers.etag)
+            .send({ entries: { 'generic.search': 'Buscar' } });
+        const merged = await api()
+            .patch('/locales/pt/apps/demo-fe/entries')
+            .set('Authorization', bearer)
+            .set('If-Match', list.headers.etag)
+            .send({ entries: { 'generic.cancel': 'Cancelar' } });
+
+        expect(imported.status).toBe(200);
+        // The first import moved the counter, so the same tag is now stale for the second.
+        expect(merged.status).toBe(412);
+    });
+
+    it('answers the new tag on a merge, which the next import takes', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+        const list = await api().get('/locales/pt/entries').set('Authorization', bearer);
+        const first = await api()
+            .patch('/locales/pt/apps/demo-fe/entries')
+            .set('Authorization', bearer)
+            .set('If-Match', list.headers.etag)
+            .send({ entries: { 'generic.search': 'Buscar' } });
+
+        const second = await api()
+            .patch('/locales/pt/apps/demo-fe/entries')
+            .set('Authorization', bearer)
+            .set('If-Match', first.headers.etag)
+            .send({ entries: { 'generic.cancel': 'Cancelar' } });
+
+        expect(versionOfTag(first.headers.etag)).toBe(1);
+        expect(second.status).toBe(200);
+    });
+
+    it('refuses an import after an entry was written in ANOTHER app, and writes nothing', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+        const list = await api().get('/locales/pt/entries').set('Authorization', bearer);
+        await createEntry(bearer, 'pt', 'generic.other', 'Outro', 'demo-be');
+
+        const refused = await api()
+            .put('/locales/pt/apps/demo-fe/entries')
+            .set('Authorization', bearer)
+            .set('If-Match', list.headers.etag)
+            .send({ entries: { 'generic.search': 'Buscar' } });
+        const stored = await api()
+            .get('/locales/pt/apps/demo-fe/entries')
+            .set('Authorization', bearer);
+
+        expect(refused.status).toBe(412);
+        expect(stored.body.items).toEqual([]);
+    });
+
+    it('checks an import that would change nothing too', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+        const list = await api().get('/locales/pt/entries').set('Authorization', bearer);
+        await createEntry(bearer, 'pt', 'generic.search', 'Buscar');
+
+        const noop = await api()
+            .patch('/locales/pt/apps/demo-fe/entries')
+            .set('Authorization', bearer)
+            .set('If-Match', list.headers.etag)
+            .send({ entries: { 'generic.search': 'Buscar' } });
+
+        expect(noop.status).toBe(412);
+    });
+
+    it('imports unconditionally without an If-Match', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+        await createEntry(bearer, 'pt', 'generic.search', 'Buscar');
+
+        const write = await api()
+            .patch('/locales/pt/apps/demo-fe/entries')
+            .set('Authorization', bearer)
+            .send({ entries: { 'generic.cancel': 'Cancelar' } });
+
+        expect(write.status).toBe(200);
+    });
+});

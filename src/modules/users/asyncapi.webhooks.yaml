@@ -10,6 +10,7 @@
 channels:
     user.erased:
         address: user.erased
+        x-read-rule: read:User
         description: An account was erased.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
@@ -18,6 +19,7 @@ channels:
                 $ref: '#/components/messages/UserErasedEvent'
     user.updated:
         address: user.updated
+        x-read-rule: read:User
         description: A personal-data field of an account was rectified.
         servers:
             - $ref: '#/servers/subscriberEndpoint'

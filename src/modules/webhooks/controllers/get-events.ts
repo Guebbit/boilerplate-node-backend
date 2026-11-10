@@ -5,14 +5,16 @@
 
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
+import { tenantCallerContextOf } from '@infrastructure/http/request';
 import type { WebhookEventCatalogEntry } from '@types';
 import { webhooksService } from '../services';
 
 /**
  * GET /webhooks/events
- * Every event a subscription may filter on, served straight from `../asyncapi.yaml`.
+ * Every event a subscription may filter on, each with whether the caller may subscribe to it
+ * (`actions.subscribe`: the caller holds the event's read rule).
  */
-export const listWebhookEvents = (_request: Request, response: Response) =>
+export const listWebhookEvents = (request: Request, response: Response) =>
     successResponse<{ items: WebhookEventCatalogEntry[] }>(response, {
-        items: [...webhooksService.listWebhookEventCatalog()]
+        items: webhooksService.listWebhookEventCatalog(tenantCallerContextOf(request).caller)
     });

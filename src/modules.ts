@@ -74,6 +74,14 @@ export const enabledModules: AppModule[] = [
 ];
 
 /**
+ * The names of the modules this build mounts: what decides whether a contract path is a path this
+ * server can answer (the 405 guard, the `OPTIONS` answer). Built once so both read the same set.
+ */
+export const servedModuleNames: ReadonlySet<string> = new Set(
+    enabledModules.map(({ name }) => name)
+);
+
+/**
  * Every enabled module's own directory of one kind, in registry order. A module carries its own
  * copy or none; this is the one place that turns the registry into the flat list the consumer
  * takes — `bootI18n` for `locales`, `registerTemplateDirectories` (`mailer.ts`) for `templates`.

@@ -154,7 +154,7 @@ paths:
                 '409': [IDEMPOTENCY_IN_FLIGHT, ORDER_INSUFFICIENT_STOCK, ORDER_PRODUCT_UNAVAILABLE]
                 '422': [IDEMPOTENCY_KEY_MISMATCH, ORDER_LINE_LIMIT_EXCEEDED]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['create:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
@@ -203,10 +203,9 @@ paths:
                 The response is never cached: `Cache-Control: private, no-store`.
             operationId: exportOrders
             x-error-codes:
-                '401': [REAUTH_REQUIRED]
                 '422': [ORDER_EXPORT_TOO_LARGE]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['export:Order']
             parameters:
                 - name: sort
                   in: query
@@ -342,7 +341,7 @@ paths:
                 on this body. See `docs/theory/tactical-ddd.md#who-writes-the-status`.
             operationId: replaceOrderById
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -373,7 +372,7 @@ paths:
                 on this body. See `docs/theory/tactical-ddd.md#who-writes-the-status`.
             operationId: updateOrderById
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -404,7 +403,7 @@ paths:
             x-error-codes:
                 '409': [ORDER_HAS_MONEY_HISTORY, ORDER_INVOICED, ORDER_NOT_CANCELED]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['delete:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/HardDeleteParam'
@@ -429,7 +428,7 @@ paths:
             x-error-codes:
                 '409': [ORDER_NOT_DELETED]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['delete:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -458,7 +457,7 @@ paths:
                 '409': [ORDER_HAS_MONEY_HISTORY, ORDER_INVOICED, ORDER_NOT_CANCELED]
             x-alias-of: deleteOrderById
             security:
-                - bearerAuth: []
+                - bearerAuth: ['delete:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -568,7 +567,7 @@ paths:
                 '409': [IDEMPOTENCY_IN_FLIGHT]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
@@ -607,7 +606,7 @@ paths:
                 row with the note's length, never its text. A second call on the same note is a 404.
             operationId: deleteOrderNote
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - name: eventId
@@ -640,7 +639,7 @@ paths:
                 '409': [ORDER_ADDRESS_LOCKED]
                 '422': [ORDER_SHIP_TO_COUNTRY_NOT_SUPPORTED]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -685,10 +684,9 @@ paths:
                 Webhooks still fire for this move; no shipped email does.
             operationId: overrideOrderStatus
             x-error-codes:
-                '401': [REAUTH_REQUIRED]
                 '409': [ORDER_OVERRIDE_AWAITING_STOCK, ORDER_OVERRIDE_NOT_ALLOWED]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['override:Order']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -2795,6 +2793,15 @@ components:
                     allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     readOnly: true
                     description: ISO-4217 currency code this order was priced in (e.g. EUR).
+                # Frozen from `NODE_TERMS_VERSION` when checkout placed the order, the way `currency`
+                # is. A staff-placed order carries none.
+                termsVersion:
+                    type: string
+                    readOnly: true
+                    description: >-
+                        The Terms version in force when the buyer placed the order at checkout;
+                        absent on staff-placed orders.
+                    example: '2'
                 # Both derived at serialization from the lines' frozen `taxRate` — never stored.
                 # See `src/modules/orders/domain/tax.ts`.
                 netTotal:

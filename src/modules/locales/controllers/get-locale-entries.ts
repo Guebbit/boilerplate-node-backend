@@ -10,6 +10,7 @@ import { readInput } from '@infrastructure/http/request';
 import { blankToUndefined, pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { ListAppLocaleEntriesQueryParams, ListLocaleEntriesQueryParams } from '@api/schemas.zod';
 import { successResponse } from '@infrastructure/http/response';
+import { setEtag } from '@infrastructure/http/preconditions';
 import { requireId } from '@infrastructure/http/ids';
 import { localeService } from '../services';
 import { presentLocaleEntry } from '../presenters';
@@ -66,6 +67,9 @@ const listEntries = (
             if (refused(response, result)) return;
             // `search()`'s `TWire` is `LocaleEntry` itself, so `result.data.items` is already the
             // wire shape this response needs — no cast.
+            // The language's `revision` is the tag's version, so the tag of either list is what an
+            // import's `If-Match` compares (see `services/entries.ts#searchEntries`).
+            setEtag(response, result.data);
             return successResponse<LocaleEntriesResponse>(response, result.data);
         })
         .catch(catchAs(response, 'getLocaleEntries'));

@@ -430,7 +430,10 @@ describe('the cart URLs a line no longer has', () => {
         const removed = await api().delete('/cart').set('Authorization', bearer);
 
         expect([added.status, removed.status]).toEqual([405, 405]);
-        expect([added.headers.allow, removed.headers.allow]).toEqual(['GET, HEAD', 'GET, HEAD']);
+        expect([added.headers.allow, removed.headers.allow]).toEqual([
+            'GET, HEAD, OPTIONS',
+            'GET, HEAD, OPTIONS'
+        ]);
     });
 
     it('answers a GET of the line collection 405, since the cart is the read', async () => {
@@ -439,7 +442,7 @@ describe('the cart URLs a line no longer has', () => {
         const response = await api().get('/cart/items').set('Authorization', bearer);
 
         expect(response.status).toBe(405);
-        expect(response.headers.allow).toBe('DELETE, POST');
+        expect(response.headers.allow).toBe('DELETE, OPTIONS, POST');
     });
 });
 

@@ -117,8 +117,8 @@ paths:
                 '409': [IDEMPOTENCY_IN_FLIGHT]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['create:Product', 'update:Translation']
+                - apiKeyAuth: ['create:Product', 'update:Translation']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
@@ -220,8 +220,8 @@ paths:
                 change one locale without restating the others, use `PATCH`.
             operationId: replaceProductById
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:Product', 'update:Translation']
+                - apiKeyAuth: ['update:Product', 'update:Translation']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -272,8 +272,8 @@ paths:
                 `translations.it.title`.
             operationId: updateProductById
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:Product', 'update:Translation']
+                - apiKeyAuth: ['update:Product', 'update:Translation']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -309,8 +309,8 @@ paths:
             description: Deletes the product identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. A soft delete is one-way and safe to repeat — undo it with `POST /products/{id}/restore`.
             operationId: deleteProductById
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['delete:Product']
+                - apiKeyAuth: ['delete:Product']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/HardDeleteParam'
@@ -334,8 +334,8 @@ paths:
             x-error-codes:
                 '409': [PRODUCT_NOT_DELETED]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['delete:Product']
+                - apiKeyAuth: ['delete:Product']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -362,8 +362,8 @@ paths:
             operationId: hardDeleteProductById
             x-alias-of: deleteProductById
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['delete:Product']
+                - apiKeyAuth: ['delete:Product']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:

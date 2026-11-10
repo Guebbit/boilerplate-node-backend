@@ -10,6 +10,7 @@
 channels:
     order.created:
         address: order.created
+        x-read-rule: display:Order
         description: A new order was placed.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
@@ -18,6 +19,7 @@ channels:
                 $ref: '#/components/messages/OrderCreatedEvent'
     order.paid:
         address: order.paid
+        x-read-rule: display:Order
         description: An order's payment settled.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
@@ -26,6 +28,7 @@ channels:
                 $ref: '#/components/messages/OrderPaidEvent'
     order.canceled:
         address: order.canceled
+        x-read-rule: display:Order
         description: An order was canceled.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
@@ -34,6 +37,7 @@ channels:
                 $ref: '#/components/messages/OrderCanceledEvent'
     order.redacted:
         address: order.redacted
+        x-read-rule: display:Order
         description: An order's personal data was scrubbed.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
