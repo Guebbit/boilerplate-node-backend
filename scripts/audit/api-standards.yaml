@@ -70,9 +70,13 @@ rules:
     - id: rfc9110-created-means-created
       standard: rfc9110
       section: status codes
-      rule: '201 means one or more new resources were created; `Location`, or else the target URI, identifies the primary one (§15.3.2).'
-      house: 'An action (no new resource) answers 200 (docs/api/write-methods.md#action-→-200).'
-      source: https://www.rfc-editor.org/rfc/rfc9110#section-15.3.2
+      rule: '201 means one or more new resources were created; `Location`, or else the target URI, identifies the primary one (§15.3.2). A POST that creates a resource SHOULD answer 201 with a `Location` naming it (§9.3.3).'
+      house: 'An action answers 200 with the thing acted on, even when it creates records on the side (docs/api/write-methods.md#action-→-200).'
+      source:
+          [
+              https://www.rfc-editor.org/rfc/rfc9110#section-15.3.2,
+              https://www.rfc-editor.org/rfc/rfc9110#section-9.3.3
+          ]
       evidence:
           [
               openapi.yaml paths.*.post.responses,
@@ -80,7 +84,7 @@ rules:
               tests/support/spec-walk.ts
           ]
       lint: no
-      difference: [line-answers-parent, signup-refusal-201]
+      difference: [line-answers-parent, signup-refusal-201, action-side-records-200]
 
     - id: rfc9110-conditional-requests
       standard: rfc9110
