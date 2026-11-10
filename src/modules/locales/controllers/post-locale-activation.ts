@@ -8,6 +8,7 @@
 import type { Request, Response } from 'express';
 import type { Language } from '@types';
 import { successResponse } from '@infrastructure/http/response';
+import { answerAsResource } from '@infrastructure/http/preconditions';
 import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
@@ -29,7 +30,11 @@ const switchLanguage =
 
                 return localeService
                     .describeStoredLanguage(result.data, localeService.standingOn(request.caller))
-                    .then((language) => successResponse<Language>(response, language));
+                    .then((language) => {
+                        // The language's new tag, and the resource it belongs to (RFC 9110 §8.8.3).
+                        answerAsResource(response, language, `/locales/${language.tag}`);
+                        return successResponse<Language>(response, language);
+                    });
             })
             .catch(catchAs(response, operation));
 

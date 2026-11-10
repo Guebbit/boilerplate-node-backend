@@ -156,6 +156,8 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
 
     /account/email-change:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the account this answers.
+        x-versioned: [post]
         post:
             tags: [Account]
             summary: Request an email change
@@ -175,11 +177,11 @@ paths:
                             $ref: '#/components/schemas/RequestEmailChangeRequest'
             responses:
                 '200':
-                    description: The change is pending; both addresses have been mailed
+                    description: The change is pending; both addresses have been mailed. The body is what `GET /account` answers
                     content:
                         application/json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Account'
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AccountView'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }

@@ -5,6 +5,7 @@
 
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
+import { answerAsResource } from '@infrastructure/http/preconditions';
 import { tenantCallerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
 import { catchAs, refused } from '@infrastructure/http/controller';
@@ -29,8 +30,12 @@ export const createWebhookSubscriptionSecret = (
         .createSubscriptionSecret(id, context)
         .then((result) => {
             if (refused(response, result)) return;
+            const subscription = viewSubscription(result.data.subscription, context.caller);
+            // The subscription's new tag (the body also carries the one-time secret) and the
+            // resource it belongs to (RFC 9110 §8.8.3).
+            answerAsResource(response, subscription, `/webhooks/subscriptions/${id}`);
             return successResponse<WebhookSubscriptionCreated>(response, {
-                ...viewSubscription(result.data.subscription, context.caller),
+                ...subscription,
                 newSecret: result.data.newSecret
             });
         })
