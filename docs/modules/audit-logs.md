@@ -1,7 +1,7 @@
 # audit-logs
 
 ::: tip At a glance
-**Owns** — the queryable audit trail, kept for `NODE_AUDIT_RETENTION_DAYS` (90 by default), which its TTL index enforces.
+**Owns** — the queryable audit trail, kept for `NODE_AUDIT_RETENTION_DAYS` (180 by default), which its TTL index enforces.
 **Depends on** — [`access`](./access.md), only for the refusal reasons its read side lists. Nothing, for the write side: nothing imports this module, it installs a sink instead.
 **Breaks if you change** — the retention window (`NODE_AUDIT_RETENTION_DAYS`) on the `timestamp` index. It is the only thing deleting old entries.
 :::
@@ -63,7 +63,7 @@ else still builds.
 :::
 
 Retention is a database fact, not a cron job: `expireAfterSeconds` on `timestamp` is
-`NODE_AUDIT_RETENTION_DAYS` days (90 by default), enforced by Mongo. Mongo will not change an
+`NODE_AUDIT_RETENTION_DAYS` days (180 by default), enforced by Mongo. Mongo will not change an
 existing TTL index's window in place: a new value fails the boot until `npm run db:sync` rebuilds
 the index. The two compound indexes are the two questions anyone asks of a
 trail — everything one actor did, and everyone who did one thing.

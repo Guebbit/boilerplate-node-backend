@@ -363,7 +363,7 @@ the hold's own `setAt` and the account's last staff lift) and removes the hold i
 id included. That date is what stops the same cancellations triggering a second hold, so it has a
 purpose; the note and the staff member's id do not outlive the hold's end (Art. 5(1)(e)). The data
 export carries the hold while it is stored. Who set it is never exported (CJEU Pankki S, C-579/21);
-the audit log keeps that for 90 days. The review flag is kept until a staff member sets or lifts a hold
+the audit log keeps that for 180 days. The review flag is kept until a staff member sets or lifts a hold
 on the account (the review is the purpose; it is a timestamp, no text and no staff id), and the data
 export carries it with the rest of the profile.
 
@@ -443,7 +443,7 @@ flowchart LR
 The ledger is a layer of one design, not a rival of the standards: a deletion concept (this page,
 ISO/IEC 27555), a ledger that outlives the backups, a quarantine restore (SDM Baustein 60, M60.S10:
 erase again **immediately, before use**) and a restoration log (ISO/IEC 27701). The earlier
-`auditlogs` and Loki sources are shorter than the backups (90 days and 7 by default), which is why
+`auditlogs` and Loki sources are no longer-lived than the backups (180 days and 7 by default), which is why
 they are only the fallback for a lost host together with a lost newest snapshot.
 
 **Deletion locks.** The ledger also records `scheduled` (with the promised `purgeAt`, stored so a

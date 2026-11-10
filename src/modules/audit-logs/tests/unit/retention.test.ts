@@ -27,10 +27,10 @@ describe('audit log retention', () => {
         jest.resetModules();
     });
 
-    it('defaults to 90 days when the variable is unset', async () => {
+    it('defaults to 180 days when the variable is unset', async () => {
         setEnvironment({ NODE_AUDIT_RETENTION_DAYS: undefined });
 
-        expect(ttlSeconds(await loadSchema())).toBe(90 * 24 * 60 * 60);
+        expect(ttlSeconds(await loadSchema())).toBe(180 * 24 * 60 * 60);
     });
 
     it('honours a configured retention', async () => {
