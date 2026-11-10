@@ -268,9 +268,9 @@ lot in. See [Journeys](../reference/tests.md#tests-integration-journeys-—-one-
 `.claude/worktrees/` are not suites at all: they hold Stryker's own sandboxes and other checkouts'
 copies of the tests, which jest would otherwise discover and run as if they were this tree's.
 
-The `tests/cross-cutting/` entry is excluded for a sandbox-specific reason — not cost, correctness:
-
-- **`contract-bundles.test.ts`** asserts each contract document is byte-identical to the sources it's built from. Stryker's sandbox prepends `// @ts-nocheck` to every file it copies (`disableTypeChecks`), so the sources it reads carry lines the committed bundle doesn't — the byte comparison can never hold. Turning `disableTypeChecks` off is the wrong fix: `ts-jest` runs with diagnostics on, so a type-breaking mutant would fail to _compile_, count as killed, and inflate the score with kills no assertion earned. Excluding the file costs nothing either way — it exercises committed files and `scripts/`, neither of which is in `mutate`.
+The `contract-bundles.test.ts` entry is excluded because it asserts the contract generators: each case builds a
+contract document in memory from its sources and checks the result. It exercises `scripts/` and the contract
+sources, neither of which is in `mutate`, so excluding it costs nothing.
 
 **The unit layer's cost depends on a naming rule, and that is the fragile part.** A file under
 `src/modules/*/tests/unit/` that calls `setupTestDb()` starts a real `mongod` and connects mongoose

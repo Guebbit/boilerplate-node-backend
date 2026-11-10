@@ -222,9 +222,7 @@ copy in `<queue>.retry` — the same confirm-channel guarantee [Publishing a mes
 describes — and nacked with requeue when the confirm fails, so a failed hop never drops a job.
 Parking needs no publish at all: the nack and the dead-lettering are one broker-side move.
 
-**The two knobs**, deployment-wide defaults — a consumer that genuinely needs different numbers
-declares them on its own `ConsumeOptions`, in code, next to its handler, rather than a second
-environment variable:
+**The two knobs**, one number each for every consumer — not a per-consumer option:
 
 | Env var                          | Default | Meaning                                         |
 | -------------------------------- | ------- | ----------------------------------------------- |

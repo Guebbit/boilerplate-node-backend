@@ -204,20 +204,16 @@ parallel, don't wait for a complete picture.
 Subscribe every integration that syncs customers to `user.erased`, `user.updated` and `order.redacted` (Art. 19).
 
 Environment variables this plan introduces or depends on. **Bold** rows must be set to a real,
-non-placeholder value before serving EU/EEA traffic; the rest ship safe defaults. Retention
+non-placeholder value before serving EU/EEA traffic; the rest ship safe defaults, listed where each one is documented. Retention
 windows are not repeated here — they live in the [processing register](#processing-register-art-30).
 
-| Variable                             | Default | What it governs                                                                                                              |
-| ------------------------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **`NODE_TOKEN_ACCESS`**              | —       | Access-token signing secret. The app refuses to boot on the shipped placeholder                                              |
-| **`NODE_TOKEN_REFRESH`**             | —       | Refresh-token signing secret. Same boot-time check                                                                           |
-| `NODE_TOKEN_ROTATION_GRACE_MS`       | `10000` | Refresh-token rotation grace window                                                                                          |
-| `NODE_REAUTH_TIME_CRITICAL`          | `300`   | Step-up freshness window for money/destructive routes                                                                        |
-| `NODE_REAUTH_TIME_SENSITIVE`         | `900`   | Step-up freshness window for identity/session/export routes                                                                  |
-| `NODE_LOG_PERSONAL_FIELDS`           | `hash`  | How `email`/`ip`/`phone`/etc. are treated on the way into logs                                                               |
-| `NODE_ACCOUNT_DELETION_GRACE_DAYS`   | `30`    | Days between `DELETE /account` and the erasure, 1 to 31 and never past one calendar month (Art. 12(3))                       |
-| `NODE_ERASURE_LEDGER_RETENTION_DAYS` | `220`   | Days the erasure ledger is kept; above the oldest backup, so a restore can erase again                                       |
-| **`NODE_ANALYTICS_REQUIRE_CONSENT`** | `true`  | Whether analytics capture is gated on `analyticsConsent`. Turning this off is a decision to document, not a default to relax |
+| Variable                                                                          | What it governs                                                                                  |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **`NODE_TOKEN_ACCESS`**, **`NODE_TOKEN_REFRESH`**, `NODE_TOKEN_ROTATION_GRACE_MS` | Token signing secrets and the rotation grace: [account sessions](../modules/account-sessions.md) |
+| `NODE_REAUTH_TIME_CRITICAL`, `NODE_REAUTH_TIME_SENSITIVE`                         | Step-up freshness windows: [account sessions](../modules/account-sessions.md)                    |
+| `NODE_LOG_PERSONAL_FIELDS`                                                        | How personal fields enter the logs: [winston](../tools/winston.md)                               |
+| `NODE_ACCOUNT_DELETION_GRACE_DAYS`, `NODE_ERASURE_LEDGER_RETENTION_DAYS`          | Deletion grace and erasure-ledger retention: [data retention](./data-retention.md)               |
+| **`NODE_ANALYTICS_REQUIRE_CONSENT`**                                              | Whether analytics capture waits for consent: [analytics](../tools/analytics.md)                  |
 
 ## What this page is not
 
