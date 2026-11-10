@@ -18,6 +18,7 @@ import * as zod from 'zod';
 import * as responseSchemas from '@api/schemas.zod';
 import {
     declaredResponseHeaders,
+    errorCodeIndex,
     listOperations,
     requiredResponseHeaders,
     type HttpMethod
@@ -48,6 +49,32 @@ const DECLARED_ROUTES: DeclaredRoute[] = listOperations()
 
 /** Headers the spec marks `required`, per operation and status — built once, like the routes. */
 const REQUIRED_HEADERS = requiredResponseHeaders();
+
+/** Which codes are app-wide and which each operation lists, per status — built once, like the routes. */
+const ERROR_CODES = errorCodeIndex();
+
+/**
+ * The codes in an error answer's `errors[]` that its operation never documented: not `scope: app`
+ * in the catalogue, and not in the operation's `x-error-codes` under this status.
+ *
+ * @param operationId - the operation that answered
+ * @param status - the answer's status
+ * @param body - the parsed problem document
+ */
+export const undocumentedCodes = (operationId: string, status: number, body: unknown): string[] => {
+    const listed = ERROR_CODES.listed[operationId]?.[String(status)] ?? [];
+    const { errors } = (body ?? {}) as { errors?: { code?: unknown }[] };
+    if (!Array.isArray(errors)) return [];
+
+    return errors
+        .map((item) => item.code)
+        .filter(
+            (code): code is string =>
+                typeof code === 'string' &&
+                !ERROR_CODES.appScoped.has(code) &&
+                !listed.includes(code)
+        );
+};
 
 /** Every header the spec declares, per operation and status — built once, like the routes. */
 const DECLARED_HEADERS = declaredResponseHeaders();
@@ -259,6 +286,13 @@ export const assertResponseMatchesContract = (response: Response): void => {
     if (!result.success)
         throw new Error(
             `${method.toUpperCase()} ${pathname} (${String(response.status)}) does not match ${operationId}'s documented shape:\n${zod.prettifyError(result.error)}`
+        );
+
+    const unlisted =
+        response.status >= 400 ? undocumentedCodes(operationId, response.status, body) : [];
+    if (unlisted.length > 0)
+        throw new Error(
+            `${method.toUpperCase()} ${pathname} (${String(response.status)}) sent ${unlisted.join(', ')}, which ${operationId} does not list in x-error-codes (docs/api/errors.md#the-errors-extension)`
         );
 
     const nulls =

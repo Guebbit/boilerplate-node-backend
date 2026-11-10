@@ -214,7 +214,7 @@ paths:
             description: A stocktake correction — signed, because shrinkage is the common case and it is negative. Refuses to take `onHand` below what is already reserved, because those units are promised to orders that exist — the fix for finding fewer units than were sold is to cancel orders, not to make availability negative. Send an `Idempotency-Key` — a retried correction with the same key replays the first answer instead of applying the delta twice.
             operationId: adjustStock
             x-error-codes:
-                '409': [IDEMPOTENCY_IN_FLIGHT]
+                '409': [IDEMPOTENCY_IN_FLIGHT, INVENTORY_BELOW_RESERVED]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: []

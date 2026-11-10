@@ -271,9 +271,12 @@ named doors instead, each narrower than the write beneath it:
 | `updateOwnProfile`       | the owner, `PUT`/`PATCH /account` | take `active` or `role`: a profile edit cannot ban its own account                     |
 | `scheduleOwnDeletion`    | the owner, `DELETE /account`      | erase anything: it locks the row, stamps `purgeAt` and moves the session epoch         |
 | `restoreOwnAccount`      | the owner, by link or at sign-in  | restore a row past `purgeAt`, or one the owner did not schedule (a conditional update) |
-| `eraseScheduledDeletion` | the purge job                     | erase a row not yet due: its first write is a claim on `purgeAt <= now`, else 409      |
-| `softDeleteInactive`     | the inactivity reaper             | take an account never warned, or one that holds a staff role (409)                     |
-| `eraseInactive`          | the inactivity reaper             | erase a row the reaper did not soft-delete itself (409)                                |
+| `eraseScheduledDeletion` | the purge job                     | erase a row not yet due: its first write is a claim on `purgeAt <= now`, else `false`  |
+| `softDeleteInactive`     | the inactivity reaper             | take an account never warned (rejects), or one that holds a staff role (`false`)       |
+| `eraseInactive`          | the inactivity reaper             | erase a row the reaper did not soft-delete itself (rejects)                            |
+
+These three are job steps, not routes: a refusal they can reach by a race resolves `false`, and one only
+misuse can reach rejects, so none of them answers an HTTP error and none has an error code.
 
 The state itself is the proof: an owner-scheduled row carries `deletedBy: 'owner'` and a `purgeAt`,
 as a reaper row carries `deletedBy: 'reaper'`. No rank check applies, so a staff member may delete

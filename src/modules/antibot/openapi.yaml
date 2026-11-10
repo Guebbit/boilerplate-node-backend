@@ -24,6 +24,8 @@ paths:
                 statement about the deployment rather than an error. The shape is the provider's
                 own — pass it to its widget verbatim.
             operationId: getAntibotChallenge
+            x-error-codes:
+                '404': [ANTIBOT_NO_CHALLENGE]
             security: []
             responses:
                 '200':

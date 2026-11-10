@@ -139,7 +139,7 @@ rules:
               docs/api/errors.md#outside-the-json-api
           ]
       lint: no
-      difference: metrics-text-plain
+      difference: [metrics-text-plain, probe-empty-503, server-parser-bare-errors]
 
     - id: rfc9457-members-shape
       standard: rfc9457
@@ -471,7 +471,7 @@ rules:
       source: https://opensource.zalando.com/restful-api-guidelines/#176
       evidence: [src/infrastructure/http/response.ts, docs/api/errors.md]
       lint: no
-      difference: metrics-text-plain
+      difference: [metrics-text-plain, probe-empty-503, server-parser-bare-errors]
 
     - id: zalando-idempotent-writes
       standard: zalando

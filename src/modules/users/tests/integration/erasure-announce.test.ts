@@ -66,11 +66,7 @@ describe('user.erased', () => {
             systemCallerContext('User')
         );
 
-        expect(result).toMatchObject({
-            success: false,
-            status: 409,
-            errors: [{ code: 'USER_ERASURE_NOT_DUE' }]
-        });
+        expect(result).toBe(false);
         expect(await erasedRows()).toHaveLength(0);
         expect(await userModel.countDocuments({ _id: user.id })).toBe(1);
     });
