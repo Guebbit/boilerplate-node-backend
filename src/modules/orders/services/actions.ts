@@ -175,7 +175,7 @@ const forStanding = (actions: OrderActions, actor: OrderActor, buyer: boolean): 
  * @param order - the order being served
  * @param authContext - the caller, or `undefined` for no request behind this read
  */
-export const orderActionsOf = (
+const orderActionsOf = (
     order: OrderForActions,
     authContext: AuthContext | undefined
 ): OrderActions => {

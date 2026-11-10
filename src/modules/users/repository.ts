@@ -129,7 +129,7 @@ const codeSlotPath = (slot: DeliveredCodeSlot, name: CodeField): string =>
  * ours, so it is marked `trusted()` and survives the sanitizing that wipes an outsider's.
  * https://mongoosejs.com/docs/api/mongoose.html#Mongoose.prototype.trusted()
  */
-export const TRUSTED_AUTHENTICATABLE_FILTER = {
+const TRUSTED_AUTHENTICATABLE_FILTER = {
     active: trusted({ ...AUTHENTICATABLE_FILTER.active }),
     deletedAt: AUTHENTICATABLE_FILTER.deletedAt
 };

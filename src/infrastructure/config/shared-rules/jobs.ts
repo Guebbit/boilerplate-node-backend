@@ -15,7 +15,7 @@ import { z } from 'zod';
 const CRON_SHAPE = /^[\d*/,-]+(\s+[\d*/,-]+){4}$/;
 
 /** One job's data. Strict: an extra key is a typo, or a behaviour that belongs in code. */
-export const jobDataSchema = z.strictObject({
+const jobDataSchema = z.strictObject({
     /** `reap:*` for what deletes or scrubs, `sweep:*` for what retries or drains. Unique repo-wide. */
     name: z.string().regex(/^(reap|sweep):[a-z0-9]+(-[a-z0-9]+)*$/),
     /** Five-field cron expression, in the container's time zone (UTC). */

@@ -18,7 +18,6 @@
         "proof-already-recorded": "Per questo reso è già registrata una prova di spedizione.",
         "refund-opened-on-proof": "Il rimborso è stato aperto quando è stata registrata la prova di spedizione, quindi non si può trattenere nulla per la gestione. Chiedilo all'acquirente a parte.",
         "cancellation-invalid": "Un annullamento deve indicare l'ordine di evasione da annullare e non inviare righe: si annulla tutto il resto.",
-        "cancellation-withdrawal-buyer-only": "Solo l'acquirente dell'ordine può annullare come recesso: il personale annulla con un altro motivo.",
         "nothing-to-cancel": "Qui non resta nulla da annullare. Se non è ancora partito nulla, annulla l'intero ordine.",
         "email": {
             "greeting": "Ciao, {{name}}!",

@@ -293,8 +293,8 @@ export function choice<const T extends string>(
     );
 }
 
-/** Which way a text value is normalised: every character lower- or upper-cased. */
-export type TextCase = 'lower' | 'upper';
+/** Which way a text value is normalised: every character lower-cased. */
+export type TextCase = 'lower';
 
 /**
  * Apply a {@link TextCase}; no case leaves the value as written.
@@ -302,10 +302,8 @@ export type TextCase = 'lower' | 'upper';
  * @param value - a trimmed value
  * @param mode - the case to normalise to, if any
  */
-const applyCase = (value: string, mode: TextCase | undefined): string => {
-    if (mode === 'lower') return value.toLowerCase();
-    return mode === 'upper' ? value.toUpperCase() : value;
-};
+const applyCase = (value: string, mode: TextCase | undefined): string =>
+    mode === 'lower' ? value.toLowerCase() : value;
 
 /** Options for {@link text}. */
 export interface TextOptions extends CommonOptions {
@@ -318,7 +316,7 @@ export interface TextOptions extends CommonOptions {
 /**
  * Free text, trimmed. Blank is unset.
  *
- * @param options - `default` for an unset value; `lower`/`upper` to normalise
+ * @param options - `default` for an unset value; `lower` to normalise
  */
 export function text(options: TextOptions & { default: string }): Field<string>;
 export function text(options?: TextOptions): Field<string | undefined>;

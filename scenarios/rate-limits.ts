@@ -46,7 +46,7 @@ const PRIVATE_COUNTERS = { NODE_RATE_LIMIT_REDIS_URL: '' };
  * except `NODE_MFA_CHALLENGE_MAX`: sized to a live challenge's own lifetime, not to request
  * volume, and no scripted driver holds a challenge open long enough to trip it.
  */
-export const RAISED_RATE_LIMIT_ENV_VARS = [
+const RAISED_RATE_LIMIT_ENV_VARS = [
     'NODE_RATE_LIMIT_MAX',
     'NODE_AUTH_RATE_LIMIT_MAX',
     'NODE_AUTH_RATE_LIMIT_ADDRESS_MAX',

@@ -15,15 +15,13 @@ import type { StoredApiKey } from './repository';
  *
  * @param key - the stored row
  * @param minterCanSignIn - the minter is neither banned, soft-deleted nor erased
- * @param now - the clock, injectable for tests
  */
 export const apiKeyStatus = (
     key: Pick<StoredApiKey, 'revokedAt' | 'expiresAt'>,
-    minterCanSignIn: boolean,
-    now: Date = new Date()
+    minterCanSignIn: boolean
 ): ApiKey['status'] => {
     if (key.revokedAt) return 'revoked';
-    if (new Date(key.expiresAt) <= now) return 'expired';
+    if (new Date(key.expiresAt) <= new Date()) return 'expired';
     return minterCanSignIn ? 'active' : 'suspended';
 };
 

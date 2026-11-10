@@ -19,6 +19,3 @@ export const passwordHashSchema = z.strictObject({
     /** Lanes (`p`). */
     parallelism: positive
 });
-
-/** Parsed `password-hash.yaml`. */
-export type PasswordHashRules = z.infer<typeof passwordHashSchema>;

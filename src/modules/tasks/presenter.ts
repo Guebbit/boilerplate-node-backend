@@ -19,19 +19,6 @@ export interface TaskView {
     earlierTasks?: TaskRef[];
 }
 
-/** The view of a reader who may do nothing — the visitor's own 201. */
-export const NO_ACTIONS: TaskView = {
-    actions: {
-        resolve: false,
-        markSpam: false,
-        reopen: false,
-        assign: false,
-        unassign: false,
-        note: false,
-        delete: false
-    }
-};
-
 /**
  * `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform and drops the dedup
  * key; the document is typed as stored, not as the wire shape, so one cast narrows it.

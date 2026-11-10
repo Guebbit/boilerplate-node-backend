@@ -10,7 +10,7 @@
 import { z } from 'zod';
 
 /** One metric's data. Strict: an extra key is a typo, or a behaviour that belongs in code. */
-export const metricDataSchema = z
+const metricDataSchema = z
     .strictObject({
         /** The Prometheus name: snake_case, and `_total` exactly when it is a counter. */
         name: z.string().regex(/^[a-z][a-z0-9]*(_[a-z0-9]+)*$/),
@@ -35,10 +35,7 @@ export const metricDataSchema = z
     });
 
 /** A `metrics:` block, keyed by the camelCase name of the code's constant. */
-export const metricsBlockSchema = z.record(
-    z.string().regex(/^[a-z][A-Za-z0-9]*$/),
-    metricDataSchema
-);
+const metricsBlockSchema = z.record(z.string().regex(/^[a-z][A-Za-z0-9]*$/), metricDataSchema);
 
 /** Shape of `shared/rules/metrics.yaml`. */
 export const metricsSchema = z.strictObject({ metrics: metricsBlockSchema }).refine(

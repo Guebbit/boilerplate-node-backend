@@ -148,7 +148,7 @@ export const restoreAccount = (
  * @param via - `link`, `sign-in` or `staff`
  * @param context - the caller, or the staff member
  */
-export const announceRestored = (
+const announceRestored = (
     user: Pick<UserDocument, 'id' | 'email' | 'locale' | 'username' | 'verifiedAt'>,
     via: RestoreVia | 'staff',
     context: CallerContext
