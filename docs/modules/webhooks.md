@@ -266,7 +266,8 @@ two space-separated `v1,...` values in one header during the overlap, until
 `DELETE .../secrets/:secretId` drops the old one or `NODE_WEBHOOK_SECRET_OVERLAP_HOURS` (default 24)
 has passed — the Standard Webhooks bounded overlap. A ring holds at most two, and an expired entry
 stops signing and is pruned on the next add or remove. A secret is a line of the subscription, so it is added with a
-`POST` on its `/secrets` collection, not a flag on the update body.
+`POST` on its `/secrets` collection, not a flag on the update body. The add answers the whole subscription
+with its new tag; the removal answers 204, and the ring is one read of the subscription away.
 
 **The body is the Standard Webhooks envelope too.** `{ type, timestamp, data }` — `type` is the
 event name (`order.created`, `payment.failed`, …), `timestamp` is when the event occurred (fixed

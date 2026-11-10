@@ -346,6 +346,23 @@ describe('POST /locales', () => {
         expect(response.status).toBe(201);
     });
 
+    it('answers the real tag, so the first edit needs no re-read', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const created = await api()
+            .post('/locales')
+            .set('Authorization', bearer)
+            .send({ tag: 'pt', name: 'Portuguese', nativeName: 'Português' });
+
+        // The tag is accepted as `If-Match` on the language it names (a byte-hash would be a 412).
+        await api()
+            .patch(created.headers['content-location'])
+            .set('Authorization', bearer)
+            .set('If-Match', created.headers.etag)
+            .send({ nativeName: 'Português (Brasil)' })
+            .expect(200);
+    });
+
     it('409s on a duplicate tag', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
@@ -557,6 +574,25 @@ describe('POST /locales/:locale/activate and /deactivate', () => {
         expect(off.body.active).toBe(false);
         expect(on.status).toBe(200);
         expect(on.body.active).toBe(true);
+    });
+
+    it('answer the real tag of the language, usable as If-Match right away', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+
+        const off = await api().post('/locales/pt/deactivate').set('Authorization', bearer);
+        const on = await api().post('/locales/pt/activate').set('Authorization', bearer);
+
+        expect([off.headers['content-location'], on.headers['content-location']]).toEqual([
+            '/locales/pt',
+            '/locales/pt'
+        ]);
+        await api()
+            .patch('/locales/pt')
+            .set('Authorization', bearer)
+            .set('If-Match', on.headers.etag)
+            .send({ nativeName: 'Português (Brasil)' })
+            .expect(200);
     });
 
     it('carries the flags that follow the move on the response', async () => {

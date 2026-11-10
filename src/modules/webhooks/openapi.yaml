@@ -287,6 +287,8 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     /webhooks/subscriptions/{id}/secrets:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the subscription this answers.
+        x-versioned: [post]
         post:
             tags: [Webhooks]
             summary: Add a secret to a webhook subscription's ring (rotate)
@@ -330,7 +332,8 @@ paths:
             description: |
                 The other half of a rotation, once every consumer has switched. Refuses to empty
                 the ring — a subscription with no secret can never sign a delivery. The remove twin
-                of `POST .../secrets`.
+                of `POST .../secrets`. Answers 204 with no body (RFC 9110 §9.3.5) and no tag: read the
+                subscription again for its new `secretIds`.
             operationId: deleteWebhookSubscriptionSecret
             security:
                 - bearerAuth: ['update:WebhookSubscription']
@@ -343,12 +346,7 @@ paths:
                   schema: { type: string, maxLength: 64 }
                   description: A ring entry's id, from `secretIds`.
             responses:
-                '200':
-                    description: Subscription with that secret removed
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/WebhookSubscription'
+                '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }

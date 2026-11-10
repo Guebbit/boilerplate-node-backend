@@ -4,19 +4,17 @@
  */
 
 import type { Request, Response } from 'express';
-import { successResponse } from '@infrastructure/http/response';
+import { noContentResponse } from '@infrastructure/http/response';
 import { tenantCallerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
 import { catchAs, refused } from '@infrastructure/http/controller';
-import type { WebhookSubscription } from '@types';
 import { webhooksService } from '../services';
-import { viewSubscription } from '../services/actions';
 
 /**
  * DELETE /webhooks/subscriptions/:id/secrets/:secretId
  * Drops one ring entry — the other half of a rotation, once every consumer has switched. 404s an
  * id the ring doesn't carry; 422s a removal that would leave the ring empty (a subscription with
- * no secret can never sign a delivery).
+ * no secret can never sign a delivery). Answers 204: the ring is one read of the subscription away.
  */
 export const deleteWebhookSubscriptionSecret = (
     request: Request<{ id: string; secretId: string }>,
@@ -30,10 +28,7 @@ export const deleteWebhookSubscriptionSecret = (
         .removeSubscriptionSecret(id, request.params.secretId, context)
         .then((result) => {
             if (refused(response, result)) return;
-            return successResponse<WebhookSubscription>(
-                response,
-                viewSubscription(result.data, context.caller)
-            );
+            noContentResponse(response);
         })
         .catch(catchAs(response, 'deleteWebhookSubscriptionSecret'));
 };

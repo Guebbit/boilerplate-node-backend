@@ -12,6 +12,7 @@
  * operation declares `ETag` must send it, and a write that sends one the spec never declares fails.
  */
 import '@tests/contract';
+import { declaredResponseHeaders, readSpec, listOperations } from '@tests/spec-walk';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
@@ -44,7 +45,9 @@ const EDITS = {
     product: { tags: ['afterwards'] },
     order: { email: 'afterwards@example.com' },
     example: { title: 'Afterwards' },
-    subscription: { description: 'afterwards' }
+    subscription: { description: 'afterwards' },
+    language: { nativeName: 'Afterwards' },
+    account: { username: 'afterwards' }
 } as const;
 
 /** A fresh user the admin may act on. */
@@ -79,6 +82,22 @@ const userAfter = (name: string, setup: 'deactivate' | 'delete', path: string): 
         else await api().delete(`/users/${id}`).set('Authorization', bearer).expect(204);
         const answer = await post(`/users/${id}${path}`, bearer);
         return { answer, resource: `/users/${id}`, bearer, edit: EDITS.user };
+    }
+});
+
+/** A language door: an admin registers `pt`, switches it off first when the door is `activate`. */
+const languageDoor = (name: string, move: 'activate' | 'deactivate'): Door => ({
+    name,
+    run: async () => {
+        const { bearer } = await authenticateAs('admin');
+        await post('/locales', bearer, {
+            tag: 'pt',
+            name: 'Portuguese',
+            nativeName: 'Português'
+        }).expect(201);
+        if (move === 'activate') await post('/locales/pt/deactivate', bearer).expect(200);
+        const answer = await post(`/locales/pt/${move}`, bearer);
+        return { answer, resource: '/locales/pt', bearer, edit: EDITS.language };
     }
 });
 
@@ -203,6 +222,31 @@ const DOORS: Door[] = [
         }
     },
     {
+        name: 'POST /webhooks/subscriptions/{id}/secrets (a rotation)',
+        run: async () => {
+            const { bearer } = await authenticateAsRole('manager');
+            const created = await post('/webhooks/subscriptions', bearer, {
+                url: 'https://example.test/inbox',
+                eventTypes: ['order.paid']
+            });
+            const resource = created.headers['content-location'];
+            const answer = await post(`${resource}/secrets`, bearer);
+            return { answer, resource, bearer, edit: EDITS.subscription };
+        }
+    },
+    languageDoor('POST /locales/{locale}/deactivate', 'deactivate'),
+    languageDoor('POST /locales/{locale}/activate', 'activate'),
+    {
+        name: 'POST /account/email-change',
+        run: async () => {
+            const { bearer } = await authenticateAs('admin');
+            const answer = await post('/account/email-change', bearer, {
+                email: 'moved@example.com'
+            });
+            return { answer, resource: '/account', bearer, edit: EDITS.account };
+        }
+    },
+    {
         name: 'POST /webhooks/subscriptions/{id}/disable',
         run: async () => {
             const { bearer } = await authenticateAsRole('manager');
@@ -235,17 +279,119 @@ describe('a create, a restore or an action answers the real tag of the resource 
     });
 });
 
-/** A subscription's create also carries the one-time secret, which no GET repeats. */
-const SECRET_CARRYING = 'POST /webhooks/subscriptions (a create)';
+/**
+ * Doors whose body no GET repeats byte for byte: a subscription's create and rotation carry the
+ * one-time secret, and the account read moves its own digest on every call (`lastActiveAt`).
+ */
+const NOT_REPEATED_BY_A_GET = new Set([
+    'POST /webhooks/subscriptions (a create)',
+    'POST /webhooks/subscriptions/{id}/secrets (a rotation)',
+    'POST /account/email-change'
+]);
 
 describe('the answer is what a GET on its Content-Location returns right after (RFC 9110 §8.7)', () => {
     // The tag is a digest of the exact body, so equal tags mean equal bodies.
-    it.each(DOORS.filter(({ name }) => name !== SECRET_CARRYING))('$name', async ({ run }) => {
-        const { answer, resource, bearer } = await run();
+    it.each(DOORS.filter(({ name }) => !NOT_REPEATED_BY_A_GET.has(name)))(
+        '$name',
+        async ({ run }) => {
+            const { answer, resource, bearer } = await run();
 
-        const read = await api().get(resource).set('Authorization', bearer);
+            const read = await api().get(resource).set('Authorization', bearer);
 
-        expect(read.headers.etag).toBe(answer.headers.etag);
+            expect(read.headers.etag).toBe(answer.headers.etag);
+        }
+    );
+});
+
+/**
+ * Schemas that restate a versioned resource's fields flat instead of `$ref`-ing it, so the walk
+ * cannot see the likeness: the answer's schema, and the versioned schema it is a copy of.
+ */
+const FLAT_COPIES: Record<string, string> = {
+    // A subscription plus the one-time secret (flat: `allOf` of two closed objects fails ajv).
+    WebhookSubscriptionCreated: 'WebhookSubscription',
+    // The PUT/PATCH answer; the read adds the abilities and the idle clock.
+    Account: 'AccountView'
+};
+
+/** Writes that answer a versioned resource and are untagged on purpose, with the reason. */
+const EXEMPT: Record<string, string> = {
+    signup: 'answers an account nobody can edit yet, and may answer a refused address the same way'
+};
+
+/** The schema name a 2xx answer's JSON body refers to, if it refers to one. */
+const bodySchemaName = (response: unknown): string | undefined =>
+    // Narrowing a parsed YAML node the compiler cannot see into: only `$ref` is read from it.
+    (response as { content?: Record<string, { schema?: { $ref?: string } }> }).content?.[
+        'application/json'
+    ]?.schema?.$ref
+        ?.split('/')
+        .pop();
+
+/** The first 2xx status an operation declares. */
+const successStatus = (responses: Record<string, unknown>): string | undefined =>
+    Object.keys(responses).find((status) => status.startsWith('2'));
+
+/**
+ * Whether a path reads one resource whose writes take `If-Match`: it ends in a path parameter or
+ * is the caller's own account, and its PUT or PATCH declares the header. A list or a dictionary
+ * also sends an `ETag`, and so does an address, but neither is edited under a tag.
+ */
+const isVersionedRead = (route: string): boolean => {
+    const item = readSpec().paths[route];
+    const takesIfMatch = ['put', 'patch'].some((method) =>
+        JSON.stringify(item[method] ?? {}).includes('#/components/parameters/IfMatchHeader')
+    );
+    return (/\/\{\w+\}$/.test(route) || route === '/account') && takesIfMatch;
+};
+
+/** Every operation with the schema its 2xx body names, from the bundled contract. */
+const answers = () => {
+    const spec = readSpec();
+    const headers = declaredResponseHeaders(spec);
+    const operations = listOperations(spec);
+    return operations.flatMap(({ path: route, method, operationId }) => {
+        const operation = spec.paths[route][method] as { responses: Record<string, unknown> };
+        const status = successStatus(operation.responses);
+        const schema = status ? bodySchemaName(operation.responses[status]) : undefined;
+        return operationId && status && schema
+            ? [{ route, operationId, method, schema, sent: headers[operationId][status] }]
+            : [];
+    });
+};
+
+describe('the contract: every write that answers a versioned resource declares its tag', () => {
+    const walked = answers();
+    // A versioned schema is one a GET hands out with an ETag.
+    const versioned = new Set(
+        walked
+            .filter(
+                ({ method, sent, route }) =>
+                    method === 'get' && sent.includes('etag') && isVersionedRead(route)
+            )
+            .map(({ schema }) => schema)
+    );
+    const isVersioned = (schema: string) =>
+        versioned.has(schema) || versioned.has(FLAT_COPIES[schema]);
+
+    it('finds versioned resources to hold writes against', () => {
+        // A walk that matches nothing would pass vacuously.
+        expect(versioned.size).toBeGreaterThan(3);
+    });
+
+    const writes = walked.filter(
+        // A PUT answer never carries a validator (RFC 9110 §9.3.4), and a delete is not tagged.
+        ({ method, schema, operationId }) =>
+            !['get', 'put', 'delete'].includes(method) &&
+            isVersioned(schema) &&
+            !(operationId in EXEMPT)
+    );
+
+    it.each(writes)('$method $operationId', ({ method, sent }) => {
+        // A PATCH is a write on the resource's own URI, so it needs no `Content-Location`.
+        const expected = method === 'patch' ? ['etag'] : ['etag', 'content-location'];
+
+        expect(sent).toEqual(expect.arrayContaining(expected));
     });
 });
 
