@@ -40,7 +40,7 @@ Output goes to `tmp/reports/audit-<run>/api-rfc9110/<SCOPE>…`. `<run>` and `<S
       `application/problem+json`, the 2xx body is an object, replace is PUT and update is PATCH,
       operationId shape, schema names, camelCase parameters, `maxLength`, `names-in-us-english-*`)
     - a bundler step (`scripts/contracts/openapi-bundle.ts`) adds `ETag`, `If-Match`, 412 and 304
-    - `scripts/contracts/response-headers.ts` declares `Idempotent-Replayed` on 2xx only
+    - `scripts/contracts/response-headers.ts` declares `Idempotent-Replayed` on every response of a keyed operation except a 429, which the ledger never sees
     - a 201 carries its `Location` (indirectly, `requiredResponseHeaders` in `tests/support/spec-walk.ts`, read by the shared `afterEach` in `tests/support/response-contract.ts`; directly, `write-methods.test.ts`, the `a 201 names the new resource in Location` block)
     - 405 `Allow`: `methodNotAllowed` and its unit test. 401 `WWW-Authenticate` and 503 `Retry-After`: `rejectResponse` in `response.ts` and its tests
     - `tests/cross-cutting/api-standards.test.ts`, `tests/contract/route-spec-parity.test.ts`, `tests/integration/conditional-writes.test.ts`, `tests/fuzz/endpoints.fuzz.test.ts`

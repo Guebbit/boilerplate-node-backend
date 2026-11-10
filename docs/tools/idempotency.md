@@ -142,8 +142,18 @@ Every finished attempt is stored, a server fault (5xx) included, and replayed fo
 [retention](#retention) window with `Idempotent-Replayed: true`. So a retry under the same key
 re-sends the failure without running the handler again; only a new key runs it.
 
-The replay carries the stored status, body, `Content-Type` and the `Location`, `Retry-After`,
-`WWW-Authenticate`, `Allow` and `ETag` headers the original answer had.
+The replay carries the stored status, body, `Content-Type` and the `Location`,
+`WWW-Authenticate`, `Allow`, `ETag` and `Content-Location` headers the original answer had.
+`Retry-After` is not replayed: a stored 503 must not say "retry later" for the whole retention
+window, under a key that can never succeed.
+
+The ledger never sees a 429. Every budget refuses before the key is claimed (a limiter is mounted
+before `idempotencyKey` on every keyed route, walked by
+`tests/cross-cutting/limiters-before-the-idempotency-key.test.ts`), so a retry after the wait runs
+for real. Stripe's rule: errors before execution begins, rate limiting among them, don't cache a
+result ([verified](https://docs.stripe.com/error-low-level)). A handler must not answer 429 after
+a write. The contract follows: `Idempotent-Replayed` is declared on every response of a keyed
+operation except a 429.
 
 This is Stripe's v1 rule. The alternative, dropping the record on a 5xx so the same key retries
 for real, is safe only when every handler is atomic. They are not: a stock receipt commits and
