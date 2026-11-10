@@ -114,7 +114,7 @@ export const storedDocumentName = (kind: InvoiceDocumentKind, id: unknown): stri
  */
 export const renderInvoicePdf = (invoice: InvoiceDocument): Promise<Buffer> =>
     storedOrRendered(storedDocumentName('invoice', invoice._id), () =>
-        resolveEInvoicingProvider().issue({ kind: 'invoice', ...sharedFields(invoice, 'invoice') })
+        resolveEInvoicingProvider().render({ kind: 'invoice', ...sharedFields(invoice, 'invoice') })
     );
 
 /**
@@ -124,7 +124,7 @@ export const renderInvoicePdf = (invoice: InvoiceDocument): Promise<Buffer> =>
  */
 export const renderCreditNotePdf = (creditNote: CreditNoteDocument): Promise<Buffer> =>
     storedOrRendered(storedDocumentName('credit-note', creditNote._id), () =>
-        resolveEInvoicingProvider().issue({
+        resolveEInvoicingProvider().render({
             kind: 'creditNote',
             ...sharedFields(creditNote, 'credit-note'),
             reversalOf: { number: creditNote.invoiceNumber }

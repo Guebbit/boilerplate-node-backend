@@ -17,5 +17,6 @@ export const restoreUsers = createRestoreController({
     entity: 'user',
     restore: (id, request) => userService.restoreById(id, callerContextOf(request)),
     present: (user, request) => userService.toUserContract(user, callerContextOf(request).caller),
-    notFoundKey: 'users.not-found'
+    notFoundKey: 'users.not-found',
+    basePath: '/users'
 });

@@ -16,5 +16,6 @@ export const restoreOrders = createRestoreController({
     entity: 'order',
     restore: (id, request) => orderService.restoreById(id, callerContextOf(request)),
     present: (order, request) => orderService.withActions(order, request.authContext),
-    notFoundKey: 'orders.not-found'
+    notFoundKey: 'orders.not-found',
+    basePath: '/orders'
 });

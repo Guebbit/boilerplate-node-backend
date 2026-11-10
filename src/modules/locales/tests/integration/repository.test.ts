@@ -656,12 +656,14 @@ describe('importEntries, through the service', () => {
         expect(result.status).toBe(422);
     });
 
-    it('refuses an empty merge', async () => {
+    it('treats an empty merge as a no-op that leaves every entry', async () => {
         await givenLanguage('es', { 'cart.title': 'Carrito' });
 
         const result = await localeService.importEntries('es', FRONTEND, {}, 'merge');
 
-        expect(result.status).toBe(422);
+        expect(result.status).toBe(200);
+        expect(result.data).toMatchObject({ created: 0, updated: 0, removed: 0 });
+        expect(await localeEntryRepository.listKeys('es', FRONTEND)).toEqual(['cart.title']);
     });
 
     it('deletes the keys a merge sets to null and keeps the rest', async () => {

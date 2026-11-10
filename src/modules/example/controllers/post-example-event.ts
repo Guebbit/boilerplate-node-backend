@@ -13,6 +13,7 @@
 import type { Request, Response } from 'express';
 import type { CallerContext } from '@types';
 import { successResponse } from '@infrastructure/http/response';
+import { answerAsResource } from '@infrastructure/http/preconditions';
 import { callerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
 import { catchAs, namedHandler, refused } from '@infrastructure/http/controller';
@@ -37,6 +38,8 @@ const eventHandler = (operation: string, door: EventDoor) =>
         return door(id, callerContextOf(request))
             .then((result) => {
                 if (refused(response, result)) return;
+                // The example's new tag, and the resource it belongs to (RFC 9110 §8.8.3).
+                answerAsResource(response, result.data, `/examples/${id}`);
                 successResponse(response, result.data, 200);
             })
             .catch(catchAs(response, operation));

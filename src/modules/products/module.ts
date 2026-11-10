@@ -17,7 +17,7 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
 import { productRepository } from './repository';
-import { checkProductTranslationFields } from './model';
+import { productTranslationFieldRules } from './model';
 import { productsConfig } from './config';
 import { productsBrowserEvents } from './browser-events';
 import './events';
@@ -39,10 +39,9 @@ export default {
     translatables: {
         product: {
             collection: 'products',
-            fields: ['title', 'description'],
             cacheTag: 'products',
             ...productRepository.translatable,
-            checkFields: checkProductTranslationFields
+            fieldRules: productTranslationFieldRules
         }
     },
     /**

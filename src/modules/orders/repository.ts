@@ -355,7 +355,8 @@ const extendConformity = (
                 conformityExtendedAt: { $exists: false }
             } as QueryFilter<OrderDocument>,
             { $set: { conformityUntil: extended, conformityExtendedAt: new Date() } },
-            { session }
+            // No `updatedAt` bump: a report on the guarantee is not an edit of the order.
+            { session, timestamps: false }
         )
         .exec()
         .then(({ modifiedCount }) => modifiedCount === 1);
@@ -410,7 +411,8 @@ const markMoneyReceived = (id: string, session?: ClientSession): Promise<void> =
         .updateOne(
             { _id: toObjectId(id), moneyReceivedAt: { $exists: false } },
             { $set: { moneyReceivedAt: new Date() } },
-            { session }
+            // No `updatedAt` bump: a report that money landed is not an edit of the order.
+            { session, timestamps: false }
         )
         .exec()
         .then(() => undefined);
@@ -439,10 +441,16 @@ const setProjection = (
             .map((key) => [key, fields[key]])
     );
 
-    return orderModel
-        .updateOne({ _id: toObjectId(id) }, setAndUnset(changes), { session })
-        .exec()
-        .then(({ matchedCount }) => matchedCount > 0);
+    return (
+        orderModel
+            // No `updatedAt` bump: a projection is another module's report, not an edit of the order.
+            .updateOne({ _id: toObjectId(id) }, setAndUnset(changes), {
+                session,
+                timestamps: false
+            })
+            .exec()
+            .then(({ matchedCount }) => matchedCount > 0)
+    );
 };
 
 /**
@@ -508,7 +516,9 @@ const writeFulfillment = (
                 }
             } as QueryFilter<OrderDocument>,
             { $set: { fulfillment: summary } },
-            { returnDocument: 'after', session }
+            // No `updatedAt` bump: delivery's shipment report is not an edit of the order. The
+            // status step a first or last shipment causes is a separate write and still bumps.
+            { returnDocument: 'after', session, timestamps: false }
         )
         .exec();
 

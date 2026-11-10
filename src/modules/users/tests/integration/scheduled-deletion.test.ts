@@ -102,11 +102,11 @@ describe('eraseScheduledDeletion', () => {
             systemCallerContext('User')
         );
 
-        expect(result.success).toBe(true);
+        expect(result).toBe(true);
         expect(await stored(user.id)).toBeNull();
     });
 
-    it('refuses with 409 while the grace is still running, deleting nothing', async () => {
+    it('leaves the account while the grace is still running, deleting nothing', async () => {
         const user = await scheduled('early@example.com', daysFromNow(5));
 
         const result = await accountUserService.eraseScheduledDeletion(
@@ -114,7 +114,7 @@ describe('eraseScheduledDeletion', () => {
             systemCallerContext('User')
         );
 
-        expect(result).toMatchObject({ success: false, status: 409 });
+        expect(result).toBe(false);
         expect(await stored(user.id)).not.toBeNull();
     });
 
@@ -128,7 +128,7 @@ describe('eraseScheduledDeletion', () => {
             systemCallerContext('User')
         );
 
-        expect(result).toMatchObject({ success: false, status: 409 });
+        expect(result).toBe(false);
         expect(await stored(user.id)).not.toBeNull();
     });
 
@@ -144,7 +144,7 @@ describe('eraseScheduledDeletion', () => {
             systemCallerContext('User')
         );
 
-        expect(result).toMatchObject({ success: false, status: 409 });
+        expect(result).toBe(false);
         expect(await stored(user.id)).not.toBeNull();
     });
 });

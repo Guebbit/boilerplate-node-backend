@@ -38,7 +38,7 @@ const warn = (user: UserDocument): Promise<void> => {
         GRACE_DAYS
     );
     return enqueueEmail({ to: user.email, subject: mail.subject }, mail.template, mail.data).then(
-        () => accountUserService.markInactivityWarned(user).then(() => undefined)
+        () => accountUserService.markInactivityWarned(user)
     );
 };
 
@@ -73,9 +73,18 @@ const deletionStages = async (inactiveDays: number): Promise<DeletionCounts> => 
     for (const user of toWarn) await warn(user);
 
     const toSoftDelete = await accountUserService.findWarnedStillInactive(daysAgo(GRACE_DAYS));
+    let softDeleted = 0;
     // Both deletes hand a system context: nobody is at the keyboard, so the trail is the only record.
-    for (const user of toSoftDelete)
-        await accountUserService.softDeleteInactive(user, systemCallerContext('User'));
+    for (const user of toSoftDelete) {
+        // `false`: the account gained a staff role since the read. It is left alone and not counted.
+        if (await accountUserService.softDeleteInactive(user, systemCallerContext('User')))
+            softDeleted += 1;
+        else
+            logger.warn({
+                message: 'Inactive-account reaper left an account holding a staff role.',
+                userId: user.id
+            });
+    }
 
     const toHardDelete = await accountUserService.findReaperSoftDeletedPastGrace(
         daysAgo(GRACE_DAYS)
@@ -87,7 +96,7 @@ const deletionStages = async (inactiveDays: number): Promise<DeletionCounts> => 
 
     const counts = {
         warned: toWarn.length,
-        softDeleted: toSoftDelete.length,
+        softDeleted,
         hardDeleted: toHardDelete.length
     };
     logger.info({ message: 'Inactive-account reaper run complete.', ...counts });

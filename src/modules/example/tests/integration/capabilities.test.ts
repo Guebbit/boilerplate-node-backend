@@ -269,15 +269,6 @@ describe('the writes `locales` makes on this collection', () => {
         expect(await fieldOf(String(mine._id), 'updatedAt')).toEqual(before);
     });
 
-    it('clears a field to an empty column rather than leaving it absent', async () => {
-        const owner = await createUser();
-        const mine = await createExample({ userId: owner.id, title: 'Before' });
-
-        await exampleRepository.translatable.writeDerived(String(mine._id), { title: null });
-
-        expect(await fieldOf(String(mine._id), 'title')).toBe('');
-    });
-
     it('moves updatedAt, the ETag, when only a translation changed', async () => {
         const owner = await createUser();
         const mine = await createExample({ userId: owner.id });

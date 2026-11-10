@@ -7,6 +7,7 @@
 
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
+import { answerAsResource } from '@infrastructure/http/preconditions';
 import { requireId } from '@infrastructure/http/ids';
 import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, namedHandler, refused } from '@infrastructure/http/controller';
@@ -30,6 +31,8 @@ export const postLiftPurchaseHold = namedHandler(
                 return userService
                     .toUserContract(result.data, callerContextOf(request).caller)
                     .then((user) => {
+                        // The user's real tag, and the resource it belongs to (RFC 9110 §8.8.3).
+                        answerAsResource(response, user, `/users/${user.id}`);
                         successResponse(response, user, 200);
                     });
             })

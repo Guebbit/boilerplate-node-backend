@@ -57,7 +57,7 @@ describe('restore against the purge at the boundary', () => {
         for (const [index, [erased, restored]] of outcomes.entries()) {
             expect(erased.status).toBe('fulfilled');
             expect(restored.status).toBe('fulfilled');
-            const erasedOk = erased.status === 'fulfilled' && erased.value.success;
+            const erasedOk = erased.status === 'fulfilled' && erased.value;
             const restoredOk = restored.status === 'fulfilled' && restored.value;
             const stored = await userRepository.findById(rounds[index].user.id);
 

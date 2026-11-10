@@ -35,6 +35,11 @@ export interface AppLevelResponse {
 export interface ErrorCodeEntry {
     status: number;
     description: string;
+    /**
+     * `app` marks a code any operation may send (a status-derived code, a validation or rate-limit
+     * answer). Every code without it must be listed on at least one operation's `x-error-codes`.
+     */
+    scope?: 'app';
 }
 
 /**

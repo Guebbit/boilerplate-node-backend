@@ -43,6 +43,8 @@ x-personal-data:
 
 paths:
     /orders:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         get:
             x-cache: private-no-cache
             tags: [Orders]
@@ -201,6 +203,7 @@ paths:
                 The response is never cached: `Cache-Control: private, no-store`.
             operationId: exportOrders
             x-error-codes:
+                '401': [REAUTH_REQUIRED]
                 '422': [ORDER_EXPORT_TOO_LARGE]
             security:
                 - bearerAuth: []
@@ -417,6 +420,8 @@ paths:
     # Undoes a soft delete. A separate verb because DELETE must be safe to repeat (RFC 9110
     # §9.2.2): a retried DELETE never brings a record back.
     /orders/{id}/restore:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Orders]
             summary: Restore order
@@ -466,6 +471,8 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
     /orders/{id}/cancel:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Orders]
             summary: Cancel order
@@ -657,6 +664,8 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
     /orders/{id}/status-override:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
+        x-versioned: [post]
         post:
             tags: [Orders]
             summary: Force-correct an order's status by hand
@@ -677,6 +686,7 @@ paths:
                 Webhooks still fire for this move; no shipped email does.
             operationId: overrideOrderStatus
             x-error-codes:
+                '401': [REAUTH_REQUIRED]
                 '409': [ORDER_OVERRIDE_AWAITING_STOCK, ORDER_OVERRIDE_NOT_ALLOWED]
             security:
                 - bearerAuth: []
@@ -2711,6 +2721,9 @@ components:
                 updatedAt:
                     type: string
                     format: date-time
+                    description: >-
+                        When staff or the buyer last edited the order or moved its status.
+                        Reports from payments, delivery and returns don't move it.
                 # Unlike a product or a user, an order carries no `active` flag, so this is the
                 # only thing that distinguishes a hidden order from a live one. A non-admin never
                 # sees a record where it is set — `visibleScope` filters them out — so it appears
@@ -2783,6 +2796,15 @@ components:
                     allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode' }]
                     readOnly: true
                     description: ISO-4217 currency code this order was priced in (e.g. EUR).
+                # Frozen from `NODE_TERMS_VERSION` when checkout placed the order, the way `currency`
+                # is. A staff-placed order carries none.
+                termsVersion:
+                    type: string
+                    readOnly: true
+                    description: >-
+                        The Terms version in force when the buyer placed the order at checkout;
+                        absent on staff-placed orders.
+                    example: '2'
                 # Both derived at serialization from the lines' frozen `taxRate` — never stored.
                 # See `src/modules/orders/domain/tax.ts`.
                 netTotal:
@@ -2903,6 +2925,9 @@ components:
                 updatedAt:
                     type: string
                     format: date-time
+                    description: >-
+                        When staff or the buyer last edited the order or moved its status.
+                        Reports from payments, delivery and returns don't move it.
                 # Unlike a product or a user, an order carries no `active` flag, so this is the
                 # only thing that distinguishes a hidden order from a live one. A non-admin never
                 # sees a record where it is set — `visibleScope` filters them out — so it appears
