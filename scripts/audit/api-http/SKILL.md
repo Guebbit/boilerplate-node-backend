@@ -30,17 +30,19 @@ from a standard is rarely introduced by the change that happens to surface it.
 Every rule below applies by default. One exception: if the API's errors are `google.rpc.Status`
 (`code`, `message`, `details`) and not `application/problem+json`, ask the user: "Errors follow
 Google AIP, not RFC 9457. Skip the RFC 9457 rules?" On a yes, the four `rfc9457-*` rules get one
-`NOT-APPLICABLE` row each: "errors follow Google AIP, judged by `api-style`". Not answered: judge
-them.
+`NOT-APPLICABLE` row each ("errors follow Google AIP"), and Part D judges `aip-error-model`
+instead. Not answered: judge the RFC 9457 rules, and leave `aip-error-model` unjudged: the report
+says so in one line. The error format always has exactly one judge, and it is this audit;
+`api-style` never judges it.
 
 ## The four parts
 
-| Part | Theme                    | Standards and rules                                           |
-| ---- | ------------------------ | ------------------------------------------------------------- |
-| A    | Methods and status codes | `rfc9110` (all but `rfc9110-conditional-requests`), `rfc6585` |
-| B    | Caching and conditions   | `rfc9111`, plus `rfc9110-conditional-requests`                |
-| C    | Writes                   | `rfc5789`, `rfc7396`, `idempotency-key`                       |
-| D    | Errors and limits        | `rfc9457`, `ratelimit-headers`                                |
+| Part | Theme                    | Standards and rules                                             |
+| ---- | ------------------------ | --------------------------------------------------------------- |
+| A    | Methods and status codes | `rfc9110` (all but `rfc9110-conditional-requests`), `rfc6585`   |
+| B    | Caching and conditions   | `rfc9111`, plus `rfc9110-conditional-requests`                  |
+| C    | Writes                   | `rfc5789`, `rfc7396`, `idempotency-key`                         |
+| D    | Errors and limits        | `rfc9457`, `ratelimit-headers`, `aip-error-model` (Google only) |
 
 - A module, a path or `--diff`: one pass, all four parts, by you.
 - `whole-repo`: one helper agent per part, in parallel. 260-odd operations times every rule is
