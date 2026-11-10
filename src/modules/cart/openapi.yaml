@@ -236,7 +236,6 @@ paths:
             operationId: checkout
             x-error-codes:
                 '401': [REAUTH_REQUIRED]
-                '403': [EMAIL_NOT_VERIFIED]
                 '404': [CART_ADDRESS_NOT_FOUND, CART_SHIPPING_METHOD_NOT_FOUND]
                 # A stored shipping choice the basket no longer fits (gone digital-only, outgrown the method) is not a
                 # refusal here: it reads as no choice, as in `GET /cart`'s `shipping.selected`.
@@ -244,7 +243,7 @@ paths:
                 # A `billingAddressId` that names none of the caller's addresses is the same 404 as `addressId`.
                 '422': [CART_ADDRESS_REQUIRED, CART_BILLING_ADDRESS_REQUIRED, CART_SHIPPING_METHOD_REQUIRED, CART_SHIP_TO_COUNTRY_NOT_SUPPORTED, IDEMPOTENCY_KEY_MISMATCH, CART_QUANTITY_LIMIT]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['checkout:Cart']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:

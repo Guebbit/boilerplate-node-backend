@@ -63,7 +63,7 @@ paths:
                 nowhere a payer reads.
             operationId: listPayments
             security:
-                - bearerAuth: []
+                - bearerAuth: ['display:Payment']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -146,10 +146,9 @@ paths:
             operationId: createPayment
             x-error-codes:
                 '401': [REAUTH_REQUIRED]
-                '403': [EMAIL_NOT_VERIFIED]
                 '409': [PAYMENT_CARD_NOT_AVAILABLE, PAYMENT_IN_FLIGHT, PAYMENT_ORDER_NOT_PAYABLE]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['checkout:Cart']
             requestBody:
                 required: true
                 content:
@@ -187,7 +186,7 @@ paths:
             operationId: searchPayments
             x-alias-of: listPayments
             security:
-                - bearerAuth: []
+                - bearerAuth: ['display:Payment']
             requestBody:
                 required: true
                 content:
@@ -216,7 +215,7 @@ paths:
                 and the cancel path. Needs `display:Payment`.
             operationId: listRefunds
             security:
-                - bearerAuth: []
+                - bearerAuth: ['display:Payment']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -268,7 +267,7 @@ paths:
                 audit row (`payment.amount_mismatch`), not stored state. Needs `display:Payment`.
             operationId: listPaymentAttention
             security:
-                - bearerAuth: []
+                - bearerAuth: ['display:Payment']
             responses:
                 '200':
                     description: The rows
@@ -322,12 +321,11 @@ paths:
             operationId: createRefund
             x-error-codes:
                 '400': [IDEMPOTENCY_KEY_REQUIRED]
-                '401': [REAUTH_REQUIRED]
                 # A provider refusal is not here: it answers 201 with the failed record.
                 '409': [IDEMPOTENCY_IN_FLIGHT, PAYMENT_DISPUTED, PAYMENT_NOT_REFUNDABLE]
                 '422': [IDEMPOTENCY_KEY_MISMATCH, PAYMENT_REFUND_EXCEEDS_REMAINING]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['create:Refund']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/RequiredIdempotencyKeyHeader'
@@ -410,11 +408,10 @@ paths:
                 `errors[].code` `REAUTH_REQUIRED`. `Idempotency-Key` is optional.
             operationId: settleRefundByHand
             x-error-codes:
-                '401': [REAUTH_REQUIRED]
                 '409': [IDEMPOTENCY_IN_FLIGHT, PAYMENT_REFUND_IN_FLIGHT, PAYMENT_REFUND_NOT_OPEN]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['create:Refund']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: The payment carrying the refund
@@ -468,11 +465,10 @@ paths:
                 with `errors[].code` `REAUTH_REQUIRED`. `Idempotency-Key` is optional.
             operationId: cancelRefund
             x-error-codes:
-                '401': [REAUTH_REQUIRED]
                 '409': [IDEMPOTENCY_IN_FLIGHT, PAYMENT_REFUND_IN_FLIGHT, PAYMENT_REFUND_NOT_OPEN]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['create:Refund']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: The payment carrying the refund
@@ -556,11 +552,10 @@ paths:
                 caller re-authenticates and retries the same request.
             operationId: recordOrderPayment
             x-error-codes:
-                '401': [REAUTH_REQUIRED]
                 '409': [IDEMPOTENCY_IN_FLIGHT, PAYMENT_IN_FLIGHT, PAYMENT_ORDER_NOT_PAYABLE]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['create:Payment']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: The order the money arrived for. Must still be `pending`, unless it was canceled with its bank transfer on file (a late transfer is recorded too)
@@ -631,11 +626,10 @@ paths:
             operationId: confirmPayment
             x-error-codes:
                 '401': [REAUTH_REQUIRED]
-                '403': [EMAIL_NOT_VERIFIED]
                 '409': [IDEMPOTENCY_IN_FLIGHT, PAYMENT_DECLINED, PAYMENT_NOT_CONFIRMABLE, PAYMENT_ORDER_NOT_PAYABLE]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['checkout:Cart']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
@@ -680,10 +674,9 @@ paths:
             operationId: syncPayment
             x-error-codes:
                 '401': [REAUTH_REQUIRED]
-                '403': [EMAIL_NOT_VERIFIED]
                 '409': [PAYMENT_DECLINED, PAYMENT_NOT_CONFIRMABLE]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['checkout:Cart']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:

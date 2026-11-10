@@ -30,7 +30,11 @@
  * Three things hold that list true:
  *   - every catalogue code that is not `scope: app` is listed on at least one operation;
  *   - every guard-made code is listed on every route that mounts the guard — read off the route
- *     table, the permission rules and the kernel's own questions, never off a second list;
+ *     table, the permission rules and the kernel's own questions, never off a second list (the
+ *     bundler writes the permission-made ones from the operation's security scopes, so this also
+ *     proves the bundler and the guard agree);
+ *   - the permission names an operation's security scopes carry are the ones its route's guards ask,
+ *     both ways;
  *   - the runtime check in `tests/support/response-contract.ts` fails any HTTP test whose answer
  *     carries a code its operation does not list (service codes only a test can see).
  */
@@ -40,7 +44,7 @@ import path from 'node:path';
 import YAML from 'yaml';
 import { MODULES_ROOT } from '@tests/paths';
 import { everyMountedRoute, type MountedRoute } from '@tests/contract-routes';
-import { errorCodeIndex, listOperations } from '@tests/spec-walk';
+import { errorCodeIndex, listOperations, readSpec } from '@tests/spec-walk';
 import {
     PRESET_ROLES,
     callerForSubject,
@@ -193,9 +197,8 @@ describe('declared error codes', () => {
     );
 
     it('lists every catalogue code that is not app-wide on at least one operation', () => {
-        // The enrollment 403 is held out until its lines are decided (PD-2).
         const orphans = index.catalogue.filter(
-            (code) => !index.appScoped.has(code) && !listed.has(code) && code !== ENROLLMENT
+            (code) => !index.appScoped.has(code) && !listed.has(code)
         );
 
         expect(orphans).toEqual([]);
@@ -213,9 +216,6 @@ describe('declared error codes', () => {
         const unmatched = routes.map((route) => specKey(route)).filter((key) => !idOf.has(key));
         const missing = routes.flatMap((route) =>
             obligationsOf(route)
-                // The enrollment 403 is held out until its lines are decided (PD-2); the canary
-                // below still proves the sweep computes it.
-                .filter(({ code }) => code !== ENROLLMENT)
                 .filter(({ status, code }) => {
                     const operationId = idOf.get(specKey(route));
                     return !(index.listed[operationId ?? '']?.[status] ?? []).includes(code);
@@ -227,6 +227,45 @@ describe('declared error codes', () => {
             unmatched: [],
             missing: []
         });
+    });
+
+    it('names on each operation the permissions its route guards ask, and no others', () => {
+        const spec = readSpec();
+        /** Every credential alternative of an operation that can carry a permission, as its names. */
+        const alternativesOf = (key: string): string[][] => {
+            const [method = '', path = ''] = key.split(' ', 2);
+            const security = (
+                spec.paths[path]?.[method] as { security?: Record<string, string[]>[] } | undefined
+            )?.security;
+            return (security ?? []).flatMap((alternative) =>
+                ['bearerAuth', 'apiKeyAuth'].flatMap((scheme) =>
+                    scheme in alternative ? [[...(alternative[scheme] ?? [])].toSorted()] : []
+                )
+            );
+        };
+        const guarded = new Map(
+            everyMountedRoute().map((route) => [
+                specKey(route).replace(/^\w+/, (method) => method.toLowerCase()),
+                route.permissions.map(({ action, subject }) => ruleId(action, subject)).toSorted()
+            ])
+        );
+
+        const mismatches = [...guarded].flatMap(([key, asked]) =>
+            alternativesOf(key)
+                .filter((named) => named.join(',') !== asked.join(','))
+                .map(
+                    (named) =>
+                        `${key}: contract [${named.join(', ')}] vs guard [${asked.join(', ')}]`
+                )
+        );
+        // Both ways: a name on an operation no mounted guard asks it of is a stale entry.
+        const orphaned = listOperations()
+            .map((operation) => `${operation.method} ${operation.path}`)
+            .filter(
+                (key) => !guarded.has(key) && alternativesOf(key).some((named) => named.length > 0)
+            );
+
+        expect({ mismatches, orphaned }).toEqual({ mismatches: [], orphaned: [] });
     });
 
     it('finds guard-made codes to hold the lists against', () => {

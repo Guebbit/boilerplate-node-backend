@@ -27,6 +27,7 @@ import { orderSections } from './section-order';
 import { assembleRoot, readModuleFragments } from './root-assembly';
 import { withBrowserEvents } from './analytics-browser-events';
 import { withCookieAuth } from './cookie-auth';
+import { withPermissionErrorCodes } from './permission-security';
 import { withImageUploadEncoding } from './image-upload-encoding';
 import { webhookEventNames } from './asyncapi-webhook-events';
 import { withFilledEnums } from './fill-enum';
@@ -611,6 +612,8 @@ const bundleSteps = (errorCodes: Record<string, ErrorCodeEntry>): readonly Step[
         (document_) => {
             withModuleStamps(document_, moduleOfPath());
         },
+        // The 403 / 401 codes each operation's named permission makes, into its `x-error-codes`.
+        withPermissionErrorCodes,
         // Refuses an operation naming an error code nobody declares.
         (document_) => {
             checkOperationErrorCodes(document_, errorCodes);

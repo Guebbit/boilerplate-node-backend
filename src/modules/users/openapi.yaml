@@ -38,8 +38,8 @@ paths:
             description: Returns a paginated list of user accounts.
             operationId: listUsers
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:User']
+                - apiKeyAuth: ['read:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -110,8 +110,8 @@ paths:
                 '401': [REAUTH_REQUIRED]
                 '403': [ROLE_MANAGEMENT_REQUIRED]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['create:User']
+                - apiKeyAuth: ['create:User']
             requestBody:
                 required: true
                 content:
@@ -149,8 +149,8 @@ paths:
             description: Returns the full profile of the user identified by `{id}`. Functionally equivalent to `GET /users?id={id}`.
             operationId: getUserById
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:User']
+                - apiKeyAuth: ['read:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -171,8 +171,8 @@ paths:
             x-error-codes:
                 '403': [ROLE_MANAGEMENT_REQUIRED]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:User']
+                - apiKeyAuth: ['update:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -205,8 +205,8 @@ paths:
             x-error-codes:
                 '403': [ROLE_MANAGEMENT_REQUIRED]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:User']
+                - apiKeyAuth: ['update:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -241,9 +241,8 @@ paths:
             description: Deletes the user identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. A soft delete is one-way and safe to repeat — undo it with `POST /users/{id}/restore`.
             operationId: deleteUserById
             x-error-codes:
-                '401': [REAUTH_REQUIRED]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['delete:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/HardDeleteParam'
@@ -270,11 +269,9 @@ paths:
                 Audited as `access.role.assigned`.
             operationId: assignUserRole
             x-error-codes:
-                '401': [REAUTH_REQUIRED]
-                '403': [ROLE_MANAGEMENT_REQUIRED]
                 '409': [USER_ROLE_ALREADY_ASSIGNED]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['assign:Role']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -308,11 +305,9 @@ paths:
                 session, and only a session: an API key is refused 401. Audited as `access.role.revoked`.
             operationId: revokeUserRole
             x-error-codes:
-                '401': [REAUTH_REQUIRED]
-                '403': [ROLE_MANAGEMENT_REQUIRED]
                 '409': [USER_ROLE_NOT_ASSIGNED]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['assign:Role']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -347,8 +342,8 @@ paths:
             x-error-codes:
                 '409': [USER_PURCHASE_HOLD_ALREADY_SET]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['ban:User']
+                - apiKeyAuth: ['ban:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -385,8 +380,8 @@ paths:
             x-error-codes:
                 '409': [USER_PURCHASE_HOLD_NOT_SET]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['ban:User']
+                - apiKeyAuth: ['ban:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -416,8 +411,8 @@ paths:
                 '401': [REAUTH_REQUIRED]
                 '409': [USER_ALREADY_ACTIVE]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['ban:User']
+                - apiKeyAuth: ['ban:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -449,8 +444,8 @@ paths:
                 '403': [ROLE_MANAGEMENT_REQUIRED]
                 '409': [USER_ALREADY_INACTIVE]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['ban:User']
+                - apiKeyAuth: ['ban:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -476,10 +471,9 @@ paths:
             description: Undoes the soft delete of the user identified by `{id}`, which includes an account whose owner asked to delete it and whose `purgeAt` has not passed (the owner is told by mail; the account is then no longer scheduled for erasure). Answers 409 `USER_NOT_DELETED` when the user is not soft-deleted, so a restore can never be mistaken for an ordinary read, and 409 `USER_ERASURE_DUE` past `purgeAt`.
             operationId: restoreUserById
             x-error-codes:
-                '401': [REAUTH_REQUIRED]
                 '409': [USER_ERASURE_DUE, USER_NOT_DELETED]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['delete:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -505,10 +499,9 @@ paths:
             description: Permanently removes the user identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /users/{id}?hardDelete=true`.
             operationId: hardDeleteUserById
             x-error-codes:
-                '401': [REAUTH_REQUIRED]
             x-alias-of: deleteUserById
             security:
-                - bearerAuth: []
+                - bearerAuth: ['delete:User']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -527,8 +520,8 @@ paths:
             operationId: searchUsers
             x-alias-of: listUsers
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:User']
+                - apiKeyAuth: ['read:User']
             requestBody:
                 required: true
                 content:
