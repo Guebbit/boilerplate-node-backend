@@ -18,7 +18,7 @@ import {
  * Picks the best served locale for the request's `Accept-Language` header.
  *
  * One pick decides everything: the API's own wording (a message with no wording in the picked
- * language falls back to the default one key at a time), the product text, and the
+ * language falls back to the fallback language key by key), the product text, and the
  * `Content-Language` label, which names the audience the answer is written for (RFC 9110 §8.5).
  * What can be picked is every language switched on — deployed or registered — and the fallback;
  * a switched-off or unknown tag falls back like no header at all.

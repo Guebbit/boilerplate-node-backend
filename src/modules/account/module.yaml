@@ -12,9 +12,8 @@ rateLimits:
         environmentVariable: NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX
         defaultMax: 10
         windowMs: 86400000
-        bounds:
-            Mails to ONE mailbox from signup, reset, email change, both resends, a data export and an
-            account deletion, over a day — bounds the VICTIM of a mail bomb, which a budget on the
+        bounds: Mails to ONE mailbox from signup, reset, email change, both resends and a data
+            export, over a day — bounds the VICTIM of a mail bomb, which a budget on the
             caller cannot.
         audited: true
     # Every credential-guess budget is windowed to 15 minutes, its own rather than the shared browsing
@@ -158,7 +157,8 @@ rateLimits:
         windowMs: 600000
         bounds:
             'Guesses against ONE live challenge (`POST /account/login/2fa`) — `credentialLimiters`
-            bounds guesses per account/address across every login attempt; this bounds guesses
+            bounds guesses per account/address across every login attempt (on this route, by
+            address and block only: the body names no account); this bounds guesses
             against ONE still-live challenge, which an IP/account limit alone does not: a
             distributed attacker rotating IPs is still capped per challenge.'
         audited: true

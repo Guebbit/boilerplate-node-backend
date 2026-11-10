@@ -83,7 +83,7 @@ Every row here is the same bug: a value carries a delimiter the protocol treats 
 | Attack          | How it works                                                 | This boilerplate                                                                                                                                                                                   |
 | --------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Regex injection | a user value passed to `new RegExp` → ReDoS or filter bypass | `new RegExp` appears nowhere. The only `$regex` patterns come from `toSearchPattern`, which strips C0/DEL and escapes every metacharacter — `infrastructure/persistence/search.ts#toSearchPattern` |
-| ReDoS           | nested quantifiers backtracking catastrophically             | Same answer — an escaped pattern has no quantifier to nest. The contract's own patterns are checked for catastrophic shapes by `tests/cross-cutting/search-regex.test.ts`.                         |
+| ReDoS           | nested quantifiers backtracking catastrophically             | Same answer — an escaped pattern has no quantifier to nest. `tests/cross-cutting/search-regex.test.ts` pins that a catastrophic search pattern is escaped into a literal.                          |
 
 ## Into a path or a model
 

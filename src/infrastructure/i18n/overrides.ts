@@ -79,9 +79,7 @@ export const resetLocaleOverrides = (): void => {
  *
  * @param overridesByLocale - nested override trees, keyed by locale
  */
-export const applyLocaleOverrides = (
-    overridesByLocale: Record<string, Record<string, unknown>>
-): void => {
+const applyLocaleOverrides = (overridesByLocale: Record<string, Record<string, unknown>>): void => {
     const supported = new Set(listSupportedLocales());
 
     // EVERY supported language is restored, not only the ones with overrides here — deleting a
@@ -119,7 +117,7 @@ export const applyLocaleOverrides = (
  *
  * @param overlay - what the provider read
  */
-export const applyLocaleOverlay = (overlay: LocaleOverlay): void => {
+const applyLocaleOverlay = (overlay: LocaleOverlay): void => {
     applyLocaleOverrides(overlay.overrides);
     setServedLanguages(overlay.activeTags, overlay.inactiveTags);
 };

@@ -25,8 +25,8 @@ everyone else?"
 
 ## Why the table above is weaker than it looks
 
-Every limit in it is keyed on an **IP address**, and that is the section's weakness rather than a
-detail of it. Residential proxy pools cost about $20 for millions of addresses, and one IPv6
+Most limits in it are keyed on an **IP address** or an address block, and that is the section's
+weakness rather than a detail of it. Residential proxy pools cost about $20 for millions of addresses, and one IPv6
 customer is handed 18 quintillion of them. So these bound one person on one connection, and bound
 almost nothing about someone who is actually trying.
 

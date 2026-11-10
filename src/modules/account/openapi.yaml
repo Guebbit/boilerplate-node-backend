@@ -69,9 +69,6 @@ paths:
             summary: Replace own profile
             description: Replaces every writable field of the authenticated user's own profile — username, locale (RFC 9110 §9.3.4, an omitted optional field is cleared). The image is outside the representation — set by an upload, cleared by an explicit `imageUrl` null, kept when a PUT never mentions it. `analyticsConsent` is required — it has no cleared state, so a PUT always states it and consent is never reset or withdrawn by a forgotten field. Role, account state, email and password are out of scope — the first two belong to the admin `/users` endpoints, the email to `POST /account/email-change`, the password to `POST /account/password`. An `email` in the body is refused with 422 like any unknown field.
             operationId: replaceAccount
-            x-error-codes:
-                '409': [EMAIL_ALREADY_USED]
-                '429': [EMAIL_CHANGE_TOO_SOON]
             security:
                 - bearerAuth: []
             requestBody:
@@ -99,9 +96,6 @@ paths:
             summary: Update own profile
             description: Merges the given fields into the authenticated user's own profile — username, locale, image (RFC 7396, an omitted field is left unchanged, `null` clears an optional one). Role, account state, email and password are out of scope — the first two belong to the admin `/users` endpoints, the email to `POST /account/email-change`, the password to `POST /account/password`. An `email` in the body is refused with 422 like any unknown field.
             operationId: updateAccount
-            x-error-codes:
-                '409': [EMAIL_ALREADY_USED]
-                '429': [EMAIL_CHANGE_TOO_SOON]
             security:
                 - bearerAuth: []
             requestBody:
@@ -185,7 +179,7 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                # `sessionCredentialLimiters` sit in front of this route, and the service paces a
+                # `signedInCredentialLimiters` sit in front of this route, and the service paces a
                 # request inside the previous one's minute — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
         delete:
@@ -738,8 +732,8 @@ paths:
                             $ref: '#/components/schemas/VerifyEmailConfirmRequest'
             responses:
                 '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
-                # The new address was claimed by another account between the request and this
-                # confirm — the same race `PUT /account` itself declares 409 for.
+                # 409: the new address was claimed by another account between the request and this
+                # confirm.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }

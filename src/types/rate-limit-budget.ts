@@ -42,7 +42,7 @@ export interface RateLimitBudget {
     /** What a caller is bucketed by, in one line, for the generated table — e.g. "per account". */
     keyedBy: string;
 
-    /** One line: what this budget bounds and why, for the generated table. */
+    /** One line: what this budget bounds and why. Lands in `rate-limits.generated.ts`, not in a docs table. */
     bounds: string;
 
     /** Whether a refusal emits an audit event. */

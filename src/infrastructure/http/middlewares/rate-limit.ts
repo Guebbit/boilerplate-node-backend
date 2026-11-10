@@ -38,7 +38,7 @@ import { infrastructureRateLimitData } from './rate-limits.generated';
 export const DEFAULT_RATE_LIMIT_MAX = infrastructureRateLimitData.global.defaultMax;
 
 /**
- * Image uploads allowed per window, per ADDRESS.
+ * Image uploads allowed per window, per UPLOADER: api key, else account, else address block.
  *
  * Sized well above what one legitimate session needs (bulk product-image edits included) and well
  * below the global brake — the cost here is CPU (the `worker.image.digest` pipeline), not a spam

@@ -416,11 +416,11 @@ on `POST /payments/:id/confirm` — were reported as one hit counted twice, thou
 in its own namespace.
 
 **A third budget, the same shape as neither.** The contact budgets (`contactLimiters`: `submissionLimiter` per address, plus a per-email and a per-address-block budget) guard `tasks`'s
-`POST /contact` — a public write that causes an outbound email (signup and reset also do, under their own budgets; this one reaches the operator) — and it inverts the rule
+`POST /tasks` — a public write that causes an outbound email (signup and reset also do, under their own budgets; this one reaches the operator) — and it inverts the rule
 above: `skipSuccessfulRequests` is deliberately **off**. A credential attempt is abusive when it
 FAILS (a wrong guess); a contact-form submission is abusive when it SUCCEEDS (a bot posts a
 well-formed body, gets a `201`, and an operator gets an email). Mounting `credentialLimiters` on
-`/contact` would therefore change nothing at all — it would count zero of the requests that matter.
+`POST /tasks` would therefore change nothing at all — it would count zero of the requests that matter.
 `submissionLimiter` spends its budget on every request, success or failure, keyed on the caller's
 address like the global limiter, at a much smaller default (`NODE_SUBMISSION_RATE_LIMIT_MAX=5`) —
 a person files a contact request once. The other two are `NODE_SUBMISSION_RATE_LIMIT_EMAIL_MAX` (5) and
@@ -450,7 +450,7 @@ Default `NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX=60` per window.
 
 **The last two are keyed on a credential, not an address.** `mfaChallengeLimiter`
 (`POST /account/login/2fa`) and `mfaSendLimiter` (`POST /account/login/2fa/send`) both bucket on a
-sha256 of the challenge token rather than the caller's IP. That is the only key that bounds guesses
+keyed HMAC of the challenge token (`pseudonymise`) rather than the caller's IP. That is the only key that bounds guesses
 against one login: an IP or account key lets a distributed attacker rotate addresses, while the
 challenge is the thing being attacked. Both windows are 600s, the longer of the two challenge
 tiers, so a window can never end before the challenge it bounds.
@@ -625,7 +625,7 @@ mailboxes, cost something rather than nothing.
 ### Mail to one mailbox — the victim's budget
 
 Every budget above bounds a CALLER. A mail bomb is bounded by its VICTIM: signup, password reset,
-email change, both resends, a data export and an account-deletion request can each be pointed at a stranger's address, and `victim+1@x`,
+email change, both resends, and a data export can each be pointed at a stranger's address, and `victim+1@x`,
 `victim+2@x`, … each look like a new address to a budget keyed on the submitted string.
 
 **One budget on the canonical mailbox, used by every flow that mails** (`account/mail-budget.ts`):
@@ -637,7 +637,7 @@ email change, both resends, a data export and an account-deletion request can ea
   caught too.
 - **Two doors:** a middleware where the body names the address (signup, reset), and a charge inside
   the service where the server picks the recipient (verification resend, pending-email resend, an
-  email change to a new address, an account-deletion request). Both count in one store, so one budget has one tally.
+  email change to a new address). Both count in one store, so one budget has one tally.
 - **A refused charge sends nothing and saves nothing:** `429`, with `Retry-After`; an email change
   leaves `pendingEmail` as it was.
   Either door counts the refusal in `rate_limit_refusals_total` and audits it
