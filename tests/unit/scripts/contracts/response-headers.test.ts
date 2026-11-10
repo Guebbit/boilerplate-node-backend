@@ -106,7 +106,10 @@ describe('withAppLevelHeaders', () => {
     });
 });
 
-/** A write taking the key through the shared parameter, next to one that does not. */
+/** The replay header's declaration, as every stamped response carries it. */
+const REPLAYED = { $ref: '#/components/headers/Idempotent-Replayed' };
+
+/** A keyed write and a plain one, both pointing at the shared 409 and 429; `created` is the keyed 201. */
 const writes = (created: Record<string, unknown>) =>
     asStub<OpenApiDocument>({
         openapi: '3.1.0',
@@ -116,31 +119,81 @@ const writes = (created: Record<string, unknown>) =>
                     parameters: [{ $ref: '#/components/parameters/IdempotencyKeyHeader' }],
                     responses: {
                         '201': created,
-                        '409': { description: 'conflict' }
+                        '400': { description: 'bad' },
+                        '409': { $ref: '#/components/responses/Conflict' },
+                        '429': { $ref: '#/components/responses/TooManyRequests' }
                     }
                 }
             },
-            '/plain': { post: { responses: { '201': { description: 'made' } } } }
+            '/plain': {
+                post: {
+                    responses: {
+                        '201': { description: 'made' },
+                        '409': { $ref: '#/components/responses/Conflict' }
+                    }
+                }
+            }
+        },
+        components: {
+            responses: {
+                Conflict: { description: 'conflict', headers: { Location: {} } },
+                TooManyRequests: { description: 'slow down' }
+            }
         }
     });
 
 describe('withIdempotentReplay', () => {
-    it('declares Idempotent-Replayed on the 2xx of an operation taking the key, and nowhere else', () => {
+    it('declares Idempotent-Replayed on every inline answer of a keyed operation, and nowhere else', () => {
         const result = applied(
             withIdempotentReplay,
             writes({ description: 'made', headers: { Location: {} } })
         );
+        const keyed = result.paths?.['/keyed']?.post?.responses;
 
-        expect(result.paths?.['/keyed']?.post?.responses?.['201']).toHaveProperty('headers', {
+        expect(keyed?.['201']).toHaveProperty('headers', {
             Location: {},
-            'Idempotent-Replayed': { $ref: '#/components/headers/Idempotent-Replayed' }
+            'Idempotent-Replayed': REPLAYED
         });
-        expect(result.paths?.['/keyed']?.post?.responses?.['409']).toEqual({
-            description: 'conflict'
-        });
+        expect(keyed?.['400']).toHaveProperty('headers', { 'Idempotent-Replayed': REPLAYED });
         expect(result.paths?.['/plain']?.post?.responses?.['201']).toEqual({
             description: 'made'
         });
+    });
+
+    it('points a keyed $ref at a twin with the header, and a non-keyed one at the untouched original', () => {
+        const result = applied(withIdempotentReplay, writes({ description: 'made' }));
+
+        expect(result.paths?.['/keyed']?.post?.responses?.['409']).toEqual({
+            $ref: '#/components/responses/ConflictReplayable'
+        });
+        expect(result.paths?.['/plain']?.post?.responses?.['409']).toEqual({
+            $ref: '#/components/responses/Conflict'
+        });
+        expect(result.components?.responses?.ConflictReplayable).toEqual({
+            description: 'conflict',
+            headers: { Location: {}, 'Idempotent-Replayed': REPLAYED }
+        });
+        expect(result.components?.responses?.Conflict).toEqual({
+            description: 'conflict',
+            headers: { Location: {} }
+        });
+    });
+
+    it('leaves a 429 plain, because the ledger never sees one', () => {
+        const result = applied(withIdempotentReplay, writes({ description: 'made' }));
+
+        expect(result.paths?.['/keyed']?.post?.responses?.['429']).toEqual({
+            $ref: '#/components/responses/TooManyRequests'
+        });
+        expect(result.components?.responses).not.toHaveProperty('TooManyRequestsReplayable');
+    });
+
+    it('clones deep, so stamping a twin never reaches the original', () => {
+        const result = applied(withIdempotentReplay, writes({ description: 'made' }));
+        const original = result.components?.responses?.Conflict as { headers: object };
+        const twin = result.components?.responses?.ConflictReplayable as { headers: object };
+
+        expect(twin.headers).not.toBe(original.headers);
     });
 
     it('also stamps the operation that requires the key', () => {
@@ -163,9 +216,21 @@ describe('withIdempotentReplay', () => {
         ).toHaveProperty(['headers', 'Idempotent-Replayed']);
     });
 
-    it('refuses a 2xx that is a $ref, which cannot take a header of its own', () => {
-        expect(() =>
-            withIdempotentReplay(writes({ $ref: '#/components/responses/NoContent' }))
-        ).toThrow(/POST \/keyed: an idempotent operation needs an inline 201/);
+    it('refuses a $ref that names no inline shared response, so there is nothing to clone', () => {
+        const missing = asStub<OpenApiDocument>({
+            openapi: '3.1.0',
+            paths: {
+                '/keyed': {
+                    post: {
+                        parameters: [{ $ref: '#/components/parameters/IdempotencyKeyHeader' }],
+                        responses: { '201': { $ref: '#/components/responses/NoContent' } }
+                    }
+                }
+            }
+        });
+
+        expect(() => withIdempotentReplay(missing)).toThrow(
+            /POST \/keyed: `NoContent` is not an inline shared response/
+        );
     });
 });

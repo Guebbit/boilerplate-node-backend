@@ -6,8 +6,9 @@
  *
  * - {@link withAppLevelHeaders}: the headers every answer carries (`x-request-id`, `Cache-Control`,
  *   ...), listed once in the root's `x-app-level-headers`, onto every response.
- * - {@link withIdempotentReplay}: `Idempotent-Replayed` onto the 2xx of every operation that takes an
- *   `Idempotency-Key`.
+ * - {@link withIdempotentReplay}: `Idempotent-Replayed` onto every response of an operation that takes
+ *   an `Idempotency-Key`, except a 429 (the ledger never sees one). A shared response is reached
+ *   through a generated `<Name>Replayable` twin, so a non-keyed operation keeps the original.
  *
  * Why stamped: the app sets these in middleware that runs before any route. A hand-copied list on
  * every operation is a published claim with no guard behind it, and it goes stale silently.
@@ -18,7 +19,7 @@
 import { OpenAPIV3, type OpenAPIV3_1 } from 'openapi-types';
 import { operationsOf, type Operation, type OpenApiDocument, type Step } from './openapi-document';
 
-/** The response header an idempotent operation's 2xx declares, and the component that describes it. */
+/** The response header an idempotent operation's answers declare, and the component that describes it. */
 const REPLAY_HEADER = 'Idempotent-Replayed';
 
 /** The two `components/parameters` an operation takes its `Idempotency-Key` through. */
@@ -98,36 +99,88 @@ const takesIdempotencyKey = (operation: Operation): boolean =>
         (parameter) => '$ref' in parameter && IDEMPOTENCY_PARAMETERS.has(parameter.$ref)
     );
 
+/** The status the ledger never sees: every budget refuses before the key is claimed. */
+const NEVER_STORED_STATUS = '429';
+
+/** The `components/responses/` prefix a shared response is referenced by. */
+const RESPONSE_REF_PREFIX = '#/components/responses/';
+
+/** `response` with `Idempotent-Replayed` declared beside the headers it already has. */
+const withReplayHeader = <TResponse extends OpenAPIV3_1.ResponseObject>(
+    response: TResponse
+): TResponse => {
+    response.headers = {
+        ...response.headers,
+        [REPLAY_HEADER]: { $ref: `#/components/headers/${REPLAY_HEADER}` }
+    };
+    return response;
+};
+
 /**
- * Hang `Idempotent-Replayed` on every 2xx of one idempotent operation.
+ * The `<Name>Replayable` twin of a shared response: a deep clone plus the replay header, made once
+ * per component. A non-keyed operation keeps pointing at the original, which stays without it.
  *
+ * @param document_ - the bundle, whose `components/responses` gets the twin
+ * @param operation - `METHOD /path`, for the message
+ * @param name - the shared response's key under `components/responses`
+ * @returns the `$ref` to the twin
+ * @throws Error if the component is missing or is itself a `$ref`
+ */
+const replayableTwinRef = (
+    document_: OpenApiDocument,
+    operation: string,
+    name: string
+): { $ref: string } => {
+    const twinName = `${name}Replayable`;
+    const responses = document_.components?.responses;
+    const original = responses?.[name];
+    if (responses === undefined || original === undefined || '$ref' in original)
+        throw new Error(
+            `[openapi] ${operation}: \`${name}\` is not an inline shared response to clone for \`${REPLAY_HEADER}\`.`
+        );
+    // The deep clone is the point: a twin that shared its headers object would leak into the original.
+    responses[twinName] ??= withReplayHeader(structuredClone(original));
+    return { $ref: `${RESPONSE_REF_PREFIX}${twinName}` };
+};
+
+/**
+ * Declare `Idempotent-Replayed` on every response of one idempotent operation but a 429.
+ *
+ * An inline response gets the header in place; a `$ref` one points at its twin.
+ *
+ * @param document_ - the bundle
  * @param operation - `METHOD /path`, for the message
  * @param target - the operation
- * @throws Error if a 2xx is a `$ref`
  */
-const declareReplay = (operation: string, target: Operation): void => {
+const declareReplay = (document_: OpenApiDocument, operation: string, target: Operation): void => {
     for (const [status, response] of Object.entries(target.responses ?? {})) {
-        if (!status.startsWith('2')) continue;
-        if ('$ref' in response)
+        if (status === NEVER_STORED_STATUS) continue;
+        if (!('$ref' in response)) {
+            withReplayHeader(response);
+            continue;
+        }
+        if (!response.$ref.startsWith(RESPONSE_REF_PREFIX))
             throw new Error(
-                `[openapi] ${operation}: an idempotent operation needs an inline ${status} to hang \`${REPLAY_HEADER}\` on, not a $ref.`
+                `[openapi] ${operation}: ${status} points outside components/responses.`
             );
-        response.headers = {
-            ...response.headers,
-            [REPLAY_HEADER]: { $ref: `#/components/headers/${REPLAY_HEADER}` }
-        };
+        target.responses![status] = replayableTwinRef(
+            document_,
+            operation,
+            response.$ref.slice(RESPONSE_REF_PREFIX.length)
+        );
     }
 };
 
 /**
- * Declare `Idempotent-Replayed` on every 2xx of an operation that takes an `Idempotency-Key`.
+ * Declare `Idempotent-Replayed` on every response of an operation that takes an `Idempotency-Key`,
+ * except a 429, which the ledger never sees (every budget refuses before the key is claimed).
  *
  * Marker is the parameter, not a hand-kept list: adding the key to a route is all it takes.
  *
- * @throws Error if an idempotent operation's 2xx is a `$ref`, which cannot take a header of its own
+ * @throws Error if a `$ref` response is not an inline shared one, so there is nothing to clone
  */
 export const withIdempotentReplay: Step = (document_) => {
     for (const { route, method, operation } of operationsOf(document_))
         if (takesIdempotencyKey(operation))
-            declareReplay(`${method.toUpperCase()} ${route}`, operation);
+            declareReplay(document_, `${method.toUpperCase()} ${route}`, operation);
 };

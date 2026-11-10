@@ -38,7 +38,8 @@ Output is `tmp/reports/audit/api-idempotency-key/<SCOPE>.md`, where `<SCOPE>` is
       `application/problem+json`, the 2xx body is an object, replace is PUT and update is PATCH,
       operationId shape, schema names, camelCase parameters, `maxLength`, `names-in-us-english-*`)
     - `tests/contract/idempotency.test.ts` (the middleware's own behaviour)
-    - `scripts/contracts/response-headers.ts` (`Idempotent-Replayed`)
+    - `scripts/contracts/response-headers.ts` (`Idempotent-Replayed` on every response of a keyed
+      operation but a 429); the proof that a replay carries it is `tests/contract/idempotency.test.ts`
       A guarded rule gets one line ("guarded by X") and no verdict hunt.
 5. If this audit is part of a run of several, the USER gives the order of precedence first
    ("RFC 9110 > Google AIP > Zalando"). Ask for it if you were not given one. Never pick it.

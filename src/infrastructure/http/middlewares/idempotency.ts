@@ -15,6 +15,9 @@
  * An idempotency ledger is a source of truth, so it goes in Mongo next to every other durable
  * thing that expires on a TTL — see `idempotency-model.ts`.
  *
+ * The ledger never sees a 429: every budget refuses before the key is claimed, and a handler must
+ * not answer 429 after a write.
+ *
  * See: docs/tools/idempotency.md
  */
 
@@ -123,17 +126,15 @@ type StoredRecord = Pick<
 >;
 
 /**
- * The headers an answer carries that a retry must see too: the challenge of a 401, the wait of a
- * 429 or 503, the allowed methods of a 405, the `ETag` of a write that answers its row's new tag and the `Content-Location` it belongs to.
- * Without them a replayed refusal is a bare status, and a replayed write hands back no tag.
+ * The headers an answer carries that a retry must see too: the challenge of a 401, the allowed
+ * methods of a 405, the `ETag` of a write that answers its row's new tag and the `Content-Location`
+ * it belongs to. Without them a replayed refusal is a bare status, and a replayed write hands back
+ * no tag.
+ *
+ * `Retry-After` is left out: a stored 503 must not say "retry later" for the whole retention
+ * window, under a key that can never succeed.
  */
-const REPLAYED_HEADERS = [
-    'Retry-After',
-    'WWW-Authenticate',
-    'Allow',
-    'ETag',
-    'Content-Location'
-] as const;
+const REPLAYED_HEADERS = ['WWW-Authenticate', 'Allow', 'ETag', 'Content-Location'] as const;
 
 /**
  * The replayable headers the handler set on this response, by name.
