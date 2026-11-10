@@ -3,26 +3,26 @@ name: api-rfc9457
 description: Audit this API's contract, handlers and docs against RFC 9457 problem details, reported only
 ---
 
+Before anything else, read `scripts/audit/RULES.md` and follow it. Where this skill and RULES.md
+disagree, RULES.md wins.
+
 ROLE: Error-contract reviewer: the lint proved the media type, you judge whether the body is true.
 
-GOAL: For every rule in `scripts/audit/api-standards.yaml` whose `standard` is `rfc9457`, give one
-verdict per rule per operation in scope, each with a citation. The audit judges whether every runtime error is a problem document with honest members.
-It reports against RFC 9457 problem details ONLY. Other standards disagree with it in places; that is
-not this audit's business.
+GOAL: For every rule in `scripts/audit/api-standards.yaml` whose `standard` is `rfc9457`, give every
+operation in scope one verdict per rule, each with a citation. Operations that share a verdict and its
+cause share one row (see Output). The audit judges whether every runtime error is a problem document with honest members.
+It reports against RFC 9457 problem details, plus the `house` clauses the registry pins to its rules.
+When a precedence is given, a rule a higher standard overrides is listed once under **Superseded by a
+higher standard**, not judged.
 
-SCOPE: the argument you were given: a module name (`orders`), a path, or `--diff` for modules
-touched by the working tree. If empty, audit the **whole contract**. A difference from a standard is
-rarely introduced by the change that happens to surface it, so an empty scope is NOT "whatever
-`git status` touched".
+SCOPE: the argument you were given: a module name (`orders`), a path, `--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5). Empty means
+`whole-repo`: the **whole contract**. A difference from a standard is rarely introduced by the change
+that happens to surface it.
 
 ## Naming the scope
 
-Output is `tmp/reports/audit/api-rfc9457/<SCOPE>.md`, where `<SCOPE>` is:
-
-- empty → `full`
-- a module → the module name (`orders`)
-- a path → the path slugged, `src/` dropped (`src/infrastructure/http` → `infrastructure-http`)
-- `--diff` → the current branch name slugged (`git branch --show-current`)
+Output goes to `tmp/reports/audit-<run>/api-rfc9457/<SCOPE>…`. `<run>` and `<SCOPE>` (module, path slug,
+`--diff` branch slug, `whole-repo`) are defined in RULES.md rule 4.
 
 ## Before you start
 
@@ -32,47 +32,97 @@ Output is `tmp/reports/audit/api-rfc9457/<SCOPE>.md`, where `<SCOPE>` is:
    `difference` names a row there gets the verdict `KNOWN-DIFFERENCE` when the difference is what
    you found, with the row `id`.
 3. Read the rules of this standard in `scripts/audit/api-standards.yaml`. Open each `source` and
-   re-read the clause: the `rule` sentence is a summary, the standard is the authority.
+   re-read the clause: the `rule` sentence is a summary, the standard is the authority. Check `house`
+   as well; its docs page is the authority for it.
 4. Name the existing guard and move on for anything already guarded mechanically. Here:
     - Spectral `shared/contracts/spectral.yaml` (security on every operation, no `nullable`, errors are
       `application/problem+json`, the 2xx body is an object, replace is PUT and update is PATCH,
       operationId shape, schema names, camelCase parameters, `maxLength`, `names-in-us-english-*`)
-    - Spectral: errors are `application/problem+json`; `x-not-problem` is the declared opt-out
-    - `tests/cross-cutting/contract-error-declarations.test.ts` (every code is in `x-error-codes`)
-    - `tests/fuzz/endpoints.fuzz.test.ts`
+    - Spectral: a 4xx/5xx that declares content declares only `application/problem+json`
+      (`x-not-problem` is the opt-out). Spectral sees only responses that declare `content`: a
+      bodiless 4xx/5xx is not seen.
+    - `tests/support/response-contract.ts`: every Jest error answer with a JSON body is
+      `application/problem+json` and matches its schema; no code check.
+    - `tests/cross-cutting/contract-error-declarations.test.ts`: a path id implies a declared 404.
+    - `tests/fuzz/endpoints.fuzz.test.ts`: never a 5xx, every status documented (statuses, not codes).
       A guarded rule gets one line ("guarded by X") and no verdict hunt.
 5. If this audit is part of a run of several, the USER gives the order of precedence first
    ("RFC 9110 > Google AIP > Zalando"). Ask for it if you were not given one. Never pick it.
 
 ## Steps
 
-1. List the operations in scope from the bundle (Grep for every place that answers an error without `rejectResponse` (`res.status(4`, `res.status(5`, `.sendStatus(`, `.json({ error`), then compare with the `x-not-problem` operations.)
+1. List the operations in scope from the bundle.
+   1b. Find every answer not built by `rejectResponse` (`src/infrastructure/http/response.ts`): grep
+   `\.(status|sendStatus|writeHead)\(|\.statusCode\s*=[^=]` over `src/**/*.ts`, tests excluded,
+   minus `response.ts`; judge each hit by hand (a computed status like `/readyz`, an untyped
+   `.send(` like the metrics 500). Compare the hits with the responses marked `x-not-problem`.
+   1c. Check `src/app/` for a `clientError` listener; without one, Node answers 400/408/413/431 itself
+   with no body.
+   1d. Sweep the no-`scope` catalogue codes listed on no operation; for a guard-made code
+   (`deniedCode`, `stepUp`, `requireFreshAuth*`), check every mount of that guard.
 2. For each rule, check three sources and reach ONE verdict: the contract (the operation, its
    responses, its headers), the handler (controller, then service, never only the route), and the
    docs page that describes it.
 3. A doc that contradicts the code: say which side is wrong, and cite the section.
 4. A finding a rule could catch mechanically: verdict `LINT-CANDIDATE` with the JSONPath. It is
-   REPORTED only, never turned into a Spectral rule, and you change no file.
+   REPORTED only, never turned into a Spectral rule.
 
 ## Verdicts
 
-| Verdict            | Means                                                                           |
-| ------------------ | ------------------------------------------------------------------------------- |
-| `VIOLATION`        | the API contradicts the standard and no page says it does so on purpose         |
-| `KNOWN-DIFFERENCE` | it differs, and a row on the theory page says why; still reported               |
-| `LINT-CANDIDATE`   | mechanical: REPORTED only, never turned into a Spectral rule, with the JSONPath |
-| `SATISFIED`        | checked, and it holds                                                           |
-| `NOT-APPLICABLE`   | the rule does not touch this scope; one line saying what you checked            |
+| Verdict            | Means                                                                                 |
+| ------------------ | ------------------------------------------------------------------------------------- |
+| `VIOLATION`        | the API contradicts the standard, and no theory row named by the rule says why        |
+| `KNOWN-DIFFERENCE` | it differs, and the theory row the rule's `difference` names says why; still reported |
+| `LINT-CANDIDATE`   | mechanical: REPORTED only, never turned into a Spectral rule, with the JSONPath       |
+| `SATISFIED`        | checked, and it holds                                                                 |
+| `NOT-APPLICABLE`   | the rule does not touch this scope; one line saying what you checked                  |
+
+A missed `house` clause is a `VIOLATION` with `section` = `house`; the evidence cites the docs page and
+the fix side is `code`, `contract` or `docs` (withdraw the promise), never `standard`. A MAY in `rule`
+never yields a `VIOLATION`.
+
+A difference explained only on another page, or by a theory row the rule does not name, is still a
+`VIOLATION`: fix side `docs`, the evidence cites that page, and the fix is a theory row linking to it,
+named in the rule's `difference`.
 
 ## Output
 
-Write `tmp/reports/audit/api-rfc9457/<SCOPE>.md`: the bundle's mtime, the scope, then a table of
+Write `tmp/reports/audit-<run>/api-rfc9457/<SCOPE>.md`: the bundle's mtime, the scope, then a table of
 
-| rule id | operation | verdict | evidence (file:line) | section | fix side |
+| # | rule id | operation | verdict | evidence (file:line) | section | fix side |
+
+**One row per cause.** Same rule, same verdict, same cause: one row. The cause is the one place the
+fix lands: a code path, a schema, a theory row.
+
+- `operation`: the members and their count. List them, or give the selector that finds them (a
+  JSONPath over the bundle, a mount line), so a reader can re-run it.
+- `evidence`: the cause, why every member reaches it (the mount, the `$ref`), and the grep that found
+  no member overriding it.
+- Split the row the moment one member differs: its own override, a bypass, another verdict.
+- `NOT-APPLICABLE`: one row per rule, naming the JSONPath checked and the count.
+- Under the table, one totals line per rule: its rows' counts add up to the operations in scope.
+- A `whole-repo` run adds an appendix: every operation, one column per rule, each cell the `#` of the
+  row that judged it.
 
 `fix side` is `contract`, `code`, `docs` or `standard` (the standard is the one that fits worse).
-Then list the `VIOLATION` and `LINT-CANDIDATE` rows again, worst first.
+Then list the `VIOLATION` and `LINT-CANDIDATE` rows again, worst first, by impact. On a tie: MUST,
+then house, then SHOULD. A row is one rule, one side (a standard clause or `house`), one verdict and
+one cause; the per-rule totals give house apart (`VIOLATION 4 (house 3)`).
 
-Do NOT change any file. No citation, no finding: an absence claim names the grep that found
+No citation, no finding: an absence claim names the grep that found
 nothing. Three real violations over thirty maybes. The report is disposable; see
 `docs/tools/ai-auditing.md`.
+
+### Outside the rules
+
+One line per finding no rule judges: a clause of the standard no rule covers, or a doc, contract or
+code text found on the way that disagrees with another. Each line: what, file:line, fix side
+(`contract`, `code`, `docs`, or `registry` = a clause that needs a rule). A finding that belongs to
+another standard's audit names that audit. No verdict, and not in the per-rule totals. Write "None."
+when empty.
+
+### Superseded by a higher standard
+
+Required. `| rule id | yields to (standard · clause) | theory row | why |`, no verdict column. If
+empty, write "none: no precedence given" or "none: no higher standard in the given precedence
+overrides a rule of this one".

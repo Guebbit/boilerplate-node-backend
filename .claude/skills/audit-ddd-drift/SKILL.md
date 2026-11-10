@@ -1,8 +1,8 @@
 ---
 name: audit-ddd-drift
 description: Report where the DDD the docs describe no longer matches the code — who drives whose state, named questions vs read tables, domain placement, subdomain depth, stale counts
-argument-hint: <module|path|--diff>  (default: the whole repo)
-allowed-tools: Read, Glob, Grep, Write, Agent, Bash(rg:*), Bash(wc:*), Bash(ls:*), Bash(git log:*), Bash(git diff:*), Bash(git status:*), Bash(git branch:*)
+argument-hint: <module|path|--diff|whole-repo>  (default: whole-repo)
+allowed-tools: Read, Glob, Grep, Write, Agent, Bash(rg:*), Bash(wc:*), Bash(ls:*), Bash(git log:*), Bash(git diff:*), Bash(git status:*), Bash(git branch --show-current), Bash(npm run audit:check-clean:*)
 ---
 
 Read `scripts/audit/ddd-drift/SKILL.md` and follow it. The scope is: $ARGUMENTS

@@ -3,6 +3,9 @@ name: rate-limit-keys
 description: Audit whether every rate-limit budget buckets callers by something an attacker cannot cheaply rotate
 ---
 
+Before anything else, read `scripts/audit/RULES.md` and follow it. Where this skill and RULES.md
+disagree, RULES.md wins.
+
 ROLE: Rate-limit auditor. You do not ask whether a budget is enforced — other
 tests answer that. You ask what a budget BUCKETS BY, and what it costs an attacker
 to get a fresh bucket.
@@ -14,9 +17,11 @@ innocent callers.
 pass. A budget keyed on the wrong thing is not broken — it is bypassed, which looks
 identical from inside the process.
 
-SCOPE: the argument you were given — a module name (`account`), a path, or `--diff` for modules touched by
-the working tree. If empty, audit every `rate-limits.ts` in the repo plus
-`src/infrastructure/http/middlewares/rate-limit.ts`.
+SCOPE: the argument you were given: a module name (`account`), a path, `--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5).
+Empty means `whole-repo`: every `rate-limits.ts` in the repo plus
+`src/infrastructure/http/middlewares/rate-limit.ts`. A diff that touches
+`src/infrastructure/http/middlewares/rate-limit.ts` or `src/types/rate-limit-budget.ts` widens the
+scope to every budget (the shared key functions live outside every module); say so in the report.
 
 ## Why this is a prompt and not a test
 
@@ -30,18 +35,17 @@ is why it lives here.
 
 ## Naming the scope
 
-Output is `tmp/reports/audit/rate-limit-keys/<SCOPE>.md`, where `<SCOPE>` is:
-
-- a module → the module name (`account`)
-- a path → the path slugged, `src/` dropped
-- `--diff` → the current branch name slugged (`git branch --show-current`)
+Output goes to `tmp/reports/audit-<run>/rate-limit-keys/<SCOPE>…`. `<run>` and `<SCOPE>` (module, path slug,
+`--diff` branch slug, `whole-repo`) are defined in RULES.md rule 4.
 
 ## Background the audit assumes
 
 Read these first; the findings below are all departures from them.
 
-- `buildRateLimiter` is the ONE factory every budget is built from. A limiter
-  constructed any other way is a finding on its own.
+- `buildRateLimiter` is the factory every budget is built from. A limiter constructed any other way
+  is a finding on its own. The one sanctioned second door is `chargeBudget`
+  (`src/infrastructure/http/middlewares/rate-limit.ts`), for a service that picks the recipient
+  itself (the mail budget).
 - A budget with no `keyGenerator` falls back to `express-rate-limit`'s default: the
   caller's single address (the library masks IPv6 to a /56). That is the weakest key available — a residential-proxy
   pool is about $20 for millions of addresses, and one IPv6 customer is allocated
@@ -51,35 +55,48 @@ Read these first; the findings below are all departures from them.
 - `identityOf` hashes the request BODY's `email`/`username`. That key is
   attacker-supplied by construction: it bounds one victim account being guessed at,
   and bounds nothing at all about one attacker sweeping many accounts.
-- `keyedBy` is a hand-written label that feeds the generated table in
-  `docs/tools/security.md#the-rate-limit-budgets`. It is prose, not behaviour.
+- `keyedBy` feeds the generated table in `docs/tools/security.md#the-rate-limit-budgets`; `bounds`
+  (`module.yaml`) feeds only `rate-limits.generated.ts`. Both are prose, not behaviour, and so is
+  every comment and doc that names a key. Nothing but this audit compares them with `keyGenerator`.
 
 ## Steps
 
 ### 1 — enumerate every budget in scope
 
 Every `RateLimitBudget` literal. For each, record `namespace`, `keyGenerator` (or
-its absence), `keyedBy`, `skipSuccessfulRequests`, and where it is mounted.
+its absence), `keyedBy`, `skipSuccessfulRequests`, `skip`, `requestWasSuccessful`, `escalation`,
+`audited`, and where it is mounted. `skip` and `requestWasSuccessful` also decide who is counted;
+`audited` is there because a budget's audit write changes what one request costs us.
 
 A budget declared and never mounted is a finding. Say which route was expected to
 carry it.
 
 ### 2 — answer one question per budget
 
+Two questions per budget.
+
 **What does an attacker pay for a fresh bucket?**
 
-| key               | attacker pays                                           |
-| ----------------- | ------------------------------------------------------- |
-| `identityOf`      | nothing — change one body field                         |
-| default (address) | a proxy hop, cents, or free on IPv6                     |
-| `addressBlockOf`  | a new /24 or /48 — the cheapest key that costs anything |
-| `credentialId`    | a new credential, which you must be issued              |
-| `accountId`       | a new account, through signup, which is itself budgeted |
+| key                     | attacker pays                                                                                                                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `identityOf`            | nothing — change one body field                                                                                                                                                       |
+| default (address)       | a proxy hop, cents, or free on IPv6                                                                                                                                                   |
+| `addressBlockOf`        | a new /24 or /48 — the cheapest key that costs anything                                                                                                                               |
+| `credentialId`          | a new credential, which you must be issued                                                                                                                                            |
+| `accountId`             | a new account, through signup, which is itself budgeted                                                                                                                               |
+| uploader                | a key, else an account, else the address block: it falls back in that order, and the last rung is the block                                                                           |
+| challenge               | attacker-supplied, but a new value moves the guesses off the live challenge, so it buys nothing                                                                                       |
+| canonical mailbox       | attacker-named on purpose: it bounds the victim's inbox, not the attacker                                                                                                             |
+| account across sessions | a new account. Every session of one account shares the bucket: a stolen session's failures also refuse the owner's other sessions for the window, and signing in again is the way out |
+
+**What does one request cost us?** What it writes or spends: an audit row, a mail, a job, an outbound
+call, CPU. A weak key with a costly request is worse than a weak key with a free one (the payment
+webhook, whose unauthenticated requests each write an audit row).
 
 Anything in the top two rows is only acceptable when something else covers the
 same route. Which brings the actual finding:
 
-### 3 — the four tells
+### 3 — the tells
 
 - **An identity-keyed budget with no address-block partner on the same route.**
   `identityOf` bounds guessing at ONE account. Credential stuffing does the
@@ -94,33 +111,57 @@ same route. Which brings the actual finding:
   it fails the other way: keying a partner api on the address buckets every partner
   behind one CDN together, so one noisy integration refuses everyone else. That is
   why `apiKeyLimiter` keys on `credentialId`.
-- **`keyedBy` disagreeing with `keyGenerator`.** The label is published in
-  `docs/tools/security.md` and nothing checks it. A budget that says "per account"
-  and keys on the address is a documented defence that does not exist.
+- **Text naming a key the code does not use.** For each budget, compare with its `keyGenerator`,
+  `skip*` and `requestWasSuccessful`:
+    - `keyedBy`;
+    - the docblock above the budget;
+    - its `module.yaml` `bounds`;
+    - the comment at its mount site (`routes.ts`, `module.ts`);
+    - any key comment in the module's contract fragment;
+    - its paragraph in `docs/tools/security.md`.
+
+    Then grep `docs/theory/defences/*.md` and `docs/theory/data-protection.md` for `/24`, `/48`,
+    `/56`, `/64`, `per address`, `keyed on`, `every limit`. Only claims about who is counted: a window,
+    default or env-var mismatch gets one line, not a row. A document that says "per account" while the
+    code keys on the address is a documented defence that does not exist.
+
+- **A charged budget that declares `escalation`.** `chargeBudget` ignores it
+  (`chargedStoreOf` reads only namespace, `onStoreError` and window), so the escalation is silently
+  lost.
 
 ### 4 — classify
 
-`sound` / `weak key, covered by a partner` / `WEAK KEY, UNCOVERED` / `label drift`.
+`sound` / `weak key, covered by a partner` / `deliberate weak key` / `WEAK KEY, UNCOVERED` /
+`label drift`.
+
+`deliberate weak key` must cite the comment that says so, and re-check that comment's premise
+against the controller: what one request writes or spends. A premise nobody re-checked is not a
+reason (RK-1: the payment webhook was "deliberate" on a cost premise nobody checked).
 
 For a `WEAK KEY, UNCOVERED`, give the concrete bypass in one line: what the
 attacker changes between requests, and what it costs.
 
 ## Output
 
-Write `tmp/reports/audit/rate-limit-keys/<SCOPE>.md`:
+Write `tmp/reports/audit-<run>/rate-limit-keys/<SCOPE>.md`:
 
-| budget | namespace | key (file:line) | mounted on | partner budget | verdict | bypass |
+| budget | namespace | key (file:line) | mounted on | partner budget | cost per request | verdict | bypass |
+
+After it, a second table for the text rows, since prose is not one per budget:
+
+| text (file:line) | says | the code (file:line) | budget |
 
 Then print the `WEAK KEY, UNCOVERED` and `label drift` rows, cheapest bypass first.
 
 Rules:
 
-- Do NOT write or modify tests or source. This is a report.
 - `sound` rows stay in the table. A report that lists only accusations reads as a
   list of bugs; the table is what makes "23 of 25 are fine" legible.
 - A weak key is NOT a finding when the route carries a partner budget that covers
   the same traffic. Name the partner and move on.
-- A deliberate weak key is recorded as deliberate, with the comment that says so.
+- A deliberate weak key gets the verdict `deliberate weak key`, with the comment that says so and
+  the re-checked premise.
+- A text row is reported, never fixed, and never turned into a proposed checker. Docs are kept by hand.
   The global browsing brake is address-keyed on purpose — it is a brake, not a
   gate, and it exists to slow a scanner rather than stop an attacker.
 - `tmp/reports/` is gitignored. These files are working evidence, not deliverables.

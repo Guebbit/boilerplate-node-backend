@@ -1,8 +1,8 @@
 ---
 name: audit-code-shape
 description: Audit a scope for over-abstraction — shallow functions, pass-throughs, lazy files, speculative generality — and its two neighbours, dead code (knip) and copy-paste (jscpd)
-argument-hint: <module|path|--diff>  (default: modules touched by the working tree)
-allowed-tools: Read, Glob, Grep, Write, Agent, Bash(npm run audit:*), Bash(npm run -s audit:*), Bash(git diff:*), Bash(git status:*), Bash(git branch:*), Bash(ls:*)
+argument-hint: <module|path|--diff|whole-repo>  (default: whole-repo)
+allowed-tools: Read, Glob, Grep, Write, Agent, Bash(npm run audit:shallow:*), Bash(npm run -s audit:unused:*), Bash(npm run audit:duplicates:*), Bash(git diff:*), Bash(git status:*), Bash(git branch --show-current), Bash(ls:*), Bash(npm run audit:check-clean:*)
 ---
 
 Read `scripts/audit/code-shape/SKILL.md` and follow it. The scope is: $ARGUMENTS

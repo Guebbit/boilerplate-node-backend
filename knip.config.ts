@@ -15,6 +15,17 @@ const config: KnipConfig = {
         'src/modules/*/index.ts',
         // Loaded by directory scan in `scripts/contracts/client-collections-bundle.ts`.
         'src/modules/*/probes.ts',
+        // Spawned by `scripts/regenerate-artifacts.ts`, never imported.
+        'scripts/docs/generate-*.ts',
+        'scripts/docker/generate-*.ts',
+        // Loaded by directory scan in `scripts/contracts/client-collections-bundle.ts`.
+        'scenarios/values/*.ts',
+        // Loaded by dynamic import in `scripts/contracts/generate-shared-rule-schemas.ts`.
+        'src/modules/*/rules.schema.ts',
+        // Gitignored, and knip globs `entry` patterns without the `.gitignore`, so it reads what they
+        // import. Every glob is anchored to a repo folder: a leading `**/` would match the
+        // worktrees and the stryker sandboxes.
+        'scenarios/**/*.generated.ts',
         // Run inside their containers, never imported.
         'docker/*.{js,mjs}',
         // Run by the load-test tool, never imported.
@@ -25,6 +36,9 @@ const config: KnipConfig = {
         'docs/.vitepress/config.mts',
         'docs/.vitepress/theme/index.ts'
     ],
+    // A type that only lives inside its own file's exported shape is not unused.
+    // https://knip.dev/reference/configuration#ignoreexportsusedinfile
+    ignoreExportsUsedInFile: { interface: true, type: true },
     // Dependencies used in a way an import walk cannot see.
     ignoreDependencies: [
         // Spawned by file path in `scripts/contracts/openapi-bundle.ts`, never imported.

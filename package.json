@@ -51,6 +51,8 @@
         "audit:shallow": "tsx scripts/audit/code-shape/scripts/generate-shallow-candidates.ts",
         "audit:unused": "knip --no-progress --no-exit-code",
         "audit:duplicates": "jscpd",
+        "audit:check-clean": "tsx scripts/audit/run-check-clean.ts",
+        "audit:test-candidates": "eslint --no-config-lookup -c scripts/audit/test-honesty/eslint.candidates.config.ts -f json",
         "test:prism": "tsx scripts/testing/run-prism-smoke-test.ts",
         "test:cluster": "jest --config jest.config.cluster.js",
         "test:broker": "jest --config jest.config.broker.js",

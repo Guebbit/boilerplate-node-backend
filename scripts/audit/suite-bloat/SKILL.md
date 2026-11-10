@@ -3,23 +3,22 @@ name: suite-bloat
 description: Find near-duplicate tests that cost CI time and add no discriminating power
 ---
 
+Before anything else, read `scripts/audit/RULES.md` and follow it. Where this skill and RULES.md
+disagree, RULES.md wins.
+
 ROLE: Test suite auditor focused on redundancy, not correctness. You are not
 looking for bugs. You are looking for tests that pay rent in CI minutes and
 return nothing.
 
 GOAL: Find near-duplicate tests that assert the same behaviour on the same branch.
 
-SCOPE: the argument you were given — a module name (`orders`), a path, or `--diff` for modules touched by
-the working tree. If empty, use `git status --porcelain` to pick the scope.
+SCOPE: the argument you were given: a module name (`orders`), a path, `--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5).
+Empty means `whole-repo`.
 
 ## Naming the scope
 
-Output is `tmp/reports/audit/suite-bloat/<SCOPE>.md`, where `<SCOPE>` is:
-
-- a module → the module name (`orders`)
-- a path → the path slugged, `src/` dropped (`src/infrastructure/http` →
-  `infrastructure-http`)
-- `--diff` → the current branch name slugged (`git branch --show-current`)
+Output goes to `tmp/reports/audit-<run>/suite-bloat/<SCOPE>…`. `<run>` and `<SCOPE>` (module, path slug,
+`--diff` branch slug, `whole-repo`) are defined in RULES.md rule 4.
 
 ## Steps
 
@@ -29,13 +28,15 @@ Two tests belong to the same group when they exercise the same branch with
 inputs that are equivalent under the code's own partitioning — not when their
 titles look similar. Use the evidence, in this order:
 
-- `tmp/reports/mutation/mutation.json` and `tmp/reports/stryker-incremental.json` — which
+- `tmp/reports/mutation/mutation.json` — which
   mutants each test kills is the ground truth for "what does this test discriminate"
 - `tmp/reports/test-report.json` — per-test duration, for the cost ranking
 - Stryker stops at the first test that kills a mutant, so every `killedBy` list in a regular report
   holds ONE test and "killed uniquely" cannot be read off it. For an audit run, scope Stryker to the
   files under audit and pass `--disableBail`, so every killing test is recorded. The regular runs
-  stay as fast as they are. https://stryker-mutator.io/docs/stryker-js/configuration/#disablebail-boolean
+  stay as fast as they are. That run writes outside the report folder, so ask first (RULES.md
+  rule 2). At `whole-repo` it is a full mutation run: on "no", use the existing mutation report,
+  mark "killed uniquely" UNVERIFIED, and offer per-module runs. https://stryker-mutator.io/docs/stryker-js/configuration/#disablebail-boolean
 
 ### 2 — find the passengers
 
@@ -49,6 +50,10 @@ Distinguish two kinds and say which:
 - **cheap insurance** — kills nothing extra today but pins a documented rule or a
   regression that already bit once. Keep it, and say why.
 
+Stryker does not run the contract, fuzz or journey suites. A duplicate where both sides sit in a
+skipped suite gets the verdict **by construction**, never "unverified": same route or branch, same
+input partition, subset assertions, each cited.
+
 ### 3 — rank by CI cost
 
 Order by what removal actually saves: DB and container setup first, then heavy
@@ -57,7 +62,7 @@ ones.
 
 ## Output
 
-Write `tmp/reports/audit/suite-bloat/<SCOPE>.md`:
+Write `tmp/reports/audit-<run>/suite-bloat/<SCOPE>.md`:
 
 | test name | file | duplicate of | mutants killed uniquely | cost | safe to remove | reason |
 
@@ -66,13 +71,12 @@ they represent.
 
 Rules:
 
-- Do NOT delete anything. Do NOT edit test files. This is a report.
 - Never call a test redundant on title similarity alone — cite the mutation or
   coverage evidence for every row.
 - If `tmp/reports/mutation/mutation.json` is missing or older than the code under
   audit, say so at the top of the report and downgrade every verdict to
   "unverified". A guess here deletes real coverage.
-- A test whose only job is to pin a rule the contract states is never bloat, even
-  at zero unique mutants. Redundancy is measured against other TESTS, not against
-  the value of the rule.
+- A rule the contract states is never bloat while this test is its only owner. When an app-wide
+  sweep pins the same rule on the same route with an equal or stronger assertion, the per-route copy
+  is redundant unless it checks more than the status (`docs/tools/contract-testing.md`).
 - `tmp/reports/` is gitignored. These files are working evidence, not deliverables.

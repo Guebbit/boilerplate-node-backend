@@ -3,24 +3,23 @@ name: ddd-drift
 description: Audit whether the DDD the docs describe still matches the code — who drives whose state, named questions vs read tables, domain placement, subdomain depth, stale counts
 ---
 
+Before anything else, read `scripts/audit/RULES.md` and follow it. Where this skill and RULES.md
+disagree, RULES.md wins.
+
 ROLE: Context-map reviewer. Lint already holds the walls between modules. You judge what lint
 cannot see: who drives whose state, where a rule lives, and whether the pages still describe the code.
 
 GOAL: Find where the code and the DDD pages have drifted apart, and say which side is wrong. This
 audit only reports. It never edits code, tests or documentation.
 
-SCOPE: the argument you were given — a module name (`orders`), a path, or `--diff` for the branch's
-changes. If empty, the scope is the whole repo (`all`). Drift is relational and is rarely introduced
-by the change that reveals it, so `--diff` is a starting point, not a boundary.
+SCOPE: the argument you were given: a module name (`orders`), a path, `--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5).
+Empty means `whole-repo`. Drift is relational and is rarely introduced by the change that reveals it,
+so `--diff` is a starting point, not a boundary: widen it as the steps below say, and say so in the report.
 
 ## Naming the scope
 
-Output is `tmp/reports/audit/ddd-drift/<SCOPE>.md`, where `<SCOPE>` is:
-
-- a module → the module name (`orders`)
-- a path → the path slugged, `src/` dropped (`src/infrastructure/http` → `infrastructure-http`)
-- `--diff` → the current branch name slugged (`git branch --show-current`)
-- empty → `all`
+Output goes to `tmp/reports/audit-<run>/ddd-drift/<SCOPE>…`. `<run>` and `<SCOPE>` (module, path slug,
+`--diff` branch slug, `whole-repo`) are defined in RULES.md rule 4.
 
 ## What this audit is not
 
@@ -72,6 +71,25 @@ modelling a module earns, the complexity of its logic picks the pattern, and a p
 
 Read `docs/theory/{strategic-ddd,tactical-ddd,domain-layer,modules,module-lifecycle}.md`, the
 in-scope `docs/modules/<module>.md`, the `module.ts` docblocks and the `module.yaml` comments.
+**A `whole-repo` run.** The module pages do not fit one reader. Before you read a page, name the
+slices at the top of `whole-repo.claims.md`: clusters of related modules (sub-pages go with their
+module; `docs/modules/index.md` is read with the theory pages), sized so one reader finishes a slice
+in one sitting. Read the theory pages once, yourself.
+
+- Pass 1, per slice: a fresh read-only helper reads that slice's `docs/modules/*.md`, `module.ts`
+  docblocks and `module.yaml` comments with the code closed, and returns claim rows. Take only claims
+  a drift class can judge: who owns or writes what, who calls whose door, `dependsOn` edges,
+  lifecycle states and edges, friend members, what sits in `domain/`, and any count, list, "only" or
+  "never" about those. Skip routes, fields, configuration, libraries and permissions: other audits
+  own them. Write each reply word for word under the slice's heading; a section is frozen once
+  written. Helpers write nothing.
+- Checking the claims (`code says | match`) may also go to one helper per slice; write its rows word
+  for word into the report's claims table. The D2–D8 and C1 searches stay whole-repo.
+- Solo (no helpers): write every slice's claims before step 2 opens any code. A slice you cannot
+  read stays unread: name it in the header; the run is PARTIAL. A page first opened after code,
+  because a candidate led there, is read for that candidate only; its rows go under a closing
+  `## Read after code` heading, never into a frozen slice.
+
 Write one row per checkable claim: a count, a list, an example, an "only", a "never" — and turn `tactical-ddd.md` §2 into one claim row per `*Actions` schema. Freeze the
 table before you open any code, so the code cannot talk you into the doc's version.
 
@@ -79,10 +97,10 @@ table before you open any code, so the code cannot talk you into the doc's versi
 
 ```bash
 # D1 — counts and "only" claims in prose
-rg -n "\b(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|[0-9]+) (modules|callers|reasons|states|edges|functions)\b|\bthe only\b|\bonly \`" docs/theory docs/modules src/modules/*/module.ts .dependency-cruiser.cjs scripts/docs
+rg -n "\b(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|[0-9]+) (modules|callers|reasons|states|edges|functions|places|transitions|counters|events|members|doors|moves)\b|\bthe only\b|\bthe one\b|\bonly \`" docs/theory docs/modules src/modules/*/module.ts .dependency-cruiser.cjs scripts/docs
 
 # D2 — owners that publish a transition table, then who outside them reads it
-rg -ln "_EVENTS|canTransition" src/modules/*/domain
+rg -ln "_EVENTS|_STATUSES|_FROM\b|canTransition|defineLifecycle" src/modules/*/domain
 rg -n "<TABLE>|<Status>\.\w+" src/modules --glob '!src/modules/<owner>/**' --glob '!**/tests/**'
 
 # D3 — per dependsOn edge, which sibling writes are called
@@ -90,21 +108,28 @@ rg -n "<sibling>Service\.\w+\(" src/modules/<module>
 
 # D4 and D5 — domain files, and import-pure files outside domain/
 rg --files -g 'domain.ts' src/modules
+rg -n "pure" src/modules/*/services     # judge each hit: a pure function inside an impure file
 
 # D6 and D8 — a ranking only, never a finding by itself
 rg -n "^subdomain:" src/modules/*/module.yaml
-wc -l src/modules/*/services/*.ts src/modules/*/domain/*.ts
+rg --files src/modules -g '**/services/**' -g '**/domain/**' -g '!**/tests/**' | xargs wc -l
 
 # C1 — doors that refuse on state, against the *Actions schemas
-rg -n "^\s+\w+Actions:" src/modules/*/openapi.yaml
+rg -n "^\s+\w+Actions:" src/modules/*/openapi.yaml shared/contracts/*.yaml
 rg -n "409|_NOT_[A-Z]+|_IN_PROGRESS|forced" src/modules/*/openapi.yaml
 
-# D7 — friend lists as they grew, and each users barrel door against its callers
-git log -p -- eslint.config.ts | rg -n "members:|friends:"
+# D7 — read every friend file: src/modules/*/friends/*.ts
+rg --files src/modules -g '**/friends/*.ts'
 ```
 
-For D5, an import-pure file is one that imports only `@types`, `@domain-primitives` and `../domain`.
+For D5, an import-pure file is one that imports only `@types`, `@domain-primitives`, `../domain`,
+and `import type … from '@api/*'`.
 Skip events, audit, analytics, config and token-type files.
+
+For D7, read each friend file: it is fine when its header says why that module is the friend.
+Flag a friend file with no why; a function in a friend file its friend never calls; an account-only
+function (no checks, trusts the caller) left in the published object; an `account` production file
+importing `userService` (lint should refuse it).
 
 For D3, take the owner's own sentence ("only `orders` writes the hold") as the claim and check every
 sibling that touches that state against it, including the documented exceptions.
@@ -122,27 +147,28 @@ correctly outgrew is a doc fix, not a code fix. The smallest fix is prose, never
 
 ## Self-check
 
-A `full` run on commit `3ff7b1587`, before the flags below landed, reports C1 for: `OrderActions`
-(delete, hardDelete), `FulfillmentOrderActions` (forceShip), `ShipmentActions` (forceDeliver, which
-the frontend instead derives from `deliver` plus `override:Order`) and `WebhookDelivery` (replay,
-which the frontend stops disabling by status). After `OrderActions.delete`/`hardDelete` and
-`FulfillmentOrderActions.forceShip` landed, only the last two remain, as DELIBERATE: the flag would
-repeat an answer an existing flag or key already gives. If a run finds none of them, it was too loose.
+A `whole-repo` run on commit `20ac75dd5` reports at least: C1 Product restore / hardDelete (as drift or
+DELIBERATE, per §2), D2 `delivery/services/progress.ts` `settleOrder`, D8 the reopen branch written
+twice (`lost.ts`, `reship.ts`), D1 `docs/theory/modules.md` payments → inventory. Calibrate by running
+on that commit (a worktree), not on main: later commits fix these. If a run finds none of them, it
+was too loose.
 
 ## Output
 
-`tmp/reports/audit/ddd-drift/<SCOPE>.md`, in this order:
+`tmp/reports/audit-<run>/ddd-drift/<SCOPE>.md`, in this order:
 
 - **Claims table** — `| claim (file:line) | code says (file:line) | match |`
 - **Findings** — `| class | where | rule broken (doc file:line) | drift / DELIBERATE / NOT-TRACED | wrong side | severity | smallest fix |`
-- HIGH first, then one line of totals: claims checked, drift, DELIBERATE, NOT-TRACED.
+- HIGH first, then one line of totals: claims checked, drift, DELIBERATE, NOT-TRACED. At `whole-repo`
+  it names the slices read and unread, and says page claims outside the DDD kinds were not taken.
+  `whole-repo.claims.md` holds the frozen claims of a `whole-repo` run.
 
 Then print the HIGH and MED rows to the terminal. A low drift-to-candidate ratio is good news, and
 worth saying.
 
 ## Rules
 
-- **Report only.** Write nothing but the report under `tmp/reports/audit/ddd-drift/`. Do NOT edit
+- **Report only.** Write nothing but the report under `tmp/reports/audit-<run>/ddd-drift/`. Do NOT edit
   source, tests, documentation, contracts or config. Do NOT commit, and never `git stash` — it
   takes every peer's uncommitted work with it.
 - Every row cites the code and the doc, each by `file:line`. A row with one side missing is not a finding.
