@@ -37,13 +37,6 @@ import { emailChangeNext, emailChangeStateOf, undoRestoresPreviousEmail } from '
 import { recordAccountAudit, withOwnAccount } from './caller';
 
 /**
- * How long a verification link works, shared by both token kinds. Tunable because the safe
- * direction is SHORTER, and how long an unclaimed mailbox stays trustworthy is a deployment's
- * call, not this file's.
- */
-const emailVerifyTokenTtlMs = (): number => accountConfig().NODE_EMAIL_VERIFY_TTL_MS;
-
-/**
  * Seconds between two verification emails for one account — what the client counts down before
  * re-enabling its Resend button. Longer than the 2FA code's 30 s: that one is a six-digit code
  * someone is typing right now, this one is a link that stays good for `NODE_EMAIL_VERIFY_TTL_MS`.
@@ -85,7 +78,10 @@ export const sendVerificationEmail = (
     if (!address) return Promise.resolve();
 
     // Issuing replaces the kind's one live link atomically, so "the newest email is the one that works".
-    return issueToken(user.id, type, emailVerifyTokenTtlMs()).then((token) => {
+    // How long a verification link works, shared by both token kinds. Tunable because the safe
+    // direction is SHORTER, and how long an unclaimed mailbox stays trustworthy is a deployment's
+    // call, not this file's.
+    return issueToken(user.id, type, accountConfig().NODE_EMAIL_VERIFY_TTL_MS).then((token) => {
         /*
          * The recipient's OWN language, exactly as the reset and delete emails choose
          * theirs: the copy is finished before the job is published, so the worker needs no

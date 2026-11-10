@@ -136,12 +136,6 @@ export const outboxEventModel = model<OutboxEventDocument, OutboxEventModel>(
     outboxEventSchema
 );
 
-/** Failed dispatches before a row is parked as `dead`. */
-const outboxMaxAttempts = (): number => outboxConfig().NODE_OUTBOX_MAX_ATTEMPTS;
-
-/** Seconds a relay's claim on a row lasts. Must outlast one dispatch, or a slow one is duplicated. */
-const outboxLeaseSeconds = (): number => outboxConfig().NODE_OUTBOX_LEASE_SECONDS;
-
 /**
  * Wait before the next dispatch after `failedAttempts` failures: 5s, 10s, 20s ... capped at 1h.
  * No jitter: the rows are claimed one aggregate at a time, so there is no herd to spread.
@@ -235,7 +229,10 @@ const claim = (row: OutboxRow): Promise<{ token: string; attempts: number } | nu
             },
             {
                 $set: {
-                    lockedUntil: new Date(now.getTime() + outboxLeaseSeconds() * 1000),
+                    // The lease must outlast one dispatch, or a slow one is duplicated.
+                    lockedUntil: new Date(
+                        now.getTime() + outboxConfig().NODE_OUTBOX_LEASE_SECONDS * 1000
+                    ),
                     leaseToken: token
                 }
             },
@@ -308,7 +305,7 @@ const markFailed = (
 ): Promise<'retried' | 'dead' | 'skipped'> => {
     // The token fences every other writer, so the attempts read at claim are still the stored ones.
     const attempts = claimed.attempts + 1;
-    const isDead = attempts >= outboxMaxAttempts();
+    const isDead = attempts >= outboxConfig().NODE_OUTBOX_MAX_ATTEMPTS;
     const lastError = `${row.name}: ${reason} (attempt ${String(attempts)})`;
     return outboxEventModel
         .updateOne(

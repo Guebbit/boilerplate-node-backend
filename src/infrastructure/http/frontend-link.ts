@@ -21,13 +21,6 @@ import { frontendLinksSchema } from '../config/shared-rules/frontend-links';
 export const FRONTEND_LINK_RULES = loadSharedRules('frontend-links', frontendLinksSchema);
 
 /**
- * The paired frontend's own origin. Same fallback as `account/oauth/config.ts`'s
- * `oauthFrontendCallbackBase` — both read `NODE_FRONTEND_URL` lazily, so a test can set it after
- * import, and both fall back to the frontend's own local dev port rather than the backend's.
- */
-const frontendOrigin = (): string => siteConfig().NODE_FRONTEND_URL;
-
-/**
  * `locale`, or the deployment's default when it names a language the shop does not serve — unknown,
  * or switched off since the recipient saved it. A link into such a locale segment is a 404 (or a
  * redirect) on the frontend's own router, not a working page in an unexpected language.
@@ -67,4 +60,8 @@ export const frontendLink = (
     template: string,
     locale: string,
     parameters: Record<string, string> = {}
-): string => `${frontendOrigin()}/${supportedLocale(locale)}/${fillPath(template, parameters)}`;
+): string =>
+    // The origin is the paired frontend's own, with the same fallback as `account/oauth/config.ts`'s
+    // `oauthFrontendCallbackBase`: read lazily so a test can set it after import, falling back to
+    // the frontend's own local dev port rather than the backend's.
+    `${siteConfig().NODE_FRONTEND_URL}/${supportedLocale(locale)}/${fillPath(template, parameters)}`;

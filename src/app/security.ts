@@ -29,13 +29,6 @@ import { appConfig } from './config';
 import { enabledModules, servedModuleNames } from '../modules';
 
 /**
- * `express.json()`'s own default (`100kb`) is already a bound, but an
- * implicit one nobody reading this file would find. Explicit and
- * configurable, same shape as `NODE_MAX_UPLOAD_BYTES` for multipart bodies.
- */
-const jsonBodyLimit = (): string => appConfig().NODE_JSON_BODY_LIMIT;
-
-/**
  * Every path whose body must survive parsing verbatim, composed from each module's own declaration.
  *
  * Built once at import: the list is fixed by the module registry, and rebuilding it per request
@@ -251,7 +244,10 @@ export const installRequestParsing = (app: Express): void => {
      * unconditional copy of every body the API receives.
      */
     const jsonParser = express.json({
-        limit: jsonBodyLimit(),
+        // `express.json()`'s own default (`100kb`) is already a bound, but an implicit one nobody
+        // reading this file would find. Explicit and configurable, same shape as
+        // `NODE_MAX_UPLOAD_BYTES` for multipart bodies.
+        limit: appConfig().NODE_JSON_BODY_LIMIT,
         // Any JSON value parses (RFC 8259 §2); the shape is judged by `requireJsonObjectBody` below,
         // so a scalar or `null` body is a 422 like any other wrong shape, never the parser's 400.
         strict: false,
