@@ -270,7 +270,7 @@ copies of the tests, which jest would otherwise discover and run as if they were
 
 The `contract-bundles.test.ts` entry is excluded because it asserts the contract generators: each case builds a
 contract document in memory from its sources and checks the result. It exercises `scripts/` and the contract
-sources, neither of which is in `mutate`, so excluding it costs nothing.
+sources.
 
 **The unit layer's cost depends on a naming rule, and that is the fragile part.** A file under
 `src/modules/*/tests/unit/` that calls `setupTestDb()` starts a real `mongod` and connects mongoose

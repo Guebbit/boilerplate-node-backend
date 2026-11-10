@@ -210,9 +210,10 @@ windows are not repeated here — they live in the [processing register](#proces
 | Variable                                                                          | What it governs                                                                                  |
 | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | **`NODE_TOKEN_ACCESS`**, **`NODE_TOKEN_REFRESH`**, `NODE_TOKEN_ROTATION_GRACE_MS` | Token signing secrets and the rotation grace: [account sessions](../modules/account-sessions.md) |
-| `NODE_REAUTH_TIME_CRITICAL`, `NODE_REAUTH_TIME_SENSITIVE`                         | Step-up freshness windows: [account sessions](../modules/account-sessions.md)                    |
+| `NODE_REAUTH_TIME_CRITICAL`, `NODE_REAUTH_TIME_SENSITIVE`                         | Step-up freshness windows: [sessions](./sessions.md#asking-for-the-password-again)               |
 | `NODE_LOG_PERSONAL_FIELDS`                                                        | How personal fields enter the logs: [winston](../tools/winston.md)                               |
-| `NODE_ACCOUNT_DELETION_GRACE_DAYS`, `NODE_ERASURE_LEDGER_RETENTION_DAYS`          | Deletion grace and erasure-ledger retention: [data retention](./data-retention.md)               |
+| `NODE_ACCOUNT_DELETION_GRACE_DAYS`                                                | Deletion grace: [data retention](./data-retention.md#self-deletion-a-grace-under-one-month)      |
+| `NODE_ERASURE_LEDGER_RETENTION_DAYS`                                              | Erasure-ledger retention: [backups](../tools/backups.md#erasures-after-a-restore)                |
 | **`NODE_ANALYTICS_REQUIRE_CONSENT`**                                              | Whether analytics capture waits for consent: [analytics](../tools/analytics.md)                  |
 
 ## What this page is not
