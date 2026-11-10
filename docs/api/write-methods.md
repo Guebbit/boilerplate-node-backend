@@ -104,8 +104,8 @@ side in [`tactical-ddd.md`](../theory/tactical-ddd.md#action-endpoints-execute-u
 
 ### A line is written through its parent
 
-A **line** is a part of a per-user parent with no life of its own: a cart line, a saved product, a
-back-in-stock request, an OAuth link, a webhook subscription's secret. It is written through the
+A **line** is a part of a parent with no life of its own: a cart line, a saved product, a
+back-in-stock request, an OAuth link, a task's note, a webhook subscription's secret. It is written through the
 parent. It has no read of its own: where a line has a URL, that URL only adds, changes or removes
 the line.
 
@@ -115,6 +115,8 @@ the line.
 | the wishlist              | `/wishlist/items`       | `POST /wishlist/items {productId}`   | none (a line is a yes/no)           | `DELETE /wishlist/items/{productId}`              |
 | the stock-alert list      | `/stock-alerts` itself  | `POST /stock-alerts {productId}`     | none                                | `DELETE /stock-alerts/{productId}`                |
 | the caller's OAuth links  | `/account/oauth/links`  | `POST /account/oauth/links/{provider}` (a redirect flow) | none         | `DELETE /account/oauth/links/{provider}`          |
+| a task's staff thread     | `/tasks/{id}/notes`     | `POST /tasks/{id}/notes {body}`      | none (append-only)                  | none (append-only)                                |
+| a webhook subscription's secret ring | `/webhooks/subscriptions/{id}/secrets` | `POST …/secrets` | none                  | `DELETE …/secrets/{secretId}`                     |
 
 - The collection is `/items` when the parent holds one kind of line, the line's own noun when it
   has one (`/secrets`, `/links`), and the parent itself when it is nothing but the list.
@@ -123,7 +125,8 @@ the line.
 - **A PUT never creates**, and a PATCH on a line the parent does not hold is a 404.
 - A repeat is not an error for an add: adding what is saved is the same 200 and fires nothing
   twice. A cart add GROWS an existing line instead (Shopify, commercetools). Removing a line the
-  parent does not hold is a 404.
+  parent does not hold is a 404. An append-only line (a note) has no identity to repeat on: each
+  add appends one, and a retry is made safe by `Idempotency-Key` alone.
 - Names: a line add is `create*` (`add*` for a cart line, which may grow instead), its removal
   `delete*` or `remove*`, its change `update*`.
 
@@ -173,13 +176,9 @@ allowed", with 409 where Google says 400).
   audit nothing.
 - `POST /tasks/{id}/unassign` on a task nobody holds: `TASK_NOT_ASSIGNED`; `POST …/assign` to the
   person who holds it already: `TASK_ALREADY_ASSIGNED`. Both write, announce and audit nothing.
-- A retried `DELETE` leaves the same state (RFC 9110 §9.2.2). It is never this refusal. What it
-  answers with nothing left to remove: 404 when the URI names one thing that no longer answers a
-  GET (a row, a line, a session, a link, a withdrawn note), as Google's
-  [AIP-135](https://google.aip.dev/135) does. The same success when the thing still answers a GET
-  in its deleted state (a soft delete, a revoked key), or when the URI names a collection or a
-  pending request (`DELETE /cart/items`, `/notifications`, `/account/email-change`). The line
-  rule's repeat 200 is for adds only: removing a line not held is a 404.
+- A retried `DELETE` is never this refusal: what it answers with nothing left to remove is
+  [DELETE — remove](#delete-remove). The line rule's repeat 200 is for adds only: removing a line
+  not held is a 404.
 - The caller's `actions` flag for the move is `false` in that state, so a screen never offers it.
 - Every 409 names a code, and the code is listed in a contract fragment's `x-error-codes`: a bare
   message cannot be told from its neighbour by a client. `tests/cross-cutting/api-standards.test.ts`
@@ -191,8 +190,8 @@ allowed", with 409 where Google says 400).
 `<RESOURCE>_ALREADY_<STATE>` (`WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED`) and a plain message. Not
 200, because an action may carry an effect a repeat must not re-run (enabling resets the failure
 streak). Not 400, which Google's [AIP-216](https://google.aip.dev/216) uses: the lifecycle rule is
-"a refusal that depends on the current state is 409 + code" (RFC 9110 §15.5.10). A `DELETE` stays
-idempotent (RFC 9110 §9.2.2): deleting what is gone is not an action's refusal.
+"a refusal that depends on the current state is 409 + code" (RFC 9110 §15.5.10). A `DELETE` is
+not this refusal: see [DELETE — remove](#delete-remove).
 
 ### An item write has an item read
 
@@ -305,6 +304,37 @@ Sent as `application/merge-patch+json` (RFC 7396's own media type) or plain `app
 (what GitHub accepts). Both are declared in the contract on every PATCH; the frontend calls the
 JSON one.
 
+## DELETE — remove
+
+A `DELETE` has no body; one is refused with 415 (see [Content-Type: 415](#content-type-415)).
+Success is 204; 200 when the answer is the parent (a line) or the list left; 202 when the removal
+is scheduled (`DELETE /account`).
+
+Sent again, it writes nothing and sends no second domain event, mail or audit row (RFC 9110
+§9.2.2). An analytics hit or a stream refresh may repeat. What it answers with nothing left to
+remove follows what the URI names now:
+
+| The URI names... | Sent again, it answers | Example |
+| --- | --- | --- |
+| one thing that no longer answers a GET | 404 | a row, a line, a session, a link, a withdrawn order note |
+| one thing that still answers a GET, marked deleted or revoked, for the caller allowed to delete it | the same success | a soft-deleted product, user or order; a revoked API key |
+| a collection or a pending request | the same success, even when empty | `DELETE /cart/items`, `/notifications`, `/account/email-change` |
+
+A row kept with its content withdrawn but with no GET of its own (an order note) is gone: 404.
+
+A `DELETE` is never the "already done" 409 of an action (see
+[Repeating an action](#repeating-an-action-409)). A 409 on a `DELETE` is a guard
+(`ORDER_NOT_CANCELED`, `LOCALE_LANGUAGE_IS_FALLBACK`).
+
+Why: RFC 9110 §15.5.5 says 404 means the target has no current representation. §13.1.1 allows a
+2xx when the change was already applied to a representation that still exists, as after a lost
+response, and the RFC ranks above Google's AIP-164, which answers NOT_FOUND for a repeated soft
+delete (as does Solidus). The no-op success was chosen deliberately: a double-click is not an
+error. GitHub answers 204 for remove-all-labels and 404 for one label that is missing; Shopify's
+Ajax cart clear returns the empty cart. See
+[`collection-delete`](../theory/api-standards.md#where-we-differ-and-why) for the collection form
+against Google's AIP.
+
 ## Content-Type: 415
 
 The JSON body parser handles only the types it is told to, so a body in any other type would arrive as
@@ -415,7 +445,7 @@ A create body declares no `'null'` type — there is nothing to clear yet, so `n
 An action endpoint (`POST …/activate`) whose target state is already reached is refused, not
 answered with a silent 200: **409** with `<RESOURCE>_ALREADY_<STATE>` and a plain message, as
 Google AIP-216 asks for a state that cannot be moved to, kept at 409 because RFC 9110 §15.5.10
-defines it as a conflict with the current state. `DELETE` stays idempotent (RFC 9110 §9.2.2).
+defines it as a conflict with the current state. `DELETE` stays idempotent: [DELETE — remove](#delete-remove).
 
 The app-wide ones (400, 413, 415, 429, 500, 503) come from `x-app-level-responses` — see
 [Regenerating](./regenerating.md).
