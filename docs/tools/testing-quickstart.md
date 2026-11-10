@@ -17,20 +17,22 @@ know _which domain_, the third line is the one.
 
 ## Every command, and when to reach for it
 
-| Command                            | Answers                                                           | Time      | Gate?                |
-| ---------------------------------- | ----------------------------------------------------------------- | --------- | -------------------- |
-| `npx jest --runInBand <path>`      | Did I break the module I'm editing?                               | seconds   | —                    |
-| `test:unit`                        | Did I break a unit anywhere?                                      | ~15s      | ✅                   |
-| `test:cross-cutting`               | Do the architectural rules still hold?                            | ~4s       | ✅                   |
-| `test:integration`                 | Does it work against a real (in-memory) Mongo?                    | ~14s      | ✅                   |
-| `test:contract`                    | Does the API match `openapi.yaml`, including what it must reject? | ~50s      | ✅                   |
-| `test:fuzz`                        | Do the rules hold for inputs nobody thought of?                   | ~32s      | ✅                   |
-| `test:unit:report` + `test:report` | Which module owns the failure, and where did the time go?         | +1s       | ✅ (prints in CI)    |
-| `test:prism`                       | Does the spec's own example server answer?                        | ~5s       | ❌ `complete:manual` |
-| `mutation`                         | Do the tests **notice** when the source is wrong?                 | minutes   | ❌ every PR (diff)   |
-| `bench [path]`                     | How fast is one endpoint?                                         | 30s each  | ❌ by hand           |
-| `bench:k6 [browse\|checkout]`      | Does it hold up under ramping load, with a verdict?               | ~70s each | ❌ by hand           |
-| `complete`                         | All of the gate, in CI's order                                    | ~10 min   | —                    |
+| Command                            | Answers                                                                                               | Time      | Gate?                |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------- | --------- | -------------------- |
+| `npx jest --runInBand <path>`      | Did I break the module I'm editing?                                                                   | seconds   | —                    |
+| `test:unit`                        | Did I break a unit anywhere?                                                                          | ~15s      | ✅                   |
+| `test:cross-cutting`               | Do the architectural rules still hold?                                                                | ~4s       | ✅                   |
+| `test:integration`                 | Does it work against a real (in-memory) Mongo?                                                        | ~14s      | ✅                   |
+| `test:contract`                    | Does the API match `openapi.yaml`, including what it must reject?                                     | ~50s      | ✅                   |
+| `test:contract:cookie`             | The same suite with `NODE_SESSION_MODE=cookie` (CI runs both)                                         | ~50s      | ✅                   |
+| `test:journeys:cookie`             | The journeys under `tests/integration/journeys/` in cookie mode (jwt mode runs in `test:integration`) | ~10s      | ✅                   |
+| `test:fuzz`                        | Do the rules hold for inputs nobody thought of?                                                       | ~32s      | ✅                   |
+| `test:unit:report` + `test:report` | Which module owns the failure, and where did the time go?                                             | +1s       | ✅ (prints in CI)    |
+| `test:prism`                       | Does the spec's own example server answer?                                                            | ~5s       | ❌ `complete:manual` |
+| `mutation`                         | Do the tests **notice** when the source is wrong?                                                     | minutes   | ❌ every PR (diff)   |
+| `bench [path]`                     | How fast is one endpoint?                                                                             | 30s each  | ❌ by hand           |
+| `bench:k6 [browse\|checkout]`      | Does it hold up under ramping load, with a verdict?                                                   | ~70s each | ❌ by hand           |
+| `complete`                         | All of the gate, in CI's order                                                                        | ~10 min   | —                    |
 
 ## Running one thing
 

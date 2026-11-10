@@ -153,13 +153,14 @@ stops touching card data. The service and the contract's shape stay as they are;
 decides what the application does next, so an adapter throws a definite code only when the provider
 answered about THIS refund.
 
-| The provider said                                                                  | Throw                                                         | Then                                                 |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------- |
-| A 4xx on the create, or a refund object `failed`/`canceled`, naming a card problem | `declined`, `expired_or_canceled_card`, `lost_or_stolen_card` | final: never retried, the shop pays back another way |
-| A refund `failed` because the shop's balance is short                              | `insufficient_funds`                                          | retried with a growing delay; money did not move     |
-| Stripe's own `failure_reason: unknown` (a definite answer)                         | `declined` (not `unknown`, which means unclear here)          | final                                                |
-| A network error, a timeout, a 5xx, a 429, Adyen `transient-error`                  | `provider_unavailable`                                        | retried; never offered for hand settlement           |
-| Anything else                                                                      | `unknown`, or throw any other error                           | retried; never offered for hand settlement           |
+| The provider said                                                                  | Throw                                                         | Then                                                                                 |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| A 4xx on the create, or a refund object `failed`/`canceled`, naming a card problem | `declined`, `expired_or_canceled_card`, `lost_or_stolen_card` | final: never retried, the shop pays back another way                                 |
+| A refund `failed` because the shop's balance is short                              | `insufficient_funds`                                          | retried with a growing delay; money did not move                                     |
+| Stripe's own `failure_reason: unknown` (a definite answer)                         | `declined` (not `unknown`, which means unclear here)          | final                                                                                |
+| A network error, a timeout, a 5xx, a 429, Adyen `transient-error`                  | `provider_unavailable`                                        | retried; never offered for hand settlement                                           |
+| A dispute blocks it (Stripe `charge_disputed`, `refund_disputed_payment`)          | `disputed`                                                    | final; never settled by hand while the chargeback is open, see [Disputes](#disputes) |
+| Anything else                                                                      | `unknown`, or throw any other error                           | retried; never offered for hand settlement                                           |
 
 The two retried-and-unclear codes are never offered for hand settlement because the refund may have
 gone through: the sweep resends under the same key, and a timeout then gets the real answer.

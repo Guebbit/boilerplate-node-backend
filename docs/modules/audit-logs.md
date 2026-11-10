@@ -178,17 +178,7 @@ everything:
 The caller snapshots "before" ahead of any in-place assignment. Where the write is atomic and
 returns no previous value (the backorder limit), it reads first.
 
-| Action                                       | By value                                                 | By name                                |
-| -------------------------------------------- | -------------------------------------------------------- | -------------------------------------- |
-| `admin.product.updated`                      | prices, VAT, flags, weight, SKU, categories, tags, dates | title, description, image              |
-| `admin.webhook_subscription.updated`         | event filter                                             | url, description                       |
-| `admin.user.updated`, `auth.profile.updated` | locale, analytics consent                                | username, email, phone, website, image |
-| `order.updated`                              |                                                          | email                                  |
-| `admin.task.status_updated`                  | status                                                   | admin notes                            |
-| `admin.locale.updated`                       | name, native name, direction, active                     |                                        |
-| `admin.locale_entry.updated`                 |                                                          | value (`entryKey` rides along)         |
-| `admin.backorder.limit.set`                  | backorder limit                                          |                                        |
-| `example.updated`                            |                                                          | title, body                            |
+Which fields of which action go in which column is the `valued` / `named` argument at each call site; the list of audited actions is generated in [the logging page](../tools/winston.md). The policy is the table above: a non-personal field by value, free text, personal data and bearer secrets by name, everything else not at all.
 
 `admin.translation.updated` already lists the locales it upserted and deleted; the text itself is
 free text and stays out.

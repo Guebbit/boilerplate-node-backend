@@ -17,7 +17,7 @@ form this API applies them, and the few places it deliberately does something el
 | Means | create in a collection, or run an action | replace the whole resource | change part of it |
 | Target | `/products` · `/orders/{id}/cancel` | `/products/{id}` | `/products/{id}` |
 | Body | the new resource, or the action's input | the **full** new representation | only what changes |
-| An omitted field | the server's default | **cleared** (see [PUT](#put-replace)) | left alone |
+| An omitted field | the server's default | **cleared** (see [PUT](#put-—-replace)) | left alone |
 | `null` | 422 — nothing to clear yet | clears | clears |
 | `''` | 422 wherever the field has `minLength: 1` | same | same |
 | Safe to repeat | no — send `Idempotency-Key` | yes (idempotent) | yes, in practice |
@@ -178,7 +178,7 @@ allowed", with 409 where Google says 400).
 - `POST /tasks/{id}/unassign` on a task nobody holds: `TASK_NOT_ASSIGNED`; `POST …/assign` to the
   person who holds it already: `TASK_ALREADY_ASSIGNED`. Both write, announce and audit nothing.
 - A retried `DELETE` is never this refusal: what it answers with nothing left to remove is
-  [DELETE — remove](#delete-remove). The line rule's repeat 200 is for adds only: removing a line
+  [DELETE — remove](#delete-—-remove). The line rule's repeat 200 is for adds only: removing a line
   not held is a 404.
 - The caller's `actions` flag for the move is `false` in that state, so a screen never offers it.
 - Every 409 names a code, and the code is listed in a contract fragment's `x-error-codes`: a bare
@@ -192,7 +192,7 @@ allowed", with 409 where Google says 400).
 200, because an action may carry an effect a repeat must not re-run (enabling resets the failure
 streak). Not 400, which Google's [AIP-216](https://google.aip.dev/216) uses: the lifecycle rule is
 "a refusal that depends on the current state is 409 + code" (RFC 9110 §15.5.10). A `DELETE` is
-not this refusal: see [DELETE — remove](#delete-remove).
+not this refusal: see [DELETE — remove](#delete-—-remove).
 
 ### An item write has an item read
 
@@ -474,7 +474,7 @@ A create body declares no `'null'` type — there is nothing to clear yet, so `n
 An action endpoint (`POST …/activate`) whose target state is already reached is refused, not
 answered with a silent 200: **409** with `<RESOURCE>_ALREADY_<STATE>` and a plain message, as
 Google AIP-216 asks for a state that cannot be moved to, kept at 409 because RFC 9110 §15.5.10
-defines it as a conflict with the current state. `DELETE` stays idempotent: [DELETE — remove](#delete-remove).
+defines it as a conflict with the current state. `DELETE` stays idempotent: [DELETE — remove](#delete-—-remove).
 
 The app-wide ones (400, 413, 415, 429, 500, 503) come from `x-app-level-responses` — see
 [Regenerating](./regenerating.md).
@@ -569,8 +569,10 @@ state change with its own 409, not an overwrite, so two callers naming different
 and the last write wins. It still moves the row's `editRevision`, so an edit holding an older tag is
 refused.
 
-Not versioned: a resource with no item read to take a tag from (tasks, an address inside its book)
-and anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declared.
+Not versioned: a resource with one owner or one field (an address in its book), no item read to take a
+tag from (the cart), or its own concurrency rule (cart lines, stock, a task's status doors). A `PUT` or
+`DELETE` with `If-Match` on one of those is simply not declared; the reasons are in
+[`unversioned-writes`](../theory/api-standards.md#where-we-differ-and-why).
 
 A language is addressed by its tag, so its `If-Match` is keyed by the tag (case-insensitive: `pt-br`
 is `pt-BR`), while the counter lives on its row. Switching it on or off moves the edit counter and
@@ -704,7 +706,7 @@ Three rules keep it honest. Break any one and a lost update gets through:
   `304` is never stale; the edit part is the only thing a write checks.
 - **The cached reads are a separate case.** Two families answer `If-None-Match` with `304` on no
   change, through Express's own ETag check: the `privateNoCache` reads (`orders`, `users`,
-  `tasks`, `payments`, `returns`, `stats`: a private copy the browser revalidates) and every
+  `tasks`, `payments`, `returns`, `stats`, `example`: a private copy the browser revalidates) and every
   `setCache` read (`locales`, `products` `/facets` and `/:id`: the shared copy, revalidated once
   `max-age` runs out or at once under `browserRevalidate`). Each such `GET` carries
   `x-cache` in its fragment, and the bundler declares the answer (the shared `NotModified`: no

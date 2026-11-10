@@ -271,12 +271,13 @@ repository's `save`/`deleteOne` are where it is met, so no module writes precond
 
 The update factory takes a required `versioned: boolean`. `true` is a resource whose contract
 declares `If-Match` and `412`; `false` ignores the header entirely, so a route never answers a
-`412` its contract does not declare (addresses, tasks, locales and webhooks).
+`412` its contract does not declare. The list is in
+[Which resources are versioned](../api/write-methods.md#which-resources-are-versioned).
 
 ```mermaid
 flowchart LR
     H["If-Match header"] --> W["withIfMatch(request, id)"] --> U["module's update(id, changes)"] --> R["repository.save"]
-    R -->|"tag matches the loaded row<br/>+ fenced on editRevision"| OK["200 + new ETag"]
+    R -->|"tag matches the loaded row<br/>+ fenced on editRevision"| OK["200 (a PATCH also answers the new ETag)"]
     R -->|"stale, or lost the race"| E["PreconditionFailedError → 412"]
 ```
 

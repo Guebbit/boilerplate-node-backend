@@ -368,7 +368,7 @@ The reminder is a task: a delay that the FTC rule covers (a shop in the United S
 territories, or a buyer shipped to one) opens a `consent_due` task for the staff who hold `OrderEditing`, due 30 days after the agreed date (or on
 the date the buyer last held), and shipping or cancelling closes it. The human rule above is
 unchanged. `promisedAt` on the fulfillment order is the date the buyer holds now; the rule is in
-[shop-tasks](shop-tasks.md#the-shops-to-dos).
+[shop-tasks](shop-tasks.md#the-shop-s-to-dos).
 
 ### The preorder board
 
@@ -684,16 +684,18 @@ is given back is the preorder allowance and not shelf units.
 Each act writes its rows to the order's [timeline](./orders.md#the-timeline) in its own transaction
 (`services/announce.ts`), beside the outbox event it already wrote.
 
-| Row                    | Written when                                                   | Carries                                                                    |
-| ---------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `shipment_shipped`     | a shipment is cut (also a digital fulfilment)                  | shipment and fulfillment order ids, `number`, `trackingCode`               |
-| `shipment_delivered`   | a shipment arrives                                             | the same ids                                                               |
-| `shipment_lost`        | staff report a shipment lost or damaged                        | the same ids, `reason` code; never the note or the message                 |
-| `fulfillment_held`     | staff hold one, or a preorder group is born on hold            | `reason` code; never the note (staff only)                                 |
-| `fulfillment_released` | staff, or an allocation of stock, release it (staff only)      | fulfillment order id                                                       |
-| `remainder_canceled`   | `returns` cancels what had not shipped                         | fulfillment order id                                                       |
-| `release_date_moved`   | a product's date moved and this order's expected date followed | fulfillment order id, `from` and `to` (shop days; an unset side is absent) |
-| `delay_notice_sent`    | the buyer was told: the date moved, or it will be missed       | fulfillment order id, `reason`, `expectedAt`                               |
+| Row                    | Written when                                                   |
+| ---------------------- | -------------------------------------------------------------- |
+| `shipment_shipped`     | a shipment is cut (also a digital fulfilment)                  |
+| `shipment_delivered`   | a shipment arrives                                             |
+| `shipment_lost`        | staff report a shipment lost or damaged                        |
+| `fulfillment_held`     | staff hold one, or a preorder group is born on hold            |
+| `fulfillment_released` | staff, or an allocation of stock, release it (staff only)      |
+| `remainder_canceled`   | `returns` cancels what had not shipped                         |
+| `release_date_moved`   | a product's date moved and this order's expected date followed |
+| `delay_notice_sent`    | the buyer was told: the date moved, or it will be missed       |
+
+What each row carries is its variant in `OrderTimeline*` of `src/modules/orders/openapi.yaml`; never the staff note or the buyer's message.
 
 A whole-order cancel writes no `remainder_canceled`: the order's own `canceled` row says it. The
 shipment row comes first, then the order's own move that it caused (`shipped`, `delivered`). A
@@ -707,19 +709,21 @@ date this order was expecting, not the product's previous date.
 
 ## Routes and events
 
-| Route                                                      | Key                                                | Answers                                                                                           |
-| ---------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `GET /delivery/methods`                                    | public                                             | the shipping methods and what each costs                                                          |
-| `GET /delivery/fulfillment-orders` · `/summary`            | `display:Order`                                    | [the preorder board](#the-preorder-board)'s two reads                                             |
-| `GET /delivery/fulfillment-orders/restock-date-impact`     | `update:Product` + `display:Order`                 | orders a restock-date move would email, before it is saved                                        |
-| `GET /orders/{id}/fulfillment-orders` · `/shipments`       | the owner, or staff                                | `{ items[] }` each, every item with its own `actions`; unpaged                                    |
-| `POST /orders/{id}/process`                                | `start:Shipment`                                   | the order, `processing`                                                                           |
-| `POST /delivery/fulfillment-orders/{id}/shipments`         | `update:Shipment`                                  | `201` + `Location` + the shipment; optional `Idempotency-Key` (a retry would cut a second parcel) |
-| `POST /delivery/fulfillment-orders/{id}/fulfill`           | `update:Shipment` (+ `start:Shipment` from `paid`) | `201` + `Location` like ship, the shipment delivered; same optional `Idempotency-Key`             |
-| `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | `update:Shipment`                                  | the fulfillment order                                                                             |
-| `PATCH /delivery/shipments/{id}`                           | `update:Shipment`                                  | the shipment, tracking added or corrected, at any time (shipped, delivered or lost)               |
-| `POST /delivery/shipments/{id}/deliver`                    | `update:Shipment`                                  | the shipment                                                                                      |
-| `POST /delivery/shipments/{id}/mark-lost`                  | `update:Shipment`                                  | the shipment, `lost`                                                                              |
+| Route                                                      | Answers                                                                                           |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `GET /delivery/methods`                                    | the shipping methods and what each costs                                                          |
+| `GET /delivery/fulfillment-orders` · `/summary`            | [the preorder board](#the-preorder-board)'s two reads                                             |
+| `GET /delivery/fulfillment-orders/restock-date-impact`     | orders a restock-date move would email, before it is saved                                        |
+| `GET /orders/{id}/fulfillment-orders` · `/shipments`       | `{ items[] }` each, every item with its own `actions`; unpaged                                    |
+| `POST /orders/{id}/process`                                | the order, `processing`                                                                           |
+| `POST /delivery/fulfillment-orders/{id}/shipments`         | `201` + `Location` + the shipment; optional `Idempotency-Key` (a retry would cut a second parcel) |
+| `POST /delivery/fulfillment-orders/{id}/fulfill`           | `201` + `Location` like ship, the shipment delivered; same optional `Idempotency-Key`             |
+| `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | the fulfillment order                                                                             |
+| `PATCH /delivery/shipments/{id}`                           | the shipment, tracking added or corrected, at any time (shipped, delivered or lost)               |
+| `POST /delivery/shipments/{id}/deliver`                    | the shipment                                                                                      |
+| `POST /delivery/shipments/{id}/mark-lost`                  | the shipment, `lost`                                                                              |
+
+The key each route asks is in `src/modules/delivery/routes.ts`: the shipment doors take `update:Shipment` (`fulfill` also `start:Shipment` from `paid`), `process` takes `start:Shipment`, the reads are `display:Order`, the order's owner, or public for the methods.
 
 Every button a client draws comes from the record's own `actions` (or `GET /returns/options`): the
 frontend never re-derives a rule. Every staff door asks the key and nothing else: [no rank](../theory/authorization.md#protecting-people).
@@ -728,14 +732,16 @@ frontend never re-derives a rule. Every staff door asks the key and nothing else
 `start:Shipment`. `ShipmentActions.update` is the tracking-code edit
 and `markLost` the lost-parcel report.
 
-| Event                                                | Payload                                                                                               | Public webhook                 |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------ |
-| `shipment.shipped`                                   | `{orderId, shipmentId, fulfillmentOrderId, lines}`                                                    | yes — replaces `order.shipped` |
-| `shipment.delivered`                                 | the same                                                                                              | yes                            |
-| `shipment.lost`                                      | the same, `reason`, and what the buyer is told                                                        | yes — the reason code only     |
-| `fulfillment_order.held` · `.released` · `.canceled` | `{orderId, fulfillmentOrderId, reason?}`                                                              | no                             |
-| `fulfillment_order.hold_noticed`                     | `{orderId, fulfillmentOrderId, userId?, notice, message?}`                                            | no                             |
-| `fulfillment_order.delayed`                          | the dates (`agreedAt`, the held `promisedAt`), the titles, `shipCountry`, `reason` (`moved` or `due`) | no                             |
+| Event                                                | Public webhook                 |
+| ---------------------------------------------------- | ------------------------------ |
+| `shipment.shipped`                                   | yes — replaces `order.shipped` |
+| `shipment.delivered`                                 | yes                            |
+| `shipment.lost`                                      | yes — the reason code only     |
+| `fulfillment_order.held` · `.released` · `.canceled` | no                             |
+| `fulfillment_order.hold_noticed`                     | no                             |
+| `fulfillment_order.delayed`                          | no                             |
+
+The payloads are the events of the contract (`asyncapi.yaml`).
 
 All are written through the outbox **in the act's transaction**. An order shipped in two goes fires
 `shipment.shipped` twice, and the order reaching `shipped` is the last of them.
@@ -764,10 +770,10 @@ trail.
 
 ## Configuration
 
-| Variable                                  | Default | Meaning                                                                                                                                                                                                   |
-| ----------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_HOLD_NOTE_RETENTION_DAYS`           | `365`   | Days without a change before `reap:delivery` unsets a fulfillment order's `holdNote`                                                                                                                      |
-| `NODE_DELIVERY_UNDELIVERED_REMINDER_DAYS` | `14`    | Days a physical shipment may stay `shipped` before the staff digest counts it undelivered. Declared by [`shop-tasks`](./shop-tasks.md), which owns the digest; `deliveryDigest` only receives the number. |
+| Variable                                  | Default | Meaning                                                                                                                                         |
+| ----------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_HOLD_NOTE_RETENTION_DAYS`           | `365`   | Days without a change before `reap:delivery` unsets a fulfillment order's `holdNote`                                                            |
+| `NODE_DELIVERY_UNDELIVERED_REMINDER_DAYS` | `14`    | Owned by [`shop-tasks`](./shop-tasks.md), which counts the undelivered parcels for the staff digest; `deliveryDigest` only receives the number. |
 
 The undelivered count takes physical shipments still `shipped` past that age. A lost parcel, a delivered
 one and a digital fulfillment are all left out.

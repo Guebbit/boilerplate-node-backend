@@ -41,16 +41,18 @@ flowchart TD
 
 ## Stack overview
 
-| Service        | Role                               | Local URL                        | Image (version: `docker-compose.yml`)  |
-| -------------- | ---------------------------------- | -------------------------------- | -------------------------------------- |
-| OTel Collector | Telemetry fan-out hub              | —                                | `otel/opentelemetry-collector-contrib` |
-| Tempo          | Trace store                        | internal only                    | `grafana/tempo:2.6.1`                  |
-| Prometheus     | Metrics store / alert evaluation   | `http://localhost:9090`          | `prom/prometheus:v2.55.1`              |
-| Alertmanager   | Alert routing                      | `http://localhost:9093`          | `prom/alertmanager:v0.34.1`            |
-| Loki           | Log store                          | `http://localhost:3100`          | `grafana/loki`                         |
-| Promtail       | Log shipper (Docker/Podman → Loki) | —                                | `grafana/promtail`                     |
-| Alloy          | Browser-facing Faro collector      | `http://localhost:12347/collect` | `grafana/alloy`                        |
-| Grafana        | Unified UI                         | `http://localhost:3001`          | `grafana/grafana:11.4.0`               |
+| Service        | Role                               |
+| -------------- | ---------------------------------- |
+| OTel Collector | Telemetry fan-out hub              |
+| Tempo          | Trace store                        |
+| Prometheus     | Metrics store / alert evaluation   |
+| Alertmanager   | Alert routing                      |
+| Loki           | Log store                          |
+| Promtail       | Log shipper (Docker/Podman → Loki) |
+| Alloy          | Browser-facing Faro collector      |
+| Grafana        | Unified UI                         |
+
+Images are in `docker-compose.yml`; the URLs are [the host port map](./pairing-and-ports.md#host-port-map).
 
 ## Admin API vs Grafana
 

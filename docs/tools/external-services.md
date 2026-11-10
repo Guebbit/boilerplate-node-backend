@@ -74,7 +74,7 @@ and GDPR terms yourself before picking one.
 | **E-invoicing**       | Italy: an SdI intermediary with an API             | A-Cube, or any intermediary accredited by the Agenzia delle Entrate |
 |                       | EU cross-border: a Peppol access point with an API | Storecove, B2BRouter, Digiteal                                      |
 
-Each one plugs in the same way: [§ 4](#_4-adding-a-provider-to-a-port).
+Each one plugs in the same way: [§ 4](#_4-·-adding-a-provider-to-a-port).
 
 ### CONFIG — standard protocols, no code
 

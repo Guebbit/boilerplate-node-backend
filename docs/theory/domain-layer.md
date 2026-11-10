@@ -386,7 +386,7 @@ flowchart TD
 
 DDD's own doctrine: spend the modelling effort on the **core domain**. The effort follows the logic,
 and the subdomain label is the first guess at how much logic there will be
-([strategic §4](./strategic-ddd.md#4-subdomain-distillation--where-to-spend-effort)). A boilerplate
+([strategic §4](./strategic-ddd.md#_4-subdomain-distillation-—-where-to-spend-effort)). A boilerplate
 cannot know where a real project's logic will grow, so it ships the cheap option and leaves the
 expensive one one folder away.
 

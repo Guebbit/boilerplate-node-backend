@@ -206,9 +206,11 @@ export const DEV_GROUPS: DependencyGroup[] = [
     },
     {
         name: 'Docs site',
-        purpose: 'the docs site, diagrams, and offline search UI',
+        purpose:
+            'the docs site, diagrams, and offline search UI; `@mdit-vue/shared` is VitePress’s own ' +
+            'heading slugifier, so the anchor checker matches the site',
         readMore: '[Testing & Docs](./testing-and-docs.md)',
-        match: ['vitepress', 'vitepress-plugin-mermaid', 'mermaid']
+        match: ['vitepress', 'vitepress-plugin-mermaid', 'mermaid', '@mdit-vue/shared']
     },
     {
         name: 'Maintenance',

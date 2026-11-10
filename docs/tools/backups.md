@@ -330,7 +330,7 @@ are shorter-lived (`auditlogs` keeps 180 days, `NODE_AUDIT_RETENTION_DAYS`; Loki
 
 Then erase each listed user again (admin `DELETE /users/{id}?hardDelete=true`) **before step 5**. If no source
 survives, write it in the incident log, as the
-[Art. 33 runbook](../theory/data-protection.md#breach-runbook-art-33-72-hours) already asks: the erasures that
+[Art. 33 runbook](../theory/data-protection.md#breach-runbook-art-33-—-72-hours) already asks: the erasures that
 could not be re-applied, and why.
 
 ## Uploaded images and the mail spool
