@@ -707,10 +707,10 @@ decision of whether the return was owed.
 
 ## Configuration
 
-| Variable                          | Default | Meaning                                                                                   |
-| --------------------------------- | ------- | ----------------------------------------------------------------------------------------- |
-| `NODE_RETURNS_RATE_LIMIT_MAX`     | `20`    | Returns opened per window, per account                                                    |
-| `NODE_RETURN_TEXT_RETENTION_DAYS` | `1095`  | Days without a change before `reap:returns` unsets a return's `note` and `declineMessage` |
+| Variable                          | Default | Meaning                                                                                       |
+| --------------------------------- | ------- | --------------------------------------------------------------------------------------------- |
+| `NODE_RETURNS_RATE_LIMIT_MAX`     | —       | Per-account budget: see [the rate-limit budgets](../tools/security.md#the-rate-limit-budgets) |
+| `NODE_RETURN_TEXT_RETENTION_DAYS` | `1095`  | Days without a change before `reap:returns` unsets a return's `note` and `declineMessage`     |
 
 The return address (`NODE_RETURN_ADDRESS_*`) and who pays postage (`NODE_RETURN_POSTAGE_PAYER`) are
 [`shop`'s](./shop.md#configuration). The postage payer is frozen on each return when it opens.

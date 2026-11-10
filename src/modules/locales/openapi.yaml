@@ -365,6 +365,8 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     /locales/{locale}/activate:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the language this answers.
+        x-versioned: [post]
         post:
             tags: [Locales]
             summary: Switch a language on
@@ -398,6 +400,8 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     /locales/{locale}/deactivate:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the language this answers.
+        x-versioned: [post]
         post:
             tags: [Locales]
             summary: Switch a language off

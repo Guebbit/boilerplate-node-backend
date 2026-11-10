@@ -530,9 +530,15 @@ describe('DELETE /webhooks/subscriptions/:id/secrets/:secretId', () => {
             )
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
-        expect(response.body.secretIds).toHaveLength(1);
-        expect(response.body.secretIds).not.toContain(originalSecretId);
+        expect(response.status).toBe(204);
+        expect(response.body).toEqual({});
+        expect(response.headers).not.toHaveProperty('etag');
+
+        const read = await api()
+            .get(`/webhooks/subscriptions/${String(created.body.id)}`)
+            .set('Authorization', bearer);
+        expect(read.body.secretIds).toHaveLength(1);
+        expect(read.body.secretIds).not.toContain(originalSecretId);
     });
 });
 

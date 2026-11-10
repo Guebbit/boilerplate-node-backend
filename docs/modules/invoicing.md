@@ -222,7 +222,7 @@ aborts both, so each document leaves exactly one row.
 | Variable                             | Default                 | Meaning                                                                                                     |
 | ------------------------------------ | ----------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `NODE_EINVOICING_PROVIDER`           | `pdf`                   | Which e-invoicing provider renders a document — see above                                                   |
-| `NODE_INVOICING_RATE_LIMIT_MAX`      | `20`                    | Invoice/credit-note renders allowed per window, per ACCOUNT — every hit spawns a Chromium launch            |
+| `NODE_INVOICING_RATE_LIMIT_MAX`      | —                       | Per-account budget: see [the rate-limit budgets](../tools/security.md#the-rate-limit-budgets)               |
 | `NODE_INVOICE_PDF_RETENTION_DAYS`    | `30`                    | Days a rendered PDF is kept for the next download; `0` stores nothing                                       |
 | `NODE_INVOICE_BUYER_RETENTION_YEARS` | `10`                    | Years after the end of the issue year that the buyer block stays on a document; see [Retention](#retention) |
 | `NODE_DOCUMENT_STORE_PATH`           | `tmp/storage/documents` | Where those PDFs live — private, plaintext, regenerable; mount a volume                                     |

@@ -770,10 +770,10 @@ trail.
 
 ## Configuration
 
-| Variable                                  | Default | Meaning                                                                                                                                         |
-| ----------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_HOLD_NOTE_RETENTION_DAYS`           | `365`   | Days without a change before `reap:delivery` unsets a fulfillment order's `holdNote`                                                            |
-| `NODE_DELIVERY_UNDELIVERED_REMINDER_DAYS` | `14`    | Owned by [`shop-tasks`](./shop-tasks.md), which counts the undelivered parcels for the staff digest; `deliveryDigest` only receives the number. |
+| Variable                                  | Default | Meaning                                                                                                                                                       |
+| ----------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_HOLD_NOTE_RETENTION_DAYS`           | `365`   | Days without a change before `reap:delivery` unsets a fulfillment order's `holdNote`                                                                          |
+| `NODE_DELIVERY_UNDELIVERED_REMINDER_DAYS` | —       | Owned by [`shop-tasks`](./shop-tasks.md#configuration), which counts the undelivered parcels for the staff digest; `deliveryDigest` only receives the number. |
 
 The undelivered count takes physical shipments still `shipped` past that age. A lost parcel, a delivered
 one and a digital fulfillment are all left out.

@@ -12,11 +12,13 @@
  * operation declares `ETag` must send it, and a write that sends one the spec never declares fails.
  */
 import '@tests/contract';
+import { declaredResponseHeaders, readSpec, listOperations } from '@tests/spec-walk';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import { OrderStatus } from '@types';
 
 setupTestDb();
 
@@ -44,7 +46,9 @@ const EDITS = {
     product: { tags: ['afterwards'] },
     order: { email: 'afterwards@example.com' },
     example: { title: 'Afterwards' },
-    subscription: { description: 'afterwards' }
+    subscription: { description: 'afterwards' },
+    language: { nativeName: 'Afterwards' },
+    account: { username: 'afterwards' }
 } as const;
 
 /** A fresh user the admin may act on. */
@@ -79,6 +83,22 @@ const userAfter = (name: string, setup: 'deactivate' | 'delete', path: string): 
         else await api().delete(`/users/${id}`).set('Authorization', bearer).expect(204);
         const answer = await post(`/users/${id}${path}`, bearer);
         return { answer, resource: `/users/${id}`, bearer, edit: EDITS.user };
+    }
+});
+
+/** A language door: an admin registers `pt`, switches it off first when the door is `activate`. */
+const languageDoor = (name: string, move: 'activate' | 'deactivate'): Door => ({
+    name,
+    run: async () => {
+        const { bearer } = await authenticateAs('admin');
+        await post('/locales', bearer, {
+            tag: 'pt',
+            name: 'Portuguese',
+            nativeName: 'Português'
+        }).expect(201);
+        if (move === 'activate') await post('/locales/pt/deactivate', bearer).expect(200);
+        const answer = await post(`/locales/pt/${move}`, bearer);
+        return { answer, resource: '/locales/pt', bearer, edit: EDITS.language };
     }
 });
 
@@ -203,6 +223,31 @@ const DOORS: Door[] = [
         }
     },
     {
+        name: 'POST /webhooks/subscriptions/{id}/secrets (a rotation)',
+        run: async () => {
+            const { bearer } = await authenticateAsRole('manager');
+            const created = await post('/webhooks/subscriptions', bearer, {
+                url: 'https://example.test/inbox',
+                eventTypes: ['order.paid']
+            });
+            const resource = created.headers['content-location'];
+            const answer = await post(`${resource}/secrets`, bearer);
+            return { answer, resource, bearer, edit: EDITS.subscription };
+        }
+    },
+    languageDoor('POST /locales/{locale}/deactivate', 'deactivate'),
+    languageDoor('POST /locales/{locale}/activate', 'activate'),
+    {
+        name: 'POST /account/email-change',
+        run: async () => {
+            const { bearer } = await authenticateAs('admin');
+            const answer = await post('/account/email-change', bearer, {
+                email: 'moved@example.com'
+            });
+            return { answer, resource: '/account', bearer, edit: EDITS.account };
+        }
+    },
+    {
         name: 'POST /webhooks/subscriptions/{id}/disable',
         run: async () => {
             const { bearer } = await authenticateAsRole('manager');
@@ -214,8 +259,159 @@ const DOORS: Door[] = [
             const answer = await post(`${resource}/disable`, bearer);
             return { answer, resource, bearer, edit: EDITS.subscription };
         }
+    },
+    {
+        name: 'POST /webhooks/subscriptions/{id}/enable',
+        run: async () => {
+            const { bearer } = await authenticateAsRole('manager');
+            const created = await post('/webhooks/subscriptions', bearer, {
+                url: 'https://example.test/inbox',
+                eventTypes: ['order.paid']
+            });
+            const resource = created.headers['content-location'];
+            await post(`${resource}/disable`, bearer).expect(200);
+            const answer = await post(`${resource}/enable`, bearer);
+            return { answer, resource, bearer, edit: EDITS.subscription };
+        }
+    },
+    {
+        name: 'POST /examples/{id}/archive',
+        run: async () => {
+            const { bearer } = await authenticateAs('admin');
+            const created = await post('/examples', bearer, { title: 'First', body: 'Hello' });
+            const resource = created.headers['content-location'];
+            await post(`${resource}/publish`, bearer).expect(200);
+            const answer = await post(`${resource}/archive`, bearer);
+            return { answer, resource, bearer, edit: EDITS.example };
+        }
+    },
+    {
+        name: 'POST /users/{id}/revoke-role',
+        run: async () => {
+            const { bearer } = await authenticateAs('admin');
+            const id = await targetOf();
+            await post(`/users/${id}/assign-role`, bearer, { role: 'support' }).expect(200);
+            const answer = await post(`/users/${id}/revoke-role`, bearer);
+            return { answer, resource: `/users/${id}`, bearer, edit: EDITS.user };
+        }
+    },
+    {
+        name: 'POST /users/{id}/lift-purchase-hold',
+        run: async () => {
+            const { bearer } = await authenticateAs('admin');
+            const id = await targetOf();
+            await post(`/users/${id}/place-purchase-hold`, bearer, {
+                until: new Date(Date.now() + 86_400_000).toISOString()
+            }).expect(200);
+            const answer = await post(`/users/${id}/lift-purchase-hold`, bearer);
+            return { answer, resource: `/users/${id}`, bearer, edit: EDITS.user };
+        }
+    },
+    {
+        name: 'POST /examples/{id}/unarchive',
+        run: async () => {
+            const { bearer } = await authenticateAs('admin');
+            const created = await post('/examples', bearer, { title: 'First', body: 'Hello' });
+            const resource = created.headers['content-location'];
+            await post(`${resource}/publish`, bearer).expect(200);
+            await post(`${resource}/archive`, bearer).expect(200);
+            const answer = await post(`${resource}/unarchive`, bearer);
+            return { answer, resource, bearer, edit: EDITS.example };
+        }
+    },
+    {
+        name: 'POST /orders/{id}/restore',
+        run: async () => {
+            const { bearer, user } = await authenticateAs('admin');
+            const product = await createProduct();
+            // Only a canceled order may be deleted.
+            const order = await createOrder(user, [toOrderItem(product, 1)], {
+                status: OrderStatus.canceled
+            });
+            const resource = `/orders/${String(order._id)}`;
+            await api().delete(resource).set('Authorization', bearer).expect(204);
+            const answer = await post(`${resource}/restore`, bearer);
+            return { answer, resource, bearer, edit: EDITS.order };
+        }
+    },
+    {
+        name: 'POST /orders/{id}/override-status',
+        run: async () => {
+            const { bearer, user } = await authenticateAs('admin');
+            const product = await createProduct();
+            const order = await createOrder(user, [toOrderItem(product, 1)], {
+                status: OrderStatus.paid
+            });
+            const resource = `/orders/${String(order._id)}`;
+            const answer = await post(`${resource}/override-status`, bearer, {
+                to: 'processing',
+                reason: 'paid offline, forcing it forward'
+            });
+            return { answer, resource, bearer, edit: EDITS.order };
+        }
+    },
+    {
+        name: 'POST /orders/{id}/process',
+        run: async () => {
+            const { bearer, user } = await authenticateAs('admin');
+            const product = await createProduct();
+            const order = await createOrder(user, [toOrderItem(product, 1)], {
+                status: OrderStatus.paid
+            });
+            const resource = `/orders/${String(order._id)}`;
+            const answer = await post(`${resource}/process`, bearer);
+            return { answer, resource, bearer, edit: EDITS.order };
+        }
+    },
+    {
+        name: 'POST /locales (a create)',
+        run: async () => {
+            const { bearer } = await authenticateAs('admin');
+            const answer = await post('/locales', bearer, {
+                tag: 'pt',
+                name: 'Portuguese',
+                nativeName: 'Português'
+            });
+            return {
+                answer,
+                resource: answer.headers['content-location'],
+                bearer,
+                edit: EDITS.language
+            };
+        }
     }
 ];
+
+/** The operation each door above exercises, which the contract walk below holds the spec to. */
+const DOOR_OPERATIONS: Record<string, string> = {
+    'POST /products (a create)': 'createProduct',
+    'POST /products/{id}/restore': 'restoreProductById',
+    'POST /users (a create)': 'createUser',
+    'POST /users/{id}/assign-role': 'assignUserRole',
+    'POST /users/{id}/place-purchase-hold': 'placeUserPurchaseHold',
+    'POST /users/{id}/deactivate': 'deactivateUserById',
+    'POST /users/{id}/activate': 'activateUserById',
+    'POST /users/{id}/restore': 'restoreUserById',
+    'POST /orders (a create)': 'createOrder',
+    'POST /orders/{id}/cancel': 'cancelOrderById',
+    'POST /examples (a create)': 'createExample',
+    'POST /examples/{id}/publish': 'publishExample',
+    'POST /examples/{id}/archive': 'archiveExample',
+    'POST /webhooks/subscriptions (a create)': 'createWebhookSubscription',
+    'POST /webhooks/subscriptions/{id}/secrets (a rotation)': 'createWebhookSubscriptionSecret',
+    'POST /webhooks/subscriptions/{id}/enable': 'enableWebhookSubscription',
+    'POST /webhooks/subscriptions/{id}/disable': 'disableWebhookSubscription',
+    'POST /locales/{locale}/deactivate': 'deactivateLocale',
+    'POST /locales/{locale}/activate': 'activateLocale',
+    'POST /locales (a create)': 'createLocale',
+    'POST /users/{id}/revoke-role': 'revokeUserRole',
+    'POST /users/{id}/lift-purchase-hold': 'liftUserPurchaseHold',
+    'POST /examples/{id}/unarchive': 'unarchiveExample',
+    'POST /orders/{id}/restore': 'restoreOrderById',
+    'POST /orders/{id}/override-status': 'overrideOrderStatus',
+    'POST /orders/{id}/process': 'processOrder',
+    'POST /account/email-change': 'requestEmailChange'
+};
 
 describe('a create, a restore or an action answers the real tag of the resource it names', () => {
     it.each(DOORS)('$name', async ({ run }) => {
@@ -235,17 +431,148 @@ describe('a create, a restore or an action answers the real tag of the resource 
     });
 });
 
-/** A subscription's create also carries the one-time secret, which no GET repeats. */
-const SECRET_CARRYING = 'POST /webhooks/subscriptions (a create)';
+/**
+ * Doors whose body no GET repeats byte for byte: a subscription's create and rotation carry the
+ * one-time secret, and the account read moves its own digest on every call (`lastActiveAt`).
+ */
+const NOT_REPEATED_BY_A_GET = new Set([
+    'POST /webhooks/subscriptions (a create)',
+    'POST /webhooks/subscriptions/{id}/secrets (a rotation)',
+    'POST /account/email-change'
+]);
 
 describe('the answer is what a GET on its Content-Location returns right after (RFC 9110 §8.7)', () => {
     // The tag is a digest of the exact body, so equal tags mean equal bodies.
-    it.each(DOORS.filter(({ name }) => name !== SECRET_CARRYING))('$name', async ({ run }) => {
-        const { answer, resource, bearer } = await run();
+    it.each(DOORS.filter(({ name }) => !NOT_REPEATED_BY_A_GET.has(name)))(
+        '$name',
+        async ({ run }) => {
+            const { answer, resource, bearer } = await run();
 
-        const read = await api().get(resource).set('Authorization', bearer);
+            const read = await api().get(resource).set('Authorization', bearer);
 
-        expect(read.headers.etag).toBe(answer.headers.etag);
+            expect(read.headers.etag).toBe(answer.headers.etag);
+        }
+    );
+});
+
+/**
+ * Schemas that restate a versioned resource's fields flat instead of `$ref`-ing it, so the walk
+ * cannot see the likeness: the answer's schema, and the versioned schema it is a copy of.
+ */
+const FLAT_COPIES: Record<string, string> = {
+    // A subscription plus the one-time secret (flat: `allOf` of two closed objects fails ajv).
+    WebhookSubscriptionCreated: 'WebhookSubscription',
+    // The PUT/PATCH answer; the read adds the abilities and the idle clock.
+    Account: 'AccountView'
+};
+
+/** Writes that answer a versioned resource and are untagged on purpose, with the reason. */
+const EXEMPT: Record<string, string> = {
+    signup: 'answers an account nobody can edit yet, and may answer a refused address the same way'
+};
+
+/**
+ * Tagged writes with no door above, each with the test that asserts BOTH its `ETag` and its
+ * `Content-Location`.
+ */
+const NO_DOOR: Record<string, string> = {
+    // Needs a cart with stock and a shipping method, which only the cart module's own support builds.
+    checkout:
+        'src/modules/cart/tests/contract/api.contract.test.ts:725-726 (ETag and Content-Location of the placed order)'
+};
+
+/** The schema name a 2xx answer's JSON body refers to, if it refers to one. */
+const bodySchemaName = (response: unknown): string | undefined =>
+    // Narrowing a parsed YAML node the compiler cannot see into: only `$ref` is read from it.
+    (response as { content?: Record<string, { schema?: { $ref?: string } }> }).content?.[
+        'application/json'
+    ]?.schema?.$ref
+        ?.split('/')
+        .pop();
+
+/** The first 2xx status an operation declares. */
+const successStatus = (responses: Record<string, unknown>): string | undefined =>
+    Object.keys(responses).find((status) => status.startsWith('2'));
+
+/**
+ * Whether a path reads one resource whose writes take `If-Match`: it ends in a path parameter or
+ * is the caller's own account, and its PUT or PATCH declares the header. A list or a dictionary
+ * also sends an `ETag`, and so does an address, but neither is edited under a tag.
+ */
+const isVersionedRead = (route: string): boolean => {
+    const item = readSpec().paths[route];
+    const takesIfMatch = ['put', 'patch'].some((method) =>
+        JSON.stringify(item[method] ?? {}).includes('#/components/parameters/IfMatchHeader')
+    );
+    return (/\/\{\w+\}$/.test(route) || route === '/account') && takesIfMatch;
+};
+
+/** Every operation with the schema its 2xx body names, from the bundled contract. */
+const answers = () => {
+    const spec = readSpec();
+    const headers = declaredResponseHeaders(spec);
+    const operations = listOperations(spec);
+    return operations.flatMap(({ path: route, method, operationId }) => {
+        const operation = spec.paths[route][method] as { responses: Record<string, unknown> };
+        const status = successStatus(operation.responses);
+        const schema = status ? bodySchemaName(operation.responses[status]) : undefined;
+        return operationId && status && schema
+            ? [{ route, operationId, method, schema, sent: headers[operationId][status] }]
+            : [];
+    });
+};
+
+describe('the contract: every write that answers a versioned resource declares its tag', () => {
+    const walked = answers();
+    // A versioned schema is one a GET hands out with an ETag.
+    const versioned = new Set(
+        walked
+            .filter(
+                ({ method, sent, route }) =>
+                    method === 'get' && sent.includes('etag') && isVersionedRead(route)
+            )
+            .map(({ schema }) => schema)
+    );
+    const isVersioned = (schema: string) =>
+        versioned.has(schema) || versioned.has(FLAT_COPIES[schema]);
+
+    it('finds versioned resources to hold writes against', () => {
+        // A walk that matches nothing would pass vacuously.
+        expect(versioned.size).toBeGreaterThan(3);
+    });
+
+    const writes = walked.filter(
+        // A PUT answer never carries a validator (RFC 9110 §9.3.4), and a delete is not tagged.
+        ({ method, schema, operationId }) =>
+            !['get', 'put', 'delete'].includes(method) &&
+            isVersioned(schema) &&
+            !(operationId in EXEMPT)
+    );
+
+    it('has a door, or a named place where its tag is proven, for every POST it holds', () => {
+        const doors = new Set(Object.values(DOOR_OPERATIONS));
+        const unproven = writes
+            // An edit's own answer is held by `tests/integration/conditional-writes.test.ts`.
+            .filter(({ method }) => method === 'post')
+            .filter(({ operationId }) => !doors.has(operationId) && !(operationId in NO_DOOR))
+            .map(({ operationId }) => operationId);
+
+        expect(unproven).toEqual([]);
+        // A walk that saw no write would pass vacuously.
+        expect(writes.filter(({ method }) => method === 'post').length).toBeGreaterThan(10);
+    });
+
+    it('names only doors that exist', () => {
+        expect(Object.keys(DOOR_OPERATIONS).toSorted()).toEqual(
+            DOORS.map(({ name }) => name).toSorted()
+        );
+    });
+
+    it.each(writes)('$method $operationId', ({ method, sent }) => {
+        // A PATCH is a write on the resource's own URI, so it needs no `Content-Location`.
+        const expected = method === 'patch' ? ['etag'] : ['etag', 'content-location'];
+
+        expect(sent).toEqual(expect.arrayContaining(expected));
     });
 });
 

@@ -130,8 +130,9 @@ the line.
 - Names: a line add is `create*` (`add*` for a cart line, which may grow instead), its removal
   `delete*` or `remove*`, its change `update*`.
 
-Why: a 201 says a resource was created at a URL, and a line has no read of its own to name (RFC 9110 §9.3.3 makes the
-`Location` of a 201 a SHOULD; §9.3.4 makes a PUT that creates a MUST-201). The parent is what the
+Why: a 201 says a resource was created at a URL, and a line has no read of its own to name (RFC 9110
+§9.3.3: a POST that creates SHOULD answer 201 with a `Location`, a SHOULD this API sets aside for a
+line, with the reason here; §9.3.4 makes a PUT that creates a MUST-201). The parent is what the
 client re-renders, so the parent is the answer (§15.3.1: a 200 carries "the result of the
 action"). Medusa v2 (`POST`/`DELETE /store/carts/{id}/line-items[/{line_id}]`), BigCommerce
 (`POST /carts/{id}/items`, `POST`/`DELETE /wishlists/{id}/items[/{item_id}]`), Shopify's
@@ -307,8 +308,9 @@ JSON one.
 ## DELETE — remove
 
 A `DELETE` has no body; one is refused with 415 (see [Content-Type: 415](#content-type-415)).
-Success is 204; 200 when the answer is the parent (a line) or the list left; 202 when the removal
-is scheduled (`DELETE /account`).
+Success is 204; 200 when the answer is the parent (a cart or wishlist line) or the list left; 202
+when the removal is scheduled (`DELETE /account`). A webhook secret's removal is a 204 too: the
+subscription is one read away. A `DELETE` answer is never tagged.
 
 Sent again, it writes nothing and sends no second domain event, mail or audit row (RFC 9110
 §9.2.2). An analytics hit or a stream refresh may repeat. What it answers with nothing left to
@@ -532,9 +534,11 @@ sequenceDiagram
     S-->>C: 200 (not 412)
 ```
 
-- **Who:** creates (products, users, examples, orders, cart checkout, webhook subscriptions),
-  restores (products, users, orders) and actions (user activation, role, purchase hold; order cancel,
-  override, process; example publish, archive, unarchive; subscription enable, disable).
+- **Who:** creates (products, users, examples, orders, cart checkout, webhook subscriptions,
+  languages), restores (products, users, orders) and actions (user activation, role, purchase hold;
+  order cancel, override, process; example publish, archive, unarchive; subscription enable,
+  disable and secret rotation; language activate, deactivate; the caller's own email-change
+  request, which answers what `GET /account` does).
 - **How:** the controller calls `answerAsResource(response, row, uri)`: `setEtag` plus
   `Content-Location`, in the path convention `Location` uses. The body must be what a `GET` on that
   URI returns right after (§8.7); users share `toUserContract`, products `presentForCaller`.

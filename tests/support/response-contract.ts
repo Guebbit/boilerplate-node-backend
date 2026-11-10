@@ -158,13 +158,15 @@ export const nullPathsIn = (value: unknown, at = ''): string[] => {
 
 /**
  * The operations whose answer carries the caller's packed rules: the session answers.
- * `account.abilities` rides on a sign-in and `GET /account`, `abilities` on a refresh.
+ * `account.abilities` rides on a sign-in, `GET /account` and the email-change request (it answers
+ * what `GET /account` does), `abilities` on a refresh.
  */
 const SESSION_ANSWERS: ReadonlySet<string> = new Set([
     'login',
     'loginTwoFactor',
     'loginRestore',
     'getAccount',
+    'requestEmailChange',
     'refreshToken'
 ]);
 

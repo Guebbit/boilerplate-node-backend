@@ -5,7 +5,7 @@
  * erase them again before the app opens.
  *
  * Owns:  the `erasureledgers` rows and the replay that restores erasures and deletion locks.
- * Why:   the `auditlogs` trail (90 days) and Loki (7 days) are shorter than the backups.
+ * Why:   the `auditlogs` trail (180 days) and Loki (7 days) are shorter than the backups.
  *
  * See: docs/theory/data-retention.md#backups-and-erasure
  */
