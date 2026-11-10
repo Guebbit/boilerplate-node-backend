@@ -17,6 +17,7 @@ import type { StoredWebhookSubscription } from '../repository';
 import type { WebhookSubscriptionDocument } from '../model';
 import { presentWebhookSubscription } from '../presenters';
 import { liveRingEntries } from '../secrets';
+import { unreadableEventTypes } from './catalog';
 
 /** What the caller holds on a subscription: the two keys every flag turns on. */
 export interface Standing {
@@ -24,6 +25,8 @@ export interface Standing {
     update: boolean;
     /** The caller holds `delete:WebhookSubscription`. */
     delete: boolean;
+    /** The caller may receive every event this filter names (`*` = all), by the catalogue's read rules. */
+    reads: (eventTypes: readonly string[]) => boolean;
 }
 
 /**
@@ -32,7 +35,8 @@ export interface Standing {
  */
 export const standingOn = (caller: TenantCaller): Standing => ({
     update: holds(caller, 'update', 'WebhookSubscription'),
-    delete: holds(caller, 'delete', 'WebhookSubscription')
+    delete: holds(caller, 'delete', 'WebhookSubscription'),
+    reads: (eventTypes) => unreadableEventTypes(eventTypes, caller).length === 0
 });
 
 /** The state half of a subscription's rules: the only two facts a flag reads off the record. */
@@ -41,6 +45,8 @@ export interface SubscriptionState {
     enabled: boolean;
     /** How many secrets still sign. */
     secretCount: number;
+    /** The stored event filter, which a secret minted now would sign for. */
+    eventTypes: readonly string[];
 }
 
 /**
@@ -56,7 +62,8 @@ export const subscriptionActions = (
     delete: standing.delete,
     enable: standing.update && !state.enabled,
     disable: standing.update && state.enabled,
-    createSecret: standing.update,
+    // A minted secret signs for the stored filter, so the caller must be able to read all of it.
+    createSecret: standing.update && standing.reads(state.eventTypes),
     // A ring never empties (`deleteSecret` 422s it), so a second secret must exist to drop one.
     deleteSecret: standing.update && state.secretCount > 1
 });
@@ -72,7 +79,11 @@ export const withSubscriptionActions = (
 ): WebhookSubscription => ({
     ...row,
     actions: subscriptionActions(
-        { enabled: row.enabled, secretCount: row.secretIds.length },
+        {
+            enabled: row.enabled,
+            secretCount: row.secretIds.length,
+            eventTypes: row.eventTypes
+        },
         standing
     )
 });
@@ -91,19 +102,25 @@ export const viewSubscription = (
         subscriptionActions(
             {
                 enabled: !subscription.disabledAt,
-                secretCount: liveRingEntries(subscription.secrets).length
+                secretCount: liveRingEntries(subscription.secrets).length,
+                eventTypes: subscription.eventTypes
             },
             standingOn(caller)
         )
     );
 
 /**
- * What the caller may do to one delivery: replay needs `update:WebhookSubscription` and a
- * subscription that is still there and switched on.
+ * What the caller may do to one delivery: replay needs `update:WebhookSubscription`, a
+ * subscription that is still there and switched on, and the read rule of the delivery's event
+ * (a replay re-sends the stored payload).
  * @param subscriptionEnabled - whether the delivery's subscription exists and is enabled
+ * @param eventType - the delivery's event
  * @param standing - how the caller stands to subscriptions
  */
 export const deliveryActions = (
     subscriptionEnabled: boolean,
+    eventType: string,
     standing: Standing
-): WebhookDeliveryActions => ({ replay: standing.update && subscriptionEnabled });
+): WebhookDeliveryActions => ({
+    replay: standing.update && subscriptionEnabled && standing.reads([eventType])
+});

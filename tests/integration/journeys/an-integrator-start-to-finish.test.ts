@@ -53,7 +53,15 @@ it('delivers every event once, signed, in causal order', async () => {
             .set('Authorization', admin)
             .send({
                 name: 'integrator',
-                permissions: ['create:WebhookSubscription', 'read:WebhookSubscription'],
+                // `*` carries every event, so the key needs each event's read rule beside the webhook ones.
+                permissions: [
+                    'create:WebhookSubscription',
+                    'read:WebhookSubscription',
+                    'display:Order',
+                    'display:Payment',
+                    'read:Return',
+                    'read:User'
+                ],
                 expiresAt: inAWeek()
             }),
         CreateApiKey201Response

@@ -10,6 +10,7 @@
 channels:
     shipment.shipped:
         address: shipment.shipped
+        x-read-rule: display:Order
         description: A shipment left — some or all of an order's goods.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
@@ -18,6 +19,7 @@ channels:
                 $ref: '#/components/messages/ShipmentShippedEvent'
     shipment.delivered:
         address: shipment.delivered
+        x-read-rule: display:Order
         description: A shipment arrived.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
@@ -26,6 +28,7 @@ channels:
                 $ref: '#/components/messages/ShipmentDeliveredEvent'
     shipment.lost:
         address: shipment.lost
+        x-read-rule: display:Order
         description: Staff reported a shipment lost or damaged in transit.
         servers:
             - $ref: '#/servers/subscriberEndpoint'

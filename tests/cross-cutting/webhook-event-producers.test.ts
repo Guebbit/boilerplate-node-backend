@@ -18,6 +18,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { declaredWebhookEvents } from '@tests/webhook-events';
 import { resetDomainEvents, emitDomainEvent } from '@kernel/events';
 import { registerModules } from '@kernel/registry';
+import { callerAs } from '@tests/callers';
 import {
     ORDER_CREATED,
     ORDER_STATUS_CHANGED,
@@ -187,7 +188,7 @@ describe('every public webhook event has exactly one producer, and no producer n
     it('GET /webhooks/events lists exactly what the registered modules declare', () => {
         expect(
             webhooksService
-                .listWebhookEventCatalog()
+                .listWebhookEventCatalog(callerAs('admin'))
                 .map((event) => event.name)
                 .toSorted()
         ).toEqual(declaredCatalog());

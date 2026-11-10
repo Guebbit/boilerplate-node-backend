@@ -8,6 +8,7 @@
         "delivery-in-progress": "Questa consegna è già in corso di tentativo. Riprova a breve.",
         "already-enabled": "Questa sottoscrizione è già abilitata.",
         "already-disabled": "Questa sottoscrizione è già disabilitata.",
-        "subscription-disabled": "Questa sottoscrizione è disabilitata, quindi la consegna non può essere rinviata. Abilitala prima."
+        "subscription-disabled": "Questa sottoscrizione è disabilitata, quindi la consegna non può essere rinviata. Abilitala prima.",
+        "event-read-required": "Non puoi ricevere questi eventi, quindi non puoi farlo: {{names}}."
     }
 }

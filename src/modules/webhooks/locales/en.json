@@ -8,6 +8,7 @@
         "delivery-in-progress": "This delivery is already being attempted right now. Try again shortly.",
         "already-enabled": "This subscription is already enabled.",
         "already-disabled": "This subscription is already disabled.",
-        "subscription-disabled": "This subscription is disabled, so the delivery cannot be replayed. Enable it first."
+        "subscription-disabled": "This subscription is disabled, so the delivery cannot be replayed. Enable it first.",
+        "event-read-required": "You may not receive these events, so you cannot do this: {{names}}."
     }
 }

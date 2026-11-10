@@ -54,7 +54,7 @@ it('an admin refund fans out a payment.refunded delivery carrying the amount and
     registerCheckoutModules([paymentsModule, webhooksModule]);
     await createSubscription(
         { url: 'https://example.com/hook', eventTypes: ['*'] },
-        { caller: callerAs('manager'), analyticsConsent: false }
+        { caller: callerAs('admin'), analyticsConsent: false }
     );
 
     const { order } = await paidOrder('20.00');

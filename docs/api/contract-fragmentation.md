@@ -450,6 +450,11 @@ and the headers schema every event shares; each event is declared by the module 
 `asyncapi-bundles.ts`. The same collision refusal applies, so two modules claiming one event name
 fail the bundle.
 
+Each channel also carries `x-read-rule`: `public`, or the declared tenant rule (no conditions) a subscriber
+must hold to receive that event. `webhooks/services/catalog.ts` reads it at boot and refuses a channel
+without a usable one; the bundler passes it through untouched into `asyncapi.public.yaml`
+([who may subscribe to what](../modules/webhooks.md#who-may-subscribe-to-what)).
+
 A payload field with a closed set of values `$ref`s the owning module's own REST schema
 (`./openapi.yaml#/components/schemas/ReturnReason`) rather than copying its enum. The bundle has to
 stand alone, so `withSectionFragments` copies each referenced schema into the fragment's

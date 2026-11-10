@@ -12,6 +12,7 @@
 channels:
     return.requested:
         address: return.requested
+        x-read-rule: read:Return
         description: A return was opened — a withdrawal or a request.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
@@ -20,6 +21,7 @@ channels:
                 $ref: '#/components/messages/ReturnRequestedEvent'
     return.received:
         address: return.received
+        x-read-rule: read:Return
         description: Returned goods arrived and went back on sale.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
@@ -28,6 +30,7 @@ channels:
                 $ref: '#/components/messages/ReturnReceivedEvent'
     return.closed:
         address: return.closed
+        x-read-rule: read:Return
         description: A return finished — the money went back.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
