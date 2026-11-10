@@ -174,6 +174,8 @@ These answers are not problem documents on purpose:
 | A redirect (OAuth callback success) | a `302`, not an error |
 | Node's own 400 / 408 / 413 / 431 | Node's HTTP server writes a bare status line and closes the connection; no language, no request id. A broken request line or headers never reach a route; a timed-out or malformed body is cut after the route has started. Behind the Traefik overlay only the 431 reaches a client; Traefik answers a bad request line itself and cuts a slow request at 60 s, before Node's 408 |
 
+The API never answers 511: RFC 6585 §6 reserves it for an intercepting proxy, not an origin server.
+
 The 404 for a path that matches nothing and the 405 for a method a path does not offer belong to no
 operation, so the contract describes them once, in the root document's description.
 

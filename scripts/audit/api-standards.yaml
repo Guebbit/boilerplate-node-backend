@@ -324,7 +324,14 @@ rules:
       house: 'Every 429 carries `Retry-After` in whole seconds (docs/api/errors.md#headers-on-an-error).'
       source: https://www.rfc-editor.org/rfc/rfc6585#section-4
       evidence:
-          [src/infrastructure/http/middlewares/rate-limit.ts, openapi.yaml paths.*.*.responses.429]
+          [
+              src/infrastructure/http/middlewares/rate-limit.ts,
+              src/infrastructure/http/response.ts,
+              src/modules/account/cooldown.ts,
+              src/modules/account/mail-budget.ts,
+              src/modules/account/services/two-factor-outcomes.ts,
+              docs/api/errors.md#headers-on-an-error
+          ]
       lint: possible
       difference: null
 
@@ -345,11 +352,17 @@ rules:
       standard: rfc6585
       section: 431 and 511
       rule: '431 and 511 are answered only as defined, or never; no other status stands in for an oversize header or a network-auth wall; an origin SHOULD NOT generate 511 (§6); neither MUST be stored by a cache (§5, §6).'
-      source: https://www.rfc-editor.org/rfc/rfc6585#section-5
+      source:
+          [
+              https://www.rfc-editor.org/rfc/rfc6585#section-5,
+              https://www.rfc-editor.org/rfc/rfc6585#section-6
+          ]
       evidence:
           [
-              src/infrastructure/http/errors.ts,
-              docs/api/write-methods.md#status-codes-a-write-answers
+              src/infrastructure/runtime/server-lifecycle.ts,
+              src/app/security.ts,
+              src/app/error-handling.ts,
+              docs/api/errors.md#outside-the-json-api
           ]
       lint: no
       difference: null
