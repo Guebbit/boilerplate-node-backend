@@ -40,7 +40,7 @@ export const getOrderItem = (
                 action: ordersAuditActions.ADMIN_ORDER_VIEWED,
                 targetType: 'order',
                 targetId: id,
-                ownerId: buyerIdOf(order)
+                subjectId: buyerIdOf(order)
             });
             // `respondWithOrder` stamps the version an edit sends back as `If-Match`.
             // The body carries what THIS caller may do to the order, so the client renders its

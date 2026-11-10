@@ -66,6 +66,13 @@ A visitor may add a **category** (`order`, `cancellation`, `return`, `payment`, 
 `privacy`, `other`) and the order number they typed (`orderNumber`, free text, never checked
 against an order). Both are the filer's own words, so the export includes them.
 
+### The list row {#the-list-row}
+
+`GET /tasks` and `POST /tasks/search` answer a `TaskListItem`: the sender's name and email, subject,
+a `messagePreview` of the first 160 characters, category, order number, assignee, due date, status
+and `actions`. The whole message, the staff notes and the sender's account are `GET /tasks/{id}`, the
+audited read. See [a list row is a list item](../api/responses.md#a-list-row-is-a-list-item).
+
 ### System tasks
 
 A producer module announces a situation through the outbox; `tasks` subscribes (`module.ts`,

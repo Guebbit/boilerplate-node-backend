@@ -75,6 +75,13 @@ Three objects, each owned once:
 | **Refund**             | the _money_: one record per attempt, on the payment                         | [`payments`](./payments.md#refund-records) |
 | **Status projections** | `paymentStatus`, `fulfillmentStatus`, `returnStatus` beside the order's own | [`orders`](./orders.md)                    |
 
+## The list row {#the-list-row}
+
+`GET /returns` answers a `ReturnListItem`: id, order, status, reason, kind, dates and `actions`. The
+customer's note, staff's decline message and the lines are `GET /returns/{id}`, the audited read; a
+customer's own list is the same shape. See
+[a list row is a list item](../api/responses.md#a-list-row-is-a-list-item).
+
 ## The lifecycle
 
 ```mermaid

@@ -20,7 +20,7 @@ import { currentEnvironment } from '@infrastructure/config/store';
 
 /** The retention window the schema was built with, in seconds. Mirrors the model's own default. */
 const RETENTION_SECONDS =
-    Number(currentEnvironment().NODE_AUDIT_RETENTION_DAYS ?? 90) * 24 * 60 * 60;
+    Number(currentEnvironment().NODE_AUDIT_RETENTION_DAYS ?? 180) * 24 * 60 * 60;
 
 describe('auditLogSchema — what an entry must carry', () => {
     it('requires who, in which world, what, how it went, when and at what level', () => {
@@ -93,13 +93,14 @@ describe('auditLogSchema — options', () => {
 });
 
 describe('auditLogSchema — indexes and retention', () => {
-    it('indexes the three questions an operator or a moderator asks, newest first', () => {
-        // "What did this account do", "who did this action" and "what happened to this row" —
-        // all three read latest-first, which is what the `-1` buys. The fourth index is the
+    it('indexes the four questions an operator or a moderator asks, newest first', () => {
+        // "What did this account do", "who did this action", "what happened to this row" and
+        // "whose data was this about" — all four read latest-first, which is what the `-1` buys. The fifth index is the
         // retention sweep below.
         expect(indexSpecs(auditLogSchema)).toEqual([
             'action_1_timestamp_-1: action+1, timestamp-1',
             'actorUserId_1_timestamp_-1: actorUserId+1, timestamp-1',
+            'subjectId_1_timestamp_-1: subjectId+1, timestamp-1',
             'targetId_1_timestamp_-1: targetId+1, timestamp-1',
             'timestamp_1: timestamp+1'
         ]);
@@ -112,6 +113,7 @@ describe('auditLogSchema — indexes and retention', () => {
         expect(indexOptionSpecs(auditLogSchema)).toEqual([
             'action_1_timestamp_-1: (none)',
             'actorUserId_1_timestamp_-1: (none)',
+            'subjectId_1_timestamp_-1: (none)',
             'targetId_1_timestamp_-1: (none)',
             `timestamp_1: expireAfterSeconds=${RETENTION_SECONDS}`
         ]);

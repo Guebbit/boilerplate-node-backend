@@ -5,7 +5,7 @@
  * this caller may do — but this is the one line that turns storage into wire.
  */
 
-import type { Order, OrderTimelineEntry } from '@types';
+import type { ExportOrder, Order, OrderActions, OrderListItem, OrderTimelineEntry } from '@types';
 import type { OrderDocument, OrderEventDocument } from './model';
 import { TIMELINE_AUDIENCE } from './domain';
 import { decryptPii } from '@infrastructure/security/pii-encryption';
@@ -17,6 +17,28 @@ import { timelineNoteAad } from './pii';
  * cast narrowing what the compiler cannot see through on its own.
  */
 export const presentOrder = (document: OrderDocument): Order => document.toJSON() as Order;
+
+/**
+ * One row of the orders list: only what the table renders, so no address, email, line or note
+ * leaves through a list. The full record is `GET /orders/{id}`, which is audited.
+ *
+ * @param order - the wire order the search produced
+ * @param actions - what the requesting caller may do to it
+ */
+export const presentOrderListItem = (order: ExportOrder, actions: OrderActions): OrderListItem => ({
+    id: order.id,
+    orderNumber: order.orderNumber,
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+    fulfillmentStatus: order.fulfillmentStatus,
+    returnStatus: order.returnStatus,
+    totalPrice: order.totalPrice,
+    currency: order.currency,
+    ...(order.paidAt === undefined ? {} : { paidAt: order.paidAt }),
+    ...(order.createdAt === undefined ? {} : { createdAt: order.createdAt }),
+    ...(order.deletedAt === undefined ? {} : { deletedAt: order.deletedAt }),
+    actions
+});
 
 /**
  * The text of one stored row as a reader gets it: a staff note is ciphertext bound to its order,

@@ -359,6 +359,31 @@ describe('search', () => {
         expect(meta.totalItems).toBe(3);
     });
 
+    it('answers a list item: a message preview of at most 160 characters, no notes, no whole message', async () => {
+        const long = 'a'.repeat(200);
+        await taskService.create(makePayload({ message: long }));
+        await taskService.create(makePayload({ message: 'Short one.', email: 'b@example.com' }));
+
+        const { items } = await taskService.search({}, staff);
+
+        const previews = items.map((item) => item.messagePreview).toSorted();
+        expect(previews).toEqual(['Short one.', `${'a'.repeat(159)}…`]);
+        for (const item of items) {
+            expect(item).not.toHaveProperty('message');
+            expect(item).not.toHaveProperty('notes');
+            expect(item).not.toHaveProperty('subjectId');
+        }
+    });
+
+    it('cuts a preview on whole characters, never through a surrogate pair', async () => {
+        await taskService.create(makePayload({ message: '😀'.repeat(200) }));
+
+        const { items } = await taskService.search({}, staff);
+
+        expect([...new Intl.Segmenter().segment(items[0].messagePreview)]).toHaveLength(160);
+        expect(items[0].messagePreview.endsWith('…')).toBe(true);
+    });
+
     it('filters by status', async () => {
         await seed();
 

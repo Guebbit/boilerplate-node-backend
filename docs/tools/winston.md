@@ -286,9 +286,9 @@ than smuggled — and the call sites that reach `recordAudit` know about neither
 
 ### Retention
 
-| Env var                     | Effect                                                                                                      |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `NODE_AUDIT_RETENTION_DAYS` | how long the Mongo copy survives before its TTL index removes it (def. 90, read by the `audit-logs` module) |
+| Env var                     | Effect                                                                                                       |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `NODE_AUDIT_RETENTION_DAYS` | how long the Mongo copy survives before its TTL index removes it (def. 180, read by the `audit-logs` module) |
 
 Only the queryable copy expires — log retention is [Loki](./loki.md)'s business.
 

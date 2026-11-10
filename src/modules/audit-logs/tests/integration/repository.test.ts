@@ -11,6 +11,7 @@ import { auditLogRepository, AUDIT_SORT } from '@modules/audit-logs/repository';
 import { auditLogService, OWN_ENTRIES_PAGE } from '@modules/audit-logs/service';
 import { coreAuditActions, type AuditEntry } from '@infrastructure/observability/audit';
 import type { AuditLogDocument } from '@modules/audit-logs/model';
+import { auditLogsConfig } from '@modules/audit-logs/config';
 
 setupTestDb();
 
@@ -391,5 +392,87 @@ describe('reading an actor’s own trail by cursor', () => {
 
         expect(entries).toHaveLength(total);
         expect(entries.every((entry) => entry.actorUserId === 'ada')).toBe(true);
+    });
+});
+
+describe('the rows that name a person', () => {
+    const DAY_MS = 86_400_000;
+    const now = Date.now();
+    const daysAgo = (days: number) => new Date(now - days * DAY_MS);
+    // A staff read, written as the sink writes it: a consultation action naming the subject.
+    const read = (overrides: Partial<AuditLogDocument> = {}): Partial<AuditLogDocument> => ({
+        ...makeEntry({ actorUserId: 'staff-1', timestamp: daysAgo(1) }),
+        action: 'admin.order.viewed',
+        targetType: 'order',
+        targetId: 'o-1',
+        subjectId: 'mario',
+        ...overrides
+    });
+
+    it('`subject` filters a search to the rows about one person', async () => {
+        await auditLogRepository.create(read());
+        await auditLogRepository.create(read({ subjectId: 'luisa' }));
+        await auditLogRepository.create(makeEntry());
+
+        const page = await search({ subject: 'mario' });
+
+        expect(page.items.map((item) => item.subjectId)).toEqual(['mario']);
+    });
+
+    it('lists the consultations of one person inside the window, newest first, without the actor', async () => {
+        await auditLogRepository.create(read({ targetId: 'old', timestamp: daysAgo(3) }));
+        await auditLogRepository.create(read({ targetId: 'new', timestamp: daysAgo(1) }));
+        await auditLogRepository.create(read({ targetId: 'out', timestamp: daysAgo(200) }));
+        await auditLogRepository.create(read({ subjectId: 'luisa', targetId: 'other-person' }));
+        await auditLogRepository.create(
+            read({ action: 'admin.user.updated', targetId: 'not-a-read' })
+        );
+
+        const rows = await auditLogRepository.consultationsOf(
+            'mario',
+            ['admin.order.viewed'],
+            daysAgo(180)
+        );
+
+        expect(rows.map((row) => row.targetId)).toEqual(['new', 'old']);
+        expect(Object.keys(rows[0] ?? {}).toSorted()).toEqual([
+            'action',
+            'targetId',
+            'targetType',
+            'timestamp'
+        ]);
+    });
+});
+
+describe('auditLogService.findConsultationsOf', () => {
+    it('answers the window it covers and a purpose per entry, never an actor', async () => {
+        await auditLogRepository.create({
+            ...makeEntry({ actorUserId: 'staff-1', timestamp: new Date() }),
+            action: 'admin.order.viewed',
+            targetType: 'order',
+            targetId: 'o-7',
+            subjectId: 'mario'
+        });
+
+        const answer = await auditLogService.findConsultationsOf('mario');
+
+        expect(answer).toEqual({
+            windowDays: auditLogsConfig().NODE_AUDIT_RETENTION_DAYS,
+            entries: [
+                {
+                    timestamp: expect.any(String) as string,
+                    targetType: 'order',
+                    targetId: 'o-7',
+                    purpose: 'handling your order'
+                }
+            ]
+        });
+    });
+
+    it('answers an empty list, with its window, for a person nobody looked up', async () => {
+        const answer = await auditLogService.findConsultationsOf('nobody');
+
+        expect(answer.entries).toEqual([]);
+        expect(answer.windowDays).toBeGreaterThan(0);
     });
 });

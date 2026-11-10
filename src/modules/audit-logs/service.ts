@@ -14,6 +14,9 @@ import type { AuditAction, AuditEntry } from '@infrastructure/observability/audi
 import { SHOP_REFUSAL_REASONS } from '@modules/access';
 import type { AuditLogDocument } from './model';
 import type { AuditEntryItem } from '@types';
+import { STAFF_READ_PURPOSES } from '@kernel/staff-read';
+import { DAY_MS } from '@domain-primitives/time';
+import { auditLogsConfig } from './config';
 import { logger } from '@infrastructure/adapters/logger';
 import { auditSinkFailuresTotal } from './metrics';
 import { presentIncidentEntry } from './presenter';
@@ -143,13 +146,57 @@ const findOwnAuditEntries = (userId: string): Promise<AuditEntryItem[]> => {
     return readFrom(undefined);
 };
 
+/** What the person is told about one consultation of their data: no staff member, only when, what, why. */
+export interface Consultation {
+    timestamp: string;
+    targetType: string;
+    targetId: string;
+    purpose: string;
+}
+
+/** The account export's "who consulted my data" section: the window it covers, and the entries in it. */
+export interface Consultations {
+    windowDays: number;
+    entries: Consultation[];
+}
+
+/**
+ * Every time staff opened a record about this person, within the retention window, for their own
+ * data export (GDPR Art. 15; CJEU C-579/21: the dates and purposes, not the employee).
+ *
+ * The window is `NODE_AUDIT_RETENTION_DAYS` and the export says so: retention is not extended to
+ * answer it. Guests have no `subjectId`, and the orders CSV export names no person: both are
+ * stated limits, not gaps.
+ *
+ * @param userId - the person asking about their own data
+ */
+const findConsultationsOf = (userId: string): Promise<Consultations> => {
+    const windowDays = auditLogsConfig().NODE_AUDIT_RETENTION_DAYS;
+    const since = new Date(Date.now() - windowDays * DAY_MS);
+
+    return auditLogRepository
+        .consultationsOf(userId, Object.keys(STAFF_READ_PURPOSES), since)
+        .then((rows) => ({
+            windowDays,
+            entries: rows.map((row) => ({
+                timestamp: row.timestamp.toISOString(),
+                targetType: row.targetType,
+                targetId: row.targetId,
+                // A row whose action left the map was filtered out by the query: the lookup holds.
+                purpose: STAFF_READ_PURPOSES[row.action as keyof typeof STAFF_READ_PURPOSES]
+            }))
+        }));
+};
+
 /**
  * The module's one door — `record` is registered as the audit sink, `search` serves a shop's own
- * staff, `searchIncidents` the platform operator and `findOwnAuditEntries` an account's export.
+ * staff, `searchIncidents` the platform operator, `findOwnAuditEntries` and `findConsultationsOf`
+ * an account's export.
  */
 export const auditLogService = {
     record,
     search,
     searchIncidents,
-    findOwnAuditEntries
+    findOwnAuditEntries,
+    findConsultationsOf
 };

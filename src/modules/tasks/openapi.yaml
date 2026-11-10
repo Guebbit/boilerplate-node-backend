@@ -739,6 +739,60 @@ components:
                     minLength: 1
                     maxLength: 5000
 
+        # One row of the staff inbox: what the inbox renders, and the first part of the message
+        # instead of all of it. The whole message, the staff notes and the sender's account come only
+        # from the audited `GET /tasks/{id}`, so paging through the list leaves no way round the read
+        # trail (OWASP API3:2023, Google AIP-157's basic view).
+        TaskListItem:
+            type: object
+            additionalProperties: false
+            required: [id, source, kind, subject, messagePreview, status, overdue, createdAt, actions]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                source:
+                    $ref: '#/components/schemas/TaskSource'
+                kind:
+                    $ref: '#/components/schemas/TaskKind'
+                name:
+                    type: string
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                    description: The sender's address. Present on a visitor task, absent on a system one.
+                subject:
+                    type: string
+                messagePreview:
+                    type: string
+                    maxLength: 160
+                    description: The message cut to 160 characters, ending in `…` when it was longer. The whole message is `GET /tasks/{id}`.
+                category:
+                    $ref: '#/components/schemas/TaskCategory'
+                orderNumber:
+                    type: string
+                    description: The order the visitor said this is about, as they typed it. Not checked against any order.
+                assigneeId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                assigneeName:
+                    type: string
+                    description: The assignee's username.
+                dueAt:
+                    type: string
+                    format: date-time
+                overdue:
+                    type: boolean
+                    description: Open and past `dueAt`, computed at read time.
+                status:
+                    $ref: '#/components/schemas/TaskStatus'
+                    readOnly: true
+                respondedAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+                actions:
+                    $ref: '#/components/schemas/TaskActions'
+
         TasksResponse:
             type: object
             additionalProperties: false
@@ -747,7 +801,7 @@ components:
                 items:
                     type: array
                     items:
-                        $ref: '#/components/schemas/Task'
+                        $ref: '#/components/schemas/TaskListItem'
                 meta:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
 

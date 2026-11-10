@@ -373,6 +373,11 @@ summary, the status move and the events commit together or not at all.
 
 The per-status half (rows 1 and 4) is the `fulfillment` trait in [the status traits](#status-traits).
 
+**A list row is an `OrderListItem`.** `GET /orders` and `POST /orders/search` answer what the table
+renders (number, the four statuses, total and currency, dates, `actions`): no email, address, line or
+note. Those come from `GET /orders/{id}`, which is the audited read. See
+[a list row is a list item](../api/responses.md#a-list-row-is-a-list-item).
+
 **Finding an order by the number the customer quotes.** `GET /orders`, `POST /orders/search` and the
 CSV export take an exact, indexed `orderNumber` filter (`orders_orderNumber`, unique: a receipt number
 names one order). The value is read the way customers type it (`parseOrderNumber`): spaces and a leading

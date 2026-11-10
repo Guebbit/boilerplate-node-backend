@@ -284,7 +284,7 @@ switch; nothing on the shopper's side needs fixing.
 There is a health page that answers plainly. The live activity view that updates by itself is the
 platform operator's, not this desk's (the support role holds no observability permission).
 
-And there is the **90-day record of every staff action**: who changed that price, who cancelled that
+And there is the **180-day record of every staff action**: who changed that price, who cancelled that
 order, when. Most "what happened here?" questions end there, but not from this desk: the record is
 [the moderator's](./moderator.md) and [the manager's](./manager.md) to read, and the desk asks one
 of them. Neither is the platform-wide view a developer or operator would use instead.
@@ -343,12 +343,12 @@ Worth knowing before promising anything to a customer:
 
 ## The words we used
 
-| Word             | In plain terms                                                                                         |
-| ---------------- | ------------------------------------------------------------------------------------------------------ |
-| **Triage**       | Deciding what a new message is and who deals with it. → [`tasks`](../modules/tasks.md)                 |
-| **Verified**     | Confirmed their email. Until then an account can shop but not check out.                               |
-| **Session**      | One signed-in device. → [`account`](../modules/account.md)                                             |
-| **Audit log**    | The 90-day record of staff actions, read by the admin only. → [`audit-logs`](../modules/audit-logs.md) |
-| **Health check** | A page that says whether the shop is running. → [`observability`](../modules/observability.md)         |
-| **Delivery**     | One attempt to notify another system of one event. → [`webhooks`](../modules/webhooks.md)              |
-| **Replay**       | Resending a delivery right now, instead of waiting for its next automatic retry. Manager only.         |
+| Word             | In plain terms                                                                                          |
+| ---------------- | ------------------------------------------------------------------------------------------------------- |
+| **Triage**       | Deciding what a new message is and who deals with it. → [`tasks`](../modules/tasks.md)                  |
+| **Verified**     | Confirmed their email. Until then an account can shop but not check out.                                |
+| **Session**      | One signed-in device. → [`account`](../modules/account.md)                                              |
+| **Audit log**    | The 180-day record of staff actions, read by the admin only. → [`audit-logs`](../modules/audit-logs.md) |
+| **Health check** | A page that says whether the shop is running. → [`observability`](../modules/observability.md)          |
+| **Delivery**     | One attempt to notify another system of one event. → [`webhooks`](../modules/webhooks.md)               |
+| **Replay**       | Resending a delivery right now, instead of waiting for its next automatic retry. Manager only.          |

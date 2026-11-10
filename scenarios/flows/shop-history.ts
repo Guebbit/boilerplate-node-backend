@@ -48,7 +48,7 @@ import {
 /**
  * The oldest order in the shop, in days.
  *
- * Inside `NODE_AUDIT_RETENTION_DAYS` (90) on purpose: the audit trail is TTL-reaped on
+ * Inside `NODE_AUDIT_RETENTION_DAYS` (180) on purpose: the audit trail is TTL-reaped on
  * `timestamp`, so an order backdated past the window would still be here with its own history
  * silently gone — a dataset that contradicts itself in the one screen that exists to explain it.
  */
