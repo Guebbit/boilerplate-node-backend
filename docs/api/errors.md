@@ -82,6 +82,19 @@ Guard-made means the route table decides it: `requireFreshAuth*` or a rule's `st
 `401 REAUTH_REQUIRED`, and a rule's `deniedCode` makes that 403. A service code is caught by the
 runtime check once a test provokes it.
 
+The permission-made codes are not written by hand. A guarded operation names its permission in its
+`security` scopes, and the bundler writes the codes from it
+([the permission on an operation](./contract-fragmentation.md#the-permission-on-an-operation)):
+
+| Code | Status | Written when |
+| --- | --- | --- |
+| the rule's `deniedCode`, else `FORBIDDEN` | 403 | the operation names the permission |
+| `SECOND_FACTOR_ENROLLMENT_REQUIRED` | 403 | a staff role withheld for want of an authenticator app would hold the rule once enrolled |
+| `REAUTH_REQUIRED` | 401 | the rule carries a `stepUp` tier |
+
+`FORBIDDEN` is `scope: app`, so a hand-written list never needs it; on a guarded operation it is
+listed anyway, because the generated list names every code the guard can send.
+
 ### The status-only code
 
 An error that names no cause of its own gets the **official RFC 9110 name of its status**, in

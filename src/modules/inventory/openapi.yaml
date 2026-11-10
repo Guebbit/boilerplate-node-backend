@@ -20,8 +20,8 @@ paths:
             description: The stock board — every product with its three counters and the availability derived from them. Admin; a customer sees `available` on the product itself. Answers the question a catalogue listing cannot, which is WHY something is unbuyable — nothing on the shelf, or everything on it already spoken for.
             operationId: listInventoryLevels
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:StockLevel']
+                - apiKeyAuth: ['read:StockLevel']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -53,8 +53,8 @@ paths:
                 The release date and the title come from the catalogue. Never public: exact counts are what a competitor wants.
             operationId: listPreorderLevels
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:StockLevel']
+                - apiKeyAuth: ['read:StockLevel']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -76,8 +76,8 @@ paths:
             description: One row of the stock board by product, with its counters and availability — the record `receive`, `adjust` and the `PATCH` act on. Same audience as the board (`read:StockLevel`). An unknown product, one with no level row and a malformed id are the same 404.
             operationId: getInventoryLevel
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:StockLevel']
+                - apiKeyAuth: ['read:StockLevel']
             parameters:
                 - name: productId
                   in: path
@@ -103,8 +103,8 @@ paths:
                 Not a stock movement: nothing on the shelf changes, so it leaves no ledger row (it is audited). Needs `update:StockLevel`.
             operationId: updateInventoryLevel
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:StockLevel']
+                - apiKeyAuth: ['update:StockLevel']
             parameters:
                 - name: productId
                   in: path
@@ -139,8 +139,8 @@ paths:
             description: A page of the ledger, newest first — one row per counter change, with every counter delta and the reason attached. Every row was written by the same call that moved the counter, so the ledger cannot have gaps. Paged rather than capped, and `meta.totalItems` counts everything matching the filters — this is the record an audit works through, and a read that returned only the newest rows would misreport history as complete.
             operationId: listStockMovements
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:StockLevel']
+                - apiKeyAuth: ['read:StockLevel']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -177,8 +177,8 @@ paths:
                 '409': [IDEMPOTENCY_IN_FLIGHT]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['create:StockMovement']
+                - apiKeyAuth: ['create:StockMovement']
             parameters:
                 - name: productId
                   in: path
@@ -217,8 +217,8 @@ paths:
                 '409': [IDEMPOTENCY_IN_FLIGHT, INVENTORY_BELOW_RESERVED]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['create:StockMovement']
+                - apiKeyAuth: ['create:StockMovement']
             parameters:
                 - name: productId
                   in: path
@@ -264,8 +264,8 @@ paths:
                 A job behind an admin endpoint rather than an internal schedule. The application ships no scheduler, so the tick is driven from outside — a cron entry, the platform's scheduled job, or an operator. Idempotent; running it twice releases nothing the first run already released.
             operationId: sweepReservations
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['sweep:StockLevel']
+                - apiKeyAuth: ['sweep:StockLevel']
             responses:
                 '200':
                     description: How many holds were expired

@@ -29,8 +29,8 @@ paths:
                 `POST .../{id}/secrets`).
             operationId: listWebhookSubscriptions
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:WebhookSubscription']
+                - apiKeyAuth: ['read:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -78,8 +78,8 @@ paths:
             x-error-codes:
                 '409': [WEBHOOK_SUBSCRIPTION_LIMIT_REACHED]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['create:WebhookSubscription']
+                - apiKeyAuth: ['create:WebhookSubscription']
             requestBody:
                 required: true
                 content:
@@ -111,8 +111,8 @@ paths:
                 shop's subscriptions, whether it never existed or belongs to another shop.
             operationId: getWebhookSubscription
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:WebhookSubscription']
+                - apiKeyAuth: ['read:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -134,8 +134,8 @@ paths:
                 secret, enable or disable it, through its own action route below.
             operationId: replaceWebhookSubscription
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:WebhookSubscription']
+                - apiKeyAuth: ['update:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -164,8 +164,8 @@ paths:
                 through its own action route below.
             operationId: updateWebhookSubscription
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:WebhookSubscription']
+                - apiKeyAuth: ['update:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -194,8 +194,8 @@ paths:
             description: Permanently removes the subscription. Its delivery log is left in place, so past attempts stay auditable.
             operationId: deleteWebhookSubscription
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['delete:WebhookSubscription']
+                - apiKeyAuth: ['delete:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -220,8 +220,8 @@ paths:
             x-error-codes:
                 '409': [WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:WebhookSubscription']
+                - apiKeyAuth: ['update:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -251,8 +251,8 @@ paths:
             x-error-codes:
                 '409': [WEBHOOK_SUBSCRIPTION_ALREADY_DISABLED]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:WebhookSubscription']
+                - apiKeyAuth: ['update:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -283,8 +283,8 @@ paths:
                 200 with the whole subscription (docs/api/write-methods.md).
             operationId: createWebhookSubscriptionSecret
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:WebhookSubscription']
+                - apiKeyAuth: ['update:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -308,8 +308,8 @@ paths:
                 of `POST .../secrets`.
             operationId: deleteWebhookSubscriptionSecret
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:WebhookSubscription']
+                - apiKeyAuth: ['update:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - name: secretId
@@ -336,8 +336,8 @@ paths:
             description: Every attempt, newest first, optionally filtered by subscription and status. The order is fixed - this is a log.
             operationId: listWebhookDeliveries
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:WebhookSubscription']
+                - apiKeyAuth: ['read:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -369,8 +369,8 @@ paths:
             description: One row of this shop's delivery log, the same shape the list gives it, with `actions.replay`. Another shop's delivery, an unknown id and a malformed one are the same 404.
             operationId: getWebhookDelivery
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:WebhookSubscription']
+                - apiKeyAuth: ['read:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -399,8 +399,8 @@ paths:
             x-error-codes:
                 '409': [WEBHOOK_DELIVERY_IN_PROGRESS, WEBHOOK_SUBSCRIPTION_DISABLED]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:WebhookSubscription']
+                - apiKeyAuth: ['update:WebhookSubscription']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -428,8 +428,8 @@ paths:
                 Unpaged: the event catalogue of the deployed modules.
             operationId: listWebhookEvents
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:WebhookSubscription']
+                - apiKeyAuth: ['read:WebhookSubscription']
             responses:
                 '200':
                     description: Every event a subscription may filter on

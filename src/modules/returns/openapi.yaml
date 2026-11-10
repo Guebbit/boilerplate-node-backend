@@ -239,7 +239,7 @@ paths:
             x-error-codes:
                 '409': [RETURN_NOT_DECIDABLE]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Return']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -269,7 +269,7 @@ paths:
             x-error-codes:
                 '409': [RETURN_NOT_DECIDABLE]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Return']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -308,10 +308,9 @@ paths:
                 carries a fresh-session requirement.
             operationId: closeReturn
             x-error-codes:
-                '401': [REAUTH_REQUIRED]
                 '409': [RETURN_NOT_CLOSABLE]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['receive:Return']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -362,7 +361,7 @@ paths:
             x-error-codes:
                 '409': [RETURN_NOT_CANCELABLE, RETURN_REFUND_OPEN]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['update:Return']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -426,11 +425,10 @@ paths:
                 token answers 401 with `errors[].code` `REAUTH_REQUIRED`.
             operationId: receiveReturn
             x-error-codes:
-                '401': [REAUTH_REQUIRED]
                 '409': [DELIVERY_NOT_REOPENABLE, IDEMPOTENCY_IN_FLIGHT, RETURN_NOT_RECEIVABLE, RETURN_REFUND_OPENED_ON_PROOF]
                 '422': [IDEMPOTENCY_KEY_MISMATCH, RETURN_DEDUCTION_INVALID, RETURN_REMEDY_INVALID, RETURN_RESTOCK_INVALID]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['receive:Return']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
@@ -476,11 +474,10 @@ paths:
                 `receive:Return`, which carries a fresh-session requirement.
             operationId: recordProofOfSending
             x-error-codes:
-                '401': [REAUTH_REQUIRED]
                 '409': [RETURN_NOT_RECEIVABLE, RETURN_PROOF_ALREADY_RECORDED]
                 '422': [RETURN_PROOF_DATE_INVALID]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['receive:Return']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
