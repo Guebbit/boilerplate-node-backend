@@ -17,20 +17,14 @@
  * See: docs/api/contract-fragmentation.md
  */
 
+import { isPlainObject } from '../../src/infrastructure/object-guards';
 import type { OpenApiDocument, Step } from './openapi-document';
-
-/** A JSON object, as far as this walk looks. */
-type Json = Record<string, unknown>;
 
 /** The document's components as plain records: the walk below is a generic JSON one. */
 type ComponentMap = Record<string, Record<string, unknown>>;
 
 /** The reference prefix every in-document component pointer starts with. */
 const COMPONENT_PREFIX = '#/components/';
-
-/** Narrows what `parse` hands back to an object. */
-const isObject = (value: unknown): value is Json =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /** What a walk over part of the document found. */
 interface Findings {
@@ -45,7 +39,7 @@ interface Findings {
 /** Records the scheme names in one `security` array. */
 const collectSchemes = (requirements: unknown[], found: Findings): void => {
     for (const requirement of requirements)
-        if (isObject(requirement))
+        if (isPlainObject(requirement))
             for (const scheme of Object.keys(requirement)) found.schemes.add(scheme);
 };
 
@@ -59,7 +53,7 @@ const collect = (node: unknown, found: Findings, key = ''): void => {
         }
         return;
     }
-    if (!isObject(node)) return;
+    if (!isPlainObject(node)) return;
 
     for (const [name, value] of Object.entries(node))
         // The families list tags without using them: counting it would keep every tag alive.

@@ -39,6 +39,7 @@ import { isMap, parse as parseYaml, parseDocument } from 'yaml';
 import { parseExtendsMap, requireDeclared } from './extends-map';
 import { readOpenApiFragment } from './fragments';
 import type { OpenApiDocument, Step } from './openapi-document';
+import { isPlainObject } from '../../src/infrastructure/object-guards';
 import { MODULES_ROOT } from '../modules-on-disk';
 
 /** `openapi.<owner>.yaml`: the owner is the module whose contract the file extends. */
@@ -61,10 +62,6 @@ export interface ExtensionFragment {
     schemas: Record<string, unknown>;
 }
 
-/** Narrows a parsed node to an object. */
-const isObject = (value: unknown): value is Json =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
-
 /**
  * Parses one candidate file, or undefined when it is not an extension (no `x-extends`).
  *
@@ -77,10 +74,11 @@ const readFragment = (
 ): ExtensionFragment | undefined => {
     // `yaml`'s YAML 1.2 loader; the guards below narrow its `any`.
     const parsed: unknown = parseYaml(readFileSync(file, 'utf8'));
-    if (!isObject(parsed) || parsed['x-extends'] === undefined) return undefined;
+    if (!isPlainObject(parsed) || parsed['x-extends'] === undefined) return undefined;
     const extendsSchemas = parseExtendsMap(parsed['x-extends'], `[openapi] ${file}`);
     const { components } = parsed;
-    const schemas = isObject(components) && isObject(components.schemas) ? components.schemas : {};
+    const schemas =
+        isPlainObject(components) && isPlainObject(components.schemas) ? components.schemas : {};
     return {
         module,
         owner,
@@ -175,7 +173,8 @@ export const checkExtensions =
             for (const name of Object.keys(fragment.extendsSchemas)) {
                 const target = schemas[name];
                 const where = `[openapi] ${fragment.file}: x-extends ${name}`;
-                if (!isObject(target)) throw new Error(`${where} names no schema in the bundle.`);
+                if (!isPlainObject(target))
+                    throw new Error(`${where} names no schema in the bundle.`);
                 if (!Array.isArray(target.oneOf) && target['x-enum-from'] !== name)
                     throw new Error(
                         `${where} targets a schema that is neither a oneOf nor declares x-enum-from: ${name}.`
@@ -186,10 +185,10 @@ export const checkExtensions =
 /** The discriminator value a variant carries: its `<propertyName>.enum[0]`. */
 const discriminatorValueOf = (variant: unknown, property: string, where: string): string => {
     const field =
-        isObject(variant) && isObject(variant.properties)
+        isPlainObject(variant) && isPlainObject(variant.properties)
             ? variant.properties[property]
             : undefined;
-    const values: unknown = isObject(field) ? field.enum : undefined;
+    const values: unknown = isPlainObject(field) ? field.enum : undefined;
     const value: unknown = Array.isArray(values) ? values.at(0) : undefined;
     if (typeof value !== 'string')
         throw new Error(
@@ -242,9 +241,9 @@ const appendVariants = (
     fragment: ExtensionFragment
 ): void => {
     const oneOf = union.oneOf as unknown[];
-    const discriminator = isObject(union.discriminator) ? union.discriminator : undefined;
+    const discriminator = isPlainObject(union.discriminator) ? union.discriminator : undefined;
     const mapping =
-        discriminator && isObject(discriminator.mapping) ? discriminator.mapping : undefined;
+        discriminator && isPlainObject(discriminator.mapping) ? discriminator.mapping : undefined;
     const property =
         typeof discriminator?.propertyName === 'string' ? discriminator.propertyName : undefined;
     requireDeclared(names, fragment.schemas, `[openapi] ${fragment.file}`);
@@ -292,7 +291,7 @@ export const withUnionExtensions =
         for (const fragment of fragments)
             for (const [name, variants] of Object.entries(fragment.extendsSchemas)) {
                 const union = schemas[name];
-                if (isObject(union) && Array.isArray(union.oneOf))
+                if (isPlainObject(union) && Array.isArray(union.oneOf))
                     appendVariants(union, variants, schemas, fragment);
             }
     };

@@ -8,6 +8,7 @@
  * See: docs/tools/permission-vocabulary.md
  */
 import { parse } from 'yaml';
+import { isPlainObject } from '../../src/infrastructure/object-guards';
 
 /** Every closed list the shared authorization keys declare, in declared order. */
 export interface PermissionVocabulary {
@@ -56,10 +57,7 @@ const stringList = (raw: Raw, key: string, what: string): string[] => {
  */
 const mappingKeys = (raw: Raw, key: string): string[] => {
     const value = raw[key];
-    const keys =
-        typeof value === 'object' && value !== null && !Array.isArray(value)
-            ? Object.keys(value)
-            : [];
+    const keys = isPlainObject(value) ? Object.keys(value) : [];
     if (keys.length === 0)
         throw new Error(`authorization-keys.generated.yaml declares no \`${key}:\` map`);
     return keys;

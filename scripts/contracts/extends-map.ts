@@ -9,12 +9,7 @@
  * See: docs/api/contract-fragmentation.md#extending-another-modules-contract
  */
 
-/** A JSON object, as far as this file reads it. */
-type Json = Record<string, unknown>;
-
-/** Narrows a parsed node to an object. */
-const isObject = (value: unknown): value is Json =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
+import { isPlainObject } from '../../src/infrastructure/object-guards';
 
 /** Narrows a map value to a list of strings. */
 const isStringList = (value: unknown): value is string[] =>
@@ -29,7 +24,8 @@ const isStringList = (value: unknown): value is string[] =>
  * @throws Error if it is not a map of string lists, or a list is empty or names a value twice
  */
 export const parseExtendsMap = (declared: unknown, where: string): Record<string, string[]> => {
-    if (!isObject(declared)) throw new Error(`${where}: x-extends must be a map of string lists.`);
+    if (!isPlainObject(declared))
+        throw new Error(`${where}: x-extends must be a map of string lists.`);
     const parsed: Record<string, string[]> = {};
     for (const [name, list] of Object.entries(declared)) {
         if (!isStringList(list))
