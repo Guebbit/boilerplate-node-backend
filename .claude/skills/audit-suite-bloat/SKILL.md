@@ -1,8 +1,8 @@
 ---
 name: audit-suite-bloat
 description: Find near-duplicate tests that cost CI time and add no discriminating power
-argument-hint: <module|path|--diff>  (default: modules touched by the working tree)
-allowed-tools: Read, Glob, Grep, Write, Bash(git diff:*), Bash(git status:*), Bash(git branch:*), Bash(ls:*), Bash(npm run mutation:*)
+argument-hint: <module|path|--diff|whole-repo>  (default: whole-repo)
+allowed-tools: Read, Glob, Grep, Write, Bash(git diff:*), Bash(git status:*), Bash(git branch --show-current), Bash(ls:*), Bash(npm run mutation), Bash(npm run audit:check-clean:*)
 ---
 
 Read `scripts/audit/suite-bloat/SKILL.md` and follow it. The scope is: $ARGUMENTS

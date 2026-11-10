@@ -10,7 +10,9 @@ approximating one. This repo has many files under `docs/` stating rules no schem
 
 `scripts/audit/` holds the prompts that work in that gap, plus two that judge something else:
 `code-shape` judges design, `test-honesty` judges whether a test can fail at all. They are plain
-markdown, run by hand against an LLM, and they write reports — never code.
+markdown, run by hand against an LLM, and they write reports — never code. The rules every audit
+shares (read-only, where the report goes, what the scope names mean, the tripwire) live in
+[`scripts/audit/RULES.md`](https://github.com/Guebbit/boilerplate-node-backend/blob/main/scripts/audit/RULES.md), which each prompt reads first.
 
 ## The one rule
 
@@ -101,18 +103,32 @@ signup-consent checkbox, has exactly one home and no second copy to drift from.
 This page is per-repo in the same way. It names this repo's own tools, its own `docs/` count and
 its own findings, so the frontend's copy is _expected_ to differ and must not be reconciled.
 
+Each `api-*` report groups operations by cause; the rule is in each SKILL's Output.
+
 ### Naming the scope
 
-The argument decides the filename, one way only:
+`scripts/audit/RULES.md` rules 4 and 5 own this: the report folder
+(`tmp/reports/audit-<YYYY-MM-DD-HHmm>/<audit>/`), the `<SCOPE>` names, and what an empty argument or
+`--diff` means.
 
-| Argument | `<SCOPE>`                                       |
-| -------- | ----------------------------------------------- |
-| a module | the module name — `orders`                      |
-| a path   | slugged, `src/` dropped — `infrastructure-http` |
-| `--diff` | the current branch name, slugged                |
+| Argument     | `<SCOPE>`                                                           |
+| ------------ | ------------------------------------------------------------------- |
+| a module     | the module name — `orders`                                          |
+| a path       | slugged, `src/` dropped — `infrastructure-http`                     |
+| `--diff`     | the current branch name, slugged                                    |
+| `whole-repo` | `whole-repo` — a skill that runs it per module says so in its SKILL |
 
-`orders.findings.md` tells the next reader what it covers. A batch number does not — never invent <!-- doc-paths:ignore -->
-one.
+An empty argument is `whole-repo`. A batch number never names a report: the module name tells
+the next reader what it covers.
+
+### The tripwire
+
+An audit is read-only. To know it kept that promise, `npm run audit:check-clean` snapshots both
+repos (HEAD, every ref, the stash list, `git status --ignored`, the index hashes) before the run
+and diffs them after, ignoring the run's own report folder. It reports a write after the fact; it
+does not stop one. A peer session in the same worktree shows up as a change, and the reader judges.
+`--ignored` lists an ignored folder (`node_modules/`) as one entry, so a change inside it is not
+seen.
 
 ### The reports are disposable
 
@@ -230,16 +246,18 @@ tool:
   `orders`."_ It needs to be able to read the repo; an audit that cannot open `openapi.yaml` has
   nothing to compare against.
 
-The pointer's `allowed-tools` is Claude Code's permission list: `Read`, `Glob`, `Grep`, `Write` and
-a few `Bash` verbs, with no `Edit`. These prompts report; they never touch source.
+The pointer's `allowed-tools` is Claude Code's permission list: it only skips prompts, and it does
+not keep an audit off the source (`Write` is allowed). What does is rule 1 of `RULES.md`: the audit
+changes nothing but its own report folder. A helper agent that is refused a file write returns the
+report as text, and the caller saves it.
 
 ::: tip Which model
 Claude for `spec-drift` and `spec-gaps` — long-context reasoning over prose vs. code is exactly
 where small local models confabulate citations most confidently, and a fabricated `file:line` costs
 more than the finding was worth.
 
-`suite-bloat` is the exception. It is bookkeeping over `tmp/reports/mutation/mutation.json`, and a local
-Ollama model handles it.
+`suite-bloat` is no exception: the rows that mattered came from reading the code, not from
+bookkeeping over `tmp/reports/mutation/mutation.json`.
 :::
 
 ## `test-honesty`: a test is innocent once it has failed
@@ -283,14 +301,8 @@ fix and the spec it cites.
 
 ### `spec-drift`'s verdicts
 
-A findings table uses four verdicts, and only one of them is a bug:
-
-| Verdict           | Means                                                                              |
-| ----------------- | ---------------------------------------------------------------------------------- |
-| **MISMATCH-CODE** | Spec says X, code does Y, the test asserts Y. The thing this audit exists to find. |
-| **TAUTOLOGY**     | The assertion cannot fail — the expected value is produced by the code under test. |
-| **SPEC-SILENT**   | A sensible assertion no document actually requires. Worth knowing, not a defect.   |
-| **OK**            | Test and spec agree.                                                               |
+The verdict table lives in `scripts/audit/spec-drift/SKILL.md` (`## Verdicts`): one home.
+Only `MISMATCH-CODE` and `TAUTOLOGY` are findings; `SPEC-CONFLICT` says prose is the stale layer.
 
 `TAUTOLOGY` is the quiet one. `expect(f(x)).toEqual(g(x))` where `g` is a sibling export, or a
 `Record<Enum, …>` whose totality TypeScript already enforces, is a test that cannot fail and

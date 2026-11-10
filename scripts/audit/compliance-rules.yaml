@@ -371,13 +371,17 @@ rules:
     - id: automated-decision-human-review
       title: No right to human review of a fully automated significant decision
       category: ai-governance
-      responsibility: backend
+      responsibility: both
       severity: high
       rule: >
-          A decision with a legal or similarly significant effect (e.g. an automatic account
-          suspension, order rejection, or fraud block) made without human involvement must offer the
-          subject a path to obtain human review, express their view, and contest the decision, and
-          the subject must be told it was taken and why.
+          Art. 22(1) is a prohibition in principle (CJEU C-634/21 SCHUFA ¶52-53). A decision based
+          solely on automated processing with a legal or similarly significant effect is made only
+          under an Art. 22(2) exception: necessary for a contract, authorised by law, or explicit
+          consent. Examples of such a decision: an automatic account suspension, order rejection or
+          fraud block. Otherwise a person with authority to change it decides before it takes
+          effect. Where such a decision is made, the subject is told it was taken, why and until
+          when. They can obtain a person's review, give their view and contest it (Art. 22(3),
+          13(2)(f), 15(1)(h)).
       applies_when: >
           APPLICABLE. The automatic purchase hold is a rule-only refusal of new checkouts: after a
           buyer's N-th UNPAID cancellation (either door) or expired reservation inside the window
@@ -388,13 +392,21 @@ rules:
           staff get an email only after, and the account is flagged for review. Whether it reaches
           the "similarly significant effect" bar of GDPR Art. 22(1) is an open question: it is short,
           capped, self-expiring, one shop, and never blocks paying, cancelling, a withdrawal, a
-          return or the account's data rights, but it is an outright refusal to contract. Still checked and NOT-APPLICABLE: antibot
-          (src/infrastructure/http/middlewares/human-challenge.ts, rate-limit.ts, adapters/antibot.ts)
-          is a per-request throttle that never sets a flag on the user record and is retryable next
-          window; payments/services/settlement.ts only records what the provider reports (a decline
+          return or the account's data rights, but it is an outright refusal to contract. Still checked and NOT-APPLICABLE: the throttle and
+          the human check (human-challenge.ts, rate-limit.ts) refuse one request, set no flag on the
+          user, and pass next window. The email-policy step (`NODE_ANTIBOT_EMAIL_POLICY`,
+          adapters/antibot.ts, off by default) judges the address's domain, not the person: a
+          disposable or mail-less domain. Signup answers it with a decoy (account/services/signup.ts
+          `guardEmailPolicy`). The contact form files it as spam (tasks/services/contact.ts
+          `create`). The person can use another address, and the deployer can allowlist a domain
+          (`NODE_ANTIBOT_EMAIL_ALLOWLIST`). Every automatic hold is flagged for a person's review
+          even if a contest message is filtered. So it has no significant effect.
+          payments/services/settlement.ts only records what the provider reports (a decline
           is retryable with another method); the account inactivity reaper has a built-in self-service
           opt-out and restoration goes through an admin. Re-evaluate if a local fraud-scoring or
           risk-model feature is ever added to payments or antibot.
+          Frontend: the cart and profile show the hold's reason, end date and a contact link, and a refused
+          checkout (409 CART_PURCHASE_HOLD) shows the same.
       evidence:
           backend:
               - src/modules/orders/services/purchase-hold.ts, src/modules/orders/domain/purchase-hold.ts
@@ -402,48 +414,69 @@ rules:
               - src/modules/cart/services/checkout.ts (the only door that asks)
               - src/modules/users/emails.ts (the buyer's mail when a hold is placed)
               - src/modules/antibot/**, src/infrastructure/http/middlewares/human-challenge.ts, rate-limit.ts
+              - src/infrastructure/adapters/antibot.ts, src/modules/account/services/signup.ts, src/modules/tasks/services/contact.ts
               - src/modules/payments/services/settlement.ts (settlePayment, applyWebhookSettlement, receiveWebhook, applyWebhookDelivery)
               - src/modules/account/jobs.ts
           frontend:
               - boilerplate-vue-frontend src/modules/account/components/PurchaseHoldNotice.vue (reason, end date, contact link)
+              - boilerplate-vue-frontend SignedInCart.vue, cart/domain/checkout-errors.ts
       references:
           - GDPR Art. 22(1) and 22(3), Recital 71
           - GDPR Art. 21 (right to object to processing based on legitimate interest)
-          - WP29 Guidelines on automated decision-making (WP251), p. 21 (meaningful human involvement)
+          - WP251 rev.01 pp.21-23 (meaningful human involvement, significance threshold, exceptions)
+          - CJEU C-634/21 SCHUFA (7 Dec 2023) ¶44-46 (broad "decision"), ¶52-54 (prohibition in principle; 22(3) safeguards attach to 22(2)(a)/(c))
       notes: >
           Safeguards present: the buyer is told when a hold is placed, why, until when and what still
           works (mail and an in-app notice on the cart and on the profile); a contact route reaches
           staff who can lift it (POST /users/{id}/lift-purchase-hold, which also restarts the count);
           the processing basis and a legitimate-interest assessment are written down
           (docs/theory/data-retention.md); the pause is capped at 7 days and flags the account so a
-          person reviews it (users list filter purchaseHoldReview). Gap: a person only reviews
-          after the fact, so the pause is "solely automated" in the WP251 sense; closing it (a person
-          before the pause) is a product decision the operator owns. The audit must report this
-          rule as APPLICABLE with that gap, not as NOT-APPLICABLE.
+          person reviews it (users list filter purchaseHoldReview). Verdict: SATISFIED when the
+          Art. 22(3) safeguards hold. The house applies them as a precaution while the Art. 22(1)
+          scope is open, so the verdict judges the safeguards, not the prohibition. The mail alone
+          carries all of them, so the backend half closes without the frontend (SATISFIED, not
+          NEEDS-BOTH-SIDES). The frontend audit checks the in-app notice at the point of refusal.
+          Every run's evidence cell adds this line as written: "Art. 22(1) scope open (WP251 p.21:
+          the effect must be comparable to a legal effect). If the pause is significant it is
+          prohibited (C-634/21 ¶52) and no Art. 22(2) exception fits, so the fix is a person before
+          the pause. That is the operator's product choice
+          (docs/theory/data-retention.md#the-purchase-hold)." Re-judge the scope question, and report
+          VIOLATION if it is then judged significant, when the hold loses its 7-day cap, stops ending
+          by itself, stops flagging the account for review, or blocks an order already placed
+          (cancelling a contract is a legal effect, WP251 p.21).
 
 suggested_rules:
     - id: policy-material-change-reconsent
-      title: No re-consent prompt when privacy/cookie/terms policies change materially
+      title: No notice to existing accounts when the Terms or privacy notice change materially
       category: consumer-protection
       responsibility: both
       severity: medium
       rule: >
-          A material change to the privacy policy, cookie policy, or terms must be surfaced to
-          existing users and, where the change affects the lawful basis for processing, re-consent
-          must be obtained rather than assumed from the original acceptance.
+          A material change to the Terms or the privacy notice is told to existing accounts through a
+          notice devoted to it (mail or in-app), before it takes effect. Terms: reasonable notice and
+          the freedom to close the account; each order stays a contract under the version shown at
+          its checkout. Privacy: well in advance when the nature of the processing changes (purpose,
+          controller, recipients, transfers, how rights are exercised); a new purpose is told before
+          it starts. Neither needs a fresh acceptance; a new consent-based purpose asks for that
+          consent separately.
       applies_when: >
-          Only once policy documents are versioned. Depends directly on
-          signup-mandatory-consent-checkbox existing first (its policyVersion field is the mechanism
-          this rule needs) — audit that rule before this one.
+          `termsVersion` exists (`GET /config`, `User.termsVersion`). The privacy notice has no
+          version field; judge its changes on the notice alone.
       evidence:
           backend:
-              - src/modules/users/model.ts (a policyVersion / acceptedPolicyVersion field)
-              - src/modules/account/*.ts (a re-consent-required check on login)
+              - src/modules/users/model.ts (termsVersion)
+              - src/app/config-routes.ts (termsVersion)
               - src/modules/orders/model.ts (termsVersion frozen on each checkout order)
+              - docs/demo-ecommerce/before-you-sell.md ("Changing the terms")
           frontend:
-              - a re-consent modal/banner component
+              - a notice surface (mail or inbox)
       references:
-          - GDPR Art. 7(3) (as easy to withdraw as to give)
+          - UCTD 93/13 Annex 1(j) and 2(b), second paragraph
+          - GDPR Art. 13(3), 14(4)
+          - WP260 rev.01 ¶29-31 pp. 16-17 (https://ec.europa.eu/newsroom/article29/items/622227)
+          - GDPR Art. 6(1)(a) and 7, EDPB Guidelines 05/2020, only for a new consent-based purpose
       suggested_reason: >
-          Natural follow-on to the mandatory-checkbox rule — without it, that checkbox is a one-time
-          formality rather than a living consent record.
+          Promotion waits for the user: the boilerplate builds no notice to existing accounts, so a
+          promoted rule would judge only the operator's row in
+          `docs/demo-ecommerce/before-you-sell.md`, and the verdict set has no operator-duty value
+          (NEEDS-BOTH-SIDES means backend↔frontend).

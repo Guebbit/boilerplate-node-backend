@@ -3,6 +3,9 @@ name: compliance-backend
 description: Audit this backend against the shared compliance registry's backend-responsibility rules
 ---
 
+Before anything else, read `scripts/audit/RULES.md` and follow it. Where this skill and RULES.md
+disagree, RULES.md wins.
+
 ROLE: Compliance reviewer, not a security or code reviewer. You check what this backend
 publishes, records and enforces against a cross-legal-domain rule list — not against this repo's
 own docs' aspirations.
@@ -10,22 +13,15 @@ own docs' aspirations.
 GOAL: For every rule in `scripts/audit/compliance-rules.yaml` whose `responsibility` is `backend`
 or `both`, decide whether it applies here, and if so whether it is met.
 
-SCOPE: the argument you were given — a module name (`orders`), a path, or `--diff` for modules touched by the working
-tree. If empty, audit the **whole repo** — unlike the other audits, an empty scope here is NOT
-"whatever `git status` touched": a compliance gap is almost never introduced by the change that
-happens to surface it. The unsubscribe rule has been violated (harmlessly, today) since the first
+SCOPE: the argument you were given: a module name (`orders`), a path, `--diff` or `whole-repo` (`scripts/audit/RULES.md` rule 5).
+Empty means `whole-repo`: a compliance gap is almost never introduced by the change that happens to
+surface it. The unsubscribe rule has been violated (harmlessly, today) since the first
 transactional-only template, not since the last commit.
 
 ## Naming the scope
 
-Every output file is named `<SCOPE>`, derived one way only:
-
-- empty → `full`
-- a module → the module name (`orders`)
-- a path → the path slugged, `src/` dropped (`src/infrastructure/http` → `infrastructure-http`)
-- `--diff` → the current branch name slugged (`git branch --show-current`)
-
-Never invent a batch number.
+Output goes to `tmp/reports/audit-<run>/compliance-backend/<SCOPE>…`. `<run>` and `<SCOPE>` (module, path slug,
+`--diff` branch slug, `whole-repo`) are defined in RULES.md rule 4.
 
 ## Steps
 
@@ -46,13 +42,14 @@ Never invent a batch number.
     - `responsibility: both` rules: if this side's own evidence already fails the rule, verdict
       `VIOLATION` — that's actionable here regardless of the frontend. If this side is fine but the
       rule's overall intent cannot close without the frontend half, verdict `NEEDS-BOTH-SIDES` and
-      note "frontend half: see /audit:compliance-frontend, same id". Never restate the rule's
+      note "frontend half: see the `compliance-frontend` audit's report
+      (`scripts/audit/compliance-frontend/`), same id". Never restate the rule's
       `rule:` text in the note — cite it by `id` only; the frontend prompt's report is meant to be
       read alongside this one, not duplicated into it.
 
 ## Output
 
-Write `tmp/reports/audit/compliance-backend/<SCOPE>.findings.md`, a table of:
+Write `tmp/reports/audit-<run>/compliance-backend/<SCOPE>.findings.md`, a table of:
 
 | id | title | applicability | verdict | evidence | severity | references |
 
@@ -62,7 +59,6 @@ rows to the terminal, most severe first.
 
 Rules:
 
-- Do NOT change any file. This is a report.
 - A finding needs a citation. No citation, no finding.
 - `NOT-APPLICABLE` needs a reason too — silently skipping a rule is not allowed.
 - `tmp/reports/` is gitignored. These files are working evidence, not deliverables — the conclusions
@@ -70,9 +66,17 @@ Rules:
 
 ## Reading the output
 
-| Verdict              | Means                                                                                                                               |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **VIOLATION**        | The rule applies and this side's evidence fails it — including a `both` rule broken on this side alone.                             |
-| **SATISFIED**        | The rule applies and this side's evidence meets it in full.                                                                         |
-| **NOT-APPLICABLE**   | `applies_when` evaluates false for this app today, reason cited.                                                                    |
-| **NEEDS-BOTH-SIDES** | A `both` rule whose own-side half is fine but whose closure depends on `/audit:compliance-frontend` — see that report by rule `id`. |
+| Verdict              | Means                                                                                                                                  |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **VIOLATION**        | The rule applies and this side's evidence fails it — including a `both` rule broken on this side alone.                                |
+| **SATISFIED**        | The rule applies and this side's evidence meets it in full.                                                                            |
+| **NOT-APPLICABLE**   | `applies_when` evaluates false for this app today, reason cited.                                                                       |
+| **NEEDS-BOTH-SIDES** | A `both` rule whose own-side half is fine but whose closure depends on the `compliance-frontend` audit — see that report by rule `id`. |
+
+## Never carry
+
+Every in-scope rule is judged fresh, so `carried` is not used. A rule out of this run's scope is
+`not re-checked`. In _Since the previous run_ (RULES.md rule 8) the _why_ is one of: a fix sha, new
+code, rule text changed (`git diff <prev-sha> -- scripts/audit/compliance-rules.yaml`), or a
+re-judgement. A re-judgement (evidence paths unchanged since the previous sha) names the registry
+text that caused it, so the rule can be tightened.
