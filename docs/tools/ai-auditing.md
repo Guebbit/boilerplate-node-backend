@@ -187,9 +187,12 @@ an import alias or a re-export, and a wrong count is a wrong verdict.
 The third is ours: knip and jscpd never count how often a _used_ function is called, and nothing
 maintained on npm reports these shapes. It reads the TypeScript checker, so an alias, a re-export,
 an `obj.fn` read off an object written `{ fn }` and a destructured name each count as a use of the one
-function. The `{ fn }` slot itself and a recursive call are not uses, and a function an object a barrel
-publishes carries counts as published. A type-only re-export publishes nothing. Known limit: a member
-typed by an interface (`const x: Port = { fn }`) is not followed. No library does this: TypeScript's
+function. A recursive call is not a use. The `{ fn }` slot of an unexported, untyped local object is
+plumbing, because the later `obj.fn` read is the use; in a call argument, a returned, exported or
+interface-typed object the slot is a use, since that is how a handler is registered. A function an
+object a barrel publishes carries counts as published. A type-only re-export publishes nothing. Known
+limit: `obj.fn` on an interface-typed object is not followed, so only its `{ fn }` slot counts. No
+library does this: TypeScript's
 find-references and knip both miss `obj.fn`. It lives in `scripts/audit/code-shape/scripts/`.
 
 ```mermaid
