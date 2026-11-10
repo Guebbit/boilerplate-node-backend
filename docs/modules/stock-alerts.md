@@ -49,7 +49,9 @@ this repo.
 **The click is the consent.** An explicit "Notify me" on one product is specific prior consent for
 that one mail, so the mail carries no other promotion (adding one, or sending it twice, makes it
 marketing: it then needs an unsubscribe and ePrivacy Art. 13 consent), and the request is deleted
-when it is answered. Signed-in only: there is no guest double opt-in to run, and
+when it is answered. The consent counts only from a proven mailbox: an account whose address is
+unverified gets the inbox row and never the mail, checked at send time (so verifying before the
+restock is enough). Signed-in only: there is no guest double opt-in to run, and
 [account erase](./account.md) covers the rows through `personalData`.
 
 **The button only exists while the product cannot be ordered.** `POST /stock-alerts` (the product in the body) is
@@ -96,7 +98,7 @@ flowchart LR
 
 The delete is the guard: a request cancelled meanwhile, or answered by a redelivery of the signal,
 finds nothing to delete and sends nothing. A mail that fails is logged; the inbox row stands. An account that is locked (banned, or in the grace
-of its own deletion) is not mailed at all: the request is still answered and deleted, the inbox row
+of its own deletion) or whose address is unverified is not mailed at all: the request is still answered and deleted, the inbox row
 stands.
 
 ## Related pages
