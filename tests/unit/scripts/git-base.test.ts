@@ -53,7 +53,7 @@ describe('mergeBase', () => {
 });
 
 describe('gitEnvironment', () => {
-    /** Variables git reads that must never reach a nested call aimed at another checkout. */
+    /** The documented minimum: variables git reads that must never reach a nested call. */
     const SANDBOX = [
         'GIT_DIR',
         'GIT_WORK_TREE',
@@ -78,12 +78,12 @@ describe('gitEnvironment', () => {
         expect(SANDBOX.filter((name) => name in environment)).toEqual([]);
     });
 
-    it('keeps the rest, git settings that are not local included', () => {
+    it('drops any other GIT_* variable too, and keeps the rest', () => {
         setProcessEnvironment({ KEEP_ME: '1', GIT_EXEC_PATH: '/usr/lib/git-core' });
 
-        expect(gitEnvironment()).toMatchObject({
-            KEEP_ME: '1',
-            GIT_EXEC_PATH: '/usr/lib/git-core'
-        });
+        const environment = gitEnvironment();
+
+        expect(environment.GIT_EXEC_PATH).toBeUndefined();
+        expect(environment.KEEP_ME).toBe('1');
     });
 });
