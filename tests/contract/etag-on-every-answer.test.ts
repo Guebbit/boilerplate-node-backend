@@ -18,6 +18,7 @@ import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import { OrderStatus } from '@types';
 
 setupTestDb();
 
@@ -285,6 +286,84 @@ const DOORS: Door[] = [
         }
     },
     {
+        name: 'POST /users/{id}/revoke-role',
+        run: async () => {
+            const { bearer } = await authenticateAs('admin');
+            const id = await targetOf();
+            await post(`/users/${id}/assign-role`, bearer, { role: 'support' }).expect(200);
+            const answer = await post(`/users/${id}/revoke-role`, bearer);
+            return { answer, resource: `/users/${id}`, bearer, edit: EDITS.user };
+        }
+    },
+    {
+        name: 'POST /users/{id}/lift-purchase-hold',
+        run: async () => {
+            const { bearer } = await authenticateAs('admin');
+            const id = await targetOf();
+            await post(`/users/${id}/place-purchase-hold`, bearer, {
+                until: new Date(Date.now() + 86_400_000).toISOString()
+            }).expect(200);
+            const answer = await post(`/users/${id}/lift-purchase-hold`, bearer);
+            return { answer, resource: `/users/${id}`, bearer, edit: EDITS.user };
+        }
+    },
+    {
+        name: 'POST /examples/{id}/unarchive',
+        run: async () => {
+            const { bearer } = await authenticateAs('admin');
+            const created = await post('/examples', bearer, { title: 'First', body: 'Hello' });
+            const resource = created.headers['content-location'];
+            await post(`${resource}/publish`, bearer).expect(200);
+            await post(`${resource}/archive`, bearer).expect(200);
+            const answer = await post(`${resource}/unarchive`, bearer);
+            return { answer, resource, bearer, edit: EDITS.example };
+        }
+    },
+    {
+        name: 'POST /orders/{id}/restore',
+        run: async () => {
+            const { bearer, user } = await authenticateAs('admin');
+            const product = await createProduct();
+            // Only a canceled order may be deleted.
+            const order = await createOrder(user, [toOrderItem(product, 1)], {
+                status: OrderStatus.canceled
+            });
+            const resource = `/orders/${String(order._id)}`;
+            await api().delete(resource).set('Authorization', bearer).expect(204);
+            const answer = await post(`${resource}/restore`, bearer);
+            return { answer, resource, bearer, edit: EDITS.order };
+        }
+    },
+    {
+        name: 'POST /orders/{id}/override-status',
+        run: async () => {
+            const { bearer, user } = await authenticateAs('admin');
+            const product = await createProduct();
+            const order = await createOrder(user, [toOrderItem(product, 1)], {
+                status: OrderStatus.paid
+            });
+            const resource = `/orders/${String(order._id)}`;
+            const answer = await post(`${resource}/override-status`, bearer, {
+                to: 'processing',
+                reason: 'paid offline, forcing it forward'
+            });
+            return { answer, resource, bearer, edit: EDITS.order };
+        }
+    },
+    {
+        name: 'POST /orders/{id}/process',
+        run: async () => {
+            const { bearer, user } = await authenticateAs('admin');
+            const product = await createProduct();
+            const order = await createOrder(user, [toOrderItem(product, 1)], {
+                status: OrderStatus.paid
+            });
+            const resource = `/orders/${String(order._id)}`;
+            const answer = await post(`${resource}/process`, bearer);
+            return { answer, resource, bearer, edit: EDITS.order };
+        }
+    },
+    {
         name: 'POST /locales (a create)',
         run: async () => {
             const { bearer } = await authenticateAs('admin');
@@ -325,6 +404,12 @@ const DOOR_OPERATIONS: Record<string, string> = {
     'POST /locales/{locale}/deactivate': 'deactivateLocale',
     'POST /locales/{locale}/activate': 'activateLocale',
     'POST /locales (a create)': 'createLocale',
+    'POST /users/{id}/revoke-role': 'revokeUserRole',
+    'POST /users/{id}/lift-purchase-hold': 'liftUserPurchaseHold',
+    'POST /examples/{id}/unarchive': 'unarchiveExample',
+    'POST /orders/{id}/restore': 'restoreOrderById',
+    'POST /orders/{id}/override-status': 'overrideOrderStatus',
+    'POST /orders/{id}/process': 'processOrder',
     'POST /account/email-change': 'requestEmailChange'
 };
 
@@ -387,18 +472,13 @@ const EXEMPT: Record<string, string> = {
 };
 
 /**
- * Tagged writes with no door above, each held to its header by the shared `afterEach` wherever a
- * contract test calls it (a declared header that is not sent fails the answer). A new tagged write
- * is not on this list until someone says where its tag is proven.
+ * Tagged writes with no door above, each with the test that asserts BOTH its `ETag` and its
+ * `Content-Location`.
  */
 const NO_DOOR: Record<string, string> = {
-    checkout: 'the cart contract tests',
-    processOrder: 'the delivery contract tests',
-    unarchiveExample: 'the example module contract tests',
-    restoreOrderById: 'the orders contract tests',
-    overrideOrderStatus: 'the orders contract tests',
-    revokeUserRole: 'the users contract tests',
-    liftUserPurchaseHold: 'the users contract tests'
+    // Needs a cart with stock and a shipping method, which only the cart module's own support builds.
+    checkout:
+        'src/modules/cart/tests/contract/api.contract.test.ts:725-726 (ETag and Content-Location of the placed order)'
 };
 
 /** The schema name a 2xx answer's JSON body refers to, if it refers to one. */

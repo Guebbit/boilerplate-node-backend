@@ -721,6 +721,9 @@ describe('POST /cart/checkout', () => {
         expect(response.body.order).toBeUndefined();
         expect(response.body.termsVersion).toEqual(expect.any(String));
         expect(response.headers.location).toBe(`/orders/${String(response.body.id)}`);
+        // The order's real tag, named by `Content-Location`, so its first edit needs no read.
+        expect(response.headers.etag).toEqual(expect.any(String));
+        expect(response.headers['content-location']).toBe(`/orders/${String(response.body.id)}`);
     });
 
     /*
