@@ -14,6 +14,8 @@ import type {
     ReplaceLocaleEntriesRequest
 } from '@types';
 import { successResponse } from '@infrastructure/http/response';
+import { setEtag, withIfMatch } from '@infrastructure/http/preconditions';
+import { EDIT_REVISION } from '@infrastructure/persistence/revision-plugin';
 import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
@@ -38,17 +40,24 @@ const importEntries =
         const body = parseBody(schema, request.body, response);
         if (!body) return;
 
-        return localeService
-            .importEntries(
+        // Keyed by the normalized tag: the repository's fence names the language the same way.
+        const tag = localeService.normalizeTag(request.params.locale);
+
+        return withIfMatch(request, tag, () =>
+            localeService.importEntries(
                 request.params.locale,
                 request.params.app,
                 body.entries,
                 mode,
                 callerContextOf(request)
             )
+        )
             .then((result) => {
                 if (refused(response, result)) return;
 
+                // The language's new revision, so the next import needs no re-export. The tag's
+                // version is the dictionary counter; a PUT answer drops it (RFC 9110 §9.3.4).
+                setEtag(response, { [EDIT_REVISION]: result.data.revision });
                 return successResponse<LocaleImportResult>(response, result.data);
             })
             .catch(

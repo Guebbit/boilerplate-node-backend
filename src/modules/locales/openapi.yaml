@@ -66,6 +66,8 @@ tags:
 paths:
     # --------- Locales ---------
     /locales:
+        # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the language this answers.
+        x-versioned: [post]
         get:
             x-cache: revalidate
             tags: [Locales]
@@ -487,6 +489,9 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
     /locales/{locale}/entries:
+        # Bundler: adds `ETag` to the 200. Its version is the language's `revision`: the tag the
+        # imports on `/locales/{locale}/apps/{app}/entries` take as `If-Match`.
+        x-versioned: [get]
         get:
             tags: [Locales]
             summary: List translation entries
@@ -498,6 +503,9 @@ paths:
                 `text` searches keys and values together. Every app's rows are listed; one app's
                 slice is a resource of its own, `/locales/{locale}/apps/{app}/entries`, which is
                 where it is written.
+
+                The `ETag` is the language's dictionary version, whichever app's rows were
+                listed: send it as `If-Match` on an import and a write that landed since is a 412.
             operationId: listLocaleEntries
             x-error-codes:
                 '404': [LOCALE_LANGUAGE_NOT_FOUND]
@@ -526,6 +534,11 @@ paths:
     # path, a query string only filters a read), so a PUT replaces exactly what the GET on the SAME
     # URI lists.
     /locales/{locale}/apps/{app}/entries:
+        # Bundler: adds `ETag` to the GET and the PATCH answer, and `If-Match` plus 412 to the two
+        # imports. The version is the language's `revision`, moved by a write to ANY of its apps.
+        # The single-entry writes below take no `If-Match`: they move the same counter, in one
+        # transaction with their row, so the imports are the only writes that need fencing.
+        x-versioned: [get, put, patch]
         get:
             tags: [Locales]
             summary: List one app's translation entries
@@ -537,6 +550,9 @@ paths:
                 `text` searches keys and values together. Only this app's rows, at the address
                 the writes below target; an app the deployment does not configure is refused
                 with a 422.
+
+                The `ETag` is the language's dictionary version, the same one `GET
+                /locales/{locale}/entries` answers: a write to any app moves it.
             operationId: listAppLocaleEntries
             x-error-codes:
                 '404': [LOCALE_LANGUAGE_NOT_FOUND]
@@ -615,6 +631,10 @@ paths:
 
                 Nobody adds five hundred keys through a form; without this the admin surface is a
                 demo.
+
+                `If-Match` takes the tag of a list read of this language: when any entry of it
+                (in any app) was written since, the import is refused with a 412 and writes
+                nothing. An import that would change nothing is checked too.
             operationId: replaceLocaleEntries
             x-error-codes:
                 '404': [LOCALE_LANGUAGE_NOT_FOUND]
@@ -653,6 +673,9 @@ paths:
 
                 See `PUT` on this collection for the replacing counterpart, and for why the choice
                 lives in the method.
+
+                `If-Match` is checked as on the `PUT`, and the answer's `ETag` is the language's
+                new version.
             operationId: updateLocaleEntries
             x-error-codes:
                 '404': [LOCALE_LANGUAGE_NOT_FOUND]
