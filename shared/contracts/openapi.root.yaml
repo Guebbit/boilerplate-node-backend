@@ -392,7 +392,9 @@ components:
                 (`IDEMPOTENCY_KEY_REQUIRED`) and nothing is written. Repeating the request with the
                 SAME key and the SAME body replays the first response (`Idempotent-Replayed: true`, no
                 repeated write); the same key with a DIFFERENT body answers 422; a key still being
-                processed by another in-flight request answers 409.
+                processed by another in-flight request answers 409. A 429 is never stored: every
+                budget refuses before the key is claimed, so a retry after `Retry-After` with the
+                same key runs for real.
 
         # Optional: a caller without a key still writes, unprotected. The required twin is
         # `RequiredIdempotencyKeyHeader`.
@@ -412,8 +414,10 @@ components:
                 Repeating this request with the SAME key and the SAME body replays
                 the first response (`Idempotent-Replayed: true`, no repeated write) instead of
                 running it again; the same key with a DIFFERENT body answers 422; a key still
-                being processed by another in-flight request answers 409. Omitting the header
-                simply forgoes replay protection — the write still happens normally.
+                being processed by another in-flight request answers 409. A 429 is never stored:
+                every budget refuses before the key is claimed, so a retry after `Retry-After` with
+                the same key runs for real. Omitting the header simply forgoes replay protection —
+                the write still happens normally.
 
         # Declared once here and added to a versioned path's PUT/PATCH/DELETE by the bundler, from
         # the path item's `x-versioned` marker (`scripts/contracts/openapi-bundle.ts`) — never
@@ -560,7 +564,8 @@ components:
             description: >-
                 `true` when this answer is the stored first answer replayed for a repeated
                 `Idempotency-Key`, not a fresh run: nothing was written a second time. Absent on a
-                first run. Sent on a replay only.
+                first run. Sent on a replay only. Declared on every answer of an operation that
+                takes an `Idempotency-Key` except a 429, which the ledger never sees.
             schema:
                 type: string
                 enum: ['true']
