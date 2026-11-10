@@ -108,6 +108,20 @@ describe('extensionFragments', () => {
         expect(Object.keys(found[0].schemas)).toEqual(['ShopNotice']);
     });
 
+    it.each([
+        ['an empty file', ''],
+        ['a comment-only file', '# nothing here yet\n']
+    ])(
+        'refuses %s: a fragment that adds nothing is a mistake, not a skipped file',
+        (_name, text) => {
+            const root = modulesWith({ 'shop/openapi.owner.yaml': text });
+
+            expect(() => extensionFragments(root)).toThrow(
+                /openapi\.owner\.yaml: fragment is empty/
+            );
+        }
+    );
+
     it('refuses an x-extends that is not a map of string lists', () => {
         const root = modulesWith({ 'shop/openapi.owner.yaml': 'x-extends:\n    Kind: nope\n' });
 

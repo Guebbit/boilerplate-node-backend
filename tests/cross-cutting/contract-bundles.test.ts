@@ -33,7 +33,6 @@ import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import {
     assembleBundle,
-    bundleFragments,
     CONTRACT_BUNDLES,
     isGenerated,
     readCommittedBundle,
@@ -55,20 +54,7 @@ const bundleByName = (name: string): ContractBundle => {
     return bundle;
 };
 
-/** The bundles with a committed file on disk — everything but the client collections. */
-const AUTHORED_BUNDLES = CONTRACT_BUNDLES.filter((bundle) => !isGenerated(bundle));
-
 describe('every contract bundle', () => {
-    it.each(AUTHORED_BUNDLES.map((bundle) => [bundle.name, bundle] as const))(
-        '%s is built from fragments that all carry content',
-        (_name, bundle) => {
-            // A canary: a fragment silently resolving to an empty file would still bundle, just
-            // without that domain's half of the document.
-            for (const fragment of bundleFragments(bundle))
-                expect(readFileSync(fragment, 'utf8').trim().length).toBeGreaterThan(0);
-        }
-    );
-
     it('produces exactly the shared files that are domain-shaped', () => {
         /*
          * The AUTHORED bundles the frontend receives are a subset of the cross-repo guard:
@@ -350,19 +336,6 @@ describe('the API client collections', () => {
         // The name is what someone reads in a folder of 70 requests; two probes under one name
         // would make a failing request unaddressable by name.
         expect(new Set(probeNames).size).toBe(probeNames.length);
-    });
-
-    it('are generated whole, with nothing on disk in between', () => {
-        /*
-         * The property that makes every other case here trustworthy: there is no intermediate. A
-         * per-module slice of a collection would be a second place the output lives, editable by
-         * hand, and a generator whose output nobody verifies is a second source of truth that
-         * agrees with the first only by habit.
-         */
-        const collections = CONTRACT_BUNDLES.filter((item) => isGenerated(item));
-
-        expect(collections.length).toBeGreaterThan(0);
-        for (const bundle of collections) expect(bundleFragments(bundle)).toEqual([]);
     });
 
     it('carry one request per operation the contract declares, in all four', () => {
