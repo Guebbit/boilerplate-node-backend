@@ -475,7 +475,7 @@ describe('the history reads as a history', () => {
         expect(daysBack).toBeGreaterThan(30);
         // Inside `NODE_AUDIT_RETENTION_DAYS` (180), or the trail behind the oldest order is reaped
         // and the dataset contradicts itself in the one screen meant to explain it.
-        expect(daysBack).toBeLessThan(90);
+        expect(daysBack).toBeLessThan(180);
     });
 
     it('moves an order and its audit trail together', async () => {

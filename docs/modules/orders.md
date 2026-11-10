@@ -452,7 +452,7 @@ already `shipped` makes the second call silent.
 What happened to an order, a page at a time, newest first: `GET /orders/{id}/timeline`. One append-only collection,
 `orderevents`, owned by `orders` and typed as an `AppendOnlyLedger` (the stock-movement precedent).
 It is its own collection because the alternatives fail: an array on the order collides with the
-conditional status writes siblings make in their own transactions, the audit log expires at 90
+conditional status writes siblings make in their own transactions, the audit log expires at 180
 days, and rebuilding from the siblings would need reads `orders` may not make.
 
 ```mermaid

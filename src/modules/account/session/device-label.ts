@@ -5,7 +5,7 @@
  * the list. Browser and system only: no version, no model, no IP, so it names a kind of device and
  * nothing that could single one out beyond what the owner already knows.
  *
- * The audit log already keeps the raw User-Agent for 90 days; this is one shorter, friendlier copy,
+ * The audit log already keeps the raw User-Agent for 180 days; this is one shorter, friendlier copy,
  * shown back to the person it describes. See docs/theory/data-protection.md.
  */
 
