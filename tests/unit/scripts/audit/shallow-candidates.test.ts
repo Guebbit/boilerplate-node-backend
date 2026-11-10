@@ -296,32 +296,47 @@ describe('published', () => {
 });
 
 describe('functions carried by an object', () => {
-    const SERVICE = 'const add = (a: number, b: number) => a + b;\nexport const svc = { add };';
+    const ADD = 'const add = (a: number, b: number) => a + b;';
 
-    it('counts each obj.fn read as one use, and the { fn } slot as none', () => {
+    it('counts each obj.fn read as one use, and the slot of a local object as none', () => {
         const report = analyse({
-            'src/svc.ts': SERVICE,
-            'src/use.ts':
-                "import { svc } from './svc';\nexport const one = svc.add(1, 2);\nexport const two = svc.add(3, 4);"
+            'src/svc.ts': `${ADD}\nconst svc = { add };\nexport const one = svc.add(1, 2);\nexport const two = svc.add(3, 4);`
         });
 
-        const add = report.smallAndRare.find((fn) => fn.name === 'add');
-
-        expect(add?.references).toBe(2);
-        expect(add?.referencedFrom).toEqual(['src/use.ts']);
+        expect(report.smallAndRare.find((fn) => fn.name === 'add')?.references).toBe(2);
     });
 
-    it('does not count a function only the object carries, nothing ever reads', () => {
-        const report = analyse({ 'src/svc.ts': SERVICE });
+    it('does not count a function only an unread local object carries', () => {
+        const report = analyse({
+            'src/svc.ts': `${ADD}\nconst svc = { add };\nexport const n = 1;`
+        });
 
         expect(namesOf(report.smallAndRare)).not.toContain('add');
     });
 
+    it('counts a function handed over in a call argument: that is how a handler is registered', () => {
+        const report = analyse({
+            'src/reg.ts':
+                'const fn = (n: number) => n;\nconst register = (options: { handler: (n: number) => number }) => options;\nexport const registered = register({ handler: fn });'
+        });
+
+        expect(report.smallAndRare.find((fn) => fn.name === 'fn')?.references).toBe(1);
+    });
+
+    it('counts a function in a returned object, an exported object and an interface-typed one', () => {
+        const report = analyse({
+            'src/shapes.ts':
+                'const a = (n: number) => n;\nconst b = (n: number) => n;\nconst c = (n: number) => n;\ninterface Port { c: (n: number) => number }\nexport const make = () => ({ a });\nexport const exported = { b };\nconst typed: Port = { c };\nexport const t = typed;'
+        });
+
+        expect(
+            Object.fromEntries(report.smallAndRare.map((fn) => [fn.name, fn.references]))
+        ).toMatchObject({ a: 1, b: 1, c: 1 });
+    });
+
     it('follows an x: fn slot the same way', () => {
         const report = analyse({
-            'src/svc.ts':
-                'const add = (a: number, b: number) => a + b;\nexport const svc = { plus: add };',
-            'src/use.ts': "import { svc } from './svc';\nexport const one = svc.plus(1, 2);"
+            'src/svc.ts': `${ADD}\nconst svc = { plus: add };\nexport const one = svc.plus(1, 2);`
         });
 
         expect(report.smallAndRare.find((fn) => fn.name === 'add')?.references).toBe(1);
@@ -329,8 +344,7 @@ describe('functions carried by an object', () => {
 
     it('reaches a function through an object spread', () => {
         const report = analyse({
-            'src/svc.ts': `${SERVICE}\nexport const outer = { ...svc };`,
-            'src/use.ts': "import { outer } from './svc';\nexport const one = outer.add(1, 2);"
+            'src/svc.ts': `${ADD}\nconst svc = { add };\nconst outer = { ...svc };\nexport const one = outer.add(1, 2);`
         });
 
         expect(report.smallAndRare.find((fn) => fn.name === 'add')?.references).toBe(1);
@@ -339,8 +353,7 @@ describe('functions carried by an object', () => {
     it('treats obj.fn(…) as a direct call, so an optional parameter nobody passes shows', () => {
         const report = analyse({
             'src/svc.ts':
-                'const at = (day: number, now?: number) => day + (now ?? 0);\nexport const svc = { at };',
-            'src/use.ts': "import { svc } from './svc';\nexport const today = svc.at(1);"
+                'const at = (day: number, now?: number) => day + (now ?? 0);\nconst svc = { at };\nexport const today = svc.at(1);'
         });
 
         expect(report.optionalNeverPassed.map((fn) => fn.name)).toEqual(['at']);
@@ -348,8 +361,7 @@ describe('functions carried by an object', () => {
 
     it('does not follow a member of the same name on an unrelated object', () => {
         const report = analyse({
-            'src/svc.ts': SERVICE,
-            'src/other.ts': 'export const other = { add: 5 };\nexport const n = other.add;'
+            'src/svc.ts': `${ADD}\nconst svc = { add };\nconst other = { add: 5 };\nexport const n = other.add;`
         });
 
         expect(namesOf(report.smallAndRare)).not.toContain('add');
@@ -360,9 +372,7 @@ describe('destructured names', () => {
     it('counts const { fn } = obj as one use of fn', () => {
         const report = analyse({
             'src/svc.ts':
-                'const add = (a: number, b: number) => a + b;\nexport const svc = { add };',
-            'src/use.ts':
-                "import { svc } from './svc';\nconst { add } = svc;\nexport const one = add(1, 2);"
+                'const add = (a: number, b: number) => a + b;\nconst svc = { add };\nconst { add: alias } = svc;\nexport const one = alias(1, 2);'
         });
 
         expect(report.smallAndRare.find((fn) => fn.name === 'add')?.references).toBe(1);

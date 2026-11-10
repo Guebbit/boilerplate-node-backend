@@ -6,9 +6,10 @@
  * Counts only — every verdict is the audit's, see `scripts/audit/code-shape/SKILL.md`.
  * Built on the TypeScript checker rather than a text search: an import alias, a re-export, an
  * `obj.fn` read off an object written `{ fn }`, or a destructured name resolves to the one function
- * it names. The `{ fn }` slot is plumbing, not a use; a self-call is not a use.
+ * it names. A self-call is not a use. The `{ fn }` slot of an unexported, untyped local object is
+ * plumbing; in a call argument, a returned, exported or interface-typed object it is a use.
  *
- * Limit:      a member typed by an interface (`const x: Port = { fn }`) is not followed.
+ * Limit:      `obj.fn` on an interface-typed object is not followed; its `{ fn }` slot counts instead.
  * No library: TypeScript's find-references and knip both miss `obj.fn`.
  */
 import path from 'node:path';
@@ -256,20 +257,44 @@ const namedFunctionOf = (node: ts.Node): NamedFunction | undefined => {
 };
 
 /**
- * Whether an identifier is the slot of an object written `{ fn }` or `{ x: fn }`.
- * The slot only hands the function to the object — a use is the later `obj.fn` — so it is
- * plumbing, like an export specifier.
+ * Whether an object literal is the initial value of a local variable that is neither exported nor
+ * typed: nothing outside the file can take the object and call what it carries by a name the checker
+ * does not see, so the only uses are the later `obj.fn` reads.
+ *
+ * @param object - the object literal
+ * @returns `true` for an untyped, unexported variable's value
+ */
+const isBoundToLocal = (object: ts.ObjectLiteralExpression): boolean => {
+    let node: ts.Node = object.parent;
+    while (
+        ts.isParenthesizedExpression(node) ||
+        ts.isAsExpression(node) ||
+        ts.isSatisfiesExpression(node) ||
+        ts.isNonNullExpression(node)
+    )
+        node = node.parent;
+    return ts.isVariableDeclaration(node) && !node.type && !isExported(node);
+};
+
+/**
+ * Whether an identifier is plumbing in an object written `{ fn }` or `{ x: fn }`: the key of
+ * `x: fn`, or the slot of an object bound to a local variable. Anywhere else — a call argument,
+ * a returned or exported object, an interface-typed one — handing `fn` over IS a use, because
+ * that is how a handler gets registered.
  *
  * @param identifier - the identifier in use position
- * @returns `true` for a slot
+ * @returns `true` when it is not a use (also the key of a destructured `{ fn: alias }`)
  */
 const isObjectSlot = (identifier: ts.Identifier): boolean => {
     const { parent } = identifier;
-    return (
-        (ts.isShorthandPropertyAssignment(parent) && parent.name === identifier) ||
-        // Both the key and the value of `{ x: fn }`: the key resolves to the function too.
-        ts.isPropertyAssignment(parent)
-    );
+    // `{ add: alias } = svc`: the key is read once, through the bound name.
+    if (ts.isBindingElement(parent) && parent.propertyName === identifier) return true;
+    // The key resolves to the function too, so it is never counted.
+    if (ts.isPropertyAssignment(parent) && parent.name === identifier) return true;
+    const slot =
+        ts.isShorthandPropertyAssignment(parent) ||
+        (ts.isPropertyAssignment(parent) && parent.initializer === identifier);
+    return slot && ts.isObjectLiteralExpression(parent.parent) && isBoundToLocal(parent.parent);
 };
 
 /**
