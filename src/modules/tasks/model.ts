@@ -225,6 +225,11 @@ export const taskSchema = new Schema<TaskDocument, TaskModel>(
 taskSchema.index({ routeSet: 1, status: 1, dueAt: 1 });
 
 /*
+ * The reminder sweeps' read: open tasks, oldest deadline first.
+ */
+taskSchema.index({ status: 1, dueAt: 1 });
+
+/*
  * "Mine": one staff member's open work.
  */
 taskSchema.index(

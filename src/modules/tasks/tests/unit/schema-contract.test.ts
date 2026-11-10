@@ -46,7 +46,7 @@ describe('taskSchema', () => {
         expect(defaultOf(taskSchema, 'status')).toBe(TaskStatus.new);
     });
 
-    it('indexes the operator queue and the retention sweep', () => {
+    it('indexes the operator queue, the reminder sweeps and the retention sweep', () => {
         // The queue — "what is still open, most recent first" — plus the TTL index below.
         expect(indexSpecs(taskSchema)).toEqual([
             'assigneeId_1_status_1: assigneeId+1, status+1',
@@ -56,6 +56,7 @@ describe('taskSchema', () => {
             'eventIds_1: eventIds+1',
             'openKey_1: openKey+1',
             'routeSet_1_status_1_dueAt_1: routeSet+1, status+1, dueAt+1',
+            'status_1_dueAt_1: status+1, dueAt+1',
             'subjectId_1: subjectId+1'
         ]);
     });
@@ -76,6 +77,7 @@ describe('taskSchema', () => {
             'eventIds_1: partialFilterExpression={"eventIds":{"$exists":true}}',
             'openKey_1: partialFilterExpression={"openKey":{"$exists":true}}, unique=true',
             'routeSet_1_status_1_dueAt_1: (none)',
+            'status_1_dueAt_1: (none)',
             'subjectId_1: partialFilterExpression={"subjectId":{"$exists":true}}'
         ]);
     });
