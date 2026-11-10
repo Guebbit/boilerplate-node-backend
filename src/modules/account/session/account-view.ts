@@ -68,7 +68,7 @@ const rulesFor = (caller: Parameters<typeof buildAbility>[0]): PackedRules =>
  *
  * @param context - the resolved signed-in caller
  */
-export const abilitiesOf = (context: AuthContext): Abilities => {
+const abilitiesOf = (context: AuthContext): Abilities => {
     const tenant = callerInScope(context, 'tenant');
     return {
         // Absent rather than null for a caller with no shop: the contract has no nullable field.

@@ -60,7 +60,7 @@ const announceDeleted = <T>(
  * @param hardDelete - `true` destroys the row; `false` stamps `deletedAt` once
  * @param context - records `ADMIN_PRODUCT_DELETED`; omit for a caller with no request behind it
  */
-export const remove = (
+const remove = (
     product: ProductDocument,
     hardDelete = false,
     context?: CallerContext

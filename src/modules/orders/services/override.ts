@@ -126,15 +126,6 @@ const notAllowed = (from: OrderStatus, to: OrderStatus): ResponseReject =>
         }
     ]);
 
-/** The 409 for an override that would ship units still awaiting stock. */
-const awaitingStock = (): ResponseReject =>
-    generateReject(409, [
-        {
-            code: ERROR_CODES.ORDER_OVERRIDE_AWAITING_STOCK,
-            message: t('orders.override.awaiting-stock')
-        }
-    ]);
-
 /**
  * `POST /orders/{id}/override-status` — an override holder moves an order forward with no shipped
  * email, for the cases that consequence would be wrong (a manual correction, a parcel that was
@@ -159,7 +150,13 @@ export const overrideStatus = (
 
         if (!canOverrideTo(order.status, to, isDigitalOnlyOrder(order.items)))
             return notAllowed(order.status, to);
-        if (shipsAwaitedStock(to, order.fulfillment)) return awaitingStock();
+        if (shipsAwaitedStock(to, order.fulfillment))
+            return generateReject(409, [
+                {
+                    code: ERROR_CODES.ORDER_OVERRIDE_AWAITING_STOCK,
+                    message: t('orders.override.awaiting-stock')
+                }
+            ]);
 
         return applyOverride(order, to, reason, context).then((updated) =>
             // Lost a race against another write since the read above — same shape as the

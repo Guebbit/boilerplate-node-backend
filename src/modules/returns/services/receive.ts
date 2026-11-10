@@ -94,31 +94,6 @@ const badRestock = (verdict: Extract<RestockVerdict, { ok: false }>): ResponseRe
         )
     ]);
 
-/** The 422 for a remedy the return's reason has no guarantee for. */
-const badRemedyFor = (): ResponseReject =>
-    generateReject(422, [
-        fieldError('remedy', t('returns.remedy-invalid'), ERROR_CODES.RETURN_REMEDY_INVALID)
-    ]);
-
-/** The 409 for a handling deduction on a return whose refund the proof of sending already opened. */
-const refundOpenedOnProof = (): ResponseReject =>
-    generateReject(409, [
-        {
-            code: ERROR_CODES.RETURN_REFUND_OPENED_ON_PROOF,
-            message: t('returns.refund-opened-on-proof')
-        }
-    ]);
-
-/** The 422 for a handling deduction on a defect or a wrong item: a guarantee remedy is free of charge. */
-const deductionOnGuarantee = (): ResponseReject =>
-    generateReject(422, [
-        fieldError(
-            'handlingDeduction',
-            t('returns.deduction-on-guarantee'),
-            ERROR_CODES.RETURN_DEDUCTION_INVALID
-        )
-    ]);
-
 /** What a replacement or a repair refunds: nothing. */
 const NO_REFUND: RefundBreakdown = { goods: '0', shipping: '0', deduction: '0', total: '0' };
 
@@ -436,17 +411,38 @@ const receiveFor = (
     const remedy = input.remedy ?? ReturnRemedy.refund;
     // Checked before anything is written: a count that cannot stand never half-receives a return.
     if (remedy !== ReturnRemedy.refund && !isGuaranteeReason(returned.reason))
-        return Promise.resolve(badRemedyFor());
+        return Promise.resolve(
+            generateReject(422, [
+                fieldError('remedy', t('returns.remedy-invalid'), ERROR_CODES.RETURN_REMEDY_INVALID)
+            ])
+        );
     if (
         isGuaranteeReason(returned.reason) &&
         toMinorUnits(input.handlingDeduction ?? '0', returned.currency) > NO_MONEY
     )
-        return Promise.resolve(deductionOnGuarantee());
+        // A guarantee remedy (defect, wrong item) is free of charge.
+        return Promise.resolve(
+            generateReject(422, [
+                fieldError(
+                    'handlingDeduction',
+                    t('returns.deduction-on-guarantee'),
+                    ERROR_CODES.RETURN_DEDUCTION_INVALID
+                )
+            ])
+        );
     if (
         proofOpenedRefund(returned) &&
         toMinorUnits(input.handlingDeduction ?? '0', returned.currency) > NO_MONEY
     )
-        return Promise.resolve(refundOpenedOnProof());
+        // The proof of sending already opened the refund, so a deduction now has nothing to come off.
+        return Promise.resolve(
+            generateReject(409, [
+                {
+                    code: ERROR_CODES.RETURN_REFUND_OPENED_ON_PROOF,
+                    message: t('returns.refund-opened-on-proof')
+                }
+            ])
+        );
     const restock = resolveRestock(wireLines(returned.lines), input.lines);
     if (!restock.ok) return Promise.resolve(badRestock(restock));
 

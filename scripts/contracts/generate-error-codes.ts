@@ -21,10 +21,10 @@
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { writeOrCheck } from './generated-file';
 import { parse } from 'yaml';
 import { requiredPath } from '../cli';
+import { REPO_ROOT } from '../modules-on-disk';
 
 /** One error code's declaration, as `x-error-codes` holds it. Only `status`/`description` are read; both already carry the WHY in the contract, so neither is repeated in a comment here. */
 interface ErrorCodeEntry {
@@ -37,14 +37,11 @@ interface OpenApiDocument {
     'x-error-codes'?: Record<string, ErrorCodeEntry>;
 }
 
-/** The repo root. `import.meta.url` rather than `__dirname`: this script runs as ESM. */
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-
 /** The bundled root contract this generator reads. */
-const INPUT = path.resolve(ROOT, 'openapi.yaml');
+const INPUT = path.resolve(REPO_ROOT, 'openapi.yaml');
 
 /** Absolute path of the file to generate, from `--out`. */
-const OUTPUT = requiredPath('out', ROOT);
+const OUTPUT = requiredPath('out', REPO_ROOT);
 
 /**
  * The bundled contract, parsed. `parse` is the `yaml` package's YAML 1.2 loader; the `as` narrows

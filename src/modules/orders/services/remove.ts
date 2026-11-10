@@ -21,22 +21,6 @@ import { deleteTimelineOf } from './timeline';
 import { hardDeletable, softDeletable } from '../domain';
 import { ERROR_CODES } from '@api/error-codes';
 
-/** The 409 a hard delete answers with once the order is paid: its invoice must survive it. */
-const orderInvoiced = (): ResponseReject =>
-    generateReject(409, [{ code: ERROR_CODES.ORDER_INVOICED, message: t('orders.invoiced') }]);
-
-/** The 409 a hard delete answers with once money was recorded on the order after its cancel. */
-const orderHasMoneyHistory = (): ResponseReject =>
-    generateReject(409, [
-        { code: ERROR_CODES.ORDER_HAS_MONEY_HISTORY, message: t('orders.has-money-history') }
-    ]);
-
-/** The 409 a restore answers with when the order is not soft-deleted. */
-const orderNotDeleted = (): ResponseReject =>
-    generateReject(409, [
-        { code: ERROR_CODES.ORDER_NOT_DELETED, message: t('orders.not-deleted') }
-    ]);
-
 /** The 404 a hard delete answers with when the order vanished between the read and the write. */
 const orderMissing = (): ResponseReject => generateReject(404, [t('orders.not-found')]);
 
@@ -55,8 +39,16 @@ const orderNotCanceled = (): ResponseReject =>
  */
 const hardDeleteRefusal = (order: OrderDocument): ResponseReject | undefined => {
     if (hardDeletable(order)) return undefined;
-    if (order.paidAt) return orderInvoiced();
-    return order.moneyReceivedAt ? orderHasMoneyHistory() : orderNotCanceled();
+    // An invoice must survive the delete.
+    if (order.paidAt)
+        return generateReject(409, [
+            { code: ERROR_CODES.ORDER_INVOICED, message: t('orders.invoiced') }
+        ]);
+    return order.moneyReceivedAt
+        ? generateReject(409, [
+              { code: ERROR_CODES.ORDER_HAS_MONEY_HISTORY, message: t('orders.has-money-history') }
+          ])
+        : orderNotCanceled();
 };
 
 /**
@@ -155,7 +147,10 @@ export const restoreById = (
     orderRepository.findById(id).then((order) => {
         if (!order) return generateReject(404, [t('orders.not-found')]);
 
-        if (!order.deletedAt) return orderNotDeleted();
+        if (!order.deletedAt)
+            return generateReject(409, [
+                { code: ERROR_CODES.ORDER_NOT_DELETED, message: t('orders.not-deleted') }
+            ]);
         order.deletedAt = undefined;
         return orderRepository.save(order).then((saved) => {
             recordAudit(context, {

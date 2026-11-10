@@ -24,9 +24,6 @@ import { initialTaskStatus, CONTACT_ROUTE_SET } from '../domain';
 import { tasksConfig } from '../config';
 import { TASK_OPENED, taskFactOf } from '../events';
 
-/** How long a contact message may wait before it is overdue, in milliseconds. */
-const contactSlaMs = (): number => tasksConfig().NODE_TASKS_CONTACT_SLA_HOURS * HOUR_MS;
-
 /**
  * When a contact message is due. A privacy request owes an answer within one calendar month
  * (GDPR Art. 12(3)); every other message waits the configured SLA.
@@ -37,7 +34,7 @@ const contactSlaMs = (): number => tasksConfig().NODE_TASKS_CONTACT_SLA_HOURS * 
 const contactDueAt = (category: string | undefined, now: Date): Date =>
     category === TaskCategory.privacy
         ? oneCalendarMonthLaterUtc(now)
-        : new Date(now.getTime() + contactSlaMs());
+        : new Date(now.getTime() + tasksConfig().NODE_TASKS_CONTACT_SLA_HOURS * HOUR_MS);
 
 /**
  * Record a contact request and announce it as `task.opened` — unless the honeypot caught it.

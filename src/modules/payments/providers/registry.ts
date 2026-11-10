@@ -2,7 +2,7 @@
  * @module
  * The payment provider registry, on its own so a double can register itself without loading the
  * module: this file imports nothing at runtime but the registry helper, where `./index` pulls in
- * the config, `orders` and everything under them.
+ * the payments config chain (the config store, `ibantools`).
  *
  * Production registers nothing here — a real PSP adds its own file and one `registerPaymentProvider`
  * call. The `fake` provider is a test double and lives in `scenarios/support/doubles/`.

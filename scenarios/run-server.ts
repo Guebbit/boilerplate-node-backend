@@ -23,6 +23,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { parseEnv } from 'node:util';
 // Before any model loads: Mongoose defaults are read at schema build.
 import '@infrastructure/runtime/mongoose-boot';
@@ -152,7 +153,7 @@ const waitUntilListening = (port: string): Promise<void> => {
             (error: unknown) => {
                 if (Date.now() - startedAt > 60_000)
                     throw new Error('demo: server never started listening', { cause: error });
-                return new Promise((resolve) => setTimeout(resolve, 100)).then(poll);
+                return sleep(100).then(poll);
             }
         );
     return poll();

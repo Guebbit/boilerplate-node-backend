@@ -18,7 +18,7 @@ import { z } from 'zod';
  * The repo-root `shared/` directory. `__dirname`, not `import.meta.url`: the same reason as
  * `i18n/catalog.ts`'s `LOCALES_DIRECTORY`.
  */
-export const SHARED_DIRECTORY = path.join(__dirname, '..', '..', '..', '..', 'shared');
+const SHARED_DIRECTORY = path.join(__dirname, '..', '..', '..', '..', 'shared');
 
 /** The repo-root `shared/rules/` directory: the rules both backends read. */
 export const SHARED_RULES_DIRECTORY = path.join(SHARED_DIRECTORY, 'rules');

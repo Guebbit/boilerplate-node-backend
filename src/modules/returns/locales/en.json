@@ -18,7 +18,6 @@
         "proof-already-recorded": "A proof of sending is already recorded for this return.",
         "refund-opened-on-proof": "The refund was opened when the proof of sending was recorded, so no handling deduction can come out of it. Claim it from the buyer separately.",
         "cancellation-invalid": "A cancellation must name the fulfillment order to cancel, and send no lines — the whole remainder is cancelled.",
-        "cancellation-withdrawal-buyer-only": "Only the order's own buyer can cancel as a withdrawal; staff cancel with another reason.",
         "nothing-to-cancel": "There is nothing left to cancel here. If nothing has shipped yet, cancel the whole order instead.",
         "email": {
             "greeting": "Hello, {{name}}!",

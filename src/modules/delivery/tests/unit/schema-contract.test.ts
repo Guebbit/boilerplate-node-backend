@@ -19,6 +19,7 @@ import {
     optionsOf,
     refOf,
     requiredPaths,
+    subSchema,
     typeOf
 } from '@tests/schema';
 
@@ -78,6 +79,17 @@ describe('shipmentSchema', () => {
             'number',
             'orderId',
             'shippedAt'
+        ]);
+    });
+
+    it('requires a whole destination when one is present, like the book and the order', () => {
+        // The set a carrier needs; the phone stays optional. A destination is written whole only.
+        expect(requiredPaths(subSchema(shipmentSchema, 'destination'))).toEqual([
+            'city',
+            'country',
+            'fullName',
+            'street',
+            'zip'
         ]);
     });
 

@@ -16,6 +16,7 @@ import {
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { fitsCurrency, toMinorUnits } from '@domain-primitives/money';
+import { POSTAL_ADDRESS_FIELDS } from '@domain-primitives/postal-address';
 import {
     orderService,
     orderTotal,
@@ -29,7 +30,7 @@ import { userService } from '@modules/users';
 import { addressService, type AddressItem } from '@modules/addresses';
 import { findShippingMethod, type StaticShippingMethod } from '@modules/delivery';
 import { paymentService, type PaymentMethodInfo } from '@modules/payments';
-import type { CallerContext, CheckoutRequest, ExpectedTotal } from '@types';
+import type { CallerContext, CheckoutRequest, ExpectedTotal, OrderAddress } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartRepository } from '../repository';
@@ -60,14 +61,17 @@ import { shipToCountries, shopCurrency } from '@modules/shop';
  * address's fields, none of the book's. Spelled field by field so the entry's `_id`/`default`
  * cannot ride along into the order.
  */
-const toOrderAddress = (address: AddressItem) => ({
-    fullName: address.fullName,
-    street: address.street,
-    city: address.city,
-    zip: address.zip,
-    country: address.country,
-    ...(address.phone === undefined ? {} : { phone: address.phone })
-});
+const toOrderAddress = (address: AddressItem): OrderAddress => {
+    const copy: Partial<OrderAddress> = {};
+    // Walks the shared field list, so a field added there is copied here; an absent one (the
+    // phone) stays absent rather than becoming `undefined`.
+    for (const field of POSTAL_ADDRESS_FIELDS) {
+        const value = address[field];
+        if (value !== undefined) copy[field] = value;
+    }
+    // One cast: the book guarantees the five required fields, which the loop cannot see.
+    return copy as OrderAddress;
+};
 
 /**
  * What the buyer chose in the checkout request, every field optional.

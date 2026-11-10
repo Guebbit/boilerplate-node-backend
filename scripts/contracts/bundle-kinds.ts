@@ -53,9 +53,8 @@ interface BundleIdentity {
  * collections downstream read a current contract.
  */
 export interface CompiledBundle extends BundleIdentity {
+    /** The compiled document text. */
     content: () => string;
-    /** The authored files it is compiled from — what a staleness message points at. */
-    sources: () => readonly string[];
     compiled: true;
 }
 
@@ -108,11 +107,3 @@ export const assembleBundle = (bundle: ContractBundle): Promise<string> =>
  */
 export const readCommittedBundle = (bundle: ContractBundle): string =>
     existsSync(bundle.output) ? readFileSync(bundle.output, 'utf8') : '';
-
-/**
- * Every authored file a bundle is built from — what a staleness check watches.
- *
- * A generated bundle has none: nothing authored stands between `openapi.yaml` and its output.
- */
-export const bundleFragments = (bundle: ContractBundle): string[] =>
-    isGenerated(bundle) ? [] : [...bundle.sources()];

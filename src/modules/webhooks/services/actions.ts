@@ -40,7 +40,7 @@ export const standingOn = (caller: TenantCaller): Standing => ({
 });
 
 /** The state half of a subscription's rules: the only two facts a flag reads off the record. */
-export interface SubscriptionState {
+interface SubscriptionState {
     /** Whether it is switched on. */
     enabled: boolean;
     /** How many secrets still sign. */
@@ -54,7 +54,7 @@ export interface SubscriptionState {
  * @param state - the subscription's state half
  * @param standing - how the caller stands to it
  */
-export const subscriptionActions = (
+const subscriptionActions = (
     state: SubscriptionState,
     standing: Standing
 ): WebhookSubscriptionActions => ({

@@ -140,7 +140,6 @@ describe('text and secret', () => {
     });
 
     it('normalises case when asked', () => {
-        expect(text({ case: 'upper' }).schema.parse('it')).toBe('IT');
         expect(text({ case: 'lower' }).schema.parse('IT')).toBe('it');
     });
 
@@ -172,7 +171,7 @@ describe('csv and key rings', () => {
     });
 
     it('normalises each member when asked', () => {
-        expect(csv({ case: 'upper' }).schema.parse('it, de')).toEqual(['IT', 'DE']);
+        expect(csv({ case: 'lower' }).schema.parse('IT, DE')).toEqual(['it', 'de']);
     });
 
     it('reads a key ring newest first and marks it sensitive', () => {

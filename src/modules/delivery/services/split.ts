@@ -17,6 +17,7 @@ import { orderService } from '@modules/orders';
 import { ERROR_CODES } from '@api/error-codes';
 import { checkShipLines, remainingOfLine, statusOfLines } from '../domain';
 import type { FulfillmentLine, ProductQuantity } from '../domain';
+import { plainLine } from '../domain/fulfillment';
 import { fulfillmentOrderRepository } from '../repository';
 import type { FulfillmentOrderDocument } from '../model';
 import { runAct, refuse, refuseMissing } from './act';
@@ -45,11 +46,8 @@ const withoutAllocated = (
     return (
         lines
             .map((line) => ({
-                productId: line.productId,
-                title: line.title,
-                quantity: line.quantity - (moved.get(line.productId) ?? 0),
-                shippedQuantity: line.shippedQuantity,
-                canceledQuantity: line.canceledQuantity
+                ...plainLine(line),
+                quantity: line.quantity - (moved.get(line.productId) ?? 0)
             }))
             // A line whose every unit moved has nothing left to wait for (a line holds at least one).
             .filter((line) => line.quantity > 0)
