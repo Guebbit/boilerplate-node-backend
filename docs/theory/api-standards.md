@@ -1,7 +1,7 @@
 # API Standards
 
 This API follows the mature HTTP standards, and writes down where it does not. This page names
-each standard, links its source, and lists the differences with their reasons. The ten audits under
+each standard, links its source, and lists the differences with their reasons. The two audits under
 `scripts/audit/api-*` read it; they report and never change a file.
 
 ## Why standards matter here
@@ -43,8 +43,14 @@ flowchart TD
 
 ## The standards
 
-Each audit has one standard, a folder under `scripts/audit/`, and its rules in
+Two kinds, two audits. Both take their rules from
 [`scripts/audit/api-standards.yaml`](https://github.com/Guebbit/boilerplate-node-backend/blob/main/scripts/audit/api-standards.yaml).
+
+| Kind        | Standards                            | Audit       | Choice                                    |
+| ----------- | ------------------------------------ | ----------- | ----------------------------------------- |
+| Web rules   | the six RFCs and the two IETF drafts | `api-http`  | none: every HTTP API follows them         |
+| Style guide | Zalando **or** Google AIP            | `api-style` | one: Zalando, unless the API leans Google |
+
 The "follows" column is a link, not a restatement.
 
 | Standard          | What it is                                                                             | Source                                                                                                                                                                                                               | Where we follow it, and differ                                                                                |
@@ -73,13 +79,26 @@ the right tool is a deterministic contract diff such as oasdiff, not an AI.
 
 ## When standards disagree
 
-They do: Zalando wants `snake_case` and Google's JSON mapping wants `lowerCamelCase`; Zalando wants
-problem JSON and Google wants `google.rpc.Status`. A single audit reports against its own standard
-only.
+The eight web rules do not: they come from the IETF HTTP working groups and are written to fit
+together. They only overlap, on a 304 and on a 429, and `api-http` reports each overlap once.
 
-When someone asks for several audits at once, they state the **order of precedence first**
-(for example "RFC 9110 > Google AIP > Zalando"). Each conflict is then reported once, under the
-winning standard, and the losing standards' view is a note. The agent never picks the order.
+The two style guides do, on purpose:
+
+| Topic          | Zalando               | Google AIP          |
+| -------------- | --------------------- | ------------------- |
+| Property names | `snake_case`          | `lowerCamelCase`    |
+| Errors         | RFC 9457 problem JSON | `google.rpc.Status` |
+| Paging         | cursor preferred      | opaque `page_token` |
+
+So an API follows **one**, and the other is never judged. Nobody configures it; the audit looks:
+
+- **Zalando** is the default: REST + JSON first, and it agrees with RFC 9457 on errors.
+- **Google AIP** fits a gRPC/protobuf-first API. When the contract shows two or more Google signals
+  (Google-shaped errors, `:verb` paths, `page_token` paging, field masks), the audit asks before
+  switching. Under Google, `api-http` also asks before it skips its RFC 9457 rules.
+
+The order is fixed: **web rules, then the style guide.** A guide rule a web rule already decides is
+listed by `api-style` under "Decided by the web rules", not judged twice.
 
 ## Stricter than the standard
 
@@ -124,7 +143,7 @@ A source marked `verified` was read on 2026-11-06 (rows re-read on 2026-11-08 sa
 | `idempotency-doc-link`              | draft-ietf-httpapi-idempotency-key-header-08 §2.7: a 400, 409 or 422 refusal SHOULD point at relevant documentation, by a problem `type` URI or `Link: <…>; rel="describedby"`                                                                                                                                                                                                                              | the code in `errors[].code`, no link on the 400 and 422 refusals                                                                                                                                                                                            | no public docs page is served, and a docs-URL setting would be an option with no caller yet. WG issue #51 may replace the link with standard error types. The `about:blank` choice is argued in `about-blank-with-codes` above and the Help link there is declined for the same reason                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | verified: https://www.ietf.org/archive/id/draft-ietf-httpapi-idempotency-key-header-08.txt                                                                                                                                                                                       |
 | `about-blank-with-codes`            | RFC 9457 §4.2.1 and §3.1.1: `type` is the primary identifier, and an app-specific problem gets its own type URI (a non-resolving one, such as `tag:`, is allowed). §3.2: an extension member belongs to the type that defines it. RateLimit draft-11 §5: three MAY types (`quota-exceeded`, `temporary-reduced-capacity`, `abnormal-usage-detected`). AIP-193: a `Help` link when the message is not enough | every error sends `type: about:blank`, including a refusal a draft defines a type for, and no docs link (no `Link: rel="describedby"`, no `doc_url`-style member). The domain meaning is `errors[].code`                                                    | one machine key, the `errors[].code` catalogue that stays true per operation; RFC 9457 §4: conditions the status already names are better as plain status codes, and most of our categories are the status; a type URI is a second identity, fixed forever once published (§3.1.1); the coarse-plus-fine model of AIP-193, Stripe and Azure. Every body bends §4.2.1 (`about:blank` claims no meaning beyond the status, `errors[].code` adds some). The RFC, Zalando and the IETF drafts follow the typed-URI model, and the big public APIs follow ours: it is a split. Reopens when IANA registers, through a published RFC and not a draft, a problem type for exactly our condition, or when a third-party client of this API appears: [Problem details](../api/errors.md#problem-details) | verified: https://www.rfc-editor.org/rfc/rfc9457.html, https://www.iana.org/assignments/http-problem-types/http-problem-types.xhtml, https://www.ietf.org/archive/id/draft-ietf-httpapi-ratelimit-headers-11.txt, https://google.aip.dev/193, https://docs.stripe.com/api/errors |
 | `closed-problem-schema`             | RFC 9457 §3.2: a client ignores an extension member it does not know. Zalando #111: a format must not declare `additionalProperties` to be `false`                                                                                                                                                                                                                                                          | `Problem` and `ErrorItem` are `additionalProperties: false`                                                                                                                                                                                                 | the contract tests catch a member that leaked into a response ([Testing and docs](../tools/testing-and-docs.md)). Both clients regenerate from one contract, and the frontend copies an error body as it arrives, without checking it against the schema                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | verified: https://www.rfc-editor.org/rfc/rfc9457.html, https://opensource.zalando.com/restful-api-guidelines/                                                                                                                                                                    |
-| `if-match-edit-version`             | RFC 9110 §13.1.1: an origin that receives `If-Match` MUST use the strong comparison, the whole tag                                                                                                                                                                                                                                                                                                          | a write's `If-Match` compares only the edit part of the `"<editRevision>.<digest>"` tag; the digest part is ignored                                                                                                                                         | a stock move or a sale changes the body (so the digest) without being an edit, and must not refuse an editor's open form with a 412. The edit part is the atomic fence; the digest is what makes a read's 304 safe. FHIR's version-only `If-Match` is the same choice: [What the tag is](../api/write-methods.md#what-the-tag-is)                                                                                                                                                                                                                                                                                                                                                                                                                                                               | verified: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1, https://hl7.org/fhir/R4/http.html                                                                                                                                                                               |
+| `if-match-edit-version`             | RFC 9110 §13.1.1: an origin that receives `If-Match` MUST use the strong comparison, the whole tag                                                                                                                                                                                                                                                                                                          | a write's `If-Match` compares only the edit part of the `"<editRevision>.<digest>"` tag; the digest part is ignored; a list's tag (a language's entries) is taken on the query-less import URL, and its version is the language's `revision`                | a stock move or a sale changes the body (so the digest) without being an edit, and must not refuse an editor's open form with a 412. The edit part is the atomic fence; the digest is what makes a read's 304 safe. FHIR's version-only `If-Match` is the same choice: [What the tag is](../api/write-methods.md#what-the-tag-is)                                                                                                                                                                                                                                                                                                                                                                                                                                                               | verified: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1, https://hl7.org/fhir/R4/http.html                                                                                                                                                                               |
 | `unversioned-writes`                | RFC 9110 §13.1.1: an origin that receives `If-Match` MUST evaluate it before performing the method                                                                                                                                                                                                                                                                                                          | a write takes `If-Match` only on a path the contract marks `x-versioned`; every other write ignores the header, and its controller says why in one line                                                                                                     | two staff overwriting each other is a real loss on a subscription, a language and an entity's translations, so those are versioned. The rest have one owner or one field (an address in its book, a shipment's tracking code, a backorder limit), no GET on their URL to read a tag from (the cart, the default address, a cover upload), or their own state rule with a 409. A delete skips it too: a security action (log out, revoke a key) must never be refusable by a stale tag, and a language delete removes its rows first. GitHub, Stripe and Shopify check nothing; Google AIP-154 offers the check "where it is important": [Which resources are versioned](../api/write-methods.md#which-resources-are-versioned)                                                                  | verified: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1, https://google.aip.dev/154                                                                                                                                                                                      |
 
 A promise date keeps AIP-142's meaning (a civil date, no time zone), so only its wire form is a
@@ -133,5 +152,5 @@ difference: `civil-date-wire-form`. AIP-142 spells the type `google.type.Date`; 
 ## Related
 
 - [Write Methods](../api/write-methods.md), [Errors](../api/errors.md), [Responses](../api/responses.md)
-- [AI auditing](../tools/ai-auditing.md): how the ten audits run and where reports go
+- [AI auditing](../tools/ai-auditing.md): how the two audits run and where reports go
 - [Contract Fragmentation](../api/contract-fragmentation.md): where the bundled contract the audits read comes from

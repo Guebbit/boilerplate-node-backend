@@ -35,7 +35,8 @@ import { resolveSafeOutboundTarget, SsrfRefusedError } from '@infrastructure/ada
 import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { ERROR_CODES } from '@api/error-codes';
 import { webhooksAuditActions } from '../audit';
-import { unknownEventTypes } from './catalog';
+import { unknownEventTypes, unreadableEventTypes } from './catalog';
+import { rejectEventReadRequired } from './read-refusal';
 import { standingOn, viewSubscription, withSubscriptionActions } from './actions';
 
 /** A subscription alongside whichever plaintext secrets this call just minted — shown once. */
@@ -90,6 +91,22 @@ const refuseUnknownEvents = (
     return generateReject(422, [
         fieldError('eventTypes', t('webhooks.unknown-event-types', { names: unknown.join(', ') }))
     ]);
+};
+
+/**
+ * Refuses a filter naming an event the caller may not receive (`*` = every event). A subscription
+ * hands a stream to a machine, so the writer needs the read rule of everything it will carry.
+ *
+ * @param eventTypes - the filter to check: requested, stored, or both together
+ * @param context - the caller
+ * @returns a 403 `WEBHOOK_EVENT_READ_REQUIRED` naming the events, or `undefined` when all are readable
+ */
+const refuseUnreadableEvents = (
+    eventTypes: readonly string[],
+    context: TenantCallerContext
+): ResponseReject | undefined => {
+    const unreadable = unreadableEventTypes(eventTypes, context.caller);
+    return unreadable.length === 0 ? undefined : rejectEventReadRequired(unreadable);
 };
 
 /** What `GET /webhooks/subscriptions` accepts, mirroring the query parameters `openapi.yaml` declares. */
@@ -216,7 +233,8 @@ const finalizeCreate = async (
  * can ever rank within it, so exactly one guard's-worth of rows survives regardless of how many
  * creates land in the same instant.
  *
- * @returns a 409 `WEBHOOK_SUBSCRIPTION_LIMIT_REACHED` once this tenant is at
+ * @returns a 403 `WEBHOOK_EVENT_READ_REQUIRED` when the filter names an event the caller may not
+ *   read; a 409 `WEBHOOK_SUBSCRIPTION_LIMIT_REACHED` once this tenant is at
  *   `getWebhookSubscriptionCap()` (deleting one lets the same request through) — the fan-out
  *   guard this module exists for: one event x N subscriptions is N deliveries.
  */
@@ -227,6 +245,8 @@ export const create = (
     const tenant = context.caller.tenantId;
     const unknownEvents = refuseUnknownEvents(body.eventTypes);
     if (unknownEvents) return Promise.resolve(unknownEvents);
+    const unreadable = refuseUnreadableEvents(body.eventTypes, context);
+    if (unreadable) return Promise.resolve(unreadable);
 
     return webhookSubscriptionRepository.count({ tenant }).then(async (count) => {
         if (count >= getWebhookSubscriptionCap()) return rejectLimitReached();
@@ -266,7 +286,8 @@ const AUDITED_FIELDS = {
  * (see {@link createSecret}/{@link removeSecret}), and neither is whether the subscription is on
  * (see {@link enable}/{@link disable}).
  *
- * @returns a 404 outside this tenant's subscriptions
+ * @returns a 404 outside this tenant's subscriptions; a 403 `WEBHOOK_EVENT_READ_REQUIRED` when the
+ *   body carries `url` or `eventTypes` and the caller may not read an event of the stored or the new filter
  */
 export const update = (
     id: string,
@@ -280,6 +301,17 @@ export const update = (
 
             const unknownEvents = refuseUnknownEvents(body.eventTypes);
             if (unknownEvents) return unknownEvents;
+
+            // Whenever the receiver or the filter can change, the caller must read the stored
+            // filter AND the new one: narrowing and redirecting in one call must not take over
+            // a stream the caller may not read.
+            if (body.url !== undefined || body.eventTypes !== undefined) {
+                const unreadable = refuseUnreadableEvents(
+                    [...subscription.eventTypes, ...(body.eventTypes ?? [])],
+                    context
+                );
+                if (unreadable) return unreadable;
+            }
 
             // Only a URL that CHANGES is worth a lookup: an edit to the description must not
             // start failing because the host's DNS is down today.
@@ -395,7 +427,8 @@ export const disable = (
  * until {@link removeSecret} drops the old one, or the overlap window ends. A ring holds at most
  * two: adding a third drops the oldest.
  *
- * @returns a 404 outside this tenant's subscriptions
+ * @returns a 404 outside this tenant's subscriptions; a 403 `WEBHOOK_EVENT_READ_REQUIRED` when the
+ *   caller may not read an event of the stored filter
  */
 export const createSecret = (
     id: string,
@@ -405,6 +438,10 @@ export const createSecret = (
         .findByIdInTenant(id, context.caller.tenantId)
         .then((subscription) => {
             if (!subscription) return generateReject(404, [t('generic.error-item-gone')]);
+
+            // A minted secret signs for the stored filter: forging an event needs the right to read it.
+            const unreadable = refuseUnreadableEvents(subscription.eventTypes, context);
+            if (unreadable) return unreadable;
 
             const minted = mintRingSecret();
             // Prune what has expired, and keep only the newest survivor beside the new secret:

@@ -14,7 +14,7 @@ import {
     localeRepository,
     translationRepository
 } from '@modules/locales/repository';
-import { localeEntryModel, type LocaleDocument } from '@modules/locales/model';
+import { localeEntryModel, localeModel, type LocaleDocument } from '@modules/locales/model';
 import { localeService } from '@modules/locales/services';
 
 setupTestDb();
@@ -44,11 +44,65 @@ const givenLanguage = async (
 const givenEntry = (locale: string, app: string, key: string, value: string) =>
     localeEntryRepository.create(makeLocaleEntry({ locale, app, key, value }));
 
+/** Every stored value of one language's frontend app, by key. */
+const valuesOf = (tag: string): Promise<Map<string, string>> =>
+    localeEntryRepository
+        .listEntries(tag, FRONTEND)
+        .then((rows) => new Map(rows.map(({ key, value }) => [key, value])));
+
 /** The language's revision as stored right now. */
 const revisionOf = async (tag: string): Promise<number> => {
     const language = await localeRepository.findByTag(tag);
     return language?.revision ?? -1;
 };
+
+/** Makes the next counter bump fail, as a database error would. */
+const failNextBump = () =>
+    jest.spyOn(localeModel, 'findOneAndUpdate').mockImplementationOnce(() => {
+        throw new Error('bump failed');
+    });
+
+describe('an entry write and its bump are one transaction', () => {
+    /*
+     * An import's `If-Match` fences on the counter. A row that landed before a bump that never did
+     * would let a stale import slip past the fence, so a failed bump must take its row with it.
+     */
+    afterEach(() => jest.restoreAllMocks());
+
+    it('leaves no new row behind when the bump fails', async () => {
+        await givenLanguage('es');
+        failNextBump();
+
+        await expect(
+            localeEntryRepository.createEntry('es', FRONTEND, { key: 'cart.title', value: 'x' })
+        ).rejects.toThrow('bump failed');
+
+        expect(await localeEntryRepository.listKeys('es', FRONTEND)).toEqual([]);
+    });
+
+    it('leaves the old value behind when the bump fails', async () => {
+        await givenLanguage('es', { 'cart.title': 'Carrito' });
+        const entry = await localeEntryRepository.findOne({ locale: 'es' });
+        failNextBump();
+
+        await expect(localeEntryRepository.saveEntryValue(entry!, 'Tu carrito')).rejects.toThrow(
+            'bump failed'
+        );
+
+        const values = await valuesOf('es');
+        expect(values.get('cart.title')).toBe('Carrito');
+    });
+
+    it('leaves the row in place when the bump of its removal fails', async () => {
+        await givenLanguage('es', { 'cart.title': 'Carrito' });
+        const entry = await localeEntryRepository.findOne({ locale: 'es' });
+        failNextBump();
+
+        await expect(localeEntryRepository.removeEntry(entry!)).rejects.toThrow('bump failed');
+
+        expect(await localeEntryRepository.listKeys('es', FRONTEND)).toEqual(['cart.title']);
+    });
+});
 
 describe('the revision counter', () => {
     /*

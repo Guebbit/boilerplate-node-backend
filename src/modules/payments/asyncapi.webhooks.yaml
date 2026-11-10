@@ -12,6 +12,7 @@
 channels:
     payment.succeeded:
         address: payment.succeeded
+        x-read-rule: display:Payment
         description: A payment settled successfully.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
@@ -20,6 +21,7 @@ channels:
                 $ref: '#/components/messages/PaymentSucceededEvent'
     payment.failed:
         address: payment.failed
+        x-read-rule: display:Payment
         description: A payment attempt was declined.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
@@ -28,6 +30,7 @@ channels:
                 $ref: '#/components/messages/PaymentFailedEvent'
     payment.refunded:
         address: payment.refunded
+        x-read-rule: display:Payment
         description: A refund on a payment settled — the whole payment, or a part of it.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
@@ -36,6 +39,7 @@ channels:
                 $ref: '#/components/messages/PaymentRefundedEvent'
     payment.refund_failed:
         address: payment.refund_failed
+        x-read-rule: display:Payment
         description: The provider refused a refund, or reported one failed.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
@@ -44,6 +48,7 @@ channels:
                 $ref: '#/components/messages/PaymentRefundFailedEvent'
     payment.refund_reversed:
         address: payment.refund_reversed
+        x-read-rule: display:Payment
         description: The provider took back a refund it had settled.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
@@ -52,6 +57,7 @@ channels:
                 $ref: '#/components/messages/PaymentRefundReversedEvent'
     payment.dispute_opened:
         address: payment.dispute_opened
+        x-read-rule: display:Payment
         description: The buyer's bank disputed a card payment.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
@@ -60,6 +66,7 @@ channels:
                 $ref: '#/components/messages/PaymentDisputeOpenedEvent'
     payment.dispute_updated:
         address: payment.dispute_updated
+        x-read-rule: display:Payment
         description: A dispute on a card payment changed (evidence sent, decided, reopened).
         servers:
             - $ref: '#/servers/subscriberEndpoint'

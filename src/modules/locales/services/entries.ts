@@ -25,6 +25,8 @@ import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { auditChanges } from '@infrastructure/observability/audit-changes';
 import { localeAuditActions } from '../audit';
+import { carryVersion } from '@infrastructure/persistence/versioning';
+import { EDIT_REVISION } from '@infrastructure/persistence/revision-plugin';
 import { normalizeTag, type LocaleEntryDocument } from '../model';
 import { localeEntryRepository, localeRepository, type EntryChange } from '../repository';
 import { findBatchCollision, findDuplicateKey, isKeyLengthValid, rejectUnusableKey } from './keys';
@@ -77,9 +79,15 @@ export const searchEntries = (
          * without an `app` filter one key repeats once per app: `app` breaks that tie, and the
          * repository closes the order with `_id`.
          */
-        return localeEntryRepository
-            .search(filters, { locale: language.tag }, { key: 1, app: 1 })
-            .then((result) => generateSuccess(result));
+        return (
+            localeEntryRepository
+                .search(filters, { locale: language.tag }, { key: 1, app: 1 })
+                // The page carries the language's `revision` as its version, so its `ETag` is the
+                // dictionary's: every write to any app moves it, and an import fences on it.
+                .then((result) =>
+                    generateSuccess(carryVersion({ [EDIT_REVISION]: language.revision }, result))
+                )
+        );
     });
 
 /**

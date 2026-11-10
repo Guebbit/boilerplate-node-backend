@@ -21,7 +21,7 @@ import { deliverWebhook } from '../transport/webhook-delivery';
 import type { WebhookDeliverJobPayload } from '@types';
 import { webhookSubscriptionRepository, webhookDeliveryRepository } from '../repository';
 import { activeRingSecrets } from '../secrets';
-import { nextAttemptAt, shouldAutoDisable } from '../domain';
+import { matchesEventFilter, nextAttemptAt, shouldAutoDisable } from '../domain';
 import { WEBHOOK_SUBSCRIPTION_AUTO_DISABLED } from '../events';
 import { webhooksAuditActions } from '../audit';
 import { webhookDeliveryAttemptsTotal, webhookSubscriptionsAutoDisabledTotal } from '../metrics';
@@ -74,7 +74,7 @@ const requireLeaseToken = (delivery: WebhookDeliveryDocument): string => {
 
 /**
  * Finalize a claimed delivery with nothing to attempt it against — its subscription was deleted
- * since the job was queued, or is disabled. Terminal either way: no subscription is left to retry.
+ * since the job was queued, is disabled, or no longer names the event. Terminal either way: no subscription is left to retry.
  */
 const finalizeUndeliverable = (
     delivery: WebhookDeliveryDocument,
@@ -205,6 +205,11 @@ export const attemptDelivery = (
     subscription: WebhookSubscriptionDocument
 ): Promise<WebhookDeliveryDocument | null> => {
     if (subscription.disabledAt) return finalizeUndeliverable(delivery, 'Subscription is disabled');
+
+    // The filter may have changed since this delivery was queued (retries, replays): an event the
+    // subscription no longer names must not reach its current url.
+    if (!matchesEventFilter(delivery.eventType, subscription.eventTypes))
+        return finalizeUndeliverable(delivery, 'Event no longer matches the subscription filter');
 
     const secrets = activeRingSecrets(subscription.secrets);
     if (secrets.length === 0)

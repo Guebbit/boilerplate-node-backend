@@ -21,6 +21,8 @@ import {
 } from '../repository';
 import type { WebhookDelivery } from '@types';
 import { attemptDelivery } from './attempt';
+import { rejectEventReadRequired } from './read-refusal';
+import { unreadableEventTypes } from './catalog';
 import { deliveryActions, standingOn } from './actions';
 import { presentWebhookDelivery } from '../presenters';
 import { webhooksAuditActions } from '../audit';
@@ -71,7 +73,11 @@ export const list = (
                 .then((enabled) => ({
                     items: items.map((row) => ({
                         ...row,
-                        actions: deliveryActions(enabled.has(subscriptionIdOf(row)), standing)
+                        actions: deliveryActions(
+                            enabled.has(subscriptionIdOf(row)),
+                            row.eventType,
+                            standing
+                        )
                     })),
                     meta
                 }));
@@ -99,6 +105,7 @@ export const get = (
                         delivery,
                         deliveryActions(
                             enabled.has(subscriptionIdOf(delivery)),
+                            delivery.eventType,
                             standingOn(context.caller)
                         )
                     )
@@ -132,7 +139,8 @@ const rejectInProgress = (): ResponseReject =>
  * double-send.
  *
  * @returns a 404 outside this tenant's log, or when the subscription itself no longer exists; a
- *   409 `WEBHOOK_SUBSCRIPTION_DISABLED` while the subscription is switched off; a 409
+ *   403 `WEBHOOK_EVENT_READ_REQUIRED` for a caller who may not read the delivery's event; a 409
+ *   `WEBHOOK_SUBSCRIPTION_DISABLED` while the subscription is switched off; a 409
  *   `WEBHOOK_DELIVERY_IN_PROGRESS` when a live worker (or another replay) holds the row's lease
  */
 export const replay = async (
@@ -141,6 +149,10 @@ export const replay = async (
 ): Promise<ResponseSuccess<WebhookDelivery> | ResponseReject> => {
     const delivery = await webhookDeliveryRepository.findByIdInTenant(id, context.caller.tenantId);
     if (!delivery) return generateReject(404, [t('generic.error-item-gone')]);
+    // A replay re-sends the stored payload to the subscription's CURRENT url: only a caller who
+    // may read this event may do it, or a narrowed-then-redirected stream would leak it.
+    const unreadable = unreadableEventTypes([delivery.eventType], context.caller);
+    if (unreadable.length > 0) return rejectEventReadRequired(unreadable);
 
     const subscription = await webhookSubscriptionRepository.findById(
         String(delivery.subscriptionId)
@@ -175,7 +187,11 @@ export const replay = async (
     return generateSuccess(
         presentWebhookDelivery(
             updated,
-            deliveryActions(enabled.has(String(updated.subscriptionId)), standingOn(context.caller))
+            deliveryActions(
+                enabled.has(String(updated.subscriptionId)),
+                updated.eventType,
+                standingOn(context.caller)
+            )
         )
     );
 };
