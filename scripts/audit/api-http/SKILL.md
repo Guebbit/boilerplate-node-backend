@@ -114,8 +114,11 @@ Output goes to `tmp/reports/audit-<run>/api-http/<SCOPE>…`. `<run>` and `<SCOP
           a request may)
         - `tests/contract/idempotency.test.ts` (the middleware's own behaviour, and the test "replays
           a refusal as the problem it was…", the proof that a replay carries the header);
-          `scripts/contracts/response-headers.ts` declares `Idempotent-Replayed` on 2xx only, so
-          non-2xx is still yours to check
+          `scripts/contracts/response-headers.ts` declares `Idempotent-Replayed` on every response of
+          a keyed operation except a 429, which the ledger never sees; a stored answer replays no
+          `Retry-After`. The 429 half is held by
+          `tests/cross-cutting/limiters-before-the-idempotency-key.test.ts` (every limiter runs
+          before the key is claimed, so no 429 is ever stored)
         - Settled by reading, not a guard: a top-level body that is not an object (RFC 7396 §2: it
           would replace the whole resource; §5 lets the server refuse it). `express.json` (strict,
           `src/app/security.ts`) refuses a scalar or `null` as 400 `entity.parse.failed`; an array
@@ -139,6 +142,10 @@ Output goes to `tmp/reports/audit-<run>/api-http/<SCOPE>…`. `<run>` and `<SCOP
         - `tests/cross-cutting/rate-limit-budgets.test.ts`: the budget set (unique names, env vars and
           namespaces, one declaration each, only the global brake passes a store outage)
         - `scripts/contracts/response-headers.ts` (declares both RateLimit fields on every response)
+        - A 429 and the idempotency ledger: `scripts/contracts/response-headers.ts` declares
+          `Idempotent-Replayed` on every response of a keyed operation except a 429, which the ledger
+          never sees; a stored answer replays no `Retry-After`. Held by
+          `tests/cross-cutting/limiters-before-the-idempotency-key.test.ts`
 
 ## Steps
 

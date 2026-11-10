@@ -369,6 +369,7 @@ describe('an answer that is stored and replayed', () => {
     it('stores the content type and the replayable headers with the body', async () => {
         const response = makeHeaderResponse({
             'Content-Type': 'application/problem+json; charset=utf-8',
+            'WWW-Authenticate': 'Bearer',
             'Retry-After': '30',
             'X-Other': 'dropped'
         });
@@ -385,8 +386,10 @@ describe('an answer that is stored and replayed', () => {
             state: 'done',
             status: 503,
             contentType: 'application/problem+json; charset=utf-8',
-            headers: { 'Retry-After': '30' }
+            headers: { 'WWW-Authenticate': 'Bearer' }
         });
+        // A stored 503 must not tell the client to retry later for the whole retention window.
+        expect(update.$set.headers).not.toHaveProperty('Retry-After');
         expect(update.$set.headers).not.toHaveProperty('X-Other');
     });
 
@@ -494,10 +497,10 @@ describe('an answer that is stored and replayed', () => {
                     Promise.resolve({
                         state: 'done',
                         fingerprint,
-                        status: 429,
+                        status: 503,
                         body: { stored: true },
                         contentType: 'application/problem+json; charset=utf-8',
-                        headers: { 'Retry-After': '30' }
+                        headers: { 'WWW-Authenticate': 'Bearer' }
                     })
             })
         });
@@ -508,8 +511,8 @@ describe('an answer that is stored and replayed', () => {
         await flush();
 
         expect(response.getHeader('content-type')).toBe('application/problem+json; charset=utf-8');
-        expect(response.getHeader('retry-after')).toBe('30');
-        expect(response.status).toHaveBeenCalledWith(429);
+        expect(response.getHeader('www-authenticate')).toBe('Bearer');
+        expect(response.status).toHaveBeenCalledWith(503);
         expect(response.json).toHaveBeenCalledWith({ stored: true });
     });
 
