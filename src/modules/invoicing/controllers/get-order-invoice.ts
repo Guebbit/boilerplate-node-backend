@@ -35,7 +35,7 @@ export const getOrderInvoice = (request: Request<{ id?: string }>, response: Res
                 // The row id, not the number: the invoice and credit-note series both restart
                 // at 1 each year, and `GET /audit?target=` filters on `targetId` alone.
                 targetId: String(invoice._id),
-                ownerId: buyerIdOf(order)
+                subjectId: buyerIdOf(order)
             });
 
             return invoicingService

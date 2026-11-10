@@ -105,6 +105,11 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
         targetId: {
             type: String
         },
+        // Whose data the row is about, when not the actor's: the key of the person's own
+        // "who consulted my data" export. Optional: most actions are not about another person.
+        subjectId: {
+            type: String
+        },
         // Free-form by design: `metadata` carries action-specific extras, and the audit vocabulary
         // is open enough that typing it would mean a schema change per new call site.
         metadata: {
@@ -134,7 +139,7 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
 );
 
 /*
- * Indexes matching the three filtered ways the endpoints are queried. All three are compound with
+ * Indexes matching the four filtered ways the endpoints are queried. All four are compound with
  * `timestamp: -1` because every query sorts newest-first — a plain `{ actorUserId: 1 }` index
  * would find the matching entries and then sort them in memory, which is the shape that falls
  * over first as the collection grows.
@@ -153,6 +158,9 @@ auditLogSchema.index({ action: 1, timestamp: -1 });
 
 // "What happened to this row" — the question `GET /audit`'s `target` filter answers.
 auditLogSchema.index({ targetId: 1, timestamp: -1 });
+
+// "Who looked at this person's data" — `GET /audit`'s `subject` filter and the account export.
+auditLogSchema.index({ subjectId: 1, timestamp: -1 });
 
 /*
  * TTL index — Mongo deletes entries older than the retention window on its own.

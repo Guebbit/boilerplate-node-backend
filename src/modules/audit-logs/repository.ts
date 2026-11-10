@@ -27,6 +27,8 @@ export interface AuditLogSearchFilters {
     /** Exclusive lower bound on `timestamp`, matching the buffer's `> since` behaviour. */
     since?: Date;
     target?: string;
+    /** The person whose data the row is about (`subjectId`): "who consulted this person's data". */
+    subject?: string;
     /** `true` keeps entries flagged `metadata.ownOrder`, `false` the rest; absent keeps both. */
     ownOrder?: boolean;
     page?: unknown;
@@ -37,14 +39,15 @@ export interface AuditLogSearchFilters {
 const base = createRepository<AuditLogDocument, AuditEntryItem>(auditLogModel, {
     transform: applyAuditLogTransform,
     searchable: {
-        // All four are closed vocabularies or opaque ids — matched verbatim, never as a regex.
+        // All five are closed vocabularies or opaque ids — matched verbatim, never as a regex.
         // `outcome` in particular must not be a partial match: 'fail' silently matching 'failure'
         // would make a filtered view quietly disagree with the numbers next to it.
         exact: {
             actor: 'actorUserId',
             action: 'action',
             outcome: 'outcome',
-            target: 'targetId'
+            target: 'targetId',
+            subject: 'subjectId'
         }
     }
 });
@@ -147,8 +150,37 @@ const ownEntriesPage = (
             return { items: base.normalize(rows), next };
         });
 
+/** One consultation row, reduced to what the person is told: when, and what kind of record. */
+export interface ConsultationRow {
+    timestamp: Date;
+    action: string;
+    targetType: string;
+    targetId: string;
+}
+
+/**
+ * The rows that name `subject` and whose action is in `actions`, newest first, no older than
+ * `since`. Reads the `{ subjectId, timestamp }` index. Returns the actor-free projection: the
+ * staff member who looked is never selected, so it cannot reach an export.
+ *
+ * @param subject - the person whose data was consulted
+ * @param actions - the actions that count as a consultation
+ * @param since - the oldest `timestamp` to include
+ */
+const consultationsOf = (
+    subject: string,
+    actions: readonly string[],
+    since: Date
+): Promise<ConsultationRow[]> =>
+    auditLogModel
+        .find({ subjectId: subject, action: { $in: actions }, timestamp: { $gte: since } })
+        .select({ _id: 0, timestamp: 1, action: 1, targetType: 1, targetId: 1 })
+        .sort({ timestamp: -1 })
+        .lean<ConsultationRow[]>()
+        .exec();
+
 /*
- * Four members, not the base repository's full surface. An audit trail is append-and-read: no
+ * Five members, not the base repository's full surface. An audit trail is append-and-read: no
  * `save`, no `deleteOne`, so the type is what refuses an edit rather than a reviewer.
  */
 export const auditLogRepository = {
@@ -156,5 +188,6 @@ export const auditLogRepository = {
     search: base.search,
     sinceScope,
     ownOrderScope,
-    ownEntriesPage
+    ownEntriesPage,
+    consultationsOf
 };

@@ -40,7 +40,7 @@ export const getOrderCreditNote = (
                 targetType: 'credit_note',
                 // The row id, not the number: it repeats across the invoice series.
                 targetId: String(creditNote._id),
-                ownerId: buyerIdOf(order)
+                subjectId: buyerIdOf(order)
             });
 
             return invoicingService

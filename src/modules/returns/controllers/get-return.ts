@@ -10,6 +10,7 @@ import { catchAs, refused } from '@infrastructure/http/controller';
 import { requireId } from '@infrastructure/http/ids';
 import type { Return } from '@types';
 import { recordStaffRead } from '@kernel/staff-read';
+import { buyerIdOf, orderService } from '@modules/orders';
 import { returnService } from '../services';
 import { returnsAuditActions } from '../audit';
 
@@ -24,13 +25,18 @@ export const getReturnById = (request: Request<{ id?: string }>, response: Respo
         .getReturn(id, authContext)
         .then((result) => {
             if (refused(response, result)) return;
-            recordStaffRead(request, {
-                key: 'read:Return',
-                action: returnsAuditActions.ADMIN_RETURN_VIEWED,
-                targetType: 'return',
-                targetId: id
+            // The return model holds no buyer on purpose; the person the read is about is the
+            // order's buyer, resolved here and stored only on the audit row.
+            return orderService.getById(result.data.orderId).then((order) => {
+                recordStaffRead(request, {
+                    key: 'read:Return',
+                    action: returnsAuditActions.ADMIN_RETURN_VIEWED,
+                    targetType: 'return',
+                    targetId: id,
+                    subjectId: order ? buyerIdOf(order) : undefined
+                });
+                successResponse<Return>(response, result.data, 200);
             });
-            successResponse<Return>(response, result.data, 200);
         })
         .catch(catchAs(response, 'getReturnById'));
 };

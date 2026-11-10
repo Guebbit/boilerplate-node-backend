@@ -30,7 +30,7 @@ export const getUserItem = createItemController({
                 action: usersAuditActions.ADMIN_USER_VIEWED,
                 targetType: 'user',
                 targetId: id,
-                ownerId: id
+                subjectId: id
             });
             return userService.toUserContract(user, callerContextOf(request).caller);
         })

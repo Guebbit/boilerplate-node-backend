@@ -26,9 +26,31 @@ export interface StaffReadTarget {
     targetType: string;
     /** The record's id. */
     targetId: string;
-    /** Whose record it is, when known; a session caller's read of their own record is not recorded. */
-    ownerId?: string;
+    /**
+     * The person whose data the record holds, when there is one: the audit row stores it as
+     * `subjectId`, which is what lets "who looked at my data" be one query. A session caller's
+     * read of their own record is not recorded. Absent for a guest's order and anything else
+     * that is not a person's.
+     */
+    subjectId?: string;
 }
+
+/**
+ * Why staff open each kind of record, in words a data subject can read: the "purpose" half of
+ * what the person is told when they ask who consulted their data (GDPR Art. 15, CJEU C-579/21
+ * gives dates and purposes, not the employee). Doubles as the list of actions that count as a
+ * consultation, so a new `admin.<resource>.viewed` is added here or it never reaches the export.
+ *
+ * See: docs/modules/audit-logs.md#the-person-can-see-who-looked
+ */
+export const STAFF_READ_PURPOSES = {
+    'admin.order.viewed': 'handling your order',
+    'admin.user.viewed': 'handling your account',
+    'admin.return.viewed': 'handling your return',
+    'admin.task.viewed': 'handling your request',
+    'admin.invoice.viewed': 'handling your invoice',
+    'admin.credit_note.viewed': 'handling your credit note'
+} as const satisfies Partial<Record<AuditAction, string>>;
 
 /**
  * Record a staff read of another person's record. A no-op for a caller without the wide-read key
@@ -43,8 +65,8 @@ export const recordStaffRead = (request: Request, target: StaffReadTarget): void
     // A key carries its minter's id but is not the minter: only a session reads its own record.
     if (
         request.credentialId === undefined &&
-        target.ownerId !== undefined &&
-        target.ownerId === caller.id
+        target.subjectId !== undefined &&
+        target.subjectId === caller.id
     )
         return;
 
@@ -52,6 +74,7 @@ export const recordStaffRead = (request: Request, target: StaffReadTarget): void
         action: target.action,
         outcome: 'success',
         targetType: target.targetType,
-        targetId: target.targetId
+        targetId: target.targetId,
+        subjectId: target.subjectId
     });
 };

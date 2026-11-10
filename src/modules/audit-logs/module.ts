@@ -41,6 +41,10 @@ export default {
         {
             section: 'auditLog',
             collect: (subject) => auditLogService.findOwnAuditEntries(subject.userId)
+        },
+        {
+            section: 'consultations',
+            collect: (subject) => auditLogService.findConsultationsOf(subject.userId)
         }
     ]
 } satisfies AppModule;

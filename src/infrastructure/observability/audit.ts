@@ -103,6 +103,12 @@ export interface AuditEvent {
     /** What was acted upon, e.g. 'product' — with `targetId`, the object of the action. */
     targetType?: string;
     targetId?: string;
+    /**
+     * The person whose data the row is about, when that is not the actor: set on a staff read of
+     * someone's record, so the person's own export can list the consultations. Absent for a
+     * guest's order and for any action that is not about a person.
+     */
+    subjectId?: string;
     /** Action-specific extras. Credentials are scrubbed on both copies; personal fields on the log line only. */
     metadata?: Record<string, unknown>;
 }
@@ -254,6 +260,7 @@ export const buildAuditEvent = (
                 | 'actorScope'
                 | 'targetType'
                 | 'targetId'
+                | 'subjectId'
                 | 'metadata'
             >
         >
