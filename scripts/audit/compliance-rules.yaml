@@ -4,6 +4,10 @@
 # docs/tools/ai-auditing.md. `rules:` is what either prompt evaluates; `suggested_rules:` is a
 # staging area for candidates pending human approval and MUST NOT be read by either prompt.
 #
+# Evidence hints name the authored contract: a module's `src/modules/<m>/openapi.yaml` fragment, or
+# `shared/contracts/openapi.root.yaml`. Never the generated, gitignored root `openapi.yaml`, which a
+# worktree may lack. Cite the fragment's line.
+#
 # A rule is never mandatory on its face — `applies_when` is prose the auditing model evaluates
 # against this app's actual shape at run time, not a boolean flag. Promote a rule out of
 # `suggested_rules:` by moving the entry under `rules:` and deleting `suggested_reason`.
@@ -18,24 +22,34 @@ rules:
       rule: >
           The app must publish a privacy policy, a cookie policy (or a combined policy that
           separately addresses cookies), and terms/marketing disclosures, each reachable via a
-          stable, discoverable URL (e.g. footer links) before any personal data is collected.
+          stable, discoverable URL (e.g. footer links) before any personal data is collected, and
+          the operator's legal notice (name, address, register, VAT).
       applies_when: >
           Always applicable — any app collecting personal data or setting cookies needs these pages
           published, regardless of jurisdiction.
       evidence:
           backend:
-              - a static/CMS-served legal-page route, if one exists
-              - openapi.yaml (a /legal or /policies path)
+              - src/app/config-routes.ts (`operator`, `termsVersion` on `GET /config`)
+              - shared/rules/frontend-links.yaml `staticPages` and src/modules/sitemap/config.ts
+              - .env-example `NODE_LEGAL_*`
           frontend:
-              - routed pages/components for /privacy-policy, /cookie-policy, /terms
-              - footer navigation links
+              - routes `terms`, `privacy` (cookie section `#cookies`, `BrowserStorageTable`) and `legal` in src/app/router/index.ts
+              - src/app/views/TermsPage.vue, PrivacyPage.vue, LegalPage.vue
+              - footer links in src/app/layouts/LayoutDefault.vue
       references:
           - GDPR Art. 12-14 (transparent information)
           - ePrivacy Directive Art. 5(3)
+          - e-Commerce Directive 2000/31 Art. 5(1) (legal notice)
       notes: >
-          Not found in this backend as of this registry's writing, and no dedicated module owns it —
-          this is most likely a frontend-owned static route. Confirm current status in the frontend
-          audit rather than assuming absence carries over.
+          The pages are frontend routes. This backend's half is the operator identity and
+          `termsVersion` on `GET /config`, and the page paths in the sitemap. A shipped
+          `<LegalPlaceholder>` (a visible "text missing" warning plus a section checklist, no legal
+          wording) is the designed default. Writing the text is the operator's go-live step
+          (frontend INSTALL.md, backend docs/demo-ecommerce/before-you-sell.md). It goes in the view
+          template, with a `NODE_TERMS_VERSION` bump in the same deploy. The placeholder never
+          decides the verdict: judge the pages, routes, footer links and identity. VIOLATION: a
+          page, route or footer link is missing; wording poses as real legal text (Lorem Ipsum, a
+          sample policy); or the go-live step is missing from those two docs.
 
     - id: signup-mandatory-consent-checkbox
       title: Every account records its holder's own acceptance of the Terms before first use (a box that starts unticked, or the notice beside a provider button); the privacy notice is shown, not agreed to
@@ -90,15 +104,13 @@ rules:
           copyright agent's contact (name/email or form) and a takedown process, per DMCA safe-harbor
           requirements (US) or an equivalent notice-and-action process (EU DSA Art. 16).
       applies_when: >
-          Only if the app allows users to upload or publish content visible to other users or the
-          public — e.g. product reviews, images, or other UGC. Unverified: check
-          src/modules/tasks/** and src/modules/products/** for any user-submitted content that is
-          actually surfaced publicly before concluding either way.
+          N/A today: no customer-authored content is shown to others (reviews, comments, public
+          profiles); re-check when one is added.
       evidence:
           backend:
               - src/modules/tasks/**
               - src/modules/products/** (review/UGC fields)
-              - src/modules/example/** (a public page any signed-up account may publish)
+              - src/modules/example/** (public published page; authoring is staff-only today, re-check if a customer audience gains `create:Example` in `shared/rules/authorization-roles.yaml`)
               - any content-moderation or takedown route
           frontend:
               - a /dmca or /copyright page
@@ -149,6 +161,8 @@ rules:
           writing — no AI/LLM runtime feature exists anywhere in src/ (the only AI usage in this repo
           is the human-run scripts/audit/*/SKILL.md prompts themselves, which are tooling, not a product
           feature). Re-evaluate the moment a runtime AI feature is added.
+          Frontend: no AI-labelled UI or chat widget, and no AI SDK in package.json (grep
+          -rniE "openai|anthropic|\bllm\b|chatbot|gpt-|gemini|ollama|ai-generated").
       evidence:
           backend:
               - src/modules/** (grep for llm/openai/anthropic/ai- prefixed modules or env vars)
@@ -174,7 +188,9 @@ rules:
       applies_when: >
           Only if the app offers biometric login. NOT-APPLICABLE as of this registry's writing — no
           biometric/FaceID code exists in this backend. Re-evaluate the moment biometric auth is
-          added, e.g. a WebAuthn platform-authenticator flow.
+          added, e.g. a WebAuthn platform-authenticator flow. Frontend: no `navigator.credentials` /
+          `PublicKeyCredential` / WebAuthn call and no biometric prompt (grep -rniE
+          "navigator\.credentials|PublicKeyCredential|webauthn|passkey|biometric").
       evidence:
           backend:
               - src/modules/account/** (any WebAuthn/passkey registration endpoint, and what it stores)
@@ -247,13 +263,18 @@ rules:
           knowingly directed at or likely used by children under 13 (or the local equivalent
           threshold), a verifiable parental-consent path must exist before collecting their data.
       applies_when: >
-          Only if the app sells/displays age-restricted product categories, or is directed at
-          children. Unverified: check src/modules/products/** category taxonomy for any
-          age-restricted category before concluding either way.
+          Only if the app sells or shows age-restricted goods (alcohol, tobacco/vapes, knives,
+          gambling, adult), or is directed at children. Categories and tags are free-form strings
+          (src/modules/products/model.ts), so judge the seeded catalogue (scenarios/products.ts,
+          scenarios/products-filler.ts) and the demo's audience. A deployer who adds such goods owns
+          the age check (docs/demo-ecommerce/before-you-sell.md, "Age-restricted goods").
+          Frontend: no age-gate component and no date-of-birth field at signup or checkout (grep
+          -rniE "age-?gate|dateOfBirth|birth").
       evidence:
           backend:
-              - src/modules/products/** (category/tag taxonomy)
-              - src/modules/account/** (any dateOfBirth/age field, and what gates on it)
+              - src/modules/products/model.ts (free-form `categories`/`tags`)
+              - scenarios/products*.ts
+              - src/modules/account/** (any date-of-birth field)
           frontend:
               - an age-gate modal/component
               - product category pages
@@ -273,12 +294,16 @@ rules:
           honouring it must stop future sends to that address without further action from the
           recipient.
       applies_when: >
-          The app sends, or is being extended to send, any email classified as marketing/bulk rather
-          than purely transactional. Currently NOT applicable: every template under
-          src/modules/*/templates/*.ejs is transactional (signup, reset, 2FA, order, shipment,
-          contact) and none carry an unsubscribe link or List-Unsubscribe header — confirmed by grep,
-          zero hits, which is correct for transactional mail. Re-evaluate the moment a template such
-          as a newsletter, promo, or re-engagement email is added.
+          The app sends, or is being extended to send, any email whose primary purpose is promotion.
+          NOT applicable today: every template under src/modules/*/templates/*.ejs is transactional
+          or a service notice, and none carries an unsubscribe link (the grep below, zero hits, is
+          correct). Standing judgement: `stock-alerts.back-in-stock` is a single notice the buyer
+          asked for, about the product they named, and the request is deleted once answered
+          (src/modules/stock-alerts/module.yaml). Under ePrivacy Art. 13(1) the request is the prior
+          consent, and nothing follows to stop. Under CAN-SPAM's primary-purpose test it is a grey
+          area: report it as a one-line note, not a finding. It becomes marketing the day it names
+          another product, carries an offer, or repeats. Re-evaluate when a newsletter, promo,
+          re-engagement or abandoned-cart mail is added.
       evidence:
           backend:
               - src/modules/*/templates/*.ejs
@@ -329,7 +354,9 @@ rules:
           service is reachable by California residents. Likely NOT-APPLICABLE today: analytics is
           opt-in (analyticsConsent) and self-hostable (Umami) — re-check if a hosted PostHog or any ad
           pixel is added, or if any sub-processor relationship changes from processor to independent
-          controller.
+          controller. Frontend: no ad pixel or hosted analytics besides `VITE_UMAMI_*`/Faro. If one is
+          added, the footer needs a "Do Not Sell or Share" link and the app must honour
+          `navigator.globalPrivacyControl`.
       evidence:
           backend:
               - docs/theory/data-protection.md (sub-processor list)

@@ -412,7 +412,7 @@ rules:
     - id: idempotency-key-moving-writes
       standard: idempotency-key
       section: scope
-      rule: Every POST or PATCH that moves money, stock or an account takes `Idempotency-Key`, or sits in a class of the published exceptions table; a PATCH whose merge patch sets absolute values is idempotent by construction and needs none.
+      rule: Every POST or PATCH whose repeat would write again takes an optional `Idempotency-Key`, and one whose repeat would move money twice requires it; the rest sit in a class of the published exceptions table. A PATCH whose merge patch sets absolute values is idempotent by construction and needs none.
       source: https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
       evidence:
           [

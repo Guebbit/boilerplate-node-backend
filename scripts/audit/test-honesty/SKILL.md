@@ -158,26 +158,41 @@ never edit `src/` to check.
     - Other `tmp/reports/mutation*/**/mutation.json` files: hints only, with the same per-file
       staleness rule. Never `stryker-incremental.json` (a cache, not a result).
     - Offer `npm run mutation` for the scope and wait for yes (RULES.md rule 2).
-    - Mark the report PARTIAL: here the report is the oracle. Rows without a mutant stay UNVERIFIED.
+    - Mark the report PARTIAL: here the report is the oracle. Rows without a mutant stay UNVERIFIED `(no report)`.
 
 - Match each break to a mutant: same location, same effect — a `ConditionalExpression` forced to
   `true` for a deleted guard, an emptied `BlockStatement` for a deleted call, an `EqualityOperator`
   for a moved boundary.
 - Stryker stops at the first test that kills a mutant, so `killedBy` names one test. A mutant
   killed by a _different_ test says nothing about this one.
-- `tests/load/` is k6, not Jest: Stryker never runs it. Mark it UNVERIFIED.
+- `tests/load/` is k6, not Jest: Stryker never runs it. Mark it UNVERIFIED `(suite skipped)`.
 
 Verdicts:
 
-| Verdict        | Means                                                                                                                  |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| **CONFIRMED**  | the matching mutant **Survived** and this test is in its `coveredBy`: the test ran the broken code and stayed green.   |
-| **CONFIRMED**  | the matching mutant is **NoCoverage**: the test never even runs the code its title names.                              |
-| **CLEAN**      | this test is in the matching mutant's `killedBy`. A false alarm — drop it silently.                                    |
-| **UNVERIFIED** | no mutant matches the break, the mutant was killed by another test, or the file is outside Stryker's reach. Say which. |
-| **DULL**       | a naming finding only — the oracle does not apply.                                                                     |
+| Verdict        | Means                                                                                                                                                                                                        |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **CONFIRMED**  | the matching mutant **Survived** and this test is in its `coveredBy`: the test ran the broken code and stayed green.                                                                                         |
+| **CONFIRMED**  | the matching mutant is **NoCoverage**: the test never even runs the code its title names.                                                                                                                    |
+| **CLEAN**      | this test is in the matching mutant's `killedBy`. A false alarm — drop it silently.                                                                                                                          |
+| **UNVERIFIED** | no mutant proves it, so nothing is counted. Give the reason tag, below.                                                                                                                                      |
+| **LIAR-TITLE** | the title names a rule `src/` does not have. Cite the `src/` line where the rule would sit, and the doc line when the docs speak (silent docs still count). The oracle does not apply; the fix is a retitle. |
+| **DULL**       | a naming finding only — the oracle does not apply.                                                                                                                                                           |
 
-Only CONFIRMED and DULL rows are findings. CLEAN rows go in a one-line count, never a table row.
+UNVERIFIED carries one reason tag:
+
+| Tag                        | Means                                                                                 |
+| -------------------------- | ------------------------------------------------------------------------------------- |
+| `(no report)`              | no usable Stryker report for this file                                                |
+| `(killed by another test)` | the matching mutant was killed by a different test, so it says nothing about this one |
+| `(no mutator)`             | no Stryker mutator can make the break (name the mutator folder you checked)           |
+| `(suite skipped)`          | the test is in a suite `stryker.json` leaves out                                      |
+
+A `(no mutator)` or `(suite skipped)` row also carries: why no mutator can make it, a diff of 3
+lines or fewer that is never applied, the observable that changes on this test's own input (a
+returned value, a stored field, an emitted event, a call), and the assertion lines that cannot see
+it. If you cannot name a changed observable, treat the break as equivalent and write no row.
+
+Only CONFIRMED, LIAR-TITLE and DULL rows are findings. CLEAN rows go in a one-line count, never a table row.
 
 ### 4 — write the report
 
@@ -199,7 +214,7 @@ silent, is worked out by hand from the input and labelled so. Never from running
 **Bent to fit**, done by the auditor.
 
 Then print the CONFIRMED rows to the terminal, security boundaries and money first, with one line
-of totals: candidates, CONFIRMED, CLEAN, UNVERIFIED, DULL. A low CONFIRMED-to-candidate ratio is
+of totals: candidates, CONFIRMED, LIAR-TITLE, DULL, CLEAN, and UNVERIFIED split by reason tag. A low CONFIRMED-to-candidate ratio is
 good news, and worth saying.
 
 ## Rules
@@ -207,8 +222,12 @@ good news, and worth saying.
 - **Report only.** Write nothing but the report under `tmp/reports/audit-<run>/test-honesty/`. Do NOT edit
   source, tests, documentation, contracts or config. Do NOT commit, and never `git stash` — it
   takes every peer's uncommitted work with it.
-- A finding needs a mutant id. "It looks weak" is not a finding — the mutant either survived this
-  test or it did not.
+- A finding needs a Stryker mutant id, or is a LIAR-TITLE. "It looks weak" is not a finding — the
+  mutant either survived this test or it did not.
+- A LIAR-TITLE is reported even when its test is CLEAN: a killed mutant clears the assertion, not
+  the title.
+- When the spec requires a rule and `src/` lacks it, the row is not this audit's. Route it in one
+  line to `/audit-spec-drift` (MISMATCH-CODE) or `/audit-spec-gaps` (`contradicted`).
 - Prefer three CONFIRMED rows over thirty candidates. A report full of guesses trains its reader to
   skip it.
 - A short test is not a weak test. `expect(isRefundable(order)).toBe(false)` on a well-chosen order

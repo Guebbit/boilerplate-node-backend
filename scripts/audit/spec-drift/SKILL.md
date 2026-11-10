@@ -52,6 +52,9 @@ Read ONLY, for everything in scope:
   `shared/authorization-{roles,conformance}.yaml`, `shared/contracts/authorization-keys.core.yaml`.
   Layout: `docs/theory/shared-rules.md` §3.
 
+Do NOT open the implementation (except the YAML files listed above) and do NOT open the test
+files yet.
+
 Under `whole-repo`, each slice follows the module rule; the system slice reads `shared/**`,
 `docs/theory/defences/` and the `docs/tools/*.md` pages that state rules in full. A module or path
 run reads its own docs and YAML in full and searches `shared/**` and `docs/tools/*.md` for scope
