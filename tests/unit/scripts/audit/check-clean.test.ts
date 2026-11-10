@@ -6,7 +6,8 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { diffSnapshots, gitEnvironment, snapshotRepo } from '../../../../scripts/audit/check-clean';
+import { diffSnapshots, snapshotRepo } from '../../../../scripts/audit/check-clean';
+import { gitEnvironment } from '../../../../scripts/git-base';
 
 /** The run folder, relative to the repo root. */
 const RUN = 'tmp/reports/audit-2026-01-01-0000/spec-drift';

@@ -48,8 +48,8 @@ The eight HTTP standards (`api-http`) outrank the style guide. A guide rule, or 
 web rule already decides is not judged here: it is listed once under **Decided by the web rules**.
 Example: AIP-216's 400 for a refused state change, where RFC 9110 defines 409.
 
-One exception: under Google AIP the error format is Google's (`aip-error-model`) and is judged
-here; `api-http` steps its RFC 9457 rules aside.
+No exception: the error format is never judged here, under either guide. `api-http` owns it
+(RFC 9457 first); its own question decides whether its RFC 9457 rules are skipped.
 
 ## Naming the scope
 

@@ -51,9 +51,10 @@ export interface RequiredId {
     /**
      * What the module answers an unknown id with, so a malformed one is indistinguishable from it:
      * an i18n key; a function that builds the translated copy, where it names the id or the
-     * entity; or `null` where an unknown id answers the bare 404 envelope.
+     * entity, or a coded item where the unknown answer carries its own error code; or `null`
+     * where an unknown id answers the bare 404 envelope.
      */
-    notFound: string | (() => string) | null;
+    notFound: string | (() => string | ResponseErrorItem) | null;
     /** The param or field the id travels under. Default `id`. */
     name?: string;
     /** The route's precedence rule, the same one its other `readInput` calls declare. Default `path`. */
@@ -65,7 +66,7 @@ export interface RequiredId {
  *
  * @param notFound - {@link RequiredId.notFound}
  */
-const notFoundCopy = (notFound: RequiredId['notFound']): string[] => {
+const notFoundCopy = (notFound: RequiredId['notFound']): (string | ResponseErrorItem)[] => {
     if (notFound === null) return [];
     return [typeof notFound === 'function' ? notFound() : t(notFound)];
 };

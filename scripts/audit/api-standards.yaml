@@ -523,6 +523,7 @@ rules:
       standard: google-aip
       section: AIP-193, errors
       rule: An error answer is a `google.rpc.Status` with an `ErrorInfo` detail.
+      # Judged by api-http Part D, and only when the user answers that errors are google.rpc.Status.
       source: https://google.aip.dev/193
       evidence: [docs/api/errors.md#problem-details, src/infrastructure/http/response.ts]
       lint: no
