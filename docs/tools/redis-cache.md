@@ -304,11 +304,7 @@ The one hit/miss signal this cache has: a Prometheus counter labelled `result`, 
 Both composes start the cache Redis with `--maxmemory` and `--maxmemory-policy`, both overridable
 from `.env`:
 
-| Variable                      | Default       | What it does                                           |
-| ----------------------------- | ------------- | ------------------------------------------------------ |
-| `NODE_REDIS_MAXMEMORY`        | `256mb`       | Ceiling for the cache container                        |
-| `NODE_REDIS_MAXMEMORY_POLICY` | `allkeys-lru` | What happens at the ceiling                            |
-| `NODE_REDIS_CACHE_MAX_BYTES`  | `262144`      | Largest single response the app will store (see above) |
+The variables are in [the configuration table](#configuration).
 
 Redis' own default is `maxmemory 0` — unlimited — which is the wrong default for a cache: entry
 count here follows traffic rather than data size, since `GET /products` is public and its answers
@@ -504,17 +500,17 @@ A non-zero rate on that counter means some endpoint is serving a stale answer to
 
 ## Configuration
 
-| Variable                           | Default                 | Meaning                                                                                                                                |
-| ---------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_REDIS_CACHE_ENABLED`         | `1`                     | `0` serves every request uncached — the switch to reach for when a stale answer is worse than a slow one, and what the test suites set |
-| `NODE_REDIS_URL`                   | —                       | Wins outright; blanking it is how `npm run host` falls through to the host/port pair below                                             |
-| `NODE_REDIS_HOST` / `_PORT`        | `127.0.0.1` / —         | Used only when the URI is unset or empty                                                                                               |
-| `NODE_REDIS_PASSWORD`              | —                       | Password for the host/port pair; a URI carries its own                                                                                 |
-| `NODE_RATE_LIMIT_REDIS_URL`        | —                       | The `limits` instance — see [Two Redis instances](#two-redis-instances)                                                                |
-| `NODE_REDIS_CACHE_PREFIX`          | —                       | Namespaces every key, so two deployments may share one Redis                                                                           |
-| `NODE_REDIS_CACHE_DEV_TTL_MAX`     | `30`                    | Outside production, clamps every route's declared TTL — see [Writes that bypass the API](#writes-that-bypass-the-api)                  |
-| `NODE_REDIS_CACHE_MAX_BYTES`       | `262144` (256 KB)       | See [Entry size is bounded](#entry-size-is-bounded)                                                                                    |
-| `NODE_REDIS_MAXMEMORY` / `_POLICY` | `256mb` / `allkeys-lru` | Read by the compose files, not by the app — see [Memory is capped](#memory-is-capped-and-the-cap-evicts)                               |
+| Variable                           | Default                    | Meaning                                                                                                                                |
+| ---------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_REDIS_CACHE_ENABLED`         | `1`                        | `0` serves every request uncached — the switch to reach for when a stale answer is worse than a slow one, and what the test suites set |
+| `NODE_REDIS_URL`                   | —                          | Wins outright; blanking it is how `npm run host` falls through to the host/port pair below                                             |
+| `NODE_REDIS_HOST` / `_PORT`        | `127.0.0.1` / —            | Used only when the URI is unset or empty                                                                                               |
+| `NODE_REDIS_PASSWORD`              | —                          | Password for the host/port pair; a URI carries its own                                                                                 |
+| `NODE_RATE_LIMIT_REDIS_URL`        | —                          | The `limits` instance — see [Two Redis instances](#two-redis-instances)                                                                |
+| `NODE_REDIS_CACHE_PREFIX`          | `boilerplate-node-backend` | Namespaces every key, so two deployments may share one Redis                                                                           |
+| `NODE_REDIS_CACHE_DEV_TTL_MAX`     | `30`                       | Outside production, clamps every route's declared TTL — see [Writes that bypass the API](#writes-that-bypass-the-api)                  |
+| `NODE_REDIS_CACHE_MAX_BYTES`       | `262144` (256 KB)          | See [Entry size is bounded](#entry-size-is-bounded)                                                                                    |
+| `NODE_REDIS_MAXMEMORY` / `_POLICY` | `256mb` / `allkeys-lru`    | Read by the compose files, not by the app — see [Memory is capped](#memory-is-capped-and-the-cap-evicts)                               |
 
 Disabling the cache is not the same as Redis being unreachable. `NODE_REDIS_CACHE_ENABLED=0`
 never builds a client at all; an unreachable Redis builds one, fails, and falls through — the
