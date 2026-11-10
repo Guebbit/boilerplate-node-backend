@@ -13,6 +13,7 @@ import type { Request, Response } from 'express';
 import { CreateLocaleBody } from '@api/schemas.zod';
 import type { CreateLocaleRequest, Language } from '@types';
 import { createdResponse } from '@infrastructure/http/response';
+import { answerAsResource } from '@infrastructure/http/preconditions';
 import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
@@ -44,9 +45,13 @@ export const createLocale = (
 
             return localeService
                 .describeStoredLanguage(result.data, localeService.standingOn(request.caller))
-                .then((language) =>
-                    createdResponse<Language>(response, language, `/locales/${language.tag}`)
-                );
+                .then((language) => {
+                    const location = `/locales/${language.tag}`;
+                    // The new language's real tag, so the first edit needs no re-read, and the
+                    // resource it belongs to (RFC 9110 §8.8.3).
+                    answerAsResource(response, language, location);
+                    return createdResponse<Language>(response, language, location);
+                });
         })
         .catch(catchAs(response, 'createLocale'));
 };

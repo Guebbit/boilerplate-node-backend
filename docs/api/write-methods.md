@@ -526,7 +526,8 @@ sequenceDiagram
 | the caller's account | `GET /account` | `PUT`, `PATCH /account` |
 | example | `GET /examples/{id}` | `PUT`, `PATCH`, `DELETE /examples/{id}` |
 | webhook subscription | `GET /webhooks/subscriptions/{id}` | `PUT`, `PATCH`, `DELETE /webhooks/subscriptions/{id}` |
-| language | `GET /locales/{locale}` | `PUT`, `PATCH /locales/{locale}` (not the `DELETE`: removing a language is unconditional) |
+| language | `GET /locales/{locale}`; `POST /locales` answers its tag | `PUT`, `PATCH /locales/{locale}` (not the `DELETE`: removing a language is unconditional) |
+| a language's dictionary entries | `GET /locales/{locale}/entries`, `GET /locales/{locale}/apps/{app}/entries` | the two imports, `PUT`, `PATCH /locales/{locale}/apps/{app}/entries` (the single-entry writes take none) |
 | translations of an entity | `GET /locales/translations/{entityType}/{id}` | `PUT`, `PATCH /locales/translations/{entityType}/{id}` |
 
 The role door (`POST /users/{id}/assign-role`, `/revoke-role`) is not in that column: a POST is a
@@ -538,9 +539,29 @@ Not versioned: a resource with no item read to take a tag from (tasks, an addres
 and anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declared.
 
 A language is addressed by its tag, so its `If-Match` is keyed by the tag (case-insensitive: `pt-br`
-is `pt-BR`), while the counter lives on its row. Writing a dictionary entry moves the language's
-`revision` (what clients re-fetch on) but not its edit counter or `updatedAt`; switching it on or
-off does move them, so an open name form is refused after a toggle.
+is `pt-BR`), while the counter lives on its row. Switching it on or off moves the edit counter and
+`updatedAt`, so an open name form is refused after a toggle; writing a dictionary entry moves
+neither.
+
+A language's entries are fenced on a second counter of the same row, its `revision` (what clients
+re-fetch on). One counter per language, not per app: both lists, the one app's and the all-apps one
+the export reads, answer it as the version of their `ETag`, so the tag of the export is the tag of
+the import. The cost is one retry: a write to app X refuses an open import into app Y once, and
+that is safe, where a per-app counter could not describe the all-apps list at all.
+
+- **The imports take it.** `PUT` and `PATCH /locales/{locale}/apps/{app}/entries` send the tag of a
+  list read as `If-Match`; a language whose `revision` moved since is a 412 and nothing is written.
+  An import that would change nothing is checked too (RFC 9110 §13.1.1 evaluates the condition
+  before the method). The `PATCH` answers the new tag.
+- **The single-entry writes do not take it**, as the edit of one string is not an overwrite of a
+  list. They move the same counter, and the row and the bump are one transaction, so an import
+  cannot land between the two and pass a fence that has not moved yet.
+- **An import's check and its bump are inside its own transaction** too: the fence is a read of
+  the language row, so a bump that lands afterwards conflicts with the import's own and re-runs
+  the whole attempt against the new counter.
+- **Using a page's tag on the import URL is a house convention** (`if-match-edit-version`): the
+  tag came from a GET with a query, the import has none. The client strips the query when it files
+  a tag, and sends the all-apps list's tag explicitly on an import.
 
 The translations of an entity are fenced on the OWNER's counter (the product's or the example's
 `editRevision`), not on one of their own: a translation save already moves it, and a product read
@@ -550,6 +571,34 @@ purpose; a stock move refuses neither. The read answers 404 for an entity that d
 A webhook subscription's delivery bookkeeping (the failure streak, the auto-disable) writes with
 `timestamps: false`, so a delivery outcome never moves the edit counter and never refuses an open
 edit form.
+
+### The pattern: optimistic locking
+
+The edit counter is a **version number**, the pattern called *optimistic locking*
+([Fowler: Optimistic Offline Lock](https://martinfowler.com/eaaCatalog/optimisticOfflineLock.html)).
+Rails `lock_version`, JPA `@Version` and Kubernetes `resourceVersion` are the same idea.
+`If-Match` is how HTTP carries it.
+
+It is not a nonce, though both are "a value the server checks":
+
+| | Version counter (this) | Nonce |
+| --- | --- | --- |
+| Value | an integer that goes up by one per edit | random |
+| Order | yes: 5 is newer than 4 | none |
+| Shared? | everyone who reads the row gets the same one, until the next edit | each one is issued once |
+| Answers | "has this changed since I read it?" | "have I seen this message before?" |
+| Here | `editRevision`, the edit part of the `ETag` | the `Idempotency-Key` ledger, the OAuth `state`, the ALTCHA antibot challenge |
+
+Three rules keep it honest. Break any one and a lost update gets through:
+
+1. **Check and write in one atomic step.** "Update where the counter is 7, and make it 8"; nothing
+   matched → 412. A check in one step and a write in the next lets a second editor in between.
+   See [What the server does with `If-Match`](#what-the-server-does-with-if-match).
+2. **Every edit moves the counter in the same atomic step as the edit.** A row and its own counter:
+   one update (`$inc`). Many rows under one counter: one transaction. A bump made afterwards leaves
+   a window where the data has changed and the counter still says it has not.
+3. **The tag describes exactly what the client read.** A read that covers a whole set of rows
+   hands out the set's counter, so a write based on that read is checked against the set.
 
 ### What the tag is
 
