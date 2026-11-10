@@ -449,10 +449,10 @@ components:
                 minItems: 1
                 maxItems: 100
                 items: { $ref: '#/components/schemas/Id' }
-        # The delete flag, shared because every soft-deleting domain offers the same three
-        # spellings of it: `/hard` in the path, `?hardDelete=true` in the query, `hardDelete` in
-        # the body. Params outrank query, which outranks body — see docs/theory/request-input.md.
-        # Declared here once so a fourth domain cannot accidentally offer only two of the three.
+        # The delete flag, shared because every soft-deleting domain offers the same two
+        # spellings: `/hard` in the path, `?hardDelete=true` in the query. OR'd, not ranked; a
+        # DELETE body is a 415 — see docs/theory/request-input.md. Declared once so a fourth
+        # domain cannot offer only one.
         HardDeleteParam:
             name: hardDelete
             in: query
