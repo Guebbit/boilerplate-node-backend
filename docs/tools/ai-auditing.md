@@ -45,20 +45,20 @@ Two consequences, both non-negotiable:
 
 ## The prompts
 
-| File                                         | Asks                                                                                                                                                                                                                                                                                                               | Writes to                                |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
-| `scripts/audit/spec-drift/SKILL.md`          | Which tests assert what the **code** does rather than what the **spec** says?                                                                                                                                                                                                                                      | `tmp/reports/audit/spec-drift/`          |
-| `scripts/audit/spec-gaps/SKILL.md`           | Which business rules and security boundaries have **zero** coverage?                                                                                                                                                                                                                                               | `tmp/reports/audit/spec-gaps/`           |
-| `scripts/audit/suite-bloat/SKILL.md`         | Which tests cost CI time and discriminate nothing?                                                                                                                                                                                                                                                                 | `tmp/reports/audit/suite-bloat/`         |
-| `scripts/audit/compliance-backend/SKILL.md`  | Which rules in the shared compliance registry (consent, privacy pages, data security, accessibility, …) does this backend violate, and which don't apply here?                                                                                                                                                     | `tmp/reports/audit/compliance-backend/`  |
-| `scripts/audit/compliance-frontend/SKILL.md` | The same registry, filtered to the paired frontend's half of responsibility.                                                                                                                                                                                                                                       | `tmp/reports/audit/compliance-frontend/` |
-| `scripts/audit/reachability/SKILL.md`        | Which defences are correct where they are tested and unreachable through the real mounted path?                                                                                                                                                                                                                    | `tmp/reports/audit/reachability/`        |
-| `scripts/audit/rate-limit-keys/SKILL.md`     | Which rate-limit budgets bucket callers by something the attacker supplies or rotates for free?                                                                                                                                                                                                                    | `tmp/reports/audit/rate-limit-keys/`     |
-| `scripts/audit/test-honesty/SKILL.md`        | Which tests stay green when the behaviour they claim to check is broken? See [below](#test-honesty-a-test-is-innocent-once-it-has-failed).                                                                                                                                                                         | `tmp/reports/audit/test-honesty/`        |
-| `scripts/audit/code-shape/SKILL.md`          | Which functions, files and options don't earn their place, and which code is dead or copy-pasted? See [below](#code-shape-the-tools-count-the-model-judges).                                                                                                                                                       | `tmp/reports/audit/code-shape/`          |
-| `scripts/audit/ddd-drift/SKILL.md`           | Where has the code drifted from the DDD the docs describe — who drives whose state, who reads a sibling's table, where a rule lives — and which side is wrong? Mirrors `../boilerplate-vue-frontend/scripts/audit/ddd-drift/SKILL.md`; C1 (BE) and F2 (FE) are one rule seen from each side.                       | `tmp/reports/audit/ddd-drift/`           |
-| `scripts/audit/api-http/SKILL.md`            | Does the API follow the eight HTTP web standards: RFC 9110 meaning, RFC 9111 caching, RFC 9457 errors, RFC 5789 and 7396 PATCH, RFC 6585 statuses, the RateLimit and Idempotency-Key drafts? A whole-contract run splits into four parts, one helper agent each; REPORTED only, never turned into a Spectral rule. | `tmp/reports/audit-<run>/api-http/`      |
-| `scripts/audit/api-style/SKILL.md`           | Where do names, enums, paging, methods, money and errors differ from ONE style guide (Zalando, unless the API clearly leans Google AIP: then it asks), and is each difference written down? REPORTED only, never turned into a Spectral rule.                                                                      | `tmp/reports/audit-<run>/api-style/`     |
+| File                                         | Asks                                                                                                                                                                                                                                                                                                               | Writes to                                      |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| `scripts/audit/spec-drift/SKILL.md`          | Which tests assert what the **code** does rather than what the **spec** says?                                                                                                                                                                                                                                      | `tmp/reports/audit-<run>/spec-drift/`          |
+| `scripts/audit/spec-gaps/SKILL.md`           | Which business rules and security boundaries have **zero** coverage?                                                                                                                                                                                                                                               | `tmp/reports/audit-<run>/spec-gaps/`           |
+| `scripts/audit/suite-bloat/SKILL.md`         | Which tests cost CI time and discriminate nothing?                                                                                                                                                                                                                                                                 | `tmp/reports/audit-<run>/suite-bloat/`         |
+| `scripts/audit/compliance-backend/SKILL.md`  | Which rules in the shared compliance registry (consent, privacy pages, data security, accessibility, …) does this backend violate, and which don't apply here?                                                                                                                                                     | `tmp/reports/audit-<run>/compliance-backend/`  |
+| `scripts/audit/compliance-frontend/SKILL.md` | The same registry, filtered to the paired frontend's half of responsibility.                                                                                                                                                                                                                                       | `tmp/reports/audit-<run>/compliance-frontend/` |
+| `scripts/audit/reachability/SKILL.md`        | Which defences are correct where they are tested and unreachable through the real mounted path?                                                                                                                                                                                                                    | `tmp/reports/audit-<run>/reachability/`        |
+| `scripts/audit/rate-limit-keys/SKILL.md`     | Which rate-limit budgets bucket callers by something the attacker supplies or rotates for free?                                                                                                                                                                                                                    | `tmp/reports/audit-<run>/rate-limit-keys/`     |
+| `scripts/audit/test-honesty/SKILL.md`        | Which tests stay green when the behaviour they claim to check is broken? See [below](#test-honesty-a-test-is-innocent-once-it-has-failed).                                                                                                                                                                         | `tmp/reports/audit-<run>/test-honesty/`        |
+| `scripts/audit/code-shape/SKILL.md`          | Which functions, files and options don't earn their place, and which code is dead or copy-pasted? See [below](#code-shape-the-tools-count-the-model-judges).                                                                                                                                                       | `tmp/reports/audit-<run>/code-shape/`          |
+| `scripts/audit/ddd-drift/SKILL.md`           | Where has the code drifted from the DDD the docs describe — who drives whose state, who reads a sibling's table, where a rule lives — and which side is wrong? Mirrors `../boilerplate-vue-frontend/scripts/audit/ddd-drift/SKILL.md`; C1 (BE) and F2 (FE) are one rule seen from each side.                       | `tmp/reports/audit-<run>/ddd-drift/`           |
+| `scripts/audit/api-http/SKILL.md`            | Does the API follow the eight HTTP web standards: RFC 9110 meaning, RFC 9111 caching, RFC 9457 errors, RFC 5789 and 7396 PATCH, RFC 6585 statuses, the RateLimit and Idempotency-Key drafts? A whole-contract run splits into four parts, one helper agent each; REPORTED only, never turned into a Spectral rule. | `tmp/reports/audit-<run>/api-http/`            |
+| `scripts/audit/api-style/SKILL.md`           | Where do names, enums, paging, methods, money and errors differ from ONE style guide (Zalando, unless the API clearly leans Google AIP: then it asks), and is each difference written down? REPORTED only, never turned into a Spectral rule.                                                                      | `tmp/reports/audit-<run>/api-style/`           |
 
 All of them take one argument — a module (`orders`), a path, or `--diff` for whatever the working
 tree touched. The two compliance prompts, `ddd-drift` and the two `api-*` audits default an empty argument to the
@@ -271,17 +271,37 @@ flowchart LR
     T --> R{"Matching mutant<br/>in Stryker's report"}
     R -->|survived this test| Y["CONFIRMED"]
     R -->|killed by this test| N["CLEAN —<br/>dropped silently"]
+    R -->|no mutant can prove it| U["UNVERIFIED<br/>with a reason tag,<br/>not counted"]
+    T --> L{"Title names a rule<br/>src/ does not have"}
+    L -->|yes, even if CLEAN| LT["LIAR-TITLE —<br/>retitle"]
     Y --> F["Report, with a<br/>suggested fix in prose"]
+    LT --> F
 
     classDef ai fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef gate fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef tool fill:#f3f4f6,stroke:#6b7280,color:#111827;
     classDef out fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef dead fill:#fee2e2,stroke:#dc2626,color:#111827;
     class C,T ai;
-    class R gate;
-    class Y,F out;
+    class R,L gate;
+    class Y,F,LT out;
     class N dead;
+    class U tool;
 ```
+
+Two things Stryker cannot prove get their own handling:
+
+- **A title that lies.** The test checks something real, but its title names a rule `src/` does not
+  have. There is no mutant to write, because the rule is not there, so it is a `LIAR-TITLE` finding
+  proven by reading, and it is reported even when the test is `CLEAN`.
+- **A break no mutator can make** (a changed number, a swapped constructor, a suite Stryker skips).
+  It is listed as `UNVERIFIED` with a reason tag and a diff that is never applied, and never
+  counted as a finding until someone runs it.
+
+The candidate list comes from `npm run audit:test-candidates`, a report-only ESLint config that
+flags tests whose every assertion is weak. The lint gate already refuses the other shapes (an
+`expect` under an `if`, a test with none, a duplicate title), so the audit does not repeat them.
+Its false positives are asserting helpers (`refused(...)`) and supertest's `.expect(200)`.
 
 The break comes from the title, never from the assertions. One chosen by reading the assertions
 proves only that they agree with themselves.
