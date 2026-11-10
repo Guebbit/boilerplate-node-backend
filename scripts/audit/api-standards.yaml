@@ -69,7 +69,8 @@ rules:
     - id: rfc9110-created-means-created
       standard: rfc9110
       section: status codes
-      rule: 201 is answered only when a new resource now exists at the URL in `Location`; an action, or a write through a parent, answers 200.
+      rule: '201 means one or more new resources were created; `Location`, or else the target URI, identifies the primary one (§15.3.2).'
+      house: 'An action (no new resource) answers 200 (docs/api/write-methods.md#action-→-200).'
       source: https://www.rfc-editor.org/rfc/rfc9110#section-15.3.2
       evidence:
           [
@@ -390,6 +391,7 @@ rules:
     - id: ratelimit-server-behavior
       standard: ratelimit-headers
       section: server behavior
+      house: 'A 429 from a declared budget names that budget in `RateLimit` with `r=0` and `t` equal to `Retry-After`, a mailbox budget charged by hand included; cooldowns and the 2FA lock send `Retry-After` only (docs/tools/security.md#response-headers).'
       rule: 'A server MAY send `RateLimit` and `RateLimit-Policy` on any status, a 429 included; when a response carries both `Retry-After` and `RateLimit`, `Retry-After` SHOULD NOT point earlier than the end of the effective window (§6). Judge the window of the policies at `r=0`, the ones the wait is for.'
       source: https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/
       evidence:
