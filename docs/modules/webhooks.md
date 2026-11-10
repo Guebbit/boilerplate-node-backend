@@ -104,6 +104,51 @@ Three things read the same files, so they cannot drift apart:
 - The subscribe check: `POST`, `PUT` and `PATCH` on a subscription answer 422 on an `eventTypes`
   name the catalogue does not list. `*` stays valid. A typo would otherwise be accepted and never
   fire; Stripe (`enabled_events`) and Shopify (topics) refuse the same way.
+- The read check: 403 `WEBHOOK_EVENT_READ_REQUIRED`, [below](#who-may-subscribe-to-what).
+
+### Who may subscribe to what {#who-may-subscribe-to-what}
+
+`WebhookManagement` is a role's key to the integration, not a licence to read everything the
+shop fires. A subscription is a standing hand-off of an event stream to a machine, like an API key,
+and a key already needs "only rules you hold" (`api-keys/services/api-keys.ts#isMintable`). So each
+event declares the rule that reads what it carries, in its own channel:
+
+- `x-read-rule` in `src/modules/<module>/asyncapi.webhooks.yaml`: `public`, or a declared
+  tenant-scoped rule with no `conditions` (an every-row staff rule: `display:Order`,
+  `display:Payment`, `read:Return`, `read:User`). Own-rows rules such as `read:Order` are refused at
+  boot: every customer holds them, so they would gate nothing.
+- `services/catalog.ts` reads it with the channel names and throws at boot on a missing, undeclared,
+  platform or conditioned value. `asyncapi.public.yaml` carries it whole, so the contract documents
+  the permission per event.
+- The check is literal, `heldRules(caller).has(rule)`, so it holds for a key as for a session.
+
+```mermaid
+flowchart TD
+    W["write that hands a stream over<br/>create, PUT, PATCH url or eventTypes, new secret, replay"] --> F["filter: stored + new events<br/>(* = every event)"]
+    F --> R{"caller holds every event's read rule?"}
+    R -- no --> X["403 WEBHOOK_EVENT_READ_REQUIRED<br/>names the events"]
+    R -- yes --> OK["written"]
+```
+
+| Door                                             | Checked against                                                                                                                  |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /webhooks/subscriptions`                   | the requested filter                                                                                                             |
+| `PUT`, or `PATCH` carrying `url` or `eventTypes` | the stored filter **and** the new one: narrowing then redirecting an admin's `*` stream is one call, and would otherwise pass    |
+| `PATCH` of the description alone                 | nothing                                                                                                                          |
+| `POST .../secrets`                               | the stored filter: the new secret signs for that stream, so it could forge `user.erased`                                         |
+| `POST /webhooks/deliveries/{id}/replay`          | the delivery's event: a stored payload is re-sent to the current url                                                             |
+| the delivery itself                              | `attemptDelivery` abandons a row whose event the filter no longer names (`exhausted`), so a retry never reaches a redirected url |
+
+Where each flag shows: `GET /webhooks/events` gives every entry `actions.subscribe` (the form
+disables the ones the caller cannot read), `actions.createSecret` is false while the stored filter
+holds an unreadable event, and `actions.replay` is false for a delivery of one. The edit form locks
+the url and events fields on such a subscription.
+
+- **No re-check at delivery against the creator.** The subscription belongs to the shop, not to its
+  creator: a demoted creator's subscriptions keep running. GitHub only hides events you cannot read
+  at subscribe time; its revocation behaviour is undocumented.
+- **A channel added later joins an existing `*` unchecked.** Only a holder of every read rule can write `*`
+  (today: admin, or a key an admin mints), so the stream was the writer's to hand over.
 
 A module reaching for the internal domain-event bus and calling it "public" would publish
 internal coupling as an external promise; declaring the event in a fragment is what keeps that from
@@ -271,6 +316,8 @@ stateDiagram-v2
 - **Replay is refused too**: `POST /webhooks/deliveries/{id}/replay` answers 409
   `WEBHOOK_SUBSCRIPTION_DISABLED` (before it claims the row, so the row stays as it was), and each
   delivery's `actions.replay` is false. The list computes the flag with one `$in` read per page.
+  A delivery whose event the caller may not read is refused with 403 as well
+  ([who may subscribe to what](#who-may-subscribe-to-what)).
 - **`retiringSecrets`** lists each superseded secret that is still signing and the instant it
   stops (its successor's mint time plus `NODE_WEBHOOK_SECRET_OVERLAP_HOURS`), so no client has to
   know the window.

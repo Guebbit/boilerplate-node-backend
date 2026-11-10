@@ -283,10 +283,10 @@ describe('PATCH /webhooks/subscriptions/:id', () => {
         const response = await api()
             .patch(`/webhooks/subscriptions/${String(created.body.id)}`)
             .set('Authorization', bearer)
-            .send({ eventTypes: ['*'] });
+            .send({ eventTypes: ['order.paid'] });
 
         expect(response.status).toBe(200);
-        expect(response.body.eventTypes).toEqual(['*']);
+        expect(response.body.eventTypes).toEqual(['order.paid']);
         expect(response.body.description).toBe('was here');
     });
 
@@ -770,7 +770,8 @@ describe('an event filter must name events the catalogue lists', () => {
     });
 
     it('accepts the * wildcard, alone or beside a listed name', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        // `*` carries every event, so only a caller who reads them all (the admin) may write it.
+        const { bearer } = await authenticateAsRole('admin');
 
         const response = await api()
             .post('/webhooks/subscriptions')
