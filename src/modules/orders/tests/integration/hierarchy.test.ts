@@ -121,7 +121,7 @@ const actionsFor = (orderId: string, role: string, callerId: string) =>
             pay: actions?.pay,
             recordPayment: actions?.recordPayment,
             process: actions?.process,
-            override: actions?.override
+            overrideStatus: actions?.overrideStatus
         }));
 
 describe('what an order offers each caller — what a client renders', () => {

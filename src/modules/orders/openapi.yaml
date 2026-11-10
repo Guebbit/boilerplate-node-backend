@@ -338,7 +338,7 @@ paths:
             description: >-
                 Replaces the order identified by `{id}` in the path (RFC 9110 §9.3.4). `email` is
                 the only writable field — `status` moves only through an action endpoint
-                (`POST /orders/{id}/cancel`, `POST /orders/{id}/status-override`), never a field
+                (`POST /orders/{id}/cancel`, `POST /orders/{id}/override-status`), never a field
                 on this body. See `docs/theory/tactical-ddd.md#who-writes-the-status`.
             operationId: replaceOrderById
             security:
@@ -369,7 +369,7 @@ paths:
             description: >-
                 Updates the order identified by `{id}` in the path, merging — an omitted `email`
                 leaves the stored one untouched. `status` moves only through an action endpoint
-                (`POST /orders/{id}/cancel`, `POST /orders/{id}/status-override`), never a field
+                (`POST /orders/{id}/cancel`, `POST /orders/{id}/override-status`), never a field
                 on this body. See `docs/theory/tactical-ddd.md#who-writes-the-status`.
             operationId: updateOrderById
             security:
@@ -662,7 +662,7 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
-    /orders/{id}/status-override:
+    /orders/{id}/override-status:
         # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
         x-versioned: [post]
         post:
@@ -2397,7 +2397,7 @@ components:
                     pay,
                     recordPayment,
                     process,
-                    override,
+                    overrideStatus,
                     correctAddress,
                     invoice,
                     withdraw,
@@ -2440,12 +2440,12 @@ components:
                         Whether `POST /orders/{id}/process` would be accepted for this
                         caller. `paid → processing` is `system`-only in the lifecycle, reached
                         only by reporting the fact through `delivery`'s own door.
-                override:
+                overrideStatus:
                     type: array
                     items:
                         $ref: '#/components/schemas/OrderStatus'
                     description: >-
-                        The statuses `POST /orders/{id}/status-override` would accept as a
+                        The statuses `POST /orders/{id}/override-status` would accept as a
                         destination for this caller right now — empty for anyone without
                         `override:Order`, or once the order has left every overridable status.
                     example: [processing, shipped, delivered]

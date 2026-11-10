@@ -318,7 +318,7 @@ describe('POST /orders/{id}/cancel', () => {
     });
 });
 
-describe('POST /orders/{id}/status-override', () => {
+describe('POST /orders/{id}/override-status', () => {
     // The bug this pins: the order carried its `statusOverrides` history straight through
     // `additionalProperties: false`'s check with nothing to catch it, because no contract test
     // ever sent a request through this route at all — the owner's admin's `actorUserId` and
@@ -329,7 +329,7 @@ describe('POST /orders/{id}/status-override', () => {
         await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'paid');
 
         const response = await api()
-            .post(`/orders/${String(order._id)}/status-override`)
+            .post(`/orders/${String(order._id)}/override-status`)
             .set('Authorization', bearer)
             .send({ to: 'processing', reason: 'paid offline, forcing it forward' });
 
@@ -618,7 +618,7 @@ describe('GET /orders/{id}/timeline', () => {
         const id = String(order._id);
         await markPaid(id, 'card');
         await api()
-            .post(`/orders/${id}/status-override`)
+            .post(`/orders/${id}/override-status`)
             .set('Authorization', staff.bearer)
             .send({ to: 'processing', reason: 'a staff-only reason' });
 

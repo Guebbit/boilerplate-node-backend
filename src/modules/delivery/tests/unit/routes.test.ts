@@ -18,7 +18,7 @@ const WRITES = [
     'POST /fulfillment-orders/:id/release',
     'PATCH /shipments/:id',
     'POST /shipments/:id/deliver',
-    'POST /shipments/:id/lost'
+    'POST /shipments/:id/mark-lost'
 ];
 
 describe('delivery routes', () => {
@@ -37,7 +37,7 @@ describe('delivery routes', () => {
             'GET /shipments/:id',
             'PATCH /shipments/:id',
             'POST /shipments/:id/deliver',
-            'POST /shipments/:id/lost'
+            'POST /shipments/:id/mark-lost'
         ]);
     });
 

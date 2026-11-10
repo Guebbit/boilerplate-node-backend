@@ -32,7 +32,7 @@ describe('order routes — what is mounted', () => {
             'GET /export',
             'POST /',
             'POST /:id/cancel',
-            'POST /:id/status-override',
+            'POST /:id/override-status',
             'PUT /:id/shipping-address',
             'GET /:id/timeline',
             'POST /:id/timeline/notes',
@@ -67,7 +67,7 @@ describe('order routes — authorization', () => {
         'GET /export',
         'POST /',
         'POST /:id/cancel',
-        'POST /:id/status-override',
+        'POST /:id/override-status',
         'GET /:id/timeline',
         'GET /:id',
         'PUT /:id',
@@ -90,7 +90,7 @@ describe('order routes — authorization', () => {
     it('gates the override door behind its own permission, not the ordinary write one', () => {
         // A distinct key (`override:Order`), so `update:Order` alone never reaches this
         // door — see `shared/authorization-keys.generated.yaml`'s `stepUp: critical` on it.
-        expect(guardsOn(router, 'POST /:id/status-override')).toContain('requirePermissionGuard');
+        expect(guardsOn(router, 'POST /:id/override-status')).toContain('requirePermissionGuard');
     });
 
     it('leaves POST /:id/cancel open to the owner, not just admins', () => {

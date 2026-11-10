@@ -384,7 +384,7 @@ rules:
       source: https://google.aip.dev/136
       evidence: [openapi.yaml paths.*.post, docs/api/write-methods.md#action-→-200]
       lint: possible
-      difference: custom-verb-path
+      difference: [custom-verb-path, operation-name-vs-path]
 
     - id: aip-update-mask
       standard: google-aip

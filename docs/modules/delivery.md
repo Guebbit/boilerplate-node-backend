@@ -514,7 +514,7 @@ in one transaction, the clock counted from the cancellation: the order only beca
 
 ## Lost in transit
 
-`POST /delivery/shipments/{id}/lost` (`update:Shipment`, no step-up) is for a parcel that left and
+`POST /delivery/shipments/{id}/mark-lost` (`update:Shipment`, no step-up) is for a parcel that left and
 will not arrive: `{ reason: lost | damaged, note?, message? }`. **`damaged` means damaged in
 transit and reported before its arrival was recorded.** Damage found after the buyer has the goods is
 a [return](./returns.md), not this door. Only a `shipped` physical shipment on a `processing` or
@@ -534,7 +534,7 @@ sequenceDiagram
     participant I as inventory
     participant O as orders
     participant B as Buyer
-    S->>D: POST /shipments/{id}/lost
+    S->>D: POST /shipments/{id}/mark-lost
     Note over D,O: one transaction
     D->>D: shipment lost, units off shippedQuantity
     D->>I: top the hold up (shelf + owed)
@@ -651,7 +651,7 @@ digital-only order's window counts from payment (Art. 9(2)(c)).
 
 ## The status override
 
-The admin override (`POST /orders/{id}/status-override`) stays an order-level repair, and it must not
+The admin override (`POST /orders/{id}/override-status`) stays an order-level repair, and it must not
 leave the two records disagreeing. `orders` announces `order.status_overridden {orderId, from, to, at}`
 through the outbox, in the override's own transaction; this module listens:
 
@@ -719,7 +719,7 @@ date this order was expecting, not the product's previous date.
 | `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | `update:Shipment`                                  | the fulfillment order                                                                             |
 | `PATCH /delivery/shipments/{id}`                           | `update:Shipment`                                  | the shipment, tracking added or corrected, at any time (shipped, delivered or lost)               |
 | `POST /delivery/shipments/{id}/deliver`                    | `update:Shipment`                                  | the shipment                                                                                      |
-| `POST /delivery/shipments/{id}/lost`                       | `update:Shipment`                                  | the shipment, `lost`                                                                              |
+| `POST /delivery/shipments/{id}/mark-lost`                  | `update:Shipment`                                  | the shipment, `lost`                                                                              |
 
 Every button a client draws comes from the record's own `actions` (or `GET /returns/options`): the
 frontend never re-derives a rule. Every staff door asks the key and nothing else: [no rank](../theory/authorization.md#protecting-people).

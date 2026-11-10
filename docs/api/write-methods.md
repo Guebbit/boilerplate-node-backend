@@ -60,7 +60,7 @@ flowchart TD
 
 ### Action → 200
 
-- `POST /orders/{id}/cancel`, `/restore`, `/status-override`: a state change on a
+- `POST /orders/{id}/cancel`, `/restore`, `/override-status`: a state change on a
   thing that already exists. 200, with the thing as it now stands.
 - When the body answered IS the new record, it is a create (201 + `Location`). When an action
   answers the thing acted on, it may create records on the side (refunds, credit notes, override

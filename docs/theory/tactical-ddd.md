@@ -220,7 +220,7 @@ kept and the stock held until the sweep.
 `shipped`/`delivered` are never a field an admin assigns either — they follow a parcel event
 `delivery` records, through `settleFulfillment` (see "Who writes the status" above).
 `paid → processing` follows a fulfillment-start fact the same way, through `markProcessing`.
-The admin override (`POST /orders/{id}/status-override`) is the door for a mis-scanned parcel or a
+The admin override (`POST /orders/{id}/override-status`) is the door for a mis-scanned parcel or a
 manual correction. `items`/`userId` are not in
 `UpdateOrderByIdRequest` at all either — they stay `POST /orders` (create)-only. Rewriting a
 document that already carries a sequential invoice number has no safe meaning: EU VAT practice
@@ -254,7 +254,7 @@ flowchart LR
 A refusal to a move the table does not have answers **409**: `ORDER_NOT_CANCELABLE` from
 a cancel door with no further detail, `ORDER_OVERRIDE_NOT_ALLOWED` from `overrideStatus` carrying
 `details: { from, to }`. Neither lists which moves ARE still open — a client wanting that reads
-`Order.actions` on the order instead: the flags (`cancel`, `override`, …) name the doors open to the caller. Every guard runs before any field
+`Order.actions` on the order instead: the flags (`cancel`, `overrideStatus`, …) name the doors open to the caller. Every guard runs before any field
 is assigned, so a refused request is never a partial write.
 
 ### Compensation is policy, and it travels with the fact

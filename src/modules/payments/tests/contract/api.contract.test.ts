@@ -180,7 +180,7 @@ describe('POST /payments', () => {
             pay: true,
             sync: false,
             refund: false,
-            settleByHand: [],
+            settleRefundByHand: [],
             cancelRefund: []
         });
     });
@@ -260,7 +260,7 @@ describe('POST /payments/{id}/confirm', () => {
             pay: false,
             sync: false,
             refund: false,
-            settleByHand: [],
+            settleRefundByHand: [],
             cancelRefund: []
         });
     });
@@ -790,7 +790,7 @@ describe('POST /payments/{id}/refunds — the operator', () => {
             pay: false,
             sync: false,
             refund: false,
-            settleByHand: [],
+            settleRefundByHand: [],
             cancelRefund: []
         });
     });
@@ -828,7 +828,7 @@ describe('POST /payments/{id}/refunds — the operator', () => {
         expect(replay.body.id).toBe(response.body.id);
         const reread = await api().get(`/payments/${paymentId}`).set('Authorization', adminBearer);
         expect(reread.body.refunds).toHaveLength(1);
-        expect(reread.body.actions.settleByHand).toEqual([response.body.id]);
+        expect(reread.body.actions.settleRefundByHand).toEqual([response.body.id]);
         setFakeRefundFailure(String(stored?.providerRef), undefined);
     });
 
@@ -1013,7 +1013,7 @@ describe('POST /payments/{id}/refunds/{refundId}/settle', () => {
         expect(refunded.refunds[0].settledByHand).toBeUndefined();
         expect(refunded.refunds[0].status).toBe('pending');
         expect(refunded.actions).toMatchObject({ refund: false });
-        expect(refunded.actions.settleByHand).toEqual([refunded.refunds[0].id]);
+        expect(refunded.actions.settleRefundByHand).toEqual([refunded.refunds[0].id]);
 
         const response = await api()
             .post(`/payments/${paymentId}/refunds/${String(refunded.refunds[0].id)}/settle`)
@@ -1028,7 +1028,7 @@ describe('POST /payments/{id}/refunds/{refundId}/settle', () => {
         });
         const reread = await api().get(`/payments/${paymentId}`).set('Authorization', adminBearer);
         expect(reread.body.displayStatus).toBe('refunded');
-        expect(reread.body.actions.settleByHand).toEqual([]);
+        expect(reread.body.actions.settleRefundByHand).toEqual([]);
     });
 
     it('answers 409 PAYMENT_REFUND_NOT_OPEN to the second operator', async () => {
@@ -1092,7 +1092,7 @@ describe('POST /payments/{id}/refunds/{refundId}/cancel', () => {
         const reread = await api().get(`/payments/${paymentId}`).set('Authorization', adminBearer);
         expect(reread.body.actions).toMatchObject({
             refund: true,
-            settleByHand: [],
+            settleRefundByHand: [],
             cancelRefund: []
         });
         expect(reread.body.displayStatus).toBe('succeeded');
@@ -1232,7 +1232,7 @@ describe('POST /orders/{id}/payments', () => {
             pay: false,
             sync: false,
             refund: true,
-            settleByHand: [],
+            settleRefundByHand: [],
             cancelRefund: []
         });
     });

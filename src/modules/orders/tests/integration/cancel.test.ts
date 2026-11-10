@@ -716,7 +716,7 @@ describe('withActions', () => {
             recordPayment: false,
             correctAddress: false,
             process: false,
-            override: [],
+            overrideStatus: [],
             invoice: false,
             withdraw: true,
             delete: false,
@@ -739,7 +739,7 @@ describe('withActions', () => {
             recordPayment: false,
             correctAddress: false,
             process: false,
-            override: [],
+            overrideStatus: [],
             invoice: false,
             withdraw: false,
             delete: true,
@@ -769,7 +769,7 @@ describe('withActions', () => {
         const body = await orderService.withActions(paid!, asWarehouse());
 
         expect(body.actions.process).toBe(true);
-        expect(body.actions.override).toEqual([]);
+        expect(body.actions.overrideStatus).toEqual([]);
     });
 
     it("never offers `process` once already `processing` — an echo write isn't a fresh offer", async () => {
@@ -833,7 +833,7 @@ describe('withActions', () => {
 
         const body = await orderService.withActions(paid!, asAdmin());
 
-        expect(body.actions.override).toEqual(['processing', 'shipped', 'delivered']);
+        expect(body.actions.overrideStatus).toEqual(['processing', 'shipped', 'delivered']);
     });
 
     it("never offers the warehouse `override:Order`'s destinations", async () => {
@@ -843,7 +843,7 @@ describe('withActions', () => {
 
         const body = await orderService.withActions(paid!, asWarehouse());
 
-        expect(body.actions.override).toEqual([]);
+        expect(body.actions.overrideStatus).toEqual([]);
     });
 
     it('carries the serialized order, not the document', async () => {

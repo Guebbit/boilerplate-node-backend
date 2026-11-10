@@ -605,7 +605,7 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
-    /delivery/shipments/{id}/lost:
+    /delivery/shipments/{id}/mark-lost:
         post:
             tags: [Delivery]
             summary: Report a shipment lost or damaged
@@ -893,7 +893,7 @@ components:
                     description: Whether `PATCH /delivery/shipments/{id}` (the tracking code) would be accepted — any physical shipment, shipped, delivered or lost.
                 markLost:
                     type: boolean
-                    description: Whether `POST /delivery/shipments/{id}/lost` would be accepted — a physical shipment still `shipped`, on an order that is `processing` or `shipped`.
+                    description: Whether `POST /delivery/shipments/{id}/mark-lost` would be accepted — a physical shipment still `shipped`, on an order that is `processing` or `shipped`.
 
         Shipment:
             type: object

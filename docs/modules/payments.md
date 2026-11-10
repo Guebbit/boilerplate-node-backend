@@ -365,7 +365,7 @@ fresh-session tier as recording a payment) is the only door that sets `settledBy
 names one record, so a payment carrying several open refunds (a cancelled remainder and two
 returns) settles each separately, and a return stays `received` until its own money is confirmed
 back. It answers the refund it settled (`GET /payments/{id}` has the totals and the actions). It audits `admin.payment.refund_settled_by_hand`; the `payment.refunded` event is the same as
-for a provider refund. `PaymentActions.settleByHand` lists the ids a caller may settle. A refund two
+for a provider refund. `PaymentActions.settleRefundByHand` lists the ids a caller may settle. A refund two
 operators settle at once settles once; the loser answers 409 `PAYMENT_REFUND_NOT_OPEN`. A cancelled hand-paid order therefore shows
 `succeeded` until an operator confirms it, not "refunded" for money nobody actually moved.
 
@@ -374,7 +374,7 @@ write included, carries `PaymentActions`: `pay` (confirm, or take a waiting tran
 card when a provider is configured), `sync` (finish an in-flight payment at the provider; narrower
 than its route on purpose, and never true together with `pay`), `refund` (`create:Refund`, a
 `succeeded` payment, and something left: a refund still open counts against what is left but does
-not hide the control while money remains) and `settleByHand`. `confirm`, `sync` and `intent` read the
+not hide the control while money remains) and `settleRefundByHand`. `confirm`, `sync` and `intent` read the
 order for `pay`; `offline` and `refund` only ever return a `succeeded` payment, where `pay` is false
 whatever the order says, so they read nothing.
 
@@ -411,7 +411,7 @@ sequenceDiagram
 
     | Entry point                   | Answers                                       | Where staff follow the refund                                        |
     | ----------------------------- | --------------------------------------------- | -------------------------------------------------------------------- |
-    | `POST /payments/{id}/refunds` | 201 and the record (`failed` if refused)      | the record itself, `actions.settleByHand`, the attention list        |
+    | `POST /payments/{id}/refunds` | 201 and the record (`failed` if refused)      | the record itself, `actions.settleRefundByHand`, the attention list  |
     | `POST /orders/{id}/cancel`    | 200; the refund runs after the answer         | the payment's `displayStatus` (`refund_pending`), the attention list |
     | `POST /returns/{id}/receive`  | 200; `received` = still owed, `closed` = back | the order's payment, the attention list                              |
 
@@ -516,7 +516,7 @@ flowchart TD
     B -->|yes, shop balance| D[insufficient_funds: retried, settleable]
     B -->|no answer or unclear| E[provider_unavailable or unknown: retried]
     C --> F[on the attention list at once]
-    D --> G[settleByHand lists it]
+    D --> G[settleRefundByHand lists it]
     C --> G
     E --> H[sweep resends under the same key; a timeout then gets the real answer]
     G --> I[operator returns the money, presses Mark returned]

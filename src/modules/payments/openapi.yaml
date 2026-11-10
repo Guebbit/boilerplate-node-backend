@@ -300,13 +300,13 @@ paths:
                 The 201 is the answer for every outcome of the record the request wrote; its
                 `status` carries the result. `succeeded`: the money is back. `failed`: the provider
                 refused, the record is kept and counts against what is left, and it is either
-                retried by the refund sweep or, when `actions.settleByHand` lists it, final and
+                retried by the refund sweep or, when `actions.settleRefundByHand` lists it, final and
                 waiting for the money to be returned another way. `pending`: hand-paid money
                 waiting for an operator. A refusal is never a 5xx. The reason of a refusal
                 (`failureReason`) is sent to `display:Payment` callers only.
 
                 On a hand-paid payment (cash, a transfer) the record is only OPENED: it stays
-                `pending` and the payment's `actions.settleByHand` lists it, because nobody here
+                `pending` and the payment's `actions.settleRefundByHand` lists it, because nobody here
                 can tell the money went back. `POST /payments/{id}/refunds/{refundId}/settle` is
                 what confirms it.
 
@@ -400,7 +400,7 @@ paths:
                 a card refund the provider refused in a way that proves the money did not move
                 (`RefundFailureReason`: `declined`, `insufficient_funds`,
                 `expired_or_canceled_card`, `lost_or_stolen_card`, `provider_removed`). The
-                payment's `actions.settleByHand` lists exactly these ids. A card refund that is
+                payment's `actions.settleRefundByHand` lists exactly these ids. A card refund that is
                 `pending` (an attempt is running) or `failed` for an unclear reason
                 (`provider_unavailable`, `unknown`) answers 409 `PAYMENT_REFUND_IN_FLIGHT`: the
                 money may have moved, and the sweep settles it from the provider. A refund two
@@ -456,7 +456,7 @@ paths:
                 `payment.refund_canceled` event.
 
                 Which refunds may be canceled: exactly the ones `actions.cancelRefund` lists, the same
-                set as `actions.settleByHand`: a hand-paid (`manual`) payment's `pending` refund, and a
+                set as `actions.settleRefundByHand`: a hand-paid (`manual`) payment's `pending` refund, and a
                 card refund the provider refused in a way that proves the money did not move
                 (`RefundFailureReason`: `declined`, `insufficient_funds`, `expired_or_canceled_card`,
                 `lost_or_stolen_card`, `provider_removed`). A `succeeded` refund, or one already
@@ -1018,7 +1018,7 @@ components:
                         When the provider took this refund back (a bank sent the money back, or the
                         provider reported the refund failed). Set once; a reversed refund is `failed`
                         again, counts against what is left, and is owed another way: an operator
-                        pays it and presses mark-returned (`actions.settleByHand`). The credit note
+                        pays it and presses mark-returned (`actions.settleRefundByHand`). The credit note
                         issued when it first settled stays. Absent otherwise.
                 createdAt:
                     type: string
@@ -1431,7 +1431,7 @@ components:
         PaymentActions:
             type: object
             additionalProperties: false
-            required: [pay, sync, refund, settleByHand, cancelRefund]
+            required: [pay, sync, refund, settleRefundByHand, cancelRefund]
             description: >-
                 What the requesting caller may do to this payment. Money is this module's to answer
                 for; the order's own moves are on `Order.actions`, and a client that needs both
@@ -1468,8 +1468,8 @@ components:
                         payment (`PAYMENT_DISPUTED`), which is what greys the control out rather
                         than letting the operator discover it by clicking. A refund still open counts against what
                         is left but does not hide the control while money remains. On a hand-paid
-                        payment the refund only opens a record; `settleByHand` confirms it.
-                settleByHand:
+                        payment the refund only opens a record; `settleRefundByHand` confirms it.
+                settleRefundByHand:
                     type: array
                     items:
                         $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -1488,7 +1488,7 @@ components:
                     description: >-
                         The ids of the refunds this caller may void with
                         `POST /payments/{id}/refunds/{refundId}/cancel`: the same set as
-                        `settleByHand` (money that provably did not move), so a hand-paid `pending`
+                        `settleRefundByHand` (money that provably did not move), so a hand-paid `pending`
                         refund or a card refund refused for a clear reason. The server decides.
                         Empty when there is none.
 
