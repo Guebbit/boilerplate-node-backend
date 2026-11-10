@@ -19,8 +19,13 @@ import {
     createOrder,
     forceOrderStatus,
     toOrderItem,
-    readOrder
+    readOrder,
+    orderRepository
 } from '@modules/orders/tests/factories';
+import { OrderPaymentStatus, OrderStatus } from '@types';
+import { deliveryService } from '@modules/delivery/services';
+import { fulfillmentOrdersOf } from '@modules/delivery/tests/factories';
+import { asAdmin, callerContextAs } from '@tests/callers';
 import { productModel } from '@modules/products/model';
 import { productRepository } from '@modules/products/repository';
 import { webhookSubscriptionModel } from '@modules/webhooks/model';
@@ -669,6 +674,38 @@ const setPasswordOf = async (id: string, extra?: (user: UserDocument) => void) =
     return setPassword(loaded, 'A-new-Passw0rd!x');
 };
 
+/** A `processing` order, its tag read, `change` applied, then a staff PATCH with the old tag. */
+const patchOrderAfter = async (
+    change: (orderId: string, productId: string) => Promise<unknown>
+) => {
+    const { bearer, user } = await authenticateAs('admin');
+    const product = await createProduct({ price: '10.00' });
+    const order = await createOrder(user, [toOrderItem(product, 2)], {
+        status: OrderStatus.processing
+    });
+    const id = String(order._id);
+    const path = `/orders/${id}`;
+    const tag = etagOf(await api().get(path).set('Authorization', bearer));
+
+    await change(id, String(product._id));
+    return api()
+        .patch(path)
+        .set('Authorization', bearer)
+        .set('If-Match', tag)
+        .send({ email: 'after-report@example.com' });
+};
+
+/** Ships `quantity` units of the order's product from its one physical fulfillment order. */
+const shipUnits = async (orderId: string, productId: string, quantity: number) => {
+    const [fulfillmentOrder] = await fulfillmentOrdersOf(orderId);
+    return deliveryService.shipFulfillmentOrder(
+        String(fulfillmentOrder._id),
+        { lines: [{ productId, quantity }] },
+        asAdmin(),
+        callerContextAs('admin')
+    );
+};
+
 describe('writes that are not an edit leave the tag alone', () => {
     it('lets a product edit through after the stock mirror moved', async () => {
         const { bearer } = await authenticateAs('admin');
@@ -684,6 +721,36 @@ describe('writes that are not an edit leave the tag alone', () => {
             .send({ tags: ['after-stock'] });
 
         expect(write.status).toBe(200);
+    });
+
+    describe("on an order, another module's report", () => {
+        it('keeps the tag through a refund projection', async () => {
+            const write = await patchOrderAfter((id) =>
+                orderRepository.setProjection(id, {
+                    paymentStatus: OrderPaymentStatus.partially_refunded
+                })
+            );
+
+            expect(write.status).toBe(200);
+        });
+
+        it('keeps the tag through the stamp that money landed', async () => {
+            const write = await patchOrderAfter((id) => orderRepository.markMoneyReceived(id));
+
+            expect(write.status).toBe(200);
+        });
+
+        it('keeps the tag through a partial shipment, the order staying `processing`', async () => {
+            const write = await patchOrderAfter((id, productId) => shipUnits(id, productId, 1));
+
+            expect(write.status).toBe(200);
+        });
+
+        it('moves the tag when a full shipment moves the status to `shipped`', async () => {
+            const write = await patchOrderAfter((id, productId) => shipUnits(id, productId, 2));
+
+            expect(write.status).toBe(412);
+        });
     });
 
     describe('on a user', () => {
