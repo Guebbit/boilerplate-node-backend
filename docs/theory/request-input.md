@@ -79,46 +79,7 @@ names. That is RFC 9110 §9.3.1 and §9.3.2 (content on a GET has no defined sem
 cache key cannot be built from a body the controller will not read. Give a collection read a real
 DTO form by adding `POST /x/search`, not by declaring a body on its GET.
 
-| Endpoint(s)                                                      | Parameter                                       | Sources (highest first)              | Treatment                                                                               |
-| ---------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------- |
-| `GET /products`, `POST /products/search`                         | `id`                                            | body, query                          | `stringArrays` — merged, not collapsed; a batch filter, `$in`                           |
-|                                                                  | `category`, `tag`                               | body, query                          | merged, then `coerceStringArray(...)[0]`                                                |
-|                                                                  | `page`, `pageSize`                              | body, query                          | merged, then the shared pagination schema                                               |
-|                                                                  | `text`, `priceMin`, `priceMax`                  | body, query                          | merged, then Zod                                                                        |
-| every `GET x`, `POST x/search` pair                              | `sort`                                          | body, query                          | `csvLists` — a query CSV is split, a body array is taken as sent; blank query is absent |
-| `GET /users`, `POST /users/search`                               | `id`                                            | body, query                          | `stringArrays` — merged, not collapsed; a batch filter, `$in`                           |
-|                                                                  | `active`                                        | body, query                          | merged, then Zod `value === 'true'`                                                     |
-|                                                                  | `page`, `pageSize`, `text`, `email`, `username` | body, query                          | merged, then Zod (pagination shared)                                                    |
-| `GET /orders`, `POST /orders/search`                             | `id`                                            | body, query                          | `stringArrays` — merged, not collapsed; a batch filter, `$in`                           |
-|                                                                  | `userId`                                        | body, query                          | merged; **ignored unless the caller holds the key**                                     |
-|                                                                  | `page`, `pageSize`, `productId`, `email`        | body, query                          | merged, then Zod (pagination shared)                                                    |
-| `DELETE /products/:id`, `DELETE /products/:id/hard`              | `id`                                            | path (`/:id`)                        | `requireId`: a malformed path id is a 404                                               |
-|                                                                  | `hardDelete`                                    | params, query — **OR'd, not ranked** | boolean; any `true` wins; 422 for anything that is not one                              |
-| `DELETE /users/:id`, `DELETE /users/:id/hard`                    | `id`                                            | path (`/:id`)                        | `requireId`: a malformed path id is a 404                                               |
-|                                                                  | `hardDelete`                                    | params, query — **OR'd, not ranked** | boolean; any `true` wins; 422 for anything that is not one                              |
-| `DELETE /orders/:id`, `DELETE /orders/:id/hard`                  | `id`                                            | path (`/:id`)                        | `requireId`: a malformed path id is a 404                                               |
-|                                                                  | `hardDelete`                                    | params, query — **OR'd, not ranked** | boolean; any `true` wins; 422 for anything that is not one                              |
-| `POST /orders`, `PUT /orders/:id`                                | `id`                                            | params                               | absent means create                                                                     |
-|                                                                  | everything else                                 | body                                 | untouched                                                                               |
-| `PUT /products/:id`, `PATCH /products/:id`                       | `id`                                            | params                               | from the path only, through the shared factory's `requireId` (404 when malformed)       |
-| `POST /products`, `PUT /products/:id`, `PATCH /products/:id`     | `active`                                        | body                                 | boolean; decoded only on `multipart/form-data`                                          |
-|                                                                  | `categories`, `tags`                            | body                                 | string array; decoded only on multipart                                                 |
-|                                                                  | everything else                                 | body                                 | untouched                                                                               |
-| `POST /users`                                                    | `active`                                        | body                                 | boolean; decoded only on multipart                                                      |
-|                                                                  | everything else                                 | body                                 | untouched                                                                               |
-| `POST /cart/items`, `POST /wishlist/items`, `POST /stock-alerts` | `productId` (`quantity` on the cart)            | body                                 | `parseBody`: Zod, and a `productId` that is not an ObjectId is a 422 naming it          |
-| `PATCH /cart/items/:productId`                                   | `productId`                                     | params                               | `requireId` (404 when malformed)                                                        |
-|                                                                  | `quantity`                                      | body                                 | Zod                                                                                     |
-| `DELETE /cart/items/:productId`                                  | `productId`                                     | params                               | `requireId`: 404 when malformed                                                         |
-| `GET /tasks`, `POST /tasks/search`                               | `page`, `pageSize`                              | body, query                          | merged, then the shared pagination schema                                               |
-|                                                                  | `text`, `email`, `status`                       | body, query                          | merged, passed through as strings                                                       |
-| `GET /inventory/levels`                                          | `page`, `pageSize`, `lowOnly`                   | query                                | `lowOnly` decoded as a boolean, then Zod                                                |
-| `GET /inventory/movements`                                       | `productId`                                     | query                                | first non-empty wins                                                                    |
-|                                                                  | `page`, `pageSize`, `reason`                    | query                                | then Zod                                                                                |
-| `GET /locales/{locale}/entries`                                  | `page`, `pageSize`, `text`                      | query                                | then the shared pagination schema                                                       |
-| `GET /locales/{locale}/apps/{app}/entries`                       | `app`                                           | params                               | the rest as above                                                                       |
-| `GET /observability/audit`                                       | `actor`, `action`, `outcome`, `since`           | query                                | then Zod; a repeated key is a 422                                                       |
-|                                                                  | `page`, `pageSize`                              | query                                | then the shared pagination schema                                                       |
+Which parameter an endpoint reads, and in what form, is its controller and the contract's parameter list; the surface above decides only where it is looked for.
 
 Pagination has exactly two authorities, and they answer different questions. `@infrastructure/http/schemas`
 owns the **bounds** — `openapi.yaml` declares `minimum: 1` / `maximum: 100`, and every one of the
@@ -221,16 +182,15 @@ One route may also state a flag in its path rather than as a value. `DELETE /pro
 means what `DELETE /products/:id?hardDelete=true` means; the `routeFlag('hardDelete')` middleware
 (`@infrastructure/http/middlewares/route-flag`) writes it onto `request.params` so the controller keeps a single
 declaration instead of growing a second entry point. Being a param, it does **not** thereby
-outrank a query or body entry that contradicts it: `hardDelete` is declared `anyTrue`, so
-`/products/:id/hard` carrying `{"hardDelete": false}` hard-deletes because one source said
-`true` — not because the path won a ranking.
+outrank a query entry that contradicts it: `hardDelete` is declared `anyTrue`, so
+`/products/:id/hard?hardDelete=false` hard-deletes because one source said `true` — not because
+the path won a ranking.
 
 An `{id}` delete takes no body at all: the 415 guard refuses one (see
 [write-methods.md](../api/write-methods.md#content-type-415)), so a gateway that strips a DELETE body can
-never turn a hard delete into a soft one. The collection form `DELETE /x` reads its id from the
-body alone, so a stray `?id=` cannot name a different record than the body does.
+never turn a hard delete into a soft one.
 
-Every domain that deletes a persisted record offers the same three spellings, and offers them for
+Every domain that deletes a persisted record offers the same two spellings (`?hardDelete=true` and `/{id}/hard`), and offers them for
 the same reason: the shape is a property of the domain, not a decision three route files each make.
 Products, users and orders all do. Cart and tasks do not, and that is a decision rather than an
 omission — a cart line is session-scoped, so there is no record to keep, and `deleteCartItem`

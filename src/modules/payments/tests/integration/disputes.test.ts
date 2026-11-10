@@ -274,7 +274,7 @@ describe('a refund the chargeback blocks', () => {
             });
             expect(payment?.refunds[0].nextAttemptAt).toBeUndefined();
             const view = await staffView(orderId);
-            expect(view?.actions?.settleByHand).toEqual([]);
+            expect(view?.actions?.settleRefundByHand).toEqual([]);
             expect(view?.actions?.cancelRefund).toEqual([]);
             const attention = await paymentService.listAttention();
             expect(attention.items.map(({ kind }) => kind).toSorted()).toEqual([
@@ -293,7 +293,7 @@ describe('a refund the chargeback blocks', () => {
 
         await deliverReport(providerRef, { status: 'lost', observedAt: at(60) });
         const offered = await staffView(orderId);
-        expect(offered?.actions?.settleByHand).toEqual([refundId]);
+        expect(offered?.actions?.settleRefundByHand).toEqual([refundId]);
         const settled = await paymentService.settleRefundByHand(
             String(payment?._id),
             refundId,
@@ -320,7 +320,7 @@ describe('a refund the chargeback blocks', () => {
         });
 
         const view = await staffView(orderId);
-        expect(view?.actions?.settleByHand).toEqual([]);
+        expect(view?.actions?.settleRefundByHand).toEqual([]);
         expect(view?.actions?.cancelRefund).toEqual([refundId]);
     });
 });

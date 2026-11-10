@@ -492,7 +492,7 @@ The numbers and wording of a budget (name, namespace, env var, default, window, 
 `shared/rules/rate-limits.yaml` for the kernel's three. `regenerate` writes a committed
 `rate-limits.generated.ts` from each, so a twin backend copies the YAML. How a caller is bucketed
 (`keyGenerator`), what counts as a success and what is skipped stay code, in `rate-limits.ts`.
-See [shared rules](../theory/shared-rules.md#rule-data-the-twin-will-need-yaml--generated-ts):
+See [shared rules](../theory/shared-rules.md#rule-data-the-twin-will-need-yaml-generated-ts):
 
 <!-- rate-limit-budgets:start -->
 

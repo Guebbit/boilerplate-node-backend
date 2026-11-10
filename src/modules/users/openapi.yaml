@@ -836,6 +836,51 @@ components:
                     maxLength: 2048
                     minLength: 1
 
+        # What a staff list row carries: what the users table renders and nothing else. The phone,
+        # website, pending address and the purchase hold's reason and note come only from the audited
+        # `GET /users/{id}`, so paging through the list leaves no way round the read trail
+        # (OWASP API3:2023, Google AIP-157's basic view).
+        UserListItem:
+            type: object
+            additionalProperties: false
+            required: [id, email, username, actions]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                username:
+                    type: string
+                role:
+                    type: string
+                    description: The staff role this account holds, by name. Absent for a plain customer.
+                active:
+                    type: boolean
+                imageUrl:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                thumbnailUrl:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ThumbnailUrl'
+                purchaseHeld:
+                    type: boolean
+                    enum: [true]
+                    description: Present, as `true`, only while a purchase hold is in force. Its reason, end and note are on `GET /users/{id}`.
+                purchaseHoldFlaggedAt:
+                    type: string
+                    format: date-time
+                    description: When the shop's rule flagged this account for staff review. Absent once staff set or lift a hold.
+                purgeAt:
+                    type: string
+                    format: date-time
+                    description: When the account is erased, after its owner asked to delete it. Absent otherwise.
+                createdAt:
+                    type: string
+                    format: date-time
+                deletedAt:
+                    type: string
+                    format: date-time
+                actions:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserActions'
+
         UsersResponse:
             type: object
             additionalProperties: false
@@ -844,6 +889,6 @@ components:
                 items:
                     type: array
                     items:
-                        $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/User'
+                        $ref: '#/components/schemas/UserListItem'
                 meta:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'

@@ -106,8 +106,8 @@ and the bundler assembles `AccountExportResponse` from them):
 ::: tip Steps 1 to 5 can be generated
 `npm run scaffold:module -- <name>` writes the folder, the contract fragment, the permission rules and set,
 the smoke tests, the docs page and the registry edits, then regenerates. It also makes the three
-edits outside the folder that a keyed module still needs (the admin role list, its conformance
-copy, the PUT/PATCH parity canary). [Module scaffolder](../tools/module-scaffolder.md) has the
+edits outside the folder that a keyed module still needs (the registry `src/modules.ts`, the admin role
+list in `shared/rules/authorization-roles.yaml`, the PUT/PATCH parity canary). [Module scaffolder](../tools/module-scaffolder.md) has the
 flow; the steps below are what it automates, and what you do by hand for a module of another shape.
 :::
 

@@ -306,7 +306,7 @@ and cancel-then-ask-again stays scheduled. The log prints the counts and then th
 No manual check is needed before starting the stack.
 
 **Only if the ledger is lost** (the host, and the newest snapshot's copy): fall back to the audit events, which
-are shorter-lived (`auditlogs` keeps 90 days, `NODE_AUDIT_RETENTION_DAYS`; Loki 7 by default).
+are shorter-lived (`auditlogs` keeps 180 days, `NODE_AUDIT_RETENTION_DAYS`; Loki 7 by default).
 
 - **The database still answers:**
 
@@ -330,7 +330,7 @@ are shorter-lived (`auditlogs` keeps 90 days, `NODE_AUDIT_RETENTION_DAYS`; Loki 
 
 Then erase each listed user again (admin `DELETE /users/{id}?hardDelete=true`) **before step 5**. If no source
 survives, write it in the incident log, as the
-[Art. 33 runbook](../theory/data-protection.md#breach-runbook-art-33-72-hours) already asks: the erasures that
+[Art. 33 runbook](../theory/data-protection.md#breach-runbook-art-33-—-72-hours) already asks: the erasures that
 could not be re-applied, and why.
 
 ## Uploaded images and the mail spool

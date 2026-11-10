@@ -182,6 +182,31 @@ describe('GET /returns and GET /returns/{id}', () => {
         expect(one.body.note).toBe('Cracked');
     });
 
+    it('lists a list item: the table’s fields, never the note, the decline message or the lines', async () => {
+        const { bearer, orderId } = await customerWithOrder(OrderStatus.delivered);
+        const admin = await authenticateAs('admin');
+        await api()
+            .post('/returns')
+            .set('Authorization', bearer)
+            .send({ orderId, reason: 'defective', note: 'Cracked' });
+
+        // Staff list the same rows: the item is the same for them, with their own `actions`.
+        const [mine, theirs] = await Promise.all(
+            [bearer, admin.bearer].map((token) =>
+                api().get('/returns').query({ orderId }).set('Authorization', token)
+            )
+        );
+
+        for (const list of [mine, theirs]) {
+            const [item] = list.body.items as Record<string, unknown>[];
+            expect(item).toMatchObject({ orderId, reason: 'defective', status: 'requested' });
+            expect(item).toHaveProperty('actions');
+            for (const hidden of ['note', 'declineMessage', 'lines', 'returnPostage']) {
+                expect(item).not.toHaveProperty(hidden);
+            }
+        }
+    });
+
     it('takes a comma-separated sort and refuses a field outside the enum', async () => {
         const { bearer } = await customerWithOrder(OrderStatus.delivered);
 

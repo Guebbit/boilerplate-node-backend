@@ -219,10 +219,10 @@ describe('the button and its door agree', () => {
                 for (const to of STATUSES) {
                     const orderId = await orderIn(owner, status);
                     const shown = await actionsFor(caller, orderId);
-                    const offered = shown?.override ?? [];
+                    const offered = shown?.overrideStatus ?? [];
                     const opened = accepted(
                         await api()
-                            .post(`/orders/${orderId}/status-override`)
+                            .post(`/orders/${orderId}/override-status`)
                             .set('Authorization', caller.bearer)
                             .send({ to, reason: 'parity sweep' })
                     );

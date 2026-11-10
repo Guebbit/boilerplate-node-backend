@@ -63,7 +63,7 @@ Per-user saved products — ids only, joined client-side like the cart's lines. 
 
 Orders are normally created via checkout but can also be created manually (a correction, not a sales channel — see [orders](../modules/orders.md#creating-an-order)). Each order has a PDF invoice available for download. Reads are scoped to the caller's own orders unless they hold a wider `read` / `display:Order` permission, in which case the same route answers for the whole shop — one route, narrowed by the rules rather than branched on a role.
 
-`orders` is the only writer of a `status` — `payments` and `delivery` each report a move through it rather than writing the field themselves. `POST /orders/{id}/status-override` and the `forced`/`reason` fields on delivery's own doors are the one exception: an `override:Order` holder correcting a status the ordinary rules refuse, always with a reason, always recorded (see [orders](../modules/orders.md#the-admin-override)).
+`orders` is the only writer of a `status` — `payments` and `delivery` each report a move through it rather than writing the field themselves. `POST /orders/{id}/override-status` and the `forced`/`reason` fields on delivery's own doors are the one exception: an `override:Order` holder correcting a status the ordinary rules refuse, always with a reason, always recorded (see [orders](../modules/orders.md#the-admin-override)).
 
 ## Payments
 
@@ -85,18 +85,7 @@ The only writer of stock in the application. A product's stock level carries thr
 
 The transitions below move them, each a conditional write paired with the ledger row that explains it, so the ledger cannot have gaps (a payment's commit moves nothing and writes no row):
 
-| Transition | When                         | `onHand` | `reserved` |
-| ---------- | ---------------------------- | -------- | ---------- |
-| `reserve`  | checkout, staff order create | —        | `+q`       |
-| `ship`     | the units leave in a parcel  | `−q`     | `−q`       |
-| `release`  | order cancelled              | —        | `−q`       |
-| `expire`   | hold timed out (the sweep)   | —        | `−q`       |
-| `receive`  | supplier delivery            | `+q`     | —          |
-| `adjust`   | stocktake correction         | `±q`     | —          |
-| `restock`  | returned goods received      | `+q`     | —          |
-| `backorder`| preorder / owed units claimed | —       | — (`backordered` `+q`) |
-| `owed`     | a lost parcel's units the shelf could not cover | — | — (`backordered` `+q`) |
-| `allocate` | a delivery serves a waiting claim | —   | `+q` (`backordered` `−q`) |
+Every transition, who calls it, which counters it moves and which ledger `reason` it writes is one table: [Reservations](../modules/inventory-reservations.md); the stocktake `adjust` and the returned-goods `restock` are in [Inventory](../modules/inventory.md).
 
 A checkout is **all-or-nothing** — the shop never silently ships fewer units than were ordered, because an order is what the customer agreed to buy. What it does do is say exactly what blocked it: a refusal carries `errors[0].details.lines`, one entry per short line with `productId`, `title`, `requested` and `availability` (sold out, short, off sale), never the number left, so a basket is fixed in one pass rather than one refusal per line. A staff order's refusal adds `available` for a caller who reads stock. That holds on both refusal paths — the pre-flight, and the conditional reserve that decides a race, where the reported figure is read back at the moment the write refused.
 
@@ -108,7 +97,7 @@ Both reads page and report `meta.totalItems`, and neither is bounded in the serv
 
 > The domain behind these routes: [`users`](../modules/users.md) · routes and middleware: `src/modules/users/routes.ts`
 
-Full user management, behind `read:User` / `create:User` / `update:User` / `delete:User` per route. The equivalent self-service actions (profile read, account deletion) live under `/account`.
+Full user management, behind `read:User` / `create:User` / `update:User` / `delete:User` per route; the action doors have their own keys: `ban:User` (activate, deactivate, purchase holds) and `assign:Role` (assign and revoke a role). The equivalent self-service actions (profile read, account deletion) live under `/account`.
 
 The three `/hard` routes are not extra operations in disguise. Each mounts the same handler as its
 `:id` sibling behind `routeFlag('hardDelete')`, so the destructive variant has a URL of its own —

@@ -1007,6 +1007,37 @@ components:
                     items:
                         $ref: '#/components/schemas/CancelableFulfillmentOrder'
 
+        # One row of a returns list: what the table renders and nothing else. The customer's note,
+        # staff's decline message and the lines come only from the audited `GET /returns/{id}`, so
+        # paging through the list leaves no way round the read trail (OWASP API3:2023, Google
+        # AIP-157's basic view). A customer's own list is the same shape.
+        ReturnListItem:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, orderNumber, status, reason, kind, requestedAt, createdAt, actions]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderNumber:
+                    type: string
+                    description: The order's human number.
+                status:
+                    $ref: '#/components/schemas/ReturnStatus'
+                reason:
+                    $ref: '#/components/schemas/ReturnReason'
+                kind:
+                    $ref: '#/components/schemas/ReturnKind'
+                requestedAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+                actions:
+                    $ref: '#/components/schemas/ReturnActions'
+
         ReturnsResponse:
             type: object
             additionalProperties: false
@@ -1015,7 +1046,7 @@ components:
                 items:
                     type: array
                     items:
-                        $ref: '#/components/schemas/Return'
+                        $ref: '#/components/schemas/ReturnListItem'
                 meta:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
 

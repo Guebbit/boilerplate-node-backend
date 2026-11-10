@@ -75,6 +75,13 @@ Three objects, each owned once:
 | **Refund**             | the _money_: one record per attempt, on the payment                         | [`payments`](./payments.md#refund-records) |
 | **Status projections** | `paymentStatus`, `fulfillmentStatus`, `returnStatus` beside the order's own | [`orders`](./orders.md)                    |
 
+## The list row {#the-list-row}
+
+`GET /returns` answers a `ReturnListItem`: id, order, status, reason, kind, dates and `actions`. The
+customer's note, staff's decline message and the lines are `GET /returns/{id}`, the audited read; a
+customer's own list is the same shape. See
+[a list row is a list item](../api/responses.md#a-list-row-is-a-list-item).
+
 ## The lifecycle
 
 ```mermaid
@@ -94,7 +101,8 @@ stateDiagram-v2
 Every move is one conditional write from the statuses that may precede it. The moves are one table
 (`src/modules/returns/domain/lifecycle.ts`): `approve` and `decline` from `requested`, `receive` and
 `cancel` from `approved`, `close` from `received`. The writes and the `actions` flags both ask it, and
-a flag is the caller's permission key AND the table's answer for the return's status. The proof of
+a flag is the caller's permission key AND the table's answer for the return's status (and `cancel` is
+also false once a proof of sending opened the refund). The proof of
 sending is a stamp inside the receive window, not a move. The birth status is per door, not a move
 either.
 
@@ -357,7 +365,8 @@ is recorded **once** (a second call is a 409 `RETURN_PROOF_ALREADY_RECORDED`) an
 
 A `sentAt` in the future is a 422 `RETURN_PROOF_DATE_INVALID`. Staff **cannot cancel** a return whose
 proof opened its refund: that is a 409 `RETURN_REFUND_OPEN`, because the refund is owed and a canceled
-return would no longer add up (the check rides in the cancel's own conditional write). A proof on a
+return would no longer add up (the check rides in the cancel's own conditional write). The return's
+`actions.cancel` is false from then on, so no client offers the button. A proof on a
 faulty item opens nothing, so that return can still be canceled.
 
 After a proof on a withdrawal, **receiving the goods** restocks as usual and opens no second refund.
@@ -413,11 +422,11 @@ Both are **stamped by their owner through `orders`' own service door** (`markPay
 `markReturnStatus`), the way `delivery` reports a shipment. `fulfillmentStatus` reads the summary
 `delivery` reports, so it is derived on read.
 
-| Field               | Values                                                                                      | Stamped by                                                                                    |
-| ------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `paymentStatus`     | `unpaid` · `paid` · `partially_refunded` · `refunded`                                       | `payments` (the refund states); `paid`/`unpaid` from `paidAt`                                 |
-| `fulfillmentStatus` | `unfulfilled` · `in_progress` · `on_hold` · `partially_fulfilled` · `shipped` · `fulfilled` | derived from `status` and `delivery`'s summary ([table](./orders.md#the-fulfillment-summary)) |
-| `returnStatus`      | `none` · `requested` · `in_progress` · `partially_returned` · `returned`                    | `returns`, after every move (`services/projection.ts`)                                        |
+| Field               | Values                                                                                      | Stamped by                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `paymentStatus`     | `unpaid` · `paid` · `partially_refunded` · `refunded`                                       | `payments` (the refund states); `paid`/`unpaid` from `paidAt`                                |
+| `fulfillmentStatus` | `unfulfilled` · `in_progress` · `on_hold` · `partially_fulfilled` · `shipped` · `fulfilled` | derived from `status` and `delivery`'s summary ([table](./orders.md#the-fulfilment-summary)) |
+| `returnStatus`      | `none` · `requested` · `in_progress` · `partially_returned` · `returned`                    | `returns`, after every move (`services/projection.ts`)                                       |
 
 `returnStatus` measures what came back against what the order held **less what a remainder cancel took**:
 a cancelled unit never shipped, so it can never return, and without that a cancel would keep the order

@@ -12,6 +12,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { slugify } from '@mdit-vue/shared';
 import { resolveFrontendPath, DEFAULT_FRONTEND_PATH } from '../pairing/paired-frontend-path';
 import {
     ALLOWED,
@@ -47,31 +48,33 @@ interface Finding {
 }
 
 /**
- * A page's heading slugs, VitePress's own way — lowercased, inline `` ` ``/`*`/`_` stripped,
- * punctuation dropped, spaces to hyphens — plus any explicit `{#custom-id}` a heading carries.
- * Approximate on purpose: VitePress de-duplicates a repeated heading with a `-1`/`-2` suffix, and
- * this does not, so a genuine collision under-reports rather than over-reports.
+ * A page's heading slugs, VitePress's own way: its `slugify` (`@mdit-vue/shared`) over the
+ * heading's plain text, a repeated heading de-duplicated with `-1`/`-2` as markdown-it-anchor
+ * does, plus any explicit `{#custom-id}` a heading carries.
+ * https://github.com/mdit-vue/mdit-vue/tree/main/packages/shared
  */
-const slugify = (heading: string): string =>
-    heading
-        .replaceAll(/[*_`~]/g, '')
-        .trim()
-        .toLowerCase()
-        .replaceAll(/[^\s\w-]/g, '')
-        .replaceAll(/\s+/g, '-')
-        .replaceAll(/-+/g, '-')
-        .replaceAll(/^-|-$/g, '');
-
-/** Every anchor a markdown page answers to: one per heading, its own `{#id}` if it wrote one. */
 const headingSlugs = (markdown: string): Set<string> => {
     const slugs = new Set<string>();
+    let inFence = false;
 
     for (const line of markdown.split('\n')) {
-        const heading = /^#{1,6}\s+(.+)$/.exec(line)?.[1];
+        // A `#` line inside a fenced block is a code comment, not a heading.
+        if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
+        const heading = inFence ? undefined : /^#{1,6}\s+(.+)$/.exec(line)?.[1];
         if (!heading) continue;
 
         const explicit = /{#([\w-]+)}\s*$/.exec(heading)?.[1];
-        slugs.add(explicit ?? slugify(heading.replace(/{#[\w-]+}\s*$/, '')));
+        // The title VitePress slugs is the heading's text: link targets, code ticks and
+        // emphasis marks are not part of it.
+        const text = heading
+            .replace(/{#[\w-]+}\s*$/, '')
+            .replaceAll(/\[([^\]]*)]\([^)]*\)/g, '$1')
+            .replaceAll(/[*`]/g, '');
+        const base = explicit ?? slugify(text);
+
+        let slug = base;
+        for (let n = 1; slugs.has(slug); n++) slug = `${base}-${n}`;
+        slugs.add(slug);
     }
 
     return slugs;
@@ -188,6 +191,36 @@ const isReal = (
 };
 
 /**
+ * The `[text](page.md#anchor)` and `[text](#anchor)` links of one page whose anchor no heading of
+ * the target page answers to. `docs:build` checks the page of a link, never its anchor, so a
+ * renamed heading otherwise leaves a link that opens the right page at the top.
+ */
+const brokenLinkAnchors = (
+    page: string,
+    markdown: string,
+    anchorsOf: (ownPath: string) => Set<string> | undefined
+): string[] => {
+    const broken: string[] = [];
+    let inFence = false;
+
+    for (const line of markdown.split('\n')) {
+        if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
+        if (inFence || line.includes(IGNORE_LINE)) continue;
+
+        for (const [, target, anchor] of line.matchAll(/]\(([^)#\s]*)#([^)\s]+)\)/g)) {
+            // Only a link to a page this repo tracks: another site or a non-`.md` file is skipped.
+            if (/^[a-z]+:/.test(target) || (target && !target.endsWith('.md'))) continue;
+
+            const resolved = target ? path.posix.join(path.posix.dirname(page), target) : page;
+            const slugs = anchorsOf(resolved);
+            if (slugs && !slugs.has(decodeURIComponent(anchor))) broken.push(`${target}#${anchor}`);
+        }
+    }
+
+    return broken;
+};
+
+/**
  * Every tail one of THESE pages answers to, mapped back to its actual path — the same suffix idea
  * as {@link trackedTargets}, so an anchor lookup can go straight from a claim's spelling to the
  * page whose headings settle it.
@@ -247,10 +280,13 @@ const run = (): number => {
     const context = { aliases, roots, own: own.targets, peer: peerTargets, anchorsOf };
 
     for (const page of pages) {
-        const scan = scanPage(readFileSync(path.join(ROOT, page), 'utf8'), context);
+        const text = readFileSync(path.join(ROOT, page), 'utf8');
+        const scan = scanPage(text, context);
 
         references += scan.tokens.length;
         for (const token of scan.findings) findings.push({ page, token });
+        for (const token of brokenLinkAnchors(page, text, anchorsOf))
+            findings.push({ page, token: `link ${token}` });
     }
 
     if (pages.length < MIN_PAGES || references < MIN_REFERENCES) {

@@ -324,10 +324,10 @@ override all ASK for a move, never assign the field themselves. See
 | Move                                       | Who asks                                                                         | Through                                                                                                                                                                                                                                        |
 | ------------------------------------------ | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pending` → `paid`                         | `system`                                                                         | `payments`' settlement, on confirm                                                                                                                                                                                                             |
-| `paid` → `processing`                      | `system`                                                                         | `POST /orders/{id}/process`, `start:Shipment` — a first shipment or fulfil from `paid` makes it too — or `POST /orders/{id}/status-override`, `override:Order`                                                                                 |
+| `paid` → `processing`                      | `system`                                                                         | `POST /orders/{id}/process`, `start:Shipment` — a first shipment or fulfil from `paid` makes it too — or `POST /orders/{id}/override-status`, `override:Order`                                                                                 |
 | `processing` → `shipped`                   | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/shipments` — only the shipment that leaves **nothing** remaining                                                                                                                                       |
 | `shipped` → `delivered`                    | `system`                                                                         | `POST /delivery/shipments/{id}/deliver` — only the last arrival, with nothing left to ship                                                                                                                                                     |
-| `shipped` → `processing`                   | `system`                                                                         | `POST /delivery/shipments/{id}/lost` — the `reopen` event, one of the two backward moves; `canOverrideTo` stays forward-only, so no override makes it. `order.status_changed` carries it                                                       |
+| `shipped` → `processing`                   | `system`                                                                         | `POST /delivery/shipments/{id}/mark-lost` — the `reopen` event, one of the two backward moves; `canOverrideTo` stays forward-only, so no override makes it. `order.status_changed` carries it                                                  |
 | `delivered` → `processing`                 | `system`                                                                         | A return received with `remedy: replace` — the `reship` event, the second backward move; the replacement leaves through the ordinary shipping door, and its arrival keeps the first `withdrawUntil` and only ever pushes `conformityUntil` out |
 | `processing` → `delivered`                 | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/fulfill` (digital), or a remainder cancel after every shipment arrived — `markFulfillmentComplete`, the one named double move                                                                          |
 | `processing` → `canceled`                  | `system`                                                                         | `markUndeliverable`: a lost parcel's remainder was cancelled and refunded and nothing ever arrived — cause `lost`, `refund: false`, no clock. Outside the actor table, so the system cancels stay on `pending`                                 |
@@ -373,6 +373,11 @@ summary, the status move and the events commit together or not at all.
 
 The per-status half (rows 1 and 4) is the `fulfillment` trait in [the status traits](#status-traits).
 
+**A list row is an `OrderListItem`.** `GET /orders` and `POST /orders/search` answer what the table
+renders (number, the four statuses, total and currency, dates, `actions`): no email, address, line or
+note. Those come from `GET /orders/{id}`, which is the audited read. See
+[a list row is a list item](../api/responses.md#a-list-row-is-a-list-item).
+
 **Finding an order by the number the customer quotes.** `GET /orders`, `POST /orders/search` and the
 CSV export take an exact, indexed `orderNumber` filter (`orders_orderNumber`, unique: a receipt number
 names one order). The value is read the way customers type it (`parseOrderNumber`): spaces and a leading
@@ -409,7 +414,7 @@ A status added to the contract fails the build there instead of falling into a d
 `fulfillment` is a value plus whether the summary may refine it: `unfulfilled` (`pending`,
 `canceled`, and `paid` which follows the summary), `in_progress` (`processing`, follows the
 summary), `shipped`, `fulfilled`. The edges between statuses are not traits; they live in the
-[event table](../theory/tactical-ddd.md#1-the-order-lifecycle).
+[event table](../theory/tactical-ddd.md#_1-the-order-lifecycle).
 
 ### The admin override
 
@@ -420,7 +425,7 @@ name. It needs a `reason` and writes a `status_overridden` row on the
 `system`-only, absolute). Shipping from `paid` is no override: the ship act makes `paid → processing`
 itself, and recording an arrival has no forced variant either.
 
-- `POST /orders/{id}/status-override` with `{ to, reason }` moves the status
+- `POST /orders/{id}/override-status` with `{ to, reason }` moves the status
   alone, forward to `processing`/`shipped`/`delivered` only. No shipped email and no webhook: an override never lands on `paid`, the only status change
   a subscriber hears, and the shipments it cuts for `delivery` are silent too.
 
@@ -447,8 +452,8 @@ already `shipped` makes the second call silent.
 What happened to an order, a page at a time, newest first: `GET /orders/{id}/timeline`. One append-only collection,
 `orderevents`, owned by `orders` and typed as an `AppendOnlyLedger` (the stock-movement precedent).
 It is its own collection because the alternatives fail: an array on the order collides with the
-conditional status writes siblings make in their own transactions, the audit log expires at 90
-days, and rebuilding from the siblings would need reads `orders` may not make.
+conditional status writes siblings make in their own transactions, the audit log expires on a
+window (`NODE_AUDIT_RETENTION_DAYS`), and rebuilding from the siblings would need reads `orders` may not make.
 
 ```mermaid
 flowchart LR
@@ -494,54 +499,13 @@ fails the test, and one added to a variant without it fails to compile. Each row
 (`buyer` or `staff`) on the wire, so a staff screen marks which rows the buyer cannot see without
 keeping a copy of this table.
 
-| Group     | Type                                                                                                                                         | Buyer sees |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| Order     | `created`, `paid`, `processing`, `shipped`, `delivered`, `canceled`                                                                          | yes        |
-| Order     | `status_overridden` (mode, from, to, and the staff's reason as `text`)                                                                       | no         |
-| Order     | `address_corrected` (staff-only)                                                                                                             | no         |
-| Order     | `note_added` (a staff note; the text is encrypted, see [staff notes](#staff-notes))                                                          | no         |
-| Payment   | `payment_declined`, `refund_issued`, `refund_settled`                                                                                        | yes        |
-| Payment   | `refund_failed` (a failure code, never the provider's wording)                                                                               | no         |
-| Payment   | `refund_canceled` (a refund staff voided; ids and amount only)                                                                               | no         |
-| Shipments | `shipment_shipped`, `shipment_delivered`, `shipment_lost`, `remainder_canceled`                                                              | yes        |
-| Shipments | `fulfillment_held`, `fulfillment_released` (a hold's reason code)                                                                            | no         |
-| Returns   | `return_requested`, `return_approved`, `return_declined`, `return_received`, `return_closed`, `return_canceled`, `proof_of_sending_recorded` | yes        |
-| Documents | `invoice_issued`, `credit_note_issued`                                                                                                       | yes        |
-| Preorders | `release_date_moved`, `delay_notice_sent`                                                                                                    | yes        |
+The audience of every type is `domain/timeline.ts`, and the types are the contract's `OrderTimelineType`.
 
 **What `data` holds, per type.** The wire carries one `oneOf` variant per kind of row, told apart by
 `type` (a discriminator with a many-to-one `mapping`; the export's `OrderTimelineExportEntry` has
-the same variants over `OrderTimelineExportEntryBase`). The shapes below are what the writers
-store, and `TimelineEntryInput` is derived from them, so a writer that passes the wrong `data`
-for its `type` fails to compile. Every `data` is closed and required; `{}` where the type says
-everything.
-
-| Types                                                             | `data`                                                                            |
-| ----------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `created`, `processing`, `shipped`, `address_corrected`           | `{}`                                                                              |
-| `note_added`                                                      | `{}`; what staff wrote is the entry's `text`                                      |
-| `status_overridden`                                               | `mode` (`status`), `from`, `to` (`OrderStatus`); the reason is the entry's `text` |
-| `paid`                                                            | `method`, absent when unknown                                                     |
-| `delivered`                                                       | `withdrawUntil` (date-time)                                                       |
-| `canceled`                                                        | `by`, `cause`, `refund`                                                           |
-| `payment_declined`                                                | `paymentId`                                                                       |
-| `refund_issued`, `refund_settled`, `refund_canceled`              | `refundId`, `amount`, `currency`, `reason`                                        |
-| `refund_failed`, `refund_reversed`                                | the same, plus `failureReason`                                                    |
-| `dispute_opened`, `dispute_closed`                                | `disputeId`, `kind`, `status`, `reason`, `amount`, `currency`                     |
-| `shipment_shipped`                                                | `shipmentId`, `fulfillmentOrderId`, `number`, `trackingCode` when given           |
-| `shipment_delivered`                                              | `shipmentId`, `fulfillmentOrderId`, `number`                                      |
-| `shipment_lost`                                                   | the same, plus `reason`                                                           |
-| `fulfillment_held`                                                | `reason`, and `fulfillmentOrderId` except on a preorder's birth hold              |
-| `fulfillment_released`, `remainder_canceled`                      | `fulfillmentOrderId`                                                              |
-| `return_requested`                                                | `returnId`, `reason`                                                              |
-| `return_approved`                                                 | `returnId`, and `reason` when opened already approved                             |
-| `return_declined`, `return_canceled`, `proof_of_sending_recorded` | `returnId`                                                                        |
-| `return_received`                                                 | `returnId`, `refundAmount`, `currency`                                            |
-| `return_closed`                                                   | `returnId`, `refundAmount`, `currency`, `remedy` when chosen                      |
-| `invoice_issued`                                                  | `invoiceId`, `number`                                                             |
-| `credit_note_issued`                                              | `creditNoteId`, `number`, `refundId`                                              |
-| `release_date_moved`                                              | `fulfillmentOrderId`, `from`, `to` (shop days, each absent when unset)            |
-| `delay_notice_sent`                                               | `fulfillmentOrderId`, `reason`, `expectedAt` (a shop day) when there is one       |
+the same variants over `OrderTimelineExportEntryBase`). Each variant's `data` is closed and required,
+and is written out in `OrderTimeline*` of `src/modules/orders/openapi.yaml`; `TimelineEntryInput` is
+derived from it, so a writer that passes the wrong `data` for its `type` fails to compile.
 
 Money is a `DecimalAmount`. A code a sibling module owns (a refund's reason, a dispute's status, a
 hold's reason) is a plain string whose description names the owner's enum: `orders` cannot

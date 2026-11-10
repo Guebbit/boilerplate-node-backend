@@ -6,7 +6,7 @@
  * needs rides through the service. Pure: the lookups and the `actions` rules sit in `./services`.
  */
 
-import type { Account, User, UserActions } from '@types';
+import type { Account, User, UserActions, UserListItem } from '@types';
 import { carryVersion } from '@infrastructure/persistence/versioning';
 import { decryptPii } from '@infrastructure/security/pii-encryption';
 import { phoneAad, type UserWire } from './model';
@@ -109,3 +109,34 @@ export const presentUser = (document: UserWire, role: string | null, actions: Us
             ? {}
             : { purchaseHoldFlaggedAt: document.purchaseHoldFlaggedAt.toISOString() })
     });
+
+/**
+ * An account as one row of the staff list: only what the table renders. No phone, website or
+ * pending address, and the hold as a flag: the reason, end and note are the audited detail
+ * read's. Nothing personal is decrypted here.
+ *
+ * @param document - the account
+ * @param role - the account's CURRENT tenant role, `null` for none
+ * @param actions - what the requesting caller may do to this account
+ */
+export const presentUserListItem = (
+    document: UserWire,
+    role: string | null,
+    actions: UserActions
+): UserListItem => ({
+    id: document.id,
+    email: document.email,
+    username: document.username,
+    ...(role === null ? {} : { role }),
+    ...(document.active === undefined ? {} : { active: document.active }),
+    ...(document.imageUrl === undefined ? {} : { imageUrl: document.imageUrl }),
+    ...(document.thumbnailUrl === undefined ? {} : { thumbnailUrl: document.thumbnailUrl }),
+    ...(activeHoldOf(document, new Date()) === undefined ? {} : { purchaseHeld: true as const }),
+    ...(document.purchaseHoldFlaggedAt === undefined
+        ? {}
+        : { purchaseHoldFlaggedAt: document.purchaseHoldFlaggedAt.toISOString() }),
+    ...(document.purgeAt ? { purgeAt: document.purgeAt.toISOString() } : {}),
+    ...(document.createdAt ? { createdAt: document.createdAt.toISOString() } : {}),
+    ...(document.deletedAt ? { deletedAt: document.deletedAt.toISOString() } : {}),
+    actions
+});

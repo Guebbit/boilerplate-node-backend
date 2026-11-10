@@ -337,7 +337,7 @@ paths:
             description: >-
                 Replaces the order identified by `{id}` in the path (RFC 9110 §9.3.4). `email` is
                 the only writable field — `status` moves only through an action endpoint
-                (`POST /orders/{id}/cancel`, `POST /orders/{id}/status-override`), never a field
+                (`POST /orders/{id}/cancel`, `POST /orders/{id}/override-status`), never a field
                 on this body. See `docs/theory/tactical-ddd.md#who-writes-the-status`.
             operationId: replaceOrderById
             security:
@@ -368,7 +368,7 @@ paths:
             description: >-
                 Updates the order identified by `{id}` in the path, merging — an omitted `email`
                 leaves the stored one untouched. `status` moves only through an action endpoint
-                (`POST /orders/{id}/cancel`, `POST /orders/{id}/status-override`), never a field
+                (`POST /orders/{id}/cancel`, `POST /orders/{id}/override-status`), never a field
                 on this body. See `docs/theory/tactical-ddd.md#who-writes-the-status`.
             operationId: updateOrderById
             security:
@@ -395,11 +395,10 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-        # Same as DELETE /orders/{id}
         delete:
             tags: [Orders]
             summary: Delete order
-            description: Deletes the order identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record, which is only allowed for an order that is canceled and was never paid (409 `ORDER_NOT_CANCELED` while it is open, 409 `ORDER_INVOICED` once paid, 409 `ORDER_HAS_MONEY_HISTORY` once money was recorded after the cancel). A soft delete hides a canceled order from its buyer (409 `ORDER_NOT_CANCELED` while it is open), is safe to repeat, and is undone with `POST /orders/{id}/restore`. Functionally equivalent to `DELETE /orders`.
+            description: Deletes the order identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record, which is only allowed for an order that is canceled and was never paid (409 `ORDER_NOT_CANCELED` while it is open, 409 `ORDER_INVOICED` once paid, 409 `ORDER_HAS_MONEY_HISTORY` once money was recorded after the cancel). A soft delete hides a canceled order from its buyer (409 `ORDER_NOT_CANCELED` while it is open), is safe to repeat, and is undone with `POST /orders/{id}/restore`.
             operationId: deleteOrderById
             x-error-codes:
                 '409': [ORDER_HAS_MONEY_HISTORY, ORDER_INVOICED, ORDER_NOT_CANCELED]
@@ -662,7 +661,7 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
-    /orders/{id}/status-override:
+    /orders/{id}/override-status:
         # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
         x-versioned: [post]
         post:
@@ -2141,6 +2140,56 @@ components:
                 email:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
 
+        # One row of an orders list: what the table renders and nothing else. The buyer's address,
+        # email, lines and notes come only from the audited `GET /orders/{id}`, so paging through
+        # the list leaves no way round the read trail (OWASP API3:2023, Google AIP-157's basic
+        # view). A customer's own list is the same shape.
+        OrderListItem:
+            type: object
+            additionalProperties: false
+            required:
+                [
+                    id,
+                    orderNumber,
+                    status,
+                    paymentStatus,
+                    fulfillmentStatus,
+                    returnStatus,
+                    totalPrice,
+                    currency,
+                    actions
+                ]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderNumber:
+                    type: string
+                    example: '2026-000041'
+                status:
+                    $ref: '#/components/schemas/OrderStatus'
+                paymentStatus:
+                    $ref: '#/components/schemas/OrderPaymentStatus'
+                fulfillmentStatus:
+                    $ref: '#/components/schemas/OrderFulfillmentStatus'
+                returnStatus:
+                    $ref: '#/components/schemas/OrderReturnStatus'
+                totalPrice:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
+                currency:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CurrencyCode'
+                paidAt:
+                    type: string
+                    format: date-time
+                    description: When the order reached `paid`. Absent while unpaid.
+                createdAt:
+                    type: string
+                    format: date-time
+                deletedAt:
+                    type: string
+                    description: Present only on a soft-deleted order, which only staff list.
+                actions:
+                    $ref: '#/components/schemas/OrderActions'
+
         OrdersResponse:
             type: object
             additionalProperties: false
@@ -2149,7 +2198,7 @@ components:
                 items:
                     type: array
                     items:
-                        $ref: '#/components/schemas/Order'
+                        $ref: '#/components/schemas/OrderListItem'
                 meta:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
 
@@ -2396,7 +2445,7 @@ components:
                     pay,
                     recordPayment,
                     process,
-                    override,
+                    overrideStatus,
                     correctAddress,
                     invoice,
                     withdraw,
@@ -2439,12 +2488,12 @@ components:
                         Whether `POST /orders/{id}/process` would be accepted for this
                         caller. `paid → processing` is `system`-only in the lifecycle, reached
                         only by reporting the fact through `delivery`'s own door.
-                override:
+                overrideStatus:
                     type: array
                     items:
                         $ref: '#/components/schemas/OrderStatus'
                     description: >-
-                        The statuses `POST /orders/{id}/status-override` would accept as a
+                        The statuses `POST /orders/{id}/override-status` would accept as a
                         destination for this caller right now — empty for anyone without
                         `override:Order`, or once the order has left every overridable status.
                     example: [processing, shipped, delivered]

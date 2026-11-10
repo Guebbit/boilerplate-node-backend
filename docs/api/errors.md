@@ -102,22 +102,9 @@ UPPER_SNAKE: the same name `title` shows. There is no table; `resolveErrorCode`
 (`src/infrastructure/http/response.ts`) derives it, and the message is the locale key
 `generic.error-<the code in kebab-case>`.
 
-| Status | Code |
-| --- | --- |
-| 400 | `BAD_REQUEST` |
-| 401 | `UNAUTHORIZED` |
-| 403 | `FORBIDDEN` |
-| 404 | `NOT_FOUND` |
-| 405 | `METHOD_NOT_ALLOWED` |
-| 409 | `CONFLICT` |
-| 412 | `PRECONDITION_FAILED` |
-| 413 | `CONTENT_TOO_LARGE` |
-| 415 | `UNSUPPORTED_MEDIA_TYPE` |
-| 422 | `UNPROCESSABLE_CONTENT` |
-| 429 | `TOO_MANY_REQUESTS` |
-| 500, and any 5xx but 503 | `INTERNAL_SERVER_ERROR` |
-| 503 | `SERVICE_UNAVAILABLE` |
-| any other 4xx | `CLIENT_ERROR` |
+The pairs are `resolveErrorCode`'s output, and a code an operation may answer with is on the contract's
+`x-error-codes`; the names are the RFC 9110 status names, so `404` is `NOT_FOUND` and `422` is
+`UNPROCESSABLE_CONTENT`.
 
 Two rules keep it total:
 
@@ -173,6 +160,8 @@ These answers are not problem documents on purpose:
 | A stream already open (SSE) | the status line is gone; the stream carries its own events |
 | A redirect (OAuth callback success) | a `302`, not an error |
 | Node's own 400 / 408 / 413 / 431 | Node's HTTP server writes a bare status line and closes the connection; no language, no request id. A broken request line or headers never reach a route; a timed-out or malformed body is cut after the route has started. Behind the Traefik overlay only the 431 reaches a client; Traefik answers a bad request line itself and cuts a slow request at 60 s, before Node's 408 |
+
+The API never answers 511: RFC 6585 §6 reserves it for an intercepting proxy, not an origin server.
 
 The 404 for a path that matches nothing and the 405 for a method a path does not offer belong to no
 operation, so the contract describes them once, in the root document's description.

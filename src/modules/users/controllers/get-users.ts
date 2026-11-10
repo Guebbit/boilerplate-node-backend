@@ -12,7 +12,7 @@ import { userService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';
 import { optionalBooleanSchema, pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { createSearchController } from '@infrastructure/surfaces/create-search-controller';
-import type { User } from '@types';
+import type { UserListItem } from '@types';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 
 /**
@@ -35,19 +35,19 @@ const searchUsersQuerySchema = SearchUsersBody.extend({
  * GET /users
  * List/search users via query parameters (admin only).
  *
- * Each row's CURRENT role and the `actions` the caller's rank decides are read fresh by
- * `userService.toUserContracts`, batched for the whole page — `applyUserTransform`'s own document
- * serialization has no role to offer. The caller is always set behind `requirePermission`.
+ * Each row is a list item (`UserListItem`): what the table shows, never the whole record. Its CURRENT
+ * role and the `actions` the caller's rank decides are read fresh by `userService.toUserListItems`,
+ * batched for the whole page — `applyUserTransform`'s own document serialization has no role to offer. The caller is always set behind `requirePermission`.
  */
 export const getUsers = createSearchController({
     entity: 'users',
     schema: searchUsersQuerySchema,
-    runSearch: (parsed, request): Promise<{ items: User[]; meta: PaginatedMeta }> =>
+    runSearch: (parsed, request): Promise<{ items: UserListItem[]; meta: PaginatedMeta }> =>
         userService
             .search(parsed)
             .then(({ items, meta }) =>
                 userService
-                    .toUserContracts(items, callerContextOf(request).caller)
+                    .toUserListItems(items, callerContextOf(request).caller)
                     .then((contracts) => ({ items: contracts, meta }))
             )
 });

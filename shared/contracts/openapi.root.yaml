@@ -453,10 +453,10 @@ components:
                 minItems: 1
                 maxItems: 100
                 items: { $ref: '#/components/schemas/Id' }
-        # The delete flag, shared because every soft-deleting domain offers the same three
-        # spellings of it: `/hard` in the path, `?hardDelete=true` in the query, `hardDelete` in
-        # the body. Params outrank query, which outranks body — see docs/theory/request-input.md.
-        # Declared here once so a fourth domain cannot accidentally offer only two of the three.
+        # The delete flag, shared because every soft-deleting domain offers the same two
+        # spellings: `/hard` in the path, `?hardDelete=true` in the query. OR'd, not ranked; a
+        # DELETE body is a 415 — see docs/theory/request-input.md. Declared once so a fourth
+        # domain cannot offer only one.
         HardDeleteParam:
             name: hardDelete
             in: query
@@ -1666,8 +1666,8 @@ paths:
         $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}~1hard'
     /orders/{id}/cancel:
         $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}~1cancel'
-    /orders/{id}/status-override:
-        $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}~1status-override'
+    /orders/{id}/override-status:
+        $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}~1override-status'
 
     # ---------- invoicing ---------- (shares the `/orders` basePath with `orders` above, same as
     # `addresses` sharing `/account` with `account` — see docs/api/contract-fragmentation.md)

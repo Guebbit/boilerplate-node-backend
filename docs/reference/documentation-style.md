@@ -82,6 +82,7 @@ to everyone who has not opened the tree. This is the only check that looks for i
 | `./`-relative tokens are skipped   | VitePress resolves those against the page, and `docs:build` already fails on a dead one.      |
 | Resolution is by suffix            | `orders/model.ts` matches `src/modules/orders/model.ts` without spelling the root path.       |
 | A `#anchor` is checked too         | Against that page's own headings, for a page in THIS repo only; the peer's are its own.       |
+| Link anchors are checked too       | `[x](page.md#a)` against VitePress's own slug (`@mdit-vue/shared`), not a copy of it.         |
 | `@`-prefixed tokens use `tsconfig` | `@modules/orders` is checked; `@asyncapi/cli` matches no alias and is read as an npm package. |
 | Tokens starting with `/` skipped   | HTTP routes, not files. The contract owns those, and `lint:openapi` refuses a missing one.    |
 | Directories count as targets       | `src/infrastructure/` resolves without naming a file.                                         |

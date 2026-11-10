@@ -1,7 +1,7 @@
 # audit-logs
 
 ::: tip At a glance
-**Owns** — the queryable audit trail, kept for `NODE_AUDIT_RETENTION_DAYS` (90 by default), which its TTL index enforces.
+**Owns** — the queryable audit trail, kept for `NODE_AUDIT_RETENTION_DAYS` (180 by default), which its TTL index enforces.
 **Depends on** — [`access`](./access.md), only for the refusal reasons its read side lists. Nothing, for the write side: nothing imports this module, it installs a sink instead.
 **Breaks if you change** — the retention window (`NODE_AUDIT_RETENTION_DAYS`) on the `timestamp` index. It is the only thing deleting old entries.
 :::
@@ -63,10 +63,10 @@ else still builds.
 :::
 
 Retention is a database fact, not a cron job: `expireAfterSeconds` on `timestamp` is
-`NODE_AUDIT_RETENTION_DAYS` days (90 by default), enforced by Mongo. Mongo will not change an
+`NODE_AUDIT_RETENTION_DAYS` days (180 by default), enforced by Mongo. Mongo will not change an
 existing TTL index's window in place: a new value fails the boot until `npm run db:sync` rebuilds
-the index. The two compound indexes are the two questions anyone asks of a
-trail — everything one actor did, and everyone who did one thing.
+the index. The compound indexes are the questions anyone asks of a trail — everything one actor
+did, everyone who did one thing, what happened to one row, and whose data a row was about.
 
 Field names are `camelCase` in the event, in Mongo and in the API, like every other collection. The
 log line is the one place they change: the Winston formatter renames them to OpenTelemetry
@@ -75,7 +75,36 @@ semantic-convention names (`actorUserId` becomes `user.id`) on the way out. See
 
 One row shape, `AuditEntryItem`, answers every read: `GET /audit`, `GET /observability/audit` and the
 account export. `actorCredentialId` names the API key when a credential did the action, and is absent
-when a person did.
+when a person did. `subjectId` names the person whose data the row is about, when that is not the
+actor: a staff read of someone's record sets it, and `GET /audit?subject=<id>` is the staff-side
+answer to "who looked at this person's data".
+
+## The person can see who looked {#the-person-can-see-who-looked}
+
+A staff member opening someone else's record writes `admin.<resource>.viewed` with the person's id
+as `subjectId` (`src/kernel/staff-read.ts`). The person's own data export then carries a
+`consultations` section: when, which kind of record, and why. Never the staff member: the EU court
+(C-579/21, Art. 15) gives a person the dates and purposes of each consultation, not the employee's name.
+
+```mermaid
+flowchart LR
+    S["staff opens a record"] --> W["recordStaffRead<br/><i>subjectId = whose it is</i>"]
+    W --> A[("auditlogs")]
+    A -->|"subjectId + a staff-read action,<br/>inside the window"| C["consultations section<br/><i>date, record kind, purpose</i>"]
+    C --> E["the person's data export"]
+```
+
+- **Purpose** comes from one fixed map, `STAFF_READ_PURPOSES` in `src/kernel/staff-read.ts`
+  (`admin.order.viewed` is "handling your order"). It is also the list of actions that count as a
+  consultation: a new `admin.<resource>.viewed` is added there, or it never reaches the export.
+- **Window** is `NODE_AUDIT_RETENTION_DAYS`, and the section says so (`windowDays`). Retention is not
+  extended to answer the request: the ruling covers the logs that are held, not how long they are kept.
+- **Limits, stated rather than hidden:** a guest's order has no person to name, so it has no
+  `subjectId`; the orders CSV export (`GET /orders/export`) names no person either; a return's
+  `subjectId` is the order's buyer, resolved at read time and stored only on the audit row.
+- **Erasure:** no erase hook. Rows that name an erased person expire with the log window. The
+  trail is kept for accountability, so the shop can show who accessed data (GDPR Art. 17(3)(e), and
+  Art. 5(2)).
 
 ## Offline writes
 
@@ -149,17 +178,7 @@ everything:
 The caller snapshots "before" ahead of any in-place assignment. Where the write is atomic and
 returns no previous value (the backorder limit), it reads first.
 
-| Action                                       | By value                                                 | By name                                |
-| -------------------------------------------- | -------------------------------------------------------- | -------------------------------------- |
-| `admin.product.updated`                      | prices, VAT, flags, weight, SKU, categories, tags, dates | title, description, image              |
-| `admin.webhook_subscription.updated`         | event filter                                             | url, description                       |
-| `admin.user.updated`, `auth.profile.updated` | locale, analytics consent                                | username, email, phone, website, image |
-| `order.updated`                              |                                                          | email                                  |
-| `admin.task.status_updated`                  | status                                                   | admin notes                            |
-| `admin.locale.updated`                       | name, native name, direction, active                     |                                        |
-| `admin.locale_entry.updated`                 |                                                          | value (`entryKey` rides along)         |
-| `admin.backorder.limit.set`                  | backorder limit                                          |                                        |
-| `example.updated`                            |                                                          | title, body                            |
+Which fields of which action go in which column is the `valued` / `named` argument at each call site; the list of audited actions is generated in [the logging page](../tools/winston.md). The policy is the table above: a non-personal field by value, free text, personal data and bearer secrets by name, everything else not at all.
 
 `admin.translation.updated` already lists the locales it upserted and deleted; the text itself is
 free text and stays out.

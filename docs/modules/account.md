@@ -126,7 +126,7 @@ flowchart LR
 `verifiedAt`, so it is an `unverified` audience, and an OAuth signup sets `verifiedAt` (the provider
 vouches for the address), so it is a `customer` from its first request. Verifying an address later
 is one field written on the account, with no role to promote. An admin create is the one signup that
-may also grant a staff role, see [`users`](./users.md#creating-and-updating-with-a-role).
+may also grant a staff role, see [`users`](./users.md#creating-with-a-role).
 
 **The first password of a staff-created account is its holder's first screen, so it carries the
 Terms.** The setup mail links the Terms and the privacy notice (the person's first contact from us,
@@ -238,7 +238,7 @@ Three things in the flow above are decisions rather than mechanics:
   resend button. The caller is signed in, so the answer can be honest. A password-reset request is
   paced the same way but SILENTLY: inside the minute it answers the same `204` and sends nothing,
   because a `429` would tell a stranger which addresses have an account. Both also spend the
-  recipient's mailbox budget ([security](../tools/security.md#mail-to-one-mailbox-the-victim-s-budget)),
+  recipient's mailbox budget ([security](../tools/security.md#mail-to-one-mailbox-—-the-victim-s-budget)),
   which a refused request does not.
 - **A display name is printed only to a mailbox that has proven itself.** `username` is free text
   (up to 50 characters, no charset rule: one would refuse real names). A mail to an address nobody

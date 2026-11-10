@@ -163,7 +163,7 @@ describe('settleRefundByHand', () => {
         expect(payment.refunds.map((refund) => refund.settledByHand)).toEqual([undefined, true]);
         // The other record is untouched and still the operator's to confirm.
         const read = await paymentService.getForOrder(orderId, asAdmin());
-        expect(read.data?.actions?.settleByHand).toEqual([first]);
+        expect(read.data?.actions?.settleRefundByHand).toEqual([first]);
         await settleOutboxNudges();
         const events = await outboxEventModel.find({ name: PAYMENT_REFUNDED }).lean();
         expect(events).toHaveLength(1);
@@ -226,9 +226,9 @@ describe('settleRefundByHand', () => {
         const asOperator = await paymentService.getForOrder(orderId, asAdmin());
         const asMod = await paymentService.getForOrder(orderId, asModerator());
 
-        expect(asOperator.data?.actions?.settleByHand).toHaveLength(1);
+        expect(asOperator.data?.actions?.settleRefundByHand).toHaveLength(1);
         // A moderator holds `create:Refund`; the flag follows the key, as `refund` does.
-        expect(asMod.data?.actions?.settleByHand).toHaveLength(1);
+        expect(asMod.data?.actions?.settleRefundByHand).toHaveLength(1);
     });
 });
 

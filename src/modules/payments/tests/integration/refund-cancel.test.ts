@@ -143,7 +143,7 @@ describe('cancelling a hand-paid refund that waits', () => {
 
         const after = await paymentService.getForOrder(orderId, asAdmin());
         expect(after.data?.actions?.cancelRefund).toEqual([]);
-        expect(after.data?.actions?.settleByHand).toEqual([]);
+        expect(after.data?.actions?.settleRefundByHand).toEqual([]);
         expect(after.data?.actions?.refund).toBe(true);
         expect(after.data?.displayStatus).toBe('succeeded');
     });

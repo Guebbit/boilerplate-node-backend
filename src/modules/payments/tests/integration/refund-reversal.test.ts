@@ -148,7 +148,7 @@ describe('a settled refund the provider takes back', () => {
         setFakeLateRefundFailure(refundRef);
         await deliverRefund(providerRef, refundRef);
         const offered = await paymentService.getForOrder(orderId, asAdmin());
-        expect(offered.data?.actions?.settleByHand).toEqual([refundId]);
+        expect(offered.data?.actions?.settleRefundByHand).toEqual([refundId]);
         expect(offered.data?.actions?.cancelRefund).toEqual([]);
 
         const settled = await paymentService.settleRefundByHand(

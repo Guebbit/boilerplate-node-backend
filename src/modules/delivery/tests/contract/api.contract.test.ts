@@ -697,14 +697,14 @@ describe('POST /delivery/shipments/{id}/deliver', () => {
     });
 });
 
-describe('POST /delivery/shipments/{id}/lost', () => {
+describe('POST /delivery/shipments/{id}/mark-lost', () => {
     it('matches the contract: the shipment is lost, the order steps back, the buyer reads the message but not the note', async () => {
         const { bearer: customer, order } = await authenticateWithShipment();
         const { bearer } = await authenticateAs('admin');
         const [shipment] = await shipmentsOf(String(order._id));
 
         const response = await api()
-            .post(`/delivery/shipments/${String(shipment._id)}/lost`)
+            .post(`/delivery/shipments/${String(shipment._id)}/mark-lost`)
             .set('Authorization', bearer)
             .send({ reason: 'lost', note: 'carrier claim 7', message: 'A new one is on its way.' });
         const own = await api()
@@ -733,7 +733,7 @@ describe('POST /delivery/shipments/{id}/lost', () => {
         const { order } = await authenticateWithShipment();
         const { bearer } = await authenticateAs('admin');
         const [shipment] = await shipmentsOf(String(order._id));
-        const url = `/delivery/shipments/${String(shipment._id)}/lost`;
+        const url = `/delivery/shipments/${String(shipment._id)}/mark-lost`;
 
         const bodies = [
             {},
@@ -754,12 +754,12 @@ describe('POST /delivery/shipments/{id}/lost', () => {
         const { order } = await authenticateWithShipment();
         const { bearer } = await authenticateAs('admin');
         const [shipment] = await shipmentsOf(String(order._id));
-        const url = `/delivery/shipments/${String(shipment._id)}/lost`;
+        const url = `/delivery/shipments/${String(shipment._id)}/mark-lost`;
         await api().post(url).set('Authorization', bearer).send({ reason: 'lost' });
 
         const again = await api().post(url).set('Authorization', bearer).send({ reason: 'lost' });
         const missing = await api()
-            .post(`/delivery/shipments/${MISSING_ID}/lost`)
+            .post(`/delivery/shipments/${MISSING_ID}/mark-lost`)
             .set('Authorization', bearer)
             .send({ reason: 'lost' });
 
@@ -773,7 +773,7 @@ describe('POST /delivery/shipments/{id}/lost', () => {
         const { bearer } = await authenticateAs('admin');
         const [shipment] = await shipmentsOf(String(order._id));
         await api()
-            .post(`/delivery/shipments/${String(shipment._id)}/lost`)
+            .post(`/delivery/shipments/${String(shipment._id)}/mark-lost`)
             .set('Authorization', bearer)
             .send({ reason: 'lost' });
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
@@ -793,7 +793,7 @@ describe('POST /delivery/shipments/{id}/lost', () => {
     it('refuses a buyer with 403 and an anonymous caller with 401', async () => {
         const { bearer: customer, order } = await authenticateWithShipment();
         const [shipment] = await shipmentsOf(String(order._id));
-        const url = `/delivery/shipments/${String(shipment._id)}/lost`;
+        const url = `/delivery/shipments/${String(shipment._id)}/mark-lost`;
 
         const buyer = await api().post(url).set('Authorization', customer).send({ reason: 'lost' });
         const anonymous = await api().post(url).send({ reason: 'lost' });

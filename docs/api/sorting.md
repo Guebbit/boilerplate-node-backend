@@ -31,17 +31,11 @@ The list is an **enum per resource** in that module's `openapi.yaml` (`ProductSo
 `OrderSort`, `PaymentSort`, `TaskSort`, `ExampleSort`, `WebhookSubscriptionSort`, `ReturnSort`, `ApiKeySort`). It is a whitelist on purpose: an unindexed or derived field
 would let a stranger ask for a collection scan.
 
-| Resource | Sortable fields |
-| --- | --- |
-| Products | `createdAt` · `price` · `title` (the fallback-locale column) |
-| Users | `createdAt` · `email` · `username` |
-| Orders | `createdAt` · `status` · `email` · `payBy` · `paidAt` — `totalPrice` is derived, not a column |
-| Payments | `createdAt` · `amount` · `payBy` (a payment with no bank-transfer deadline counts as the earliest) |
-| Task   | `createdAt` · `status` · `email` |
-| Examples | `createdAt` · `title` · `status` |
-| Webhook subscriptions | `createdAt` · `url` |
-| Returns | `createdAt` · `status` |
-| API keys | `createdAt` · `expiresAt` · `lastUsedAt` (a key never used has no `lastUsedAt`) |
+The fields are the enum's values; they are not copied here. Three things the enums alone do not say:
+
+- Orders: `totalPrice` is derived, not a column, so it is not sortable.
+- Payments: a payment with no bank-transfer deadline counts as the earliest under `payBy`.
+- API keys: a key never used has no `lastUsedAt`.
 
 ## Lists with one fixed order
 

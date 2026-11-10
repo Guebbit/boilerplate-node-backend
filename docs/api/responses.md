@@ -43,6 +43,22 @@ resource (`{ methods }`, `{ sessions }`), and its description names the bound th
 }
 ```
 
+### A list row is a list item
+
+A staff list carries what its table renders, not the whole record: `OrderListItem`, `UserListItem`,
+`ReturnListItem` and `TaskListItem`. The full record, with the personal data in it (addresses,
+phone, a customer's note, the whole message), comes only from `GET /{id}`, which writes the
+`admin.<resource>.viewed` audit row naming the person. Without that split, paging through the list
+is a way round the read trail (OWASP API3:2023); Google AIP-157 calls the small form the basic view.
+Customers get the same item on their own orders and returns. The client caches a row with
+`partial: true`, so it merges over a full record it already holds instead of replacing it.
+
+```mermaid
+flowchart LR
+    L["GET /orders<br/><i>list item: number, status, total, dates, actions</i>"] --> T["the table"]
+    T -->|"open one"| D["GET /orders/{id}<br/><i>the whole record, audited</i>"]
+```
+
 ### Pagination
 
 `page` and `pageSize` in the query, `meta` beside `items`. Offset paging with totals on purpose:

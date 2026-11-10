@@ -68,7 +68,7 @@ describe.each([
         withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { orderId, payment, refundId } = await refusedRefund(reason);
             const offered = await paymentService.getForOrder(orderId, asAdmin());
-            expect(offered.data?.actions?.settleByHand).toEqual([refundId]);
+            expect(offered.data?.actions?.settleRefundByHand).toEqual([refundId]);
 
             const result = await settle(String(payment._id), refundId);
 
@@ -89,7 +89,7 @@ describe.each(['provider_unavailable', 'unknown'] as const)(
         it('answers 409 PAYMENT_REFUND_IN_FLIGHT, offers nothing, and writes nothing', async () => {
             const { orderId, payment, refundId } = await refusedRefund(reason);
             const offered = await paymentService.getForOrder(orderId, asAdmin());
-            expect(offered.data?.actions?.settleByHand).toEqual([]);
+            expect(offered.data?.actions?.settleRefundByHand).toEqual([]);
 
             const result = await settle(String(payment._id), refundId);
 

@@ -40,18 +40,20 @@ cancelled first, `released`. Shelf count (`onHand`) drops at dispatch, not at pa
 Shopify, Magento MSI, Saleor and Medusa share — so a stocktake counts the same number `onHand`
 says, and `available` is identical in both models at every moment.
 
-| Transition                 | Called by                                                                                                                  | Counters                        | Ledger `reason` |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | --------------- |
-| `reserveForOrder`          | [checkout](./cart-checkout.md), admin order create                                                                         | `reserved` +n                   | `reserve`       |
-| `commitForOrder`           | [`orders`](./orders.md), in the transaction of `markPaid` (a card, a transfer or a cash payment)                           | none                            | none            |
-| `shipLinesForOrder`        | [`delivery`](./delivery.md) (through `orders`), in the transaction of each shipment — only ITS units                       | `onHand` −n, `reserved` −n      | `ship`          |
-| `shipForOrder`             | [`orders`](./orders.md), in the transaction of an admin override past dispatch — whatever is left                          | `onHand` −n, `reserved` −n      | `ship`          |
-| `releaseLinesForOrder`     | [`orders`](./orders.md) for [`returns`](./returns.md), in the transaction of a remainder cancel — only the cancelled units | `reserved` −n                   | `release`       |
-| `releaseForOrder`          | [`orders`](./orders.md) on cancel                                                                                          | `reserved` −n                   | `release`       |
-| `releaseForOrder`          | the sweep                                                                                                                  | `reserved` −n                   | `expire`        |
-| `releaseCommittedForOrder` | [`orders`](./orders.md) on cancel, once the release above claims nothing (a paid, unshipped order)                         | `reserved` −n                   | `release`       |
-| `reserveForOrder`          | checkout, for a [preorder](#preorders) line, or the owed part of a [backorder](#backorders) line                           | `backordered` +n                | `backorder`     |
-| `receive`                  | `POST /inventory/levels/{productId}/receive`, for the paid claims waiting (every write that raises `available` does this)  | `backordered` −n, `reserved` +n | `allocate`      |
+| Transition                 | Called by                                                                                                                  | Counters                        | Ledger `reason`   |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ----------------- |
+| `reserveForOrder`          | [checkout](./cart-checkout.md), admin order create                                                                         | `reserved` +n                   | `reserve`         |
+| `commitForOrder`           | [`orders`](./orders.md), in the transaction of `markPaid` (a card, a transfer or a cash payment)                           | none                            | none              |
+| `shipLinesForOrder`        | [`delivery`](./delivery.md) (through `orders`), in the transaction of each shipment — only ITS units                       | `onHand` −n, `reserved` −n      | `ship`            |
+| `shipForOrder`             | [`orders`](./orders.md), in the transaction of an admin override past dispatch — whatever is left                          | `onHand` −n, `reserved` −n      | `ship`            |
+| `releaseLinesForOrder`     | [`orders`](./orders.md) for [`returns`](./returns.md), in the transaction of a remainder cancel — only the cancelled units | `reserved` −n                   | `release`         |
+| `releaseForOrder`          | [`orders`](./orders.md) on cancel                                                                                          | `reserved` −n                   | `release`         |
+| `releaseForOrder`          | the sweep                                                                                                                  | `reserved` −n                   | `expire`          |
+| `releaseCommittedForOrder` | [`orders`](./orders.md) on cancel, once the release above claims nothing (a paid, unshipped order)                         | `reserved` −n                   | `release`         |
+| `reserveForOrder`          | checkout, for a [preorder](#preorders) line, or the owed part of a [backorder](#backorders) line                           | `backordered` +n                | `backorder`       |
+| `receive`                  | `POST /inventory/levels/{productId}/receive`, for the paid claims waiting (every write that raises `available` does this)  | `backordered` −n, `reserved` +n | `allocate`        |
+| `reserveMoreForOrder`      | [`delivery`](./delivery.md) (through `orders`), when a parcel is [reported lost](#owed-after-a-loss)                       | `reserved` +n, `backordered` +n | `reserve`, `owed` |
+| `releaseTopUpForOrder`     | [`delivery`](./delivery.md) (through `orders`), when the lost parcel turns up                                              | `reserved` −n, `backordered` −n | `release`         |
 
 **`releaseCommittedForOrder` is never merged into `releaseForOrder`**, on purpose: the sweep only
 ever releases a stale HOLD, and folding the paid case into that same function would let it put a
@@ -190,7 +192,7 @@ the shelf when the parcel shipped. `reserveMoreForOrder` tops the order's hold u
 | Part                        | What it does                                                                                                                                        |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | the shelf part              | reserves the free units, `available` drops. Never units held for another order: `available` already excludes them                                   |
-| the owed part               | a `backorder` movement **outside the cap** (a ledger note says so): the cap limits new sales, not a promise already made                            |
+| the owed part               | an `owed` movement **outside the cap** (a ledger note says so): the cap limits new sales, not a promise already made                                |
 | a product with no stock row | claims nothing and does not fail: the loss is recorded elsewhere                                                                                    |
 | the hold                    | an open hold grows; a hold that ended (`shipped`, `released`) is reopened `committed` with only the added units, keeping the original `committedAt` |
 

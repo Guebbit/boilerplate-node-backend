@@ -34,7 +34,7 @@ export const getTaskById = (request: Request<{ id: string }>, response: Response
                     action: tasksAuditActions.ADMIN_TASK_VIEWED,
                     targetType: 'task',
                     targetId: id,
-                    ownerId: result.data.subjectId
+                    subjectId: result.data.subjectId
                 });
             successResponse(response, result.data, 200);
         })

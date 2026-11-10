@@ -198,77 +198,14 @@ abandoned row is ever removed. `leases` has no TTL on purpose: a job that stoppe
 keep alerting (`ScheduledJobStale`), and an expired row would make that alert resolve on its own. Pushgateway
 and Healthchecks.io behave the same way: a silent job stays down until someone deletes it.
 
-`orders` and a SETTLED `payments` row must NOT be removed on a timer — both are invoices, kept for
-tax and commercial-law reasons. `orders` carries PII (both addresses, notes, email) that survives
-an account's erasure, so `npm run job reap:orders` once an order's claim window has closed
-([rule](../theory/data-retention.md#orders-after-the-account)) replaces the email and unsets both addresses and the notes — see the script's own header.
-The invoices keep their own encrypted copy of the buyer address: they are the legal record. `payments`
-carries none: `cardLast4` is not a PAN, and `amount`/`currency`/`provider` were never personal
-data, so a settled payment is never touched by any timer.
-
-A payment that never settled is a different case, not a PII one: `npm run job reap:payments` DELETES
-an attempt (never `succeeded`) once it has sat untouched for
-`NODE_PAYMENT_ABANDONED_RETENTION_DAYS` (default 30 days) — an abandoned checkout is not an
-invoice, so there is nothing there worth keeping. See the script's own header, and
-[payments](../modules/payments.md)'s retention section for the full reasoning.
-
-`users` has no TTL either. `npm run job reap:inactive-accounts` measures activity as the latest login
-(refresh-token use) or API-key use, and runs two independent dials:
-
-| Dial                          | Default           | What happens past it                                                                                                   |
-| ----------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `NODE_INACTIVE_MINIMISE_DAYS` | `1095`, on        | every module's `personalData.minimise` hook runs: the address book goes, the orders' PII clock starts; the login stays |
-| `NODE_INACTIVE_ACCOUNT_DAYS`  | `0`, **disabled** | warn, then soft-delete, then hard-delete — the controller's call, never a default                                      |
-
-Why minimise rather than delete: [Data Retention](../theory/data-retention.md#inactive-accounts-minimise-don-t-delete).
-See the script's own header for the stages.
-
-`returns` has no TTL: the row is a legal record. `npm run job reap:returns` unsets only its free text
-(`note`, `declineMessage`) once the return's `updatedAt` is older than `NODE_RETURN_TEXT_RETENTION_DAYS`
-(default 1095). `updatedAt`, not the closing date, because an approved return whose goods never
-arrive never closes. Safe to repeat: the filter only matches returns still holding text, and the
-wipe does not move `updatedAt`. Why three years: [Data Retention](../theory/data-retention.md#free-text-on-returns).
-
-`delivery` has no TTL either: a fulfillment order is the record of what was promised and what left.
-`npm run job reap:delivery` unsets only staff's hold note (`holdNote`) once the fulfillment order's `updatedAt`
-is older than `NODE_HOLD_NOTE_RETENTION_DAYS` (default 365), on the same terms as `reap:returns`: the filter
-only matches one still holding a note, and the wipe does not move `updatedAt`. Why a year:
-[Data Retention](../theory/data-retention.md#free-text-on-holds).
-
-A cancel's refund has no sweep of its own. The `order.canceled` row the cancel writes carries the
-`refund` it owes, the outbox relay (`sweep:outbox`) delivers it until `payments` has opened the
-refund record, and from then on `sweep:payment-effects` finishes the record. See
-[the outbox](../tools/outbox.md#limits-on-purpose).
-
-The stock half of a cancel is not covered here, because it cannot half-happen: the status move,
-the hold's release (a paid, unshipped order's claim included) is one `withTransaction`. A release that throws
-rolls the status back with it — the order stays `paid`, the counters stay put, and the cancel can
-simply be retried. Only the catalogue's stock cache is refreshed after the commit, and the next
-stock transition on a product corrects it if that one write is lost.
-
-`npm run job sweep:reservations` is what heals a `held` hold's own expiry: it expires every hold
-past its `expiresAt` and, through `orders`' own `RESERVATION_EXPIRED` listener, cancels the order
-behind it — the same work `POST /inventory/reservations/sweep` does on demand, on a schedule
-instead. Without it, an abandoned checkout would hold its units forever and a bank-transfer hold
-would never end. A card payment gone `processing` (a SEPA debit, some bank redirects, which can
-settle over days) gets its hold extended to the bank-transfer window, `NODE_BANK_TRANSFER_HOLD_HOURS`
-(168 h by default — no setting of its own), the moment `settlePayment` sees that state; a payment
-still `requires_action` gets no such grace, since that means the BROWSER has work to do and the
-ordinary window already fits it. Money that lands after the hold has expired anyway is refunded
-automatically regardless. Runs every 5 minutes, well inside both windows. See
-[Reservations](../modules/inventory-reservations.md).
-
-`npm run job sweep:payment-effects` is the provider-facing counterpart. A settlement is one database
-transaction (payment, order, hold, outbox rows), so a crash leaves nothing half-done; what can still
-be owed is the provider's side. The sweep retries every refund it may send, with the same idempotency
-key: a record is claimed first (one conditional write), a retryable refusal waits a delay that
-starts at `NODE_PAYMENT_REFUND_RETRY_MINUTES` (default 1: longer than a refund request in flight)
-and doubles to at most a day, and a final refusal is never sent again. Runs every 5 minutes. See [payments](../modules/payments.md#one-settlement-transaction).
-
-The same job reconciles lost webhooks: an unsettled payment untouched for
-`NODE_PAYMENT_RECONCILE_MINUTES` (default 15) is asked about at the provider and settled through the
-same function the webhook uses, so a payment the webhook did deliver is left alone. See
-[payments](../modules/payments.md#lost-webhooks).
+Past the TTL indexes, retention is a job, not a timer on a row: the reapers and sweeps are in the
+table above, and each script's header says what it matches and why it is safe to repeat. What each
+one removes or unsets, and why (`orders` and a settled `payments` row are invoices and are never
+reaped; the inactive-account step and its two dials; the free text on returns and holds), is
+[Data Retention](../theory/data-retention.md). The sweeps that heal other state belong to their
+module: reservations in [Reservations](../modules/inventory-reservations.md), the provider-facing
+refund retry and the lost-webhook reconcile in [payments](../modules/payments.md#one-settlement-transaction),
+a cancel's refund in [the outbox](../tools/outbox.md#limits-on-purpose).
 
 Log lines are Loki's retention, not Mongo's: `docker/observability/loki.config.yaml` sets
 `retention_period: 168h` (7 days) for the local stack. A production deployment tunes this

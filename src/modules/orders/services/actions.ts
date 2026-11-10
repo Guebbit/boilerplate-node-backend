@@ -9,7 +9,7 @@
 
 import { callerForSubject } from '@kernel/permissions';
 import { holds } from '@kernel/ability';
-import type { AuthContext, ExportOrder, Order, OrderActions } from '@types';
+import type { AuthContext, ExportOrder, Order, OrderActions, OrderListItem } from '@types';
 import type { OrderDocument } from '../model';
 import { orderRepository } from '../repository';
 import { OrderStatus } from '@types';
@@ -32,7 +32,7 @@ import type { Lean } from '@infrastructure/persistence/create-repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { carryVersion } from '@infrastructure/persistence/versioning';
 import { resolveCurrentImages } from './current';
-import { presentOrder } from '../presenter';
+import { presentOrder, presentOrderListItem } from '../presenter';
 import { actorOf } from './scope';
 
 /**
@@ -54,8 +54,8 @@ type OrderForActions = Lean<OrderDocument>;
 const startAndOverrideActions = (
     order: OrderForActions,
     authContext: AuthContext | undefined
-): Pick<OrderActions, 'process' | 'override' | 'correctAddress'> => {
-    if (!authContext) return { process: false, override: [], correctAddress: false };
+): Pick<OrderActions, 'process' | 'overrideStatus' | 'correctAddress'> => {
+    if (!authContext) return { process: false, overrideStatus: [], correctAddress: false };
 
     const { status } = order;
     const caller = callerForSubject(authContext, 'Order');
@@ -65,7 +65,7 @@ const startAndOverrideActions = (
         process: holds(caller, 'start', 'Shipment') && reachesProcessing,
         correctAddress: holds(caller, 'update', 'Order') && canCorrectAddress(order),
         // The door's own stock guard, so no target is offered that answers 409.
-        override: holds(caller, 'override', 'Order')
+        overrideStatus: holds(caller, 'override', 'Order')
             ? overridableTargetsFrom(status, isDigitalOnlyOrder(order.items)).filter(
                   (to) => !shipsAwaitedStock(to, order.fulfillment)
               )
@@ -223,17 +223,17 @@ export const withActions = (order: OrderDocument, authContext?: AuthContext): Pr
     );
 
 /**
- * A page of list rows, each carrying what this caller may do to it. The rows are already wire
- * shape (an aggregation), so the documents the flags need are read back in ONE `$in` query for the
- * whole page, however many rows it holds; the per-row step is pure.
+ * A page of list rows, each reduced to the list item and carrying what this caller may do to it.
+ * The rows are already wire shape (an aggregation), so the documents the flags need are read back
+ * in ONE `$in` query for the whole page, however many rows it holds; the per-row step is pure.
  * @param page - the search result
  * @param authContext - the caller
- * @returns the same page, every row carrying its `actions`
+ * @returns the same page as list items, every row carrying its `actions`
  */
 export const withListActions = (
     page: { items: ExportOrder[]; meta: PaginatedMeta },
     authContext: AuthContext | undefined
-): Promise<{ items: Order[]; meta: PaginatedMeta }> =>
+): Promise<{ items: OrderListItem[]; meta: PaginatedMeta }> =>
     page.items.length === 0
         ? Promise.resolve({ items: [], meta: page.meta })
         : orderRepository.findByIds(page.items.map((item) => item.id)).then((documents) => {
@@ -244,7 +244,7 @@ export const withListActions = (
                   items: page.items.flatMap((item) => {
                       const document = byId.get(item.id);
                       return document
-                          ? [{ ...item, actions: orderActionsOf(document, authContext) }]
+                          ? [presentOrderListItem(item, orderActionsOf(document, authContext))]
                           : [];
                   }),
                   meta: page.meta

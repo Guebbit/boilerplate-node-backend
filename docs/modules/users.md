@@ -68,7 +68,7 @@ the decision actually gets made.
 [`account`](./account.md), which is a _second service over this same collection_. That split is why
 this module's barrel is the widest in the repo: `account` needs more of it to authenticate the same
 document. What a barrel publishes, and the deny-list that holds even here, is
-[Published language](../theory/strategic-ddd.md#5-published-language-the-barrel). Every read or
+[Published language](../theory/strategic-ddd.md#_5-published-language-—-the-barrel). Every read or
 write goes through a service, never the collection directly: `userService` for a sibling,
 `accountUserService` (`friends/account.ts`) for `account`.
 
@@ -254,13 +254,13 @@ A sibling reaches `users` through two objects, and the second is for one module 
 `flagPurchaseHoldReview`, the staff admin writes (`create`, `updateById`, `activate`, `deactivate`,
 `removeById`, `restoreById`, `setPurchaseHold`, `liftPurchaseHold`, `assignUserRole`,
 `revokeUserRole`, which check role or grant protection themselves) and the shapers `toAccount`,
-`toUserContract`, `toUserContracts`. `accountUserService` holds every step `account` calls (the doors
+`toUserContract`, `toUserListItems`. `accountUserService` holds every step `account` calls (the doors
 below, credentials, sign-up, the OAuth link, the reaper's reads); they trust that `account` checked.
 `getById`, `findAuthenticatableById` and `toAccount` are the same functions under both names.
 `account` cannot import `userService`, so a new `account`-only function can only go in its own
 object; publishing one is a deliberate step for another module. The same pattern gives `orders` the
 one hold it may take (`friends/orders.ts`). See
-[Published language](../theory/strategic-ddd.md#5-published-language-the-barrel).
+[Published language](../theory/strategic-ddd.md#_5-published-language-—-the-barrel).
 
 Two writes skip the ban check and the staff protection the admin routes enforce: the raw `update`
 and `remove`. Both are `@internal` and never leave the module. `account` reaches the record through
@@ -289,6 +289,13 @@ and later be erased like anyone else. The purge hands a system context, so the t
 accounts that are live, enabled and have an authenticator app armed, with their address and
 language. An account without an app has its staff role withheld, so it could not act on the notice
 and is left out; so is a banned or deleted one.
+
+## The list row {#the-list-row}
+
+`GET /users` and `POST /users/search` answer a `UserListItem`: identity, role, active, avatar, dates,
+the `purchaseHeld` flag, the review flag and `actions`. No phone, website or pending address, and not
+the hold's reason or note: those are `GET /users/{id}`, the audited read. See
+[a list row is a list item](../api/responses.md#a-list-row-is-a-list-item).
 
 ## Purchase hold
 
@@ -432,6 +439,6 @@ evaluator — [Authorization](../theory/authorization.md) explains the model.
 
 - [Modules overview](./index.md) — the whole context map
 - [`account`](./account.md) — the other service over this collection
-- [Strategic DDD](../theory/strategic-ddd.md#5-published-language-—-the-barrel) — why a wide barrel is a map edge, not a private detail
+- [Strategic DDD](../theory/strategic-ddd.md#_5-published-language-—-the-barrel) — why a wide barrel is a map edge, not a private detail
 - [Security](../tools/security.md) — password hashing and the token shapes
 - [Events & Logging](../tools/events-and-logging.md) — the domain-event bus

@@ -7,12 +7,16 @@
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { auditLogger } from '@infrastructure/adapters/logger';
+import { auditLogRepository, AUDIT_SORT } from '@modules/audit-logs/repository';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { OrderStatus } from '@types';
 import { carryOrderTo } from '@modules/delivery/tests/factories';
 import { credentialHolding, credentialOf } from '@tests/credentials';
 import { createSystemTask, findAllTasks } from '@modules/tasks/tests/factories';
+import { settleInlineExports } from '@modules/account/services/export';
+import { requestAndDownloadExport } from '@tests/account-export';
+import { emptyFileSandbox } from '@tests/file-sandbox';
 
 setupTestDb();
 
@@ -22,6 +26,7 @@ interface Entry {
     actorUserId?: string;
     targetType?: string;
     targetId?: string;
+    subjectId?: string;
 }
 
 let auditSpy: jest.SpyInstance;
@@ -32,6 +37,8 @@ beforeEach(() => {
 
 afterEach(() => {
     auditSpy.mockRestore();
+    // The export test writes a file into the private store; a test removes every file it causes.
+    return settleInlineExports().then(emptyFileSandbox);
 });
 
 /** The `*.viewed` entries recorded so far. */
@@ -39,6 +46,18 @@ const viewed = (): Entry[] =>
     auditSpy.mock.calls
         .map((call: unknown[]) => call[2] as Entry)
         .filter((entry) => /^admin\.\w+\.viewed$/.test(entry.action));
+
+/** Polls until the sink has stored a staff read about `subjectId`: the write is not awaited by the request. */
+const waitForStoredRead = async (subjectId: string): Promise<void> => {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+        const stored = await auditLogRepository.search({ subject: subjectId }, {}, AUDIT_SORT);
+        if (stored.items.length > 0) return;
+        await new Promise((resolve) => {
+            setTimeout(resolve, 20);
+        });
+    }
+    throw new Error('the staff read was never stored');
+};
 
 /** A customer with one shipped order, and an admin to read it with. */
 const shopWithOrder = async () => {
@@ -69,7 +88,8 @@ describe('GET /users/{id}', () => {
                 action: 'admin.user.viewed',
                 actorUserId: String(admin.user._id),
                 targetType: 'user',
-                targetId: String(customer.user._id)
+                targetId: String(customer.user._id),
+                subjectId: String(customer.user._id)
             })
         ]);
     });
@@ -113,7 +133,7 @@ describe('GET /users/{id}', () => {
 
 describe('GET /orders/{id}', () => {
     it("records staff opening a customer's order", async () => {
-        const { admin, orderId } = await shopWithOrder();
+        const { customer, admin, orderId } = await shopWithOrder();
         auditSpy.mockClear();
 
         const response = await api().get(`/orders/${orderId}`).set('Authorization', admin.bearer);
@@ -123,7 +143,8 @@ describe('GET /orders/{id}', () => {
             expect.objectContaining({
                 action: 'admin.order.viewed',
                 targetType: 'order',
-                targetId: orderId
+                targetId: orderId,
+                subjectId: String(customer.user._id)
             })
         ]);
     });
@@ -165,7 +186,12 @@ describe('GET /returns/{id}', () => {
 
         await api().get(`/returns/${returnId}`).set('Authorization', admin.bearer);
         expect(viewed()).toEqual([
-            expect.objectContaining({ action: 'admin.return.viewed', targetId: returnId })
+            // The return holds no buyer; the row names the order's buyer as the person.
+            expect.objectContaining({
+                action: 'admin.return.viewed',
+                targetId: returnId,
+                subjectId: String(customer.user._id)
+            })
         ]);
     });
 });
@@ -208,5 +234,29 @@ describe('GET /tasks/{id}', () => {
 
         expect(response.status).toBe(200);
         expect(viewed()).toEqual([]);
+    });
+});
+
+describe('the person whose record staff opened', () => {
+    it('finds the consultation in their own data export, with a purpose and no staff member', async () => {
+        const { customer, admin, orderId } = await shopWithOrder();
+        await api().get(`/orders/${orderId}`).set('Authorization', admin.bearer);
+        // The audit write is fire-and-forget: wait until the row is stored before exporting.
+        await waitForStoredRead(String(customer.user._id));
+
+        const { data } = await requestAndDownloadExport(customer.bearer);
+
+        const { consultations } = data as {
+            consultations: { windowDays: number; entries: Record<string, string>[] };
+        };
+        expect(consultations.entries).toEqual([
+            {
+                timestamp: expect.any(String) as string,
+                targetType: 'order',
+                targetId: orderId,
+                purpose: 'handling your order'
+            }
+        ]);
+        expect(JSON.stringify(consultations)).not.toContain(String(admin.user._id));
     });
 });

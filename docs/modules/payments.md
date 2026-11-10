@@ -365,7 +365,7 @@ fresh-session tier as recording a payment) is the only door that sets `settledBy
 names one record, so a payment carrying several open refunds (a cancelled remainder and two
 returns) settles each separately, and a return stays `received` until its own money is confirmed
 back. It answers the refund it settled (`GET /payments/{id}` has the totals and the actions). It audits `admin.payment.refund_settled_by_hand`; the `payment.refunded` event is the same as
-for a provider refund. `PaymentActions.settleByHand` lists the ids a caller may settle. A refund two
+for a provider refund. `PaymentActions.settleRefundByHand` lists the ids a caller may settle. A refund two
 operators settle at once settles once; the loser answers 409 `PAYMENT_REFUND_NOT_OPEN`. A cancelled hand-paid order therefore shows
 `succeeded` until an operator confirms it, not "refunded" for money nobody actually moved.
 
@@ -374,7 +374,7 @@ write included, carries `PaymentActions`: `pay` (confirm, or take a waiting tran
 card when a provider is configured), `sync` (finish an in-flight payment at the provider; narrower
 than its route on purpose, and never true together with `pay`), `refund` (`create:Refund`, a
 `succeeded` payment, and something left: a refund still open counts against what is left but does
-not hide the control while money remains) and `settleByHand`. `confirm`, `sync` and `intent` read the
+not hide the control while money remains) and `settleRefundByHand`. `confirm`, `sync` and `intent` read the
 order for `pay`; `offline` and `refund` only ever return a `succeeded` payment, where `pay` is false
 whatever the order says, so they read nothing.
 
@@ -411,7 +411,7 @@ sequenceDiagram
 
     | Entry point                   | Answers                                       | Where staff follow the refund                                        |
     | ----------------------------- | --------------------------------------------- | -------------------------------------------------------------------- |
-    | `POST /payments/{id}/refunds` | 201 and the record (`failed` if refused)      | the record itself, `actions.settleByHand`, the attention list        |
+    | `POST /payments/{id}/refunds` | 201 and the record (`failed` if refused)      | the record itself, `actions.settleRefundByHand`, the attention list  |
     | `POST /orders/{id}/cancel`    | 200; the refund runs after the answer         | the payment's `displayStatus` (`refund_pending`), the attention list |
     | `POST /returns/{id}/receive`  | 200; `received` = still owed, `closed` = back | the order's payment, the attention list                              |
 
@@ -516,7 +516,7 @@ flowchart TD
     B -->|yes, shop balance| D[insufficient_funds: retried, settleable]
     B -->|no answer or unclear| E[provider_unavailable or unknown: retried]
     C --> F[on the attention list at once]
-    D --> G[settleByHand lists it]
+    D --> G[settleRefundByHand lists it]
     C --> G
     E --> H[sweep resends under the same key; a timeout then gets the real answer]
     G --> I[operator returns the money, presses Mark returned]
@@ -568,7 +568,7 @@ stateDiagram-v2
   provider refusing an open one shows as `refused_refund`, with `reversedAt` as the once-guard.
   A reversed refund cannot be cancelled (it settled once): only paid by hand.
   `payment.refund_reversed` also opens a `refund_reversed` to-do for `PaymentRefunding`, closed when
-  the refund is marked returned (see [shop-tasks](./shop-tasks.md#the-shops-to-dos)).
+  the refund is marked returned (see [shop-tasks](./shop-tasks.md#the-shop-s-to-dos)).
 
 ### Telling the buyer their refund cannot reach the card {#telling-the-buyer}
 
@@ -725,7 +725,7 @@ flowchart TD
 | Shop won                    | a refund refused as `disputed` can only be voided (`cancelRefund`)                                                                           |
 | Unshipped goods             | nothing is held by itself; staff use the existing `high_risk` hold                                                                           |
 
-**To-dos.** The proof the shop owes is the `dispute` to-do; once it is sent (`under_review`) that closes and a `dispute_awaiting_bank` to-do waits for the bank's decision, see [shop-tasks](./shop-tasks.md#the-shops-to-dos).
+**To-dos.** The proof the shop owes is the `dispute` to-do; once it is sent (`under_review`) that closes and a `dispute_awaiting_bank` to-do waits for the bank's decision, see [shop-tasks](./shop-tasks.md#the-shop-s-to-dos).
 
 **Visibility.** The attention list gets `dispute_needs_response` for a dispute waiting on the shop,
 with `since`, `dueBy` (the provider's evidence deadline) and `disputeId` (it has no `refundId`). When
@@ -978,16 +978,19 @@ see [Bank transfer](#bank-transfer).
 Payments feeds the order's [timeline](./orders.md#the-timeline) through `orderService.appendTimeline`,
 in the transaction of the fact each row describes, so a write that lost its race leaves no row.
 
-| Row                | Written when                                                     | Carries                                                       |
-| ------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------- |
-| `paid`             | the payment settles (`orders` writes it; payments names how)     | `method`: `card`, or what staff recorded                      |
-| `payment_declined` | the provider declines an attempt                                 | `paymentId`                                                   |
-| `refund_issued`    | a refund record is opened, before the provider is asked          | `refundId`, `amount`, `currency`, `reason`                    |
-| `refund_settled`   | the record settles                                               | the same                                                      |
-| `refund_failed`    | the provider refuses (staff only)                                | the same, and the closed `failureReason`                      |
-| `refund_canceled`  | staff void the record (staff only)                               | the same; the note is only in the audit row                   |
-| `dispute_opened`   | the provider first reports a dispute (staff only)                | `disputeId`, `kind`, `status`, `reason`, `amount`, `currency` |
-| `dispute_closed`   | a dispute first reads won, lost, accepted or closed (staff only) | the same                                                      |
+| Row                | Written when                                                          |
+| ------------------ | --------------------------------------------------------------------- |
+| `paid`             | the payment settles (`orders` writes it; payments names how)          |
+| `payment_declined` | the provider declines an attempt                                      |
+| `refund_issued`    | a refund record is opened, before the provider is asked               |
+| `refund_settled`   | the record settles                                                    |
+| `refund_failed`    | the provider refuses (staff only)                                     |
+| `refund_reversed`  | the provider takes a settled refund back (staff only)                 |
+| `refund_canceled`  | staff void the record (staff only; the note is only in the audit row) |
+| `dispute_opened`   | the provider first reports a dispute (staff only)                     |
+| `dispute_closed`   | a dispute first reads won, lost, accepted or closed (staff only)      |
+
+What each row carries is its variant in `OrderTimeline*` of `src/modules/orders/openapi.yaml`.
 
 The provider's wording is never copied: it can carry anything, and only the closed code is stored.
 The `actor` is the operator who asked or recorded the money; an automatic refund has none.
@@ -998,7 +1001,7 @@ The `actor` is the operator who asked or recorded the money; an automatic refund
 | --------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NODE_PAYMENT_PROVIDER`                 | —       | Which registered implementation answers. Unset: no card payments (`card` is not listed). A name this process does not carry throws at boot rather than silently taking no payments                                                                                                                                        |
 | `NODE_PAYMENT_WEBHOOK_SECRET`           | —       | What `POST /payments/webhook/{provider}` verifies deliveries against. With a live provider this is THEIR signing secret, and it is the only thing between an attacker and marking any order paid. A comma-separated list is a ring for rotating it: the first entry signs, any entry verifies, every entry 16+ characters |
-| `NODE_DEFAULT_CURRENCY`                 | `EUR`   | ISO-4217. Stamped on every payment document at creation; also what `products`, `cart` and `orders` (frozen at checkout) read for their own `currency` field — one shop, one currency                                                                                                                                      |
+| `NODE_DEFAULT_CURRENCY`                 | `EUR`   | Owned by [`shop`](./shop.md#configuration). Stamped on every payment document at creation.                                                                                                                                                                                                                                |
 | `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` | `30`    | Days an attempt that never settled may sit untouched before `npm run job reap:payments` deletes it. See Retention below.                                                                                                                                                                                                  |
 | `NODE_BANK_TRANSFER_BENEFICIARY`        | —       | The account name a transfer is made out to. `bank_transfer` is offered only once this and `_IBAN` are both set                                                                                                                                                                                                            |
 | `NODE_BANK_TRANSFER_IBAN`               | —       | The account IBAN. Validated with `ibantools` at boot — a malformed value refuses to boot rather than silently advertising a dead account                                                                                                                                                                                  |
@@ -1117,12 +1120,8 @@ status and let the settlement decide.
 
 ### Idempotency keys expire
 
-`refund` receives a stable `idempotencyKey`. Stripe forgets a key after 24 hours
-([idempotent requests](https://docs.stripe.com/api/idempotent_requests)), so a refund retried by
-the effects sweep after that window, with the same key, is a NEW refund and returns the money
-twice. Before retrying an old refund, list the intent's existing refunds at the provider and
-return the matching one instead of creating another. Stamp your own reference on each refund's
-metadata so the match is exact.
+A provider forgets a key after a window (Stripe: 24 hours), so a refund retried after it must find the
+existing one instead of creating another: [a key the provider forgot](./payments-provider-port.md#a-key-the-provider-forgot).
 
 ### The webhook
 
@@ -1158,9 +1157,8 @@ in several. A charge under dispute (`charge_disputed`, `refund_disputed_payment`
 
 ### Refund errors
 
-Map the provider's refusal onto the closed `RefundFailureReason` and throw
-`PaymentProviderError(code, message)` (`providers/errors.ts`). Anything else an adapter throws is
-stored as `unknown`. The message is the provider's own wording and goes to the log, never the wire.
+An adapter maps the provider's refusal onto the closed `RefundFailureReason`:
+[reading a refusal](./payments-provider-port.md#reading-a-refusal).
 
 ### The reconcile sweep calls the provider
 
