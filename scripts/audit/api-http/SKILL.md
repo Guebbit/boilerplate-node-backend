@@ -30,17 +30,19 @@ from a standard is rarely introduced by the change that happens to surface it.
 Every rule below applies by default. One exception: if the API's errors are `google.rpc.Status`
 (`code`, `message`, `details`) and not `application/problem+json`, ask the user: "Errors follow
 Google AIP, not RFC 9457. Skip the RFC 9457 rules?" On a yes, the four `rfc9457-*` rules get one
-`NOT-APPLICABLE` row each: "errors follow Google AIP, judged by `api-style`". Not answered: judge
-them.
+`NOT-APPLICABLE` row each ("errors follow Google AIP"), and Part D judges `aip-error-model`
+instead. Not answered: judge the RFC 9457 rules, and leave `aip-error-model` unjudged: the report
+says so in one line. The error format always has exactly one judge, and it is this audit;
+`api-style` never judges it.
 
 ## The four parts
 
-| Part | Theme                    | Standards and rules                                           |
-| ---- | ------------------------ | ------------------------------------------------------------- |
-| A    | Methods and status codes | `rfc9110` (all but `rfc9110-conditional-requests`), `rfc6585` |
-| B    | Caching and conditions   | `rfc9111`, plus `rfc9110-conditional-requests`                |
-| C    | Writes                   | `rfc5789`, `rfc7396`, `idempotency-key`                       |
-| D    | Errors and limits        | `rfc9457`, `ratelimit-headers`                                |
+| Part | Theme                    | Standards and rules                                             |
+| ---- | ------------------------ | --------------------------------------------------------------- |
+| A    | Methods and status codes | `rfc9110` (all but `rfc9110-conditional-requests`), `rfc6585`   |
+| B    | Caching and conditions   | `rfc9111`, plus `rfc9110-conditional-requests`                  |
+| C    | Writes                   | `rfc5789`, `rfc7396`, `idempotency-key`                         |
+| D    | Errors and limits        | `rfc9457`, `ratelimit-headers`, `aip-error-model` (Google only) |
 
 - A module, a path or `--diff`: one pass, all four parts, by you.
 - `whole-repo`: one helper agent per part, in parallel. 260-odd operations times every rule is
@@ -179,7 +181,8 @@ Output goes to `tmp/reports/audit-<run>/api-http/<SCOPE>…`. `<run>` and `<SCOP
           service of each
         - `idempotency-key-*`: every POST or PATCH that moves money, stock or an account. The house
           rule is a MINIMUM (`docs/tools/idempotency.md`, "Named exceptions"): a create with no key
-          that no exception names is a finding only if a retry does real harm
+          that no exception names is a finding only if a retry does real harm. Rank worst first: harm
+          a retry can do twice (money, stock, an account) > MUST > SHOULD > docs
     - Part D:
         - Find every answer not built by `rejectResponse` (`src/infrastructure/http/response.ts`):
           grep `\.(status|sendStatus|writeHead)\(|\.statusCode\s*=[^=]` over `src/**/*.ts`, tests
@@ -242,8 +245,7 @@ names both rule ids.
   no member overriding it.
 - Split the row the moment one member differs: its own override, a bypass, another verdict.
 - `NOT-APPLICABLE`: one row per rule, naming the JSONPath checked and the count.
-- Under each table, one totals line per rule: its rows' counts add up to the operations in scope (or
-  the declared sample, where a step allows one).
+- Under each table, one totals line per rule: its rows' counts add up to the operations in scope.
 - A `whole-repo` run adds an appendix: every operation, one column per rule, each cell the `#` of the
   row that judged it.
 
@@ -272,6 +274,5 @@ code text found on the way that disagrees with another. Each line: what, file:li
 ### Superseded by a higher standard
 
 Required. `| rule id | yields to (standard · clause) | theory row | why |`, no verdict column. The web
-rules rank above the style guides, so a style guide never supersedes one. Write "none: no higher
-standard in the given precedence overrides a rule of this one", or the rows the user's precedence
-produces.
+rules rank above the style guides, so a style guide never supersedes one. Write "none — the web
+rules rank first".

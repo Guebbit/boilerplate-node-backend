@@ -272,7 +272,7 @@ export const statusesLeadingTo = (to: OrderStatus, actor: OrderActor): readonly 
 
 /**
  * The part of `OrderActions` this status/actor pairing alone can answer — `process`/`ship`/
- * `deliver`/`override` need the caller's actual permission keys (a warehouse operator holds
+ * `deliver`/`overrideStatus` need the caller's actual permission keys (a warehouse operator holds
  * `start:Shipment` without `update:Order`, and `actor` alone cannot tell them apart from
  * a customer), so `services/scope.ts`'s `withActions` computes those and merges them in.
  */

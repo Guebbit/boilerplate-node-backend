@@ -2,21 +2,22 @@ import { execFileSync } from 'node:child_process';
 import { REPO_ROOT } from './modules-on-disk';
 
 /**
- * `process.env`, minus the three vars git exports into every hook it runs
- * (`GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE`). A nested `git` call that targets some OTHER
- * checkout by `cwd`/`-C` must use this: those vars, once set, override that targeting and point
- * the nested call at the hook's own repo instead — silently, since the command still exits 0.
+ * `process.env`, minus every `GIT_*` variable. A sandboxed nested `git` needs none of the outer
+ * ones. The ones that matter, which the unit test names as the documented minimum:
+ *
+ * - git's own `--local-env-vars` list (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, …): a hook
+ *   exports them, and they override the `cwd`/`-C` a nested call was aimed with, so it silently
+ *   reads the hook's own repo while still exiting 0;
+ * - `GIT_AUTHOR_*` and `GIT_COMMITTER_*`: they change the identity of whatever it writes;
+ * - `GIT_CONFIG_PARAMETERS`/`COUNT`/`KEY_<n>`/`VALUE_<n>`: they inject settings.
+ *
+ * https://git-scm.com/docs/git-rev-parse#Documentation/git-rev-parse.txt---local-env-vars
  *
  * Pass this as `env` to every `execFileSync('git', …)` whose `cwd` or `-C` argument is not
- * `REPO_ROOT` itself.
+ * `REPO_ROOT` itself. The FE's `scripts/audit/check-clean.ts` carries an identical copy.
  */
-export const gitEnvironment = (): NodeJS.ProcessEnv => {
-    const environment = { ...process.env };
-    delete environment.GIT_DIR;
-    delete environment.GIT_WORK_TREE;
-    delete environment.GIT_INDEX_FILE;
-    return environment;
-};
+export const gitEnvironment = (): NodeJS.ProcessEnv =>
+    Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
 
 /** `git merge-base HEAD <ref>`, or `undefined` when git refuses to resolve `ref`. */
 const resolveRef = (ref: string): string | undefined => {
