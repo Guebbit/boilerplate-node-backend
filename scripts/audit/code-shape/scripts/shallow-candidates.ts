@@ -4,8 +4,12 @@
  * users, pure forwarders, optional parameters no caller passes, files with one or two importers.
  *
  * Counts only — every verdict is the audit's, see `scripts/audit/code-shape/SKILL.md`.
- * Built on the TypeScript checker rather than a text search: an import alias, a re-export or a
- * shorthand property still resolves to the one function it names.
+ * Built on the TypeScript checker rather than a text search: an import alias, a re-export, an
+ * `obj.fn` read off an object written `{ fn }`, or a destructured name resolves to the one function
+ * it names. The `{ fn }` slot is plumbing, not a use; a self-call is not a use.
+ *
+ * Limit:      a member typed by an interface (`const x: Port = { fn }`) is not followed.
+ * No library: TypeScript's find-references and knip both miss `obj.fn`.
  */
 import path from 'node:path';
 import ts from 'typescript';
@@ -45,7 +49,7 @@ export interface FunctionFacts {
     name: string;
     /** Lines the body spans, braces included. */
     bodyLines: number;
-    /** Uses anywhere in the program, its own declaration and import/export plumbing excluded. */
+    /** Uses anywhere in the program; its declaration, import/export and `{ fn }` slots, self-calls excluded. */
     references: number;
     /** The files those uses are in. */
     referencedFrom: string[];
@@ -53,7 +57,7 @@ export interface FunctionFacts {
     forwardsTo?: string;
     /** Optional parameters no call site supplies — reported only when every use is a direct call. */
     optionalNeverPassed: string[];
-    /** Exported from a file a module barrel re-exports whole, or re-exported by this name. */
+    /** Exported from a file a module barrel re-exports whole, re-exported by this name, or carried by a published object. */
     published: boolean;
 }
 
@@ -117,7 +121,37 @@ const PLUMBING = new Set([
 ]);
 
 /**
- * The symbol an identifier ultimately names, seen through import aliases and shorthand properties.
+ * The function an object-literal member hands over: `{ fn }` or `{ x: fn }`.
+ *
+ * @param checker - the program's type checker
+ * @param member - a declaration that may be such a member
+ * @returns the symbol the slot holds, or `undefined` for any other declaration
+ */
+const slotValueOf = (checker: ts.TypeChecker, member: ts.Declaration): ts.Symbol | undefined => {
+    if (ts.isShorthandPropertyAssignment(member)) return targetOf(checker, member.name);
+    return ts.isPropertyAssignment(member) && ts.isIdentifier(member.initializer)
+        ? targetOf(checker, member.initializer)
+        : undefined;
+};
+
+/**
+ * The function a property stands for, when the object was written `{ fn }` or `{ x: fn }`.
+ * An interface-typed member has no such declaration and is not followed (known limit).
+ *
+ * @param checker - the program's type checker
+ * @param symbol - a resolved symbol
+ * @returns the symbol the property's slot holds, or `symbol` itself when it is not such a property
+ */
+const followProperty = (checker: ts.TypeChecker, symbol: ts.Symbol): ts.Symbol => {
+    // A spread keeps its source's declarations, so `obj.fn` through `...inner` lands on the same slot.
+    const declaration =
+        symbol.flags & ts.SymbolFlags.Property ? symbol.declarations?.[0] : undefined;
+    return (declaration && slotValueOf(checker, declaration)) ?? symbol;
+};
+
+/**
+ * The symbol an identifier ultimately names, seen through import aliases, shorthand properties
+ * and a member read off an object that was written `{ fn }`.
  * Checker API: https://github.com/microsoft/TypeScript/wiki/Using-the-Compiler-API
  *
  * @param checker - the program's type checker
@@ -130,9 +164,36 @@ const targetOf = (checker: ts.TypeChecker, identifier: ts.Identifier): ts.Symbol
         ? checker.getShorthandAssignmentValueSymbol(identifier.parent)
         : checker.getSymbolAtLocation(identifier);
     // An imported name is an alias symbol; `getAliasedSymbol` follows it to the declaration.
-    return symbol && symbol.flags & ts.SymbolFlags.Alias
-        ? checker.getAliasedSymbol(symbol)
-        : symbol;
+    const resolved =
+        symbol && symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+    return resolved && followProperty(checker, resolved);
+};
+
+/**
+ * The function a name bound by object destructuring reads: `const { fn } = svc`, or
+ * `({ fn }) =>` on an `import()` result.
+ *
+ * @param checker - the program's type checker
+ * @param identifier - the identifier in a binding position
+ * @returns the symbol the property resolves to, or `undefined` when this is not a destructured name
+ */
+const destructuredTargetOf = (
+    checker: ts.TypeChecker,
+    identifier: ts.Identifier
+): ts.Symbol | undefined => {
+    const element = identifier.parent;
+    if (!ts.isBindingElement(element) || element.name !== identifier) return undefined;
+    if (element.dotDotDotToken || !ts.isObjectBindingPattern(element.parent)) return undefined;
+    const key = element.propertyName ?? identifier;
+    // The pattern's type holds the property even when the source is an `import()` namespace.
+    const property = ts.isIdentifier(key)
+        ? checker.getTypeAtLocation(element.parent).getProperty(key.text)
+        : undefined;
+    const resolved =
+        property && property.flags & ts.SymbolFlags.Alias
+            ? checker.getAliasedSymbol(property)
+            : property;
+    return resolved && followProperty(checker, resolved);
 };
 
 /**
@@ -142,8 +203,13 @@ const targetOf = (checker: ts.TypeChecker, identifier: ts.Identifier): ts.Symbol
  * @returns the count, `Infinity` for a spread
  */
 const callArgumentsOf = (identifier: ts.Identifier): number | undefined => {
-    const call = identifier.parent;
-    if (!ts.isCallExpression(call) || call.expression !== identifier) return undefined;
+    // `svc.fn(x)`: the callee is the whole property access, not its name.
+    const callee =
+        ts.isPropertyAccessExpression(identifier.parent) && identifier.parent.name === identifier
+            ? identifier.parent
+            : identifier;
+    const call = callee.parent;
+    if (!ts.isCallExpression(call) || call.expression !== callee) return undefined;
     return call.arguments.some((argument) => ts.isSpreadElement(argument))
         ? Infinity
         : call.arguments.length;
@@ -163,53 +229,6 @@ const projectFiles = (program: ts.Program): ts.SourceFile[] =>
                 !sourceFile.isDeclarationFile &&
                 !program.isSourceFileFromExternalLibrary(sourceFile)
         );
-
-/**
- * Walks every identifier in the program once and records each use against the symbol it names.
- *
- * @param program - the program to walk
- * @param relativeOf - maps an absolute file name to its repo-relative path
- * @returns usage per resolved symbol
- */
-const collectUsage = (
-    program: ts.Program,
-    relativeOf: (fileName: string) => string
-): Map<ts.Symbol, Usage> => {
-    const checker = program.getTypeChecker();
-    const usage = new Map<ts.Symbol, Usage>();
-    const record = (identifier: ts.Identifier, file: string): void => {
-        if (PLUMBING.has(identifier.parent.kind)) return;
-        const symbol = targetOf(checker, identifier);
-        // `getNameOfDeclaration`: the name node a declaration introduces — the declaration is not a use.
-        if (
-            !symbol ||
-            symbol.declarations?.some(
-                (declaration) => ts.getNameOfDeclaration(declaration) === identifier
-            )
-        )
-            return;
-        const entry = usage.get(symbol) ?? {
-            references: 0,
-            files: new Set<string>(),
-            callArguments: []
-        };
-        entry.references += 1;
-        entry.files.add(file);
-        const argumentCount = callArgumentsOf(identifier);
-        if (argumentCount !== undefined) entry.callArguments.push(argumentCount);
-        usage.set(symbol, entry);
-    };
-    for (const sourceFile of projectFiles(program)) {
-        const file = relativeOf(sourceFile.fileName);
-        // `forEachChild`: visits a node's direct children; the recursion reaches every identifier.
-        const visit = (node: ts.Node): void => {
-            if (ts.isIdentifier(node)) record(node, file);
-            ts.forEachChild(node, visit);
-        };
-        visit(sourceFile);
-    }
-    return usage;
-};
 
 /**
  * The function a node declares, if it declares one.
@@ -234,6 +253,89 @@ const namedFunctionOf = (node: ts.Node): NamedFunction | undefined => {
             parameters: node.initializer.parameters
         };
     return undefined;
+};
+
+/**
+ * Whether an identifier is the slot of an object written `{ fn }` or `{ x: fn }`.
+ * The slot only hands the function to the object — a use is the later `obj.fn` — so it is
+ * plumbing, like an export specifier.
+ *
+ * @param identifier - the identifier in use position
+ * @returns `true` for a slot
+ */
+const isObjectSlot = (identifier: ts.Identifier): boolean => {
+    const { parent } = identifier;
+    return (
+        (ts.isShorthandPropertyAssignment(parent) && parent.name === identifier) ||
+        // Both the key and the value of `{ x: fn }`: the key resolves to the function too.
+        ts.isPropertyAssignment(parent)
+    );
+};
+
+/**
+ * Whether an identifier sits inside the body of a function it names — a recursive call.
+ *
+ * @param symbol - what the identifier resolved to
+ * @param identifier - the identifier
+ * @returns `true` for a self-call
+ */
+const isSelfCall = (symbol: ts.Symbol, identifier: ts.Identifier): boolean =>
+    (symbol.declarations ?? []).some((declaration) => {
+        const declared = namedFunctionOf(declaration);
+        // Positions only compare inside one file.
+        return (
+            declared?.name.getSourceFile() === identifier.getSourceFile() &&
+            declared.body.pos <= identifier.pos &&
+            identifier.end <= declared.body.end
+        );
+    });
+
+/**
+ * Walks every identifier in the program once and records each use against the symbol it names.
+ *
+ * @param program - the program to walk
+ * @param relativeOf - maps an absolute file name to its repo-relative path
+ * @returns usage per resolved symbol
+ */
+const collectUsage = (
+    program: ts.Program,
+    relativeOf: (fileName: string) => string
+): Map<ts.Symbol, Usage> => {
+    const checker = program.getTypeChecker();
+    const usage = new Map<ts.Symbol, Usage>();
+    const record = (identifier: ts.Identifier, file: string): void => {
+        if (PLUMBING.has(identifier.parent.kind) || isObjectSlot(identifier)) return;
+        const symbol = destructuredTargetOf(checker, identifier) ?? targetOf(checker, identifier);
+        // `getNameOfDeclaration`: the name node a declaration introduces — the declaration is not a use.
+        if (
+            !symbol ||
+            symbol.declarations?.some(
+                (declaration) => ts.getNameOfDeclaration(declaration) === identifier
+            ) ||
+            isSelfCall(symbol, identifier)
+        )
+            return;
+        const entry = usage.get(symbol) ?? {
+            references: 0,
+            files: new Set<string>(),
+            callArguments: []
+        };
+        entry.references += 1;
+        entry.files.add(file);
+        const argumentCount = callArgumentsOf(identifier);
+        if (argumentCount !== undefined) entry.callArguments.push(argumentCount);
+        usage.set(symbol, entry);
+    };
+    for (const sourceFile of projectFiles(program)) {
+        const file = relativeOf(sourceFile.fileName);
+        // `forEachChild`: visits a node's direct children; the recursion reaches every identifier.
+        const visit = (node: ts.Node): void => {
+            if (ts.isIdentifier(node)) record(node, file);
+            ts.forEachChild(node, visit);
+        };
+        visit(sourceFile);
+    }
+    return usage;
 };
 
 /**
@@ -340,13 +442,20 @@ type ReExportEdges = Map<string, Map<string, ReExported>>;
  * The names an `export … from` declaration takes from its source file.
  *
  * @param declaration - the export declaration
- * @returns `'all'` for `export *` and `export * as ns`, else the source-side names
+ * @returns `'all'` for `export *` and `export * as ns`, else the source-side names; none for a
+ *          type-only declaration or specifier
  */
 const reExportedBy = (declaration: ts.ExportDeclaration): ReExported => {
+    // `export type * from` and `export type { A } from` carry no runtime value, so publish nothing.
+    if (declaration.isTypeOnly) return new Set();
     const clause = declaration.exportClause;
     if (!clause || ts.isNamespaceExport(clause)) return 'all';
-    // `propertyName` is the source-side name in `export { source as alias }`.
-    return new Set(clause.elements.map((element) => (element.propertyName ?? element.name).text));
+    return new Set(
+        clause.elements
+            .filter((element) => !element.isTypeOnly)
+            // `propertyName` is the source-side name in `export { source as alias }`.
+            .map((element) => (element.propertyName ?? element.name).text)
+    );
 };
 
 /**
@@ -450,6 +559,57 @@ const publishesName = (published: Published, file: string, name: string): boolea
     published.whole.has(file) || (published.named.get(file)?.has(name) ?? false);
 
 /**
+ * The object literal a variable is initialised with, seen through `as`, `satisfies`, `!` and
+ * parentheses.
+ *
+ * @param declaration - a declaration that may be such a variable
+ * @returns the literal, or `undefined`
+ */
+const objectLiteralOf = (
+    declaration: ts.Declaration | undefined
+): ts.ObjectLiteralExpression | undefined => {
+    let expression =
+        declaration && ts.isVariableDeclaration(declaration) ? declaration.initializer : undefined;
+    while (
+        expression &&
+        (ts.isParenthesizedExpression(expression) ||
+            ts.isAsExpression(expression) ||
+            ts.isSatisfiesExpression(expression) ||
+            ts.isNonNullExpression(expression))
+    )
+        expression = expression.expression;
+    return expression && ts.isObjectLiteralExpression(expression) ? expression : undefined;
+};
+
+/**
+ * Adds every function an object literal carries to `carried`: its own `{ fn }` and `{ x: fn }`
+ * slots, and, through `...inner`, the slots of the object `inner` names.
+ *
+ * @param checker - the program's type checker
+ * @param object - the object literal
+ * @param carried - the functions found so far
+ * @param seen - literals already walked, so a spread cycle ends
+ */
+const collectCarried = (
+    checker: ts.TypeChecker,
+    object: ts.ObjectLiteralExpression,
+    carried: Set<ts.Symbol>,
+    seen = new Set<ts.ObjectLiteralExpression>()
+): void => {
+    if (seen.has(object)) return;
+    seen.add(object);
+    for (const member of object.properties) {
+        const source =
+            ts.isSpreadAssignment(member) && ts.isIdentifier(member.expression)
+                ? objectLiteralOf(targetOf(checker, member.expression)?.valueDeclaration)
+                : undefined;
+        if (source) collectCarried(checker, source, carried, seen);
+        const slot = slotValueOf(checker, member);
+        if (slot) carried.add(slot);
+    }
+};
+
+/**
  * Whether a declaration is exported — on itself, or on the `const` statement holding it.
  *
  * @param node - the declaration
@@ -460,19 +620,54 @@ const isExported = (node: ts.Declaration): boolean =>
     (ts.getCombinedModifierFlags(node) & ts.ModifierFlags.Export) !== 0;
 
 /**
+ * The functions a published object carries: the ones a barrel's `userService = { fn }` hands out
+ * without exporting them one by one.
+ *
+ * @param program - the program
+ * @param relativeOf - maps an absolute file name to its repo-relative path
+ * @param published - what the barrels publish
+ * @returns the carried function symbols
+ */
+const carriedFunctions = (
+    program: ts.Program,
+    relativeOf: (fileName: string) => string,
+    published: Published
+): Set<ts.Symbol> => {
+    const checker = program.getTypeChecker();
+    const carried = new Set<ts.Symbol>();
+    for (const sourceFile of projectFiles(program)) {
+        const file = relativeOf(sourceFile.fileName);
+        const objects = sourceFile.statements
+            .filter((statement) => ts.isVariableStatement(statement))
+            .flatMap((statement) => [...statement.declarationList.declarations])
+            .filter(
+                (declaration) =>
+                    isExported(declaration) &&
+                    ts.isIdentifier(declaration.name) &&
+                    publishesName(published, file, declaration.name.text)
+            );
+        for (const declaration of objects) {
+            const object = objectLiteralOf(declaration);
+            if (object) collectCarried(checker, object, carried);
+        }
+    }
+    return carried;
+};
+
+/**
  * The facts reported for one function.
  *
  * @param declared - the function
  * @param use - how it is used, `undefined` when nothing uses it
  * @param file - its repo-relative file
- * @param publishedFile - whether a barrel publishes this function by name or with its file
+ * @param published - whether a barrel publishes this function: by name, with its file, or in an object
  * @returns its facts
  */
 const factsOf = (
     declared: NamedFunction,
     use: Usage | undefined,
     file: string,
-    publishedFile: boolean
+    published: boolean
 ): FunctionFacts => {
     const sourceFile = declared.name.getSourceFile();
     return {
@@ -488,7 +683,7 @@ const factsOf = (
         referencedFrom: [...(use?.files ?? [])].toSorted(),
         forwardsTo: forwardTarget(declared),
         optionalNeverPassed: use ? optionalNeverPassed(declared, use) : [],
-        published: publishedFile && isExported(declared.declaration)
+        published
     };
 };
 
@@ -523,6 +718,7 @@ export const findShallowCandidates = (
     const usage = collectUsage(program, relativeOf);
     const { importers, reExports } = collectImports(program, relativeOf);
     const published = publishedFiles(reExports);
+    const carried = carriedFunctions(program, relativeOf, published);
     const functions: FunctionFacts[] = [];
     const files: FileFacts[] = [];
 
@@ -538,7 +734,9 @@ export const findShallowCandidates = (
                         declared,
                         usage.get(symbol),
                         file,
-                        publishesName(published, file, declared.name.text)
+                        (publishesName(published, file, declared.name.text) &&
+                            isExported(declared.declaration)) ||
+                            carried.has(symbol)
                     )
                 );
             ts.forEachChild(node, visit);
