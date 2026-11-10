@@ -130,17 +130,19 @@ All of them run read-only, with every capability dropped, as uid 1000.
 Behind the `observability` profile: start it with `--profile observability` or `npm run compose:up:full`.
 Versions are in `docker-compose.yml`, not here; `docker/observability/validate-configs.sh` (CI `alert-rules` job) checks every config against the image its compose file names.
 
-| Container        | Image                                  | Port(s)                      | Role                                                                                                                                       | Read next                                             |
-| ---------------- | -------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
-| `otel-collector` | `otel/opentelemetry-collector-contrib` | `4317` (gRPC), `4318` (HTTP) | Single ingestion point for all OTLP telemetry from the app. Fans out traces to Tempo.                                                      | [OpenTelemetry](./opentelemetry.md)                   |
-| `tempo`          | `grafana/tempo:2.6.1`                  | internal only                | Stores distributed traces received from the OTel Collector. Queried by Grafana.                                                            | [Tempo](./tempo.md)                                   |
-| `prometheus`     | `prom/prometheus:v2.55.1`              | `9090`                       | Scrapes `/observability/metrics` from the app every 15 s. Evaluates alert rules. 7-day retention.                                          | [Prometheus](./prometheus.md)                         |
-| `alertmanager`   | `prom/alertmanager:v0.34.1`            | `9093`                       | Receives firing alerts from Prometheus. Routes/groups notifications by the `ALERT_*` knobs; email goes to mailpit by default in local dev. | [Prometheus](./prometheus.md#alertmanager)            |
-| `gatus`          | `twinproduction/gatus:v5.37.0`         | `3071`                       | Stand-in for the off-host heartbeat service: mails mailpit when Alertmanager's `Watchdog` pings stop.                                      | [Gatus](./gatus.md)                                   |
-| `loki`           | `grafana/loki`                         | `3100`                       | Stores log lines shipped by Promtail. Queried by Grafana via LogQL. 7-day retention.                                                       | [Loki](./loki.md)                                     |
-| `promtail`       | `grafana/promtail`                     | internal only                | Tails container log files and pushes entries to Loki. Needs `CONTAINER_LOGS_PATH` / `PROMTAIL_CONFIG` in `.env` on Podman.                 | [Loki](./loki.md)                                     |
-| `alloy`          | `grafana/alloy`                        | `12347` (Faro), `12345` (UI) | Receives browser telemetry (Grafana Faro) from the frontend; fans it into Loki and the OTel Collector.                                     | [Frontend Observability](./frontend-observability.md) |
-| `grafana`        | `grafana/grafana:11.4.0`               | `3001`                       | Unified UI: explore traces (Tempo), metrics (Prometheus), and logs (Loki). Anonymous admin access in local dev.                            | [Grafana](./grafana.md)                               |
+| Container        | Role                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `otel-collector` | Single ingestion point for all OTLP telemetry from the app. Fans out traces to Tempo.                                                      |
+| `tempo`          | Stores distributed traces received from the OTel Collector. Queried by Grafana.                                                            |
+| `prometheus`     | Scrapes `/observability/metrics` from the app every 15 s. Evaluates alert rules. 7-day retention.                                          |
+| `alertmanager`   | Receives firing alerts from Prometheus. Routes/groups notifications by the `ALERT_*` knobs; email goes to mailpit by default in local dev. |
+| `gatus`          | Stand-in for the off-host heartbeat service: mails mailpit when Alertmanager's `Watchdog` pings stop.                                      |
+| `loki`           | Stores log lines shipped by Promtail. Queried by Grafana via LogQL. 7-day retention.                                                       |
+| `promtail`       | Tails container log files and pushes entries to Loki. Needs `CONTAINER_LOGS_PATH` / `PROMTAIL_CONFIG` in `.env` on Podman.                 |
+| `alloy`          | Receives browser telemetry (Grafana Faro) from the frontend; fans it into Loki and the OTel Collector.                                     |
+| `grafana`        | Unified UI: explore traces (Tempo), metrics (Prometheus), and logs (Loki). Anonymous admin access in local dev.                            |
+
+Images are in `docker-compose.yml`; the host ports are [the host port map](./pairing-and-ports.md#host-port-map).
 
 ### Analytics and docs (opt-in)
 

@@ -565,8 +565,10 @@ state change with its own 409, not an overwrite, so two callers naming different
 and the last write wins. It still moves the row's `editRevision`, so an edit holding an older tag is
 refused.
 
-Not versioned: a resource with no item read to take a tag from (tasks, an address inside its book)
-and anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declared.
+Not versioned: a resource with one owner or one field (an address in its book), no item read to take a
+tag from (the cart), or its own concurrency rule (cart lines, stock, a task's status doors). A `PUT` or
+`DELETE` with `If-Match` on one of those is simply not declared; the reasons are in
+[`unversioned-writes`](../theory/api-standards.md#where-we-differ-and-why).
 
 A language is addressed by its tag, so its `If-Match` is keyed by the tag (case-insensitive: `pt-br`
 is `pt-BR`), while the counter lives on its row. Switching it on or off moves the edit counter and
@@ -700,7 +702,7 @@ Three rules keep it honest. Break any one and a lost update gets through:
   `304` is never stale; the edit part is the only thing a write checks.
 - **The cached reads are a separate case.** Two families answer `If-None-Match` with `304` on no
   change, through Express's own ETag check: the `privateNoCache` reads (`orders`, `users`,
-  `tasks`, `payments`, `returns`, `stats`: a private copy the browser revalidates) and every
+  `tasks`, `payments`, `returns`, `stats`, `example`: a private copy the browser revalidates) and every
   `setCache` read (`locales`, `products` `/facets` and `/:id`: the shared copy, revalidated once
   `max-age` runs out or at once under `browserRevalidate`). Each such `GET` carries
   `x-cache` in its fragment, and the bundler declares the answer (the shared `NotModified`: no

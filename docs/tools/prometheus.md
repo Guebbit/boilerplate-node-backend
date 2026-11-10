@@ -58,45 +58,47 @@ derived from the URL grows the registry for the life of the process.
 
 Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`. The last five rows (`Watchdog`, `AlertmanagerNotificationsFailing`, `PrometheusRuleEvaluationFailures`, `DiskAlmostFull`, `TlsCertExpiringSoon`) live in `docker/observability/prometheus.infra-rules.yaml` instead: they read Prometheus's and Alertmanager's own metrics (and, later, the host's and the proxy's), not the app's, which `tests/cross-cutting/alert-rules-metrics.test.ts` would reject. Both compose files mount it next to the first. The `security.rules` group (login, 2FA, audit, 401/403, rate-limit and rejection signals) is sized for a quiet shop: every threshold carries a "tune to your traffic" comment, and none should be trusted before it has seen yours.
 
-| Alert                                | Condition                                                                                                                                 | Severity           |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| `ApiDown`                            | scrape target unreachable > 1 min                                                                                                         | critical           |
-| `DependencyUnavailable`              | the app reports Mongo (critical, 1 min), Redis or RabbitMQ (warning, 5 min) as not serving (`dependency_up`)                              | critical / warning |
-| `ApiRestarting`                      | more than 2 process starts in 15 min: a crash loop (unreliable with clustering on; `ApiDown` mutes it)                                    | critical           |
-| `HighErrorRate`                      | 5xx rate > 5 % of requests over 5 min (4xx are the client's, and have their own rules)                                                    | warning            |
-| `HighP95Latency`                     | p95 latency > 2 s over 5 min                                                                                                              | warning            |
-| `HighInFlightRequests`               | > 100 concurrent requests for 2 min                                                                                                       | warning            |
-| `HighHeapUsage`                      | heap > 90 % for 5 min                                                                                                                     | warning            |
-| `QueueJobsParked`                    | any job parked in `<queue>.dead` in the last 15 min                                                                                       | warning            |
-| `OutboxEventsDead`                   | any outbox event given up on in the last 15 min                                                                                           | warning            |
-| `WebhookDeliveriesFailingEverywhere` | zero successful webhook deliveries in 30 min while attempts keep arriving                                                                 | critical           |
-| `WebhookRetriesStalled`              | webhook deliveries stay overdue for 15 min straight                                                                                       | warning            |
-| `ScheduledJobStale`                  | a nightly `docker/crontab` job has not recorded a success in > 48 h; keeps firing until the job runs again or its `leases` row is deleted | warning            |
-| `FrequentSweepStale`                 | `sweep:outbox`, `sweep:payment-effects` or `sweep:reservations` has not succeeded in > 30 min                                             | warning            |
-| `ScheduledJobNeverSucceeded`         | a job has been recorded as run for over an hour and has never recorded a success                                                          | warning            |
-| `LoginFailureRate`                   | failed logins above 1 per second for 5 min                                                                                                | warning            |
-| `LoginFailureShare`                  | over half of logins failing for 10 min, with real traffic                                                                                 | warning            |
-| `TwoFactorChallengeFailures`         | login-time 2FA failures above 0.1 per second for 10 min                                                                                   | warning            |
-| `TwoFactorDisableFailures`           | any failed attempt to disable 2FA in 15 min                                                                                               | warning            |
-| `AuditSinkFailing`                   | any audit entry not persisted in 5 min                                                                                                    | critical           |
-| `UnauthorizedForbiddenRate`          | 401 and 403 answers above 2 per second for 10 min                                                                                         | warning            |
-| `RateLimitStoreFallback`             | any limiter operation served without the `limits` Redis in 5 min                                                                          | warning            |
-| `RateLimitRefusals`                  | one budget refusing over 1 request per second for 10 min                                                                                  | warning            |
-| `UnhandledRejections`                | any unhandled promise rejection in 15 min                                                                                                 | warning            |
-| `ForgedBearerTokens`                 | more than 10 bad-signature or malformed bearer tokens in 15 min                                                                           | warning            |
-| `RevokedApiKeyUsed`                  | a revoked `sk_` key presented with its real secret                                                                                        | warning            |
-| `PaymentWebhookSignatureFailures`    | a payment webhook failed its signature check                                                                                              | critical           |
-| `MetricsTokenGuessed`                | a wrong bearer token on `/observability/metrics`                                                                                          | warning            |
-| `OneTimeTokenGuessing`               | more than 20 refused one-time link tokens on one flow in 15 min                                                                           | warning            |
-| `RefreshTokenReuse`                  | a refresh token was replayed after rotation                                                                                               | warning            |
-| `PaymentAmountMismatch`              | the provider reported a success for an amount, currency or payment that is not the frozen one                                             | critical           |
-| `PaidOrderWithoutHold`               | a paid or shipping order has no stock hold to settle: [runbook](../modules/inventory-reservations.md#orphaned-hold)                       | critical           |
-| `AccountExportFailing`               | any personal-data export failed in 15 min (the GDPR deadline is running)                                                                  | warning            |
-| `Watchdog`                           | always firing; the heartbeat pushed to `ALERT_HEARTBEAT_URL` (silence there = the pipeline is dead)                                       | none               |
-| `AlertmanagerNotificationsFailing`   | Alertmanager failed to send a notification in 15 min (a failing email goes to the webhook, any other failing channel goes to email)       | warning            |
-| `PrometheusRuleEvaluationFailures`   | a rule errored while running in the last 15 min                                                                                           | warning            |
-| `DiskAlmostFull`                     | a real mount under 10 % free, or predicted full within 24 h by the last 6 h (needs the `monitoring` profile's node_exporter)              | warning            |
-| `TlsCertExpiringSoon`                | a certificate Traefik serves expires in under 14 days (needs `docker-compose.proxy.yml`)                                                  | warning            |
+| Alert                                | What it means                                                                                                                             |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `ApiDown`                            | scrape target unreachable > 1 min                                                                                                         |
+| `DependencyUnavailable`              | the app reports Mongo (critical, 1 min), Redis or RabbitMQ (warning, 5 min) as not serving (`dependency_up`)                              |
+| `ApiRestarting`                      | more than 2 process starts in 15 min: a crash loop (unreliable with clustering on; `ApiDown` mutes it)                                    |
+| `HighErrorRate`                      | 5xx rate > 5 % of requests over 5 min (4xx are the client's, and have their own rules)                                                    |
+| `HighP95Latency`                     | p95 latency > 2 s over 5 min                                                                                                              |
+| `HighInFlightRequests`               | > 100 concurrent requests for 2 min                                                                                                       |
+| `HighHeapUsage`                      | heap > 90 % for 5 min                                                                                                                     |
+| `QueueJobsParked`                    | any job parked in `<queue>.dead` in the last 15 min                                                                                       |
+| `OutboxEventsDead`                   | any outbox event given up on in the last 15 min                                                                                           |
+| `WebhookDeliveriesFailingEverywhere` | zero successful webhook deliveries in 30 min while attempts keep arriving                                                                 |
+| `WebhookRetriesStalled`              | webhook deliveries stay overdue for 15 min straight                                                                                       |
+| `ScheduledJobStale`                  | a nightly `docker/crontab` job has not recorded a success in > 48 h; keeps firing until the job runs again or its `leases` row is deleted |
+| `FrequentSweepStale`                 | `sweep:outbox`, `sweep:payment-effects` or `sweep:reservations` has not succeeded in > 30 min                                             |
+| `ScheduledJobNeverSucceeded`         | a job has been recorded as run for over an hour and has never recorded a success                                                          |
+| `LoginFailureRate`                   | failed logins above 1 per second for 5 min                                                                                                |
+| `LoginFailureShare`                  | over half of logins failing for 10 min, with real traffic                                                                                 |
+| `TwoFactorChallengeFailures`         | login-time 2FA failures above 0.1 per second for 10 min                                                                                   |
+| `TwoFactorDisableFailures`           | any failed attempt to disable 2FA in 15 min                                                                                               |
+| `AuditSinkFailing`                   | any audit entry not persisted in 5 min                                                                                                    |
+| `UnauthorizedForbiddenRate`          | 401 and 403 answers above 2 per second for 10 min                                                                                         |
+| `RateLimitStoreFallback`             | any limiter operation served without the `limits` Redis in 5 min                                                                          |
+| `RateLimitRefusals`                  | one budget refusing over 1 request per second for 10 min                                                                                  |
+| `UnhandledRejections`                | any unhandled promise rejection in 15 min                                                                                                 |
+| `ForgedBearerTokens`                 | more than 10 bad-signature or malformed bearer tokens in 15 min                                                                           |
+| `RevokedApiKeyUsed`                  | a revoked `sk_` key presented with its real secret                                                                                        |
+| `PaymentWebhookSignatureFailures`    | a payment webhook failed its signature check                                                                                              |
+| `MetricsTokenGuessed`                | a wrong bearer token on `/observability/metrics`                                                                                          |
+| `OneTimeTokenGuessing`               | more than 20 refused one-time link tokens on one flow in 15 min                                                                           |
+| `RefreshTokenReuse`                  | a refresh token was replayed after rotation                                                                                               |
+| `PaymentAmountMismatch`              | the provider reported a success for an amount, currency or payment that is not the frozen one                                             |
+| `PaidOrderWithoutHold`               | a paid or shipping order has no stock hold to settle: [runbook](../modules/inventory-reservations.md#orphaned-hold)                       |
+| `AccountExportFailing`               | any personal-data export failed in 15 min (the GDPR deadline is running)                                                                  |
+| `Watchdog`                           | always firing; the heartbeat pushed to `ALERT_HEARTBEAT_URL` (silence there = the pipeline is dead)                                       |
+| `AlertmanagerNotificationsFailing`   | Alertmanager failed to send a notification in 15 min (a failing email goes to the webhook, any other failing channel goes to email)       |
+| `PrometheusRuleEvaluationFailures`   | a rule errored while running in the last 15 min                                                                                           |
+| `DiskAlmostFull`                     | a real mount under 10 % free, or predicted full within 24 h by the last 6 h (needs the `monitoring` profile's node_exporter)              |
+| `TlsCertExpiringSoon`                | a certificate Traefik serves expires in under 14 days (needs `docker-compose.proxy.yml`)                                                  |
+
+The expression, the `for` and the severity of each are in the rules file; the conditions above are the meaning, not a copy of the thresholds.
 
 ### Considered and not used {#alerts-not-used}
 

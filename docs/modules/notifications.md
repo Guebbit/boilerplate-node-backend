@@ -66,14 +66,16 @@ backend keeps no copy in step with the UI.
 `Notification` is a discriminated union on `code`, and each variant types its own `params`. This
 module's own codes are the staff work notices, under `notifications.staff.*`:
 
-| `code`                                 | `params`                      |
-| -------------------------------------- | ----------------------------- |
-| `notifications.staff.webhook-disabled` | `{ subscriptionId }`          |
-| `notifications.staff.task-opened`      | `{ taskId, kind, category? }` |
-| `notifications.staff.task-due-soon`    | the same as `task-opened`     |
-| `notifications.staff.task-overdue`     | the same as `task-opened`     |
-| `notifications.staff.task-assigned`    | `{ taskId, kind }`            |
-| `notifications.staff.outbox-dead`      | `{ eventName, aggregateId }`  |
+| `code`                                 |
+| -------------------------------------- |
+| `notifications.staff.webhook-disabled` |
+| `notifications.staff.task-opened`      |
+| `notifications.staff.task-due-soon`    |
+| `notifications.staff.task-overdue`     |
+| `notifications.staff.task-assigned`    |
+| `notifications.staff.outbox-dead`      |
+
+Each code's `params` are the union of the contract (`Notification` in `src/modules/notifications/openapi.yaml`).
 
 A module that sits on top adds its own variants to the union by contract fragment. The shop does:
 its buyer messages (a cart line removed, a delayed preorder, a lost parcel, a stock alert) and its

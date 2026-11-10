@@ -278,7 +278,7 @@ way a handle does. What it never publishes, no matter how convenient:
     **A step exactly one other module must call** is not published in the barrel either. The owner
     gives that module a **friend file**, `src/modules/<owner>/friends/<friend>.ts`, and the
     boundaries policy lets only the module named in the file's name import it (the template
-    `friends/{{ from.element.captured.module }}.ts` in `eslint.config.ts`). Three exist:
+    `friends/<the importer's module>.ts` in `eslint.config.ts`). Three exist:
     `users/friends/account.ts` (`accountUserService`, everything `account` calls),
     `users/friends/orders.ts` (`takeAutomaticPurchaseHold`) and `orders/friends/payments.ts`
     (`markPaid`). A friend file opens with why that module is the friend, and the step it carries is

@@ -179,7 +179,7 @@ carries the words and the time, never the author.
 ### Who is told
 
 A task never mails anyone itself. A new one (spam excluded) is announced as `task.opened`
-`{ taskId, kind, routeSet, category? }`, handing one to a colleague as `task.assigned`
+`{ taskId, kind, routeSet, category?, work? }`, handing one to a colleague as `task.assigned`
 (taking your own announces nothing), an open one three days from its due date as `task.due_soon`
 and one that passes it as `task.overdue` (both with the payload of `task.opened`, see
 [the reminders](#the-overdue-reminder)).

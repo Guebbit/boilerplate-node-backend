@@ -155,17 +155,7 @@ Cypress runs are an order of magnitude slower than these, because they drive a r
 A `setupTestDb()`-calling spec lives in that module's own `tests/integration/`, never its
 `tests/unit/` — the placement rule every module follows.
 
-| Command                        | What it runs                                                                                                          |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `npm run test:unit`            | one function, no database                                                                                             |
-| `npm run test:cross-cutting`   | the sweeps: one rule across every module                                                                              |
-| `npm run test:integration`     | a real database, or the real app over HTTP, `--runInBand`                                                             |
-| `npm run test:contract`        | HTTP against the spec, `--runInBand`                                                                                  |
-| `npm run test:contract:cookie` | the same suite with `NODE_SESSION_MODE=cookie`; CI runs both                                                          |
-| `npm run test:journeys:cookie` | the journeys under `tests/integration/journeys/` with `NODE_SESSION_MODE=cookie`; jwt mode runs in `test:integration` |
-| `npm run test:fuzz`            | the spec, hostile, `--runInBand`                                                                                      |
-| `npm test`                     | all five, in that order                                                                                               |
-| `npm run mutation:full`        | whole scope, sharded and monthly in CI, see [Mutation Testing](./mutation-testing.md)                                 |
+The commands, what each answers and whether it gates are one table, in [Testing quickstart](./testing-quickstart.md#every-command-and-when-to-reach-for-it). `npm test` runs `test:unit`, `test:cross-cutting`, `test:integration`, `test:contract` and `test:fuzz`, in that order; `npm run mutation:full` is the whole scope, sharded and monthly in CI, see [Mutation Testing](./mutation-testing.md).
 
 The mutation run's swc transform skips type-checking, which `npm run ts-check` does once for the
 whole project anyway, so the same tests run markedly faster there. See `jest.config.mutation.js`.
@@ -213,11 +203,7 @@ flowchart LR
 
 ## Documentation rule of thumb
 
-- keep docs grouped by concept,
-- prefer visual maps when they help,
-- use the local search bar first when you only need to jump to one concept,
-- avoid a page for every tiny request/response,
-- keep code comments brief and move long explanation here.
+The house style is [Documentation style](../reference/documentation-style.md).
 
 ## External references
 

@@ -102,22 +102,9 @@ UPPER_SNAKE: the same name `title` shows. There is no table; `resolveErrorCode`
 (`src/infrastructure/http/response.ts`) derives it, and the message is the locale key
 `generic.error-<the code in kebab-case>`.
 
-| Status | Code |
-| --- | --- |
-| 400 | `BAD_REQUEST` |
-| 401 | `UNAUTHORIZED` |
-| 403 | `FORBIDDEN` |
-| 404 | `NOT_FOUND` |
-| 405 | `METHOD_NOT_ALLOWED` |
-| 409 | `CONFLICT` |
-| 412 | `PRECONDITION_FAILED` |
-| 413 | `CONTENT_TOO_LARGE` |
-| 415 | `UNSUPPORTED_MEDIA_TYPE` |
-| 422 | `UNPROCESSABLE_CONTENT` |
-| 429 | `TOO_MANY_REQUESTS` |
-| 500, and any 5xx but 503 | `INTERNAL_SERVER_ERROR` |
-| 503 | `SERVICE_UNAVAILABLE` |
-| any other 4xx | `CLIENT_ERROR` |
+The pairs are `resolveErrorCode`'s output, and a code an operation may answer with is on the contract's
+`x-error-codes`; the names are the RFC 9110 status names, so `404` is `NOT_FOUND` and `422` is
+`UNPROCESSABLE_CONTENT`.
 
 Two rules keep it total:
 
