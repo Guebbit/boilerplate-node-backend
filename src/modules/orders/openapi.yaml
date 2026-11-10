@@ -2721,6 +2721,9 @@ components:
                 updatedAt:
                     type: string
                     format: date-time
+                    description: >-
+                        When staff or the buyer last edited the order or moved its status.
+                        Reports from payments, delivery and returns don't move it.
                 # Unlike a product or a user, an order carries no `active` flag, so this is the
                 # only thing that distinguishes a hidden order from a live one. A non-admin never
                 # sees a record where it is set — `visibleScope` filters them out — so it appears
@@ -2913,6 +2916,9 @@ components:
                 updatedAt:
                     type: string
                     format: date-time
+                    description: >-
+                        When staff or the buyer last edited the order or moved its status.
+                        Reports from payments, delivery and returns don't move it.
                 # Unlike a product or a user, an order carries no `active` flag, so this is the
                 # only thing that distinguishes a hidden order from a live one. A non-admin never
                 # sees a record where it is set — `visibleScope` filters them out — so it appears
