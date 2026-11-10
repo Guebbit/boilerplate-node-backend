@@ -352,6 +352,16 @@ describe('create', () => {
             expect(reread!.termsVersion).toBeUndefined();
         }));
 
+    it("carries the accepted Terms version into the buyer's account export", async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await createOrder(user, [toOrderItem(product, 1)], { termsVersion: '2026-11' });
+
+        const exported = await orderService.findOwnOrders(String(user._id));
+
+        expect(exported.map((order) => order.termsVersion)).toEqual(['2026-11']);
+    });
+
     it('stores a full product snapshot on each line', async () => {
         const { order, keyboard } = await seedOrder();
 
