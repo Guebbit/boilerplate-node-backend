@@ -48,18 +48,11 @@ export const findPublicById = (productId: string) => productRepository.findPubli
  * Every product in `ids`, plain and untransformed, in one round trip — `orders` joins them onto
  * its own rows by id rather than reading one at a time.
  *
- * `Promise.resolve().then(...)` rather than a bare call: `toObjectId` throws on a malformed id,
- * and deferring the `.map()` into the callback turns that into a rejection — the convention
- * `orders/services/crud.ts#create` states for the same reason, so a bad id reaches every caller
- * as a rejected promise like every other failure here, never a synchronous throw out of a
- * function every caller otherwise treats as `Promise`-returning.
+ * Returns every id, past the `findAll` default cap; a malformed id rejects the promise.
  *
  * @param ids - the product ids to read back
  */
-export const findManyByIds = (ids: readonly string[]) =>
-    Promise.resolve().then(() =>
-        productRepository.findAll({ _id: { $in: ids.map((id) => toObjectId(id)) } })
-    );
+export const findManyByIds = (ids: readonly string[]) => productRepository.findByIds(ids);
 
 /**
  * How many of `ids` are still publicly visible — `@modules/inventory`'s low-stock gauge asks this

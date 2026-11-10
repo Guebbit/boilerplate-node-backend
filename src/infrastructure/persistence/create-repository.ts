@@ -273,6 +273,12 @@ export interface Repository<TDocument extends Document, TWire> {
         where?: QueryFilter<TDocument>,
         options?: FindAllOptions
     ) => Promise<Lean<TDocument>[]>;
+    /**
+     * Fetch every document whose id is in the list, as lean objects — returns every id, past the
+     * `findAll` default cap. An id that matches nothing is simply absent. A malformed id rejects
+     * the promise rather than throwing out of the call.
+     */
+    findByIds: (ids: readonly string[]) => Promise<Lean<TDocument>[]>;
     /** Count the documents matching a filter. */
     count: (where?: QueryFilter<TDocument>) => Promise<number>;
     /**
@@ -405,6 +411,16 @@ export function createRepository<TDocument extends Document, TWire>(
         return query.sort(withTiebreaker(sort)).skip(skip).limit(limit).exec();
     };
 
+    /**
+     * Every document whose id is listed. The limit is the list's own length, so the 1000-row
+     * `findAll` ceiling cannot silently drop the tail of a long list. `Promise.resolve().then`
+     * turns `toObjectId`'s throw on a malformed id into a rejection, like every other failure here.
+     */
+    const findByIds = (ids: readonly string[]): Promise<Lean<TDocument>[]> =>
+        Promise.resolve().then(() =>
+            findAll({ _id: { $in: ids.map((id) => toObjectId(id)) } }, { limit: ids.length })
+        );
+
     /** Count the documents matching a filter. */
     const count = (where: QueryFilter<TDocument> = {}): Promise<number> =>
         mongooseModel.countDocuments(where);
@@ -487,6 +503,7 @@ export function createRepository<TDocument extends Document, TWire>(
         findOne,
         findByIdRaw,
         findAll,
+        findByIds,
         count,
         create,
         save,

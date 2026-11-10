@@ -7,7 +7,6 @@
  */
 
 import { DAY_MS, HOUR_MS } from '@domain-primitives/time';
-import { toObjectId } from '@infrastructure/persistence/create-repository';
 import { orderRepository } from '../repository';
 
 /** What the digest counts on the orders side. */
@@ -56,10 +55,7 @@ export const shippingMethodsOf = (
     orderIds.length === 0
         ? Promise.resolve(new Map<string, string | undefined>())
         : orderRepository
-              .findAll(
-                  { _id: { $in: orderIds.map((id) => toObjectId(id)) } },
-                  { limit: orderIds.length }
-              )
+              .findByIds(orderIds)
               .then(
                   (orders) =>
                       new Map(orders.map((order) => [String(order._id), order.shippingMethod]))
