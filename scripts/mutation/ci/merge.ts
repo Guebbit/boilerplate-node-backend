@@ -93,10 +93,16 @@ export const incompleteFiles = (
         .map(({ file }) => file);
 };
 
-/** Re-keys every report's tests into one list per test file, and returns each report's id map. */
+/**
+ * Re-keys every report's tests into one list per test file. Also returns `remap`, which turns a
+ * test-id list of report number `index` into ids of the merged list (an unknown id stays as it was).
+ */
 const mergeTests = (
     reports: readonly StrykerReport[]
-): { testFiles: NonNullable<StrykerReport['testFiles']>; idMaps: Map<string, string>[] } => {
+): {
+    testFiles: NonNullable<StrykerReport['testFiles']>;
+    remap: (index: number, ids?: string[]) => string[] | undefined;
+} => {
     const testFiles: NonNullable<StrykerReport['testFiles']> = {};
     const canonical = new Map<string, string>();
 
@@ -118,7 +124,10 @@ const mergeTests = (
         return idMap;
     });
 
-    return { testFiles, idMaps };
+    return {
+        testFiles,
+        remap: (index, ids) => ids?.map((id) => idMaps[index].get(id) ?? id)
+    };
 };
 
 /** One file's mutants across every report: what each report ran, and what any report saw at all. */
@@ -168,14 +177,13 @@ export const mergeReports = (
             finished.map(({ shard }) => shard)
         )
     );
-    const { testFiles, idMaps } = mergeTests(finished.map(({ report }) => report));
+    const { testFiles, remap } = mergeTests(finished.map(({ report }) => report));
     const byFile = collectMutants(finished);
 
     // A mutant every slice skipped cannot happen when every slice finished; if it ever does, the
     // file's score would come from a subset, so it goes out with the incomplete ones.
     for (const [file, { ran, seen }] of byFile) if (ran.size < seen.size) incomplete.add(file);
 
-    const remap = (index: number, ids?: string[]) => ids?.map((id) => idMaps[index].get(id) ?? id);
     let nextId = 0;
     const files = Object.fromEntries(
         [...byFile]
@@ -217,8 +225,7 @@ export const mergeReports = (
  */
 export const overlayReport = (whole: StrykerReport, partial: StrykerReport): StrykerReport => {
     // The partial run first, so a test both reports know keeps its newer entry.
-    const { testFiles, idMaps } = mergeTests([partial, whole]);
-    const remap = (index: number, ids?: string[]) => ids?.map((id) => idMaps[index].get(id) ?? id);
+    const { testFiles, remap } = mergeTests([partial, whole]);
     const kept = Object.entries(whole.files).filter(([file]) => !(file in partial.files));
 
     let nextId = 0;
