@@ -138,7 +138,7 @@ all answer the parent.
 ### A child created under its parent
 
 A **child** with a life of its own (an id, a status, actions of its own) may be created at
-`POST /parent/{id}/children` with no `GET` on that path (it answers 405 with `Allow: POST`), when:
+`POST /parent/{id}/children` with no `GET` on that path (it answers 405 with `Allow: OPTIONS, POST`), when:
 
 1. each child has its own `GET` by id;
 2. all of a parent's children come back from one **named read**;
@@ -314,13 +314,17 @@ The JSON body parser handles only the types it is told to, so a body in any othe
 flowchart LR
     R["write request<br/>with a body"] --> G{"type declared for<br/>this operation?"}
     G -->|"yes"| P["parse, validate, run"]
-    G -->|"no"| E["415 — details.accepted lists the types"]
+    G -->|"no"| E["415 — details.accepted, Accept<br/>and (PATCH) Accept-Patch list the types"]
     N["no body at all"] --> P
 ```
 
 The guard is `requireDeclaredContentType`, built from `api/request-content-types.ts`, which
 `npm run gen:api` derives from the contract's own `requestBody` media types. A request with no
 bytes is not judged: a missing required body is the schema's own 422.
+
+The 415 also sends `Accept` with the declared types, and `Accept-Patch` (the same list) on a
+`PATCH` (RFC 9110 §12.5.1, RFC 5789 §2.2). An operation with no declared body sends neither. The
+`OPTIONS` answer reads the same row (`declaredOperation`), so the two lists never differ.
 
 Any write (`POST`, `PUT`, `PATCH`, `DELETE`) that declares no body is listed with no types at all
 (`types: []`), and the guard refuses ANY body on it, `{}` included, `details.accepted` empty. An
@@ -334,10 +338,12 @@ in the query or the `/hard` path and a body is refused instead of ignored.
 
 A path the contract declares, asked with a method it does not give it, answers **405** with an
 `Allow` header (RFC 9110 §15.5.6) — never the catch-all's 404. `DELETE /tasks/{id}` is fine,
-`PATCH /tasks/{id}` is a 405 naming `DELETE, GET, HEAD`: a task's `status` is read-only and moves only through its doors.
+`PATCH /tasks/{id}` is a 405 naming `DELETE, GET, HEAD, OPTIONS`: a task's `status` is read-only and moves only through its doors.
 
-- **`Allow` is sorted**, with HEAD beside GET. `OPTIONS` is never judged: the CORS layer answers
-  a preflight before any route runs.
+- **`Allow` is sorted**, with HEAD beside GET and `OPTIONS` on every path: every served path
+  answers it, and a 405 must list what the resource supports (RFC 9110 §15.5.6). The 405 and the
+  `OPTIONS` answer (below) take it from one function, so they never disagree. The guard never
+  judges `OPTIONS` itself: that answer runs before any router.
 - **A trailing slash is the same path.** `/things/` reads as `/things`.
 - **A literal path wins over a templated one.** `DELETE /products/facets` would otherwise
   read `categories` as the `{id}` of `/products/{id}` and answer 404, so the guard runs a second
@@ -347,6 +353,27 @@ A path the contract declares, asked with a method it does not give it, answers *
 - **Not declared per operation.** The 405 belongs to a request that matched no operation, so no
   operation's `responses` could carry it; its code, `METHOD_NOT_ALLOWED`, is in the contract's
   `x-error-codes`.
+
+## `OPTIONS` says what a path accepts
+
+`OPTIONS` asks a path what it can do (RFC 9110 §9.3.7; RFC 5789 §3.1 for `Accept-Patch`). `cors`
+runs with `preflightContinue: true`, so ONE handler (`answerOptions`, mounted right after it in
+`src/app/security.ts`) answers every `OPTIONS`, whatever the Origin.
+
+| Request | Answer |
+| --- | --- |
+| a path of a served module | 204 + `Allow`; `Accept-Patch` only when `Allow` has `PATCH` |
+| `OPTIONS *`, or a preflight (`Access-Control-Request-Method`) on any path | 204 |
+| a plain `OPTIONS` on a path no served module owns | the 404 problem |
+
+- **No `Content-Length` on the 204** (RFC 9110 §8.6).
+- **Same `Allow` for an allowed, a refused and an absent Origin.** A refused Origin gets no
+  `Access-Control-*` headers, so the browser still fails the call.
+- **`Allow` lists `OPTIONS`**, the same as the 405.
+- **A literal path wins**: `/products/facets` answers `GET, HEAD, OPTIONS`, not the `/products/{id}` set.
+- **`Accept-Patch`** is the media types the contract declares for that path's `PATCH` body.
+- **A module this build does not serve** is a 404 for a plain `OPTIONS`, like any other method.
+
 
 The guard is `methodNotAllowed`, built from `api/operation-routes.ts`, which `npm run gen:api`
 derives from the contract's paths and mounted twice in `src/app/routes.ts`: before the routers

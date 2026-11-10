@@ -302,7 +302,7 @@ describe('the status doors', () => {
             .send({ status: 'resolved' });
 
         expect([patch.status, put.status]).toEqual([405, 405]);
-        expect(patch.headers.allow).toBe('DELETE, GET, HEAD');
+        expect(patch.headers.allow).toBe('DELETE, GET, HEAD, OPTIONS');
     });
 
     it('resolves, marks as spam and reopens, each answering the task with its actions', async () => {

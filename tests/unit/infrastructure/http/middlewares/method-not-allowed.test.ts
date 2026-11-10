@@ -91,7 +91,7 @@ describe('methodNotAllowed', () => {
     it('answers 405 with the sorted Allow list, HEAD added beside GET', () => {
         expect(run('DELETE', '/things')).toMatchObject({
             status: 405,
-            allow: 'GET, HEAD, POST',
+            allow: 'GET, HEAD, OPTIONS, POST',
             passed: false
         });
     });
@@ -114,11 +114,11 @@ describe('methodNotAllowed', () => {
     });
 
     it('judges a system route, which has no owning module', () => {
-        expect(run('POST', '/ping')).toMatchObject({ status: 405, allow: 'GET, HEAD' });
+        expect(run('POST', '/ping')).toMatchObject({ status: 405, allow: 'GET, HEAD, OPTIONS' });
     });
 
     it('reads a trailing slash as the same path', () => {
-        expect(run('PUT', '/things/').allow).toBe('GET, HEAD, POST');
+        expect(run('PUT', '/things/').allow).toBe('GET, HEAD, OPTIONS, POST');
     });
 
     it('offers the union of every template a path matches', () => {
@@ -127,7 +127,7 @@ describe('methodNotAllowed', () => {
         expect(run('PATCH', '/things/search').passed).toBe(true);
         expect(run('GET', '/things/search')).toMatchObject({
             status: 405,
-            allow: 'DELETE, PATCH, POST, PUT'
+            allow: 'DELETE, OPTIONS, PATCH, POST, PUT'
         });
     });
 
@@ -135,7 +135,7 @@ describe('methodNotAllowed', () => {
         it('judges a literal path by its own methods, not the templated path it also matches', () => {
             expect(run('DELETE', '/things/search', true)).toMatchObject({
                 status: 405,
-                allow: 'POST'
+                allow: 'OPTIONS, POST'
             });
         });
 

@@ -201,13 +201,14 @@ rules:
       standard: rfc5789
       section: advertising support in OPTIONS
       rule: An OPTIONS on a resource that supports PATCH SHOULD answer Accept-Patch, listing the media types its PATCH declares (§3.1).
+      house: Every `Allow` (the OPTIONS 204 and every 405) lists `OPTIONS` itself, computed by the one `allowedMethods` function (RFC 9110 §15.5.6 SHOULD list what the resource supports). Express's own `Allow` leaves it out (docs/api/write-methods.md#a-known-path-with-the-wrong-method).
       source: https://www.rfc-editor.org/rfc/rfc5789#section-3.1
       evidence:
           [
               src/app/security.ts,
               src/infrastructure/http/middlewares/method-not-allowed.ts,
               openapi.yaml paths.*.patch.requestBody.content,
-              docs/api/write-methods.md#a-known-path-with-the-wrong-method
+              docs/api/write-methods.md#options-says-what-a-path-accepts
           ]
       lint: no
       difference: null
