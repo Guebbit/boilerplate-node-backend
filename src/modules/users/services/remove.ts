@@ -88,24 +88,22 @@ const runAfterErase = (userId: string, deferred: readonly AfterErase[]): Promise
  *
  * @param claim - the first write of the transaction, when the erasure must be won against a
  * concurrent writer (the scheduled purge against a restore). Resolving `false` abandons the
- * erasure with 409 and nothing deleted.
+ * erasure with nothing deleted.
  * @param erasedAt - the original erasure date, only for a repeat erasure on a restored database
+ * @returns whether THIS call erased the account; `false` only when a claim was lost
  */
 export const erase = (
     user: UserDocument,
     context?: CallerContext,
     claim?: (session: ClientSession) => Promise<boolean>,
     erasedAt?: Date
-): Promise<ResponseSuccess<undefined> | ResponseReject> =>
+): Promise<boolean> =>
     withTransaction((session) =>
         (claim ? claim(session) : Promise.resolve(true)).then((won) =>
             won ? runErasureCascade(user, session, erasedAt) : undefined
         )
     ).then((deferred) => {
-        if (!deferred)
-            return generateReject(409, [
-                { code: ERROR_CODES.USER_ERASURE_NOT_DUE, message: t('users.erasure-not-due') }
-            ]);
+        if (!deferred) return false;
         nudgeOutbox();
         return runAfterErase(user.id, deferred)
             .then(() => imageStore.remove(user.imageUrl))
@@ -120,7 +118,7 @@ export const erase = (
                     metadata: { hardDelete: true }
                 });
             })
-            .then(() => generateSuccess(undefined, 200));
+            .then(() => true);
     });
 
 /**
@@ -145,7 +143,8 @@ export const remove = (
     hardDelete = false,
     context?: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseSuccess<undefined> | ResponseReject> => {
-    if (hardDelete) return erase(user, context);
+    // No claim, so this erasure cannot lose one: it always erases.
+    if (hardDelete) return erase(user, context).then(() => generateSuccess(undefined, 200));
 
     // Already deleted: nothing to do. DELETE must be safe to retry; undoing it is `restoreById`.
     if (user.deletedAt) return Promise.resolve(generateSuccess(user, 200));

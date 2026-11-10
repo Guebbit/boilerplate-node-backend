@@ -49,8 +49,9 @@ rules:
     #
     # RFC 9457: a 4xx/5xx answers `application/problem+json`, nothing else, so a client branches on
     # one media type (Zalando guideline 176). An answer that is not JSON on purpose, such as the
-    # Prometheus text of a failed scrape, opts out with `x-not-problem: true`. House rule, not the
-    # whole Zalando ruleset.
+    # Prometheus text of a failed scrape or a probe's empty 503, opts out with `x-not-problem: true`.
+    # A sibling rule below refuses an error that declares no body at all. House rule, not the whole
+    # Zalando ruleset.
     error-responses-are-problem-json:
         description: 'A 4xx/5xx response declares only `application/problem+json` content (`x-not-problem: true` opts a deliberate non-JSON answer out).'
         severity: error
@@ -63,6 +64,16 @@ rules:
                     required: ['application/problem+json']
                     propertyNames:
                         const: 'application/problem+json'
+
+    # A separate rule, not a second `given` on the one above: that rule selects `.content`, which an
+    # error with no body never has, and folding both in reports every hit twice.
+    error-responses-have-a-body:
+        description: 'A 4xx/5xx response declares a body (`x-not-problem: true` opts a deliberately empty answer out).'
+        severity: error
+        given: "$.paths[*][*].responses[?(@property.match(/^[45]/) && !@['x-not-problem'])]"
+        then:
+            field: content
+            function: truthy
 
     # --- A JSON success is never a top-level array ---
     #

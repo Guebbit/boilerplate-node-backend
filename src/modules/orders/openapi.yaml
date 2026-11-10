@@ -203,6 +203,7 @@ paths:
                 The response is never cached: `Cache-Control: private, no-store`.
             operationId: exportOrders
             x-error-codes:
+                '401': [REAUTH_REQUIRED]
                 '422': [ORDER_EXPORT_TOO_LARGE]
             security:
                 - bearerAuth: []
@@ -685,6 +686,7 @@ paths:
                 Webhooks still fire for this move; no shipped email does.
             operationId: overrideOrderStatus
             x-error-codes:
+                '401': [REAUTH_REQUIRED]
                 '409': [ORDER_OVERRIDE_AWAITING_STOCK, ORDER_OVERRIDE_NOT_ALLOWED]
             security:
                 - bearerAuth: []
