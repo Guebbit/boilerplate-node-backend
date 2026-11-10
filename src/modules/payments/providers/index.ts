@@ -225,14 +225,22 @@ export interface PaymentProvider {
      * An adapter must time its request out well inside the refund sweep's lease (10 minutes for
      * up to 200 payments): a call that hangs holds the whole sweep.
      *
-     * Beyond the provider's key window the adapter must stay idempotent on its own, by stamping
-     * `refundId` on the provider's refund: docs/modules/payments-provider-port.md#a-key-the-provider-forgot
-     *
-     * Which provider answers become which `RefundFailureReason` (and which are never offered for hand
-     * settlement) is docs/modules/payments-provider-port.md#reading-a-refusal
+     * Beyond the provider's key window (Stripe: a day from first use) a reused key makes a NEW
+     * refund, so the adapter must stay idempotent itself:
+     * docs/modules/payments-provider-port.md#a-key-the-provider-forgot
      *
      * A refund the provider accepted but has not settled answers `status: 'pending'`; it is
      * finished later with {@link retrieveRefund}, never sent again.
+     *
+     * @param providerRef - the provider's reference of the payment to refund
+     * @param charge - the amount and currency to give back
+     * @param idempotency - `idempotencyKey`: the provider's dedupe key. `refundId`: stamp it on
+     *   the provider's refund (Stripe `metadata.refund_record`). `createdAt`: past a day, list the
+     *   payment's refunds and adopt the one carrying `refundId` before creating one.
+     * @throws {PaymentProviderError} a definite code only when the provider answered about THIS
+     *   refund. Network error, timeout, 5xx, 429: `provider_unavailable`; anything else: `unknown`
+     *   (both retried, never offered for hand settlement). Blocked by a dispute: `disputed`.
+     *   Full table: docs/modules/payments-provider-port.md#reading-a-refusal
      */
     refund(
         providerRef: string,
