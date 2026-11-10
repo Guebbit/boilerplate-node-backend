@@ -94,13 +94,10 @@ rules:
     # `replace*` means a full, idempotent replace; `update*` means a partial change — and these
     # rules check that the METHOD agrees, so a verb cannot change behind an unchanged
     # operationId unnoticed. Each rule's `given` selects exactly the offenders: an
-    # operationId matching the prefix, under any method but the right one, name not on the
-    # allowlist — so a match here always means a real drift, not a rule bug.
-    #
-    # Allowlisted, an idempotent single-field PUT whose one editable property is set outright
-    # rather than merged, so PUT is the correct verb even though the name reads as "update":
+    # operationId matching the prefix, under any method but the right one, so a match here
+    # always means a real drift, not a rule bug.
     verb-replace-is-put:
-        description: 'operationId matching ^replace must be a PUT operation — see the allowlist above this rule if a genuine exception is needed.'
+        description: 'operationId matching ^replace must be a PUT operation.'
         severity: error
         given: "$.paths[*][?(@property != 'put' && @.operationId && @.operationId.match(/^replace/))]"
         then:
@@ -108,7 +105,7 @@ rules:
             function: falsy
 
     verb-update-is-patch:
-        description: 'operationId matching ^update must be a PATCH operation — see the allowlist above this rule if a genuine exception is needed.'
+        description: 'operationId matching ^update must be a PATCH operation.'
         severity: error
         given: "$.paths[*][?(@property != 'patch' && @.operationId && @.operationId.match(/^update/))]"
         then:
