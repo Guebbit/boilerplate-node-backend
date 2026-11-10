@@ -147,7 +147,8 @@ rules:
     - id: rfc9111-read-declares-cache
       standard: rfc9111
       section: freshness
-      rule: 'Every GET declares its cache answer, and a cached answer names what varies it (`Vary`), including `Cookie` where a cookie can pick the caller.'
+      rule: 'A cache MUST NOT reuse a stored response for a request whose `Vary`-selected headers differ, so an answer that varies names what varies it in `Vary` (§4.1).'
+      house: 'Every GET declares its cache answer, and `Cookie` is in `Vary` where a cookie can pick the caller (docs/theory/defences/http-and-caches.md#caches).'
       source: https://www.rfc-editor.org/rfc/rfc9111#section-4.1
       evidence:
           [
@@ -180,7 +181,8 @@ rules:
     - id: rfc9457-every-error-is-a-problem
       standard: rfc9457
       section: problem details object
-      rule: Every runtime error answer is built by `rejectResponse` and carries `application/problem+json`; a deliberate exception is declared `x-not-problem`.
+      rule: 'A problem details document is served as `application/problem+json` (§3).'
+      house: 'Every runtime error answer is built by `rejectResponse` and is a problem; a deliberate exception is declared `x-not-problem` (docs/api/errors.md#outside-the-json-api).'
       source: https://www.rfc-editor.org/rfc/rfc9457#section-3
       evidence:
           [
@@ -194,7 +196,8 @@ rules:
     - id: rfc9457-members-shape
       standard: rfc9457
       section: members
-      rule: '`title` is the status phrase, `status` equals the HTTP status, `instance` is never a URL that carries a secret.'
+      rule: 'A generator MUST use the same status code in the HTTP response as in `status` (§3.1.2), and `title` SHOULD NOT change from occurrence to occurrence of a problem (§3.1.3).'
+      house: '`title` is the status phrase and `instance` is never a URL that carries a secret (docs/api/errors.md#problem-details).'
       source: https://www.rfc-editor.org/rfc/rfc9457#section-3.1
       evidence: [src/infrastructure/http/response.ts, docs/api/errors.md#problem-details]
       lint: no
@@ -203,7 +206,8 @@ rules:
     - id: rfc9457-errors-extension
       standard: rfc9457
       section: extension members
-      rule: "The `errors` extension is never empty, and every code with no `scope` in the catalogue is in the operation's `x-error-codes` under its status."
+      rule: 'A problem type MAY define extension members, and a client MUST ignore the ones it does not recognize (§3.2).'
+      house: "The `errors` extension is never empty, and every code with no `scope` in the catalogue is in the operation's `x-error-codes` under its status (docs/api/errors.md#the-errors-extension)."
       source: https://www.rfc-editor.org/rfc/rfc9457#section-3.2
       evidence: [openapi.yaml paths.*.*.x-error-codes, docs/api/errors.md#the-errors-extension]
       lint: possible
@@ -212,7 +216,7 @@ rules:
     - id: rfc9457-type-about-blank
       standard: rfc9457
       section: type
-      rule: '`type` is `about:blank` only when the problem has nothing beyond its status; otherwise a problem type URI (RFC 9457 §4).'
+      rule: '`type` is `about:blank` only when the problem has no semantics beyond its HTTP status, and its `title` SHOULD then be the status phrase; otherwise a problem type URI (§4.2.1).'
       source: https://www.rfc-editor.org/rfc/rfc9457#section-4.2.1
       evidence: [src/infrastructure/http/response.ts, docs/api/errors.md#problem-details]
       lint: no
@@ -404,7 +408,7 @@ rules:
     - id: idempotency-key-syntax
       standard: idempotency-key
       section: syntax
-      rule: The key is accepted in the draft's quoted (structured-field string) form.
+      rule: 'The value of `Idempotency-Key` MUST be a String, an Item Structured Field value (§2.1).'
       source: https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
       evidence:
           [openapi.yaml paths.*.post.parameters, src/infrastructure/http/middlewares/idempotency.ts]
@@ -414,7 +418,7 @@ rules:
     - id: idempotency-key-error-doc-link
       standard: idempotency-key
       section: errors
-      rule: 'A 400, 409 or 422 refusal of a key points at documentation (a problem `type`, or a `Link` with `rel=describedby`).'
+      rule: 'A 400, 409 or 422 refusal of a key SHOULD point at documentation: a problem `type`, or a `Link` with `rel=describedby` (§2.7).'
       source: https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
       evidence:
           [src/infrastructure/http/middlewares/idempotency.ts, docs/api/errors.md#problem-details]
@@ -424,7 +428,8 @@ rules:
     - id: idempotency-key-missing-400
       standard: idempotency-key
       section: errors
-      rule: Where a key is required and absent the answer is 400 with the documented code.
+      rule: 'Where a documented idempotent operation requires the key and it is absent, the resource SHOULD reply 400 (§2.7).'
+      house: 'The 400 carries the documented code (docs/tools/idempotency.md#where-it-is-mounted).'
       source: https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
       evidence: [src/infrastructure/http/middlewares/idempotency.ts, docs/tools/idempotency.md]
       lint: no
@@ -433,7 +438,7 @@ rules:
     - id: idempotency-key-reuse-422-409
       standard: idempotency-key
       section: errors
-      rule: The same key with another body is 422; the same key while the first call still runs is 409.
+      rule: 'A key MUST NOT be reused with a different request payload and the resource SHOULD reply 422; a retry while the original is still processing SHOULD be answered 409 (§2.2, §2.7).'
       source: https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
       evidence:
           [
@@ -446,7 +451,8 @@ rules:
     - id: idempotency-key-replay-headers
       standard: idempotency-key
       section: replay
-      rule: A replay answers the stored status, body and headers, and says it is a replay.
+      rule: 'A retry after the original completed SHOULD be answered consistently with the request having completed (§2.6).'
+      house: 'A replay answers the stored status, body and headers, and says it is a replay (docs/tools/idempotency.md#how-it-works).'
       source: https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
       evidence:
           [
