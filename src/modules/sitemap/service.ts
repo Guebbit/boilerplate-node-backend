@@ -11,8 +11,7 @@
 
 import type { SitemapItemLoose } from 'sitemap';
 import { siteConfig } from '@infrastructure/http/config';
-import { getDefaultLocale } from '@infrastructure/i18n/catalog';
-import { listServedLocales } from '@infrastructure/i18n/served';
+import { getDefaultLocale, listServedLocales } from '@infrastructure/i18n';
 import { productPagePath, productService } from '@modules/products';
 import { STATIC_PAGES, sitemapConfig } from './config';
 
@@ -38,7 +37,7 @@ const servedLanguages = (): Languages => {
 
 /**
  * A page of the paired frontend: its origin, the language segment and the path. Not
- * `frontendLink`, which swaps a language the API has no dictionary for with the default — here a
+ * `frontendLink`, which swaps a language the API does not serve with the fallback — here a
  * registered language must keep its own address.
  *
  * @param language - the language tag

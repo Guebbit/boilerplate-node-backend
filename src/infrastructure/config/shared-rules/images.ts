@@ -17,7 +17,7 @@ const markerSchema = z.strictObject({
 });
 
 /** One accepted format. Strict: an extra key is a typo, or a behaviour that belongs in code. */
-export const imageFormatSchema = z.strictObject({
+const imageFormatSchema = z.strictObject({
     /** The real MIME type, e.g. `image/png`. */
     mime: z.string().regex(/^image\/[a-z0-9.+-]+$/),
     /** Other `Content-Type` spellings clients send for it. */

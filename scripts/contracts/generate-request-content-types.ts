@@ -21,19 +21,16 @@
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { writeOrCheck } from './generated-file';
 import { HTTP_METHODS, WRITE_METHODS, parseOpenApi, securityOpenMethods } from './openapi-document';
 import { requiredPath } from '../cli';
-
-/** The repo root. `import.meta.url` rather than `__dirname`: this script runs as ESM. */
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+import { REPO_ROOT } from '../modules-on-disk';
 
 /** The bundled root contract this generator reads. */
-const INPUT = path.resolve(ROOT, 'openapi.yaml');
+const INPUT = path.resolve(REPO_ROOT, 'openapi.yaml');
 
 /** Absolute path of the file to generate, from `--out`. */
-const OUTPUT = requiredPath('out', ROOT);
+const OUTPUT = requiredPath('out', REPO_ROOT);
 
 /** The bundled contract, parsed. */
 const document = parseOpenApi(readFileSync(INPUT, 'utf8'));

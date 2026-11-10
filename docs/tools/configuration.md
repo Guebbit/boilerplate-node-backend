@@ -23,13 +23,13 @@ flowchart LR
 Laravel, AdonisJS, NestJS and Spring Boot all converge on it. This repo follows it on Zod 4, which
 was already a dependency.
 
-| Rule                                  | Where it is enforced here                                                           |
-| ------------------------------------- | ----------------------------------------------------------------------------------- |
-| Read the environment in one layer     | `no-restricted-properties` on `process.env` in `src/`, off only in `config.ts`      |
-| Validate once at boot, list every one | `assertConfig` from `registerModules`, `runScript` and the cluster primary          |
-| Parse once, expose a frozen object    | The store snapshots `process.env` at the first read; a slice parses once per change |
-| Everything else reads that object     | Getters such as `vatRateDefault()` are the read door; their body reads the slice    |
-| Tests override config through a seam  | `tests/support/environment.ts`; lint refuses a `process.env` write in a test        |
+| Rule                                  | Where it is enforced here                                                                          |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Read the environment in one layer     | `no-restricted-properties` on `process.env` in `src/`, off only in `config.ts`                     |
+| Validate once at boot, list every one | `assertConfig` from `registerModules`, `runScript` and the cluster primary                         |
+| Parse once, expose a frozen object    | The store snapshots `process.env` at the first read; a slice parses once per change                |
+| Everything else reads that object     | A value read from another file has an exported getter; one read in one place reads the slice there |
+| Tests override config through a seam  | `tests/support/environment.ts`; lint refuses a `process.env` write in a test                       |
 
 A junk value **refuses to boot**. It never falls back to the default:
 `NODE_MAX_UPLOAD_BYTES=5mb` stops the boot; it is not read as 5 MB or as the default. Blank counts as unset.
@@ -47,7 +47,8 @@ A junk value **refuses to boot**. It never falls back to the default:
 ## Add a variable
 
 1. Put it in **its owner's** `config.ts`, with a builder.
-2. Add a getter with a plain signature; read the slice inside it.
+2. A value read from another file gets an exported getter in its owner's `config.ts`; a value read
+   in one place reads the slice there, unit conversion included, with its why as a comment on that line.
 3. A module lists the slice on its manifest (`config: [mySlice.slice]`). Infrastructure and app
    slices are listed in `src/app/config.ts`.
 4. Add its line to [`.env-example`](#env-example), in the section it belongs to, unless something

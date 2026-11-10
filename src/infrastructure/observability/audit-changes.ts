@@ -52,7 +52,7 @@ export interface AuditedFields<TKey extends string> {
  * @param before - the stored value
  * @param after - the requested value
  */
-const differs = (before: unknown, after: unknown): boolean =>
+export const differs = (before: unknown, after: unknown): boolean =>
     JSON.stringify(before ?? null) !== JSON.stringify(after ?? null);
 
 /**

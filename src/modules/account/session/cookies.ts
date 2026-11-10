@@ -20,7 +20,7 @@ import { isRelaxedEnvironment } from '@infrastructure/runtime/config';
  * endpoint that reads or clears it. A function, not a constant, so each call reads `NODE_ENV`
  * fresh rather than freezing it at import time.
  */
-export const secureCookieOptions = () => ({
+const secureCookieOptions = () => ({
     httpOnly: true,
     secure: !isRelaxedEnvironment(),
     sameSite: 'lax' as const,

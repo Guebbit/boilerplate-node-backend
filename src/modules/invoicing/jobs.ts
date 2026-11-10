@@ -13,17 +13,17 @@ import { invoicingConfig } from './config';
 import { eraseDueBuyers } from './services/retention';
 import { DAY_MS } from '@domain-primitives/time';
 
-/** The retention window in ms. Zero days is a window of nothing: everything stored is reaped. */
-const retentionMs = (): number => invoicingConfig().NODE_INVOICE_PDF_RETENTION_DAYS * DAY_MS;
-
 /** The jobs `invoicing` owns. */
 export const invoicingJobs: readonly JobDeclaration[] = [
     {
         ...invoicingJobData.reapInvoicePdfs,
+        // Zero days is a retention window of nothing: everything stored is reaped.
         run: () =>
-            reapDocuments(retentionMs()).then(({ checked, reaped }) => {
-                logger.info({ message: 'Stored documents reaped.', checked, reaped });
-            }),
+            reapDocuments(invoicingConfig().NODE_INVOICE_PDF_RETENTION_DAYS * DAY_MS).then(
+                ({ checked, reaped }) => {
+                    logger.info({ message: 'Stored documents reaped.', checked, reaped });
+                }
+            ),
         // The sweep never touches Mongo; only the outcome record does.
         connectFirst: false
     },

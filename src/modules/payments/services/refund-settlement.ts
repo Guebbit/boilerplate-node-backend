@@ -83,7 +83,7 @@ export const isFullyRefunded = (payment: PaymentDocument): boolean =>
  * @param outcome - `failure` when the status moved but no money actually went back
  * @param byHand - the operator confirmed hand-paid money returned (`settleRefundByHand`)
  */
-export const announceRefund = (
+const announceRefund = (
     payment: PaymentDocument,
     refund: RefundRecord,
     context: CallerContext | undefined,
@@ -170,7 +170,7 @@ export const stampOrder = (payment: PaymentDocument, session: ClientSession): Pr
  * @param actor - the operator who settled it by hand, when one did
  * @returns the payment as it now stands, or `null` when the record was no longer open
  */
-export const writeSettlement = (
+const writeSettlement = (
     payment: PaymentDocument,
     refund: RefundRecord,
     fields: RefundSettlement,
@@ -232,7 +232,7 @@ export const settleRefund = (
  * @param refund - the record as it was read before this refusal
  * @param failureReason - the closed code for what the provider said now
  */
-export const isNewFailure = (refund: RefundRecord, failureReason: RefundFailureReason): boolean =>
+const isNewFailure = (refund: RefundRecord, failureReason: RefundFailureReason): boolean =>
     (refund.attempts ?? 0) === 0 || refund.failureReason !== failureReason;
 
 /**

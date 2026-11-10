@@ -19,6 +19,7 @@ import {
 import { t } from '@infrastructure/i18n';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { isObjectIdString, toObjectId } from '@infrastructure/persistence/create-repository';
+import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { announceInTransaction } from '@kernel/outbox';
 import { accessService } from '@modules/access';
@@ -63,10 +64,6 @@ const REFUSALS: Record<TaskRefusal, { code: ErrorCode; key: string }> = {
     already_spam: { code: ERROR_CODES.TASK_ALREADY_SPAM, key: 'tasks.already-spam' },
     already_open: { code: ERROR_CODES.TASK_ALREADY_OPEN, key: 'tasks.already-open' }
 };
-
-/** Whether an error is Mongo's duplicate-key refusal (E11000). */
-const isDuplicateKey = (error: unknown): boolean =>
-    typeof error === 'object' && error !== null && 'code' in error && error.code === 11_000;
 
 /** The 409 for assigning a task that is closed. */
 const notOpen = (): ResponseReject =>

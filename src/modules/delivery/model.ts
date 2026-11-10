@@ -15,6 +15,7 @@
 
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
+import { postalAddressPaths } from '@infrastructure/persistence/postal-address-paths';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import {
     FulfillmentCancelReason,
@@ -151,17 +152,7 @@ const fulfillmentLineSchema = new Schema<FulfillmentOrderLine>(
 );
 
 /** The embedded destination: the order's address fields, each an encrypted string. */
-const destinationSchema = new Schema<OrderAddress>(
-    {
-        fullName: { type: String },
-        street: { type: String },
-        city: { type: String },
-        zip: { type: String },
-        country: { type: String },
-        phone: { type: String }
-    },
-    { _id: false }
-);
+const destinationSchema = new Schema<OrderAddress>(postalAddressPaths, { _id: false });
 
 /** An embedded shipment line. */
 const shipmentLineSchema = new Schema<ShipmentLineDocument>(

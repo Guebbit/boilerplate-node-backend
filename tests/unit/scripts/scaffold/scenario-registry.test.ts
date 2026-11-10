@@ -96,6 +96,25 @@ describe('scenario registries', () => {
         expect(text).toContain('= [paymentsLever];');
     });
 
+    it('skips a doubles folder that has only one of its two files, for the registry it lacks', async () => {
+        write(
+            'scenarios/support/doubles/shipping/levers.ts',
+            'export const installLever = () => {};\n'
+        );
+        write(
+            'scenarios/support/doubles/billing/register.ts',
+            'export const registerDouble = () => {};\n'
+        );
+
+        const doubles = await rendered(DOUBLES_REGISTRY);
+        const levers = await rendered(LEVERS_REGISTRY);
+
+        expect(doubles).toContain('= [billingDouble, paymentsDouble];');
+        expect(doubles).not.toContain('shipping');
+        expect(levers).toContain('= [paymentsLever, shippingLever];');
+        expect(levers).not.toContain('billing');
+    });
+
     it('drops an entry the moment its file is deleted, with no text to edit', async () => {
         rmSync(path.join(root, 'scenarios/products.ts'));
         rmSync(path.join(root, 'scenarios/shop.scenario.ts'));

@@ -9,7 +9,7 @@
  */
 
 import { DAY_MS } from '@domain-primitives/time';
-import { remainingOfLine } from './fulfillment';
+import { plainLine, remainingOfLine } from './fulfillment';
 import type { FulfillmentLine, ProductQuantity } from './fulfillment';
 
 /** The lines of a lost shipment, as the plan needs them. */
@@ -36,18 +36,6 @@ export interface Restoration {
     /** The fulfillment orders made for the owed units: closed, with no refund. */
     owedFulfillmentOrderIds: string[];
 }
-
-/**
- * One line as plain data: a stored line is a subdocument whose fields sit behind getters.
- * @param line - a line, plain or stored
- */
-const plain = (line: FulfillmentLine): FulfillmentLine => ({
-    productId: line.productId,
-    title: line.title,
-    quantity: line.quantity,
-    shippedQuantity: line.shippedQuantity,
-    canceledQuantity: line.canceledQuantity
-});
 
 /**
  * Sum of one product over some fulfillment orders' lines, by a per-line measure.
@@ -84,7 +72,7 @@ export const withLoss = (
     const owedBy = new Map(owed.map(({ productId, quantity }) => [productId, quantity]));
     return lines
         .map((line) => ({
-            ...plain(line),
+            ...plainLine(line),
             shippedQuantity: Math.max(0, line.shippedQuantity - (lostBy.get(line.productId) ?? 0)),
             quantity: line.quantity - (owedBy.get(line.productId) ?? 0)
         }))
@@ -156,11 +144,11 @@ export const withRestoration = (
         const found = back.find(({ productId }) => productId === line.productId);
         return found
             ? {
-                  ...plain(line),
+                  ...plainLine(line),
                   shippedQuantity: line.shippedQuantity + found.quantity,
                   quantity: line.quantity + found.owed
               }
-            : plain(line);
+            : plainLine(line);
     });
     const dropped = back
         .filter(({ productId }) => !known.has(productId))

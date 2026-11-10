@@ -9,7 +9,7 @@
 import { z } from 'zod';
 
 /** One cookie or storage item. Strict: an extra key is a typo, or a behaviour that belongs in code. */
-export const cookieRowSchema = z.strictObject({
+const cookieRowSchema = z.strictObject({
     /** The wire name, exactly as the browser stores it. */
     name: z.string().min(1),
     /** Who sets it: this backend, the frontend, or a library the frontend loads. */
@@ -55,6 +55,3 @@ export const cookiesSchema = z.strictObject({
             { message: 'a name is listed twice' }
         )
 });
-
-/** Parsed `cookies.yaml`. */
-export type CookieRules = z.infer<typeof cookiesSchema>;

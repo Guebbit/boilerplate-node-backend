@@ -19,7 +19,6 @@ import { resolveCurrentImages } from './current';
 import { callerScope, ownerScope } from './scope';
 import { buyerIdOf, fulfillmentStatusFilter } from '../domain';
 import { parseOrderNumber } from './order-numbering';
-import { toObjectId } from '@infrastructure/persistence/create-repository';
 
 /**
  * Rewrite the two filters that are not plain columns into conditions the repository understands,
@@ -120,26 +119,21 @@ export interface OrderBrief {
 export const orderBriefsByIds = (orderIds: readonly string[]): Promise<Map<string, OrderBrief>> =>
     orderIds.length === 0
         ? Promise.resolve(new Map<string, OrderBrief>())
-        : orderRepository
-              .findAll(
-                  { _id: { $in: orderIds.map((id) => toObjectId(id)) } },
-                  { limit: orderIds.length }
-              )
-              .then(
-                  (orders) =>
-                      new Map(
-                          orders.map((order): [string, OrderBrief] => [
-                              String(order._id),
-                              {
-                                  id: String(order._id),
-                                  orderNumber: order.orderNumber,
-                                  email: order.email,
-                                  ...(buyerIdOf(order) ? { userId: buyerIdOf(order) } : {}),
-                                  ...(order.paidAt ? { paidAt: order.paidAt } : {})
-                              }
-                          ])
-                      )
-              );
+        : orderRepository.findByIds(orderIds).then(
+              (orders) =>
+                  new Map(
+                      orders.map((order): [string, OrderBrief] => [
+                          String(order._id),
+                          {
+                              id: String(order._id),
+                              orderNumber: order.orderNumber,
+                              email: order.email,
+                              ...(buyerIdOf(order) ? { userId: buyerIdOf(order) } : {}),
+                              ...(order.paidAt ? { paidAt: order.paidAt } : {})
+                          }
+                      ])
+                  )
+          );
 
 /**
  * Every order this account placed, in wire shape — for the account's own data export. Goes

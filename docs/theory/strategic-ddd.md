@@ -307,7 +307,9 @@ way a handle does. What it never publishes, no matter how convenient:
   reason to reach for a test builder.
 
 Unused exports in a published file are allowed on purpose and unenforced — the point of this
-section is that copying is the expensive failure mode, not an idle export. What IS enforced: a
+section is that copying is the expensive failure mode, not an idle export. Published means
+reachable from the module barrel; a sub-barrel or an infrastructure facade is a convenience, and
+its unused re-exports go. What IS enforced: a
 barrel may only `export *` from the files above, and a module may not import its own barrel — the
 same cycle risk `export *` always carries, now closed at the one place it would bite.
 

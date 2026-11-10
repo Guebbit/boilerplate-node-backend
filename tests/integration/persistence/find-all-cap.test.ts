@@ -39,3 +39,20 @@ describe('findAll without a limit', () => {
         expect(rows).toHaveLength(1001);
     });
 });
+
+describe('findByIds', () => {
+    it('returns every id, past the findAll default cap', async () => {
+        // One past the ceiling: without a limit of its own the 1001st id would be dropped silently.
+        const inserted = await probeModel.insertMany(
+            Array.from({ length: 1001 }, (_, n) => ({ n }))
+        );
+
+        const rows = await probes.findByIds(inserted.map((row) => String(row._id)));
+
+        expect(rows).toHaveLength(1001);
+    });
+
+    it('rejects a malformed id instead of throwing out of the call', async () => {
+        await expect(probes.findByIds(['not-an-id'])).rejects.toThrow();
+    });
+});

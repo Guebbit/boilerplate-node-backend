@@ -22,6 +22,3 @@ export const logRedactionSchema = z.strictObject({
     /** Query parameters a span's URL attributes may not carry in clear. */
     traceUrlSecrets: names
 });
-
-/** Parsed `log-redaction.yaml`. */
-export type LogRedactionRules = z.infer<typeof logRedactionSchema>;

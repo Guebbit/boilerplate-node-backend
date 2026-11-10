@@ -64,16 +64,6 @@ const lostRace = (id: string): Promise<ResponseReject> =>
         .findById(id)
         .then((now) => (now?.proofOfSendingAt === undefined ? notReceivable() : alreadyRecorded()));
 
-/** The 422 for a proof dated in the future, on the field that carries it. */
-const futureProof = (): ResponseReject =>
-    generateReject(422, [
-        fieldError(
-            'sentAt',
-            t('returns.proof-date-in-future'),
-            ERROR_CODES.RETURN_PROOF_DATE_INVALID
-        )
-    ]);
-
 /** What the transaction decided: the stamped return and the refund it opened, or a lost race. */
 type Recorded = { returned: ReturnDocument; opened: OpenedReturnRefund | null } | null;
 
@@ -175,7 +165,14 @@ export const recordProofOfSending = (
     context: CallerContext
 ): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> =>
     returnRepository.findById(id).then((returned) => {
-        if (input.sentAt.getTime() > Date.now()) return futureProof();
+        if (input.sentAt.getTime() > Date.now())
+            return generateReject(422, [
+                fieldError(
+                    'sentAt',
+                    t('returns.proof-date-in-future'),
+                    ERROR_CODES.RETURN_PROOF_DATE_INVALID
+                )
+            ]);
         if (!returned) return generateReject(404, [t('returns.not-found')]);
         if (!returnLifecycle.allows('receive', returned.status)) return notReceivable();
         if (returned.proofOfSendingAt !== undefined) return alreadyRecorded();

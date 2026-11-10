@@ -699,10 +699,5 @@ export const openapiBundle: CompiledBundle = {
     label: 'openapi.yaml',
     output: OPENAPI_OUTPUT,
     compiled: true,
-    content: compile,
-    sources: () => [
-        ROOT_SPEC,
-        ...MODULE_SECTIONS.map((section) => moduleSpec(section)),
-        ...extensionFragments().map((fragment) => fragment.file)
-    ]
+    content: compile
 };

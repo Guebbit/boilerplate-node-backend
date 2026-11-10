@@ -165,12 +165,6 @@ export const approveReturn = (
 ): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> => decide(id, 'approve', {}, context);
 
 /**
- * The 422 for `other` with nothing written: "other" alone tells the buyer nothing.
- */
-const messageRequired = (): ResponseReject =>
-    generateReject(422, [fieldError('message', t('returns.decline-message-required'))]);
-
-/**
  * Decline a return request, saying why: a code the buyer reads in their own language, and a message
  * when the code is `other`. Checked before anything is written.
  * @param id - the return
@@ -182,7 +176,11 @@ export const declineReturn = (
     decline: { reason: ReturnDeclineReason; message?: string | undefined },
     context: CallerContext
 ): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> => {
-    if (decline.reason === 'other' && !decline.message) return Promise.resolve(messageRequired());
+    // "other" alone tells the buyer nothing.
+    if (decline.reason === 'other' && !decline.message)
+        return Promise.resolve(
+            generateReject(422, [fieldError('message', t('returns.decline-message-required'))])
+        );
 
     return decide(
         id,

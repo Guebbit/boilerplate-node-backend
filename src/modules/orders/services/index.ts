@@ -81,7 +81,12 @@ import {
 } from './stats';
 
 export type { OrderBrief } from './read';
-export type { PlaceOrderInput, PlaceOrderLine, PlaceOrderOutcome } from './place';
+export type {
+    PlaceOrderInput,
+    PlaceOrderLine,
+    PlaceOrderOutcome,
+    PlaceOrderShipping
+} from './place';
 export type { CancelCause } from './cancel';
 export type { OrderExport } from './export';
 export type {

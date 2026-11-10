@@ -78,7 +78,7 @@ export const fulfillmentOrderActions = (
  * @param standing - how the caller stands to it
  * @param restorable - for a `lost` shipment: whether every unit on it is still open (see `./found`)
  */
-export const shipmentActions = (
+const shipmentActions = (
     shipment: ShipmentDocument,
     order: OrderDocument,
     standing: Standing,

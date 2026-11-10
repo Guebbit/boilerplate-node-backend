@@ -36,15 +36,6 @@ const locked = (): ResponseReject =>
         { code: ERROR_CODES.ORDER_ADDRESS_LOCKED, message: t('orders.address.locked') }
     ]);
 
-/** The 422 for a country the shop does not ship to: VAT is charged at the shop's own rates. */
-const unsupportedCountry = (): ResponseReject =>
-    generateReject(422, [
-        {
-            code: ERROR_CODES.ORDER_SHIP_TO_COUNTRY_NOT_SUPPORTED,
-            message: t('orders.address.ship-to-country-not-supported')
-        }
-    ]);
-
 /**
  * Replace the shipping address of the units that have not left yet. Parcels already cut keep the
  * address they went to (each shipment stores its own copy).
@@ -65,7 +56,13 @@ export const correctShippingAddress = (
         if (!order) return generateReject(404, [t('orders.not-found')]);
         if (!canCorrectAddress(order)) return locked();
         // Checkout refuses the same list: a redirect abroad would break the VAT the order was charged.
-        if (!shipToCountries().includes(address.country)) return unsupportedCountry();
+        if (!shipToCountries().includes(address.country))
+            return generateReject(422, [
+                {
+                    code: ERROR_CODES.ORDER_SHIP_TO_COUNTRY_NOT_SUPPORTED,
+                    message: t('orders.address.ship-to-country-not-supported')
+                }
+            ]);
 
         return withTransaction(
             withTimeline(

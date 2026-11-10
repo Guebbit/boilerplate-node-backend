@@ -23,7 +23,7 @@ import {
 import type { PaymentDocument } from '../model';
 import { withActions } from './view';
 import { paymentRepository } from '../repository';
-import { cardNotAvailable, notPayable, orderNotFound } from './errors';
+import { notPayable, orderNotFound } from './errors';
 import { mailTransferExpired } from './notify';
 import { isHandRecorded, SETTLEABLE_PAYMENT_STATUSES } from '../domain';
 import { settleFromProvider } from './settlement';
@@ -105,8 +105,15 @@ export const createIntent = async (
     if (!isPayable(order.status)) return notPayable();
 
     // No provider configured: this deployment takes no card payments, and the order stays unpaid.
+    // Same answer as checkout's 409, for a client that skips both it and `GET /payments/methods`.
     const provider = resolvePaymentProvider();
-    if (!provider) return cardNotAvailable();
+    if (!provider)
+        return generateReject(409, [
+            {
+                code: ERROR_CODES.PAYMENT_CARD_NOT_AVAILABLE,
+                message: t('payments.card-not-available')
+            }
+        ]);
     const payerId = buyerIdOf(order);
     const { currency } = order;
     const upserted = await paymentRepository.upsertIntent(orderId, payerId, {

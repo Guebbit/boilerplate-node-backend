@@ -28,7 +28,7 @@ import {
     softDeletable
 } from '../domain';
 import type { OrderActor } from '../domain';
-import { toObjectId, type Lean } from '@infrastructure/persistence/create-repository';
+import type { Lean } from '@infrastructure/persistence/create-repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { carryVersion } from '@infrastructure/persistence/versioning';
 import { resolveCurrentImages } from './current';
@@ -175,7 +175,7 @@ const forStanding = (actions: OrderActions, actor: OrderActor, buyer: boolean): 
  * @param order - the order being served
  * @param authContext - the caller, or `undefined` for no request behind this read
  */
-export const orderActionsOf = (
+const orderActionsOf = (
     order: OrderForActions,
     authContext: AuthContext | undefined
 ): OrderActions => {
@@ -236,24 +236,17 @@ export const withListActions = (
 ): Promise<{ items: OrderListItem[]; meta: PaginatedMeta }> =>
     page.items.length === 0
         ? Promise.resolve({ items: [], meta: page.meta })
-        : orderRepository
-              .findAll(
-                  { _id: { $in: page.items.map((item) => toObjectId(item.id)) } },
-                  { limit: page.items.length }
-              )
-              .then((documents) => {
-                  const byId = new Map(
-                      documents.map((document) => [String(document._id), document])
-                  );
-                  return {
-                      // A row whose document vanished between the two reads is gone: it is dropped,
-                      // since an `Order` always carries its `actions`.
-                      items: page.items.flatMap((item) => {
-                          const document = byId.get(item.id);
-                          return document
-                              ? [presentOrderListItem(item, orderActionsOf(document, authContext))]
-                              : [];
-                      }),
-                      meta: page.meta
-                  };
-              });
+        : orderRepository.findByIds(page.items.map((item) => item.id)).then((documents) => {
+              const byId = new Map(documents.map((document) => [String(document._id), document]));
+              return {
+                  // A row whose document vanished between the two reads is gone: it is dropped,
+                  // since an `Order` always carries its `actions`.
+                  items: page.items.flatMap((item) => {
+                      const document = byId.get(item.id);
+                      return document
+                          ? [presentOrderListItem(item, orderActionsOf(document, authContext))]
+                          : [];
+                  }),
+                  meta: page.meta
+              };
+          });

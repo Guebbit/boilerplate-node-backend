@@ -18,6 +18,7 @@ import {
     auditChanges,
     type AuditChanges,
     type AuditedFields,
+    differs,
     fieldChange,
     type FieldChange
 } from '@infrastructure/observability/audit-changes';
@@ -264,15 +265,6 @@ export interface ProductUpdateOutcome {
     /** The free-text fields and the image that changed, by name only. */
     changedFields: string[];
 }
-
-/**
- * Whether two values differ, treating an unset field and `null` alike.
- *
- * @param before - the stored value
- * @param after - the requested value
- */
-const differs = (before: unknown, after: unknown): boolean =>
-    JSON.stringify(before ?? null) !== JSON.stringify(after ?? null);
 
 /**
  * The audited fields an update would move. The lists are sanitised first, so the diff compares

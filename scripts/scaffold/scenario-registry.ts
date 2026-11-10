@@ -59,6 +59,30 @@ const declares = (file: string, exportName: string): boolean =>
     new RegExp(String.raw`^export const ${exportName}\b`, 'm').test(readFileSync(file, 'utf8'));
 
 /**
+ * The doubles folders whose `fileName` declares `exportName`, alphabetically. A folder with only
+ * one of its two files (levers without a register, or the reverse) is skipped for the other
+ * registry instead of failing the whole generation.
+ * @param doublesDirectory - absolute `scenarios/support/doubles`, which may not exist
+ * @param fileName - the file the convention asks for in each folder
+ * @param exportName - the export that file must declare
+ */
+const foldersDeclaring = (
+    doublesDirectory: string,
+    fileName: string,
+    exportName: string
+): string[] =>
+    existsSync(doublesDirectory)
+        ? readdirSync(doublesDirectory, { withFileTypes: true })
+              .filter((entry) => entry.isDirectory())
+              .map((entry) => entry.name)
+              .filter((name) => {
+                  const file = path.join(doublesDirectory, name, fileName);
+                  return existsSync(file) && declares(file, exportName);
+              })
+              .toSorted()
+        : [];
+
+/**
  * A module or scenario name as an identifier: `api-keys` becomes `apiKeys`.
  * @param name - a kebab-case file or folder name
  */
@@ -144,14 +168,11 @@ const renderScenarioRegistry = (repoRoot: string): string => {
  * @param repoRoot - the checkout to read
  */
 const renderDoublesRegistry = (repoRoot: string): string => {
-    const doubles = path.join(repoRoot, 'scenarios', 'support', 'doubles');
-    const folders = existsSync(doubles)
-        ? readdirSync(doubles, { withFileTypes: true })
-              .filter((entry) => entry.isDirectory())
-              .map((entry) => entry.name)
-              .filter((name) => declares(path.join(doubles, name, 'register.ts'), 'registerDouble'))
-              .toSorted()
-        : [];
+    const folders = foldersDeclaring(
+        path.join(repoRoot, 'scenarios', 'support', 'doubles'),
+        'register.ts',
+        'registerDouble'
+    );
 
     return [
         HEADER,
@@ -179,14 +200,11 @@ const renderDoublesRegistry = (repoRoot: string): string => {
  * @param repoRoot - the checkout to read
  */
 const renderLeversRegistry = (repoRoot: string): string => {
-    const doubles = path.join(repoRoot, 'scenarios', 'support', 'doubles');
-    const folders = existsSync(doubles)
-        ? readdirSync(doubles, { withFileTypes: true })
-              .filter((entry) => entry.isDirectory())
-              .map((entry) => entry.name)
-              .filter((name) => declares(path.join(doubles, name, 'levers.ts'), 'installLever'))
-              .toSorted()
-        : [];
+    const folders = foldersDeclaring(
+        path.join(repoRoot, 'scenarios', 'support', 'doubles'),
+        'levers.ts',
+        'installLever'
+    );
 
     return [
         HEADER,
