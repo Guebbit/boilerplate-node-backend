@@ -17,9 +17,6 @@ import { setProcessEnvironment } from '@tests/environment';
 /** `execFile` without blocking the event loop. */
 const run = promisify(execFile);
 
-/** The three vars git exports into a hook's process — put back after every case by the harness. */
-const HOOK_VARS = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE'] as const;
-
 describe('gitEnvironment', () => {
     it('strips GIT_DIR, GIT_WORK_TREE and GIT_INDEX_FILE, simulating a hook environment', () => {
         setProcessEnvironment({ GIT_DIR: '/repo/.git' });
@@ -39,12 +36,6 @@ describe('gitEnvironment', () => {
         const environment = gitEnvironment();
 
         expect(environment.PATH).toBe(process.env.PATH);
-    });
-
-    it('is a no-op copy when none of the three are set', () => {
-        setProcessEnvironment(Object.fromEntries(HOOK_VARS.map((key) => [key, undefined])));
-
-        expect(gitEnvironment()).toEqual(process.env);
     });
 });
 

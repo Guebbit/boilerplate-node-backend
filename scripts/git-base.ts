@@ -2,21 +2,50 @@ import { execFileSync } from 'node:child_process';
 import { REPO_ROOT } from './modules-on-disk';
 
 /**
- * `process.env`, minus the three vars git exports into every hook it runs
- * (`GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE`). A nested `git` call that targets some OTHER
- * checkout by `cwd`/`-C` must use this: those vars, once set, override that targeting and point
- * the nested call at the hook's own repo instead — silently, since the command still exits 0.
+ * The variables git itself lists as repository-local (`git rev-parse --local-env-vars`). Set, any
+ * of them overrides the `cwd` / `-C` a nested `git` was aimed with.
+ * https://git-scm.com/docs/git-rev-parse#Documentation/git-rev-parse.txt---local-env-vars
+ */
+const GIT_LOCAL_ENV = new Set([
+    'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+    'GIT_CONFIG',
+    'GIT_CONFIG_PARAMETERS',
+    'GIT_CONFIG_COUNT',
+    'GIT_OBJECT_DIRECTORY',
+    'GIT_DIR',
+    'GIT_WORK_TREE',
+    'GIT_IMPLICIT_WORK_TREE',
+    'GIT_GRAFT_FILE',
+    'GIT_INDEX_FILE',
+    'GIT_NO_REPLACE_OBJECTS',
+    'GIT_REPLACE_REF_BASE',
+    'GIT_PREFIX',
+    'GIT_SHALLOW_FILE',
+    'GIT_COMMON_DIR'
+]);
+
+/**
+ * Whether git would read `name` from the caller's environment instead of the target repo: its own
+ * local list, the author and committer identity, and the injected `GIT_CONFIG_KEY_<n>` /
+ * `GIT_CONFIG_VALUE_<n>` pairs.
+ *
+ * @param name - an environment variable name
+ * @returns true when a nested `git` aimed at another checkout must not inherit it
+ */
+const isGitSandboxVariable = (name: string): boolean =>
+    GIT_LOCAL_ENV.has(name) || /^GIT_(AUTHOR_|COMMITTER_|CONFIG_KEY_|CONFIG_VALUE_)/.test(name);
+
+/**
+ * `process.env`, minus the variables a hook (or a parent `git -c`) exports that would aim a nested
+ * `git` at the wrong repo or identity. A nested `git` call that targets some OTHER checkout by
+ * `cwd`/`-C` must use this: those vars override that targeting and point the nested call at the
+ * hook's own repo instead — silently, since the command still exits 0.
  *
  * Pass this as `env` to every `execFileSync('git', …)` whose `cwd` or `-C` argument is not
- * `REPO_ROOT` itself.
+ * `REPO_ROOT` itself. The FE's `scripts/audit/check-clean.ts` carries an identical copy.
  */
-export const gitEnvironment = (): NodeJS.ProcessEnv => {
-    const environment = { ...process.env };
-    delete environment.GIT_DIR;
-    delete environment.GIT_WORK_TREE;
-    delete environment.GIT_INDEX_FILE;
-    return environment;
-};
+export const gitEnvironment = (): NodeJS.ProcessEnv =>
+    Object.fromEntries(Object.entries(process.env).filter(([name]) => !isGitSandboxVariable(name)));
 
 /** `git merge-base HEAD <ref>`, or `undefined` when git refuses to resolve `ref`. */
 const resolveRef = (ref: string): string | undefined => {
