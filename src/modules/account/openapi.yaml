@@ -185,7 +185,7 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                # `sessionCredentialLimiters` sit in front of this route, and the service paces a
+                # `signedInCredentialLimiters` sit in front of this route, and the service paces a
                 # request inside the previous one's minute — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
         delete:
@@ -738,8 +738,8 @@ paths:
                             $ref: '#/components/schemas/VerifyEmailConfirmRequest'
             responses:
                 '204': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NoContent' }
-                # The new address was claimed by another account between the request and this
-                # confirm — the same race `PUT /account` itself declares 409 for.
+                # 409: the new address was claimed by another account between the request and this
+                # confirm.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }

@@ -18,8 +18,8 @@ import { wellFormedLocale } from '@infrastructure/http/schemas';
 
 /**
  * `PUT /account` and `PATCH /account` — one handler pair over `accountService.updateProfile`,
- * which merges the fields, routes `email` through the `pendingEmail` flow, and audits the change
- * itself.
+ * which merges the fields and audits the change itself. `email` is not one of them: the schemas
+ * refuse it, and it moves only through `POST /account/email-change`.
  */
 export const { replace: replaceAccount, update: updateAccount } = createUpdateController({
     versioned: true,

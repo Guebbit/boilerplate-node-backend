@@ -1,9 +1,10 @@
 /**
  * @module
  * The per-RECIPIENT mail budget: how many mails this app will send to one mailbox in a day,
- * whichever flow asks. Signup, password reset, email change, both resends, a data export and an account-deletion
- * request can each be pointed at a stranger's address; a budget on the caller (an address, an account) bounds the caller, never
- * the victim, and a `+tag` makes every attempt look like a new address.
+ * whichever flow asks. Signup, password reset, email change, both resends and a data export can each
+ * be pointed at a stranger's address; a budget on the caller (an address, an account) bounds the
+ * caller, never the victim, and a `+tag` makes every attempt look like a new address.
+ * Not charged: the account-deletion mail, which goes to the caller's own address behind fresh auth.
  *
  * Key:     the canonical mailbox (`canonicalMailbox`: no `+tag`, no dots for Gmail), pseudonymised.
  * Window:  24 hours, `NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX` (10): a per-minute window lets a slow

@@ -158,8 +158,8 @@ router.delete(
 router.post('/restore', credentialLimiters, postAccountRestore);
 
 // POST /account/login — authenticate and get tokens. `loginChallengeGate` (rung 3, off by
-// default) only engages once `credentialLimiters`' identity budget is mostly spent — never on an
-// honest first attempt, see rate-limits.ts.
+// default) only engages once `credentialLimiters`' identity or block budget is mostly spent —
+// never on an honest first attempt, see rate-limits.ts.
 router.post('/login', credentialLimiters, loginChallengeGate, postLogin);
 
 // POST /account/signup — register new user. `signupLimiters`, not `credentialLimiters`: the
