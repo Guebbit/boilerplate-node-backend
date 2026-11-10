@@ -10,6 +10,7 @@
  */
 
 import { spawn } from 'node:child_process';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { REPO_ROOT } from '../modules-on-disk';
 import { failScript } from '../fail-script';
 
@@ -94,7 +95,7 @@ const waitForBoot = async (): Promise<Response> => {
         } catch {
             if (Date.now() > deadline)
                 finish(1, `[prism] did not accept connections on :${PORT} within 30s.`);
-            await new Promise((resolve) => setTimeout(resolve, 250));
+            await sleep(250);
         }
     }
 };

@@ -17,22 +17,19 @@
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { requiredPath } from '../cli';
+import { REPO_ROOT } from '../modules-on-disk';
 import { writeOrCheck } from './generated-file';
 import { operationsOf, parseOpenApi, type Operation } from './openapi-document';
 
 /** What a fragment's `x-redirect-query` holds on a response: parameter name to its enum schema. */
 type RedirectQuery = Record<string, { enum?: string[] }>;
 
-/** The repo root. `import.meta.url` rather than `__dirname`: this script runs as ESM. */
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-
 /** The bundled root contract this generator reads. */
-const INPUT = path.resolve(ROOT, 'openapi.yaml');
+const INPUT = path.resolve(REPO_ROOT, 'openapi.yaml');
 
 /** Absolute path of the file to generate, from `--out`. */
-const OUTPUT = requiredPath('out', ROOT);
+const OUTPUT = requiredPath('out', REPO_ROOT);
 
 /** Operation id to parameter name to the values it takes. */
 const enums: Record<string, Record<string, string[]>> = {};
