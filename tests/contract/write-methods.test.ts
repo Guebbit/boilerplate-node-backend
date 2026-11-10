@@ -72,6 +72,9 @@ describe('the body media type', () => {
             .send('username=someone-else');
 
         expect(response.status).toBe(415);
+        expect(response.headers['accept-patch']).toBe(
+            'application/json, application/merge-patch+json, multipart/form-data'
+        );
         const profile = await api().get('/account').set('Authorization', bearer);
         expect(profile.body.username).toBe(user.username);
     });

@@ -14,11 +14,14 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { rejectResponse } from '@infrastructure/http/response';
 import type { OperationRoute } from '@api/operation-routes';
+import { declaredOperation } from '@infrastructure/http/middlewares/content-type';
 import type { RequestContentType } from '@api/request-content-types';
 
 /**
  * The methods a request path can be asked with: every method of every live path template that
- * matches it, plus HEAD wherever GET is (Express answers a HEAD through the GET route).
+ * matches it, plus HEAD wherever GET is (Express answers a HEAD through the GET route) and
+ * `OPTIONS` on any path that has a method at all (every served path answers it). The one place
+ * `Allow` is computed, for the 405 and for the `OPTIONS` answer alike.
  *
  * @param routes - the generated path table
  * @param served - the modules this build mounts
@@ -43,6 +46,7 @@ const allowedMethods = (
             .flatMap((route) => route.methods)
     );
     if (methods.has('GET')) methods.add('HEAD');
+    if (methods.size > 0) methods.add('OPTIONS');
     return [...methods].toSorted();
 };
 
@@ -90,15 +94,15 @@ const withoutTrailingSlash = (path: string): string =>
     path.length > 1 ? path.replace(/\/$/, '') : path;
 
 /**
- * The PATCH formats a path accepts: the first matching PATCH row of the generated table (already
- * sorted fewest `{param}` first, so a literal path beats a templated one).
+ * The PATCH formats a path accepts: its PATCH row of the generated table, the same one the 415
+ * guard reads (`declaredOperation`).
  *
  * @param contentTypes - the generated request-body table
  * @param path - the request path, without a trailing slash
  * @returns the declared media types, empty when no PATCH row matches
  */
 const patchTypes = (contentTypes: readonly RequestContentType[], path: string): readonly string[] =>
-    contentTypes.find((row) => row.method === 'PATCH' && row.pattern.test(path))?.types ?? [];
+    declaredOperation(contentTypes, 'PATCH', path)?.types ?? [];
 
 /**
  * Builds the one `OPTIONS` answer, mounted right after `cors` (which runs with
@@ -109,8 +113,8 @@ const patchTypes = (contentTypes: readonly RequestContentType[], path: string): 
  *  - `OPTIONS *`, or a preflight (`Access-Control-Request-Method`) on any path: 204;
  *  - a plain `OPTIONS` on a path no served module owns: the 404 problem.
  *
- * The 204 carries no `Content-Length` (RFC 9110 §8.6). `Allow` leaves `OPTIONS` itself out, like
- * the 405 guard. A path with literal templates answers from those alone, as the router would.
+ * The 204 carries no `Content-Length` (RFC 9110 §8.6). `Allow` lists `OPTIONS` itself, like
+ * the 405. A path with literal templates answers from those alone, as the router would.
  *
  * See: docs/api/write-methods.md#options-says-what-a-path-accepts
  *

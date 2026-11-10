@@ -15,7 +15,7 @@ describe('a wrong method on a known path', () => {
         const response = await api().delete('/shop');
 
         expect(response.status).toBe(405);
-        expect(response.headers.allow).toBe('GET, HEAD');
+        expect(response.headers.allow).toBe('GET, HEAD, OPTIONS');
         expect(response.body.errors[0].code).toBe('METHOD_NOT_ALLOWED');
         expect(response.type).toBe('application/problem+json');
         expect(response.body).toMatchObject({ title: 'Method Not Allowed', status: 405 });
@@ -26,14 +26,14 @@ describe('a wrong method on a known path', () => {
         const response = await api().delete('/products/facets');
 
         expect(response.status).toBe(405);
-        expect(response.headers.allow).toBe('GET, HEAD');
+        expect(response.headers.allow).toBe('GET, HEAD, OPTIONS');
     });
 
     it('answers 405 on a system route too', async () => {
         const response = await api().post('/livez');
 
         expect(response.status).toBe(405);
-        expect(response.headers.allow).toBe('GET, HEAD');
+        expect(response.headers.allow).toBe('GET, HEAD, OPTIONS');
     });
 });
 
@@ -75,14 +75,14 @@ describe('OPTIONS says what a path accepts', () => {
         const response = await api().options('/shop');
 
         expect(response.status).toBe(204);
-        expect(response.headers.allow).toBe('GET, HEAD');
+        expect(response.headers.allow).toBe('GET, HEAD, OPTIONS');
         expect(response.headers['accept-patch']).toBeUndefined();
     });
 
     it('lets a literal path win over its templated sibling', async () => {
         const response = await api().options('/products/facets');
 
-        expect(response.headers.allow).toBe('GET, HEAD');
+        expect(response.headers.allow).toBe('GET, HEAD, OPTIONS');
         expect(response.headers['accept-patch']).toBeUndefined();
     });
 
@@ -123,5 +123,17 @@ describe('OPTIONS says what a path accepts', () => {
         expect(plain.status).toBe(404);
         expect(plain.headers.allow).toBeUndefined();
         expect(preflight.status).toBe(204);
+    });
+});
+
+describe('Allow lists OPTIONS itself, on both answers', () => {
+    it('lists OPTIONS on the OPTIONS 204 and on a 405, the same set', async () => {
+        const options = await api().options('/shop');
+        const refused = await api().delete('/shop');
+
+        expect(options.status).toBe(204);
+        expect(refused.status).toBe(405);
+        expect(options.headers.allow).toBe('GET, HEAD, OPTIONS');
+        expect(refused.headers.allow).toBe(options.headers.allow);
     });
 });

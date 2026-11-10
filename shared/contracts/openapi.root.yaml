@@ -691,6 +691,16 @@ components:
             headers:
                 Cache-Control:
                     $ref: '#/components/headers/CacheControlNoStore'
+                Accept:
+                    description: The media types the operation takes, comma-separated (RFC 9110 §12.5.1). Absent when the operation declares no body.
+                    required: false
+                    schema:
+                        type: string
+                Accept-Patch:
+                    description: The same list, on a refused `PATCH` only (RFC 5789 §2.2).
+                    required: false
+                    schema:
+                        type: string
             content:
                 application/problem+json:
                     schema:
