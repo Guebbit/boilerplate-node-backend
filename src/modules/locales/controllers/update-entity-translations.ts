@@ -22,10 +22,9 @@ import {
 import { callerContextOf } from '@infrastructure/http/request';
 import { setEtag, withIfMatch } from '@infrastructure/http/preconditions';
 import { requireId } from '@infrastructure/http/ids';
-import { t } from '@infrastructure/i18n';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { localeService } from '../services';
-import type { EntityTranslationsResult } from '../services/translations';
+import { entityNotFoundError, type EntityTranslationsResult } from '../services/translations';
 
 /**
  * The two routes differ by their schema and their service call, so one builder makes both.
@@ -56,7 +55,7 @@ const writeEntityTranslations =
     ) => {
         const { entityType, id: entityId } = request.params;
         const id = requireId(request, response, {
-            notFound: () => t('locales.error-entity-not-found', { entityType, entityId })
+            notFound: () => entityNotFoundError(entityType, entityId)
         });
         if (!id) return;
 

@@ -152,6 +152,25 @@ const fillParameter = (
     return template.replace(SENTINEL, () => encodeURIComponent(value));
 };
 
+/**
+ * Bodies for the writes whose random spec-valid body is refused (422) before the entity is looked
+ * up, so their unknown-id probe would never answer the 404 a malformed id is compared with. A PUT
+ * must carry the fallback locale (it may not delete `en`); a PATCH with nothing to merge reaches
+ * the owner lookup.
+ */
+const BODY_THAT_REACHES_THE_404: Record<string, unknown> = {
+    'put /locales/translations/{entityType}/{id}': { en: { fields: { title: 'A title' } } },
+    'patch /locales/translations/{entityType}/{id}': {}
+};
+
+/** Path rows whose malformed answer was actually compared with the unknown one, by label. */
+const COMPARED = new Set<string>();
+
+/** The rows that must be compared: the ones a 404 body carries its own error code on. */
+const MUST_COMPARE: string[] = PATH_SITES.map(([label]) => label).filter((label) =>
+    label.includes('/locales/translations/{entityType}/{id} {id}')
+);
+
 describe('the id sites the spec declares', () => {
     it('are found, so the sweeps below cannot pass by sweeping nothing', () => {
         // Counts, not a floor of one: a walk that quietly stopped recognising `Id` would still
@@ -172,8 +191,18 @@ const documentedStatuses = (operation: Operation): string[] =>
         (readSpec().paths[operation.path][operation.method] as { responses: object }).responses
     );
 
+/**
+ * An unknown-id body with the id it was asked about swapped for another. Some copy names the id
+ * it was sent ("No product exists with id …"); that echo is the one difference the rule allows.
+ *
+ * @param body - the unknown-id answer's body
+ * @param value - the id the malformed request carried
+ */
+const echoing = (body: unknown, value: string): object =>
+    JSON.parse(JSON.stringify(body).split(OBJECT_ID).join(value)) as object;
+
 describe('an id in the URL path', () => {
-    describe.each(PATH_SITES)('%s', (_label, operation, parameter) => {
+    describe.each(PATH_SITES)('%s', (label, operation, parameter) => {
         it('documents the 404 it answers', () => {
             expect(documentedStatuses(operation)).toContain('404');
         });
@@ -181,7 +210,9 @@ describe('an id in the URL path', () => {
         it('answers 404 for a malformed value, as it does for an unknown one', async () => {
             const { user, bearer } = await authenticateAs(roleReaching(operation));
             const world = await seedWorld(user);
-            const body = validBodyFor(operation.bodySchema);
+            const body =
+                BODY_THAT_REACHES_THE_404[`${operation.method} ${operation.path}`] ??
+                validBodyFor(operation.bodySchema);
 
             const unknown = await send(
                 operation,
@@ -202,13 +233,25 @@ describe('an id in the URL path', () => {
                 // Same code, same copy: nothing tells it from an unknown id. A body that would
                 // have been refused first (422, 409) makes the unknown answer differ in status,
                 // which is exactly why a malformed id must be answered before the body is read.
-                if (unknown.status === 404)
-                    // eslint-disable-next-line jest/no-conditional-expect -- a table row whose unknown-id probe was refused earlier (422/409) has no 404 body to compare; the status assertion above still ran
-                    expect(withoutInstance(malformed.body as object)).toEqual(
-                        withoutInstance(unknown.body as object)
-                    );
+                // A row whose unknown probe was refused has no 404 body to compare: the status
+                // assertion above still ran, and the canary below names the rows that must not skip.
+                if (unknown.status !== 404) continue;
+
+                expect(withoutInstance(malformed.body as object)).toEqual(
+                    withoutInstance(echoing(unknown.body, value))
+                );
+                COMPARED.add(label);
             }
         }, 60_000);
+    });
+
+    it('compares the translations rows, so none of them passes by being skipped', () => {
+        // The canary: a row whose unknown probe stopped answering 404 is skipped above, and a
+        // skipped row proves nothing. These are the rows that carry their own error code.
+        expect(MUST_COMPARE).toHaveLength(3);
+        expect([...COMPARED].filter((label) => MUST_COMPARE.includes(label))).toHaveLength(
+            MUST_COMPARE.length
+        );
     });
 });
 

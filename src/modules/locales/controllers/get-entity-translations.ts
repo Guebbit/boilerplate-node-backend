@@ -8,9 +8,9 @@ import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import { requireId } from '@infrastructure/http/ids';
-import { t } from '@infrastructure/i18n';
 import { setEtag } from '@infrastructure/http/preconditions';
 import { localeService } from '../services';
+import { entityNotFoundError } from '../services/translations';
 
 /**
  * GET /locales/translations/:entityType/:id (admin)
@@ -22,7 +22,7 @@ export const getEntityTranslations = (
 ) => {
     const { entityType, id: entityId } = request.params;
     const id = requireId(request, response, {
-        notFound: () => t('locales.error-entity-not-found', { entityType, entityId })
+        notFound: () => entityNotFoundError(entityType, entityId)
     });
     if (!id) return Promise.resolve();
 
