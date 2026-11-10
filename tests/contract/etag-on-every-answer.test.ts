@@ -258,8 +258,75 @@ const DOORS: Door[] = [
             const answer = await post(`${resource}/disable`, bearer);
             return { answer, resource, bearer, edit: EDITS.subscription };
         }
+    },
+    {
+        name: 'POST /webhooks/subscriptions/{id}/enable',
+        run: async () => {
+            const { bearer } = await authenticateAsRole('manager');
+            const created = await post('/webhooks/subscriptions', bearer, {
+                url: 'https://example.test/inbox',
+                eventTypes: ['order.paid']
+            });
+            const resource = created.headers['content-location'];
+            await post(`${resource}/disable`, bearer).expect(200);
+            const answer = await post(`${resource}/enable`, bearer);
+            return { answer, resource, bearer, edit: EDITS.subscription };
+        }
+    },
+    {
+        name: 'POST /examples/{id}/archive',
+        run: async () => {
+            const { bearer } = await authenticateAs('admin');
+            const created = await post('/examples', bearer, { title: 'First', body: 'Hello' });
+            const resource = created.headers['content-location'];
+            await post(`${resource}/publish`, bearer).expect(200);
+            const answer = await post(`${resource}/archive`, bearer);
+            return { answer, resource, bearer, edit: EDITS.example };
+        }
+    },
+    {
+        name: 'POST /locales (a create)',
+        run: async () => {
+            const { bearer } = await authenticateAs('admin');
+            const answer = await post('/locales', bearer, {
+                tag: 'pt',
+                name: 'Portuguese',
+                nativeName: 'Português'
+            });
+            return {
+                answer,
+                resource: answer.headers['content-location'],
+                bearer,
+                edit: EDITS.language
+            };
+        }
     }
 ];
+
+/** The operation each door above exercises, which the contract walk below holds the spec to. */
+const DOOR_OPERATIONS: Record<string, string> = {
+    'POST /products (a create)': 'createProduct',
+    'POST /products/{id}/restore': 'restoreProductById',
+    'POST /users (a create)': 'createUser',
+    'POST /users/{id}/assign-role': 'assignUserRole',
+    'POST /users/{id}/place-purchase-hold': 'placeUserPurchaseHold',
+    'POST /users/{id}/deactivate': 'deactivateUserById',
+    'POST /users/{id}/activate': 'activateUserById',
+    'POST /users/{id}/restore': 'restoreUserById',
+    'POST /orders (a create)': 'createOrder',
+    'POST /orders/{id}/cancel': 'cancelOrderById',
+    'POST /examples (a create)': 'createExample',
+    'POST /examples/{id}/publish': 'publishExample',
+    'POST /examples/{id}/archive': 'archiveExample',
+    'POST /webhooks/subscriptions (a create)': 'createWebhookSubscription',
+    'POST /webhooks/subscriptions/{id}/secrets (a rotation)': 'createWebhookSubscriptionSecret',
+    'POST /webhooks/subscriptions/{id}/enable': 'enableWebhookSubscription',
+    'POST /webhooks/subscriptions/{id}/disable': 'disableWebhookSubscription',
+    'POST /locales/{locale}/deactivate': 'deactivateLocale',
+    'POST /locales/{locale}/activate': 'activateLocale',
+    'POST /locales (a create)': 'createLocale',
+    'POST /account/email-change': 'requestEmailChange'
+};
 
 describe('a create, a restore or an action answers the real tag of the resource it names', () => {
     it.each(DOORS)('$name', async ({ run }) => {
@@ -317,6 +384,21 @@ const FLAT_COPIES: Record<string, string> = {
 /** Writes that answer a versioned resource and are untagged on purpose, with the reason. */
 const EXEMPT: Record<string, string> = {
     signup: 'answers an account nobody can edit yet, and may answer a refused address the same way'
+};
+
+/**
+ * Tagged writes with no door above, each held to its header by the shared `afterEach` wherever a
+ * contract test calls it (a declared header that is not sent fails the answer). A new tagged write
+ * is not on this list until someone says where its tag is proven.
+ */
+const NO_DOOR: Record<string, string> = {
+    checkout: 'the cart contract tests',
+    processOrder: 'the delivery contract tests',
+    unarchiveExample: 'the example module contract tests',
+    restoreOrderById: 'the orders contract tests',
+    overrideOrderStatus: 'the orders contract tests',
+    revokeUserRole: 'the users contract tests',
+    liftUserPurchaseHold: 'the users contract tests'
 };
 
 /** The schema name a 2xx answer's JSON body refers to, if it refers to one. */
@@ -386,6 +468,25 @@ describe('the contract: every write that answers a versioned resource declares i
             isVersioned(schema) &&
             !(operationId in EXEMPT)
     );
+
+    it('has a door, or a named place where its tag is proven, for every POST it holds', () => {
+        const doors = new Set(Object.values(DOOR_OPERATIONS));
+        const unproven = writes
+            // An edit's own answer is held by `tests/integration/conditional-writes.test.ts`.
+            .filter(({ method }) => method === 'post')
+            .filter(({ operationId }) => !doors.has(operationId) && !(operationId in NO_DOOR))
+            .map(({ operationId }) => operationId);
+
+        expect(unproven).toEqual([]);
+        // A walk that saw no write would pass vacuously.
+        expect(writes.filter(({ method }) => method === 'post').length).toBeGreaterThan(10);
+    });
+
+    it('names only doors that exist', () => {
+        expect(Object.keys(DOOR_OPERATIONS).toSorted()).toEqual(
+            DOORS.map(({ name }) => name).toSorted()
+        );
+    });
 
     it.each(writes)('$method $operationId', ({ method, sent }) => {
         // A PATCH is a write on the resource's own URI, so it needs no `Content-Location`.
