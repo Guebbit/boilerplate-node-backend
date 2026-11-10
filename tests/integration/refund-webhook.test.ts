@@ -52,9 +52,12 @@ const refundDeliveries = () =>
 
 it('an admin refund fans out a payment.refunded delivery carrying the amount and currency', async () => {
     registerCheckoutModules([paymentsModule, webhooksModule]);
-    await createSubscription(
-        { url: 'https://example.com/hook', eventTypes: ['*'] },
-        { caller: callerAs('admin'), analyticsConsent: false }
+    // A `*` stream needs every event's read rule, so only an admin gets one; a refusal fails here.
+    asSuccess(
+        await createSubscription(
+            { url: 'https://example.com/hook', eventTypes: ['*'] },
+            { caller: callerAs('admin'), analyticsConsent: false }
+        )
     );
 
     const { order } = await paidOrder('20.00');

@@ -64,8 +64,8 @@ const canceledDeliveries = () =>
 const subscribeToEverything = () =>
     createSubscription(
         { url: 'https://example.com/hook', eventTypes: ['*'] },
-        { caller: callerAs('manager'), analyticsConsent: false }
-    );
+        { caller: callerAs('admin'), analyticsConsent: false }
+    ).then(asSuccess);
 
 beforeEach(() => {
     registerCheckoutModules([paymentsModule, webhooksModule]);

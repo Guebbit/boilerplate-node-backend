@@ -20,6 +20,7 @@ import {
     fieldError,
     generateReject,
     generateSuccess,
+    type ResponseErrorItem,
     type ResponseReject,
     type ResponseSuccess
 } from '@infrastructure/http/response';
@@ -57,14 +58,21 @@ const entityTypeUnknown = (entityType: string): ResponseReject =>
         }
     ]);
 
+/**
+ * The 404 error item for an `entityId` the module named by `entityType` does not currently hold.
+ * The controllers answer a malformed id with the same item, so nothing tells the two apart.
+ *
+ * @param entityType - the translatable's registry key
+ * @param entityId - the id the URL named
+ */
+export const entityNotFoundError = (entityType: string, entityId: string): ResponseErrorItem => ({
+    code: ERROR_CODES.LOCALE_ENTITY_NOT_FOUND,
+    message: t('locales.error-entity-not-found', { entityType, entityId })
+});
+
 /** An `entityId` the module named by `entityType` does not currently hold. */
 const entityNotFound = (entityType: string, entityId: string): ResponseReject =>
-    generateReject(404, [
-        {
-            code: ERROR_CODES.LOCALE_ENTITY_NOT_FOUND,
-            message: t('locales.error-entity-not-found', { entityType, entityId })
-        }
-    ]);
+    generateReject(404, [entityNotFoundError(entityType, entityId)]);
 
 /**
  * One `VALIDATION_ERROR` rejection for a single locale slot — the shape every {@link planSlot}
