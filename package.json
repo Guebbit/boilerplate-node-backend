@@ -187,7 +187,7 @@
         "jose": "^6.2.12",
         "mongodb": "^7.1.1",
         "mongodb-connection-string-url": "^7.0.2",
-        "mongoose": "^9.9.5",
+        "mongoose": "^9.12.1",
         "multer": "^2.5.0",
         "nodemailer": "^10.2.1",
         "openid-client": "^6.8.8",
