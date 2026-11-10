@@ -131,8 +131,8 @@ paths:
             x-error-codes:
                 '409': [LOCALE_LANGUAGE_EXISTS]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['create:Locale']
+                - apiKeyAuth: ['create:Locale']
             requestBody:
                 required: true
                 content:
@@ -276,8 +276,8 @@ paths:
             x-error-codes:
                 '404': [LOCALE_LANGUAGE_NOT_FOUND]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:Locale']
+                - apiKeyAuth: ['update:Locale']
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
             requestBody:
@@ -312,8 +312,8 @@ paths:
             x-error-codes:
                 '404': [LOCALE_LANGUAGE_NOT_FOUND]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:Locale']
+                - apiKeyAuth: ['update:Locale']
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
             requestBody:
@@ -351,8 +351,8 @@ paths:
                 '404': [LOCALE_LANGUAGE_NOT_FOUND]
                 '409': [LOCALE_LANGUAGE_IS_FALLBACK]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['delete:Locale']
+                - apiKeyAuth: ['delete:Locale']
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
             responses:
@@ -379,8 +379,8 @@ paths:
                 '404': [LOCALE_LANGUAGE_NOT_FOUND]
                 '409': [LOCALE_LANGUAGE_ALREADY_ACTIVE]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:Locale']
+                - apiKeyAuth: ['update:Locale']
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
             responses:
@@ -414,8 +414,8 @@ paths:
                 '404': [LOCALE_LANGUAGE_NOT_FOUND]
                 '409': [LOCALE_LANGUAGE_ALREADY_INACTIVE, LOCALE_LANGUAGE_IS_FALLBACK]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:Locale']
+                - apiKeyAuth: ['update:Locale']
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
             responses:
@@ -502,8 +502,8 @@ paths:
             x-error-codes:
                 '404': [LOCALE_LANGUAGE_NOT_FOUND]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:Locale']
+                - apiKeyAuth: ['update:Locale']
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
@@ -542,8 +542,8 @@ paths:
                 '404': [LOCALE_LANGUAGE_NOT_FOUND]
                 '422': [LOCALE_APP_UNKNOWN]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:Locale']
+                - apiKeyAuth: ['update:Locale']
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
                 - $ref: '#/components/parameters/AppPathParam'
@@ -574,8 +574,8 @@ paths:
                 '409': [LOCALE_ENTRY_KEY_COLLISION, LOCALE_ENTRY_KEY_EXISTS]
                 '422': [LOCALE_APP_UNKNOWN, LOCALE_ENTRY_KEY_INVALID]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['create:Locale']
+                - apiKeyAuth: ['create:Locale']
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
                 - $ref: '#/components/parameters/AppPathParam'
@@ -620,8 +620,8 @@ paths:
                 '404': [LOCALE_LANGUAGE_NOT_FOUND]
                 '422': [LOCALE_APP_UNKNOWN, LOCALE_ENTRY_KEY_INVALID]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:Locale']
+                - apiKeyAuth: ['update:Locale']
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
                 - $ref: '#/components/parameters/AppPathParam'
@@ -659,8 +659,8 @@ paths:
                 '409': [LOCALE_ENTRY_KEY_COLLISION]
                 '422': [LOCALE_APP_UNKNOWN, LOCALE_ENTRY_KEY_INVALID]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:Locale']
+                - apiKeyAuth: ['update:Locale']
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
                 - $ref: '#/components/parameters/AppPathParam'
@@ -705,8 +705,8 @@ paths:
             x-error-codes:
                 '422': [LOCALE_APP_UNKNOWN]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:Locale']
+                - apiKeyAuth: ['update:Locale']
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
                 - $ref: '#/components/parameters/AppPathParam'
@@ -734,8 +734,8 @@ paths:
             x-error-codes:
                 '422': [LOCALE_APP_UNKNOWN]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:Locale']
+                - apiKeyAuth: ['update:Locale']
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
                 - $ref: '#/components/parameters/AppPathParam'
@@ -765,8 +765,8 @@ paths:
             x-error-codes:
                 '422': [LOCALE_APP_UNKNOWN]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['delete:Locale']
+                - apiKeyAuth: ['delete:Locale']
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
                 - $ref: '#/components/parameters/AppPathParam'
@@ -796,8 +796,8 @@ paths:
             x-error-codes:
                 '404': [LOCALE_ENTITY_TYPE_UNKNOWN, LOCALE_ENTITY_NOT_FOUND]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:Translation']
+                - apiKeyAuth: ['read:Translation']
             parameters:
                 - $ref: '#/components/parameters/TranslatableEntityTypePathParam'
                 - $ref: '#/components/parameters/TranslationEntityIdPathParam'
@@ -835,8 +835,8 @@ paths:
             x-error-codes:
                 '404': [LOCALE_ENTITY_NOT_FOUND]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:Translation']
+                - apiKeyAuth: ['update:Translation']
             parameters:
                 - $ref: '#/components/parameters/TranslatableEntityTypePathParam'
                 - $ref: '#/components/parameters/TranslationEntityIdPathParam'
@@ -890,8 +890,8 @@ paths:
             x-error-codes:
                 '404': [LOCALE_ENTITY_TYPE_UNKNOWN, LOCALE_ENTITY_NOT_FOUND]
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:Translation']
+                - apiKeyAuth: ['update:Translation']
             parameters:
                 - $ref: '#/components/parameters/TranslatableEntityTypePathParam'
                 - $ref: '#/components/parameters/TranslationEntityIdPathParam'

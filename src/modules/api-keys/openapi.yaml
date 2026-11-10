@@ -29,7 +29,7 @@ paths:
             description: Newest first unless `sort` says otherwise. Never returns a credential's secret — that exists only in the response of the call that minted it.
             operationId: listApiKeys
             security:
-                - bearerAuth: []
+                - bearerAuth: ['read:ApiKey']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -74,9 +74,8 @@ paths:
                 member minted are revoked the same way when they lose their last authenticator app.
             operationId: createApiKey
             x-error-codes:
-                '401': [REAUTH_REQUIRED]
             security:
-                - bearerAuth: []
+                - bearerAuth: ['create:ApiKey']
             requestBody:
                 required: true
                 content:
@@ -103,7 +102,7 @@ paths:
             description: One credential of this shop, with the same `status` the list gives it. Never its secret — that exists only in the response of the call that minted it. Another shop's credential, an unknown id and a malformed one are the same 404.
             operationId: getApiKey
             security:
-                - bearerAuth: []
+                - bearerAuth: ['read:ApiKey']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -125,7 +124,7 @@ paths:
                 readable. Immediate — there is no grace window.
             operationId: revokeApiKey
             security:
-                - bearerAuth: []
+                - bearerAuth: ['delete:ApiKey']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:

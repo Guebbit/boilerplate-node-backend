@@ -52,7 +52,7 @@ paths:
                 Requires the operator role (`read:ObservabilitySnapshot`).
             operationId: getObservabilityHealth
             security:
-                - bearerAuth: []
+                - bearerAuth: ['read:ObservabilitySnapshot']
             responses:
                 '200':
                     description: Health summary
@@ -120,7 +120,7 @@ paths:
                 Requires the operator role (`read:ObservabilitySnapshot`).
             operationId: getObservabilityMetricsOverview
             security:
-                - bearerAuth: []
+                - bearerAuth: ['read:ObservabilitySnapshot']
             responses:
                 '200':
                     description: Metrics overview
@@ -148,7 +148,7 @@ paths:
                 Requires the platform operator's observability key.
             operationId: listObservabilityAuditEntries
             security:
-                - bearerAuth: []
+                - bearerAuth: ['read:ObservabilitySnapshot']
             parameters:
                 - name: actor
                   in: query

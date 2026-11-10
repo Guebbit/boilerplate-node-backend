@@ -212,6 +212,31 @@ only: it never boots the app, because the app imports files this same build gene
 `tests/cross-cutting/cache-policy-declared.test.ts` names the missing or stray operation when a
 router and its `x-cache` disagree. It checks which GETs are cached, not the value.
 
+### The permission on an operation
+
+A route guarded by `requirePermission(action, subject)` names that permission in its fragment, in
+the standard OpenAPI place: the scopes list of the security requirement (OAS 3.1 allows role names
+there for non-OAuth schemes, [spec](https://spec.openapis.org/oas/v3.1.0#security-requirement-object)).
+
+```yaml
+security:
+    - bearerAuth: ['display:Payment']
+    - apiKeyAuth: ['display:Payment']
+```
+
+- Several guards on one route list several names (all must hold). A `router.use` guard counts for
+  every operation under it.
+- `apiKeyAuth` is listed only where an API key may reach the route, and carries the same names.
+- The bundler (`scripts/contracts/permission-security.ts`) reads the names through the kernel's
+  rules and merges into the operation's `x-error-codes`: the rule's `deniedCode` (else `FORBIDDEN`)
+  and `SECOND_FACTOR_ENROLLMENT_REQUIRED` under 403, `REAUTH_REQUIRED` under 401 for a `stepUp`
+  rule. A name no rule declares fails the bundle.
+- Do not write those codes by hand. A code a service makes (`ROLE_MANAGEMENT_REQUIRED` on a user
+  write, say) stays a hand line.
+- `tests/cross-cutting/contract-error-declarations.test.ts` holds the names against the mounted
+  guards, both ways, and the generated lists against the guard's own questions. The SSE streams
+  that authenticate by cookie name no permission: their guard is not a `requirePermission`.
+
 ### Client hints a fragment can put on an operation
 
 | key | on | what the client does with it |
