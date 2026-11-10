@@ -3,7 +3,7 @@
  * Which languages this deployment SERVES right now: the one list every part of a request agrees
  * on. A language is served when it is switched on — a deployed dictionary file, or a registered
  * row — and the fallback language always is. A switched-off language is never selected: the
- * negotiation, the emails and the order snapshots all fall back to the default instead.
+ * negotiation, the emails and the order snapshots are all answered in the fallback language instead.
  *
  * The state is filled by the database overlay's refresh (`./overrides`), never read from Mongo on
  * a request. Until the first refresh lands it is empty, which serves exactly the deployed files.
@@ -80,7 +80,7 @@ export const isServedLocale = (tag: string): boolean =>
 /**
  * Whether the API has its own wording for the tag: a deployed dictionary file, and not switched off.
  * A registered language without a file is served but has no wording of its own, so its messages
- * fall back to the default language key by key.
+ * come from the fallback language key by key.
  */
 export const hasServedDictionary = (tag: string): boolean => {
     const canonical = canonicalLocale(tag);

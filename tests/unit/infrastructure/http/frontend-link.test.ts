@@ -59,8 +59,21 @@ describe('frontendLink — the locale segment', () => {
         expect(new URL(url).pathname).toBe(`/it/verify-email/confirm`);
     });
 
-    it('clamps an unsupported locale to the deployment default, rather than 404ing the link', () => {
-        useEnvironment({ NODE_SUPPORTED_LOCALES: 'en,it', NODE_DEFAULT_LOCALE: 'en' });
+    it('opens a regional tag in its served base language, as the mail is written', () => {
+        useEnvironment({ NODE_SUPPORTED_LOCALES: 'en,it' });
+        const url = frontendLink('verify-email/confirm#token={token}', 'it-CH', {
+            token: TOKEN
+        });
+
+        expect(new URL(url).pathname.startsWith('/it/')).toBe(true);
+    });
+
+    it('sends an unserved locale to the fallback, not the default, rather than 404ing the link', () => {
+        useEnvironment({
+            NODE_SUPPORTED_LOCALES: 'en,it',
+            NODE_DEFAULT_LOCALE: 'it',
+            NODE_FALLBACK_LOCALE: 'en'
+        });
         const url = frontendLink('verify-email/confirm#token={token}', 'kl', {
             token: TOKEN
         });

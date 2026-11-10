@@ -8,7 +8,7 @@
  * why infrastructure may not know a module by name.
  */
 
-import { getDefaultLocale, isServedLocale } from '@infrastructure/i18n';
+import { getFallbackLocale, isServedLocale, localeCandidatesFor } from '@infrastructure/i18n';
 import { siteConfig } from '@infrastructure/http/config';
 import { loadSharedRules } from '../config/shared-rules/load';
 import { frontendLinksSchema } from '../config/shared-rules/frontend-links';
@@ -21,12 +21,14 @@ import { frontendLinksSchema } from '../config/shared-rules/frontend-links';
 export const FRONTEND_LINK_RULES = loadSharedRules('frontend-links', frontendLinksSchema);
 
 /**
- * `locale`, or the deployment's default when it names a language the shop does not serve — unknown,
- * or switched off since the recipient saved it. A link into such a locale segment is a 404 (or a
- * redirect) on the frontend's own router, not a working page in an unexpected language.
+ * The language a mail's link opens in: the one its words are written in. Walks the tag, its base
+ * language, then the fallback, and takes the first the shop serves (`it-CH` opens `/it/`).
+ * A tag that is unknown or switched off since the recipient saved it ends at the fallback.
+ * The frontend routes only served tags, and a redirect from a stray one drops the `#token`
+ * fragment of a reset, signup or email-change link, so the segment is always a served tag.
  */
 const supportedLocale = (locale: string): string =>
-    isServedLocale(locale) ? locale : getDefaultLocale();
+    localeCandidatesFor(locale).find(isServedLocale) ?? getFallbackLocale();
 
 /**
  * A path template with every `{name}` placeholder filled in and URL-encoded: the part of a link
