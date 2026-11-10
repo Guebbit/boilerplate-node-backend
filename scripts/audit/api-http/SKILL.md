@@ -85,7 +85,13 @@ Output goes to `tmp/reports/audit-<run>/api-http/<SCOPE>…`. `<run>` and `<SCOP
         - `tests/cross-cutting/api-standards.test.ts`, `tests/contract/route-spec-parity.test.ts`
         - `tests/cross-cutting/rate-limit-budgets.test.ts`,
           `tests/cross-cutting/rate-limit-keys-conformance.test.ts`
-        - `tests/integration/conditional-writes.test.ts` (428 and 412)
+        - `tests/integration/conditional-writes.test.ts` (412 on a stale `If-Match`; a write without
+          one runs, so no 428 is ever answered)
+        - `x-app-level-responses` (`shared/contracts/openapi.root.yaml`), merged by
+          `scripts/contracts/openapi-bundle.ts` and tested in
+          `tests/unit/scripts/contracts/openapi-bundle.test.ts`: every operation declares 429
+        - `generateRateLimited`'s required `retryAfter`, copied into `Retry-After` by `rejectResponse`
+        - A 429 and the idempotency ledger: `tests/cross-cutting/limiters-before-the-idempotency-key.test.ts`
     - Part B:
         - a bundler step (`scripts/contracts/openapi-bundle.ts`) adds `ETag`, `If-Match`, 412 and 304;
           `tests/integration/conditional-writes.test.ts`
@@ -109,7 +115,9 @@ Output goes to `tmp/reports/audit-<run>/api-http/<SCOPE>…`. `<run>` and `<SCOP
           still hunted.
         - `tests/contract/write-methods.test.ts` and `tests/integration/bad-bodies.test.ts` (the 415
           on an undeclared type); `scripts/contracts/generate-request-content-types.ts` (the declared
-          request media types) and the 415 guard `src/infrastructure/http/middlewares/content-type.ts`
+          request media types) and the 415 guard `src/infrastructure/http/middlewares/content-type.ts`,
+          with its unit test `tests/unit/infrastructure/http/middlewares/content-type.test.ts` (the
+          `Accept-Patch` on a 415)
         - `tests/cross-cutting/contract-responses-never-null.test.ts` (a response never carries null;
           a request may)
         - `tests/contract/idempotency.test.ts` (the middleware's own behaviour, and the test "replays
@@ -154,8 +162,11 @@ Output goes to `tmp/reports/audit-<run>/api-http/<SCOPE>…`. `<run>` and `<SCOP
         - `rfc9110-get-safe`: every GET (a plain read is judged once, at its shared surface)
         - `rfc9110-delete-no-body`: every DELETE
         - `rfc9110-created-means-created`: every POST answering 200 or 201
-        - `rfc6585-*`: start from `src/infrastructure/http/middlewares/rate-limit.ts` and
-          `src/infrastructure/http/preconditions.ts`, then grep for each of 428, 429, 431, 511
+        - `rfc6585-*`: list the operations in scope from the bundle, then find every 429 producer:
+          `grep -rnE '\b429\b' src --include='*.ts'`. Each goes through `generateRateLimited`; a bare
+          `generateReject(429` or a `setHeader('Retry-After'` on a 429 is a finding. 428 would live in
+          `src/infrastructure/http/preconditions.ts`. 431 comes from Node itself
+          (`src/infrastructure/runtime/server-lifecycle.ts`, plain `app.listen`)
     - Part B: start from `src/infrastructure/http/middlewares/cache.ts` and
       `docs/theory/defences/http-and-caches.md`, then walk the GETs. `rfc9110-conditional-requests`:
       every operation on a resource that sends an `ETag` (reads for `If-None-Match`, writes for
