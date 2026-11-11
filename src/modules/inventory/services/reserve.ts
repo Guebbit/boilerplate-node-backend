@@ -11,29 +11,26 @@ import { StockMovementReason } from '@types';
 import { reservationTtlMinutes } from '../config';
 import { roomOn } from '../domain';
 import { stockLevelRepository, reservationRepository } from '../repository';
-import type { ReservationDocument, StockLevelDocument } from '../model';
+import type { StockLevelDocument } from '../model';
 import type { StockLine, StockShortfall, ReserveOutcome } from './types';
 import { applyTransition, refreshStockCache } from './transition';
 import { releaseForOrder } from './holds';
 import { MINUTE_MS } from '@domain-primitives/time';
 
 /**
- * Give back everything an unfinished reserve took, then delete the hold that named it — shared by
- * a refused line and a line whose write threw.
+ * Give back everything an unfinished reserve took — shared by a refused line and a line whose
+ * write threw.
  *
  * The hold lists only lines whose counters moved in the same transaction, so the claim-guarded
  * release gives back exactly those. A hold the sweep already claimed releases nothing here (no
- * double give-back). The delete runs only once the release resolved: a release that threw leaves
- * the hold `held`, which is what the sweep reads to free the units later.
- * The delete is cleanup, not a retry need: `place.ts` mints a fresh order id on every checkout.
+ * double give-back). The hold is never deleted: it ends `released`, a counter-backed record of
+ * what was held, and a release that threw leaves it `held` for the sweep to free later.
  * A failure is logged rather than thrown, so the caller still reports the original refusal.
  *
  * @param orderId - the order whose reserve is being unwound
- * @param hold - the hold document to delete once its lines are given back
  */
-const giveBackAndDeleteHold = (orderId: string, hold: ReservationDocument): Promise<void> =>
+const giveBack = (orderId: string): Promise<void> =>
     releaseForOrder(orderId)
-        .then(() => reservationRepository.deleteOne(hold))
         .then(() => undefined)
         .catch((error: unknown) => {
             // Stryker disable all
@@ -216,7 +213,7 @@ const takeLine = async (orderId: string, line: StockLine): Promise<StockLine[] |
  * Exactly-once: an EMPTY hold is written first, and its unique `orderId` means a retried checkout
  * loses the insert without touching a counter. Each line is then taken in one transaction that
  * also adds it to the hold, so the hold never names a line whose counters did not move — even if
- * the process is killed between lines. A failed line unwinds through {@link giveBackAndDeleteHold},
+ * the process is killed between lines. A failed line unwinds through {@link giveBack},
  * so the ledger shows the take and the give-back rather than netting them to silence.
  *
  * A line that THROWS (a database hiccup, not a refusal) unwinds the same way, then rethrows.
@@ -265,13 +262,13 @@ export const reserveForOrder = async (
                     available: leftFor(line, blockerLevel)
                 };
 
-                await giveBackAndDeleteHold(orderId, hold);
+                await giveBack(orderId);
                 return { held: false, shortfalls: [shortfall] };
             }
             owed.push(...owedPartsOf(line, parts));
         }
     } catch (error) {
-        await giveBackAndDeleteHold(orderId, hold);
+        await giveBack(orderId);
         throw error;
     }
 

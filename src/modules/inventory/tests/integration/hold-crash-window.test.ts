@@ -11,7 +11,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { createProduct } from '@modules/products/tests/factories';
+import { createProduct, countersOf } from '@modules/products/tests/factories';
 import { StockMovementReason } from '@types';
 import { inventoryService } from '../../services';
 import { reservationRepository, stockLevelRepository } from '../../repository';
@@ -173,7 +173,8 @@ describe('a checkout killed between two lines', () => {
         expect(await outcome).toBe('rejected');
         expect(await levelOf(secondId)).toEqual({ onHand: 10, reserved: 4 });
         expect(await levelOf(firstId)).toEqual({ onHand: 10, reserved: 2 });
-        expect(await reservationRepository.findByOrderId(ORDER)).toBeNull();
+        const held = await reservationRepository.findByOrderId(ORDER);
+        expect(held?.status).toBe('released');
         // The unwind found the hold already released: it gave nothing back a second time and
         // left the sweep's ledger rows (the take and the release of A) exactly as they were.
         expect(sweepRows).toHaveLength(2);
@@ -204,5 +205,68 @@ describe('a rollback whose release throws', () => {
         await inventoryService.runReservationSweep();
 
         expect(await levelOf(productId)).toEqual({ onHand: 10, reserved: 0 });
+    });
+});
+
+describe('a checkout unwinding while the sweep that claimed its hold is still finishing', () => {
+    it("leaves the catalogue's stock cache equal to the level", async () => {
+        const first = await createProduct({ onHand: 10 });
+        const second = await createProduct({ onHand: 10 });
+        const [firstId, secondId] = [String(first._id), String(second._id)].toSorted();
+        await inventoryService.reserveForOrder('f'.repeat(24), [
+            { productId: firstId, quantity: 2 }
+        ]);
+
+        // The second line waits, as in a checkout killed between lines.
+        const realApplyDelta = stockLevelRepository.applyDelta;
+        const lineGate: { open?: () => void } = {};
+        const lineWaits = new Promise<void>((resolve) => {
+            lineGate.open = resolve;
+        });
+        jest.spyOn(stockLevelRepository, 'applyDelta').mockImplementation(
+            async (productId, reason, quantity, delta, session) => {
+                if (productId === secondId && reason === StockMovementReason.reserve)
+                    await lineWaits;
+                return realApplyDelta(productId, reason, quantity, delta, session);
+            }
+        );
+        const checkout = inventoryService.reserveForOrder(ORDER, [
+            { productId: firstId, quantity: 3 },
+            { productId: secondId, quantity: 3 }
+        ]);
+        const outcome = checkout.then(
+            () => 'resolved',
+            () => 'rejected'
+        );
+        while ((await itemCount()) === 0) await new Promise((resolve) => setTimeout(resolve, 5));
+
+        // The sweep's post-commit read of the hold (which names the cache rows to refresh) waits
+        // until the checkout has finished unwinding.
+        const realFind = reservationRepository.findByOrderId.bind(reservationRepository);
+        const readGate: { open?: () => void } = {};
+        const readWaits = new Promise<void>((resolve) => {
+            readGate.open = resolve;
+        });
+        const readReached: { reached?: () => void } = {};
+        const sweepRead = new Promise<void>((resolve) => {
+            readReached.reached = resolve;
+        });
+        jest.spyOn(reservationRepository, 'findByOrderId').mockImplementation(async (orderId) => {
+            readReached.reached?.();
+            await readWaits;
+            return realFind(orderId);
+        });
+        await reservationModel.updateOne({ orderId: ORDER }, { expiresAt: new Date(0) });
+        const sweep = inventoryService.runReservationSweep();
+        await sweepRead;
+
+        lineGate.open?.();
+        expect(await outcome).toBe('rejected');
+        readGate.open?.();
+        await sweep;
+
+        const level = await levelOf(firstId);
+        const cached = await countersOf(firstId);
+        expect({ onHand: cached.onHand, reserved: cached.reserved }).toEqual(level);
     });
 });

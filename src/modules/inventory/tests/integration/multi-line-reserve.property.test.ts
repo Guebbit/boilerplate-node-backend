@@ -157,7 +157,7 @@ describe('multi-line holds against the stock level', () => {
         );
     });
 
-    it('a refused multi-line hold leaves no reservation and no counter moved', async () => {
+    it('a refused multi-line hold leaves no open reservation and no counter moved', async () => {
         await fc.assert(
             fc.asyncProperty(
                 fc.array(fc.integer({ min: 1, max: 6 }), { minLength: 2, maxLength: 3 }),
@@ -178,7 +178,7 @@ describe('multi-line holds against the stock level', () => {
                     const outcome = await inventoryService.reserveForOrder('d'.repeat(24), lines);
 
                     expect(outcome.held).toBe(false);
-                    expect(await reservationModel.countDocuments({})).toBe(0);
+                    expect(await reservationModel.countDocuments({ status: 'held' })).toBe(0);
                     for (const { productId } of lines) {
                         const level = await stockLevelModel.findOne({ productId }).lean();
                         expect(level).toMatchObject({

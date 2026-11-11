@@ -84,7 +84,10 @@ describe('opposite-order multi-line holds, each taking its first line before the
         // 5 units cover exactly one hold of 3: one order wins, not both lose.
         expect(standing).toBe(1);
         expect(await reservationModel.countDocuments({ status: 'held' })).toBe(standing);
-        expect(await reservationModel.countDocuments({})).toBe(standing);
+        // The loser's hold stays, released: it is never deleted.
+        expect(await reservationModel.countDocuments({ status: 'released' })).toBe(
+            outcomes.length - standing
+        );
         for (const productId of [leftId, rightId]) {
             const level = await stockLevelRepository.findByProductId(productId);
             expect(level?.reserved).toBe(standing * 3);

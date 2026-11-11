@@ -220,8 +220,8 @@ products oppositely meet on the same product first, and one goes on rather than 
 lines, then takes each line in one transaction that also adds it to the hold (`pushItems`, guarded on
 the hold still being `held`). A checkout killed between two lines therefore leaves a hold that lists
 only lines whose counters moved, so the sweep never gives back units another order holds. A refused or
-failing line unwinds through the same claim-guarded `releaseForOrder` the sweep uses, then deletes the
-hold; a hold the sweep claimed first makes the next line's push miss and abort, so nothing is taken twice.
+failing line unwinds through the same claim-guarded `releaseForOrder` the sweep uses, and the hold ends
+`released`, never deleted; a hold the sweep claimed first makes the next line's push miss and abort, so nothing is taken twice.
 :::
 
 ## A paid order with no hold at all is an incident, not a no-op {#orphaned-hold}

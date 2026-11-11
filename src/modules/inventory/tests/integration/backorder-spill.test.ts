@@ -93,7 +93,8 @@ describe('reserving a line that may spill', () => {
             shortfalls: [{ productId, requested: 3, available: 2 }]
         });
         expect(await levelOf(productId)).toEqual({ reserved: 0, available: 2, backordered: 0 });
-        expect(await reservationRepository.findByOrderId(orderId)).toBeNull();
+        const held = await reservationRepository.findByOrderId(orderId);
+        expect(held?.status).toBe('released');
     });
 
     it('rolls the whole hold back when a later line is refused by its cap', async () => {
@@ -142,6 +143,7 @@ describe('reserving a line that may spill', () => {
 
         push.mockRestore();
         expect(await levelOf(productId)).toEqual({ reserved: 0, available: 2, backordered: 0 });
-        expect(await reservationRepository.findByOrderId(orderId)).toBeNull();
+        const held = await reservationRepository.findByOrderId(orderId);
+        expect(held?.status).toBe('released');
     });
 });

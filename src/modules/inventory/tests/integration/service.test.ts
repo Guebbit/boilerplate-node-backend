@@ -314,7 +314,8 @@ describe('reserveForOrder', () => {
             reserved: 0,
             available: 10
         });
-        expect(await reservationRepository.findByOrderId(orderId)).toBeNull();
+        const held = await reservationRepository.findByOrderId(orderId);
+        expect(held?.status).toBe('released');
     });
 
     it('refuses when the units exist but are all held', async () => {
