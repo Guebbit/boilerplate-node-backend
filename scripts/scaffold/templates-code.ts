@@ -326,7 +326,7 @@ export const actionsFile = (names: ModuleNames): string => `/**
  *
  * Delete it if: the module has nothing a client must grey out per row.
  *
- * See: docs/theory/tactical-ddd.md#2-capabilities-the-server-answers-what-a-client-may-do
+ * See: docs/theory/tactical-ddd.md#_2-capabilities-the-server-answers-what-a-client-may-do
  */
 
 import type { CallerContext, ${names.entity}Actions } from '@types';

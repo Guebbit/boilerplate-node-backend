@@ -61,7 +61,7 @@ const secondsBetween = (fromMs: number, toMs: number): number =>
 /**
  * How long a shared cache (edge) or this server (origin) may keep serving a stale entry while one
  * rebuild is in flight — RFC 5861's `stale-while-revalidate`, and the same number both layers use
- * so they agree on what "stale" means. See docs/tools/redis-cache.md#refresh-ahead.
+ * so they agree on what "stale" means. See docs/tools/redis-cache.md#refresh-ahead-no-stampede-when-a-hot-key-goes-stale.
  */
 const STALE_WHILE_REVALIDATE_SECONDS = 60;
 

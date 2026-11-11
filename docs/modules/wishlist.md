@@ -3,7 +3,7 @@
 ::: tip At a glance
 **Owns** — one wishlist per user, holding product references and nothing else.
 **Depends on** — [`products`](./products.md), [`cart`](./cart.md).
-**Breaks if you change** — `WISHLIST_ITEMS_REMOVED`. [`notifications`](./notifications.md) imports that event name; nothing else depends on it.
+**Breaks if you change** — `WISHLIST_ITEMS_REMOVED`. [`shop-tasks`](./shop-tasks.md) imports that event name; nothing else depends on it.
 :::
 
 ## Its neighbourhood
