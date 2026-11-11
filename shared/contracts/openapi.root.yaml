@@ -38,10 +38,10 @@ info:
         answers no operation declares: a path that matches nothing (404) and a method a path does
         not offer (405, with `Allow`). The few non-JSON answers (probes, the Prometheus text,
         `security.txt`) are named on their own operations.
-        Node's HTTP server answers four statuses itself, outside Express, with no body: 400 and 431
-        for a malformed request line or headers (before any route), and 408 (request not received
-        within `NODE_HTTP_REQUEST_TIMEOUT_MS`), 413 (chunk extension over 16 KiB) and 400 (malformed
-        body framing) mid-request, after the route was reached.
+        The HTTP server layer may answer a few statuses itself, outside the application, with no
+        body: 400 and 431 for a malformed request line or headers (before any route), and 408
+        (request not received in time), 413 (oversized chunk extension) and 400 (malformed body
+        framing) mid-request, after the route was reached.
 
         The header is intentionally not declared per operation: it applies to all of them and
         clients set it once in an interceptor, so declaring it on every operation would only add a
@@ -333,7 +333,7 @@ components:
         metricsBearer:
             type: http
             scheme: bearer
-            description: The static scrape credential (`NODE_METRICS_TOKEN`) Prometheus sends to `GET /observability/metrics`. Not a session token and not an `sk_...` key.
+            description: The static scrape credential Prometheus sends to `GET /observability/metrics`. Not a session token and not an `sk_...` key.
 
     parameters:
         # `Accept-Language` is honoured by every operation and is documented in
@@ -517,7 +517,7 @@ components:
         EntityTag:
             required: false
             description: >-
-                The strong entity-tag Express computes for any read that has a body (RFC 9110
+                The strong entity-tag the server computes for any read that has a body (RFC 9110
                 section 8.8.3); a write answer never carries it. A client may send it back as `If-None-Match` on a read the app lets
                 it keep, and a `GET` that declares `304` answers that way when it still matches. Only
                 a resource marked versioned promises it (the `ETag` header) and takes it as `If-Match`.
@@ -715,8 +715,8 @@ components:
         PayloadTooLarge:
             description: >-
                 The request body is larger than this deployment accepts: a JSON body over
-                `NODE_JSON_BODY_LIMIT` (100kb by default), an uploaded file over
-                `NODE_MAX_UPLOAD_BYTES`, or a multipart field value over 100 KB. Refused by the
+                the configured JSON body limit (100 KB by default), an uploaded file over the
+                configured upload limit, or a multipart field value over 100 KB. Refused by the
                 body parser or the upload middleware, which is why it is declared for every
                 body-accepting operation rather than by hand. The other multipart limits (counts,
                 shapes) answer `400`.
@@ -767,7 +767,7 @@ components:
                         $ref: '#/components/schemas/Problem'
         ServiceUnavailable:
             description: >-
-                A dependency the request needed (Mongo, Redis) is unreachable right now — the
+                A dependency the request needed (the database, the cache) is unreachable right now — the
                 SERVER is temporarily unable, not the request refused (RFC 9110 §15.6.4). Every
                 route can answer this: `getAuth` for any bearer request, or a controller's own
                 database call. The `Retry-After` header carries a rough wait hint, a few seconds,
@@ -802,7 +802,7 @@ components:
             minimum: 1
             maximum: 10000
             default: 1
-            description: 1-based page index. Bounded so page × pageSize cannot ask for an unbounded Mongo skip.
+            description: 1-based page index. Bounded so page × pageSize cannot ask for an unbounded database offset.
         PageSize:
             type: integer
             default: 10
@@ -810,7 +810,7 @@ components:
             maximum: 100
             description: >-
                 Rows per page, a whole number from 1 to 100. Absent or empty: the deployment's default
-                (10 unless `NODE_SETTINGS_PAGINATION_PAGE_SIZE` sets another). Anything else, 0
+                (10 unless the deployment configures another). Anything else, 0
                 included, is a 422; nothing is clamped.
         Id:
             type: string
@@ -1162,13 +1162,13 @@ components:
                 supportEmail:
                     type: string
                     format: email
-                    description: The one customer-facing support address (`NODE_SUPPORT_EMAIL`). The contact form's mail goes there and customers' replies come back to it; show it as "write to us at".
+                    description: The one customer-facing support address. The contact form's mail goes there and customers' replies come back to it; show it as "write to us at".
                 operator:
                     $ref: '../../src/modules/account/openapi.yaml#/components/schemas/Operator'
                 termsVersion:
                     type: string
                     description: >-
-                        Which text of the Terms is in force (`NODE_TERMS_VERSION`, `1` by default).
+                        Which text of the Terms is in force (`1` by default).
                         An account stores the version it accepted beside the date (`User.termsVersion`).
 
         # What `GET /account` answers: the account as its holder sees it, plus what a client needs
@@ -1446,8 +1446,8 @@ paths:
             summary: Vulnerability disclosure contact
             description: |
                 RFC 9116 `security.txt`: where an outside reporter sends a vulnerability.
-                Published only when the deployment sets `NODE_SECURITY_CONTACT` and
-                `NODE_SECURITY_EXPIRES`; a fork that has not opted in answers 404 and publishes
+                Published only when the deployment configures a security contact and
+                an expiry date; a fork that has not opted in answers 404 and publishes
                 nothing. Plain text, not JSON, because the format is fixed by the RFC.
             operationId: getSecurityTxt
             security: []
