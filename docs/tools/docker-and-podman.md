@@ -128,7 +128,7 @@ All of them run read-only, with every capability dropped, as uid 1000.
 ### Observability stack
 
 Behind the `observability` profile: start it with `--profile observability` or `npm run compose:up:full`.
-Versions are in `docker-compose.yml`, not here; `docker/observability/validate-configs.sh` (CI `alert-rules` job) checks every config against the image its compose file names.
+Versions are in `docker-compose.yml`, not here; `docker/observability/validate-configs.sh` (CI `alert-rules` job) checks the Loki and production Alloy configs against the image their compose file names. Dev-only configs are not checked: a bad one fails on `compose up`.
 
 | Container        | Role                                                                                                                                       |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |

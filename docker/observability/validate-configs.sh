@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Validates every observability config with the image of the compose file that mounts it, so a
-# version bump of an image and a config the new version refuses cannot land separately.
+# Validates the configs that production runs (Loki, Alloy) with the image of the compose file that
+# mounts them, so a version bump of an image and a config the new version refuses cannot land
+# separately. Dev-only configs are not checked: a bad one fails at once on `compose up`.
 #
 #   bash docker/observability/validate-configs.sh
 #
-# Each tool's own check: `otelcol validate`, `loki -verify-config`, `alloy validate`,
-# `caddy adapt`. Needs a container engine (`docker`, or the podman shim).
+# Each tool's own check: `loki -verify-config`, `alloy validate`. Needs a container engine (`docker`, or the podman shim).
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -24,14 +24,11 @@ check() {
     shift 2
     [ -n "$image" ] || { echo "validate-configs: no image found for $label" >&2; exit 1; }
     echo "== $label ($image)"
-    docker run --rm -v "$PWD/docker/observability:/obs:ro" -v "$PWD/docker:/docker:ro" "$@" >/dev/null
+    docker run --rm -v "$PWD/docker/observability:/obs:ro" "$@" >/dev/null
 }
 
 dev=docker-compose.yml
 prod=docker-compose.production.yml
-
-otel="$(image_in "$dev" 'otel/opentelemetry-collector-contrib')"
-check "otel-collector" "$otel" "$otel" validate --config=/obs/otel-collector.config.yaml
 
 # Loki runs in both stacks with the one config, so both versions have to accept it.
 for compose in "$dev" "$prod"; do
@@ -39,20 +36,9 @@ for compose in "$dev" "$prod"; do
     check "loki ($compose)" "$loki" "$loki" -config.file=/obs/loki.config.yaml -verify-config
 done
 
-# Dev loads a directory: the Faro receiver plus the container-log pipeline, as compose mounts them.
-alloy_dev="$(image_in "$dev" 'grafana/alloy')"
-check "alloy dev" "$alloy_dev" \
-    -v "$PWD/docker/observability/alloy.config.alloy:/conf/faro.alloy:ro" \
-    -v "$PWD/docker/observability/alloy.logs.config.alloy:/conf/logs.alloy:ro" \
-    "$alloy_dev" validate /conf
-
 # Production loads a directory: the logs config plus the optional audit forwarder (empty by default).
 alloy_prod="$(image_in "$prod" 'grafana/alloy')"
 check "alloy production" "$alloy_prod" -v "$PWD/docker/observability/alloy.logs.config.alloy:/conf/logs.alloy:ro" \
     "$alloy_prod" validate /conf
-
-# `adapt` parses the Caddyfile without loading the certificates it names.
-caddy="$(image_in "$dev" 'caddy')"
-check "caddy" "$caddy" "$caddy" caddy adapt --config /docker/webhook-tester-tls.Caddyfile --adapter caddyfile
 
 echo "validate-configs: all configs accepted"
