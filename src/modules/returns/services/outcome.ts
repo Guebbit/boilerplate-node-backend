@@ -187,6 +187,7 @@ export const enqueueRequested = (
         {
             returnId: String(created._id),
             orderId: String(created.orderId),
+            orderNumber: created.orderNumber,
             reason: created.reason,
             requestedAt: created.requestedAt.toISOString(),
             ...(created.statedVia ? { statedVia: created.statedVia } : {})

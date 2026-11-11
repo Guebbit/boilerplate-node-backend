@@ -173,6 +173,11 @@ union by `openapi.notifications.yaml` and to the stream's `NotificationPayload` 
 
 The `fulfillment-delayed` and `shipment-lost` params name their dates (`agreedAt`, `expectedAt`) as plain shop days (`YYYY-MM-DD`), converted from the event's instants when the row is written, so the inbox prints the same day as the mail.
 
+A notice that points at an order names it. `fulfillment-delayed`, `fulfillment-held`, `shipment-lost` and
+`staff.return-requested` carry a required `orderNumber` (`2026-000041`, printed as `#2026-000041`), copied
+from their event, which got it where the order was already in hand. The row does no orders read, and two
+notices for two orders never read as the same link. A later notice that names an order does the same.
+
 `fulfillment_order.delayed` is both a to-do and a message. One module has one handler per event, so
 a single handler runs the to-do first (idempotent by `eventId`) and then the notice: a redelivery
 after a failed notice re-runs a no-op open and writes the notice once.

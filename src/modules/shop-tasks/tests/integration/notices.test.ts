@@ -30,6 +30,7 @@ setupTestDb();
 /** A `fulfillment_order.hold_noticed` fact for `userId`, absent for an erased account. */
 const heldFor = (userId: string | undefined) => ({
     orderId: 'order-1',
+    orderNumber: '2026-000041',
     fulfillmentOrderId: 'fo-1',
     ...(userId ? { userId } : {}),
     notice: 'check_address' as const,
@@ -42,6 +43,7 @@ const inboxOf = (userId: string) => notificationsService.list(userId).then(({ it
 /** A `shipment.lost` fact for the given buyer. */
 const lostFor = (userId: string | undefined) => ({
     orderId: 'order-1',
+    orderNumber: '2026-000041',
     shipmentId: 'shipment-1',
     fulfillmentOrderId: 'fo-1',
     lines: [{ productId: 'p1', quantity: 2 }],
@@ -309,6 +311,7 @@ describe('the module subscriptions', () => {
         it('writes no row at all for a buyer whose account was erased', async () => {
             await emitDomainEvent('fulfillment_order.delayed', {
                 orderId: 'order-1',
+                orderNumber: '2026-000041',
                 fulfillmentOrderId: 'fo-1',
                 titles: ['Blue mug'],
                 agreedAt: new Date().toISOString(),
@@ -339,6 +342,7 @@ describe('the module subscriptions', () => {
                 severity: 'warning',
                 params: {
                     orderId: 'order-1',
+                    orderNumber: '2026-000041',
                     notice: 'check_address',
                     message: 'Is the flat number right?'
                 }
@@ -366,6 +370,7 @@ describe('the module subscriptions', () => {
                 severity: 'warning',
                 params: {
                     orderId: 'order-1',
+                    orderNumber: '2026-000041',
                     shipmentId: 'shipment-1',
                     reason: 'lost',
                     message: 'A new one ships on Monday.',
@@ -390,6 +395,7 @@ describe('the module subscriptions', () => {
             const [message] = await inboxOf(user.id);
             expect(message?.params).toEqual({
                 orderId: 'order-1',
+                orderNumber: '2026-000041',
                 shipmentId: 'shipment-1',
                 reason: 'lost'
             });

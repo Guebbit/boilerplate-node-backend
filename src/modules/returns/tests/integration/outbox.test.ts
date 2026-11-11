@@ -107,6 +107,7 @@ describe('return.requested', () => {
                 {
                     returnId: String(outcome.data._id),
                     orderId,
+                    orderNumber: outcome.data.orderNumber,
                     reason: 'defective',
                     requestedAt: outcome.data.requestedAt.toISOString()
                 },

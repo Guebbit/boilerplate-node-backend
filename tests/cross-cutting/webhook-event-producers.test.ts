@@ -162,6 +162,7 @@ describe('every public webhook event has exactly one producer, and no producer n
         await emitDomainEvent(RETURN_REQUESTED, {
             returnId: 'q'.repeat(24),
             orderId: ORDER_ID,
+            orderNumber: '2026-000041',
             reason: 'withdrawal',
             requestedAt: '2026-01-02T03:04:05.000Z',
             statedVia: 'online'

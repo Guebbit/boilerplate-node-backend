@@ -124,6 +124,8 @@ export interface LossNotice {
     owed: ShipmentLostOwedLine[];
     /** When the owed units are expected. */
     expectedAt?: Date | undefined;
+    /** The order's number, as the buyer knows it. */
+    orderNumber: string;
 }
 
 /**
@@ -164,6 +166,7 @@ export const announceLost = (
                 {
                     ...shipmentPayload(shipment),
                     reason,
+                    orderNumber: notice.orderNumber,
                     ...(notice.userId ? { userId: notice.userId } : {}),
                     ...(notice.message ? { message: notice.message } : {}),
                     owed: notice.owed,
@@ -196,6 +199,7 @@ const noticeTheBuyer = (
         FULFILLMENT_ORDER_HOLD_NOTICED,
         {
             orderId: String(fulfillmentOrder.orderId),
+            orderNumber: order.orderNumber,
             fulfillmentOrderId: String(fulfillmentOrder._id),
             ...(order.userId ? { userId: String(order.userId) } : {}),
             notice: notice === 'check_address' ? 'check_address' : 'delayed',
