@@ -44,7 +44,7 @@ components:
                 salesOrders:
                     type: integer
                     minimum: 0
-                    description: Orders paid and not yet with a carrier (`paid` or `processing`), held ones included. Needs `display:Order`.
+                    description: Orders with `fulfillmentStatus=awaiting_shipment`, live — the list that value opens. Needs `display:Order`.
                 salesPayments:
                     type: integer
                     minimum: 0

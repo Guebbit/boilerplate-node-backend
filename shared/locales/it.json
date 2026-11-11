@@ -10,6 +10,7 @@
         "error-missing-data": "Errore: dati mancanti.",
         "error-internal-server-error": "Qualcosa è andato storto dalla nostra parte.",
         "error-service-unavailable": "Questo servizio non è temporaneamente disponibile. Riprova tra poco.",
+        "error-query-timeout": "La risposta ha richiesto troppo tempo. Riprova tra poco.",
         "error-unauthorized": "Non hai effettuato l’accesso, oppure la sessione è scaduta.",
         "error-forbidden": "Non hai i permessi per farlo.",
         "error-role-management-required": "Solo chi gestisce i ruoli può assegnare, cambiare o togliere un ruolo di staff.",

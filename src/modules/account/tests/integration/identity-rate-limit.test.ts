@@ -9,7 +9,7 @@ import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { appAnswering, statusOf, withReloadedRateLimits } from '@tests/rate-limit-harness';
 
 /**
- * Anti-automation Rung 1 (see `docs/tools/security.md#identity--and-block-keyed-budgets--signup-password-reset-the-contact-form`):
+ * Anti-automation Rung 1 (see `docs/tools/security.md#identity-and-block-keyed-budgets-—-signup-password-reset-the-contact-form`):
  * `signupLimiters` and `resetRequestLimiters` each add an identity (submitted email) and an
  * address-BLOCK (IPv4 /24, IPv6 /48) dimension on top of the per-address budget — three keys, not
  * one. Built against trivial handlers, like `submissionLimiter`'s own tests — the property under

@@ -37,25 +37,20 @@ const ONE_ROW = { pageSize: 1 };
 /** The `meta.totalItems` of a page. */
 const totalOf = ({ meta }: { meta: { totalItems: number } }): number => meta.totalItems;
 
-/**
- * Orders of one status, live ones only. No third argument to `search`: a caller context there
- * fires an `orders_viewed` analytics event, and a badge refresh is not a person viewing orders.
- */
-const ordersWith = (status: 'paid' | 'processing', caller: AuthContext): Promise<number> =>
-    orderService
-        .search({ ...ONE_ROW, status, deleted: false }, orderService.callerScope(caller))
-        .then(totalOf);
-
 /** The five badges, in the order the navigation lists them. */
 const BADGES: readonly Badge[] = [
     {
         key: 'salesOrders',
         opens: mayOpen('display', 'Order'),
-        // Two reads, because the orders list's `status` filter takes one value.
+        // No third argument to `search`: a caller context there fires an `orders_viewed`
+        // analytics event, and a badge refresh is not a person viewing orders.
         count: (caller) =>
-            Promise.all([ordersWith('paid', caller), ordersWith('processing', caller)]).then(
-                ([paid, processing]) => paid + processing
-            )
+            orderService
+                .search(
+                    { ...ONE_ROW, fulfillmentStatus: 'awaiting_shipment', deleted: false },
+                    orderService.callerScope(caller)
+                )
+                .then(totalOf)
     },
     {
         key: 'salesPayments',

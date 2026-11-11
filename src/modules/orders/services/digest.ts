@@ -7,13 +7,14 @@
  */
 
 import { DAY_MS, HOUR_MS } from '@domain-primitives/time';
+import { fulfillmentStatusFilter } from '../domain/fulfillment';
 import { orderRepository } from '../repository';
 
 /** What the digest counts on the orders side. */
 export interface OrdersDigest {
     /** Bank-transfer orders still unpaid whose `payBy` is within the window (or already past). */
     transfersDue: number;
-    /** Paid orders not handed to a carrier for longer than the allowance. */
+    /** Orders awaiting shipment (paid, goods still owed) for longer than the allowance. */
     unshipped: number;
 }
 
@@ -36,10 +37,15 @@ export const ordersDigest = (
             deletedAt: null,
             payBy: { $lte: new Date(now.getTime() + transferHours * HOUR_MS) }
         }),
+        // The set the digest link opens (`fulfillmentStatus=awaiting_shipment`), narrowed by age.
         orderRepository.count({
-            status: { $in: ['paid', 'processing'] },
-            deletedAt: null,
-            paidAt: { $lte: new Date(now.getTime() - unshippedDays * DAY_MS) }
+            $and: [
+                fulfillmentStatusFilter('awaiting_shipment'),
+                {
+                    deletedAt: null,
+                    paidAt: { $lte: new Date(now.getTime() - unshippedDays * DAY_MS) }
+                }
+            ]
         })
     ]).then(([transfersDue, unshipped]) => ({ transfersDue, unshipped }));
 

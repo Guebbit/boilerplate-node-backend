@@ -81,11 +81,11 @@ paths:
                 - name: fulfillmentStatus
                   in: query
                   description: >-
-                      Filter to orders whose goods stand here — the same derived value
-                      `Order.fulfillmentStatus` carries, so `on_hold` and `partially_fulfilled`
-                      can be listed.
+                      Filter to orders whose goods stand here — any value `Order.fulfillmentStatus`
+                      carries, so `on_hold` and `partially_fulfilled` can be listed, or the one
+                      filter-only aggregate `awaiting_shipment`.
                   schema:
-                      $ref: '#/components/schemas/OrderFulfillmentStatus'
+                      $ref: '#/components/schemas/OrderFulfillmentFilter'
                 - name: paymentMethod
                   in: query
                   description: >-
@@ -229,7 +229,7 @@ paths:
                 - name: fulfillmentStatus
                   in: query
                   schema:
-                      $ref: '#/components/schemas/OrderFulfillmentStatus'
+                      $ref: '#/components/schemas/OrderFulfillmentFilter'
                 - name: paymentMethod
                   in: query
                   schema:
@@ -2064,9 +2064,9 @@ components:
                 # status is filtering their own orders, and staff see the same shape.
                 status:
                     $ref: '#/components/schemas/OrderStatus'
-                # Filters on the derived value `Order.fulfillmentStatus` carries, so the two always agree.
+                # Filters on the derived value `Order.fulfillmentStatus` carries, or the one aggregate.
                 fulfillmentStatus:
-                    $ref: '#/components/schemas/OrderFulfillmentStatus'
+                    $ref: '#/components/schemas/OrderFulfillmentFilter'
                 paymentMethod:
                     $ref: '#/components/schemas/PaymentMethodId'
                 # `true`: only soft-deleted rows; `false`: only live ones; absent: both.
@@ -2414,6 +2414,24 @@ components:
                 `partially_fulfilled` once something left and more remains; `on_hold` while every
                 remaining unit is held back; `in_progress` while being prepared; `unfulfilled` before
                 work starts, and for a pending or canceled order. Read-only.
+
+        OrderFulfillmentFilter:
+            type: string
+            enum:
+                [
+                    awaiting_shipment,
+                    unfulfilled,
+                    in_progress,
+                    on_hold,
+                    partially_fulfilled,
+                    shipped,
+                    fulfilled
+                ]
+            description: >-
+                What `fulfillmentStatus` accepts: every `OrderFulfillmentStatus` value, plus the
+                filter-only `awaiting_shipment` — paid or processing, so goods still owed, none or
+                some already sent (Shopify's `unfulfilled` inside `status=open`). No order carries
+                it, so responses keep `OrderFulfillmentStatus`.
 
         OrderReturnStatus:
             type: string
