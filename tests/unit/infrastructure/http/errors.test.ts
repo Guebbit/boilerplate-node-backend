@@ -13,7 +13,6 @@ import { asStub } from '@tests/stub';
 import {
     ConflictError,
     databaseErrorInterpreter,
-    loggableDatabaseError,
     isInfrastructureError,
     rejectDatabaseEnvelope,
     rejectDatabaseError
@@ -24,6 +23,7 @@ import { ServiceBusyError } from '@infrastructure/runtime/busy';
 import type { CastError } from 'mongoose';
 import { ClientClosedError } from 'redis';
 import { makeResponseStub } from '@tests/express';
+import { SpanStatusCode, trace, type Span } from '@opentelemetry/api';
 
 jest.mock('@infrastructure/adapters/logger', () => ({
     __esModule: true,
@@ -326,7 +326,7 @@ describe('rejectDatabaseError', () => {
         // `warn`, not `error`: a 422 is the request's fault, not a server failure worth paging.
         expect(mockedLogger.warn).toHaveBeenCalledWith('getProducts - Invalid identifier', {
             status: 422,
-            error: { name: 'BSONError', code: undefined, stack: expect.any(String) }
+            error
         });
         expect(mockedLogger.error).not.toHaveBeenCalled();
     });
@@ -344,11 +344,24 @@ describe('rejectDatabaseError', () => {
         );
         expect(JSON.stringify(response.json.mock.calls[0][0])).not.toContain('shard-02');
         // `error`, not `warn`: this is the genuine server fault the split exists to still page on.
-        expect(mockedLogger.error).toHaveBeenCalledWith(
-            'getProducts - connection reset to shard-02',
-            { status: 500, error }
-        );
+        // The headline names the class, never the message: the logger scrubs the `error` itself.
+        expect(mockedLogger.error).toHaveBeenCalledWith('getProducts - Error', {
+            status: 500,
+            error
+        });
         expect(mockedLogger.warn).not.toHaveBeenCalled();
+    });
+
+    it('carries the request id the middleware put on the response', () => {
+        const response = makeResponseStub();
+        response.setHeader('x-request-id', '3f2b8c1e-5d4a-4e6b-9c7d-1a2b3c4d5e6f');
+
+        rejectDatabaseError(response, 'getProducts', new Error('boom'));
+
+        expect(mockedLogger.error).toHaveBeenCalledWith(
+            'getProducts - Error',
+            expect.objectContaining({ requestId: '3f2b8c1e-5d4a-4e6b-9c7d-1a2b3c4d5e6f' })
+        );
     });
 
     it('logs a duplicate-key 409 at warn, the same as any other 4xx', () => {
@@ -469,7 +482,7 @@ describe('rejectDatabaseEnvelope', () => {
         // `warn`, not `error`: a 422 is the request's fault, not a server failure worth paging.
         expect(mockedLogger.warn).toHaveBeenCalledWith('login - Invalid identifier', {
             status: 422,
-            error: { name: 'BSONError', code: undefined, stack: expect.any(String) }
+            error: expect.objectContaining({ name: 'BSONError' })
         });
         expect(mockedLogger.error).not.toHaveBeenCalled();
     });
@@ -482,59 +495,37 @@ describe('rejectDatabaseEnvelope', () => {
     });
 });
 
-/** Everything the mocked logger was handed, flattened so a stray copy anywhere is caught. */
-const loggedText = () =>
-    JSON.stringify([mockedLogger.warn.mock.calls, mockedLogger.error.mock.calls]);
+/** An active span that records what it is told, in place of a provider. */
+const spanSpy = () => {
+    const span = {
+        setAttribute: jest.fn(),
+        setStatus: jest.fn(),
+        recordException: jest.fn()
+    };
+    jest.spyOn(trace, 'getActiveSpan').mockReturnValue(asStub<Span>(span));
+    return span;
+};
 
-describe('personal data in database-error logs', () => {
-    /*
-     * Both doors a `.catch` uses log through one scrub: a duplicate-key message names the email
-     * and a ValidationError quotes the rejected value, and log redaction never reads message text.
-     */
-    const EMAIL = 'someone@example.com';
+describe('a 5xx marks the active span', () => {
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
 
-    const makeLeakyDuplicateKey = () =>
-        Object.assign(
-            new Error(`E11000 duplicate key error index: email_1 dup key: { email: "${EMAIL}" }`),
-            { name: 'MongoServerError', code: 11_000 }
+    it('sets the error status for a 500, so the trace counts as failed', () => {
+        const span = spanSpy();
+
+        rejectDatabaseError(makeResponseStub(), 'ctx', new Error('boom'));
+
+        expect(span.setStatus).toHaveBeenCalledWith(
+            expect.objectContaining({ code: SpanStatusCode.ERROR })
         );
-
-    const makeLeakyValidation = () =>
-        Object.assign(new Error(`User validation failed:\n  email: \`${EMAIL}\` is not valid`), {
-            name: 'ValidationError'
-        });
-
-    it.each([
-        [
-            'rejectDatabaseError',
-            (error: unknown) => rejectDatabaseError(makeResponseStub(), 'ctx', error)
-        ],
-        ['rejectDatabaseEnvelope', (error: unknown) => rejectDatabaseEnvelope('ctx', error)]
-    ])('%s logs a duplicate key without the email, keeping name and code', (_door, door) => {
-        door(makeLeakyDuplicateKey());
-
-        expect(loggedText()).not.toContain(EMAIL);
-        expect(mockedLogger.warn).toHaveBeenCalledWith(expect.any(String), {
-            status: 409,
-            error: {
-                name: 'MongoServerError',
-                code: 11_000,
-                stack: expect.stringContaining('    at ')
-            }
-        });
     });
 
-    it('logs a ValidationError without the rejected value', () => {
-        rejectDatabaseEnvelope('ctx', makeLeakyValidation());
+    it("leaves the span alone for a 4xx, which is the request's fault", () => {
+        const span = spanSpy();
 
-        expect(loggedText()).not.toContain(EMAIL);
-        // The frames survive: an operator can still see where the error came from.
-        expect(loggedText()).toContain('errors.test.ts');
-    });
+        rejectDatabaseEnvelope('ctx', makeBsonError());
 
-    it('leaves an error that is not a database error unchanged for the logger', () => {
-        const error = new Error('connection reset');
-
-        expect(loggableDatabaseError(error)).toBe(error);
+        expect(span.setStatus).not.toHaveBeenCalled();
     });
 });

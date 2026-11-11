@@ -9,7 +9,7 @@
  */
 
 import { auditLogger, redactCredentials } from '@infrastructure/adapters/logger';
-import { getActiveSpanContext } from '@infrastructure/observability/tracer';
+import { getActiveSpanContext } from '@infrastructure/observability/span-context';
 import { AuditEntryItemActorRole, AuditEntryItemLevel, AuditEntryItemOutcome } from '@types';
 import type { AuthorizationScope, CallerContext } from '@types';
 import { coreAuditActions } from './audit-actions.generated';

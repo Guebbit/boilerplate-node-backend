@@ -1,51 +1,181 @@
-# Which log keys are redacted. Run by BEnode and by the PHP twin against their own loggers.
+# What a log line hides. Run by BEnode and by the PHP twin against their own loggers.
 # Every `redact` case sits next to the `keep` case that bounds it.
+#
+# kind `key`:     is the VALUE under this key replaced (`redact`) or left (`keep`)?
+# kind `message`: the address-shaped text in a message becomes a pseudonym. `{hash:X}` in `expect`
+#                 stands for the keyed digest of X, the same digest the `email` field gets. X is the
+#                 address AS HASHED: lowercased, without the port. The mask itself is code in each
+#                 backend; these rows are what pins it.
 cases:
     - name: a plain password key is redacted
+      kind: key
       key: password
       expect: redact
     - name: camelCase and snake_case spell the same key
+      kind: key
       key: newPassword
       expect: redact
     - name: kebab-case HTTP header spells the same key
+      kind: key
       key: x-api-key
       expect: redact
     - name: the antibot challenge header is redacted
+      kind: key
       key: Antibot-Challenge-Token
       expect: redact
     - name: the device cookie is redacted
+      kind: key
       key: __Host-device
       expect: redact
     - name: an OAuth state cookie is redacted
+      kind: key
       key: __Host-oauth_state
       expect: redact
     - name: the account-deletion claim-check cookie is redacted
+      kind: key
       key: __Host-oauth_deletion_challenge
       expect: redact
     - name: a fragment makes a compound key sensitive
+      kind: key
       key: webhookSecret
       expect: redact
     - name: a signature header is redacted by fragment
+      kind: key
       key: x-hub-signature
       expect: redact
     - name: the bare key `key` is redacted
+      kind: key
       key: key
       expect: redact
     - name: idempotencyKey is NOT eaten by the bare key `key`
+      kind: key
       key: idempotencyKey
       expect: keep
     - name: statusCode is kept
+      kind: key
       key: statusCode
       expect: keep
     - name: a bare code stays readable to a debugger
+      kind: key
       key: code
       expect: keep
     - name: linkCount is NOT eaten by linkurl
+      kind: key
       key: linkCount
       expect: keep
     - name: a personal email is pseudonymised
+      kind: key
       key: email
       expect: redact
     - name: a transition's `to` stays readable
+      kind: key
       key: to
       expect: keep
+    - name: a duplicate-key message loses the address it quotes
+      kind: message
+      input: 'E11000 duplicate key error collection: shop.users index: email_1 dup key: { email: "ada@example.com" }'
+      expect: 'E11000 duplicate key error collection: shop.users index: email_1 dup key: { email: "{hash:ada@example.com}" }'
+    - name: an SMTP refusal loses the recipient
+      kind: message
+      input: 'Recipient address rejected: 550 5.1.1 <ada@example.com>: user unknown'
+      expect: 'Recipient address rejected: 550 5.1.1 <{hash:ada@example.com}>: user unknown'
+    - name: two addresses in one message are both replaced
+      kind: message
+      input: 'from ada@example.com to bob@example.org'
+      expect: 'from {hash:ada@example.com} to {hash:bob@example.org}'
+    - name: the same address twice gives the same digest
+      kind: message
+      input: 'ada@example.com then ada@example.com'
+      expect: '{hash:ada@example.com} then {hash:ada@example.com}'
+    - name: an uppercase address is lowercased before it is hashed, so it matches the stored email
+      kind: message
+      input: 'Ada@Example.COM bounced'
+      expect: '{hash:ada@example.com} bounced'
+    - name: a plus tag stays part of the address
+      kind: message
+      input: 'sent to ada+shop@example.com'
+      expect: 'sent to {hash:ada+shop@example.com}'
+    - name: a Unicode local part is an address
+      kind: message
+      input: 'josé@example.com bounced'
+      expect: '{hash:josé@example.com} bounced'
+    - name: a Unicode domain is an address
+      kind: message
+      input: 'user@münchen.example.de bounced'
+      expect: '{hash:user@münchen.example.de} bounced'
+    - name: a sentence's full stop is not part of the address
+      kind: message
+      input: 'write to ada@example.com.'
+      expect: 'write to {hash:ada@example.com}.'
+    - name: a subdomain address is replaced whole
+      kind: message
+      input: 'ada@mail.eu.example.com'
+      expect: '{hash:ada@mail.eu.example.com}'
+    - name: an npm scope is not an address
+      kind: message
+      input: 'Cannot find module @types/node'
+      expect: 'Cannot find module @types/node'
+    - name: a retina image suffix is not an address
+      kind: message
+      input: 'missing logo@2x.png'
+      expect: 'missing logo@2x.png'
+    - name: a clock time is not an IPv6 address
+      kind: message
+      input: 'started at 12:30:45'
+      expect: 'started at 12:30:45'
+    - name: an ObjectId is not an address
+      kind: message
+      input: 'no document 65f1c0ffee0123456789abcd'
+      expect: 'no document 65f1c0ffee0123456789abcd'
+    - name: an octet above 255 is not an IPv4 address
+      kind: message
+      input: 'version 999.1.1.1'
+      expect: 'version 999.1.1.1'
+    - name: a five-part dotted number is not an IPv4 address
+      kind: message
+      input: 'build 1.2.3.4.5'
+      expect: 'build 1.2.3.4.5'
+    - name: a Class::method name is not an IPv6 address
+      kind: message
+      input: 'Cache::get failed'
+      expect: 'Cache::get failed'
+    - name: a digest already in the line is left alone
+      kind: message
+      input: 'user hmac:0123456789ab refused'
+      expect: 'user hmac:0123456789ab refused'
+    - name: an IPv4 address is replaced
+      kind: message
+      input: 'refused 203.0.113.7'
+      expect: 'refused {hash:203.0.113.7}'
+    - name: an IPv4 address loses its address but keeps its port
+      kind: message
+      input: 'connect ECONNREFUSED 203.0.113.7:443'
+      expect: 'connect ECONNREFUSED {hash:203.0.113.7}:443'
+    - name: an IPv4 address ends before a full stop
+      kind: message
+      input: 'from 203.0.113.7.'
+      expect: 'from {hash:203.0.113.7}.'
+    - name: a compressed IPv6 address is replaced
+      kind: message
+      input: 'from 2001:db8::1 refused'
+      expect: 'from {hash:2001:db8::1} refused'
+    - name: an uppercase IPv6 address is lowercased before it is hashed
+      kind: message
+      input: 'from 2001:DB8::1 refused'
+      expect: 'from {hash:2001:db8::1} refused'
+    - name: the IPv6 loopback is replaced
+      kind: message
+      input: 'connect ::1 refused'
+      expect: 'connect {hash:::1} refused'
+    - name: a full IPv6 address is replaced
+      kind: message
+      input: 'from 2001:db8:0:0:0:0:0:1 refused'
+      expect: 'from {hash:2001:db8:0:0:0:0:0:1} refused'
+    - name: an IPv4-mapped IPv6 address is replaced whole
+      kind: message
+      input: 'from ::ffff:192.0.2.1 refused'
+      expect: 'from {hash:::ffff:192.0.2.1} refused'
+    - name: a message with nothing to hide is unchanged
+      kind: message
+      input: 'connection reset by peer'
+      expect: 'connection reset by peer'

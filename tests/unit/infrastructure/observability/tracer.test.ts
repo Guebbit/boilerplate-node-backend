@@ -13,12 +13,8 @@ import { trace } from '@opentelemetry/api';
 import { setEnvironment } from '@tests/environment';
 import { node } from '@opentelemetry/sdk-node';
 import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace';
-import {
-    getTracer,
-    withSpan,
-    getActiveSpanContext,
-    recordErrorOnActiveSpan
-} from '@infrastructure/observability/tracer';
+import { getTracer, withSpan, recordErrorOnActiveSpan } from '@infrastructure/observability/tracer';
+import { getActiveSpanContext } from '@infrastructure/observability/span-context';
 
 // ---------------------------------------------------------------------------
 // Test tracer provider + in-memory exporter (no full SDK needed in tests)
@@ -142,6 +138,24 @@ describe('withSpan — error', () => {
             .find((s) => s.name === 'prod-span')
             ?.events.find((e) => e.name === 'exception');
         expect(event?.attributes).toEqual({ 'exception.type': 'TypeError' });
+    });
+
+    it('puts only the error type in the status in production, and the message in development', async () => {
+        const failed = async (name: string) => {
+            await expect(
+                withSpan(name, () => Promise.reject(new TypeError('dup key {email: "a@b.c"}')))
+            ).rejects.toThrow(TypeError);
+            return exporter.getFinishedSpans().find((s) => s.name === name);
+        };
+
+        setEnvironment({ NODE_ENV: 'production' });
+        const production = await failed('status-prod');
+        setEnvironment({ NODE_ENV: 'development' });
+        const development = await failed('status-dev');
+
+        expect(production?.status.message).toBe('TypeError');
+        expect(production?.attributes['error.type']).toBe('TypeError');
+        expect(development?.status.message).toBe('dup key {email: "a@b.c"}');
     });
 });
 

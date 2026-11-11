@@ -16,6 +16,7 @@ import { isDuplicateKey, isConnectionError } from '@infrastructure/persistence/m
 import { PreconditionFailedError } from '@infrastructure/persistence/versioning';
 import { isRedisConnectionError } from '@infrastructure/adapters/redis';
 import { ServiceBusyError } from '@infrastructure/runtime/busy';
+import { recordErrorOnActiveSpan } from '@infrastructure/observability/tracer';
 import { generateReject, rejectResponse } from './response';
 // Type-only — see `response.ts`'s own import for why: this file sits on `contracts:bundle`'s
 // incidental module-load path, which runs before `@api/error-codes` exists.
@@ -118,36 +119,6 @@ export const rejectServiceUnavailable = (response: Response) => {
 };
 
 /**
- * Names of the driver and ODM errors, by `name` rather than `instanceof`: `mongodb` and `bson`
- * are transitive dependencies and a second copy would make `instanceof` answer false.
- */
-const DATABASE_ERROR_NAME =
-    /^(?:Mongo\w*Error|Mongoose\w*Error|ValidationError|CastError|BSONError)$/;
-
-/**
- * What of a failure may reach the log. A Mongo/Mongoose error keeps its name, its code and its
- * stack FRAMES, never its message: the message carries the offending values (a duplicate-key
- * error names the email, a `ValidationError` quotes what was rejected), and log redaction reads
- * key names, never message text. The stack's leading lines are that message, so only the
- * `    at ...` frame lines are kept; they name where the error came from and no data. Anything
- * else is returned unchanged for the logger's own serializer.
- *
- * Shared by the global error handler and {@link logDatabaseFailure}, so both paths scrub alike.
- *
- * @param error - whatever was caught
- * @returns the scrubbed shape for a database error, otherwise `error` itself
- */
-export const loggableDatabaseError = (error: unknown): unknown => {
-    if (!(error instanceof Error) || !DATABASE_ERROR_NAME.test(error.name)) return error;
-    // A message may span several lines, so frames are picked by shape, not by "drop line one".
-    const frames = (error.stack ?? '')
-        .split('\n')
-        .filter((line) => /^\s+at /.test(line))
-        .join('\n');
-    return { name: error.name, code: 'code' in error ? error.code : undefined, stack: frames };
-};
-
-/**
  * Log a database-derived failure at the severity it deserves: `warn` for a 4xx (the request's
  * fault — a duplicate key, a bad id, a refused write), `error` for a 5xx (the server's). Without
  * the split, an ordinary 409/422 — the everyday case `unique: true` and a bad id exist to turn
@@ -157,21 +128,28 @@ export const loggableDatabaseError = (error: unknown): unknown => {
  * @param status - the status {@link databaseErrorInterpreter} derived
  * @param detail - the interpreter's own message for that status
  * @param error - whatever the `.catch()` caught — never assumed to be an `Error`
+ * @param requestId - the request's id, when the caller has a response to read it from
  */
 const logDatabaseFailure = (
     context: string,
     status: number,
     detail: string,
-    error: unknown
+    error: unknown,
+    requestId?: string
 ): void => {
-    // `context` and `detail` are developer-facing — logged with the request/trace id (which is
-    // what makes this findable) rather than returned, since the driver must not speak to the
-    // client. `error` under its own key, not folded into the message string, is what lets the
-    // logger's own serializer attach a stack trace — see `adapters/logger.ts`'s `serializeError`.
+    // A 5xx is the server's own failure: mark the trace red too, which is how its error rate counts.
+    if (status >= 500) recordErrorOnActiveSpan(error);
+    // The interpreter's 500 detail IS the error's message, which can quote data: the headline
+    // for a 500 names the error class instead. `error` under its own key, not folded into the
+    // message string, is what lets the logger's own serializer attach a stack trace and scrub
+    // the message — see `adapters/logger.ts`'s `serializeError`. `trace_id` is stamped by the logger.
+    const errorName = error instanceof Error ? error.name : 'Unknown error';
+    const headline = status === 500 ? errorName : detail;
     // Stryker disable next-line all
-    logger[status < 500 ? 'warn' : 'error'](`${context} - ${detail}`, {
+    logger[status < 500 ? 'warn' : 'error'](`${context} - ${headline}`, {
         status,
-        error: loggableDatabaseError(error)
+        requestId,
+        error
     });
 };
 
@@ -188,7 +166,15 @@ const logDatabaseFailure = (
 export const rejectDatabaseError = (response: Response, context: string, error: unknown) => {
     const [status, detail] = databaseErrorInterpreter(error);
 
-    logDatabaseFailure(context, status, detail, error);
+    // The request-id middleware set this header; it is how the client's id finds this line.
+    const requestId = response.getHeader('x-request-id');
+    logDatabaseFailure(
+        context,
+        status,
+        detail,
+        error,
+        typeof requestId === 'string' ? requestId : undefined
+    );
 
     return status === 503 ? rejectServiceUnavailable(response) : rejectResponse(response, status);
 };
