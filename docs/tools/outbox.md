@@ -137,6 +137,9 @@ A handler on the bus receives `(payload, meta)`. Rules:
 - **Be idempotent on `meta.eventId` where a duplicate does harm** (stock, money, webhook fan-out);
   a mail may repeat, see [rabbitmq.md](rabbitmq.md). `webhooks/services/publish.ts` is the
   reference: a unique index plus "duplicate key means already done".
+  `payments` is the second example: the payment records every `order.canceled` event id it
+  handled, even one with nothing to refund, and a redelivery of a known id returns before any
+  write. It must be the payment that remembers, not the refund record: staff can void a refund.
 - **Attempt every target, then fail.** `fanOut` uses `Promise.allSettled` so one bad subscription
   does not starve the rest, then throws so the relay retries; already-created rows are skipped.
 
@@ -184,6 +187,8 @@ db.outboxevents.find({ status: 'dead' });
 ```
 
 Fix the consumer, then set the row back with `status: 'pending', attempts: 0, nextAttemptAt: new Date()`.
+Reviving a dead row re-runs every listener of its event. `payments` skips an `order.canceled` it
+already handled; a mail may repeat.
 Reviving a dead invoice event (`order.status_changed` to `paid`) also issues the credit notes of the
 refunds that settled meanwhile and found no invoice: see
 [`invoicing`](../modules/invoicing.md#issuing-a-document). Reviving a dead `paid` event also makes the
