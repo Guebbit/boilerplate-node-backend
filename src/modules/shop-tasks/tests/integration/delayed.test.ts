@@ -32,6 +32,7 @@ afterEach(() => {
 /** A delay notice for a buyer shipped to the United States, so the consent rule applies. */
 const delayFor = (userId: string): DomainEventMap['fulfillment_order.delayed'] => ({
     orderId: new Types.ObjectId().toString(),
+    orderNumber: '2026-000041',
     fulfillmentOrderId: 'fo1',
     userId,
     titles: ['Mug'],

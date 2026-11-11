@@ -416,6 +416,7 @@ describe('a return on goods that have shipped', () => {
                 {
                     returnId: String(outcome.data._id),
                     orderId,
+                    orderNumber: outcome.data.orderNumber,
                     reason: 'withdrawal',
                     requestedAt: outcome.data.requestedAt.toISOString(),
                     statedVia: 'online'

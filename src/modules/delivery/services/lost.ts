@@ -143,6 +143,7 @@ const lostAct = async (
         shipment,
         {
             userId: order.userId ? String(order.userId) : undefined,
+            orderNumber: order.orderNumber,
             message: input.message,
             owed: owed.map(({ productId, quantity }) => ({
                 title: shipment.lines.find((line) => line.productId === productId)?.title ?? '',

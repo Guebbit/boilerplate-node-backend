@@ -394,6 +394,17 @@ describe('what the buyer is told', () => {
         expect(staff.success && staff.data.lostNote).toBe('staff only');
     });
 
+    it('names the order by its number on the event, which the inbox notice copies', async () => {
+        const { shipmentId } = await shippedOrder(1);
+        await reportLost(shipmentId, { reason: 'lost' });
+
+        const [event] = await outboxEventModel.find({ name: 'shipment.lost' }).lean().exec();
+
+        expect(event.payload).toMatchObject({
+            orderNumber: expect.stringMatching(/^\d{4}-\d{6}$/)
+        });
+    });
+
     it('carries the reason code and no free text on the webhook event', async () => {
         const { shipmentId } = await shippedOrder(1);
         await reportLost(shipmentId, { reason: 'damaged', message: 'free text', note: 'n' });

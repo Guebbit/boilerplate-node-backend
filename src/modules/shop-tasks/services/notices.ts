@@ -85,6 +85,7 @@ export const shopNotices = {
                       severity: 'warning',
                       params: {
                           orderId: held.orderId,
+                          orderNumber: held.orderNumber,
                           fulfillmentOrderId: held.fulfillmentOrderId,
                           notice: held.notice,
                           ...(held.message ? { message: held.message } : {})
@@ -107,6 +108,7 @@ export const shopNotices = {
                       severity: 'warning',
                       params: {
                           orderId: lost.orderId,
+                          orderNumber: lost.orderNumber,
                           shipmentId: lost.shipmentId,
                           reason: lost.reason,
                           ...(lost.message ? { message: lost.message } : {}),
@@ -138,6 +140,7 @@ export const shopNotices = {
                       severity: 'warning',
                       params: {
                           orderId: delayed.orderId,
+                          orderNumber: delayed.orderNumber,
                           fulfillmentOrderId: delayed.fulfillmentOrderId,
                           titles: delayed.titles,
                           agreedAt: shopDayOf(new Date(delayed.agreedAt)),
@@ -175,6 +178,7 @@ export const shopNotices = {
     onReturnRequested: ({
         returnId,
         orderId,
+        orderNumber,
         reason
     }: DomainEventMap['return.requested']): Promise<void> =>
         reason === 'withdrawal'
@@ -184,7 +188,7 @@ export const shopNotices = {
                       tenantId: DEPLOYMENT_TENANT_ID,
                       body: {
                           code: 'shop-tasks.staff.return-requested',
-                          params: { returnId, orderId }
+                          params: { returnId, orderId, orderNumber }
                       },
                       route: SHOP_STAFF_ROUTES['shop-tasks.staff.return-requested'],
                       dedupeKey: `return-requested:${returnId}`
