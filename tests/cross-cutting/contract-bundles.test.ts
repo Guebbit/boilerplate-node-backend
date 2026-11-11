@@ -12,8 +12,9 @@
  * install. Whether the file on disk equals a fresh build is `npm run check`'s question, so it is
  * not repeated here as a second Jest case over the same two function calls.
  *
- * GENERATED — the four API client collections, produced whole from `openapi.yaml` and the demo
- * dataset. They have no fragments: nothing on disk stands between the contract and the document.
+ * GENERATED — the API client collections (Bruno only today), produced whole from `openapi.yaml`
+ * and the demo dataset. They have no fragments: nothing on disk stands between the contract and the
+ * document.
  * They are also `.gitignore`d, so there is no committed copy to compare against and the
  * byte-for-byte question does not apply. What is asserted instead is the GENERATOR: every case
  * below builds a collection in memory and checks the document it produced. That is the property

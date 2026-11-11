@@ -5,7 +5,7 @@ import { withReloadedRateLimits } from '@tests/rate-limit-harness';
 /**
  * `submissionLimiter` — the budget for `POST /tasks` — spends on a SUCCESSFUL request,
  * the opposite of `credentialLimiters`' `skipSuccessfulRequests`. The regression it guards:
- * mounting `credentialLimiters` on `/contact` would count zero of the requests that matter,
+ * mounting `credentialLimiters` on `POST /tasks` would count zero of the requests that matter,
  * because every abusive contact-form submission gets a `201`.
  *
  * Lives here rather than in the unit suite because it sends a real request through
@@ -13,7 +13,7 @@ import { withReloadedRateLimits } from '@tests/rate-limit-harness';
  * covers the pure-configuration properties (the default, and its relation to the global budget).
  *
  * Not built against `@tests/rate-limit-harness`'s `appAnswering`: the third case below asserts
- * the log line names the real path, `POST /contact`, which that harness's fixed `/route` cannot
+ * the log line names the real path, `POST /tasks`, which that harness's fixed `/route` cannot
  * stand in for.
  */
 
@@ -32,13 +32,13 @@ describe('submissionLimiter', () => {
         const submissionLimiter = await submissionLimiterWithBudget(3);
 
         const limited = express();
-        limited.post('/contact', submissionLimiter, (_request, response) => {
+        limited.post('/tasks', submissionLimiter, (_request, response) => {
             response.status(201).json({ success: true });
         });
 
         const statuses: number[] = [];
         for (let index = 0; index < 5; index++) {
-            const response = await supertest(limited).post('/contact');
+            const response = await supertest(limited).post('/tasks');
             statuses.push(response.status);
         }
 
@@ -50,13 +50,13 @@ describe('submissionLimiter', () => {
         const submissionLimiter = await submissionLimiterWithBudget(3);
 
         const limited = express();
-        limited.post('/contact', submissionLimiter, (_request, response) => {
+        limited.post('/tasks', submissionLimiter, (_request, response) => {
             response.status(422).json({ success: false });
         });
 
         const statuses: number[] = [];
         for (let index = 0; index < 5; index++) {
-            const response = await supertest(limited).post('/contact');
+            const response = await supertest(limited).post('/tasks');
             statuses.push(response.status);
         }
 
@@ -77,18 +77,18 @@ describe('submissionLimiter', () => {
         const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
 
         const limited = express();
-        limited.post('/contact', submissionLimiter, (_request, response) => {
+        limited.post('/tasks', submissionLimiter, (_request, response) => {
             response.status(201).json({ success: true });
         });
 
-        await supertest(limited).post('/contact');
+        await supertest(limited).post('/tasks');
         expect(warn).not.toHaveBeenCalled();
 
-        await supertest(limited).post('/contact');
+        await supertest(limited).post('/tasks');
 
         expect(warn).toHaveBeenCalledWith(
-            expect.stringContaining('POST /contact'),
-            expect.objectContaining({ method: 'POST', route: '/contact', statusCode: 429 })
+            expect.stringContaining('POST /tasks'),
+            expect.objectContaining({ method: 'POST', route: '/tasks', statusCode: 429 })
         );
 
         warn.mockRestore();
