@@ -14,6 +14,7 @@ import {
     metricsRegistry
 } from '@infrastructure/observability/metrics-registry';
 import { logger } from '@infrastructure/adapters/logger';
+import { recordErrorOnActiveSpan } from '@infrastructure/observability/tracer';
 
 /** GET /observability/metrics — scraped by Prometheus, guarded by a static credential. */
 export const getObservabilityMetrics = (_request: Request, response: Response) => {
@@ -27,6 +28,7 @@ export const getObservabilityMetrics = (_request: Request, response: Response) =
         .catch((error: unknown) => {
             // Stryker disable next-line all
             logger.error('Failed to collect Prometheus metrics', { error });
+            recordErrorOnActiveSpan(error);
             response.status(500).send('# metrics unavailable\n');
         });
 };

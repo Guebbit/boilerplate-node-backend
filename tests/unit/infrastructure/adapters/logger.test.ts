@@ -13,7 +13,8 @@
  */
 import fc from 'fast-check';
 import { cookieData } from '@infrastructure/http/cookies.generated';
-import type winston from 'winston';
+import winston from 'winston';
+import { Writable } from 'node:stream';
 import {
     redactSensitiveFields,
     serializeError,
@@ -912,5 +913,81 @@ describe('traceContextFormat', () => {
 
         expect(output).not.toHaveProperty('traceId');
         expect(output).not.toHaveProperty('spanId');
+    });
+});
+
+/** The JSON line a real winston logger writes for one call, through `redactFormat`. */
+const lineOf = (log: (target: winston.Logger) => void): Record<string, unknown> => {
+    let line = '';
+    const target = winston.createLogger({
+        format: winston.format.combine(redactFormat(), winston.format.json()),
+        transports: [
+            new winston.transports.Stream({
+                stream: new Writable({
+                    write: (chunk: Buffer, _encoding, done) => {
+                        line += chunk.toString();
+                        done();
+                    }
+                })
+            })
+        ]
+    });
+    log(target);
+    return JSON.parse(line) as Record<string, unknown>;
+};
+
+describe('redactFormat — an Error passed as log metadata', () => {
+    const EMAIL = 'ada@example.com';
+
+    /** A Mongo duplicate-key error with the fields the driver puts on it, all quoting the address. */
+    const duplicateKey = () =>
+        Object.assign(new Error(`E11000 duplicate key dup key: { email: "${EMAIL}" }`), {
+            name: 'MongoServerError',
+            code: 11_000,
+            errorResponse: { errmsg: `E11000 dup key: { email: "${EMAIL}" }` },
+            keyValue: { email: EMAIL }
+        });
+
+    it('keeps the address out of every field winston merges off the error', () => {
+        setEnvironment({ NODE_ENV: 'production' });
+
+        const line = lineOf((target) => target.error('insert failed', duplicateKey()));
+
+        expect(JSON.stringify(line)).not.toContain(EMAIL);
+        expect(line.error).toMatchObject({ name: 'MongoServerError', code: 11_000 });
+        expect(line.message).toBe('insert failed');
+        expect(line).not.toHaveProperty('keyValue');
+        expect(line).not.toHaveProperty('errorResponse');
+    });
+
+    it('masks the address in a message that is not a database error', () => {
+        setEnvironment({ NODE_ENV: 'production' });
+
+        const line = lineOf((target) =>
+            target.error('send failed', new Error(`provider refused ${EMAIL}`))
+        );
+
+        expect(JSON.stringify(line)).not.toContain(EMAIL);
+        expect(line.error).toMatchObject({ message: expect.stringContaining('provider refused') });
+    });
+});
+
+describe('serializeError — Mongoose errors that name themselves differently', () => {
+    class MongooseError extends Error {}
+    class DocumentNotFoundError extends MongooseError {}
+
+    it.each([
+        ['a subclass of MongooseError', new DocumentNotFoundError('no doc ada@example.com')],
+        [
+            'a driver subclass of a Mongo error',
+            Object.assign(new (class MongoBulkWriteError extends Error {})('dup ada@example.com'), {
+                name: 'Error'
+            })
+        ]
+    ])('keeps %s to its identity', (_label, error) => {
+        // Renamed so only the prototype chain gives it away.
+        Object.defineProperty(error, 'name', { value: 'Renamed' });
+
+        expect(serializeError(error)).not.toHaveProperty('message');
     });
 });

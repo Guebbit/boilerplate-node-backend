@@ -6,6 +6,7 @@
 #                 stands for the keyed digest of X, the same digest the `email` field gets. X is the
 #                 address AS HASHED: lowercased, without the port. The mask itself is code in each
 #                 backend; these rows are what pins it.
+# kind `traceUrl`: a request target as a span would record it; `expect` is the target a span may carry.
 cases:
     - name: a plain password key is redacted
       kind: key
@@ -179,3 +180,15 @@ cases:
       kind: message
       input: 'connection reset by peer'
       expect: 'connection reset by peer'
+    - name: a staff search's email in the query is replaced, whatever its encoding
+      kind: traceUrl
+      input: '/users?email=ada%40example.com&page=2'
+      expect: '/users?email=REDACTED&page=2'
+    - name: the OAuth callback's code and state are replaced
+      kind: traceUrl
+      input: '/account/oauth/google/callback?code=abc&state=xyz'
+      expect: '/account/oauth/google/callback?code=REDACTED&state=REDACTED'
+    - name: a query with no secret is left alone
+      kind: traceUrl
+      input: '/products?page=2'
+      expect: '/products?page=2'

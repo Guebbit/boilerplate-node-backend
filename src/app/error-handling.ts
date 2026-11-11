@@ -114,9 +114,10 @@ export const handleUncaughtError = (
         return;
     }
 
-    recordErrorOnActiveSpan(error);
-
     const status = resolveStatus(error);
+    // OpenTelemetry HTTP semconv: a 4xx on a server span leaves the status unset, the client's
+    // mistake is not the server's failure. https://opentelemetry.io/docs/specs/semconv/http/http-spans/
+    if (status >= 500) recordErrorOnActiveSpan(error);
     const logged = loggableError(error, clientErrorStatus(error) !== undefined);
     // Same rule for the headline: a stripped error's message is exactly what must not be logged,
     // and the logger will strip a database or SMTP error's own.

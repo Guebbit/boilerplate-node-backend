@@ -5,7 +5,7 @@
 
 import type { Request, Response } from 'express';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import { isInfrastructureError, rejectServiceUnavailable } from '@infrastructure/http/errors';
+import { isInfrastructureError, rejectDatabaseError } from '@infrastructure/http/errors';
 import type { RefreshTokenResponse } from '@types';
 import { accountService } from '../services';
 import { createSessionCookie } from '../session/cookies';
@@ -58,7 +58,8 @@ export const getRefreshToken = (request: Request, response: Response) => {
             // treats 401 as a definitive sign-out, so it gets a retryable 503 instead.
             .catch((error: unknown) => {
                 if (isInfrastructureError(error)) {
-                    rejectServiceUnavailable(response, error);
+                    // The 503 (`QUERY_TIMEOUT` for a killed query) plus the log line and span mark.
+                    rejectDatabaseError(response, 'refreshAccessToken', error);
                     return;
                 }
                 authRefreshTotal.inc({ status: 'failure' });
