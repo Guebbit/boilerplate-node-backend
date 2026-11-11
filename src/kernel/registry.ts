@@ -267,13 +267,6 @@ export interface JobDeclaration {
     connectFirst?: boolean;
 
     /**
-     * Install every module's event subscriptions and, with `i18n`, load the translations before
-     * `run`. Needed by a sweep that works by emitting an event (it would be unheard otherwise) or
-     * that renders translated mail.
-     */
-    needs?: { subscriptions?: boolean; i18n?: boolean };
-
-    /**
      * Run under a lease so only one runner at a time does the work — for a job that can outlast
      * its interval, or whose double run is costly. The lease records the job's outcome itself.
      */

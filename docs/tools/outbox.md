@@ -165,6 +165,8 @@ a crash between the commit and the send no longer loses the mail. The rules that
 
 - **A duplicate is accepted.** Delivery is at-least-once, so a mail can go out twice; no dedupe
   field is kept. A duplicate beats a lost mail, see [rabbitmq.md](rabbitmq.md#emails-fire-and-forget).
+- **A failed BUILD is a setup bug, not a failed send.** Every job boots like the app
+  (`prepareJob`), so a listener in cron has the translations and templates it builds from.
 - **A failed mail never fails the act.** The listener logs and swallows, and the buyer-mail
   lookup is `orders`' `mailBuyerOfOrder`. `enqueueEmail` itself never rejects, so the outbox covers
   the crash window, not a failed send.

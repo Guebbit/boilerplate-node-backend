@@ -38,9 +38,7 @@ export const accountJobs: readonly JobDeclaration[] = [
     {
         ...accountJobData.reapInactiveAccounts,
         run: reapInactive,
-        // Minimise and erase hooks are resolved from the manifests, and the warning mail renders
-        // translated copy. Leased: it hard-deletes accounts, so "exactly one runner" earns its keep.
-        needs: { subscriptions: true, i18n: true },
+        // Leased: it hard-deletes accounts, so "exactly one runner" earns its keep.
         lease: { ttlMs: 15 * MINUTE_MS }
     },
     {
@@ -63,9 +61,7 @@ export const accountJobs: readonly JobDeclaration[] = [
     {
         ...accountJobData.reapScheduledDeletions,
         run: purgeScheduledDeletions,
-        // Erase hooks come from the manifests and the goodbye mail renders translated copy.
         // Leased: it hard-deletes accounts, so "exactly one runner" earns its keep.
-        needs: { subscriptions: true, i18n: true },
         lease: { ttlMs: 15 * MINUTE_MS }
     }
 ];

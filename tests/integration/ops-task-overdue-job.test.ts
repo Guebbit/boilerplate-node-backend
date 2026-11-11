@@ -1,8 +1,8 @@
 /**
  * @module
  * The overdue-task sweep driven the way `npm run job` drives it: nothing registered by the
- * test, only what `prepareJob` installs from the job's own `needs`. A sweep whose declaration
- * forgets `subscriptions` stamps its tasks and tells nobody.
+ * test, only what `prepareJob` installs and `runJobWork` settles. A sweep run without the app's
+ * boot stamps its tasks and tells nobody.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -14,7 +14,7 @@ import { backdateDue, createSystemTask, giveLife } from '@modules/tasks/tests/fa
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { callerInScope } from '@kernel/permissions';
 import { resetDomainEvents } from '@kernel/events';
-import { prepareJob } from '../../scripts/ops/prepare-job';
+import { prepareJob, runJobWork } from '../../scripts/ops/prepare-job';
 
 setupTestDb();
 
@@ -33,8 +33,8 @@ describe('the overdue sweep run through the job runner', () => {
         const task = await createSystemTask();
         await backdateDue(String(task._id), 2);
 
-        await prepareJob(job);
-        await job.run();
+        await prepareJob();
+        await runJobWork(job);
 
         const { items } = await notificationsService.listVisible(
             callerInScope(
@@ -54,8 +54,8 @@ describe('the overdue sweep run through the job runner', () => {
         const task = await createSystemTask();
         await giveLife(String(task._id), 2, 10);
 
-        await prepareJob(job);
-        await job.run();
+        await prepareJob();
+        await runJobWork(job);
 
         const { items } = await notificationsService.listVisible(
             callerInScope(

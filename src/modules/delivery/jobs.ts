@@ -8,7 +8,6 @@
 import type { JobDeclaration } from '@kernel/registry';
 import { deliveryJobData } from './jobs.generated';
 import { logger } from '@infrastructure/adapters/logger';
-import { settleOutboxNudges } from '@kernel/outbox';
 import { scrubHoldNotes, scrubLostNotes } from './services/retention';
 import { runPreorderSweep } from './services/preorder-sweep';
 import { MINUTE_MS } from '@domain-primitives/time';
@@ -25,14 +24,9 @@ export const deliveryJobs: readonly JobDeclaration[] = [
     {
         ...deliveryJobData.sweepPreorders,
         run: () =>
-            runPreorderSweep()
-                .then((result) => {
-                    logger.info({ message: 'Preorder sweep done.', ...result });
-                })
-                // Each notice rides the outbox; settled inside the lease so `notifications` has
-                // heard every one before the connections close.
-                .then(() => settleOutboxNudges()),
-        needs: { subscriptions: true, i18n: true },
+            runPreorderSweep().then((result) => {
+                logger.info({ message: 'Preorder sweep done.', ...result });
+            }),
         lease: { ttlMs: 30 * MINUTE_MS }
     }
 ];
