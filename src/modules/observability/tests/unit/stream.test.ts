@@ -17,6 +17,7 @@
  *
  * `getHttpRequestCounters` is mocked and the clock is faked, so the frames are deterministic.
  */
+import { ObservabilityMetricsPayloadSchema } from '@types';
 import { asStub } from '@tests/stub';
 import type { Response } from 'express';
 
@@ -150,6 +151,13 @@ describe('the SSE metrics stream', () => {
             expect(payload.memory).toEqual({ rss: 100, heapUsed: 40, heapTotal: 60, external: 5 });
             expect(payload.http).toEqual({ totalRequests: 10, totalErrors: 2 });
             expect(payload.realtime).toEqual({ sseClients: 0 });
+        });
+
+        it('builds a frame the AsyncAPI contract accepts', async () => {
+            const payload = await buildObservabilityPayload();
+
+            // The generated schema is strict, so a field the code adds or loses fails here.
+            expect(ObservabilityMetricsPayloadSchema.safeParse(payload).success).toBe(true);
         });
 
         it('stamps an ISO-8601 timestamp, so the client can compute its own skew', async () => {

@@ -351,7 +351,8 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
 
     # Same as DELETE /products/{id}?hardDelete=true — the flag spelled in the path instead of
-    # in the query. Both reach the same handler; neither is the canonical one.
+    # in the query. Both reach the same handler; `DELETE /products/{id}` is the canonical one
+    # (`x-alias-of` below).
     /products/{id}/hard:
         # Bundler: adds the `If-Match` parameter and 412 to the writes listed, and `ETag` to the 200s.
         x-versioned: [delete]
