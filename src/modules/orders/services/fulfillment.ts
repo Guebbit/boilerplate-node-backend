@@ -6,7 +6,7 @@
  * decides whether each still applies. Every door takes the act's session: the shipment, the
  * summary, the status move and the events commit together or not at all.
  *
- * See `docs/modules/orders.md#the-fulfillment-summary`.
+ * See `docs/modules/orders.md#the-fulfilment-summary`.
  */
 
 import type { ClientSession } from 'mongoose';

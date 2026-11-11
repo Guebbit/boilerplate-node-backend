@@ -8,6 +8,7 @@
 import { model, Schema } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { configureMongoose } from '@infrastructure/runtime/database';
+import { databaseErrorInterpreter } from '@infrastructure/http/errors';
 
 setupTestDb();
 
@@ -60,6 +61,19 @@ describe('maxTimeMS', () => {
         );
     });
 
+    // The wiring the model-only cases above never reach: the real driver error, through the one
+    // function that decides the answer.
+    it('answers a killed query 503, through the real error interpreter', async () => {
+        configureMongoose(150);
+
+        const error = await probeModel
+            .find(slowFilter(1500))
+            .exec()
+            .catch((error_: unknown) => error_);
+
+        expect(databaseErrorInterpreter(error)).toEqual([503, 'Query timed out']);
+    });
+
     it('leaves a query inside the limit alone', async () => {
         configureMongoose(5000);
 
@@ -80,5 +94,24 @@ describe('maxTimeMS', () => {
         configureMongoose(0);
 
         await expect(probeModel.find(slowFilter(400)).exec()).resolves.toHaveLength(1);
+    });
+});
+
+/**
+ * A kill cannot half-apply a write, because the global limit never reaches a multi-document one:
+ * Mongoose applies it to find, count, distinct, aggregate and `findOneAndUpdate` (one document,
+ * atomic), not to `updateOne`/`updateMany`/`deleteMany`. A limit named on the query itself does
+ * reach them, and then a kill leaves the rows already visited modified — which is why none is set.
+ */
+describe('a multi-document write', () => {
+    it('runs to completion under the global limit, so a kill can never half-apply it', async () => {
+        await probeModel.insertMany(Array.from({ length: 5 }, () => ({ name: 'b' })));
+        configureMongoose(150);
+
+        const result = await probeModel
+            .updateMany({ $where: 'sleep(100) || true' }, { name: 'c' })
+            .exec();
+
+        expect(result.modifiedCount).toBe(6);
     });
 });

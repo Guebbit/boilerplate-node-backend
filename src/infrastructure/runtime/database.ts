@@ -87,9 +87,12 @@ export const getDatabaseUri = () => {
  * options, read when a query runs rather than when a schema compiles, so there is no load order to
  * get wrong: no entry point can build a model "too early" for them.
  *
- * `maxTimeMS` is attached to every query and aggregate that did not set its own, and a query that
- * did (even `0`, "no limit") keeps it. It cannot reach `save`, `insertMany`, `bulkWrite` or a raw
- * `collection.*` call: those are writes (accepted, a comment at each site) or set a limit by hand.
+ * `maxTimeMS` is attached to every find, count, distinct, aggregate and `findOneAndX` that did not
+ * set its own, and a query that did (even `0`, "no limit") keeps it. It cannot reach `save`,
+ * `insertMany`, `bulkWrite`, `updateOne`/`updateMany`/`deleteMany` or a raw `collection.*` call:
+ * those are writes (accepted, a comment at each site) or set a limit by hand. A multi-document
+ * write is out of reach on purpose: a kill mid-way would leave it half-applied.
+ * A killed query answers 503 `QUERY_TIMEOUT` (`http/errors.ts#databaseErrorInterpreter`).
  * https://mongoosejs.com/docs/api/mongoose.html#Mongoose.prototype.set()
  * https://www.mongodb.com/docs/manual/reference/method/cursor.maxTimeMS/
  *

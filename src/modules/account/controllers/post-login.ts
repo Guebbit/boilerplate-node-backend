@@ -42,8 +42,9 @@ export const postLogin = (
     response: Response
 ) => {
     /*
-     * Read, not parsed against `LoginBody`. Three reasons, and only the first is about answering
-     * uniformly — `accountService.login` parses anyway, so this is not where a 422 is avoided.
+     * Passed whole, not parsed against `LoginBody` here. Three reasons, and only the first is
+     * about answering uniformly — `accountService.login` parses anyway (an unknown field is its
+     * 422 too), so this is not where a 422 is avoided.
      *
      * Uniform:     whether the ACCOUNT EXISTS. `login` compares against `DUMMY_PASSWORD_HASH` on
      *              a miss, so an unknown address costs the same hash round as a wrong password
@@ -56,10 +57,10 @@ export const postLogin = (
      *              attempt from the trail. The service's 422 arrives after it, and is recorded.
      * Absent body: express 5 leaves `request.body` undefined when no parser matched. The `?? {}`
      *              below turns that into an ordinary empty body rather than a synchronous
-     *              `TypeError` on the destructure, so `accountService.login` reaches its own
-     *              422 the same way a JSON body missing both fields would.
+     *              `TypeError` on `request.body?.remember`, so `accountService.login` reaches
+     *              its own 422 the same way a JSON body missing both fields would.
      */
-    const { email, password } = request.body ?? {};
+    const body: unknown = request.body ?? {};
 
     /*
      * `remember` IS parsed, and first: it is not a secret, so a 422 here tells a caller nothing
@@ -77,7 +78,7 @@ export const postLogin = (
     const provedAt = Date.now();
 
     return accountService
-        .login(email, password)
+        .login(body)
         .then((result) => {
             if (refused(response, result)) {
                 recordLoginFailure(request);

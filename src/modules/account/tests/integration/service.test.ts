@@ -64,6 +64,26 @@ describe('signup', () => {
         expect(stored).not.toBeNull();
     });
 
+    it('refuses a body with a field the contract does not know, creating nothing', async () => {
+        // Strict like every other body: a stray key is a 422, not silently dropped.
+        const response = asReject(
+            await accountService.signup(
+                {
+                    email: 'stray@example.com',
+                    username: 'stray',
+                    password: PLAIN_PASSWORD,
+                    passwordConfirm: PLAIN_PASSWORD,
+                    termsAccepted: true,
+                    role: 'admin'
+                },
+                testCallerContext
+            )
+        );
+
+        expect(response.status).toBe(422);
+        expect(await userRepository.findOne({ email: 'stray@example.com' })).toBeNull();
+    });
+
     it('never stores the password as it was sent', async () => {
         // The `pre('save')` hook hashes it. If that hook stops firing — or someone "simplifies"
         // this service to write the field directly — every account in the database becomes a
@@ -320,7 +340,9 @@ describe('login', () => {
     it('returns the user for correct credentials', async () => {
         await createLoginUser();
 
-        const response = asSuccess(await accountService.login('login@example.com', PLAIN_PASSWORD));
+        const response = asSuccess(
+            await accountService.login({ email: 'login@example.com', password: PLAIN_PASSWORD })
+        );
 
         expect(response.data.email).toBe('login@example.com');
     });
@@ -337,10 +359,10 @@ describe('login', () => {
         await createLoginUser();
 
         const unknownAccount = asReject(
-            await accountService.login('nobody@example.com', PLAIN_PASSWORD)
+            await accountService.login({ email: 'nobody@example.com', password: PLAIN_PASSWORD })
         );
         const wrongPassword = asReject(
-            await accountService.login('login@example.com', 'not-the-password')
+            await accountService.login({ email: 'login@example.com', password: 'not-the-password' })
         );
 
         expect(unknownAccount.status).toBe(401);
@@ -355,7 +377,9 @@ describe('login', () => {
         // and every other login test still passes, because they use live accounts.
         await createLoginUser({ deletedAt: new Date() });
 
-        const response = asReject(await accountService.login('login@example.com', PLAIN_PASSWORD));
+        const response = asReject(
+            await accountService.login({ email: 'login@example.com', password: PLAIN_PASSWORD })
+        );
 
         expect(response.status).toBe(401);
     });
@@ -369,8 +393,12 @@ describe('login', () => {
         // the thing the 401s above are careful not to.
         await createLoginUser();
 
-        const existingAccount = asReject(await accountService.login('login@example.com', 'x'));
-        const unknownAccount = asReject(await accountService.login('nobody@example.com', 'x'));
+        const existingAccount = asReject(
+            await accountService.login({ email: 'login@example.com', password: 'x' })
+        );
+        const unknownAccount = asReject(
+            await accountService.login({ email: 'nobody@example.com', password: 'x' })
+        );
 
         expect(existingAccount.status).toBe(422);
         expect(unknownAccount.status).toBe(422);
@@ -384,7 +412,7 @@ describe('login', () => {
     ])('rejects %s with 422, before touching the database', async (_label, email, password) => {
         // 422 rather than 401: the request could not be understood, which is a different fact
         // from "these credentials are wrong" and must not be flattened into it.
-        const response = asReject(await accountService.login(email, password));
+        const response = asReject(await accountService.login({ email: email, password: password }));
 
         expect(response.status).toBe(422);
     });
@@ -429,7 +457,10 @@ describe('passwordChange', () => {
         const stored = await userRepository.findOneWithCredentials({ email: 'change@example.com' });
         expect(stored?.password).toMatch(/^\$argon2id\$/);
         // And it is the NEW one: the login flow is the honest way to assert that.
-        const loggedIn = await accountService.login('change@example.com', PLAIN_PASSWORD);
+        const loggedIn = await accountService.login({
+            email: 'change@example.com',
+            password: PLAIN_PASSWORD
+        });
         expect(loggedIn.success).toBe(true);
     });
 
@@ -446,7 +477,10 @@ describe('passwordChange', () => {
 
         expect(response.status).toBe(422);
 
-        const stillWorks = await accountService.login('unchanged@example.com', PASSPHRASE_PASSWORD);
+        const stillWorks = await accountService.login({
+            email: 'unchanged@example.com',
+            password: PASSPHRASE_PASSWORD
+        });
         expect(stillWorks.success).toBe(true);
     });
 });

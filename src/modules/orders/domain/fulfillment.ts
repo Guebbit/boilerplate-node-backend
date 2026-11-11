@@ -5,7 +5,7 @@
  * small record, written only through `orderService.recordFulfillmentProgress`, and everything
  * `orders` itself asks about the goods reads that record.
  *
- * Pure — no I/O. See `docs/modules/orders.md#the-fulfillment-summary`.
+ * Pure — no I/O. See `docs/modules/orders.md#the-fulfilment-summary`.
  */
 
 import { OrderStatus } from '@types';

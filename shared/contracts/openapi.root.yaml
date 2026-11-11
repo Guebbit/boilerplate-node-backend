@@ -180,6 +180,12 @@ x-error-codes:
             status: 503,
             description: 'A dependency (database, broker) is unreachable, or the server is at a capacity limit (a full queue, the process ceiling on open live streams). Carries a `Retry-After` hint.'
         }
+    QUERY_TIMEOUT:
+        {
+            scope: app,
+            status: 503,
+            description: "A database query ran past the server's time limit and was stopped. The server is busy, not broken. Carries a `Retry-After` hint."
+        }
     RATE_LIMITED:
         {
             scope: app,
@@ -772,7 +778,8 @@ components:
                 route can answer this: `getAuth` for any bearer request, or a controller's own
                 database call. The `Retry-After` header carries a rough wait hint, a few seconds,
                 not a promise — there is no queue depth or circuit-breaker state to compute a
-                real one from.
+                real one from. A query the server stopped at its time limit answers the same
+                status with the code `QUERY_TIMEOUT` instead of `SERVICE_UNAVAILABLE`.
             headers:
                 Cache-Control:
                     $ref: '#/components/headers/CacheControlNoStore'
