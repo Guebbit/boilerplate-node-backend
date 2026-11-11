@@ -12,7 +12,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { slugify } from '@mdit-vue/shared';
 import { resolveFrontendPath, DEFAULT_FRONTEND_PATH } from '../pairing/paired-frontend-path';
 import {
     ALLOWED,
@@ -26,6 +25,7 @@ import {
     gitEnvironment
 } from './repo-references';
 import { REPO_ROOT as ROOT } from '../modules-on-disk';
+import { deadCodeCitations, headingSlugs } from './code-citations';
 
 /** The paired repo, addressed in prose by the directory it actually sits in. */
 const PEER_DIRECTORY = path.basename(DEFAULT_FRONTEND_PATH);
@@ -46,39 +46,6 @@ interface Finding {
     page: string;
     token: string;
 }
-
-/**
- * A page's heading slugs, VitePress's own way: its `slugify` (`@mdit-vue/shared`) over the
- * heading's plain text, a repeated heading de-duplicated with `-1`/`-2` as markdown-it-anchor
- * does, plus any explicit `{#custom-id}` a heading carries.
- * https://github.com/mdit-vue/mdit-vue/tree/main/packages/shared
- */
-const headingSlugs = (markdown: string): Set<string> => {
-    const slugs = new Set<string>();
-    let inFence = false;
-
-    for (const line of markdown.split('\n')) {
-        // A `#` line inside a fenced block is a code comment, not a heading.
-        if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
-        const heading = inFence ? undefined : /^#{1,6}\s+(.+)$/.exec(line)?.[1];
-        if (!heading) continue;
-
-        const explicit = /{#([\w-]+)}\s*$/.exec(heading)?.[1];
-        // The title VitePress slugs is the heading's text: link targets, code ticks and
-        // emphasis marks are not part of it.
-        const text = heading
-            .replace(/{#[\w-]+}\s*$/, '')
-            .replaceAll(/\[([^\]]*)]\([^)]*\)/g, '$1')
-            .replaceAll(/[*`]/g, '');
-        const base = explicit ?? slugify(text);
-
-        let slug = base;
-        for (let n = 1; slugs.has(slug); n++) slug = `${base}-${n}`;
-        slugs.add(slug);
-    }
-
-    return slugs;
-};
 
 /**
  * Normalize one inline code span into the path it claims (with any `#anchor` kept, separately),
@@ -288,6 +255,11 @@ const run = (): number => {
         for (const token of brokenLinkAnchors(page, text, anchorsOf))
             findings.push({ page, token: `link ${token}` });
     }
+
+    // Citations written in code, contract YAML and `.env-example`: a page that moved or a heading
+    // that was renamed leaves them pointing at nothing, and no build opens them.
+    for (const citation of deadCodeCitations(ROOT))
+        findings.push({ page: 'outside docs/', token: citation });
 
     if (pages.length < MIN_PAGES || references < MIN_REFERENCES) {
         console.error(
