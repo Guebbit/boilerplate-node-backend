@@ -82,7 +82,7 @@ first script.
 What still guards a version change:
 
 - the lockfile integrity hash, and the human merge of the bump PR;
-- the 7-day dependabot `cooldown` (dependabot PRs only: a developer's `npm install` gets none);
+- the 7-day dependabot `cooldown`, plus `.npmrc` `min-release-age=7` for local installs;
 - production installs with `--ignore-scripts` (`docker/Dockerfile.production`), so no script runs
   in the shipped image whatever `allowScripts` says.
 
@@ -93,16 +93,17 @@ the diff of the lockfile, not of a script, so a per-version pin turned into a cl
 
 A script that is a no-op without an env flag is denied, not allowed: `@parcel/watcher`'s `install`
 only builds when `npm_config_build_from_source` is set, and its binaries arrive as optional
-dependencies.
+dependencies. The same goes for `protobufjs`: its install script only prints a version-scheme
+warning.
 
-`@scarf/scarf` and `@parcel/watcher` are name-only `false`, so a version bump stays denied.
+`@scarf/scarf`, `@parcel/watcher` and `protobufjs` are name-only `false`, so a version bump stays denied.
 
 ### When an install reports a blocked script
 
 1. Read what the script does (`npm view <pkg>@<version> scripts`, then the file in the tarball).
    Telemetry or a download of an unpinned binary is a no (rule 3 above).
-2. `npm install-scripts approve <pkg>` (alias `approve-scripts`) writes `<pkg>: true` into
-   `allowScripts`. Never `--all`. `npm install-scripts prune` drops entries nothing installs any more.
+2. `npm approve-scripts <pkg>` writes `<pkg>: true` into `allowScripts`. Never `--all`.
+   (`npm install-scripts` only exists from npm 11.18; the `engines` floor is 11.16.)
 3. Commit the `package.json` change with the lockfile it came from.
 
 ### The sibling checkout token
