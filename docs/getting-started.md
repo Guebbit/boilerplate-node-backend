@@ -65,6 +65,18 @@ The full list, and the env var for every port, is in
 [Pairing & Ports](./tools/pairing-and-ports.md). This repo owns `3000–3099`; the paired frontend
 owns `8080–8099`, which is what lets both stacks be up at once.
 
+### Rehearse the dead man's switch
+
+The alert pipeline watches itself: Alertmanager pings an outside watcher (Gatus) every minute, and
+silence is the alarm. Locally Gatus mails Mailpit, so you can see it work before you rely on it
+(`compose:up:full`, plus the `integrations` profile for Mailpit):
+
+1. `npm run compose -- stop alertmanager`
+2. Within about 3 minutes the mail lands in Mailpit (`http://localhost:8025`): `alertmanager-heartbeat` is missing.
+3. `npm run compose -- start alertmanager`: the next ping resolves it, and Gatus mails the resolution.
+
+The full chain, and the production setup on a second machine, are in [Gatus](./tools/gatus.md).
+
 ## Explore the API without writing a client
 
 Ask for a collection and one lands at the repo root:
