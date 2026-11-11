@@ -827,6 +827,7 @@ components:
             type: string
             minLength: 3
             maxLength: 3
+            format: iso-4217
             pattern: '^[A-Z]{3}$'
             description: ISO 4217 alphabetic currency code, upper case (e.g. `EUR`)
         # Money on the wire: text at the currency's own ISO 4217 places ("19.90" EUR, "1000" JPY,
@@ -858,6 +859,7 @@ components:
         Locale:
             type: string
             maxLength: 35
+            format: bcp47
             description: >-
                 BCP 47 language tag, e.g. `en` or `pt-BR`. Any casing is accepted and compared
                 case-blind; the API stores and returns the canonical spelling (`pt-BR`,
@@ -868,6 +870,7 @@ components:
         CountryCode:
             type: string
             maxLength: 2
+            format: iso-3166-alpha-2
             description: >-
                 ISO 3166-1 alpha-2 country code, e.g. `IT`. Shape-checked here; which codes a
                 deployment actually ships to is a runtime fact, not a contract one — see

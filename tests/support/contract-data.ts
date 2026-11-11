@@ -134,7 +134,7 @@ const defOf = (schema: ZodType): ZodDef => asStub<{ _zod: { def: ZodDef } }>(sch
 /** The checks (min length, pattern, ...) attached to a schema, unwrapped from Zod's wrapper. */
 const checksOf = (def: ZodDef): ZodCheckDef[] => [
     ...(def.checks ?? []).map((check) => check._zod.def),
-    // A custom string format (money as text) carries its pattern on the schema itself.
+    // A custom string format (money as text, ISO codes) carries its pattern on the schema itself.
     ...(def.pattern ? [{ check: 'string_format', pattern: def.pattern }] : [])
 ];
 
