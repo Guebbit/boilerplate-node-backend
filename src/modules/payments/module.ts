@@ -142,9 +142,11 @@ export default {
         // nobody finished, still open at the provider (closed best-effort, never rethrown), and —
         // when `refund` says so — the money already taken. The refund is the durable half: its
         // event is an outbox row, and a rejection here makes the relay deliver it again.
-        onDomainEvent(ORDER_CANCELED, ({ orderId, refund, cause, informedAt }) =>
+        // `meta.eventId` is the outbox row id, stable across redeliveries: the refund remembers it,
+        // so a redelivery after staff voided the refund cannot pay again.
+        onDomainEvent(ORDER_CANCELED, ({ orderId, refund, cause, informedAt }, { eventId }) =>
             cancelOpenIntentForOrder(orderId, cause === 'reservation_expired').then(() =>
-                refund ? refundForOrder(orderId, { cause, informedAt }) : undefined
+                refund ? refundForOrder(orderId, { cause, informedAt }, eventId) : undefined
             )
         );
         // A bank-transfer order is owed money from the moment it is placed: its payment, with the

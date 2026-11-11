@@ -66,6 +66,11 @@ A payment is _about_ an order: the intent freezes its total, the confirm moves i
 `refund` it owes, and this module answers by opening the refund. The event is an outbox row written
 with the cancel, so the promise survives a crash; the refund RECORD is the promise from then on.
 
+The payment also remembers every cancel event id it handled (`handledCancelEvents`, never on the
+wire), even one that had nothing to refund. A redelivery of a handled event refunds nothing, so
+staff voiding that refund is final: the event cannot pay it again. An open record is finished by
+the refund sweep, not by a redelivery.
+
 This module's `order.canceled` listener also closes a card intent nobody ever finished, so an
 abandoned one cannot resolve at the provider days later with no local row left to catch the charge
 it makes. Best-effort and first: a payment already `succeeded` is the refund's to give back, never
