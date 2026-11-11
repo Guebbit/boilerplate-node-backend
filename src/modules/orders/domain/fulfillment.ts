@@ -9,7 +9,8 @@
  */
 
 import { OrderStatus } from '@types';
-import type { OrderFulfillmentStatus } from '@types';
+import type { OrderFulfillmentFilter, OrderFulfillmentStatus } from '@types';
+import { isAwaitingGoods } from './lifecycle';
 import { ORDER_STATUS_TRAITS, statusesWhere } from './status-traits';
 
 /**
@@ -145,10 +146,12 @@ const EVERY_UNIT_HELD: FulfillmentFilter = {
  * The query behind `GET /orders?fulfillmentStatus=`: the stored status and summary conditions
  * that make {@link fulfillmentStatusOf} answer `wanted`. Derived from the same table rather than a
  * stored copy of the answer, so the filter and the value a row serializes with cannot disagree.
+ * `awaiting_shipment` is the one aggregate: no row carries it, it groups every status that
+ * {@link isAwaitingGoods} names (goods still owed, none or some already sent).
  * @param wanted - the value to list
  * @returns a filter to AND into the listing's own
  */
-export const fulfillmentStatusFilter = (wanted: OrderFulfillmentStatus): FulfillmentFilter => {
+export const fulfillmentStatusFilter = (wanted: OrderFulfillmentFilter): FulfillmentFilter => {
     const neither = { $nor: [PARTIALLY_SHIPPED, EVERY_UNIT_HELD] };
     const withValue = (value: OrderFulfillmentStatus, followsSummary: boolean) =>
         statusIn(
@@ -161,6 +164,9 @@ export const fulfillmentStatusFilter = (wanted: OrderFulfillmentStatus): Fulfill
     // Statuses whose summary may refine the answer: only they can be partially fulfilled or on hold.
     const inFlight = statusIn(...statusesWhere((traits) => traits.fulfillment.followsSummary));
     switch (wanted) {
+        case 'awaiting_shipment': {
+            return statusIn(...Object.values(OrderStatus).filter(isAwaitingGoods));
+        }
         case 'fulfilled':
         case 'shipped': {
             return withValue(wanted, false);

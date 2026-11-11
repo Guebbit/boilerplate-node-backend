@@ -517,7 +517,7 @@ export const stockMovementRepository: AppendOnlyLedger<StockMovementDocument, St
 /**
  * The hold. The generic CRUD surface plus the lifecycle primitives the service drives every
  * transition through (`insertHold`, `claimStatus`, `findExpired`) and the two refinements
- * (`narrowToTaken`, `extendExpiry`) — each documented at its own definition below.
+ * (`pushItems`, `extendExpiry`) — each documented at its own definition below.
  */
 export const reservationRepository: Repository<ReservationDocument, Wire<ReservationDocument>> & {
     insertHold: (
@@ -552,10 +552,11 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
         session: ClientSession
     ) => Promise<ReservationDocument[]>;
     findExpired: (now: Date, limit: number) => Promise<ReservationDocument[]>;
-    narrowToTaken: (
+    pushItems: (
         orderId: string,
-        items: readonly { productId: string; quantity: number; kind?: HoldKind }[]
-    ) => Promise<void>;
+        parts: readonly { productId: string; quantity: number; kind?: HoldKind }[],
+        session: ClientSession
+    ) => Promise<boolean>;
     extendExpiry: (orderId: string, expiresAt: Date) => Promise<ReservationDocument | null>;
 } = {
     ...createRepository<ReservationDocument, Wire<ReservationDocument>>(reservationModel, {
@@ -758,26 +759,25 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
             .exec(),
 
     /**
-     * Rewrite a still-held hold's item list to only what a partial reserve actually took, before
-     * the caller releases those and deletes the hold — so a crash between this write and the
-     * delete leaves a hold naming real reservations, never lines whose counters were never moved.
-     * Guarded on `status: 'held'`: if another caller already claimed the hold, its items are
-     * mid-use and this leaves them alone rather than racing that claim.
+     * Add lines to a still-`held` hold, in the transaction that takes their units: a hold names
+     * only what its counters really moved, so a crash mid-reserve leaves nothing for the sweep to
+     * release that this order never took. Guarded on `status: 'held'`: a hold already claimed is
+     * mid-release and must not grow.
      *
-     * @param orderId - the order whose hold is being narrowed
-     * @param items - the lines actually taken before the failure
+     * @param orderId - the order whose hold is open
+     * @param parts - the lines just taken
+     * @param session - the transaction that took them
+     * @returns whether the hold was still `held` and now names them
      */
-    narrowToTaken: (
-        orderId: string,
-        items: readonly { productId: string; quantity: number; kind?: HoldKind }[]
-    ) =>
+    pushItems: (orderId, parts, session) =>
         reservationModel
             .updateOne(
                 { orderId: toObjectId(orderId), status: 'held' },
-                { $set: { items: toReservationItems(items) } }
+                { $push: { items: { $each: toReservationItems(parts) } } },
+                { session }
             )
             .exec()
-            .then(() => undefined),
+            .then(({ modifiedCount }) => modifiedCount > 0),
 
     /**
      * Push a still-`held` hold's deadline out — a card payment gone `processing` can take days to

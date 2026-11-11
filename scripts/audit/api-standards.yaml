@@ -56,13 +56,13 @@ rules:
       standard: rfc9110
       section: methods
       rule: 'Content received in a DELETE has no defined semantics and cannot alter the meaning or target of the request; a client SHOULD NOT send it; a success SHOULD be 202, 204 or 200 (§9.3.5).'
-      house: A DELETE body is refused with 415, and a repeat writes nothing. With nothing left to remove, the answer is 404 when the URI names one thing that no longer answers a GET. It is the same success when that thing still answers a GET marked deleted or revoked, or when the URI names a collection or a pending request (docs/api/write-methods.md#delete-remove).
+      house: A DELETE body is refused with 415, and a repeat writes nothing. With nothing left to remove, the answer is 404 when the URI names one thing that no longer answers a GET. It is the same success when that thing still answers a GET marked deleted or revoked, or when the URI names a collection or a pending request (docs/api/write-methods.md#delete-—-remove).
       source: https://www.rfc-editor.org/rfc/rfc9110#section-9.3.5
       evidence:
           [
               openapi.yaml paths.*.delete.requestBody,
               src/infrastructure/http/request.ts,
-              docs/api/write-methods.md#delete-remove
+              docs/api/write-methods.md#delete-—-remove
           ]
       lint: possible
       difference: null
@@ -538,7 +538,7 @@ rules:
           [
               openapi.yaml paths.*.delete,
               src/modules/api-keys/openapi.yaml,
-              docs/api/write-methods.md#delete-remove,
+              docs/api/write-methods.md#delete-—-remove,
               docs/api/write-methods.md#repeating-an-action-409
           ]
       lint: no

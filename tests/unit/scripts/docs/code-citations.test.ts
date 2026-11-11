@@ -1,0 +1,75 @@
+/**
+ * `scripts/docs/code-citations.ts` — the `docs/…` links cited outside `docs/`, run through the
+ * same function `check-references.ts` calls, against a scratch repo whose files git tracks.
+ */
+import { execFile } from 'node:child_process';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
+import { deadCodeCitations } from '../../../../scripts/docs/code-citations';
+import { gitEnvironment } from '../../../../scripts/docs/repo-references';
+
+/** `execFile` without blocking the event loop. */
+const run = promisify(execFile);
+
+describe('deadCodeCitations', () => {
+    /** A scratch repo, so the case controls exactly which pages and citing files exist. */
+    let root: string;
+
+    /** Writes `files` into the scratch repo and stages them (`ls-files` reads the index). */
+    const track = async (files: Record<string, string>): Promise<void> => {
+        for (const [file, text] of Object.entries(files)) {
+            await mkdir(path.dirname(path.join(root, file)), { recursive: true });
+            await writeFile(path.join(root, file), text);
+        }
+        await run('git', ['add', '.'], { cwd: root, env: gitEnvironment() });
+    };
+
+    beforeEach(async () => {
+        root = await mkdtemp(path.join(os.tmpdir(), 'code-citations-'));
+        await run('git', ['init', '--quiet'], { cwd: root, env: gitEnvironment() });
+    });
+
+    afterEach(() => rm(root, { recursive: true, force: true }));
+
+    it('accepts a cited page and a cited anchor that is one of its headings', async () => {
+        await track({
+            'docs/modules/orders.md': '# orders\n\n## Cancel — the rules\n',
+            'src/a.ts': '// See: docs/modules/orders.md#cancel-—-the-rules\n',
+            '.env-example': '# docs/modules/orders.md\n'
+        });
+
+        expect(deadCodeCitations(root)).toEqual([]);
+    });
+
+    it('reports an anchor that no heading of the page answers to', async () => {
+        await track({
+            'docs/modules/orders.md': '# orders\n\n## Cancel\n',
+            'src/a.ts': '// See: docs/modules/orders.md#renamed-heading\n'
+        });
+
+        expect(deadCodeCitations(root)).toEqual([
+            'src/a.ts: docs/modules/orders.md#renamed-heading'
+        ]);
+    });
+
+    it('reports a page that is not tracked, in contract YAML too', async () => {
+        await track({
+            'docs/modules/orders.md': '# orders\n',
+            'src/modules/orders/openapi.yaml': 'description: see docs/modules/gone.md#x.\n'
+        });
+
+        expect(deadCodeCitations(root)).toEqual([
+            'src/modules/orders/openapi.yaml: docs/modules/gone.md#x'
+        ]);
+    });
+
+    it('leaves a URL and a peer repo page alone', async () => {
+        await track({
+            'src/a.ts': '// https://example.com/docs/nope.md\n// peer-repo/docs/tools/other.md#x\n'
+        });
+
+        expect(deadCodeCitations(root)).toEqual([]);
+    });
+});

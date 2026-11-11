@@ -196,6 +196,10 @@ refused with the matching `LIMIT_*` code (400 for a count or a field name, 413 f
   persistent `public/images/`. Reference-based rather than age-based — see the script's own
   docblock for why a promoted image cannot be swept the way quarantine is.
 
+The orphan sweep and every account erasure (which deletes the avatar and its thumbnail) need the
+`uploads` volume mounted in the container that runs them. In the production compose file that means
+`cron` mounts it like `app`; without it both walk an empty folder and report success.
+
 ## Who owns an upload
 
 A refused write must not leave its image behind, and no controller should have to remember that.
