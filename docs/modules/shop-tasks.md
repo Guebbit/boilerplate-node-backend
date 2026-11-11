@@ -193,7 +193,7 @@ per run.
 | Summary row                               | Counts                                    | Run    | Set told              | Mail   |
 | ----------------------------------------- | ----------------------------------------- | ------ | --------------------- | ------ |
 | `shop-tasks.staff.transfers-due`          | bank transfers due soon                   | daily  | `PaymentRecording`    | bell   |
-| `shop-tasks.staff.unshipped`              | paid orders not shipped                   | daily  | `DeliveryStart`       | digest |
+| `shop-tasks.staff.unshipped`              | paid orders with goods still to ship      | daily  | `DeliveryStart`       | digest |
 | `shop-tasks.staff.returns-undecided`      | return requests still undecided           | daily  | `ReturnManagement`    | digest |
 | `shop-tasks.staff.returns-awaiting-goods` | approved returns overdue for their goods  | daily  | `ReturnReceiving`     | digest |
 | `shop-tasks.staff.delivery-holds-open`    | held orders open too long                 | daily  | `DeliveryManagement`  | digest |
@@ -213,7 +213,8 @@ returns list shows the ones still inside their days.
 Each row carries `params.work`: the filtered list path, from the `staffPages:` block of
 `shared/rules/frontend-links.yaml` (`SUMMARY_PAGES`). The bell opens it as it is, and the digest mail
 links the same entry, so the two cannot drift. Some rows open a list slightly wider than the count
-(for instance `unshipped` shows every paid order, not only the late ones).
+(`unshipped` lists every age, not only the late ones). Its link,
+`fulfillmentStatus=awaiting_shipment&deleted=false`, otherwise opens exactly the counted set.
 
 There is no digest extension point in `notifications`: all ten rows are the shop's, so a registry
 would have one caller. The primitives (`writeSummary`, `clearSummary`, `staffRecipients`) are the
@@ -231,7 +232,7 @@ the caller holds the screen's route gate; zero is sent as `0`, never left out.
 
 | Key              | Screen           | Gate              | Counts                                                  |
 | ---------------- | ---------------- | ----------------- | ------------------------------------------------------- |
-| `salesOrders`    | sales orders     | `display:Order`   | orders `paid` or `processing`, live, held ones included |
+| `salesOrders`    | sales orders     | `display:Order`   | orders with `fulfillmentStatus=awaiting_shipment`, live |
 | `salesPayments`  | payments         | `display:Payment` | the rows of `GET /payments/attention`, all six sources  |
 | `returns`        | sales returns    | `read:Return`     | returns with `status=requested`                         |
 | `salesPreorders` | preorders board  | `display:Order`   | fulfillment orders with `late=true`                     |

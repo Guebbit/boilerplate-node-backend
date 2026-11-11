@@ -11,7 +11,7 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { OrderStatus } from '@types';
-import type { OrderFulfillmentStatus } from '@types';
+import type { OrderFulfillmentFilter } from '@types';
 import { orderService } from '../../services';
 import { orderModel } from '../../model';
 import type { FulfillmentSummary } from '../../domain';
@@ -50,7 +50,7 @@ const orderWith = async (status: OrderStatus, fulfillment?: Partial<FulfillmentS
 };
 
 /** The ids a listing by `fulfillmentStatus` answers. */
-const listed = (fulfillmentStatus: OrderFulfillmentStatus): Promise<string[]> =>
+const listed = (fulfillmentStatus: OrderFulfillmentFilter): Promise<string[]> =>
     orderService.search({ fulfillmentStatus }, {}).then(({ items }) => items.map(({ id }) => id));
 
 describe('listing by fulfillmentStatus', () => {
@@ -79,6 +79,25 @@ describe('listing by fulfillmentStatus', () => {
         expect(await listed('partially_fulfilled')).toEqual([part]);
         expect(await listed('shipped')).toEqual([shipped]);
         expect(await listed('fulfilled')).toEqual([delivered]);
+    });
+
+    it('selects awaiting_shipment as the paid or processing orders, partly shipped included', async () => {
+        const paid = await orderWith(OrderStatus.paid, { remaining: 2 });
+        const part = await orderWith(OrderStatus.processing, {
+            shipped: true,
+            remaining: 1,
+            undelivered: 1
+        });
+        const held = await orderWith(OrderStatus.processing, { remaining: 1, onHold: 1 });
+        await orderWith(OrderStatus.pending);
+        // Paid then canceled with the money kept: `paidAt` set, no refund stamp, still out.
+        const canceled = await buyerOrder(OrderStatus.canceled);
+        await orderModel.updateOne({ _id: canceled._id }, { paidAt: new Date() }).exec();
+        await orderWith(OrderStatus.shipped, { shipped: true, undelivered: 1 });
+
+        expect(await listed('awaiting_shipment').then((all) => all.toSorted())).toEqual(
+            [paid, part, held].toSorted()
+        );
     });
 
     it('agrees with the value each listed order serializes with', async () => {

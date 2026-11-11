@@ -129,18 +129,18 @@ describe('reserving a line that may spill', () => {
         expect(await levelOf(productId)).toEqual({ reserved: 1, available: 0, backordered: 1 });
     });
 
-    it('leaves nothing taken when the hold cannot be rewritten', async () => {
+    it('leaves nothing taken when the hold cannot take the line', async () => {
         const productId = await productWith(2, 10);
         const orderId = anOrderId();
-        const rewrite = jest
-            .spyOn(reservationRepository, 'replaceItems')
-            .mockRejectedValueOnce(new Error('the rewrite failed'));
+        const push = jest
+            .spyOn(reservationRepository, 'pushItems')
+            .mockRejectedValueOnce(new Error('the push failed'));
 
         await expect(
             inventoryService.reserveForOrder(orderId, [spilling(productId, 3)])
-        ).rejects.toThrow('the rewrite failed');
+        ).rejects.toThrow('the push failed');
 
-        rewrite.mockRestore();
+        push.mockRestore();
         expect(await levelOf(productId)).toEqual({ reserved: 0, available: 2, backordered: 0 });
         expect(await reservationRepository.findByOrderId(orderId)).toBeNull();
     });

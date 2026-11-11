@@ -1,6 +1,6 @@
 /**
  * @module
- * This module's `services/` — see `docs/theory/layers.md#when-service-ts-becomes-services-` for
+ * This module's `services/` — see `docs/theory/layers.md#when-service-ts-becomes-services` for
  * when a module gets one of these instead of a single `service.ts`. Split by what the operations
  * DO: `subscriptions.ts` and `deliveries.ts` are the admin surface's two resources, `attempt.ts` is
  * the delivery core both `deliveries.ts`'s replay and the queued worker share, `sweep.ts` is the

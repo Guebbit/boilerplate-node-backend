@@ -160,7 +160,7 @@ switches it on and the catalogue tells this module which lines may spill; the ca
 
 **A line the shelf covers half.** `reserveForOrder` takes a line with `spill` whole from the shelf when
 it fits. Otherwise, in one transaction, it takes the shelf units there are, claims the rest against the
-cap and rewrites the hold to say which is which. A crash anywhere inside leaves nothing taken; a claim
+cap and adds each part to the hold. A crash anywhere inside leaves nothing taken; a claim
 the cap refuses gives the shelf part back; two checkouts racing the last unit resolve inside the
 database. The outcome returns the owed count per line for [`orders`](./orders.md) to freeze.
 
@@ -215,6 +215,13 @@ finds the hold still open and finishes the job instead of reporting "already don
 
 Taking a multi-line hold's lines is ordered by product id, so two checkouts listing the same
 products oppositely meet on the same product first, and one goes on rather than both refusing.
+
+**The hold starts empty and names only what was taken.** `reserveForOrder` writes the hold with no
+lines, then takes each line in one transaction that also adds it to the hold (`pushItems`, guarded on
+the hold still being `held`). A checkout killed between two lines therefore leaves a hold that lists
+only lines whose counters moved, so the sweep never gives back units another order holds. A refused or
+failing line unwinds through the same claim-guarded `releaseForOrder` the sweep uses, then deletes the
+hold; a hold the sweep claimed first makes the next line's push miss and abort, so nothing is taken twice.
 :::
 
 ## A paid order with no hold at all is an incident, not a no-op {#orphaned-hold}

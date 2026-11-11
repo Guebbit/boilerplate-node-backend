@@ -18,7 +18,28 @@
  * are transitive dependencies and a second copy would make `instanceof` answer false.
  */
 const DATABASE_ERROR_NAME =
-    /^(?:Mongo\w*Error|Mongoose\w*Error|ValidationError|CastError|BSONError)$/;
+    /^(?:Mongo\w*Error|Mongoose\w*Error|ValidationError|ValidatorError|CastError|VersionError|DocumentNotFoundError|StrictModeError|BSONError)$/;
+
+/**
+ * Whether the error, or any class it extends, carries a database error's name. The prototype
+ * chain is walked because Mongoose's subclasses (`DocumentNotFoundError`, `VersionError`, a
+ * subclass of an app's own) all end in `MongooseError` yet name themselves differently.
+ *
+ * @param error - whatever was caught
+ */
+const isDatabaseError = (error: Error): boolean => {
+    if (DATABASE_ERROR_NAME.test(error.name)) return true;
+    let prototype: unknown = Object.getPrototypeOf(error);
+    while (typeof prototype === 'object' && prototype !== null) {
+        const constructorName = (
+            Reflect.get(prototype, 'constructor') as { name?: unknown } | undefined
+        )?.name;
+        if (typeof constructorName === 'string' && DATABASE_ERROR_NAME.test(constructorName))
+            return true;
+        prototype = Object.getPrototypeOf(prototype);
+    }
+    return false;
+};
 
 /**
  * The scrubbed fields of an error whose class is known to quote data in its message, or
@@ -33,7 +54,7 @@ const DATABASE_ERROR_NAME =
  * @param error - whatever was caught
  */
 export const scrubError = (error: Error): Record<string, unknown> | undefined => {
-    if (DATABASE_ERROR_NAME.test(error.name)) {
+    if (isDatabaseError(error)) {
         // A message may span several lines, so frames are picked by shape, not by "drop line one".
         const frames = (error.stack ?? '')
             .split('\n')

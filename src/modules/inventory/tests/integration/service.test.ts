@@ -283,14 +283,14 @@ describe('reserveForOrder', () => {
         let calls = 0;
         const spy = jest
             .spyOn(stockLevelRepository, 'applyDelta')
-            .mockImplementation((productId, reason, quantity, delta) => {
+            .mockImplementation((productId, reason, quantity, delta, session) => {
                 calls += 1;
                 // The 1st call after this spy is installed is A's own line, which must succeed so
                 // there is something to roll back; the 2nd is B's, made to throw like a database
                 // hiccup rather than a refusal.
                 return calls === 2
                     ? Promise.reject(new Error('connection reset'))
-                    : realApplyDelta(productId, reason, quantity, delta);
+                    : realApplyDelta(productId, reason, quantity, delta, session);
             });
 
         const orderId = anOrderId();

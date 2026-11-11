@@ -3,7 +3,7 @@
  * Whether a shopper can order a product right now, and the moment that changes. Pure: the clock
  * comes in as an argument.
  *
- * See: docs/modules/products.md#back-in-stock-signal
+ * See: docs/modules/stock-alerts.md
  */
 
 import { isBackorder, type BackorderFacts } from './backorder';

@@ -15,6 +15,7 @@ import { makeResponseStub } from '@tests/express';
 import { logger, serializeError } from '@infrastructure/adapters/logger';
 import { handleUncaughtError, handleUnhandledRejection } from '@app/error-handling';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { trace, type Span } from '@opentelemetry/api';
 import { processUnhandledRejectionsTotal } from '@infrastructure/observability/metrics-process';
 
 /** Enough of a `Request` for the one field the handler reads: `requestId`, for the log line. */
@@ -234,6 +235,42 @@ describe('handleUncaughtError log level', () => {
 
         expect(error).toHaveBeenCalledTimes(1);
         expect(warn).not.toHaveBeenCalled();
+    });
+});
+
+/** Run the handler with a stub span active; returns the stub. */
+const spanAfter = (error: Error) => {
+    const span = asStub<Span>({
+        setAttribute: jest.fn(),
+        setStatus: jest.fn(),
+        recordException: jest.fn()
+    });
+    jest.spyOn(trace, 'getActiveSpan').mockReturnValue(span);
+    jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+    jest.spyOn(logger, 'error').mockImplementation(() => logger);
+
+    handleUncaughtError(error, requestStub(), makeResponseStub(), NEXT);
+
+    return span;
+};
+
+describe('handleUncaughtError span status', () => {
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    it('leaves the span status unset for a 4xx (OTel HTTP semconv)', () => {
+        const span = spanAfter(
+            Object.assign(new Error('duplicate'), { expose: true, status: 409 })
+        );
+
+        expect(span.setStatus).not.toHaveBeenCalled();
+    });
+
+    it('marks the span failed for a 5xx', () => {
+        const span = spanAfter(new Error('boom'));
+
+        expect(span.setStatus).toHaveBeenCalledWith(expect.objectContaining({ code: 2 }));
     });
 });
 

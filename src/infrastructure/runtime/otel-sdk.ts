@@ -26,6 +26,7 @@ import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic
 import {
     BatchSpanProcessor,
     NoopSpanProcessor,
+    type ReadableSpan,
     type SpanProcessor
 } from '@opentelemetry/sdk-trace';
 // `OTLPTraceExporter` speaks OTLP over HTTP/protobuf — the vendor-neutral wire format
@@ -33,6 +34,7 @@ import {
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 // Relative: this file loads first, before anything that resolves path aliases is wired.
 import { isRelaxedEnvironment, loggingConfig, tracingConfig } from './config';
+import { correlationDigest } from '../security/pseudonymise';
 import { scrubbingExporter } from './span-scrub';
 import packageJson from '../../../package.json';
 // Auto-instrumentations: each one monkey-patches its target library so spans are created
@@ -55,7 +57,8 @@ import { logRedactionSchema } from '../config/shared-rules/log-redaction';
 
 /**
  * Query parameters no span may carry in clear: the OAuth callback's one-time `code` and its CSRF
- * `state`, which the HTTP instrumentation otherwise records in the span's URL attributes.
+ * `state`, and the `email` of a staff search, which the HTTP instrumentation otherwise records in
+ * the span's URL attributes.
  * The list is `shared/rules/log-redaction.yaml`'s `traceUrlSecrets`.
  */
 const QUERY_SECRETS = loadSharedRules('log-redaction', logRedactionSchema).traceUrlSecrets;
@@ -145,15 +148,45 @@ export const linkInboundTrace = (span: Span, request: ClientRequest | IncomingMe
     if (remote && trace.isSpanContextValid(remote)) span.addLink({ context: remote });
 };
 
+/** The span attributes that hold a caller's IP address: the client's, and the connecting peer's. */
+const ADDRESS_ATTRIBUTES = ['client.address', 'network.peer.address'];
+
 /**
- * The hook run on every incoming request span: redact URL secrets, then link the caller's trace
+ * Apply `NODE_LOG_PERSONAL_FIELDS` to the caller's IP address on an incoming span, the one policy
+ * a log line's `ip` follows:
+ * - `hash`   the digest the log shows, so a trace and its logs still correlate.
+ * - `redact` the `[REDACTED]` marker: the operator asked for removal, not a pseudonym.
+ * - `plain`  left as it is (local dev).
+ *
+ * The attribute is read back off the span rather than recomputed: the instrumentation derives
+ * `client.address` from `Forwarded` / `X-Forwarded-For` / the socket, and a copy of that logic
+ * would drift.
+ *
+ * @param span - the span the instrumentation just started
+ */
+const pseudonymiseAddresses = (span: Span): void => {
+    const mode = loggingConfig().NODE_LOG_PERSONAL_FIELDS;
+    if (mode === 'plain') return;
+    // A single narrowing cast: the `Span` interface cannot be read, the SDK's class behind it can.
+    const { attributes = {} } = span as Partial<ReadableSpan>;
+    for (const name of ADDRESS_ATTRIBUTES) {
+        const address = attributes[name];
+        if (typeof address === 'string')
+            span.setAttribute(name, mode === 'redact' ? '[REDACTED]' : correlationDigest(address));
+    }
+};
+
+/**
+ * The hook run on every incoming request span: redact URL secrets, pseudonymise the caller's
+ * address, then link the caller's trace
  * unless an ingress already vouches for it (then it is the parent, not a link).
  *
  * @param span - the span the instrumentation just started
  * @param request - the incoming request; outgoing ones are left alone
  */
-const onIncomingRequest = (span: Span, request: ClientRequest | IncomingMessage): void => {
+export const onIncomingRequest = (span: Span, request: ClientRequest | IncomingMessage): void => {
     redactIncomingUrl(span, request);
+    if (request instanceof IncomingMessage) pseudonymiseAddresses(span);
     if (!tracingConfig().NODE_TRUSTED_INGRESS) linkInboundTrace(span, request);
 };
 

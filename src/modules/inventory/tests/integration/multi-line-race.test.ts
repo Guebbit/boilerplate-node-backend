@@ -44,18 +44,19 @@ const holdLaterReservesUntilFirstWritesLand = (firstWrites: number): void => {
     });
 
     jest.spyOn(stockLevelRepository, 'applyDelta').mockImplementation(
-        async (productId, reason, quantity, delta) => {
+        async (productId, reason, quantity, delta, session) => {
             if (reason !== StockMovementReason.reserve)
-                return realApplyDelta(productId, reason, quantity, delta);
+                return realApplyDelta(productId, reason, quantity, delta, session);
             started += 1;
             const isLater = started > firstWrites;
             if (isLater) await firstWritesLanded;
-            const moved = await realApplyDelta(productId, reason, quantity, delta);
-            if (!isLater) {
+            // A write inside a transaction can reject (write conflict, then a retry): count it
+            // settled either way, or the barrier never opens.
+            return realApplyDelta(productId, reason, quantity, delta, session).finally(() => {
+                if (isLater) return;
                 finished += 1;
                 if (finished === firstWrites) barrier.open?.();
-            }
-            return moved;
+            });
         }
     );
 };

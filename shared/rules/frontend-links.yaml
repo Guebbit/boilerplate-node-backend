@@ -42,14 +42,14 @@ staffPages:
     salesPayments: sales/payments
     # The ten summary rows ("{n} things need you"): each opens the list filtered to what it counts.
     # The query keys are the ones the list's own URL state reads. The bell and the digest mail share
-    # these, so the two cannot drift. `partial` rows open a list wider than the count.
+    # these, so the two cannot drift. Some rows open a list wider than the count (`unshipped`: every age).
     transfersDue: sales/payments?tab=awaiting
     preordersLate: sales/preorders?tab=orders&fulfillment-late=true
     deliveryHoldsOpen: sales/orders?fulfillmentStatus=on_hold
     returnsAwaitingGoods: sales/returns?status=approved
     returnsUndecided: sales/returns?status=requested
     lowStock: inventory?levels-lowOnly=true
-    unshipped: sales/orders?status=paid
+    unshipped: sales/orders?fulfillmentStatus=awaiting_shipment&deleted=false
     awaitingTracking: sales/orders?status=shipped
     undelivered: sales/orders?status=shipped
     staleRefunds: sales/payments?tab=attention
