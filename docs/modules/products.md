@@ -23,6 +23,7 @@ flowchart LR
     inventory["inventory"]
     orders["orders"]
     shop["shop"]
+    shop_tasks["shop-tasks"]
     sitemap["sitemap"]
     stock_alerts["stock-alerts"]
     wishlist["wishlist"]
@@ -31,6 +32,7 @@ flowchart LR
     delivery --> products
     inventory --> products
     orders --> products
+    shop_tasks --> products
     sitemap --> products
     stock_alerts --> products
     wishlist --> products
@@ -49,7 +51,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class delivery,inventory,shop,stock_alerts,wishlist supporting;
+    class delivery,inventory,shop,shop_tasks,stock_alerts,wishlist supporting;
     class sitemap generic;
     class products centre;
 ```

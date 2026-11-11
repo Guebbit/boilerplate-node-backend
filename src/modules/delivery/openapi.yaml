@@ -372,20 +372,24 @@ paths:
                 `GET /orders/{id}/shipments`, and one by `GET /delivery/shipments/{id}`.
 
 
-                Send an `Idempotency-Key`: a partial ship creates a NEW shipment, so a retry without one
-                (a dropped connection, a double click) would cut a second parcel and take the stock twice.
-                The same key replays the first answer; a 409 means the first request is still running, a
-                422 means the key was reused with another body.
+                Requires an `Idempotency-Key` header: a ship creates a NEW shipment, so a retry without
+                one (a dropped connection, a double click) would cut a second parcel and take the stock
+                twice, and a request without it answers 400 `IDEMPOTENCY_KEY_REQUIRED`. The same key
+                replays the first answer; a 409 `IDEMPOTENCY_IN_FLIGHT` means the first request is still
+                running, a 422 means the key was reused with another body. If the first attempt never
+                reported an outcome, the same key answers 409 `IDEMPOTENCY_OUTCOME_UNKNOWN` and runs
+                nothing: read the order's shipments back before shipping again with a new key.
             operationId: shipFulfillmentOrder
             x-error-codes:
-                '409': [DELIVERY_NOT_PHYSICAL, DELIVERY_NOT_SHIPPABLE, IDEMPOTENCY_IN_FLIGHT, ORDER_NOT_PROCESSING, ORDER_NOT_PAID]
+                '400': [IDEMPOTENCY_KEY_REQUIRED]
+                '409': [DELIVERY_NOT_PHYSICAL, DELIVERY_NOT_SHIPPABLE, IDEMPOTENCY_IN_FLIGHT, IDEMPOTENCY_OUTCOME_UNKNOWN, ORDER_NOT_PROCESSING, ORDER_NOT_PAID]
                 '422': [DELIVERY_LINES_INVALID, IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: ['update:Shipment']
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                   description: The fulfillment order to ship from
-                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/RequiredIdempotencyKeyHeader'
             requestBody:
                 required: false
                 content:

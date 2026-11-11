@@ -6,6 +6,7 @@
  * that module's own tests.
  */
 
+import { randomUUID } from 'node:crypto';
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, authenticateAsRole } from '@tests/http';
@@ -54,7 +55,13 @@ describe('an empty string is never a stored value', () => {
     it.each(EMPTY_STRING_CASES)('%s %s answers 422', async (method, url, body) => {
         const { bearer } = await authenticateAs(roleReaching({ path: url }));
 
-        const response = await api()[method](url).set('Authorization', bearer).send(body);
+        // The key rides on every case: the stock and ship doors refuse a request without it (400)
+        // before they look at the body, and any other route ignores it.
+        const response = await api()
+            [method](url)
+            .set('Authorization', bearer)
+            .set('Idempotency-Key', randomUUID())
+            .send(body);
 
         expect(response.status).toBe(422);
     });

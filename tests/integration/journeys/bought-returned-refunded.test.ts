@@ -12,6 +12,7 @@
  *
  * Asserts the chain across modules only. Each module's own rule has its own tests.
  */
+import { randomUUID } from 'node:crypto';
 import '@tests/contract';
 import {
     CreateAddress201Response,
@@ -139,6 +140,7 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
     const shipment = bodyOf(
         await api()
             .post(`/delivery/fulfillment-orders/${fulfillmentOrder.id}/shipments`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', staff)
             .send({ trackingCode: 'TRK-JOURNEY01' }),
         ShipFulfillmentOrder201Response

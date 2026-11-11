@@ -412,7 +412,7 @@ rules:
     - id: idempotency-key-moving-writes
       standard: idempotency-key
       section: scope
-      rule: Every POST or PATCH whose repeat would write again takes an optional `Idempotency-Key`, and one whose repeat would move money twice requires it; the rest sit in a class of the published exceptions table. A PATCH whose merge patch sets absolute values is idempotent by construction and needs none.
+      rule: Every POST or PATCH whose repeat would write again takes an optional `Idempotency-Key`, and one whose repeat would move money or stock twice (the do-not-retry class) requires it; the rest sit in a class of the published exceptions table. A PATCH whose merge patch sets absolute values is idempotent by construction and needs none.
       source: https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
       evidence:
           [
@@ -478,6 +478,22 @@ rules:
           [
               src/infrastructure/http/middlewares/idempotency.ts,
               scripts/contracts/response-headers.ts
+          ]
+      lint: no
+      difference: null
+
+    - id: idempotency-key-no-repeat
+      standard: idempotency-key
+      section: replay
+      rule: 'On a do-not-retry operation, a retry never repeats a side effect that may already have committed: after a crash, a failed outcome write or an expired lease, the answer is a replay or a stored outcome-unknown.'
+      house: 'Past the lease a do-not-retry key answers 409 IDEMPOTENCY_OUTCOME_UNKNOWN and runs nothing (docs/tools/idempotency.md#do-not-retry-operations).'
+      source: https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
+      evidence:
+          [
+              src/infrastructure/http/middlewares/idempotency.ts,
+              src/infrastructure/http/middlewares/idempotency-model.ts,
+              src/infrastructure/runtime/server-lifecycle.ts,
+              docs/tools/idempotency.md#do-not-retry-operations
           ]
       lint: no
       difference: null

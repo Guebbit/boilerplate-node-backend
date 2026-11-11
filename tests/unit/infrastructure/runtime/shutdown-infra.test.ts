@@ -5,6 +5,7 @@
 import { shutdownInfra } from '@infrastructure/runtime/server-lifecycle';
 import { stopQueue } from '@infrastructure/adapters/queue';
 import { stopDatabase } from '@infrastructure/runtime/database';
+import { settleIdempotencyMarks } from '@infrastructure/http/middlewares/idempotency';
 
 jest.mock('@infrastructure/adapters/queue', () => ({ __esModule: true, stopQueue: jest.fn() }));
 jest.mock('@infrastructure/runtime/database', () => ({
@@ -15,6 +16,10 @@ jest.mock('@infrastructure/adapters/cache', () => ({ __esModule: true, stopCache
 jest.mock('@infrastructure/adapters/pdf', () => ({
     __esModule: true,
     settleRenders: jest.fn(() => Promise.resolve())
+}));
+jest.mock('@infrastructure/http/middlewares/idempotency', () => ({
+    __esModule: true,
+    settleIdempotencyMarks: jest.fn(() => Promise.resolve())
 }));
 jest.mock('@infrastructure/adapters/limits-redis', () => ({
     __esModule: true,
@@ -64,6 +69,17 @@ describe('shutdownInfra', () => {
 
         expect(calls).toEqual(['in-flight settled', 'queue stopped', 'database stopped']);
         expect(settleInFlight).toHaveBeenCalledWith(expect.any(Number));
+    });
+
+    it("lets the ledger's pending done-marks finish before the database closes", async () => {
+        jest.mocked(settleIdempotencyMarks).mockImplementationOnce(() => {
+            calls.push('marks settled');
+            return Promise.resolve();
+        });
+
+        await shutdownInfra();
+
+        expect(calls).toEqual(['marks settled', 'queue stopped', 'database stopped']);
     });
 
     it('closes the stores as before when there is no in-flight work to settle', async () => {

@@ -10,7 +10,7 @@
 
 import { Router } from 'express';
 import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
-import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
+import { requireIdempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 import { getInventoryLevels } from './controllers/get-inventory-levels';
 import { getInventoryLevel } from './controllers/get-inventory-level';
 import { getStockMovements } from './controllers/get-stock-movements';
@@ -52,21 +52,21 @@ router.patch('/levels/:productId', requirePermission('update', 'StockLevel'), pa
 router.get('/movements', requirePermission('read', 'StockLevel'), getStockMovements);
 
 // POST /inventory/levels/:productId/receive — a supplier delivery lands. `create:StockMovement`: the key stock never
-// moves without — see `shared/authorization-keys.generated.yaml`. `idempotencyKey`: a retried receipt must
-// replay, not count the delivery twice.
+// moves without — see `shared/authorization-keys.generated.yaml`. The key is REQUIRED: a retried
+// receipt must replay, not count the delivery twice.
 router.post(
     '/levels/:productId/receive',
     requirePermission('create', 'StockMovement'),
-    idempotencyKey,
+    requireIdempotencyKey({ operation: 'receive-stock', subjectParam: 'productId' }),
     postReceipt
 );
 
-// POST /inventory/levels/:productId/adjust — a stocktake correction, signed. Same replay guard as receipts:
+// POST /inventory/levels/:productId/adjust — a stocktake correction, signed. Same required key as receipts:
 // a retried delta applied twice is a wrong stock count.
 router.post(
     '/levels/:productId/adjust',
     requirePermission('create', 'StockMovement'),
-    idempotencyKey,
+    requireIdempotencyKey({ operation: 'adjust-stock', subjectParam: 'productId' }),
     postAdjustment
 );
 

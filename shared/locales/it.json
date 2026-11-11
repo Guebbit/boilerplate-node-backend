@@ -29,6 +29,7 @@
         "error-idempotency-key-invalid": "Idempotency-Key deve contenere 1-200 lettere, cifre, trattini o underscore.",
         "error-idempotency-key-required": "Questa richiesta richiede l'header Idempotency-Key.",
         "error-idempotency-in-flight": "Una richiesta con questa Idempotency-Key è ancora in elaborazione.",
+        "error-idempotency-outcome-unknown": "Il primo tentativo con questa Idempotency-Key non ha mai riportato un esito, quindi non sappiamo se sia andato a buon fine. Non è stato rieseguito nulla e lo staff è stato avvisato. Controlla il risultato prima di riprovare con una nuova chiave (vedi \"Dopo un arresto del server\" nella guida dello staff).",
         "error-idempotency-key-mismatch": "Questa Idempotency-Key è già stata usata con una richiesta diversa.",
         "error-idempotency-body-unsafe": "Il corpo della richiesta non può contenere un campo chiamato __proto__."
     },

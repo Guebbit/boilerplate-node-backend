@@ -17,19 +17,26 @@ const PAGES = FRONTEND_LINK_RULES.staffPages;
 const CODES = Object.keys(SHOP_STAFF_ROUTES) as (keyof typeof SHOP_STAFF_ROUTES)[];
 
 describe('SHOP_STAFF_ROUTES', () => {
-    it.each(CODES)('%s names permission sets that exist', (code) => {
-        const declared = new Set(PERMISSION_SETS.map(({ name }) => name));
+    // A `per-notice` route names no set here: its producer does, typed against the vocabulary.
+    it.each(CODES.filter((code) => SHOP_STAFF_ROUTES[code].sets !== 'per-notice'))(
+        '%s names permission sets that exist',
+        (code) => {
+            const declared = new Set(PERMISSION_SETS.map(({ name }) => name));
+            const { sets } = SHOP_STAFF_ROUTES[code];
 
-        for (const set of SHOP_STAFF_ROUTES[code].sets) expect(declared).toContain(set);
-    });
+            if (sets === 'per-notice') return;
+            for (const set of sets) expect(declared).toContain(set);
+        }
+    );
 
-    it('mails only where someone must act soon: a paused checkout', () => {
+    it('mails only where someone must act soon: a paused checkout, a write of unknown outcome', () => {
         expect(SHOP_STAFF_ROUTES['shop-tasks.staff.purchase-hold-placed'].email).toBe('now');
+        expect(SHOP_STAFF_ROUTES['shop-tasks.staff.outcome-unknown'].email).toBe('now');
         expect(SHOP_STAFF_ROUTES['shop-tasks.staff.return-requested'].email).toBe('none');
     });
 
-    it('lists the twelve codes the shop writes: two announced, ten counted', () => {
-        expect(CODES).toHaveLength(12);
+    it('lists the thirteen codes the shop writes: three announced, ten counted', () => {
+        expect(CODES).toHaveLength(13);
         expect(Object.keys(SUMMARY_PAGES)).toHaveLength(10);
     });
 });
@@ -67,6 +74,30 @@ describe('the mails', () => {
         expect(mail.data.link).toMatch(new RegExp(`/${locale}/users/u1$`));
         expect(JSON.stringify(mail)).not.toMatch(/@/);
     });
+
+    it.each(['en', 'it'])(
+        'words a write of unknown outcome in %s, naming its subject',
+        (locale) => {
+            const mail = staffNoticeEmail(
+                locale,
+                {
+                    code: 'shop-tasks.staff.outcome-unknown',
+                    params: {
+                        operation: 'refund',
+                        subjectId: 'o1',
+                        subjectName: '2026-000041',
+                        since: '2026-10-30T09:00:00.000Z'
+                    }
+                },
+                { template: PAGES.order, parameters: { id: 'o1' } }
+            );
+
+            expect(mail.subject).not.toContain('shop-tasks.staff-mail');
+            expect(mail.subject).toContain('2026-000041');
+            expect(mail.data.summary).not.toContain('shop-tasks.staff-mail');
+            expect(mail.data.link).toMatch(new RegExp(`/${locale}/orders/o1$`));
+        }
+    );
 
     it.each(['en', 'it'])('words every digest line in %s and links it to its screen', (locale) => {
         const items = (Object.keys(SUMMARY_PAGES) as (keyof typeof SUMMARY_PAGES)[]).map(

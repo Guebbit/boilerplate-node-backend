@@ -208,6 +208,11 @@ x-error-codes:
             status: 409,
             description: 'Another request already carries this `Idempotency-Key` and has not finished yet.'
         }
+    IDEMPOTENCY_OUTCOME_UNKNOWN:
+        {
+            status: 409,
+            description: 'A do-not-retry operation under this `Idempotency-Key` began and never reported an outcome, so whether it took effect is unknown. Nothing was run again; read the subject back before trying again with a new key.'
+        }
     IDEMPOTENCY_KEY_MISMATCH:
         {
             status: 422,
@@ -380,7 +385,8 @@ components:
                 The token the active human-challenge provider issued to the client — see
                 `antibot` on `GET /config`. Absent when that provider is `none`.
 
-        # The twin of `IdempotencyKeyHeader` for a route where a retry would move money twice: same
+        # The twin of `IdempotencyKeyHeader` for a do-not-retry operation, one where a repeat would
+        # move money or stock twice: same
         # shape, but absent is a 400 (`IDEMPOTENCY_KEY_REQUIRED`), per the IETF Idempotency-Key
         # header draft (see `src/infrastructure/http/middlewares/idempotency.ts`).
         RequiredIdempotencyKeyHeader:
@@ -394,13 +400,17 @@ components:
                 pattern: '^("[A-Za-z0-9_-]{1,200}"|[A-Za-z0-9_-]{1,200})$'
             description: >
                 An opaque, client-generated value (a UUID by convention) that makes a retried
-                write safe, and that this route REQUIRES: a request without it answers 400
-                (`IDEMPOTENCY_KEY_REQUIRED`) and nothing is written. Repeating the request with the
+                write safe, and that this do-not-retry operation (money or stock) REQUIRES: a request
+                without it answers 400 (`IDEMPOTENCY_KEY_REQUIRED`) and nothing is written. Repeating the request with the
                 SAME key and the SAME body replays the first response (`Idempotent-Replayed: true`, no
                 repeated write); the same key with a DIFFERENT body answers 422; a key still being
                 processed by another in-flight request answers 409. A 429 is never stored: every
                 budget refuses before the key is claimed, so a retry after `Retry-After` with the
-                same key runs for real.
+                same key runs for real. A key whose first attempt began and never reported an outcome
+                (the server stopped mid-request) is never run again: it answers 409
+                `IDEMPOTENCY_OUTCOME_UNKNOWN`, stored like any other answer, and the caller reads the
+                subject back before sending the operation again with a NEW key. A 5xx on this
+                operation never carries `Retry-After`: the write may already have taken effect.
 
         # Optional: a caller without a key still writes, unprotected. The required twin is
         # `RequiredIdempotencyKeyHeader`.
