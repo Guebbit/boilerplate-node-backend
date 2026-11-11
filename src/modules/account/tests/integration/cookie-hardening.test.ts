@@ -79,7 +79,7 @@ describe('POST /account/refresh', () => {
         const response = await api().get('/account/refresh').set('Cookie', cookie);
 
         expect(response.status).toBe(405);
-        expect(response.headers.allow).toBe('POST');
+        expect(response.headers.allow).toBe('OPTIONS, POST');
     });
 });
 

@@ -198,6 +198,6 @@ describe('the wishlist URLs a line no longer has', () => {
         const response = await api().get('/wishlist/items').set('Authorization', bearer);
 
         expect(response.status).toBe(405);
-        expect(response.headers.allow).toBe('POST');
+        expect(response.headers.allow).toBe('OPTIONS, POST');
     });
 });
