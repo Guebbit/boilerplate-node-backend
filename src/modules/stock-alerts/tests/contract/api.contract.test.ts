@@ -101,7 +101,7 @@ describe('POST /stock-alerts', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(405);
-        expect(response.headers.allow).toBe('DELETE');
+        expect(response.headers.allow).toBe('DELETE, OPTIONS');
     });
 });
 
