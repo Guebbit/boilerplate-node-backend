@@ -3,9 +3,8 @@
  *
  * Four resources offer their filters twice — `GET /products?text=x` and
  * `POST /products/search {text}` reach one controller, run one query and now share one cache
- * entry. `x-alias-of` says they are the same operation and
- * `tests/cross-cutting/contract-aliases.test.ts` checks they ANSWER alike. Nothing checked they
- * ASK alike, and they had already drifted: `GET /tasks` declared `status` as a bare
+ * entry. `x-alias-of` says they are the same operation; the last describe below checks they
+ * ANSWER alike. The first checks they ASK alike, and they had already drifted: `GET /tasks` declared `status` as a bare
  * `type: string` while `POST /tasks/search` declared it as a four-value enum, so the same
  * filter was documented as open on one route and closed on the other.
  *
@@ -89,6 +88,41 @@ const searchPairs = (() => {
         );
 })();
 
+/** Every operation carrying `x-alias-of`, search pairs and hard-delete pairs alike. */
+const aliases = (() => {
+    const paths = spec.paths as Record<string, Record<string, Record<string, unknown>>>;
+    const operations = Object.values(paths).flatMap((item) =>
+        Object.values(item).filter((operation) => typeof operation?.operationId === 'string')
+    );
+    const byId = new Map(
+        operations.map((operation) => [operation.operationId as string, operation])
+    );
+    return operations
+        .filter((operation) => operation['x-alias-of'] !== undefined)
+        .map((alias) => ({
+            id: alias.operationId as string,
+            target: alias['x-alias-of'] as string,
+            alias,
+            canonical: byId.get(alias['x-alias-of'] as string)
+        }));
+})();
+
+/**
+ * The first 2xx status and its JSON schema, as one comparable string.
+ *
+ * A caller switching spellings branches on the status and parses the schema; prose
+ * (`description`) is left out on purpose.
+ */
+const successShape = (operation: Record<string, unknown>): string => {
+    const responses = (operation.responses ?? {}) as Record<string, unknown>;
+    const status = Object.keys(responses).find((code) => code.startsWith('2'));
+    if (status === undefined) return 'NO 2xx';
+    const content = resolve(responses[status]).content as
+        | Record<string, { schema?: unknown }>
+        | undefined;
+    return `${status} ${JSON.stringify(content?.['application/json']?.schema ?? null)}`;
+};
+
 describe('a search accepts the same filters in both spellings', () => {
     // Discovered by walking `x-alias-of`, so a new pair is covered without editing this file —
     // and a regex that stopped matching would make every case below vacuous.
@@ -146,4 +180,30 @@ describe('a search accepts the same filters in both spellings', () => {
             expect(divergent).toEqual([]);
         }
     );
+});
+
+describe('an alias answers like its canonical', () => {
+    // A bundle read wrong would make both checks below pass on an empty list.
+    it('found the aliases', () => {
+        expect(aliases.length).toBeGreaterThan(3);
+    });
+
+    it('every x-alias-of names an operation that exists', () => {
+        expect(
+            aliases
+                .filter(({ canonical }) => canonical === undefined)
+                .map(({ id, target }) => `${id} -> ${target}`)
+        ).toEqual([]);
+    });
+
+    it('both spellings return the same success status and schema', () => {
+        const divergent = aliases
+            .filter(
+                ({ alias, canonical }) =>
+                    canonical !== undefined && successShape(alias) !== successShape(canonical)
+            )
+            .map(({ id, target }) => `${id} answers differently from ${target}`);
+
+        expect(divergent).toEqual([]);
+    });
 });
