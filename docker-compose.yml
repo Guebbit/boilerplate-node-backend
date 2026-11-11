@@ -423,7 +423,7 @@ services:
     alertmanager:
         logging: *container-logging
         profiles: ['observability']
-        image: prom/alertmanager:v0.34.1
+        image: prom/alertmanager:v0.34.2
         restart: unless-stopped
         # Renders the routing template from the environment below, then starts Alertmanager on it.
         # Why: Alertmanager reads no env vars itself. docs/tools/prometheus.md#alert-routing
@@ -463,7 +463,7 @@ services:
     gatus:
         logging: *container-logging
         profiles: ['observability']
-        image: twinproduction/gatus:v5.37.0
+        image: twinproduction/gatus:v5.38.0
         restart: unless-stopped
         volumes:
             - ./docker/observability/gatus.dev.config.yaml:/config/config.yaml:ro,Z
@@ -474,7 +474,7 @@ services:
     loki:
         logging: *container-logging
         profiles: ['observability']
-        image: grafana/loki:3.7.8
+        image: grafana/loki:3.7.9
         restart: unless-stopped
         command: ['-config.file=/etc/loki/loki-config.yaml']
         volumes:
@@ -531,7 +531,7 @@ services:
     alloy:
         logging: *container-logging
         profiles: ['observability']
-        image: grafana/alloy:v1.20.1
+        image: grafana/alloy:v1.21.3
         restart: unless-stopped
         command:
             - 'run'
@@ -701,7 +701,7 @@ services:
     mailpit:
         logging: *container-logging
         profiles: ['integrations']
-        image: axllent/mailpit:v1.31.5
+        image: axllent/mailpit:v1.33.0
         restart: unless-stopped
         environment:
             # Accept any login: the app sends NODE_SMTP_USER/PASS, and a sink has no accounts.
