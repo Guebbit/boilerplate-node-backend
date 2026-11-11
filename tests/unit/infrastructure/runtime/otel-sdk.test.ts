@@ -142,12 +142,12 @@ describe('otel-sdk — buildProcessors, error text', () => {
 describe('otel-sdk — redactUrlSecrets', () => {
     it("hides the OAuth callback's code and state", () => {
         expect(redactUrlSecrets('/account/oauth/google/callback?code=abc&state=xyz&x=1')).toBe(
-            '/account/oauth/google/callback?code=[REDACTED]&state=[REDACTED]&x=1'
+            '/account/oauth/google/callback?code=REDACTED&state=REDACTED&x=1'
         );
     });
 
     it("hides a staff search's email, however it is encoded", () => {
-        expect(redactUrlSecrets('/users?email=ada%40example.com')).toBe('/users?email=[REDACTED]');
+        expect(redactUrlSecrets('/users?email=ada%40example.com')).toBe('/users?email=REDACTED');
     });
 
     it('leaves a URL with nothing to hide untouched', () => {
@@ -334,17 +334,16 @@ describe('otel-sdk — onIncomingRequest', () => {
         expect(setAttribute).not.toHaveBeenCalled();
     });
 
-    it('rewrites a staff search email out of every URL attribute', () => {
-        const { request, span } = incomingWithAddresses('/users?email=ada%40example.com');
+    it('rewrites a staff search email out of url.query, and writes no old-convention attribute', () => {
+        const { request, span, setAttribute } = incomingWithAddresses(
+            '/users?email=ada%40example.com'
+        );
 
         onIncomingRequest(span, request);
 
-        expect(span.setAttributes).toHaveBeenCalledWith(
-            expect.objectContaining({
-                'http.target': '/users?email=[REDACTED]',
-                'url.query': 'email=[REDACTED]'
-            })
-        );
+        expect(setAttribute).toHaveBeenCalledWith('url.query', 'email=REDACTED');
+        expect(setAttribute).not.toHaveBeenCalledWith('http.target', expect.anything());
+        expect(setAttribute).not.toHaveBeenCalledWith('http.url', expect.anything());
     });
 });
 
@@ -363,9 +362,7 @@ describe('otel-sdk — an address in a query value', () => {
 
     it('is replaced by the marker in redact mode', async () => {
         await withEnvironmentOverrides({ NODE_LOG_PERSONAL_FIELDS: 'redact' }, () => {
-            expect(redactUrlSecrets('/users?text=ada%40example.com')).toBe(
-                '/users?text=[REDACTED]'
-            );
+            expect(redactUrlSecrets('/users?text=ada%40example.com')).toBe('/users?text=REDACTED');
             return Promise.resolve();
         });
     });
@@ -373,7 +370,7 @@ describe('otel-sdk — an address in a query value', () => {
     it('stays in plain mode, while a listed secret is still hidden', async () => {
         await withEnvironmentOverrides({ NODE_LOG_PERSONAL_FIELDS: 'plain' }, () => {
             expect(redactUrlSecrets('/users?text=ada%40example.com&code=abc')).toBe(
-                '/users?text=ada%40example.com&code=[REDACTED]'
+                '/users?text=ada%40example.com&code=REDACTED'
             );
             return Promise.resolve();
         });

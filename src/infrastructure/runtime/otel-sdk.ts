@@ -72,6 +72,14 @@ const REDACTED = '[REDACTED]';
 const QUERY_SECRETS = new Set(loadSharedRules('log-redaction', logRedactionSchema).traceUrlSecrets);
 
 /**
+ * The marker a URL attribute carries for a hidden value: `REDACTED` without brackets, the one
+ * the OTel `url.query` spec (and `instrumentation-http`'s own `sig=REDACTED`) uses; a bracket
+ * would be percent-encoded in a query anyway. Every other attribute and every log keeps
+ * {@link REDACTED}.
+ */
+const URL_REDACTED = 'REDACTED';
+
+/**
  * What stands in for a caller's address on a span, by `NODE_LOG_PERSONAL_FIELDS`, the one policy a
  * log line's `ip` follows:
  * - `hash`   the digest the log shows, so a trace and its logs still correlate.
@@ -96,14 +104,16 @@ const redactQueryPair = (pair: string): string => {
     // Decoded the way the app reads it, so `ada%40example.com` is seen as the email it is.
     const [[name = '', value = ''] = []] = new URLSearchParams(pair);
     const rawName = pair.split('=', 1)[0] ?? '';
-    if (QUERY_SECRETS.has(name)) return `${rawName}=${REDACTED}`;
-    const masked = maskMessage(value, standIn);
+    if (QUERY_SECRETS.has(name)) return `${rawName}=${URL_REDACTED}`;
+    const masked = maskMessage(value, (address) =>
+        loggingConfig().NODE_LOG_PERSONAL_FIELDS === 'redact' ? URL_REDACTED : standIn(address)
+    );
     return masked === value ? pair : `${rawName}=${masked}`;
 };
 
 /**
  * `target` (a path plus query) with the value of every {@link QUERY_SECRETS} parameter replaced by
- * `[REDACTED]` and every email or IP address in any other value replaced by its stand-in (a
+ * `REDACTED` and every email or IP address in any other value replaced by its stand-in (a
  * staff search by `text=ada@example.com` carries one under a parameter nobody listed).
  * Returned as-is when nothing changed.
  *
@@ -121,8 +131,9 @@ export const redactUrlSecrets = (target: string): string => {
 };
 
 /**
- * Overwrite an incoming span's URL attributes, both semantic-convention generations, when the
- * request's query carries a secret or an address.
+ * Overwrite an incoming span's `url.query` when the request's query carries a secret or an
+ * address. `instrumentation-http` records the server span's `url.path` and `url.query` only (no
+ * `http.target` or `http.url`), so that is the one attribute to rewrite.
  *
  * @param span - the span the instrumentation just started
  * @param request - the incoming request; outgoing ones are left alone
@@ -131,11 +142,7 @@ const redactIncomingUrl = (span: Span, request: ClientRequest | IncomingMessage)
     if (!(request instanceof IncomingMessage) || !request.url) return;
     const target = redactUrlSecrets(request.url);
     if (target === request.url) return;
-    span.setAttributes({
-        'http.target': target,
-        'http.url': `http://${request.headers.host ?? 'localhost'}${target}`,
-        'url.query': target.split('?', 2)[1] ?? ''
-    });
+    span.setAttribute('url.query', target.slice(target.indexOf('?') + 1));
 };
 
 /**
