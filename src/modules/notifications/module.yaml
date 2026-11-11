@@ -6,4 +6,3 @@ dependsOn:
     - tasks # subscribes to its events, and asks it to mail the main mailbox
     - users # which of those members can act today, and where to mail them
     - webhooks # subscribes to its event, a subscription auto-disabled
-noAudit: "Writes and clears courtesy messages and pointers to work: nothing money, stock or identity related, every row is the owner's to delete, and the screen a work notice points at audits its own acts."

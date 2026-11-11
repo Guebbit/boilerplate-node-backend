@@ -17,7 +17,7 @@ npm run scaffold:module -- audits-lite --no-audit
 | `--entity <Name>`  | naive singular of name | The record's type name. Use it when `-ies`/`-s` gets the noun wrong |
 | `--group <group>`  | `foundation`           | `shop` marks the demo shop's own module, which `demo:remove` takes  |
 | `--summary <text>` | a TODO sentence        | The line in the docs index and sidebar                              |
-| `--no-audit`       | audits                 | No `audit.ts`; `module.yaml` carries a `noAudit` reason to fill in  |
+| `--no-audit`       | audits                 | No `audit.ts`, no `rules.yaml`, no audit calls in the service       |
 | `--no-regenerate`  | regenerates            | Write the files and stop before `regenerate --no-sync`              |
 
 ## What it generates

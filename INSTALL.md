@@ -27,7 +27,7 @@ If you pair it with the Vue frontend, that repository has its own `INSTALL.md`.
 - [ ] Breached-password lookups: [Guessing the credential](docs/theory/defences/authentication.md#guessing-the-credential)
 - [ ] Analytics: [Configuration](docs/tools/analytics.md#configuration)
 - [ ] Alerts that reach a person: [Monitoring and alerts](docs/getting-started-production.md#monitoring-and-alerts)
-- [ ] An outside watcher on a second machine: [Gatus](docs/tools/gatus.md#production-the-second-machine)
+- [ ] An outside watcher on a second machine: [Gatus](docs/tools/gatus.md#production-the-second-machine), rehearsed locally first: [Rehearse the dead man's switch](docs/getting-started.md#rehearse-the-dead-man-s-switch)
 - [ ] Backups, and a restore drill: [Backups](docs/getting-started-production.md#backups)
 - [ ] Uploads on a volume: [Uploaded images](docs/getting-started-production.md#uploaded-images-do-not-outlive-the-container)
 - [ ] A disclosure contact: [Publish a disclosure contact](docs/getting-started-production.md#publish-a-disclosure-contact)

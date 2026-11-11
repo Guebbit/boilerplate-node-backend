@@ -16,7 +16,7 @@ import {
 /** Shape of `rules.yaml`. */
 export const rulesSchema = z.strictObject({
     /** Dotted `noun.verb` strings, unique across modules (`tests/cross-cutting/audit-actions.test.ts`). */
-    audit: keyedListSchema(/^[a-z_]+(\.[a-z_]+)+$/),
+    audit: keyedListSchema(/^[a-z][\d_a-z]*(\.[a-z][\d_a-z]*){1,3}$/),
     /** Snake-case event names (`docs/tools/analytics.md#naming`). */
     analytics: keyedListSchema(/^[a-z]+(_[a-z]+)+$/)
 });

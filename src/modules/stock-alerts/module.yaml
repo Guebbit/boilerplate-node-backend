@@ -4,7 +4,6 @@ group: shop
 dependsOn:
     - products # a request names a product, and the product announces when it is orderable again
     - users # the mail goes to the account's own address and language
-noAudit: "Saves and clears a person's own request for one courtesy mail: no money, stock or identity attached."
 jobs:
     sweepStockAlerts:
         name: sweep:stock-alerts

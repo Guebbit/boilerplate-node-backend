@@ -45,7 +45,6 @@ flowchart TD
         MEMSERVER["mongodb-memory-server"]
         FC["fast-check"]
         STRYKER["Stryker"]
-        AUTOCANNON["autocannon"]
     end
 
     subgraph OBS["Telemetry"]
@@ -71,7 +70,7 @@ flowchart TD
     class MONGOOSE,MONGO,REDIS,RMQ data;
     class HELMET,CORS,RATE,JWT,ZOD,MULTER sec;
     class ORVAL,SPECTRAL,MODELINA,PRISM contract;
-    class JEST,SUPERTEST,MEMSERVER,FC,STRYKER,AUTOCANNON test;
+    class JEST,SUPERTEST,MEMSERVER,FC,STRYKER test;
     class OTEL,PROM,WINSTON,POSTHOG obs;
 ```
 

@@ -120,25 +120,11 @@ const STEPS: readonly Step[] = [
             "docs/tools/package-dependencies.md's tables, read off package.json and who actually imports each package"
     },
     {
-        name: 'persona tables',
-        command: ['tsx', 'scripts/docs/generate-persona-tables.ts'],
-        checks: true,
-        because:
-            "docs/tools/demo-profile.md's three account tables, read off shared/scenarios/personas.yaml"
-    },
-    {
         name: 'rate-limit budgets',
         command: ['tsx', 'scripts/docs/generate-rate-limit-budgets.ts'],
         checks: true,
         because:
             "docs/tools/security.md's rate-limit budget table, read off every module's own manifest"
-    },
-    {
-        name: 'cookie inventory',
-        command: ['tsx', 'scripts/docs/generate-cookie-table.ts'],
-        checks: true,
-        because:
-            "docs/theory/data-protection.md's table of the cookies the backend sets, read off shared/rules/cookies.yaml"
     },
     {
         name: 'scheduled jobs',

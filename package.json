@@ -57,8 +57,7 @@
         "test:prism": "tsx scripts/testing/run-prism-smoke-test.ts",
         "test:cluster": "jest --config jest.config.cluster.js",
         "test:broker": "jest --config jest.config.broker.js",
-        "bench": "sh -c 'autocannon -c 20 -d 30 -l \"http://localhost:${NODE_PORT:-3000}${1:-/products}\"' --",
-        "bench:search": "autocannon -c 20 -d 30 -l -m POST -H 'Content-Type: application/json' -b '{\"text\":\"a\"}' http://localhost:${NODE_PORT:-3000}/products/search",
+        "bench": "sh -c '${CONTAINER_ENGINE:-podman} run --rm -i --network=host -e TARGET=\"http://localhost:${NODE_PORT:-3000}${1:-/products}\" -e TOKEN -e VUS -e DURATION -v ./tests/load:/scripts:Z grafana/k6:1.8.1 run /scripts/hit.js' --",
         "db:sync": "tsx scripts/db/sync-indexes.ts",
         "scenario:apply": "tsx scenarios/apply.ts",
         "scenario:images": "tsx scenarios/tools/generate-seed-images.ts",
@@ -94,7 +93,7 @@
         "prepare": "husky",
         "test:unit:report": "tsx scripts/testing/run-suite.ts unit cross-cutting --unsharded --json --outputFile=tmp/reports/test-report.json",
         "test:report": "tsx scripts/testing/report-results.ts",
-        "bench:k6": "sh -c '${CONTAINER_ENGINE:-podman} run --rm -i --network=host -e BASE_URL -v ./tests/load:/scripts:Z grafana/k6 run \"/scripts/${1:-browse}.js\"' --"
+        "bench:k6": "sh -c '${CONTAINER_ENGINE:-podman} run --rm -i --network=host -e BASE_URL -v ./tests/load:/scripts:Z grafana/k6:1.8.1 run \"/scripts/${1:-browse}.js\"' --"
     },
     "devDependencies": {
         "@asyncapi/diff": "^0.5.0",
@@ -128,7 +127,6 @@
         "@typescript-eslint/eslint-plugin": "^8.70.1",
         "@typescript-eslint/parser": "^8.70.1",
         "@typescript-eslint/utils": "^8.70.1",
-        "autocannon": "^8.0.0",
         "cross-env": "^10.1.0",
         "dependency-cruiser": "^18.2.0",
         "eslint": "^10.11.0",

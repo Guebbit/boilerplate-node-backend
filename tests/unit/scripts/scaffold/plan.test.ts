@@ -76,7 +76,7 @@ describe('planModule', () => {
             );
     });
 
-    it('drops audit.ts and every audit call for --no-audit, and declares noAudit instead', () => {
+    it('drops audit.ts and every audit call for --no-audit', () => {
         const quiet = { ...OPTIONS, audit: false };
         const files = planModule(quiet).files.map((file) => file.path);
 
@@ -86,8 +86,6 @@ describe('planModule', () => {
         expect(contentOf(quiet, 'services/crud.ts')).not.toMatch(/recordAudit|AuditActions/);
         // The context still arrives: `actions` are decided per caller, audit or not.
         expect(contentOf(quiet, 'services/crud.ts')).toContain('context: CallerContext');
-        expect(contentOf(quiet, 'module.yaml')).toContain('noAudit:');
-        expect(contentOf(OPTIONS, 'module.yaml')).not.toContain('noAudit');
     });
 });
 
@@ -116,7 +114,7 @@ describe('the generated module.yaml', () => {
         expect(descriptor.dependsOn).toEqual([]);
     });
 
-    it('parses for a noAudit module too', () => {
+    it('parses for a --no-audit module too', () => {
         expect(() =>
             moduleDescriptorSchema.parse(
                 parseYaml(contentOf({ ...OPTIONS, audit: false }, 'module.yaml'))

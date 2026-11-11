@@ -2,4 +2,3 @@ summary: 'The relay a browser uses to report browsing events (a product viewed, 
 subdomain: generic
 group: foundation
 dependsOn: []
-noAudit: 'Records nothing of its own: an event goes to the analytics provider, and only when the visitor consented. There is no resource and no state change for an audit row to name.'

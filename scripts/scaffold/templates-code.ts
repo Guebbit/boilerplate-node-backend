@@ -19,11 +19,6 @@ export const moduleYaml = (options: ScaffoldOptions): string =>
         'subdomain: generic',
         `group: ${options.group}`,
         'dependsOn: []',
-        ...(options.audit
-            ? []
-            : [
-                  "noAudit: 'TODO: say why this module records no audit action, or drop this line and add an audit.ts.'"
-              ]),
         ''
     ].join('\n');
 
@@ -117,7 +112,7 @@ import {
 /** Shape of rules.yaml. */
 export const rulesSchema = z.strictObject({
     /** Dotted noun.verb strings, unique across modules. */
-    audit: keyedListSchema(/^[a-z_]+(\.[a-z_]+)+$/)
+    audit: keyedListSchema(/^[a-z][\d_a-z]*(\.[a-z][\d_a-z]*){1,3}$/)
 });
 
 /** What rules.yaml generates: rules.generated.ts. */
