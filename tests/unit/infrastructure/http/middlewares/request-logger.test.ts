@@ -17,11 +17,6 @@ jest.mock('@infrastructure/observability/metrics-http', () => ({
     getRouteLabel: () => '/products'
 }));
 
-jest.mock('@infrastructure/observability/tracer', () => ({
-    __esModule: true,
-    getActiveSpanContext: () => ({ traceId: 'trace-xyz', spanId: 'span-abc' })
-}));
-
 import { logger } from '@infrastructure/adapters/logger';
 
 const mockLog = logger.log as jest.MockedFunction<typeof logger.log>;
@@ -90,7 +85,6 @@ describe('requestLogger', () => {
         const meta = callArgs[2] as Record<string, unknown>;
         expect(meta).toEqual({
             requestId: 'req-1',
-            traceId: 'trace-xyz',
             method: 'GET',
             route: '/products',
             statusCode: 200,

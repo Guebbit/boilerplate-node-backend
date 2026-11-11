@@ -8,7 +8,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { logger } from '@infrastructure/adapters/logger';
 import { getRouteLabel } from '@infrastructure/observability/metrics-http';
-import { getActiveSpanContext } from '@infrastructure/observability/tracer';
 
 /**
  * Express middleware that emits one access-log entry per request.
@@ -31,7 +30,6 @@ export const requestLogger = (request: Request, response: Response, next: NextFu
         logger.log(level, `${method} ${route} ${statusCode} ${durationMs.toFixed(1)}ms`, {
             requestId,
             clientRequestId,
-            traceId: getActiveSpanContext().traceId,
             method,
             route,
             statusCode,

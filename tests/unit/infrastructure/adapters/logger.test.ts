@@ -21,11 +21,15 @@ import {
     SENSITIVE_KEY_FRAGMENTS,
     PERSONAL_FIELDS,
     redactFormat,
+    traceContextFormat,
     resolveLogLevel,
     resolveConsoleFormat,
     resolvePersonalFieldMode
 } from '@infrastructure/adapters/logger';
 import { setEnvironment } from '@tests/environment';
+import { asStub } from '@tests/stub';
+import { trace, type Span, type SpanContext } from '@opentelemetry/api';
+import { correlationDigest } from '@infrastructure/security/pseudonymise';
 
 describe('redactSensitiveFields', () => {
     it('returns primitives unchanged', () => {
@@ -152,15 +156,95 @@ describe('serializeError', () => {
     });
 
     it('preserves custom error names', () => {
-        class ValidationError extends Error {
+        class DomainError extends Error {
             constructor(message: string) {
                 super(message);
-                this.name = 'ValidationError';
+                this.name = 'DomainError';
             }
         }
-        const result = serializeError(new ValidationError('bad input'));
-        expect(result.name).toBe('ValidationError');
+        const result = serializeError(new DomainError('bad input'));
+        expect(result.name).toBe('DomainError');
         expect(result.message).toBe('bad input');
+    });
+});
+
+describe('serializeError — what a message may quote', () => {
+    const EMAIL = 'ada@example.com';
+
+    /** A Mongo duplicate-key error as the driver builds it: the message names the address. */
+    const duplicateKey = () =>
+        Object.assign(new Error(`E11000 duplicate key dup key: { email: "${EMAIL}" }`), {
+            name: 'MongoServerError',
+            code: 11_000
+        });
+
+    /** What nodemailer builds for a refused recipient: the SMTP reply is appended to the message. */
+    const refusedRecipient = () =>
+        Object.assign(new Error(`Mail command failed: 550 No such user ${EMAIL}`), {
+            name: 'Error',
+            code: 'EENVELOPE',
+            command: 'RCPT TO',
+            responseCode: 550,
+            response: `550 No such user ${EMAIL}`
+        });
+
+    it('keeps a database error to its name, code and frames', () => {
+        setEnvironment({ NODE_ENV: 'development' });
+
+        const result = serializeError(duplicateKey());
+
+        expect(result).toMatchObject({ name: 'MongoServerError', code: 11_000 });
+        expect(JSON.stringify(result)).not.toContain(EMAIL);
+        expect(result.stack).toEqual(expect.stringContaining('    at '));
+        expect(result).not.toHaveProperty('message');
+    });
+
+    it('keeps the frames of a database error out of a production log', () => {
+        setEnvironment({ NODE_ENV: 'production' });
+
+        expect(serializeError(duplicateKey())).not.toHaveProperty('stack');
+    });
+
+    it('drops the SMTP reply from a nodemailer error and keeps its codes', () => {
+        const result = serializeError(refusedRecipient());
+
+        expect(result).toMatchObject({
+            message: 'Mail command failed',
+            code: 'EENVELOPE',
+            command: 'RCPT TO',
+            responseCode: 550
+        });
+        expect(result).not.toHaveProperty('response');
+    });
+
+    it('scrubs a database error nested as a cause and inside a list', () => {
+        const wrapped = new Error('save failed', { cause: duplicateKey() });
+
+        const logged = redactSensitiveFields({ error: wrapped, errors: [duplicateKey()] });
+
+        expect(JSON.stringify(logged)).not.toContain(EMAIL);
+    });
+
+    it('masks an address in the message of any other error', () => {
+        const result = serializeError(new Error(`provider refused ${EMAIL}`));
+
+        expect(result.message).toBe(`provider refused ${correlationDigest(EMAIL)}`);
+    });
+
+    it('leaves the message readable when personal fields are logged plain', () => {
+        setEnvironment({ NODE_LOG_PERSONAL_FIELDS: 'plain' });
+
+        expect(serializeError(new Error(`provider refused ${EMAIL}`)).message).toBe(
+            `provider refused ${EMAIL}`
+        );
+    });
+
+    it('replaces the address with the redaction marker when personal fields are redacted', () => {
+        setEnvironment({ NODE_LOG_PERSONAL_FIELDS: 'redact' });
+
+        expect(serializeError(new Error(`provider refused ${EMAIL}`)).message).toBe(
+            'provider refused [REDACTED]'
+        );
     });
 });
 
@@ -773,5 +857,60 @@ describe('the two loggers are configured independently', () => {
 
         expect((appLogger as winston.Logger).transports.length).toBeGreaterThan(0);
         expect((audit as winston.Logger).transports.length).toBeGreaterThan(0);
+    });
+});
+
+describe('redactFormat — the headline', () => {
+    it('masks an address in the message winston builds from a logged error', () => {
+        const output = transform({
+            level: 'error',
+            message: 'send failed: refused ada@example.com'
+        });
+
+        expect(output.message).toBe(`send failed: refused ${correlationDigest('ada@example.com')}`);
+    });
+
+    it('leaves a headline that is not text alone', () => {
+        expect(transform({ level: 'info', message: 42 }).message).toBe(42);
+    });
+});
+
+describe('traceContextFormat', () => {
+    /** Runs the format over one record, with `spanContext` as the active span's identity. */
+    const stamped = (info: Record<string, unknown>, spanContext?: SpanContext) => {
+        jest.spyOn(trace, 'getActiveSpan').mockReturnValue(
+            spanContext ? asStub<Span>({ spanContext: () => spanContext }) : undefined
+        );
+        return traceContextFormat().transform(info as never) as Record<string, unknown>;
+    };
+
+    const active: SpanContext = {
+        traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
+        spanId: '00f067aa0ba902b7',
+        traceFlags: 1
+    };
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    it('stamps the active span on a line that carries no ids', () => {
+        expect(stamped({ level: 'info', message: 'x' }, active)).toMatchObject({
+            traceId: active.traceId,
+            spanId: active.spanId
+        });
+    });
+
+    it('keeps an id the caller already set', () => {
+        expect(stamped({ level: 'info', message: 'x', traceId: 'mine' }, active)).toMatchObject({
+            traceId: 'mine'
+        });
+    });
+
+    it('adds nothing outside a traced context', () => {
+        const output = stamped({ level: 'info', message: 'x' });
+
+        expect(output).not.toHaveProperty('traceId');
+        expect(output).not.toHaveProperty('spanId');
     });
 });

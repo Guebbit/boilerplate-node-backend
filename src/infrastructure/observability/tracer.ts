@@ -58,15 +58,8 @@ export const withSpan = <T>(spanName: string, callback: (span: Span) => Promise<
                     return result;
                 },
                 (error: unknown) => {
-                    // `setStatus(ERROR)` records the failure before propagating — this is what
-                    // makes the span show up red / count toward error rates in the backend.
-                    span.setStatus({
-                        code: SpanStatusCode.ERROR,
-                        message: extractErrorMessage(error, String(error))
-                    });
-                    // `recordException` additionally attaches a structured exception *event*
-                    // (type, message, stack) — richer than the status message alone.
-                    if (error instanceof Error) recordSanitisedException(span, error);
+                    // Marks the span red / counted toward error rates, then ends it.
+                    markSpanFailed(span, error);
                     span.end();
                     // Re-throw: this wrapper observes, it never swallows. Callers keep their
                     // existing error handling unchanged.
@@ -77,47 +70,27 @@ export const withSpan = <T>(spanName: string, callback: (span: Span) => Promise<
 };
 
 /**
- * OTel uses all-zeros trace/span IDs for no-op/invalid spans — treat these as absent. Without
- * this check, log lines in an untraced context (tests, before the SDK starts) would carry a
- * meaningless all-zeros id that looks like real data.
- */
-const isValidOtelId = (id: string) => Boolean(id) && !/^0+$/.test(id);
-
-/**
- * Attach an exception event to a span, without the stack trace outside a relaxed environment.
+ * Mark a span as failed: error status, `error.type`, and an exception event for an `Error`.
  *
- * `recordException(error)` writes `exception.stacktrace`: absolute paths and dependency internals,
- * shipped to whichever backend collects traces. Outside development and test only the error's
- * `name` is recorded, since its message can carry request data (the span status keeps the message).
+ * Outside development and test the status message is the error's `name` only: a message can
+ * carry request data (a duplicate-key error names the email) and a trace backend keeps it.
+ * The exception event is cut the same way, and `recordException(error)` would also write
+ * `exception.stacktrace` (absolute paths, dependency internals), so only `{ name }` is recorded.
+ * The exporter (`src/infrastructure/runtime/span-scrub.ts`) applies the same rule to spans other libraries recorded.
  *
  * @param span - the span to annotate
  * @param error - what was thrown
  */
-const recordSanitisedException = (span: Span, error: Error): void => {
+const markSpanFailed = (span: Span, error: unknown): void => {
+    const relaxed = isRelaxedEnvironment();
+    const type = error instanceof Error ? error.name : typeof error;
+    span.setAttribute('error.type', type);
+    span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: relaxed ? extractErrorMessage(error, String(error)) : type
+    });
     // https://opentelemetry.io/docs/specs/semconv/exceptions/exceptions-spans/
-    span.recordException(isRelaxedEnvironment() ? error : { name: error.name });
-};
-
-/**
- * Return the trace ID and span ID from the currently active OTel span, if any.
- * Returns undefined fields when no span is active (e.g. in tests without SDK).
- */
-export const getActiveSpanContext = (): {
-    traceId: string | undefined;
-    spanId: string | undefined;
-} => {
-    // Reads from OTel's async context (AsyncLocalStorage), so it works anywhere in a traced
-    // request without threading a span through every signature — the glue for cross-signal
-    // correlation, since audit/analytics events stamp the same traceId.
-    const activeSpan = trace.getActiveSpan();
-    if (!activeSpan) return { traceId: undefined, spanId: undefined };
-    // `spanContext()` returns the wire-propagatable identity: traceId, spanId, trace flags.
-    const spanContext = activeSpan.spanContext();
-    return {
-        // `traceId` — the whole request across services. `spanId` — this one operation.
-        traceId: isValidOtelId(spanContext.traceId) ? spanContext.traceId : undefined,
-        spanId: isValidOtelId(spanContext.spanId) ? spanContext.spanId : undefined
-    };
+    if (error instanceof Error) span.recordException(relaxed ? error : { name: error.name });
 };
 
 /**
@@ -128,11 +101,7 @@ export const recordErrorOnActiveSpan = (error: unknown): void => {
     const span = trace.getActiveSpan();
     // No active span (untraced context) — nothing to annotate, and not an error condition.
     if (!span) return;
-    span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: extractErrorMessage(error, String(error))
-    });
-    if (error instanceof Error) recordSanitisedException(span, error);
+    markSpanFailed(span, error);
     // Note: deliberately does NOT call `span.end()`. The span belongs to whoever opened it
     // (usually the auto-instrumentation's request span) and ending it here would truncate it.
 };

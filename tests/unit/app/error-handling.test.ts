@@ -12,7 +12,7 @@
 import type { NextFunction, Request } from 'express';
 import { asStub } from '@tests/stub';
 import { makeResponseStub } from '@tests/express';
-import { logger } from '@infrastructure/adapters/logger';
+import { logger, serializeError } from '@infrastructure/adapters/logger';
 import { handleUncaughtError, handleUnhandledRejection } from '@app/error-handling';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { processUnhandledRejectionsTotal } from '@infrastructure/observability/metrics-process';
@@ -178,7 +178,7 @@ describe('handleUncaughtError log content', () => {
         expect(JSON.stringify([headline, meta])).not.toContain('hunter2');
     });
 
-    it('logs only the name and code of a Mongo error, never the values it names', () => {
+    it('names a Mongo error by class in the headline and hands it to the logger, which scrubs it', () => {
         const [headline, meta] = loggedCall(
             Object.assign(new Error('E11000 duplicate key { email: "ada@example.com" }'), {
                 name: 'MongoServerError',
@@ -186,12 +186,14 @@ describe('handleUncaughtError log content', () => {
             })
         );
 
-        expect(meta.error).toEqual({
+        expect(headline).toBe('MongoServerError');
+        expect(serializeError(meta.error)).toMatchObject({
             name: 'MongoServerError',
-            code: 11_000,
-            stack: expect.not.stringContaining('ada@example.com')
+            code: 11_000
         });
-        expect(JSON.stringify([headline, meta])).not.toContain('ada@example.com');
+        expect(JSON.stringify([headline, serializeError(meta.error)])).not.toContain(
+            'ada@example.com'
+        );
     });
 
     it('still logs any other error whole', () => {

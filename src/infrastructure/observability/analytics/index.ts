@@ -8,7 +8,7 @@
  * See: docs/tools/analytics.md
  */
 
-import { getActiveSpanContext } from '@infrastructure/observability/tracer';
+import { getActiveSpanContext } from '@infrastructure/observability/span-context';
 import { createProviderRegistry, requireProvider } from '@infrastructure/runtime/provider-registry';
 import { defineProbe } from '@infrastructure/config/define';
 import { analyticsConfig } from '@infrastructure/observability/config';

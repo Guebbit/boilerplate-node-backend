@@ -21,6 +21,7 @@ import {
     defaultTextMapGetter,
     defaultTextMapSetter,
     propagation,
+    SpanStatusCode,
     trace,
     type Span
 } from '@opentelemetry/api';
@@ -89,6 +90,49 @@ describe('otel-sdk — buildProcessors', () => {
 
         expect(exportSpy).toHaveBeenCalledTimes(1);
         exportSpy.mockRestore();
+    });
+});
+
+/** A sampled span that failed with a message quoting an address. */
+const failedSpan = (): ReadableSpan =>
+    asStub<ReadableSpan>({
+        spanContext: () => ({ traceFlags: TraceFlags.SAMPLED }),
+        resource: { asyncAttributesPending: false },
+        attributes: { 'error.type': 'MongoServerError' },
+        events: [],
+        status: { code: SpanStatusCode.ERROR, message: 'dup key ada@example.com' }
+    });
+
+/** The status the exporter was handed for a failed span, under this NODE_ENV. */
+const exportedStatus = async (nodeEnvironment: string) => {
+    const exportSpy = jest
+        .spyOn(OTLPTraceExporter.prototype, 'export')
+        .mockImplementation((_spans, callback) => callback({ code: 0 }));
+    await withEnvironmentOverrides(
+        { OTEL_EXPORTER_OTLP_ENDPOINT: 'http://localhost:4318', NODE_ENV: nodeEnvironment },
+        async () => {
+            const [processor] = buildProcessors();
+            processor.onEnd(failedSpan());
+            await processor.forceFlush();
+        }
+    );
+    const [exportedSpans] = exportSpy.mock.calls[0] ?? [[]];
+    exportSpy.mockRestore();
+    return exportedSpans[0]?.status;
+};
+
+describe('otel-sdk — buildProcessors, error text', () => {
+    it('exports the error type, not its message, in production', async () => {
+        expect(await exportedStatus('production')).toEqual({
+            code: SpanStatusCode.ERROR,
+            message: 'MongoServerError'
+        });
+    });
+
+    it('exports the message in development', async () => {
+        expect(await exportedStatus('development')).toMatchObject({
+            message: 'dup key ada@example.com'
+        });
     });
 });
 

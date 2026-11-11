@@ -16,6 +16,8 @@ import winston from 'winston';
 import { isRelaxedEnvironment, loggingConfig, PERSONAL_FIELD_MODES } from '../runtime/config';
 import { correlationDigest } from '../security/pseudonymise';
 import { toSemanticNames } from './semantic-names';
+import { maskMessage, scrubError } from './log-scrub';
+import { getActiveSpanContext } from '../observability/span-context';
 import { loadSharedRules } from '../config/shared-rules/load';
 import { logRedactionSchema } from '../config/shared-rules/log-redaction';
 import { cookieData } from '../http/cookies.generated';
@@ -250,20 +252,40 @@ const redactEntries = (
 };
 
 /**
+ * Masks the email and IP addresses in a message text, following {@link PersonalFieldMode}:
+ * `hash` and `redact` stand in for each address like they do for the `email` field, `plain`
+ * leaves the text alone.
+ *
+ * @param text - a log headline or an error message
+ */
+const maskText = (text: string): string =>
+    resolvePersonalFieldMode() === 'plain' ? text : maskMessage(text, applyPersonalFieldMode);
+
+/**
  * Normalize unknown thrown values into log-safe plain objects.
- * Stack is omitted in production to avoid leaking internals.
+ *
+ * - A known class that quotes data in its message (a database or SMTP error) keeps only its
+ *   identifying fields, see `src/infrastructure/adapters/log-scrub.ts`. Every other error keeps its message, with the
+ *   addresses in it masked.
+ * - Stack is omitted in production to avoid leaking internals.
  *
  * Needed because `Error` has non-enumerable properties: `JSON.stringify(new Error('x'))`
  * yields `{}`, silently losing the message. This pulls the useful fields onto a plain object.
+ * Every error the redaction walk meets (top level, nested, `cause`) goes through here.
  */
 export const serializeError = (error: unknown): Record<string, unknown> => {
     if (error instanceof Error) {
-        return {
+        const { stack, ...fields } = scrubError(error) ?? {
             name: error.name,
             message: error.message,
+            stack: error.stack
+        };
+        return {
+            ...fields,
+            ...(typeof fields.message === 'string' && { message: maskText(fields.message) }),
             // Stack traces expose absolute paths and dependency internals — useful locally,
             // an information leak in aggregated server logs. Kept only on a developer's machine or CI.
-            ...(isRelaxedEnvironment() && { stack: error.stack }),
+            ...(isRelaxedEnvironment() && { stack }),
             // The wrapped error is usually the one that explains the failure.
             ...(error.cause !== undefined && { cause: error.cause })
         };
@@ -271,6 +293,20 @@ export const serializeError = (error: unknown): Record<string, unknown> => {
     // `throw 'string'` and `throw { code: 1 }` are legal JS; keep *something* readable.
     return { raw: String(error) };
 };
+
+/**
+ * Stamp the active span's `traceId` and `spanId` on a record that has none, so every line of a
+ * traced request joins its trace without the caller threading the ids through.
+ *
+ * Runs before {@link redactFormat}; {@link semanticNamesFormat} then renames both to
+ * `trace_id` and `span_id`. Untraced contexts add nothing.
+ */
+export const traceContextFormat = winston.format((info) => {
+    const { traceId, spanId } = getActiveSpanContext();
+    if (traceId !== undefined && info.traceId === undefined) info.traceId = traceId;
+    if (spanId !== undefined && info.spanId === undefined) info.spanId = spanId;
+    return info;
+});
 
 /**
  * Apply error serialization and redaction before transport output.
@@ -301,9 +337,12 @@ export const redactFormat = winston.format((info) => {
     }
 
     const redacted = redactSensitiveFields(rest);
+    // The headline is not metadata, so the walk never sees it. winston appends a logged error's
+    // message to it (`logger.error('text', error)`), which is where an address would ride in.
+    const headline = typeof message === 'string' ? maskText(message) : message;
     // Mutate `info` in place (winston requires the same object identity back) while
     // overwriting metadata with the redacted copy and restoring the reserved fields.
-    return Object.assign(info, { level, message }, redacted);
+    return Object.assign(info, { level, message: headline }, redacted);
 });
 
 /**
@@ -342,6 +381,7 @@ const baseFormat = winston.format.combine(
     // Explicit ISO-8601 with milliseconds and offset; the winston default is locale-dependent.
     winston.format.timestamp({ format: 'YYYY-MM-DDTHH:mm:ss.SSSZ' }),
     // Note the call: the factory above must be invoked to yield a format instance.
+    traceContextFormat(),
     redactFormat(),
     semanticNamesFormat(),
     winston.format.json()
@@ -355,6 +395,7 @@ const baseFormat = winston.format.combine(
  */
 const prettyFormat = winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DDTHH:mm:ss.SSSZ' }),
+    traceContextFormat(),
     redactFormat(),
     semanticNamesFormat(),
     // `all: true` colours the whole line by level, not just the level token.

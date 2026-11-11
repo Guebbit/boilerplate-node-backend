@@ -32,7 +32,8 @@ import {
 // understood by Jaeger, Tempo, Honeycomb, Datadog, the OTel Collector, etc.
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 // Relative: this file loads first, before anything that resolves path aliases is wired.
-import { loggingConfig, tracingConfig } from './config';
+import { isRelaxedEnvironment, loggingConfig, tracingConfig } from './config';
+import { scrubbingExporter } from './span-scrub';
 import packageJson from '../../../package.json';
 // Auto-instrumentations: each one monkey-patches its target library so spans are created
 // without touching business code. Only the four libraries this app actually uses are loaded,
@@ -190,7 +191,13 @@ export const buildProcessors = (): SpanProcessor[] => {
 
     // `@opentelemetry/sdk-trace`'s `BatchSpanProcessor` takes one options object (`{ exporter,
     // ... }`), unlike the deprecated `sdk-trace-base` two-argument form this replaced.
-    return [new BatchSpanProcessor({ exporter: new OTLPTraceExporter() })];
+    const exporter = new OTLPTraceExporter();
+    // Outside development and test the exporter keeps an error's type and drops its text.
+    return [
+        new BatchSpanProcessor({
+            exporter: isRelaxedEnvironment() ? exporter : scrubbingExporter(exporter)
+        })
+    ];
 };
 
 /**

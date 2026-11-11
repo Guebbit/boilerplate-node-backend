@@ -10,15 +10,9 @@ import type { Express, Request, Response, NextFunction } from 'express';
 import { MulterError } from 'multer';
 import { logger, auditLogger } from '@infrastructure/adapters/logger';
 import { fieldError, rejectResponse } from '@infrastructure/http/response';
-import {
-    databaseErrorInterpreter,
-    loggableDatabaseError,
-    rejectServiceUnavailable
-} from '@infrastructure/http/errors';
-import {
-    getActiveSpanContext,
-    recordErrorOnActiveSpan
-} from '@infrastructure/observability/tracer';
+import { scrubError } from '@infrastructure/adapters/log-scrub';
+import { databaseErrorInterpreter, rejectServiceUnavailable } from '@infrastructure/http/errors';
+import { recordErrorOnActiveSpan } from '@infrastructure/observability/tracer';
 import { processUnhandledRejectionsTotal } from '@infrastructure/observability/metrics-process';
 import { t } from '@infrastructure/i18n';
 import { isTestEnvironment } from '@infrastructure/runtime/config';
@@ -82,8 +76,8 @@ const resolveStatus = (error: Error): number => {
  *
  * - a body-parser error: `type` only. Its message quotes the request body (`Unexpected token ...
  *   in JSON`), and a client controls that body.
- * - a Mongo/Mongoose error: name, code and stack frames (no message), via the shared `loggableDatabaseError`.
- * - anything else: unchanged, the logger's own serializer decides.
+ * - anything else: unchanged. The logger's own serializer scrubs a database or SMTP error
+ *   (`src/infrastructure/adapters/log-scrub.ts`) and masks the addresses in every other message.
  *
  * @param error - the unhandled error
  * @param declaredClientError - whether the error declared itself a client error (`expose`, 4xx)
@@ -91,7 +85,7 @@ const resolveStatus = (error: Error): number => {
 const loggableError = (error: Error, declaredClientError: boolean): unknown => {
     if (declaredClientError && 'type' in error && typeof error.type === 'string')
         return { type: error.type };
-    return loggableDatabaseError(error);
+    return error;
 };
 
 /**
@@ -122,8 +116,12 @@ export const handleUncaughtError = (
 
     const status = resolveStatus(error);
     const logged = loggableError(error, clientErrorStatus(error) !== undefined);
-    // Same rule for the headline: a stripped error's message is exactly what must not be logged.
-    const headline = logged === error ? `${error.name}: ${error.message}` : error.name;
+    // Same rule for the headline: a stripped error's message is exactly what must not be logged,
+    // and the logger will strip a database or SMTP error's own.
+    const headline =
+        logged === error && scrubError(error) === undefined
+            ? `${error.name}: ${error.message}`
+            : error.name;
 
     // The raw `error`, not hand-picked `name`/`message` fields — same reasoning as the
     // process-level handlers below: `redactFormat` (`adapters/logger.ts`) serializes an `Error`
@@ -134,7 +132,6 @@ export const handleUncaughtError = (
     // Stryker disable all
     logger[status >= 500 ? 'error' : 'warn'](headline, {
         requestId: request.requestId,
-        traceId: getActiveSpanContext().traceId,
         statusCode: status,
         error: logged
     });
