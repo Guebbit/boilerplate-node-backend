@@ -262,7 +262,7 @@ const announceOwedByHand = (
         : Promise.resolve();
 
 /** How many times a stamped refund write may miss and be retried before the call throws. */
-const CANCEL_EVENT_WRITE_RETRIES = 5;
+export const CANCEL_EVENT_WRITE_RETRIES = 5;
 
 /**
  * Whether the payment already handled the cancel event a request answers. The write that opens a

@@ -16,6 +16,7 @@ import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { ORDER_CANCELED, orderService } from '@modules/orders';
 import { paymentService } from '@modules/payments/services';
 import { PAYMENT_REFUND_OWED_BY_HAND } from '@modules/payments/events';
+import { CANCEL_EVENT_WRITE_RETRIES } from '@modules/payments/services/refunds';
 import { paymentRepository } from '@modules/payments/repository';
 import paymentsModule from '@modules/payments/module';
 import { payByCard, refundOrderPayment } from '@modules/payments/tests/factories';
@@ -258,8 +259,7 @@ describe('a cancel event that fails or races itself', () => {
         expect(await deliverCancel(orderId, 'evt-1')).toBe(false);
 
         // Bounded: one first try plus the retries, then it gives up loudly.
-        expect(write.mock.calls.length).toBeGreaterThan(1);
-        expect(write.mock.calls.length).toBeLessThan(20);
+        expect(write).toHaveBeenCalledTimes(CANCEL_EVENT_WRITE_RETRIES + 1);
         const after = await paymentOf(orderId);
         expect(after.refunds).toHaveLength(0);
         expect(after.handledCancelEvents).toEqual([]);
