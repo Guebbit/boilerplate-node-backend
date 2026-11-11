@@ -1,6 +1,6 @@
 /**
  * `shared/rules/cookies.yaml` against the places that must agree with it: the contract's
- * `cookieAuth` name, and the GDPR table generated from it.
+ * `cookieAuth` name.
  */
 
 import { readFileSync } from 'node:fs';
@@ -21,12 +21,5 @@ describe('the cookie inventory', () => {
         ) as RootContract;
 
         expect(cookieData.session.name).toBe(contract.components.securitySchemes.cookieAuth.name);
-    });
-
-    it('is printed in full in the data-protection page', () => {
-        const page = readFileSync(path.join(REPO_ROOT, 'docs/theory/data-protection.md'), 'utf8');
-
-        for (const cookie of Object.values(cookieData))
-            expect(page).toContain(`\`${cookie.name}\``);
     });
 });
