@@ -265,6 +265,32 @@ describe('the signal', () => {
         expect(await stockAlertModel.countDocuments()).toBe(0);
     });
 
+    it('answers the request of an unverified account with the event but no mail', async () => {
+        const { bearer } = await authenticateAsRole('unverified');
+        const productId = await soldOut();
+        await api().post('/stock-alerts').set('Authorization', bearer).send({ productId });
+
+        await inventoryService.receive(productId, 3, undefined, testCallerContext);
+        await settleOutboxNudges();
+
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+        expect(await sentEvents()).toMatchObject([{ productId }]);
+        expect(await stockAlertModel.countDocuments()).toBe(0);
+    });
+
+    it('mails an account that verified between asking and the restock', async () => {
+        const { bearer, user } = await authenticateAsRole('unverified');
+        const productId = await soldOut();
+        await api().post('/stock-alerts').set('Authorization', bearer).send({ productId });
+        await userRepository.updateMany({ _id: user.id }, { $set: { verifiedAt: new Date() } });
+
+        await inventoryService.receive(productId, 3, undefined, testCallerContext);
+        await settleOutboxNudges();
+
+        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+        expect(mockEnqueueEmail.mock.calls[0]?.[1]).toBe('stock-alerts.back-in-stock');
+    });
+
     it('gives a request canceled before the signal nothing', async () => {
         const { bearer } = await shopper();
         const productId = await soldOut();

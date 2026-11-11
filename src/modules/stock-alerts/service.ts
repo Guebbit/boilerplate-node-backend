@@ -147,7 +147,9 @@ const answerOne = (
 
 /**
  * Mail one buyer that a product is back. An erased account has no address left, a locked one
- * (banned, or in the grace of its own deletion) is not mailed, and a mail that fails is logged: the request is already gone and the inbox row stands.
+ * (banned, or in the grace of its own deletion) is not mailed, and neither is an address its owner
+ * never confirmed: the inbox row is its only notice. A mail that fails is logged: the request is
+ * already gone and the inbox row stands.
  *
  * @param userId - the buyer
  * @param productId - the product
@@ -163,6 +165,9 @@ const mailBuyer = (
         .then((user) => {
             // A locked account (banned, or its owner asked to delete it) gets no optional notice.
             if (!user || !isAuthenticatable(user)) return;
+            // An unproven address may belong to someone else, and the greeting carries a name the
+            // requester typed: it gets the inbox row only.
+            if (!user.verifiedAt) return;
             const locale = user.locale ?? getDefaultLocale();
             const mail = backInStockEmail(locale, user.username, {
                 title: titleFor(titles, locale),

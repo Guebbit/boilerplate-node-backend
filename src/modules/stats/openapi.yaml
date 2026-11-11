@@ -21,7 +21,7 @@ paths:
                 unless it says otherwise; money is grouped by currency and never converted. A sale
                 is dated by `paidAt`, a reversal by the credit note's `issuedAt`, and days are the
                 shop's (`NODE_SHOP_TIMEZONE`), so a bucket edge is shop-local midnight. `from` and
-                `to` are shop-local calendar days, both inclusive; the range may not pass two years
+                `to` are shop-local calendar days, both inclusive; the range may not pass 731 days
                 or 400 buckets. Needs `read:Stats`. Never cached: it is the shop's money.
             operationId: getSalesStats
             security:
@@ -241,12 +241,15 @@ components:
             name: to
             in: query
             required: true
-            description: Last shop-local calendar day of the period, inclusive. At most two years after `from`.
+            description: Last shop-local calendar day of the period, inclusive. At most 731 days after `from` (two years), and the whole period at most 400 buckets.
             schema: { type: string, format: date }
         StatsIntervalParam:
             name: interval
             in: query
             required: false
+            description: >-
+                The bucket size. The period may span at most 400 buckets, so `day` fits about 13
+                months and `week` or `month` fit the full 731 days.
             schema:
                 $ref: '#/components/schemas/StatsInterval'
 
