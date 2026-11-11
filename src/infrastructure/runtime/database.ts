@@ -228,15 +228,17 @@ export const stopDatabase = () => {
 export const { connection } = mongoose;
 
 /**
- * Runs `fn` inside a MongoDB multi-document transaction, retrying it on a transient error the
- * driver itself flags as safe to retry (a stepdown, a network blip) per MongoDB's own recommended
- * transaction pattern. `fn` must only touch the database through calls that take `{ session }` —
- * a write made without it is not part of the transaction and will not roll back with the rest.
+ * Runs `work` inside a MongoDB multi-document transaction, per MongoDB's own recommended pattern.
  * https://mongoosejs.com/docs/transactions.html
  *
- * Requires a replica set: a standalone `mongod` refuses `startTransaction()` outright.
- * Every entry point that reaches this — the server, every cron script, `mongodb-memory-server`'s
- * test double — runs one; see `scenarios/support/ephemeral-mongod.ts` and `docker-compose.yml`.
+ * Retries: the whole of `work`, again from the top, on a transient error the driver flags as
+ *          safe to retry (a stepdown, a network blip, a write conflict), for up to 120 s.
+ * Inside:  only `{ session }` writes and outbox rows. Anything else runs again on each attempt
+ *          and stays done on abort, so a provider call, a mail or a cache write goes AFTER the
+ *          transaction resolves. See `docs/modules/payments.md#one-settlement-transaction` and
+ *          `rearmPrecondition` (`persistence/versioning.ts`).
+ * Needs:   a replica set; a standalone `mongod` refuses `startTransaction()` outright. Every
+ *          entry point runs one: `scenarios/support/ephemeral-mongod.ts`, `docker-compose.yml`.
  *
  * @param work - the work to run inside the transaction, given the session to pass to every write
  * @returns whatever `work` resolved with, once the transaction has committed

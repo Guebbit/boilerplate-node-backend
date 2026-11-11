@@ -83,6 +83,17 @@ describe('fakePaymentProvider.confirm', () => {
         expect(state.status).toBe('succeeded');
     });
 
+    it('answers an already succeeded intent as succeeded, even with a card that would decline', async () => {
+        await fakePaymentProvider.confirm('fake_pi_reconfirm', FAKE_SUCCESS_METHOD);
+
+        const again = await fakePaymentProvider.confirm('fake_pi_reconfirm', FAKE_DECLINE_METHOD);
+
+        expect(again.status).toBe('succeeded');
+        await expect(fakePaymentProvider.retrieve('fake_pi_reconfirm')).resolves.toMatchObject({
+            status: 'succeeded'
+        });
+    });
+
     it('never reports more of a card than its last four digits', async () => {
         const state = await fakePaymentProvider.confirm('fake_pi_e', 'pm_test_1881');
 

@@ -164,7 +164,12 @@ export interface ProviderWebhookEvent {
  * paid: {@link PaymentProvider.parseWebhook} must verify the provider's signature over the raw
  * body and trust no payment status reported by the browser.
  *
- * See: docs/theory/defences/business-logic.md
+ * Money duties (a retry must never move money twice):
+ *   1. `confirm`: at most one successful charge per `providerRef`.
+ *   2. `refund`: send the idempotency key, stamp `refundId` on the provider's refund and echo it.
+ *   3. Past the provider's key window: adopt the refund carrying `refundId` instead of creating one.
+ *
+ * See: docs/theory/defences/business-logic.md, docs/modules/payments-provider-port.md#money-duties
  */
 export interface PaymentProvider {
     /** The name persisted on each payment document, so a row says who handled it. */
@@ -192,6 +197,10 @@ export interface PaymentProvider {
 
     /**
      * Attach a payment method the browser tokenised and ask the provider to take the money.
+     *
+     * A confirm on an intent that already succeeded answers that state and never charges again.
+     * An adapter with no intent object keeps this rule itself, with a provider key built from
+     * `providerRef` + `paymentMethodRef`. A retry after a decline stays allowed (a new method, a new key).
      *
      * @param providerRef - what {@link prepare} returned
      * @param paymentMethodRef - the provider's opaque handle for the card (`pm_…`). NOT a card
@@ -223,7 +232,7 @@ export interface PaymentProvider {
      * An adapter must time its request out well inside the refund sweep's lease (10 minutes for
      * up to 200 payments): a call that hangs holds the whole sweep.
      *
-     * Beyond the provider's key window (Stripe: a day from first use) a reused key makes a NEW
+     * Beyond the provider's key window (Stripe v1: 24 h from first use; your provider's key window) a reused key makes a NEW
      * refund, so the adapter must stay idempotent itself:
      * docs/modules/payments-provider-port.md#a-key-the-provider-forgot
      *
@@ -233,7 +242,7 @@ export interface PaymentProvider {
      * @param providerRef - the provider's reference of the payment to refund
      * @param charge - the amount and currency to give back
      * @param idempotency - `idempotencyKey`: the provider's dedupe key. `refundId`: stamp it on
-     *   the provider's refund (Stripe `metadata.refund_record`). `createdAt`: past a day, list the
+     *   the provider's refund (Stripe `metadata.refund_record`). `createdAt`: past your provider's key window (Stripe v1: 24 h), list the
      *   payment's refunds and adopt the one carrying `refundId` before creating one.
      * @throws {PaymentProviderError} a definite code only when the provider answered about THIS
      *   refund. Network error, timeout, 5xx, 429: `provider_unavailable`; anything else: `unknown`

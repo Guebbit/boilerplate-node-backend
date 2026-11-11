@@ -65,8 +65,8 @@ export const FAKE_DECLINE_METHOD = 'pm_card_declined';
  *
  * In memory, and deliberately: this is a stub, and a stub that needed a collection would be a
  * second payments database to keep consistent. The cost is that a restart — or a second worker —
- * forgets, which is why {@link retrieve} answers `processing` for a reference it does not know:
- * an unknown intent must settle NOTHING, and `processing` is the only state that settles nothing.
+ * forgets, which is why {@link retrieve} answers `open` for a reference it does not know:
+ * an unknown intent must settle NOTHING, and `open` is the state that settles nothing.
  */
 const outcomes = new Map<string, ProviderPaymentState>();
 
@@ -396,7 +396,15 @@ export const fakePaymentProvider: PaymentProvider = {
         });
     },
 
+    // Money duty 1: an intent that already succeeded answers that state and charges nothing again,
+    // whatever method the retry brings. A retry after a decline still goes through (not recorded here).
     confirm: (providerRef, paymentMethodRef) => {
+        const settled = outcomes.get(providerRef);
+        if (settled?.status === 'succeeded') {
+            // Stryker disable next-line all
+            logger.info(`[fake-psp] confirm ${providerRef} → already succeeded, nothing charged`);
+            return Promise.resolve(withReceipt(providerRef, settled));
+        }
         const { settlesTo, ...state } = outcomeFor(paymentMethodRef);
         outcomes.set(providerRef, settlesTo);
         // Stryker disable all
