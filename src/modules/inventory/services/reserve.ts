@@ -3,6 +3,7 @@
  * Taking a hold for an order: all lines or none, with the unwinding a refusal needs.
  */
 
+import type { ClientSession } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { productService } from '@modules/products';
@@ -13,46 +14,30 @@ import { stockLevelRepository, reservationRepository } from '../repository';
 import type { ReservationDocument, StockLevelDocument } from '../model';
 import type { StockLine, StockShortfall, ReserveOutcome } from './types';
 import { applyTransition, refreshStockCache } from './transition';
+import { releaseForOrder } from './holds';
 import { MINUTE_MS } from '@domain-primitives/time';
 
 /**
- * Give back every line already taken for a reserve that will not complete, and delete the hold
- * that named them — shared by a refused line and a line whose write threw.
+ * Give back everything an unfinished reserve took, and delete the hold that named it — shared by
+ * a refused line and a line whose write threw.
  *
- * The hold is narrowed to `taken` FIRST, before a single counter moves: a crash partway through
- * this cleanup then leaves a hold that still names only real reservations, never a line whose
- * counters were never touched — the exact leak this fixes (`docs/modules/inventory-reservations.md`).
- * Each release is logged rather than allowed to throw, so one failed give-back doesn't stop the
- * others or hide which line it was.
+ * The hold lists only lines whose counters moved in the same transaction, so the claim-guarded
+ * release gives back exactly those. A crash partway through this cleanup leaves a hold the sweep
+ * releases the same way; a hold the sweep already claimed releases nothing here (no double give-back).
+ * Each failure is logged rather than thrown, so one failed give-back doesn't hide the others.
  *
  * @param orderId - the order whose reserve is being unwound
- * @param taken - the lines actually taken before the refusal or throw
  * @param hold - the hold document to delete once its lines are given back
- * @param note - why the ledger shows this release
  */
-const giveBackAndDeleteHold = async (
-    orderId: string,
-    taken: readonly StockLine[],
-    hold: ReservationDocument,
-    note: string
-): Promise<void> => {
-    await reservationRepository.narrowToTaken(orderId, taken);
-    await Promise.all(
-        taken.map((line) =>
-            applyTransition(StockMovementReason.release, line.productId, line.quantity, {
-                reference: orderId,
-                note,
-                ...(line.kind ? { kind: line.kind } : {})
-            }).catch((error: unknown) => {
-                // Stryker disable all
-                logger.error({
-                    message: `Inventory: could not release ${line.quantity} of product ${line.productId} while rolling back a failed reserve for order ${orderId}`,
-                    error
-                });
-                // Stryker restore all
-            })
-        )
-    );
+const giveBackAndDeleteHold = async (orderId: string, hold: ReservationDocument): Promise<void> => {
+    await releaseForOrder(orderId).catch((error: unknown) => {
+        // Stryker disable all
+        logger.error({
+            message: `Inventory: could not release the lines taken while rolling back a failed reserve for order ${orderId}`,
+            error
+        });
+        // Stryker restore all
+    });
     await reservationRepository.deleteOne(hold).catch((error: unknown) => {
         // Stryker disable all
         logger.error({
@@ -100,10 +85,33 @@ const leftFor = (line: StockLine, level: StockLevelDocument | null): number => {
 /** Thrown inside a spilling line's transaction to abort it when the cap cannot take the owed part. */
 class OwedRefused extends Error {}
 
+/** Thrown inside a line's transaction when the hold is no longer `held`, so the take rolls back. */
+class HoldClaimed extends Error {}
+
+/**
+ * Add the parts just taken to the hold, in the same transaction that took them: both land or
+ * neither does, which is what keeps the sweep from releasing a unit this order never held.
+ *
+ * @param orderId - the order the hold belongs to
+ * @param parts - the lines whose counters just moved in `session`
+ * @param session - the transaction that moved them
+ * @returns `parts`, for the caller to return
+ * @throws {HoldClaimed} when the hold was claimed meanwhile, aborting the transaction
+ */
+const pushed = async (
+    orderId: string,
+    parts: StockLine[],
+    session: ClientSession
+): Promise<StockLine[]> => {
+    if (!(await reservationRepository.pushItems(orderId, parts, session)))
+        throw new HoldClaimed(`The hold for order ${orderId} was claimed while it was being taken`);
+    return parts;
+};
+
 /**
  * Take a line that may spill, as ONE transaction: the whole line from the shelf when it fits;
- * otherwise the shelf part and a claim on the cap for the rest, and the hold rewritten to say
- * which is which. A crash anywhere inside leaves nothing taken, and a claim the cap refuses gives
+ * otherwise the shelf part and a claim on the cap for the rest, and the hold gaining each part
+ * it took. A crash anywhere inside leaves nothing taken, and a claim the cap refuses gives
  * the shelf part back by aborting.
  *
  * @param orderId - the order the hold belongs to
@@ -120,7 +128,7 @@ const takeSpillLine = async (orderId: string, line: StockLine): Promise<StockLin
             { reference: orderId },
             session
         );
-        if (fits) return [line];
+        if (fits) return pushed(orderId, [line], session);
 
         // Read inside the transaction: the figure the take below is judged against.
         const level = await stockLevelRepository.findByProductId(line.productId, session);
@@ -152,21 +160,7 @@ const takeSpillLine = async (orderId: string, line: StockLine): Promise<StockLin
         );
         if (!claimed) throw new OwedRefused();
 
-        const hold = await reservationRepository.findOpenByOrderId(orderId, session);
-        const others = (hold?.items ?? [])
-            .filter((item) => String(item.productId) !== line.productId)
-            .map(({ productId, quantity, kind }) => ({
-                productId: String(productId),
-                quantity,
-                kind
-            }));
-        await reservationRepository.replaceItems(
-            orderId,
-            [...others, ...shelfPart, owed],
-            undefined,
-            session
-        );
-        return [...shelfPart, owed];
+        return pushed(orderId, [...shelfPart, owed], session);
     }).catch((error: unknown) => {
         // The shelf part rolled back with the transaction; nothing of this line is taken.
         if (error instanceof OwedRefused) return null;
@@ -205,24 +199,31 @@ const owedPartsOf = (
 const takeLine = async (orderId: string, line: StockLine): Promise<StockLine[] | null> => {
     if (line.spill && line.kind !== 'backorder') return takeSpillLine(orderId, line);
 
-    const held = await applyTransition(takeReasonFor(line), line.productId, line.quantity, {
-        reference: orderId
+    const taken = await withTransaction(async (session): Promise<StockLine[] | null> => {
+        const held = await applyTransition(
+            takeReasonFor(line),
+            line.productId,
+            line.quantity,
+            { reference: orderId },
+            session
+        );
+        return held ? pushed(orderId, [line], session) : null;
     });
-    return held ? [line] : null;
+    // Written outside the transaction by design: the catalogue's copy cannot roll back.
+    if (taken) await refreshStockCache(line.productId);
+    return taken;
 };
 
 /**
  * Hold every line for an order, or hold none of it.
  *
- * Exactly-once: the hold is written first, and its unique `orderId` means a retried checkout
- * loses the insert without touching a counter. Lines are then taken one conditional write each,
- * so two checkouts racing the last unit resolve inside mongod. A failed line rolls back through
- * `applyTransition` — same as every other change — so the ledger shows the take and give-back
- * rather than netting them to silence.
+ * Exactly-once: an EMPTY hold is written first, and its unique `orderId` means a retried checkout
+ * loses the insert without touching a counter. Each line is then taken in one transaction that
+ * also adds it to the hold, so the hold never names a line whose counters did not move — even if
+ * the process is killed between lines. A failed line unwinds through {@link giveBackAndDeleteHold},
+ * so the ledger shows the take and the give-back rather than netting them to silence.
  *
- * A line that THROWS (a database hiccup, not a refusal) is exception-safe too: the `try` unwinds
- * through {@link giveBackAndDeleteHold} exactly like a refusal, then rethrows — so a hold never
- * survives naming lines this call never actually took.
+ * A line that THROWS (a database hiccup, not a refusal) unwinds the same way, then rethrows.
  *
  * @param orderId - the order the hold belongs to
  * @param lines - what it claims
@@ -236,7 +237,7 @@ export const reserveForOrder = async (
     holdMinutes: number = reservationTtlMinutes()
 ): Promise<ReserveOutcome> => {
     const expiresAt = new Date(Date.now() + holdMinutes * MINUTE_MS);
-    const hold = await reservationRepository.insertHold(orderId, lines, expiresAt);
+    const hold = await reservationRepository.insertHold(orderId, [], expiresAt);
     // Already held — a retry, or a double-clicked button. The first call did the work; report
     // ITS expiry, not the fresh guess this attempt computed but never actually wrote.
     if (!hold) {
@@ -244,7 +245,6 @@ export const reserveForOrder = async (
         return { held: true, expiresAt: existing?.expiresAt ?? expiresAt, owed: [] };
     }
 
-    const taken: StockLine[] = [];
     const owed: { productId: string; quantity: number }[] = [];
     // eslint-disable-next-line no-restricted-syntax -- multi-step write with partial rollback: a thrown error partway through must give back only the lines actually taken, then rethrow, so no safe wrapper covers this
     try {
@@ -269,24 +269,13 @@ export const reserveForOrder = async (
                     available: leftFor(line, blockerLevel)
                 };
 
-                await giveBackAndDeleteHold(
-                    orderId,
-                    taken,
-                    hold,
-                    'rolled back — another line could not be held'
-                );
+                await giveBackAndDeleteHold(orderId, hold);
                 return { held: false, shortfalls: [shortfall] };
             }
-            taken.push(...parts);
             owed.push(...owedPartsOf(line, parts));
         }
     } catch (error) {
-        await giveBackAndDeleteHold(
-            orderId,
-            taken,
-            hold,
-            'rolled back — reserve failed partway through'
-        );
+        await giveBackAndDeleteHold(orderId, hold);
         throw error;
     }
 
