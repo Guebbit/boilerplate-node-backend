@@ -5,7 +5,7 @@
 #   bash docker/observability/validate-configs.sh
 #
 # Each tool's own check: `otelcol validate`, `loki -verify-config`, `alloy validate`,
-# `promtail -check-syntax`, `caddy adapt`. Needs a container engine (`docker`, or the podman shim).
+# `caddy adapt`. Needs a container engine (`docker`, or the podman shim).
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -39,18 +39,17 @@ for compose in "$dev" "$prod"; do
     check "loki ($compose)" "$loki" "$loki" -config.file=/obs/loki.config.yaml -verify-config
 done
 
+# Dev loads a directory: the Faro receiver plus the container-log pipeline, as compose mounts them.
 alloy_dev="$(image_in "$dev" 'grafana/alloy')"
-check "alloy dev" "$alloy_dev" "$alloy_dev" validate /obs/alloy.config.alloy
+check "alloy dev" "$alloy_dev" \
+    -v "$PWD/docker/observability/alloy.config.alloy:/conf/faro.alloy:ro" \
+    -v "$PWD/docker/observability/alloy.logs.config.alloy:/conf/logs.alloy:ro" \
+    "$alloy_dev" validate /conf
 
 # Production loads a directory: the logs config plus the optional audit forwarder (empty by default).
 alloy_prod="$(image_in "$prod" 'grafana/alloy')"
 check "alloy production" "$alloy_prod" -v "$PWD/docker/observability/alloy.logs.config.alloy:/conf/logs.alloy:ro" \
     "$alloy_prod" validate /conf
-
-promtail="$(image_in "$dev" 'grafana/promtail')"
-for config in promtail.config.yaml promtail.podman.config.yaml; do
-    check "promtail $config" "$promtail" "$promtail" -config.file="/obs/$config" -check-syntax
-done
 
 # `adapt` parses the Caddyfile without loading the certificates it names.
 caddy="$(image_in "$dev" 'caddy')"

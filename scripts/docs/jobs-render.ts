@@ -59,7 +59,7 @@ const CRONTAB_HEADER = [
     "# connection on both paths, and records each run's outcome for /observability/health.",
     '#',
     "# No output redirects: supercronic hands each job's stdout/stderr straight to its own",
-    "# (`-passthrough-logs`), which is the container's log stream Promtail ships.",
+    "# (`-passthrough-logs`), which is the container's log stream Alloy ships.",
     ''
 ].join('\n');
 

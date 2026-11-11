@@ -185,8 +185,8 @@ is also deliberately **one** wrapper rather than a `:host` twin per script: copi
 
 ## Container scripts
 
-Four verbs, either engine. Use them instead of a bare `compose up`: they pass the runtime's
-Promtail override with `-f`, which is what gives Promtail a host log path to tail.
+Four verbs, either engine. Use them instead of a bare `compose up`: they pick the engine and
+read `CONTAINER_LOGS_PATH` from `.env`, which is what gives Alloy a host log path to tail.
 
 | Script            | Job                                                                                                                                                                 | Read more                                                 |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
