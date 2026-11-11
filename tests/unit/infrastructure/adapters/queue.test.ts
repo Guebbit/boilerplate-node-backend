@@ -6,6 +6,7 @@ import {
     consumeFromQueue,
     startQueue,
     stopQueue,
+    boundQueueRetries,
     redactedBrokerTarget,
     parkedCounts,
     DEAD_LETTER_EXCHANGE,
@@ -1095,5 +1096,56 @@ describe('stopQueue() on a live connection', () => {
 
         expect(mockAck).toHaveBeenCalled();
         expect(mockModelClose).toHaveBeenCalled();
+    });
+});
+
+describe('a connection that lands after stopQueue()', () => {
+    afterEach(disableRabbitMQ);
+
+    it('is closed on arrival, so a short-lived process can exit', async () => {
+        enableRabbitMQ();
+        await stopQueue();
+        // A broker that answers only after the process has already asked to stop.
+        let landLate: ((model: unknown) => void) | undefined;
+        mockConnect.mockImplementationOnce(
+            () =>
+                new Promise((resolve) => {
+                    landLate = resolve;
+                })
+        );
+        await startQueue();
+        await stopQueue();
+        mockModelClose.mockClear();
+
+        landLate?.(recoveringModelMock);
+        await settle();
+
+        expect(mockModelClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('is kept when nothing stopped the queue meanwhile', async () => {
+        await ensureConnected();
+        mockModelClose.mockClear();
+        await settle();
+
+        expect(mockModelClose).not.toHaveBeenCalled();
+    });
+});
+
+// Last in the file: it flips a process-wide switch that no other case here wants on.
+describe('boundQueueRetries()', () => {
+    afterEach(disableRabbitMQ);
+
+    it('gives the connection a finite number of retries, so a dead broker cannot hold a job open', async () => {
+        enableRabbitMQ();
+        await stopQueue();
+        boundQueueRetries();
+        await startQueue();
+
+        const [, options] = mockConnect.mock.calls.at(-1) as [
+            string,
+            { recovery: { maxRetries: number } }
+        ];
+        expect(options.recovery.maxRetries).toBe(3);
     });
 });

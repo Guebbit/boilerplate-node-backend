@@ -9,7 +9,6 @@
 import type { JobDeclaration } from '@kernel/registry';
 import { stockAlertsJobData } from './jobs.generated';
 import { logger } from '@infrastructure/adapters/logger';
-import { settleOutboxNudges } from '@kernel/outbox';
 import { stockAlertService } from './service';
 import { MINUTE_MS } from '@domain-primitives/time';
 
@@ -18,15 +17,9 @@ export const stockAlertsJobs: readonly JobDeclaration[] = [
     {
         ...stockAlertsJobData.sweepStockAlerts,
         run: () =>
-            stockAlertService
-                .sweepBuyable(new Date())
-                .then((products) => {
-                    logger.info({ message: 'Stock alert sweep done.', products });
-                })
-                // Each inbox row rides the outbox; settled inside the lease so `notifications` has
-                // heard every one before the connections close.
-                .then(() => settleOutboxNudges()),
-        needs: { subscriptions: true, i18n: true },
+            stockAlertService.sweepBuyable(new Date()).then((products) => {
+                logger.info({ message: 'Stock alert sweep done.', products });
+            }),
         lease: { ttlMs: 30 * MINUTE_MS }
     }
 ];

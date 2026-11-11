@@ -1,9 +1,9 @@
 /**
  * @module
  * The webhook retry sweep driven the way `npm run job` drives it: nothing registered by the
- * test, only what `prepareJob` installs from the job's own `needs`. With no broker the sweep sends
- * inline and can auto-disable a subscription; a declaration that forgets `subscriptions` disables
- * it and tells no staff.
+ * test, only what `prepareJob` installs and `runJobWork` settles. With no broker the sweep sends
+ * inline and can auto-disable a subscription; run without the app's boot it disables it and tells
+ * no staff.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -24,7 +24,7 @@ import {
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { callerInScope } from '@kernel/permissions';
 import { resetDomainEvents } from '@kernel/events';
-import { prepareJob } from '../../scripts/ops/prepare-job';
+import { prepareJob, runJobWork } from '../../scripts/ops/prepare-job';
 
 // No broker: the sweep sends the row itself. The subscriber's endpoint always fails.
 jest.mock('@infrastructure/adapters/queue', () => ({
@@ -78,8 +78,8 @@ describe('the webhook retry sweep run through the job runner', () => {
             nextAttemptAt: new Date(Date.now() - 1000)
         });
 
-        await prepareJob(job);
-        await job.run();
+        await prepareJob();
+        await runJobWork(job);
 
         const { items } = await notificationsService.listVisible(
             callerInScope(

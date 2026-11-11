@@ -20,10 +20,11 @@ let collectedTemplates: Record<string, string> = {};
  * The template NAME still travels through RabbitMQ to a consumer that may be another process —
  * see `EmailJobPayload` — so a bare filename stays the wire format; only WHERE that filename
  * lives on disk moved, from one shared directory into the module that owns it. Every process that
- * could drain the queue boots the full module list (`app/workers.ts` runs in the same process as
- * `app.ts`), so each one collects the identical map from the identical manifests.
+ * builds a mail boots the full module list (the app and every scheduled job, through
+ * `bootRendering`), so each one collects the identical map from the identical manifests. The
+ * inline fallback of `enqueueEmail` renders in whichever process sent, so it needs the map too.
  *
- * Called once at boot, from `app.ts` right beside `bootI18n` — before the first request or queue
+ * Called once at boot, from `bootRendering` right beside `bootI18n` — before the first request or queue
  * job that could resolve a name against it.
  *
  * @param directories - absolute paths, each expected to hold `<name>.ejs` files — a module's own

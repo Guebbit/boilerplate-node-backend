@@ -19,8 +19,6 @@ const digestJob = (run: DigestRun, data: JobData): JobDeclaration => ({
         runStaffDigest(run).then((result) => {
             logger.info({ message: `Staff ${run} digest done.`, ...result });
         }),
-    // Rendering the mail needs the translations; the rows need no subscriptions.
-    needs: { i18n: true },
     lease: { ttlMs: 30 * MINUTE_MS }
 });
 
