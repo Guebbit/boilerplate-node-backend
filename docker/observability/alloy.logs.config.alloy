@@ -1,6 +1,6 @@
-// Grafana Alloy — the container-log pipeline for the production `monitoring` profile.
-// Why Alloy and not Promtail: Promtail is deprecated; Alloy is its successor and already ships
-// in this repo for the Faro receiver. This file is the production stack's log shipper.
+// Grafana Alloy — the container-log pipeline, loaded by both the dev `observability` profile and the
+// production `monitoring` profile, so dev and prod run one log shipper. Alloy is the successor of
+// Promtail (end of life since 2026-03) and already ships in this repo for the Faro receiver.
 //
 // Both container engines are read at once, so nothing needs selecting:
 //   Docker  `json-file` driver   -> <id>/<id>-json.log, wrapped in a JSON envelope

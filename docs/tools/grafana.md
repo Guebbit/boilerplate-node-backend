@@ -31,8 +31,8 @@ flowchart TD
     App -->|OTLP/HTTP| Collector[OTel Collector]
     Collector -->|OTLP/gRPC| Tempo
     App -->|/observability/metrics scrape| Prometheus
-    App -->|stdout JSON| Promtail
-    Promtail --> Loki
+    App -->|stdout JSON| Alloy
+    Alloy --> Loki
     Prometheus -->|alerts| Alertmanager
     Tempo --> Grafana
     Prometheus --> Grafana
@@ -41,16 +41,15 @@ flowchart TD
 
 ## Stack overview
 
-| Service        | Role                               |
-| -------------- | ---------------------------------- |
-| OTel Collector | Telemetry fan-out hub              |
-| Tempo          | Trace store                        |
-| Prometheus     | Metrics store / alert evaluation   |
-| Alertmanager   | Alert routing                      |
-| Loki           | Log store                          |
-| Promtail       | Log shipper (Docker/Podman → Loki) |
-| Alloy          | Browser-facing Faro collector      |
-| Grafana        | Unified UI                         |
+| Service        | Role                                                                 |
+| -------------- | -------------------------------------------------------------------- |
+| OTel Collector | Telemetry fan-out hub                                                |
+| Tempo          | Trace store                                                          |
+| Prometheus     | Metrics store / alert evaluation                                     |
+| Alertmanager   | Alert routing                                                        |
+| Loki           | Log store                                                            |
+| Alloy          | Log shipper (Docker/Podman → Loki) and browser-facing Faro collector |
+| Grafana        | Unified UI                                                           |
 
 Images are in `docker-compose.yml`; the URLs are [the host port map](./pairing-and-ports.md#host-port-map).
 

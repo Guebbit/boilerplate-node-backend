@@ -34,8 +34,8 @@ npm run compose:up               # the lean default, or: npm run compose:up:full
 What `setup` touches, and what it leaves for you, is on
 [First run: `npm run setup`](./tools/configuration.md#first-run-npm-run-setup).
 
-On Podman, also set `CONTAINER_LOGS_PATH`, `PROMTAIL_CONFIG` and `CONTAINER_LOG_DRIVER` in `.env`
-(see `.env-example` → _Promtail Log Collection_) — only read once the `observability` profile is
+On Podman, also set `CONTAINER_LOGS_PATH` and `CONTAINER_LOG_DRIVER` in `.env`
+(see `.env-example` → _log collection_) — only read once the `observability` profile is
 running. Nothing to set on Docker.
 
 That is the whole setup. The `app` container runs `npm run db:bootstrap` before starting the

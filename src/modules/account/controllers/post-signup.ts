@@ -31,44 +31,23 @@ const SIGNUP_LOCATION = '/account';
 export const postSignup = (
     // `| undefined`: express 5 leaves `request.body` unset when no parser matched the
     // content-type, and multer is no protection — it calls `next()` untouched on a non-multipart
-    // body. See the guard on the destructure below.
+    // body. See the `?? {}` below.
     request: Request<unknown, unknown, SignupRequest | undefined>,
     response: Response
 ) => {
     /*
-     * Read, not parsed here — deliberate, not a gap. `accountService.signup` parses it against
-     * `SignupBody` plus the two rules the contract cannot say (the repeat matches, terms accepted),
-     * so every caller of the service gets the same 422.
+     * Passed whole, not parsed here — deliberate, not a gap. `accountService.signup` parses it
+     * against `SignupBody` plus the two rules the contract cannot say (the repeat matches, terms
+     * accepted), so every caller of the service gets the same 422, an unknown field included. An
+     * absent body (`?? {}`) answers the 422 a body of empty fields does, instead of throwing.
      */
-    /*
-     * Defaulted rather than passed through as `undefined`: `SignupInput` wants strings. An absent
-     * body therefore answers the same 422 a body of empty fields does, instead of throwing —
-     * `false` for the terms because a request nobody sent accepted nothing.
-     */
-    const {
-        email = '',
-        username = '',
-        password = '',
-        passwordConfirm = '',
-        analyticsConsent,
-        termsAccepted = false
-    } = request.body ?? {};
+    const body: unknown = request.body ?? {};
     // The password this request sets is its proof. The account is new, so no epoch can predate
     // it; stated anyway, since every first session says when its proof began.
     const proof = { amr: [AMR.password], provedAt: Date.now() };
 
     return accountService
-        .signup(
-            {
-                email,
-                username,
-                password,
-                passwordConfirm,
-                analyticsConsent,
-                termsAccepted
-            },
-            callerContextOf(request)
-        )
+        .signup(body, callerContextOf(request))
         .then((result) => {
             if (!result.success) {
                 authSignupTotal.inc({ status: 'failure' });

@@ -4,7 +4,7 @@
  * Here: how many examples were created.
  * Delete it if: the module counts nothing (and drop the `.inc()` call).
  *
- * See: docs/tools/observability.md
+ * See: docs/tools/prometheus.md
  */
 
 import { Counter } from 'prom-client';

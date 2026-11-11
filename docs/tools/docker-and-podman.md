@@ -26,7 +26,7 @@ flowchart LR
             Tempo["tempo\nTrace storage"]
             Prometheus["prometheus\nMetrics scraping :9090"]
             Alertmanager["alertmanager\nAlert routing :9093"]
-            Promtail["promtail\nLog collection"]
+            Alloy["alloy\nLog collection + Faro"]
             Loki["loki\nLog storage :3100"]
             Grafana["grafana\nUI dashboard :3001"]
         end
@@ -40,7 +40,7 @@ flowchart LR
     OTelCol --> Tempo
     Prometheus -->|"scrape /observability/metrics"| App
     Prometheus -->|"firing alerts"| Alertmanager
-    Promtail --> Loki
+    Alloy --> Loki
     Tempo --> Grafana
     Prometheus --> Grafana
     Loki --> Grafana
@@ -54,7 +54,7 @@ flowchart LR
     class Host host;
     class App app;
     class MongoDB,Redis,RabbitMQ data;
-    class OTelCol,Tempo,Prometheus,Alertmanager,Promtail,Loki obs;
+    class OTelCol,Tempo,Prometheus,Alertmanager,Alloy,Loki obs;
     class Grafana ui;
 ```
 
@@ -137,8 +137,8 @@ Versions are in `docker-compose.yml`, not here; `docker/observability/validate-c
 | `prometheus`     | Scrapes `/observability/metrics` from the app every 15 s. Evaluates alert rules. 7-day retention.                                          |
 | `alertmanager`   | Receives firing alerts from Prometheus. Routes/groups notifications by the `ALERT_*` knobs; email goes to mailpit by default in local dev. |
 | `gatus`          | Stand-in for the off-host heartbeat service: mails mailpit when Alertmanager's `Watchdog` pings stop.                                      |
-| `loki`           | Stores log lines shipped by Promtail. Queried by Grafana via LogQL. 7-day retention.                                                       |
-| `promtail`       | Tails container log files and pushes entries to Loki. Needs `CONTAINER_LOGS_PATH` / `PROMTAIL_CONFIG` in `.env` on Podman.                 |
+| `loki`           | Stores log lines shipped by Alloy. Queried by Grafana via LogQL. 7-day retention.                                                          |
+| `alloy`          | Tails container log files and pushes entries to Loki (plus the browser Faro receiver). Needs `CONTAINER_LOGS_PATH` in `.env` on Podman.    |
 | `alloy`          | Receives browser telemetry (Grafana Faro) from the frontend; fans it into Loki and the OTel Collector.                                     |
 | `grafana`        | Unified UI: explore traces (Tempo), metrics (Prometheus), and logs (Loki). Anonymous admin access in local dev.                            |
 
@@ -170,12 +170,12 @@ rather than always-on.
 
 ## Service groups
 
-| Group         | Services                                                                                                 | Why they are here                                                     |
-| ------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| App runtime   | `app`, `cron`                                                                                            | runs the backend and its scheduled jobs                               |
-| Core data     | `database`, `redis`, `limits`, `rabbitmq`                                                                | persistence, cache, rate-limit counters, and async jobs               |
-| Observability | `otel-collector`, `tempo`, `prometheus`, `alertmanager`, `gatus`, `loki`, `promtail`, `alloy`, `grafana` | traces, metrics, logs, and dashboards                                 |
-| Integrations  | `webhook-tester`, `webhook-tester-tls`, `mailpit`                                                        | opt-in sinks for outbound webhooks and mail; `--profile integrations` |
+| Group         | Services                                                                                     | Why they are here                                                     |
+| ------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| App runtime   | `app`, `cron`                                                                                | runs the backend and its scheduled jobs                               |
+| Core data     | `database`, `redis`, `limits`, `rabbitmq`                                                    | persistence, cache, rate-limit counters, and async jobs               |
+| Observability | `otel-collector`, `tempo`, `prometheus`, `alertmanager`, `gatus`, `loki`, `alloy`, `grafana` | traces, metrics, logs, and dashboards                                 |
+| Integrations  | `webhook-tester`, `webhook-tester-tls`, `mailpit`                                            | opt-in sinks for outbound webhooks and mail; `--profile integrations` |
 
 ### The `integrations` profile is where a real consumer would go
 
@@ -260,29 +260,30 @@ docker/boot-check.sh boot-check
 - **The Dockerfile is intentionally simple**: install dependencies once, add Chromium for PDF support, then let compose decide runtime commands.
 - **Podman is treated as a compatible local engine**, not a separate architecture.
 
-## Podman and Promtail log collection
+## Podman and log collection
 
 Docker writes container logs as `json-file` under `/var/lib/docker/containers`. Podman can write
 the same kind of thing with its `k8s-file` driver (CRI format) under its own storage path — but
 **it does not do so by default.** Podman's default driver is `journald`, which puts log lines in
-the systemd journal and writes no file at all. Promtail tails files, so with the default it tails a
+the systemd journal and writes no file at all. Alloy tails files, so with the default it tails a
 glob matching nothing, Loki stays empty, and Grafana's log panels are blank with no error anywhere
 to explain it.
 
-That is the entire difference between the two runtimes, and it is three values in `.env`, which
+That is the entire difference between the two runtimes, and it is two values in `.env`, which
 compose reads by itself:
 
 ```dotenv
 CONTAINER_LOGS_PATH=/home/youruser/.local/share/containers/storage/overlay-containers
-PROMTAIL_CONFIG=promtail.podman.config.yaml
 CONTAINER_LOG_DRIVER=k8s-file
 ```
 
-The defaults in `docker-compose.yml` are docker's, so on docker you set none of them. The driver is
-applied to every service through a YAML anchor rather than per service, because Promtail scrapes
+The defaults in `docker-compose.yml` are docker's, so on docker you set neither of them. The driver is
+applied to every service through a YAML anchor rather than per service, because Alloy scrapes
 the whole directory and any service left on the default would simply be missing from the logs.
-Whichever path you give is mounted at `/var/log/host-containers`, so the two promtail configs
-differ only in the glob under it and the parser stage — CRI for podman, JSON envelope for docker.
+Whichever path you give is mounted at `/var/log/host-containers`, so one config reads both: `alloy.logs.config.alloy`
+has a glob and parser stage for each engine — JSON envelope for docker, CRI for podman. It is the file the production stack loads too.
+
+The cost on podman: the log driver and path are no longer hidden by engine discovery, so both values are required.
 
 There is no override file and no `-f` list.
 

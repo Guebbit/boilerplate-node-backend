@@ -76,7 +76,7 @@ Redaction runs first on purpose: its lists know the names code writes.
 
 The map lives in `src/infrastructure/adapters/semantic-names.ts`. Only top-level fields are renamed:
 `metadata` and a nested `error.cause` keep the call site's own shape. In LogQL, `| json` turns a dot
-into an underscore: read `user.id` as `user_id`. Promtail and Alloy extract the `service` label from
+into an underscore: read `user.id` as `user_id`. Alloy extracts the `service` label from
 `service.name`.
 
 ## Audit events
@@ -325,12 +325,12 @@ The private setting (`hash`) is the default deliberately: a boilerplate's defaul
 ## Works with
 
 - **[OpenTelemetry](./opentelemetry.md)** — the OTel SDK automatically injects the active `trace_id` into Winston's logging context on every request. You write nothing; every log line just has it. → full explanation: [How logs and traces correlate](./opentelemetry.md#how-logs-and-traces-correlate)
-- **[Loki](./loki.md)** — Winston writes JSON to stdout; Promtail tails those lines and ships them to Loki. The `trace_id` on each line is what enables jumping from a log entry straight to a Tempo trace. → [Trace ↔ log correlation](./loki.md#trace-log-correlation)
+- **[Loki](./loki.md)** — Winston writes JSON to stdout; Alloy tails those lines and ships them to Loki. The `trace_id` on each line is what enables jumping from a log entry straight to a Tempo trace. → [Trace ↔ log correlation](./loki.md#trace-log-correlation)
 
 ## External references
 
 - [OWASP Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html) — guidance for what audit/security logs should capture
-- [winston-loki transport](https://github.com/JaniAnttonen/winston-loki) — drop-in if you want to push logs directly to [Loki](./loki.md) instead of via Promtail
+- [winston-loki transport](https://github.com/JaniAnttonen/winston-loki) — drop-in if you want to push logs directly to [Loki](./loki.md) instead of via Alloy
 
 ## Related pages
 

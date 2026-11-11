@@ -719,7 +719,7 @@ describe('resolveLogLevel', () => {
 /**
  * `resolveConsoleFormat` decides whether a log line is machine-readable, and getting it wrong is
  * invisible: the app keeps logging, the container keeps writing, and only the *labels* in Loki go
- * missing — `{service="api"}` and `{level="error"}` silently match nothing, because Promtail
+ * missing — `{service="api"}` and `{level="error"}` silently match nothing, because Alloy
  * parses each line as JSON and colourised prose is not JSON.
  *
  * So the assertions are made on the rendered line rather than on which format object came back:

@@ -115,4 +115,17 @@ describe('a failed login', () => {
         expect(failure).toBeDefined();
         expect(failure?.targetId).toBeUndefined();
     });
+
+    it('is a 422 and still audited when the body carries a field the contract does not know', async () => {
+        const user = await createUser({ email: 'known@example.com' });
+
+        const response = await api()
+            .post('/account/login')
+            .send({ email: user.email, password: PLAIN_PASSWORD, role: 'admin' });
+
+        // The credentials are right; only the stray key refuses it, after the failure record.
+        expect(response.status).toBe(422);
+        const failure = entries().find((entry) => entry.action === accountAuditActions.AUTH_LOGIN);
+        expect(failure?.targetId).toBe(pseudonymise('log', 'known@example.com'));
+    });
 });
