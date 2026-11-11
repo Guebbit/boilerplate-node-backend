@@ -4,4 +4,3 @@ group: shop
 dependsOn:
     - cart # move-to-cart writes a line
     - products # a saved line is meaningless without one
-noAudit: 'Saves and unsaves product references: low-stakes user data with no money, no stock and no identity attached.'

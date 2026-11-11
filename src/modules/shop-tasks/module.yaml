@@ -15,7 +15,6 @@ dependsOn:
     - tasks # opens and clears the to-dos
     - users # who can act today, for the digest
     - wishlist # subscribes to its event
-noAudit: 'Writes through `tasks` and `notifications`, which audit their own writes; this module owns no collection.'
 jobs:
     sweepStaffDigest:
         name: sweep:staff-digest

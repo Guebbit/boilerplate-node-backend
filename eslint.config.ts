@@ -572,6 +572,30 @@ export default tseslint.config(
     },
 
     /**
+     * A module's audit vocabulary: every action value is dotted lower snake_case, 2 to 4 segments
+     * (`order.refunded`). Staff search the audit log by that name, so a stray spelling hides an entry.
+     *
+     * The same shape is checked on `rules.yaml` actions (`rules.schema.ts`) and on the core
+     * `security.*` ones (`shared-rules/audit-actions.ts`). This block REPEATS the double-cast and
+     * try/catch bans because `no-restricted-syntax` replaces, never merges, between blocks.
+     */
+    {
+        files: ['src/modules/*/audit.ts'],
+        rules: {
+            'no-restricted-syntax': [
+                'error',
+                ...bannedDoubleCasts,
+                bannedTryCatch,
+                {
+                    selector: String.raw`Property > Literal.value:not([value=/^[a-z][\d_a-z]*(\.[a-z][\d_a-z]*){1,3}$/])`,
+                    message:
+                        'An audit action is dotted lower snake_case, 2 to 4 segments (`order.refunded`): staff search the audit log by this name.'
+                }
+            ]
+        }
+    },
+
+    /**
      * The environment is read in ONE layer: each owner's `config.ts` (a `defineConfig` slice) and the
      * store beneath them. Everything else asks a slice for a typed value.
      *

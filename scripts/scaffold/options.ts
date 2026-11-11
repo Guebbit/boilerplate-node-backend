@@ -17,7 +17,7 @@ export interface ScaffoldOptions {
     group: Exclude<ModuleDescriptor['group'], 'example'>;
     /** One sentence for the docs index. */
     summary: string;
-    /** Emit an `audit.ts` and record actions (default), or declare `noAudit` in `module.yaml`. */
+    /** Emit an `audit.ts` and record actions (default), or skip it. */
     audit: boolean;
     /** Run `regenerate --no-sync` after writing (default). */
     regenerate: boolean;
@@ -31,7 +31,7 @@ export const USAGE = [
     '  --entity <Name>   record type name (default: the naive singular of <name>)',
     '  --group <group>   foundation (default) or shop',
     '  --summary <text>  one sentence for the docs index',
-    '  --no-audit        emit no audit action; module.yaml declares noAudit instead',
+    '  --no-audit        emit no audit.ts and no audit action',
     '  --no-regenerate   write the files and stop before `regenerate --no-sync`'
 ].join('\n');
 
