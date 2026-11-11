@@ -3,4 +3,3 @@ subdomain: generic
 group: shop
 dependsOn:
     - products # the public catalogue is what a product page's address is built from
-noAudit: 'Read-only, public: it publishes addresses that are already public.'

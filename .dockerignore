@@ -32,14 +32,11 @@ docs/.vitepress/cache
 # every megabyte here is copied into the build context on every single build.
 tmp
 
-# Generated API-client collections for Bruno, Insomnia, Mockoon and Postman: ~900 KB of developer
-# tooling rebuilt by `npm run contracts:bundle -- bruno insomnia mockoon postman`. Only
+# Generated API-client collection for Bruno: developer tooling rebuilt by
+# `npm run contracts:bundle -- bruno`. Only
 # `tests/cross-cutting/contract-bundles.test.ts` reads them, and the image build runs no tests,
 # only `ts-check`.
 contract.bruno.yml
-contract.insomnia.json
-contract.mockoon.json
-contract.postman.json
 
 # Generated from openapi.yaml fragments by `postinstall` — see .gitignore. A stale host copy would
 # be overwritten anyway (`gen:api` starts with `rm -rf ./api`), but there is no reason to upload it

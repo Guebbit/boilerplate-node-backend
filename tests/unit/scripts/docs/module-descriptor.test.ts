@@ -14,11 +14,9 @@ describe('moduleDescriptorSchema', () => {
         expect(moduleDescriptorSchema.safeParse(withoutSummary).success).toBe(false);
     });
 
-    it('refuses a noAudit with no reason in it', () => {
-        expect(moduleDescriptorSchema.safeParse({ ...MINIMAL, noAudit: '' }).success).toBe(false);
-    });
-
     it('refuses a key it does not know, so a typo is not silently ignored', () => {
-        expect(moduleDescriptorSchema.safeParse({ ...MINIMAL, noAudits: 'x' }).success).toBe(false);
+        expect(moduleDescriptorSchema.safeParse({ ...MINIMAL, noSummary: 'x' }).success).toBe(
+            false
+        );
     });
 });

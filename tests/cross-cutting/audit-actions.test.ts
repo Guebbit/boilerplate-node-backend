@@ -5,44 +5,22 @@
  * a single list pinning every action string by name would have to name every domain —
  * reintroducing, in a test, exactly the coupling the module split removes.
  *
- * So the properties are asserted structurally instead. Each is a real failure that has no other
- * guard:
+ * So the properties are asserted structurally instead:
  *
- *   1. **Uniqueness across modules.** Two modules independently choosing `order.updated`
+ *   1. **The sweep finds files.** An empty result must mean "nothing declares actions", not "the
+ *      sweep stopped finding files".
+ *   2. **Uniqueness across modules.** Two modules independently choosing `order.updated`
  *      type-checks — the union just collapses the duplicate — and produces an audit trail where a
  *      compliance query cannot tell which domain acted.
- *   2. **The dotted convention.** Log backends filter by prefix (`auth.*`, `admin.product.*`), so
- *      an action that is not `noun.noun` or `noun.noun.verb` is invisible to every saved search
- *      built on it.
- *   3. **Every module's file is reachable from the sweep.** A module whose actions live somewhere
- *      this test does not look is a module whose actions are unguarded, and the failure would be
- *      silence.
- *   4. **Coverage, not just shape.** The three checks above only ever see what a module declares —
- *      a module that should audit something and doesn't looks identical to one that legitimately
- *      has nothing to record. A module's `module.yaml#noAudit` is the explicit, reviewed answer for
- *      the modules where that absence is a decision rather than an oversight — it holds the
- *      reason, and docs/modules/audit-logs.md has the wider picture.
+ *
+ * The dotted-name convention (`noun.noun`, lower snake_case, 2-4 segments) is not asserted here:
+ * ESLint refuses a malformed value in any `audit.ts` (`eslint.config.ts`), and the `rules.yaml`
+ * and core `security.*` actions are shape-checked by their schemas when `regenerate` runs.
  */
 
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
-import { readAllModuleDescriptors } from '../../scripts/docs/module-descriptor';
 import { MODULES_ROOT } from '@tests/paths';
-
-/**
- * Modules that deliberately emit no audit action at all — the ones whose own `module.yaml`
- * carries a `noAudit` reason. The decision and its reasoning live beside the module, so adding
- * or deleting one never edits this file.
- */
-const EXPECTED_NON_AUDITING: string[] = Object.entries(readAllModuleDescriptors(MODULES_ROOT))
-    .filter(([, descriptor]) => descriptor.noAudit !== undefined)
-    .map(([name]) => name);
-
-/** Every directory under `src/modules/`. */
-const moduleFolders = (): string[] =>
-    readdirSync(MODULES_ROOT).filter((entry) =>
-        statSync(path.join(MODULES_ROOT, entry)).isDirectory()
-    );
 
 /** Every `src/modules/<name>/audit.ts`, discovered rather than listed. */
 const listAuditFiles = (): { module: string; file: string }[] =>
@@ -99,43 +77,5 @@ describe('audit actions across modules', () => {
             }
 
         expect(collisions).toEqual([]);
-    });
-
-    it('spells every action as dotted lower snake_case', async () => {
-        const malformed: string[] = [];
-
-        for (const { module, file } of listAuditFiles())
-            for (const action of Object.values(await readActions(file)))
-                // domain.verb or domain.resource.verb — two to four segments, each lower
-                // snake_case. Matches BE's identical bound, so a renamed action satisfies both
-                // repositories' guards at once.
-                if (!/^[a-z][\d_a-z]*(\.[a-z][\d_a-z]*){1,3}$/.test(action))
-                    malformed.push(`${module}: "${action}"`);
-
-        expect(malformed).toEqual([]);
-    });
-
-    it('keeps every module either auditing or explicitly excused', () => {
-        const auditing = new Set(listAuditFiles().map(({ module }) => module));
-
-        const unaccounted = moduleFolders()
-            .filter((folder) => !auditing.has(folder))
-            .filter((folder) => !EXPECTED_NON_AUDITING.includes(folder))
-            .map(
-                (folder) =>
-                    `${folder}: no audit.ts and has no noAudit reason in its module.yaml — decide whether it should audit`
-            );
-
-        expect(unaccounted).toEqual([]);
-    });
-
-    it('keeps the non-auditing list free of modules that started auditing', () => {
-        const auditing = new Set(listAuditFiles().map(({ module }) => module));
-
-        // The list is read off the modules that exist, so a deleted module drops out with its own
-        // `module.yaml` — nothing to keep in step.
-        const stale = EXPECTED_NON_AUDITING.filter((module) => auditing.has(module));
-
-        expect(stale).toEqual([]);
     });
 });

@@ -1,8 +1,8 @@
 /**
  * @module
  * This module's one door onto `enqueueEmail` — the whole reason it exists is layer, not logic:
- * `tests/cross-cutting/side-effects-have-one-layer.test.ts` requires every `enqueueEmail` call to
- * come from the service layer, and `../emails.ts` is the copy layer (template + translated
+ * `docs/theory/layers.md` keeps every `enqueueEmail` call in the service layer (a lint ban in
+ * controllers, repositories and models), and `../emails.ts` is the copy layer (template + translated
  * strings), not this one. Kept a one-function file rather than folded into an existing service so
  * `two-factor/methods/email.ts` — itself not a service — can reach it without importing a whole
  * service's unrelated surface.

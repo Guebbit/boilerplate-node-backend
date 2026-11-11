@@ -390,6 +390,7 @@ compile is a real dependency another module declared on it, which is exactly wha
 
 - Routes should not hide business logic.
 - Controllers should not become query-heavy.
+- A queued mail, an audit record, an analytics event and a domain event are published from the service layer: a controller, `repository.ts` or `model.ts` importing `enqueueEmail`, `recordAudit`, `emitAnalyticsEvent` or `emitDomainEvent` is a lint error (`no-restricted-imports` in `eslint.config.ts`), so a job calling the same service inherits the effect.
 - Services should not depend on Express response objects.
 - Repositories should not decide HTTP status codes.
 - Models should not know route behavior.

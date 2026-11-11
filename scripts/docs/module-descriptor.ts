@@ -37,12 +37,6 @@ export const moduleDescriptorSchema = z
         group: z.enum(['foundation', 'shop', 'example']),
         dependsOn: z.array(z.string()),
         /**
-         * Present only on a module that deliberately emits no audit action, holding the reason (`audit-actions.test.ts`
-         * reads it, rather than keeping its own list). A module with an `audit.ts`
-         * must not carry it.
-         */
-        noAudit: z.string().min(1).optional(),
-        /**
          * The module's rate-limit budgets as data. `npm run regenerate` writes
          * `<module>/rate-limits.generated.ts` from it; `rate-limits.ts` adds the key and skip logic.
          */

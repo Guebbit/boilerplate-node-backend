@@ -107,8 +107,8 @@ same way modules declare domain events; `infrastructure` keeps only the `securit
 reached a domain. A module's own attack action (a forged webhook, a wrong scrape token) lives in
 its `audit.ts` and registers its counter series with `registerSecurityEvents`. So the union narrows when
 you delete a module, and `infrastructure` never names one. `tests/cross-cutting/audit-actions.test.ts` is
-what keeps two modules from claiming the same string, or inventing one that breaks the dotted
-convention log backends filter on.
+what keeps two modules from claiming the same string. ESLint (the `audit.ts` block of `eslint.config.ts`) refuses a name that breaks the
+dotted convention log backends filter on.
 
 ### Every action
 

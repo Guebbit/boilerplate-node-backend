@@ -10,7 +10,7 @@
         "properties": {
           "value": {
             "type": "string",
-            "pattern": "^security(\\.[a-z_]+)+$"
+            "pattern": "^security(\\.[a-z][\\d_a-z]*){1,3}$"
           },
           "description": {
             "type": "string",

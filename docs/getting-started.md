@@ -65,20 +65,31 @@ The full list, and the env var for every port, is in
 [Pairing & Ports](./tools/pairing-and-ports.md). This repo owns `3000–3099`; the paired frontend
 owns `8080–8099`, which is what lets both stacks be up at once.
 
+### Rehearse the dead man's switch
+
+The alert pipeline watches itself: Alertmanager pings an outside watcher (Gatus) every minute, and
+silence is the alarm. Locally Gatus mails Mailpit, so you can see it work before you rely on it
+(`compose:up:full`, plus the `integrations` profile for Mailpit):
+
+1. `npm run compose -- stop alertmanager`
+2. Within about 3 minutes the mail lands in Mailpit (`http://localhost:8025`): `alertmanager-heartbeat` is missing.
+3. `npm run compose -- start alertmanager`: the next ping resolves it, and Gatus mails the resolution.
+
+The full chain, and the production setup on a second machine, are in [Gatus](./tools/gatus.md).
+
 ## Explore the API without writing a client
 
 Ask for a collection and one lands at the repo root:
 
 ```bash
-npm run contracts:bundle -- bruno insomnia mockoon postman
+npm run contracts:bundle -- bruno
 ```
 
-`contract.bruno.yml`, `contract.insomnia.json`, `contract.mockoon.json` and `contract.postman.json`
-each carry one request per operation the contract declares, pre-filled with **values the seeded database actually holds**.
-Import one and start clicking; `POST /account/login` already carries credentials that work.
+`contract.bruno.yml` carries one request per operation the contract declares, pre-filled with **values the seeded database actually holds**.
+Import it into Bruno and start clicking; `POST /account/login` already carries credentials that work.
 
-They are generated rather than hand-written, which is why they cannot rot, and `.gitignore`d rather
-than committed, because their only reader is whoever just asked for one. See
+It is generated rather than hand-written, which is why it cannot rot, and `.gitignore`d rather
+than committed, because its only reader is whoever just asked for one. `@guebbit/openapi-runnable-collections` can also emit Insomnia, Postman and Mockoon collections: add the tool's name to `COLLECTION_TOOLS` in `scripts/contracts/client-collections-bundle.ts` (and a bundle in `bundle-registry.ts`) to get one. See
 [Regenerating After a Change](./api/regenerating.md).
 
 ## Which database am I looking at?

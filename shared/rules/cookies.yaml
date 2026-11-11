@@ -1,7 +1,6 @@
-# Every cookie the backend sets, once. Read by the code that sets it (the name and the lifetime),
-# by the log scrubber (the `secret` ones) and by the GDPR cookie table in
-# docs/theory/data-protection.md. The paired frontend's own `browser-storage.yaml` uses the same
-# format for what it stores itself.
+# Every cookie the backend sets, once. Read by the code that sets it (the name and the lifetime)
+# and by the log scrubber (the `secret` ones). docs/theory/data-protection.md links here. The
+# paired frontend's own `browser-storage.yaml` uses the same format for what it stores itself.
 #
 # Log redaction = log-redaction.yaml UNION the `secret: true` names here. The twin must do the same.
 #

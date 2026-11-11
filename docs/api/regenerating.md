@@ -60,7 +60,7 @@ flowchart LR
 
     ROOT --> COL[generate]
     PR --> COL
-    COL --> DEV["contract.{bruno,insomnia,mockoon,postman}.*<br/><i>generated whole</i>"]
+    COL --> DEV["contract.bruno.yml<br/><i>generated whole</i>"]
 
     ROOT --> G[gen:api] --> API["api/models · api/schemas.zod.ts"]
     ROOT --> FE["copy to the frontend"]
@@ -105,7 +105,7 @@ phase and not the others.
 | `src/modules/*/audit.ts`, `analytics.ts`, `metrics.ts`, `probes.ts`, `events.ts` | `contracts:bundle` for `probes.ts` only | the client collections embed the probes; the other four feed no generator — an analytics name is read straight from the module that declares it |
 | A controller or service (no contract, no route change) | nothing                                             | no bundle reads source code, and no page states a service's internals |
 | `openapi.yaml` / `asyncapi*.yaml` **directly**        | stop — edit the fragment instead                    | the next bundle overwrites you, and `contracts:bundle --check` fails first |
-| `contract.{bruno,insomnia,mockoon,postman}.*`         | stop — these are generated                          | edit the contract or the probes; a hand edit is reverted by the next run |
+| `contract.bruno.yml`                                  | stop — these are generated                          | edit the contract or the probes; a hand edit is reverted by the next run |
 
 When in doubt, `npm run contracts:bundle` on its own is always safe: it compares before it writes
 and touches only the bundles that actually drifted.
@@ -121,7 +121,7 @@ npm run contracts:bundle -- asyncapi    # just asyncapi.yaml (asyncapi-public is
 npm run contracts:bundle -- bruno       # just contract.bruno.yml
 ```
 
-Known names: `openapi`, `asyncapi`, `asyncapi-public`, `bruno`, `insomnia`, `mockoon`, `postman`.
+Known names: `openapi`, `asyncapi`, `asyncapi-public`, `bruno`.
 An unknown name exits with the list rather than doing nothing.
 
 The four collections are **only** produced by naming them: a full `contracts:bundle` assembles the
@@ -179,7 +179,7 @@ refuses a commit where one of them is stale ([below](#the-pre-commit-hook)).
 | `api/permission-vocabulary.ts`                                  | `kernel/permissions.ts` — the action vocabulary, from `shared/authorization-keys.generated.yaml` (see [Permission Vocabulary](../tools/permission-vocabulary.md)) | no — gitignored, rebuilt by `postinstall` |
 | `src/types/asyncapi.generated.ts`                               | every SSE, domain-event and queue call site                                                             | no — gitignored, rebuilt by `postinstall` |
 | every other `*.generated.ts` (`src/`, `scenarios/`)             | this repo's own code only — built from the shared rules and the scenario files                          | no — gitignored, rebuilt by `postinstall` |
-| `contract.{bruno,insomnia,mockoon,postman}.*`                   | you, and whoever explores the API without running it                                                    | no — generated on demand, see above       |
+| `contract.bruno.yml`                                            | you, and whoever explores the API without running it                                                    | no — generated on demand, see above       |
 | `shared/authorization-keys.generated.yaml`                                | `kernel/permissions.ts` at boot · the PHP twin — assembled by `regenerate` from each module's `authorization.yaml` | yes — read at boot and handed to the twin |
 | `shared/rules/schemas/*.generated.schema.json`                            | the PHP twin, which validates with them and cannot rebuild them                                         | yes                                       |
 | `docker/crontab`                                                | the production host bind-mounts it, with no dev tools                                                   | yes                                       |

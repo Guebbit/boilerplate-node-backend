@@ -1,10 +1,10 @@
 /**
- * The four API client collections — `contract.{bruno,insomnia,mockoon,postman}.*` at the repo root.
+ * The Bruno API client collection — `contract.bruno.yml` at the repo root.
  *
- * GENERATED ON DEMAND, NOT COMMITTED (all four are `.gitignore`d): their only reader is a human
+ * GENERATED ON DEMAND, NOT COMMITTED (`.gitignore`d): their only reader is a human
  * about to open one, and committing them put ~1.9 MB of derived text in every contract diff.
  *
- *   npm run contracts:bundle -- bruno insomnia mockoon postman
+ *   npm run contracts:bundle -- bruno
  *
  * This file is CONFIGURATION, not machinery — the traversal, example synthesis and emitters live
  * in `@guebbit/openapi-runnable-collections`. What stays here is the three things only this repo
@@ -22,8 +22,9 @@
  *   3. What the contract cannot describe — each module's `probes.ts`, the requests that prove the
  *      API REJECTS things. A spec declares valid calls, so no generator can derive a bogus token.
  *
- * Postman is its own emitter rather than a renamed Insomnia: Collection Format v2.1 splits a URL
- * into parts and reads those rather than the string, and the compatibility runs one way only.
+ * Bruno only (MIT, no account). `@guebbit/openapi-runnable-collections` can also emit Insomnia,
+ * Postman and Mockoon: add the name to `COLLECTION_TOOLS` below, give it a bundle in
+ * `bundle-registry.ts` and a `.gitignore` line, and the same probes and values feed it.
  *
  * See: docs/api/contract-fragmentation.md#the-client-collections-generated
  */
@@ -46,8 +47,11 @@ import { SUBJECTS } from '../../scenarios/subjects';
 import type { CollectionValues } from '../../scenarios/collection-values';
 import { REPO_ROOT, MODULES_ROOT, modulesWith } from '../modules-on-disk';
 
-/** The four tools, and the order this file names them in. */
-const COLLECTION_TOOLS = ['bruno', 'insomnia', 'mockoon', 'postman'] as const;
+/**
+ * The tools a collection is generated for. The library also knows `'insomnia'`, `'mockoon'` and
+ * `'postman'`; add one here (and in `bundle-registry.ts`) to get its collection too.
+ */
+const COLLECTION_TOOLS = ['bruno'] as const;
 
 /** The name every collection carries, in the tools that show one. */
 const COLLECTION_NAME = 'Boilerplate API';

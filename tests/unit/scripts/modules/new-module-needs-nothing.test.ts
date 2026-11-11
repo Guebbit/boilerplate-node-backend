@@ -72,7 +72,6 @@ describe('a module folder alone is enough', () => {
         const descriptors = readAllModuleDescriptors(modulesRoot());
 
         expect(Object.keys(descriptors)).toEqual(['feedback', 'widgets']);
-        expect(descriptors.widgets.noAudit).toBeUndefined();
     });
 
     it('reaches the root contract, paths and tag, with the root file untouched', () => {

@@ -23,11 +23,11 @@ tables built from it read it from there.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 50}}}%%
 flowchart LR
-    M["src/modules/&lt;name&gt;/"] --> Y["module.yaml<br/><i>group, summary, dependsOn,<br/>noAudit</i>"]
+    M["src/modules/&lt;name&gt;/"] --> Y["module.yaml<br/><i>group, summary, dependsOn</i>"]
     M --> F["openapi.yaml · asyncapi.yaml<br/>authorization.yaml · probes.ts"]
     M --> T["module.ts<br/><i>name, routes, personalData…</i>"]
     R["src/modules.ts<br/><i>the registry</i>"] --> T
-    Y --> D["docs index + sidebar<br/>audit-exemption check"]
+    Y --> D["docs index + sidebar"]
     F --> B["contract bundles<br/>client collections"]
     T --> A["app tier: routes, seeding,<br/>i18n, personal data<br/>+ the router-guard tests"]
     classDef own fill:#dcfce7,stroke:#16a34a,color:#111827;
@@ -36,13 +36,12 @@ flowchart LR
     class D,B,A read;
 ```
 
-| What a module declares           | Read by                                                                                   |
-| -------------------------------- | ----------------------------------------------------------------------------------------- |
-| `module.yaml#group`, `summary`   | the docs index and the `/modules/` sidebar (`scripts/docs/module-catalog.ts`)             |
-| `module.yaml#noAudit` (a reason) | `tests/cross-cutting/audit-actions.test.ts` — the reviewed "emits no audit action" answer |
-| `openapi.yaml` (paths and tags)  | the root contract, completed by `scripts/contracts/root-assembly.ts`                      |
-| `probes.ts`                      | the client collections, loaded by directory scan                                          |
-| `module.ts#routes`               | the router-guard tests, through `enabledModules`                                          |
+| What a module declares          | Read by                                                                       |
+| ------------------------------- | ----------------------------------------------------------------------------- |
+| `module.yaml#group`, `summary`  | the docs index and the `/modules/` sidebar (`scripts/docs/module-catalog.ts`) |
+| `openapi.yaml` (paths and tags) | the root contract, completed by `scripts/contracts/root-assembly.ts`          |
+| `probes.ts`                     | the client collections, loaded by directory scan                              |
+| `module.ts#routes`              | the router-guard tests, through `enabledModules`                              |
 
 Three order lists remain, and they are a PREFERENCE, not a registry:
 
@@ -279,10 +278,10 @@ npm run lint:openapi              # spectral
 generated and `.gitignore`d, so they are opt-in:
 
 ```bash
-npm run contracts:bundle -- bruno insomnia mockoon postman
+npm run contracts:bundle -- bruno
 ```
 
-`contract.{bruno,insomnia,mockoon,postman}.*` land at the repo root, untracked, built from the committed
+`contract.bruno.yml` lands at the repo root, untracked, built from the committed
 `openapi.yaml` and `scenarios/subjects.ts`'s example ids. They are generated and never hand-edited —
 a request the contract cannot describe belongs in that module's `probes.ts`.
 
@@ -307,7 +306,6 @@ Then fill in the descriptor the page is listed from — no other registration:
 
 - `summary` and `group` in `module.yaml` put the module in the index and the `/modules/` sidebar,
   under Foundation or Demo shop
-- `noAudit:` in `module.yaml`, with the reason, only if the module deliberately emits no audit action
 
 If the domain carries a file shape no other module has, give it a row in
 [`docs/reference/src-modules.md`](../reference/src-modules.md) so the vocabulary stays written

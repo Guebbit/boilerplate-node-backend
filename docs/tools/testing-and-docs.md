@@ -230,7 +230,7 @@ Each entry says what the thing **is**, why it is not here, and what would change
 
 ### Performance budgets, soak runs and query-shape tests
 
-**What exists.** Load can be applied by hand: `npm run bench` and `bench:search` (autocannon) and
+**What exists.** Load can be applied by hand: `npm run bench` (one URL) and
 `npm run bench:k6` (the `browse` and `checkout` scripts in `tests/load/`). None of it runs in CI or
 asserts a budget; that is what the rest of this entry is about.
 

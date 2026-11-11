@@ -11,5 +11,5 @@ import { keyedListSchema } from './generate-spec';
 /** Shape of `shared/rules/audit-actions.yaml`. */
 export const auditActionsSchema = z.strictObject({
     /** Dotted `security.*` strings; the prefix is what reaches the platform operator's alerts. */
-    actions: keyedListSchema(/^security(\.[a-z_]+)+$/)
+    actions: keyedListSchema(/^security(\.[a-z][\d_a-z]*){1,3}$/)
 });

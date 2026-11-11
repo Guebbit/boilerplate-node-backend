@@ -11,7 +11,7 @@ flowchart LR
     Frag --> Bundle[npm run contracts:bundle]
     Bundle --> Spec[openapi.yaml]
     Spec --> Lint[npm run lint:openapi]
-    Spec --> Mock[npm run test:prism or Bruno/Mockoon]
+    Spec --> Mock[npm run test:prism or Bruno]
     Spec --> Generate[npm run gen:api]
     Generate --> Implement[Align routes, services, and responses]
     Implement --> Test[npm run test]
@@ -53,7 +53,7 @@ How the file is meant to be split per module and how it travels between the two 
 | [Spectral](https://stoplight.io/open-source/spectral) | lint the spec against `shared/contracts/spectral.yaml` rules |
 | [orval](https://orval.dev) | generate `api/` types and Zod validators from the spec |
 | [Prism](https://stoplight.io/open-source/prism) | mock the API from the spec |
-| [Bruno](https://www.usebruno.com/) / [Mockoon](https://mockoon.com/) / [Insomnia](https://insomnia.rest/) | explore or fake the API during development (generated on demand) |
+| [Bruno](https://www.usebruno.com/) | explore the API during development (generated on demand) |
 
 ## Generated output (`api/`)
 

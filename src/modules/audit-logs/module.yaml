@@ -3,4 +3,3 @@ subdomain: generic
 group: foundation
 dependsOn:
     - access # the reasons it writes on a refusal row, which the operator's incident view leaves out
-noAudit: 'It owns and reads the trail; it is the destination, not a writer.'
