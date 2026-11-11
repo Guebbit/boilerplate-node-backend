@@ -63,7 +63,7 @@ Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`.
 | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `ApiDown`                            | scrape target unreachable > 1 min                                                                                                         |
 | `DependencyUnavailable`              | the app reports Mongo (critical, 1 min), Redis or RabbitMQ (warning, 5 min) as not serving (`dependency_up`)                              |
-| `ApiRestarting`                      | more than 2 process starts in 15 min: a crash loop (unreliable with clustering on; `ApiDown` mutes it)                                    |
+| `ApiRestarting`                      | more than 2 process starts in 15 min: a crash loop (unreliable in cluster mode, `npm run start:cluster`; `ApiDown` mutes it)              |
 | `HighErrorRate`                      | 5xx rate > 5 % of requests over 5 min (4xx are the client's, and have their own rules)                                                    |
 | `HighP95Latency`                     | p95 latency > 2 s over 5 min                                                                                                              |
 | `HighInFlightRequests`               | > 100 concurrent requests for 2 min                                                                                                       |

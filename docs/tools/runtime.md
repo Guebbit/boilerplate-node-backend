@@ -41,7 +41,7 @@ flowchart LR
 
 ## External references
 
-- [Node.js cluster module](https://nodejs.org/api/cluster.html) — used in `src/cluster.ts`; see also [Clustering & Shutdown](../theory/clustering.md)
+- [Node.js cluster module](https://nodejs.org/api/cluster.html) — used in `src/cluster.ts` (`npm run start:cluster` only); see also [Clustering & Shutdown](../theory/clustering.md)
 - [Zod schema basics](https://zod.dev/?id=basic-usage)
 
 ## Related pages

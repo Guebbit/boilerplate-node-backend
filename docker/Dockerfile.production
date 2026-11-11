@@ -18,7 +18,7 @@
 # Run:    docker compose -f docker-compose.production.yml up -d
 #
 # ── WHY THIS SHIPS TYPESCRIPT AND NOT COMPILED JAVASCRIPT ────────────────────────────────────────
-# The runtime stage below runs `node --import tsx src/cluster.ts`, the same command as `npm start`. tsx transpiles
+# The runtime stage below runs `node --import tsx src/main.ts`, the same command as `npm start`. tsx transpiles
 # with esbuild once at boot and caches; it does not type-check, which is why the build stage does
 # that separately and refuses to produce an image otherwise.
 #
@@ -105,7 +105,7 @@ WORKDIR /app
 
 # `dumb-init` is PID 1 so that SIGTERM reaches Node instead of being swallowed.
 #
-# This matters more than usual here: `src/cluster.ts` implements graceful shutdown — it stops
+# This matters more than usual here: `src/serve.ts` implements graceful shutdown — it stops
 # accepting connections, waits for in-flight requests, then exits — and that whole mechanism is
 # only reachable if the signal arrives. A bare `node` as PID 1 in a container does not get the
 # default signal dispositions it expects, and `docker stop` degrades into a SIGKILL after its
@@ -153,7 +153,7 @@ RUN npm ci --omit=dev --ignore-scripts \
 # cannot rewrite it. Only the writable directories further down belong to `node`.
 #
 # Each of these is here because something reads it at runtime, not for completeness:
-#   src/      the application, entered at src/cluster.ts — includes each module's own
+#   src/      the application, entered at src/main.ts — includes each module's own
 #             src/modules/*/templates/ (the EJS email/PDF templates it owns)
 #   api/      orval-generated request/response types and zod schemas, imported as @api/*
 #   shared/   the shared EJS layout partials (`shared/templates/layouts/`, resolved against the
@@ -214,7 +214,7 @@ ENTRYPOINT ["dumb-init", "--"]
 # signals). It resolves `tsx` from the working directory, so every command runs from /app.
 # https://tsx.is/node#nodejs-import
 #
-# Clustering is off unless NODE_ENABLE_CLUSTERING=1. Leave it off when the orchestrator already
-# runs several replicas — one process per container is what makes a replica count mean anything,
-# and two layers of process management is how a rolling deploy loses track of what is live.
-CMD ["node", "--import", "tsx", "src/cluster.ts"]
+# One process per container: scale with replicas (`--scale app=N`), not with an in-container
+# cluster. One process per container is what makes a replica count mean anything, and two layers
+# of process management is how a rolling deploy loses track of what is live.
+CMD ["node", "--import", "tsx", "src/main.ts"]

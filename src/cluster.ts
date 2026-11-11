@@ -1,9 +1,9 @@
 /**
- * This is the MAIN file of the repo (check "package.json") so we can use clusters.
+ * The cluster entry: `npm run start:cluster`, for a bare VM with no PM2 or systemd. Not the
+ * default (`src/main.ts` is); containers scale with `--scale app=N` instead.
  *
- * Keep it the entry point in production. It is what makes OTel start before `app` loads express
- * and mongoose: `app` is imported dynamically below, while a static import is hoisted above any
- * statement — including the `startTracing()` call in `app.ts` itself.
+ * Like `main.ts`, it starts OTel before `serve` loads express and mongoose: `serve` is imported
+ * dynamically below, while a static import is hoisted above any statement.
  */
 // First: every other import reads the environment, and this is what loads `.env` into it.
 import './infrastructure/config/dotenv';

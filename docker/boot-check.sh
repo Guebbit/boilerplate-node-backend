@@ -43,7 +43,6 @@ docker run -d --name "$app" --network "$network" \
     -p "127.0.0.1:${port}:3000" \
     -v "$secrets:/run/secrets:ro" \
     -e NODE_ENV=production \
-    -e NODE_ENABLE_CLUSTERING=0 \
     -e NODE_DB_URI="mongodb://${mongo}:27017/api" \
     -e NODE_URL=https://api.example.com \
     -e NODE_FRONTEND_URL=https://shop.example.com \

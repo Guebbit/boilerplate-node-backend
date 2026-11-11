@@ -1,11 +1,31 @@
 # Clustering & Graceful Shutdown
 
-This page explains how the app boots, scales across CPU cores, and shuts down cleanly.
-The relevant files are `src/cluster.ts` (process supervisor), `src/app.ts` (`createApp()`: the
+This page explains how the app boots, how to scale it, and how it shuts down cleanly.
+The relevant files are `src/main.ts` (the default entry: one process), `src/cluster.ts` (the
+optional supervisor, `npm run start:cluster`), `src/app.ts` (`createApp()`: the
 HTTP app + its `boot`/`start`/`stop` lifecycle) and `src/serve.ts` (calls `start()`, wires
-`stop()` to the process signals — the file a worker, or `dev:docker`, actually runs).
+`stop()` to the process signals — the file `main.ts`, or a cluster worker, actually runs).
 
-## Why a primary + workers
+## Two ways to run it
+
+| Where                            | Command                                  | Scale with                                |
+| -------------------------------- | ---------------------------------------- | ----------------------------------------- |
+| Containers, production, dev      | `npm start` (`src/main.ts`, one process) | `--scale app=N`; the platform restarts it |
+| A bare VM without PM2 or systemd | `npm run start:cluster`                  | one worker per CPU, the primary restarts  |
+| A bare VM with PM2               | `pm2 start "npm start" -i max`           | PM2 forks and restarts                    |
+
+`main.ts` loads `.env`, starts OTel, then imports `serve.ts`. The default is one process because
+the platform already restarts and scales; a second supervisor inside the container is two layers
+of process management.
+
+### Cluster mode limits
+
+- `/metrics` is per copy: each scrape hits a different worker, nothing aggregates them.
+- The `ApiRestarting` alert is unreliable: `process_start_time_seconds` jumps between workers.
+- SSE caps (per-user and global stream limits) are counted per copy, so the real ceiling is cap × workers.
+- Rate-limit budgets are per process without a `limits` Redis; the app logs an error at boot in cluster mode.
+
+## Why a primary + workers (cluster mode)
 
 ```mermaid
 flowchart TD
@@ -30,16 +50,16 @@ flowchart TD
 
 ## Configuration
 
-| Env var                              | Effect                                                                                                                                                      |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_ENABLE_CLUSTERING`             | A flag (`1 true yes on`): true enables the primary/worker mode. Otherwise it imports `src/serve.ts` straight from `src/cluster.ts`'s own process — no fork. |
-| `NODE_CLUSTER_WORKERS`               | Number of workers; 0 or unset = one per available CPU (minimum 1).                                                                                          |
-| `NODE_CLUSTER_CRASH_WINDOW_MS`       | Sliding window for counting crashes (default 60 000 ms).                                                                                                    |
-| `NODE_CLUSTER_CRASH_BACKOFF_BASE_MS` | Base delay before respawning after a crash (default 500 ms, doubled per crash).                                                                             |
-| `NODE_CLUSTER_CRASH_BACKOFF_MAX_MS`  | Maximum respawn delay (default 30 000 ms).                                                                                                                  |
-| `NODE_CLUSTER_CRASH_LIMIT`           | Crashes in one window before the primary gives up and exits 1 (default 10).                                                                                 |
-| `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS`   | Hard kill timeout during shutdown (default 15 000 ms).                                                                                                      |
-| `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`  | Worker-side hard exit timeout (default 15 000 ms), read by `registerSignalHandlers`; also scales the drain steps below.                                     |
+| Env var                              | Effect                                                                                                                                                                           |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENABLE_CLUSTERING`             | A flag (`1 true yes on`): true enables the primary/worker mode. `npm run start:cluster` sets it. Otherwise `src/cluster.ts` imports `src/serve.ts` in its own process — no fork. |
+| `NODE_CLUSTER_WORKERS`               | Number of workers; 0 or unset = one per available CPU (minimum 1).                                                                                                               |
+| `NODE_CLUSTER_CRASH_WINDOW_MS`       | Sliding window for counting crashes (default 60 000 ms).                                                                                                                         |
+| `NODE_CLUSTER_CRASH_BACKOFF_BASE_MS` | Base delay before respawning after a crash (default 500 ms, doubled per crash).                                                                                                  |
+| `NODE_CLUSTER_CRASH_BACKOFF_MAX_MS`  | Maximum respawn delay (default 30 000 ms).                                                                                                                                       |
+| `NODE_CLUSTER_CRASH_LIMIT`           | Crashes in one window before the primary gives up and exits 1 (default 10).                                                                                                      |
+| `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS`   | Hard kill timeout during shutdown (default 15 000 ms).                                                                                                                           |
+| `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`  | Worker-side hard exit timeout (default 15 000 ms), read by `registerSignalHandlers`; also scales the drain steps below.                                                          |
 
 ## Crash backoff
 
@@ -92,7 +112,7 @@ If shutdown takes longer than the timeout, the worker (or the primary) force-exi
 
 - Workers are stateless: anything you store in memory dies on the next deploy or crash.
 - Background timers must be cleared in `stop` (or the `stop*` helper it calls), otherwise the process never exits.
-- OTel must be initialised **before** any other import; that is why both `src/cluster.ts` and `src/app.ts` call `startTracing()` first.
+- OTel must be initialised **before** any other import; that is why both `src/main.ts` and `src/cluster.ts` call `startTracing()` before importing `serve.ts`.
 
 ## Useful links
 

@@ -174,9 +174,9 @@ describe('rateLimitStore — which store gets built', () => {
 });
 
 describe('rateLimitStore — the missing-config alert', () => {
-    it('logs when no Redis is configured and more than one worker is running', () => {
+    it('logs when no Redis is configured and cluster mode runs more than one worker', () => {
         setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: undefined });
-        setEnvironment({ NODE_CLUSTER_WORKERS: '4' });
+        setEnvironment({ NODE_ENABLE_CLUSTERING: '1', NODE_CLUSTER_WORKERS: '4' });
 
         freshStore().rateLimitStore('global');
 
@@ -185,9 +185,18 @@ describe('rateLimitStore — the missing-config alert', () => {
         );
     });
 
+    it('stays quiet outside cluster mode, the default single process', () => {
+        setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: undefined });
+        setEnvironment({ NODE_ENABLE_CLUSTERING: '0', NODE_CLUSTER_WORKERS: '4' });
+
+        freshStore().rateLimitStore('global');
+
+        expect(freshLogger().error).not.toHaveBeenCalled();
+    });
+
     it('stays quiet when a single worker makes per-process counting correct anyway', () => {
         setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: undefined });
-        setEnvironment({ NODE_CLUSTER_WORKERS: '1' });
+        setEnvironment({ NODE_ENABLE_CLUSTERING: '1', NODE_CLUSTER_WORKERS: '1' });
 
         freshStore().rateLimitStore('global');
 

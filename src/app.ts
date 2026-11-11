@@ -9,7 +9,7 @@
  * `tests/support/http.ts` calls it once for the `app` object alone, `scenarios/apply.ts` calls
  * `boot()` but never `start()`. Nothing here decides to serve traffic: `src/serve.ts` is the one
  * place that calls `start()` and wires it to the process signals, for whichever entry point
- * (`cluster.ts`'s worker branch, `dev:docker`) actually wants a listening server.
+ * (`main.ts`, `cluster.ts`'s worker branch) actually wants a listening server.
  */
 
 // First: the tracing setup below already reads config, and the config store reads the environment

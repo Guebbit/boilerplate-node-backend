@@ -1,7 +1,8 @@
 /**
  * One budget means one budget — across workers, not per worker.
  *
- * `src/cluster.ts` forks a worker per CPU in production. `express-rate-limit`'s default store is an
+ * `npm run start:cluster` (`src/cluster.ts`) forks a worker per CPU, and `--scale app=N` runs
+ * several processes too. `express-rate-limit`'s default store is an
  * in-process `Map`, so with that store a budget of 100 per minute is really `100 × workers` per
  * minute, and which bucket a request lands in depends on which worker the OS handed the socket to.
  * On a sixteen-core box that is a sixteenfold allowance for password guessing, with nothing in the
