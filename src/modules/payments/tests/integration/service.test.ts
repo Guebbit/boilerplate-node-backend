@@ -665,6 +665,9 @@ describe('refund on cancel', () => {
             auth(user),
             testCallerContext
         );
+        // The cancel nudged the relay, whose `order.canceled` delivery reaches this module's
+        // listener: wait for it, so the asserts read the settled state, not a race.
+        await settleOutboxNudges();
 
         expect((await orderService.getById(orderId))!.status).toBe('canceled');
         const payment = await paymentRepository.findByOrderId(orderId);
