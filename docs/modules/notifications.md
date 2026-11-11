@@ -191,6 +191,10 @@ A summary row's params carry `work`, the filtered list path the bell opens.
   the module declares no permission rule, since no signed-in account can lack its own inbox. It carries only what happens
   while a tab is open; `GET /notifications` is still how a tab starts. Per process, like the
   observability stream: a message written by another worker arrives at the next fetch.
+  Held streams are capped per account and per process (`NODE_SSE_MAX_STREAMS_PER_USER`,
+  `NODE_SSE_MAX_STREAMS`): the extra tab is refused with 429 (or 503 when the process is full) and
+  `Retry-After`, and still sees new items on its next fetch. See
+  [denial of service](../theory/defences/denial-of-service.md).
 
 ## Personal data
 

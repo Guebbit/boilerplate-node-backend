@@ -99,6 +99,7 @@ const writeMetricsEvent = (response: Response, eventName: ObservabilityChannel) 
  * then schedules periodic updates and heartbeats, cleaning up all intervals on close.
  *
  * @param response - the response to hold open and stream frames into
+ * @param userId - the caller, counted against the per-account stream cap
  * @param reverify - re-answers "does this caller still hold the permission that opened the
  *   stream", polled by `openSseStream`. Kept a plain callback, not a specific auth
  *   call, so this module stays agnostic of how a caller is authenticated — the route wires it to
@@ -106,9 +107,12 @@ const writeMetricsEvent = (response: Response, eventName: ObservabilityChannel) 
  */
 export const streamObservabilityMetrics = (
     response: Response,
+    userId: string,
     reverify: () => Promise<boolean>
 ) => {
-    const stream = openSseStream(response, reverify);
+    const stream = openSseStream(response, userId, reverify);
+    // A cap refused the open and already answered; nothing to register.
+    if (!stream) return;
 
     sseClients.add(response);
     // Send the first payload immediately so the client has data before the first interval fires.

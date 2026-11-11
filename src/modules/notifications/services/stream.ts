@@ -69,7 +69,9 @@ export const streamNotifications = (
     userId: string,
     reverify: () => Promise<boolean>
 ): void => {
-    const stream = openSseStream(response, reverify);
+    const stream = openSseStream(response, userId, reverify);
+    // A cap refused the open and already answered; nothing to register.
+    if (!stream) return;
 
     const owned = connections.get(userId) ?? new Set<Response>();
     owned.add(response);

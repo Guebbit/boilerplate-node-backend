@@ -86,6 +86,21 @@ export const idempotencyConfig = defineConfig({
 });
 
 /**
+ * Caps on live SSE streams, counted per process. Opens past either cap are refused, since a held
+ * stream is never counted by the request limiter.
+ *
+ * See: docs/theory/defences/denial-of-service.md
+ */
+export const sseConfig = defineConfig({
+    name: 'sse',
+    shape: {
+        // Two per tab at most for a staff member (bell + dashboard), so 12 is about six tabs.
+        NODE_SSE_MAX_STREAMS_PER_USER: int({ default: 12, min: 1 }),
+        NODE_SSE_MAX_STREAMS: int({ default: 2000, min: 1 })
+    }
+});
+
+/**
  * A slice of rate-limit budgets: one integer per budget, keyed by the variable it declares. The
  * data lives on the manifest (`AppModule.rateLimits`) or in `INFRASTRUCTURE_RATE_LIMITS`; this only
  * turns it into the same typed, validated shape everything else is.

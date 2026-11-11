@@ -178,13 +178,13 @@ x-error-codes:
         {
             scope: app,
             status: 503,
-            description: 'A dependency (database, broker) is unreachable. Carries a `Retry-After` hint.'
+            description: 'A dependency (database, broker) is unreachable, or the server is at a capacity limit (a full queue, the process ceiling on open live streams). Carries a `Retry-After` hint.'
         }
     RATE_LIMITED:
         {
             scope: app,
             status: 429,
-            description: "The caller spent a rate-limit budget: a request limiter, a mailbox's send budget, or an account's wrong-code budget (the 2FA lock). Carries `Retry-After`, and `details.retryAfter` with the same seconds; `details.policy` names the budget when there is one."
+            description: "The caller spent a rate-limit budget: a request limiter, a mailbox's send budget, an account's wrong-code budget (the 2FA lock), or an account's cap on open live streams. Carries `Retry-After`, and `details.retryAfter` with the same seconds; `details.policy` names the budget when there is one."
         }
     TOO_MANY_REQUESTS:
         {

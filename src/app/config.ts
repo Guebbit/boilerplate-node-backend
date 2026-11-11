@@ -32,6 +32,7 @@ import {
     rateLimitConfig,
     responseCacheConfig,
     siteConfig,
+    sseConfig,
     uploadConfig
 } from '@infrastructure/http/config';
 import { INFRASTRUCTURE_RATE_LIMITS } from '@infrastructure/http/middlewares/rate-limit';
@@ -127,6 +128,7 @@ export const APP_CONFIG_SLICES: readonly ConfigSlice[] = [
     uploadConfig,
     responseCacheConfig,
     idempotencyConfig,
+    sseConfig,
     localeConfig,
     persistenceConfig,
     analyticsConfig,
