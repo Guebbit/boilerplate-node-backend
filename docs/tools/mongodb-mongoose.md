@@ -189,7 +189,7 @@ checks two things directly, in `npm test`: every module's declared `scenario.sho
 actually holds, and a seeded row — read back through the real Mongoose serializer — parses as
 valid input to the contract's own generated response schema for that entity.
 
-The client collections (`npm run contracts:bundle -- bruno insomnia mockoon postman`) still need
+The client collection (`npm run contracts:bundle -- bruno`) still need
 values that reference REAL rows, but only ids and credentials:
 `scripts/contracts/client-collections-bundle.ts` reads those from `scenarios/subjects.ts` rather
 than importing a module's fixtures directly, which would reintroduce the same `@api/` import cycle

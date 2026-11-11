@@ -304,32 +304,16 @@ describe('the API client collections', () => {
         return document;
     };
 
-    it('all parse, so a mis-sliced fragment cannot reach a developer as a broken import', () => {
-        for (const name of ['bruno', 'insomnia', 'mockoon', 'postman'])
-            expect(() => parseYaml(collection(name))).not.toThrow();
-    });
-
-    it('leaves Mockoon with one tree entry per route, in the same order', () => {
-        // Mockoon lists every route twice — once in `routes`, once as a `rootChildren` reference
-        // that fixes the order its UI shows them in — and a module owns both slices. Slicing one
-        // and forgetting the other produces a collection Mockoon loads with routes it never shows.
-        const mockoon = JSON.parse(collection('mockoon')) as {
-            routes: { uuid: string }[];
-            rootChildren: { type: string; uuid: string }[];
-        };
-
-        expect(mockoon.rootChildren.map(({ uuid }) => uuid)).toEqual(
-            mockoon.routes.map(({ uuid }) => uuid)
-        );
-        expect(mockoon.routes.length).toBeGreaterThan(0);
+    it('parses, so a mis-sliced fragment cannot reach a developer as a broken import', () => {
+        expect(() => parseYaml(collection('bruno'))).not.toThrow();
     });
 
     it('leaves no probe token unresolved', () => {
         // A probe writes `{{seedSoftDeletedProductId}}` rather than pasting an id, and the
         // generator throws on a token it does not know — but a token that never reached the
         // generator (a typo in a key it does not scan, a probe field added later) would ship as a
-        // literal. Mockoon is excluded: it has no probes, and `{{...}}` is its own templating.
-        for (const name of ['bruno', 'insomnia']) expect(collection(name)).not.toContain('{{seed');
+        // literal.
+        expect(collection('bruno')).not.toContain('{{seed');
     });
 
     it('names no probe twice', () => {
@@ -338,11 +322,10 @@ describe('the API client collections', () => {
         expect(new Set(probeNames).size).toBe(probeNames.length);
     });
 
-    it('carry one request per operation the contract declares, in all four', () => {
+    it('carries one request per operation the contract declares', () => {
         // This is the assertion that would have caught the rot they were generated to end: before
-        // it, Bruno and Mockoon covered 37 of 56 operations and named no feedback, locales or
-        // observability endpoint, while 30 of Insomnia's 39 requests pointed at URLs the app had
-        // stopped serving.
+        // it, the collections covered 37 of 56 operations and named no feedback, locales or
+        // observability endpoint, while some requests pointed at URLs the app had stopped serving.
         const contract = parseYaml(readCommittedBundle(bundleByName('openapi'))) as {
             paths: Record<string, Record<string, unknown>>;
         };
@@ -356,36 +339,12 @@ describe('the API client collections', () => {
         const bruno = parseYaml(collection('bruno')) as {
             items: { items?: unknown[] }[];
         };
-        const insomnia = parseYaml(collection('insomnia')) as {
-            collection: { children?: unknown[] }[];
-        };
-        const postman = JSON.parse(collection('postman')) as {
-            item: { item?: unknown[] }[];
-        };
-        const mockoon = JSON.parse(collection('mockoon')) as {
-            routes: { method: string; endpoint: string }[];
-        };
 
-        // The three request collections also carry the probes — the requests the contract cannot
-        // describe, so that they are the only difference between what one holds and what the API
-        // declares. Mockoon has none: a mock server answers requests, it does not send them.
+        // The collection also carries the probes — the requests the contract cannot describe, so
+        // that they are the only difference between what it holds and what the API declares.
         const probes = probeCount;
         expect(probes).toBeGreaterThan(0);
 
         expect(counted(bruno.items)).toBe(operations.length + probes);
-        expect(counted(insomnia.collection)).toBe(operations.length + probes);
-        expect(counted(postman.item.map((group) => ({ items: group.item })))).toBe(
-            operations.length + probes
-        );
-
-        // Mockoon keeps the contract's parameter NAMES (`:productId`), so its routes can be
-        // compared as a set rather than only counted.
-        expect(
-            mockoon.routes
-                .map(({ method, endpoint }) =>
-                    `${method} /${endpoint}`.replaceAll(/:(\w+)/g, '{$1}')
-                )
-                .toSorted()
-        ).toEqual(operations.toSorted());
     });
 });

@@ -279,10 +279,10 @@ npm run lint:openapi              # spectral
 generated and `.gitignore`d, so they are opt-in:
 
 ```bash
-npm run contracts:bundle -- bruno insomnia mockoon postman
+npm run contracts:bundle -- bruno
 ```
 
-`contract.{bruno,insomnia,mockoon,postman}.*` land at the repo root, untracked, built from the committed
+`contract.bruno.yml` lands at the repo root, untracked, built from the committed
 `openapi.yaml` and `scenarios/subjects.ts`'s example ids. They are generated and never hand-edited —
 a request the contract cannot describe belongs in that module's `probes.ts`.
 

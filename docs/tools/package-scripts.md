@@ -120,7 +120,7 @@ be linted where it is written rather than only after bundling.
 bundles that actually drifted. A full run covers the authored bundles (`openapi.yaml` is one, though gitignored — see below),
 never the client collections. The client
 collections are generated from `openapi.yaml` and `.gitignore`d, so they are produced by name —
-`npm run contracts:bundle -- bruno insomnia mockoon postman` — and `--check` refuses them, because an
+`npm run contracts:bundle -- bruno` — and `--check` refuses it, because an
 uncommitted file cannot be stale.
 
 `openapi.yaml`, `asyncapi.yaml`, `asyncapi.public.yaml`, `api/` (from `gen:api`), every `*.generated.ts`

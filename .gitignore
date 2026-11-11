@@ -56,13 +56,10 @@ src/modules/*/__factories-import-probe.ts
 !/.claude/skills/
 
 # API client collections. Generated whole from openapi.yaml on demand — `npm run contracts:bundle
-# -- bruno insomnia postman` — and never read by the suite, the app or CI. Committing them put
+# -- bruno` — and never read by the suite, the app or CI. Committing them put
 # 1.9 MB of derived text in every diff that touched the contract, for an artefact whose only reader
 # is a human about to open it in the tool. Regenerate when you want one.
 contract.bruno.yml
-contract.insomnia.json
-contract.mockoon.json
-contract.postman.json
 
 # The compiled contract and the typed client it produces. Both are deterministic outputs of
 # `npm run contracts:bundle` + `npm run gen:api` (module `openapi.yaml` fragments -> this root
