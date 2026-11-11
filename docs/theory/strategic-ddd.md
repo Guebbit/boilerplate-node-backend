@@ -194,7 +194,7 @@ that table.
 This table keeps the definitions; the values themselves live on each module's own
 `module.yaml#subdomain` and are read from there into the generated map at `docs/modules/index.md`
 (`npm run regenerate`) — so the table above is illustrative, not the source of truth for any one
-module's label. `tests/cross-cutting/module-descriptors.test.ts` only holds `subdomain` to being one
+module's label. The strict schema (`npm run check`, module-graph step) only holds `subdomain` to being one
 of the three names; it does not check that a classification stays HONEST (nothing stops every module
 drifting to `core`). Placing the value with
 the module it describes is still worth doing, since a doc table can go stale the moment a new module

@@ -104,9 +104,9 @@ flowchart LR
 Fails closed both ways: a module folder with no `module.yaml` may reach no sibling at all, rather
 than being silently exempt from the rule; a `dependsOn` that is not an array of strings throws,
 naming the offending file, instead of matching nothing. `tests/cross-cutting/module-descriptors.test.ts`
-is the separate hygiene check — every file exists, parses against a strict schema, and names only
-real, non-duplicate, alphabetically-ordered siblings — kept apart from this enforcement on purpose,
-so the enforcement config's own logic stays as small as the fail-closed guarantee requires.
+is the separate check that every `dependsOn` names a real module — kept apart from this enforcement on
+purpose, so the enforcement config's own logic stays as small as the fail-closed guarantee requires.
+A missing or malformed `module.yaml` fails `npm run check` (the module-graph step).
 
 `scripts/docs/generate-module-graph.ts` reads the same files for each module's `subdomain` colour in
 the generated map at [Modules](../modules/index.md) — see
