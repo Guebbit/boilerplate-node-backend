@@ -230,7 +230,7 @@
     },
     "allowScripts": {
         "mongodb-memory-server": true,
-        "protobufjs": true,
+        "protobufjs": false,
         "fsevents": true,
         "unrs-resolver": true,
         "@hyperjump/json-pointer": true,

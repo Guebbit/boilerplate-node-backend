@@ -82,11 +82,14 @@ components:
             type: object
             required:
                 - orderId
+                - orderNumber
                 - fulfillmentOrderId
                 - titles
                 - agreedAt
             properties:
                 orderId:
+                    type: string
+                orderNumber:
                     type: string
                 fulfillmentOrderId:
                     type: string
@@ -106,10 +109,13 @@ components:
             type: object
             required:
                 - orderId
+                - orderNumber
                 - fulfillmentOrderId
                 - notice
             properties:
                 orderId:
+                    type: string
+                orderNumber:
                     type: string
                 fulfillmentOrderId:
                     type: string
@@ -127,10 +133,13 @@ components:
             type: object
             required:
                 - orderId
+                - orderNumber
                 - shipmentId
                 - reason
             properties:
                 orderId:
+                    type: string
+                orderNumber:
                     type: string
                 shipmentId:
                     type: string
@@ -489,10 +498,13 @@ components:
             required:
                 - returnId
                 - orderId
+                - orderNumber
             properties:
                 returnId:
                     type: string
                 orderId:
+                    type: string
+                orderNumber:
                     type: string
             additionalProperties: false
         NotificationStaffReturnRequestedPayload:

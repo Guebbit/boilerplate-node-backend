@@ -34,6 +34,8 @@ export interface ShipmentLostOwedLine {
  * The webhook projects only the shared part and the reason — never `message`, which is free text.
  */
 export interface ShipmentLostPayload extends ShipmentEventPayload {
+    /** The order's number, as the buyer knows it: what a notice names the order by. */
+    orderNumber: string;
     /** Why the parcel will not arrive. */
     reason: ShipmentLostReason;
     /** The buyer; absent once the account was erased, so there is no inbox to write to. */
@@ -58,6 +60,8 @@ export interface ShipmentShippedPayload extends ShipmentEventPayload {
 /** What a `fulfillment_order.delayed` event tells: the dates, and nothing the buyer must answer. */
 export interface FulfillmentOrderDelayed {
     orderId: string;
+    /** The order's number, as the buyer knows it: what a notice names the order by. */
+    orderNumber: string;
     fulfillmentOrderId: string;
     /** The buyer; absent once the account was erased, so there is no inbox to write to. */
     userId?: string;
@@ -84,6 +88,8 @@ export interface FulfillmentOrderDelayed {
  */
 export interface FulfillmentOrderHoldNoticed {
     orderId: string;
+    /** The order's number, as the buyer knows it: what a notice names the order by. */
+    orderNumber: string;
     fulfillmentOrderId: string;
     /** The buyer; absent once the account was erased, so there is no inbox to write to. */
     userId?: string;

@@ -157,6 +157,7 @@ describe('a purchase hold placed', () => {
 const returnRequested = (returnId: string, reason: ReturnReason = 'defective') => ({
     returnId,
     orderId: '64b7f1a2c3d4e5f607182940',
+    orderNumber: '2026-000041',
     reason,
     requestedAt: '2026-10-26T10:00:00.000Z'
 });
@@ -176,7 +177,8 @@ describe('a return requested', () => {
                 code: 'shop-tasks.staff.return-requested',
                 params: {
                     returnId: '64b7f1a2c3d4e5f607182941',
-                    orderId: '64b7f1a2c3d4e5f607182940'
+                    orderId: '64b7f1a2c3d4e5f607182940',
+                    orderNumber: '2026-000041'
                 }
             }
         ]);
