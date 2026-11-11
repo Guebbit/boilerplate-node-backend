@@ -15,7 +15,8 @@ import { createProduct, readProduct, saveProduct } from '@modules/products/tests
 import { withTransaction } from '@infrastructure/runtime/database';
 import { inventoryService } from '@modules/inventory';
 import { registerModules } from '@kernel/registry';
-import { resetDomainEvents } from '@kernel/events';
+import { emitDomainEvent, resetDomainEvents } from '@kernel/events';
+import { PRODUCT_DELETED, productService } from '@modules/products';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { stockAlertService } from '../../service';
 import { stockAlertModel } from '../../model';
@@ -390,6 +391,20 @@ describe('what leaves with a product or an account', () => {
         await settleOutboxNudges();
 
         expect(await stockAlertModel.countDocuments()).toBe(0);
+    });
+
+    it('keeps the requests of a product restored before a late product.deleted arrives', async () => {
+        const { bearer } = await shopper();
+        const productId = await soldOut();
+        await productService.removeById(productId, false);
+        await settleOutboxNudges();
+        await productService.restoreById(productId);
+        await ask(bearer, productId);
+
+        // The retry of the first delivery, arriving after the restore.
+        await emitDomainEvent(PRODUCT_DELETED, { productId, hardDelete: false, titles: {} });
+
+        expect(await stockAlertModel.countDocuments({ productId })).toBe(1);
     });
 
     it('exports the caller’s requests and erases them with the account', async () => {

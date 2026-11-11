@@ -12,7 +12,7 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
-import { PRODUCT_BUYABLE_AGAIN, PRODUCT_DELETED } from '@modules/products';
+import { PRODUCT_BUYABLE_AGAIN, PRODUCT_DELETED, productService } from '@modules/products';
 import { stockAlertsJobs } from './jobs';
 import { router } from './routes';
 import { stockAlertService } from './service';
@@ -36,8 +36,12 @@ export default {
         onDomainEvent(PRODUCT_BUYABLE_AGAIN, ({ productId }) =>
             stockAlertService.onBuyableAgain(productId)
         );
+        // Skipped for a product that is live again: a retried delivery can arrive after a
+        // restore, and the buyer's request still stands for a product on sale.
         onDomainEvent(PRODUCT_DELETED, ({ productId }) =>
-            stockAlertService.removeByProductId(productId)
+            productService
+                .isLive(productId)
+                .then((live) => (live ? undefined : stockAlertService.removeByProductId(productId)))
         );
     },
     locales: path.join(__dirname, 'locales'),
