@@ -30,7 +30,7 @@ datasources:
               # namespace, pod, service.name) and builds `{service_name="api"}` — a label this
               # stack never sets, so the panel opens on an empty result with no error.
               #
-              # `service` is the label Promtail promotes from the `service` field Winston stamps
+              # `service` is the label Alloy promotes from the `service` field Winston stamps
               # on every record, and the one Alloy attaches to frontend telemetry — so this one
               # mapping covers both halves of a stitched trace.
               tags:

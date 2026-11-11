@@ -130,7 +130,8 @@ and the flow runner are `scenarios/`, outside `src/` entirely; index sync and th
 npm run complete    # build + all tests + lint + format check — several minutes
 ```
 
-Exactly what the pre-commit hook runs; `npm run complete:fix` is the same gate with lint and
+The pre-commit hook runs a lighter slice of it (`complete:light:gates`, then `test:staged`);
+`npm run complete:fix` is the full gate with lint and
 formatting fixed rather than reported. Outside it, by hand: `npm run complete:manual`
 (`test:prism`), `npm run mutation`, `npm run test:fuzz`, and `npm run bench`.
 

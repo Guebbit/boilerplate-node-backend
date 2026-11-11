@@ -10,7 +10,7 @@
 # connection on both paths, and records each run's outcome for /observability/health.
 #
 # No output redirects: supercronic hands each job's stdout/stderr straight to its own
-# (`-passthrough-logs`), which is the container's log stream Promtail ships.
+# (`-passthrough-logs`), which is the container's log stream Alloy ships.
 # Deletes quarantined upload files past their retention window.
 0 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:quarantine
 # Deletes a stored image or thumbnail no document names, once it is over an hour old.

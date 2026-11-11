@@ -90,7 +90,7 @@
 # driver writes forever, and a busy API fills the host's disk with its own log. Ten megabytes times
 # five files bounds each container at 50 MB.
 #
-#   driver  `json-file`, because every shipper can tail it (Alloy, Promtail, Fluent Bit, a file
+#   driver  `json-file`, because every shipper can tail it (Alloy, Fluent Bit, a file
 #           agent) and `local` is a binary format only Docker reads. The variable exists because
 #           Podman runs production too: its default is `journald`, which writes no file at all, and
 #           `k8s-file` is the file-based driver there.
@@ -962,8 +962,8 @@ services:
         volumes:
             - /:/host:ro,rslave
 
-    # Alloy: tails the container log files and ships them to Loki. Replaces Promtail, which is
-    # deprecated. Runs as root because the engine's log files are root-owned; the capability set is
+    # Alloy: tails the container log files and ships them to Loki. The dev stack loads the same
+    # config file. Runs as root because the engine's log files are root-owned; the capability set is
     # empty, so it can read them (as their owner) and do nothing else.
     alloy:
         logging: *logging
