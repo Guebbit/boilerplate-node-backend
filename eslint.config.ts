@@ -1007,7 +1007,7 @@ export default tseslint.config(
             ],
 
             /*
-             * The file layer, for the five files that are a tier each on their own — an element
+             * The file layer, for the files that are a tier each on their own — an element
              * descriptor matches folders, and these have no folder.
              *
              * Named one by one rather than as `src/*.ts`, deliberately: the whole point of
@@ -1016,6 +1016,7 @@ export default tseslint.config(
              */
             'boundaries/files': [
                 { pattern: 'src/app.ts', category: 'composition-root' },
+                { pattern: 'src/main.ts', category: 'process-supervisor' },
                 { pattern: 'src/cluster.ts', category: 'process-supervisor' },
                 { pattern: 'src/serve.ts', category: 'server-entry' },
                 { pattern: 'src/modules.ts', category: 'registry' },
@@ -1113,7 +1114,7 @@ export default tseslint.config(
                         {
                             /*
                              * The four files that are a tier each — `app.ts` composes,
-                             * `cluster.ts` supervises, `serve.ts` starts what `app.ts` composed
+                             * `main.ts` and `cluster.ts` supervise, `serve.ts` starts what `app.ts` composed
                              * and wires it to the process signals, `modules.ts` IS the
                              * registry and is the one caller allowed to import
                              * `@modules/<name>/module`. They have no element (an element

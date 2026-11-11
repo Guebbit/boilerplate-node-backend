@@ -286,7 +286,7 @@ services:
         restart: unless-stopped
 
         # Runs `dumb-init` as PID 1 already (see the Dockerfile ENTRYPOINT), so compose does not
-        # need to inject its own. Left explicit because the graceful shutdown in `src/cluster.ts`
+        # need to inject its own. Left explicit because the graceful shutdown in `src/serve.ts`
         # depends on SIGTERM arriving, and that is worth stating twice.
         stop_grace_period: 30s
 
@@ -296,9 +296,8 @@ services:
         environment:
             <<: [*app-env, *app-key-env, *backing-env]
             NODE_PORT: '${NODE_PORT:-3000}'
-            # One process per container. Scale with `--scale app=N` or with the orchestrator, not
-            # with an in-container cluster — see the Dockerfile CMD note.
-            NODE_ENABLE_CLUSTERING: '0'
+            # One process per container (the image runs `src/main.ts`). Scale with `--scale app=N`
+            # or with the orchestrator — see the Dockerfile CMD note.
             OTEL_EXPORTER_OTLP_ENDPOINT: '${OTEL_EXPORTER_OTLP_ENDPOINT:-}'
             NODE_SERVICE_NAME: '${NODE_SERVICE_NAME:-api}'
 

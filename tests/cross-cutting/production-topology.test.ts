@@ -273,7 +273,7 @@ describe('the production image carries no package manager, so nothing starts thr
      * `npm` would fail at boot instead of in review.
      */
     it('starts the web process with node, not npm', () => {
-        expect(dockerfile).toContain('CMD ["node", "--import", "tsx", "src/cluster.ts"]');
+        expect(dockerfile).toContain('CMD ["node", "--import", "tsx", "src/main.ts"]');
     });
 
     it('removes npm, npx, corepack and yarn from the runtime stage', () => {

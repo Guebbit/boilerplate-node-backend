@@ -6,7 +6,7 @@ of a dev box. `docker-compose.production.yml` is the other half: it runs the **b
 the API port to loopback only, and stops at the services the application cannot run without: `app`, `cron`, and the datastores (`database`, `cache`, `limits`, `queue`).
 
 ::: warning Read this alongside the file, not instead of it
-Every decision below — why the port is loopback-only, why clustering is off, why observability is
+Every decision below — why the port is loopback-only, why it is one process per container, why observability is
 absent — is explained inline in `docker-compose.production.yml` and `docker/Dockerfile.production`
 themselves. This page is the short version; the compose file is the source of truth.
 :::
@@ -245,7 +245,7 @@ on a change that breaks a client goes through a deprecation window. See
 | Source bind-mounted, `tsx` watches for changes              | Source baked into the image at build time                                                                                                |
 | API port published to `${NODE_HOST:-127.0.0.1}`             | API port published to `127.0.0.1` only                                                                                                   |
 | Full observability stack included                           | No observability containers — see [below](#monitoring-and-alerts)                                                                        |
-| `NODE_ENABLE_CLUSTERING=1` (multi-process in one container) | `NODE_ENABLE_CLUSTERING=0` — one process per container, always                                                                           |
+| `NODE_ENABLE_CLUSTERING=1` (optional, `dev:docker:cluster`) | The image runs `src/main.ts`: one process per container, always; scale with `--scale app=N`                                              |
 | Runs as whatever user starts compose                        | Runs as the non-root `node` user inside the image, `read_only` root filesystem, all Linux capabilities dropped                           |
 | Mongo is a single-member replica set with no auth           | Mongo is a single-node replica set (`rs0`), a scoped `readWrite` app user behind a root account, both Redis instances require a password |
 | Uploads/storage/quarantine are host paths or absent         | `uploads`, `storage` and `quarantine` are named volumes — `storage` also holds the outbound mail spool, so back it up                    |

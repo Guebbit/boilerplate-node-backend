@@ -46,7 +46,7 @@ tests:
                       instance: api
                   exp_annotations:
                       summary: The API is restarting repeatedly
-                      description: 'The API process started more than twice in 15 minutes: a crash loop. Not reliable with NODE_ENABLE_CLUSTERING on, where each scrape hits a different worker.'
+                      description: 'The API process started more than twice in 15 minutes: a crash loop. Unreliable in cluster mode (`npm run start:cluster`): per-copy metrics, each scrape hits a different worker.'
     # Quiet: one restart is a deploy.
     - interval: 1m
       input_series:

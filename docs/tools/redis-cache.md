@@ -381,7 +381,7 @@ replica set, which this compose file does not run.
 
 ## Redis and the workers
 
-With `NODE_ENABLE_CLUSTERING=1` the primary forks one worker per CPU core, and each worker runs
+In cluster mode (`npm run start:cluster`) the primary forks one worker per CPU core, and each worker runs
 the whole Express app — see [Clustering](../theory/clustering.md). Workers are separate OS
 processes: they share no memory, no variables, no in-process cache. What they do share is Redis.
 

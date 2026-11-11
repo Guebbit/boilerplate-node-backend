@@ -124,7 +124,7 @@ flowchart LR
 
 `npm run host -- dev` did not put it there. `compose up` starts two things that matter here — the
 `database` container and the `app` container — and `app`'s startup command is
-`npm run db:bootstrap && npm run dev:docker` (`dev:docker:cluster` when `NODE_ENABLE_CLUSTERING` is set). The container seeded the fresh volume before it began
+`npm run db:bootstrap && npm run dev:docker` (`dev:docker:cluster` when `NODE_ENABLE_CLUSTERING=1` is set). The container seeded the fresh volume before it began
 serving.
 
 Your host process then connects to that same mongod and finds a furnished shop. Two app processes,
@@ -187,6 +187,16 @@ resolver decides; docker and podman publish a port to `0.0.0.0`, which is IPv4 o
 resolver answers with the IPv6 address first, the name reaches a port nothing is listening on, and
 a container that is running and healthy refuses every connection — as `ECONNRESET`, or as a hang,
 never as anything that says why.
+
+## Which command runs the app
+
+| Where                            | Command                                                               |
+| -------------------------------- | --------------------------------------------------------------------- |
+| Containers, production, a laptop | `npm start` / `npm run dev`: one process. Scale with `--scale app=N`. |
+| A bare VM with no PM2 or systemd | `npm run start:cluster`: one worker per CPU, restarts a crash.        |
+| A bare VM with PM2               | `pm2 start "npm start" -i max`                                        |
+
+The reasons and the limits of cluster mode: [Clustering](./theory/clustering.md).
 
 ## The one command before you commit
 

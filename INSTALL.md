@@ -6,6 +6,10 @@ settings: `npm run setup` and the boot refusal already do that.
 
 If you pair it with the Vue frontend, that repository has its own `INSTALL.md`.
 
+## Which command starts it
+
+- [ ] Containers or production: `npm start` (the image does), scale with `--scale app=N`. A bare VM with no PM2 or systemd: `npm run start:cluster`: [Which command runs the app](docs/getting-started.md#which-command-runs-the-app)
+
 ## Required to boot
 
 - [ ] Secrets: [Secrets](docs/getting-started-production.md#secrets), [First run](docs/tools/configuration.md#first-run-npm-run-setup)

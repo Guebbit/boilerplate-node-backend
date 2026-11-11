@@ -193,7 +193,7 @@ In `account` it closes a `users → account → users` cycle, because `users`' o
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 45}}}%%
 flowchart TD
-    ENTRY["app.ts · cluster.ts<br/><i>process entry</i>"]
+    ENTRY["app.ts · main.ts<br/><i>process entry</i>"]
     REG["modules.ts<br/><i>THE enabled-domain list</i>"]
     APP["app/<br/><i>security · routes · workers</i>"]
     MODS["modules/*"]
