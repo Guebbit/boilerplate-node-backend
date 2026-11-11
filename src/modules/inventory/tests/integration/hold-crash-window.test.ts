@@ -129,7 +129,10 @@ describe('a checkout killed between two lines', () => {
         const second = await createProduct({ onHand: 10 });
         const [firstId, secondId] = [String(first._id), String(second._id)].toSorted();
         const other = 'f'.repeat(24);
-        await inventoryService.reserveForOrder(other, [{ productId: secondId, quantity: 4 }]);
+        await inventoryService.reserveForOrder(other, [
+            { productId: firstId, quantity: 2 },
+            { productId: secondId, quantity: 4 }
+        ]);
 
         // The second line's counter write waits for the sweep, as a killed process would never
         // get there; it is released afterwards so no transaction hangs past teardown.
@@ -164,16 +167,42 @@ describe('a checkout killed between two lines', () => {
         gate.open?.();
 
         expect(swept?.status).toBe('released');
-        expect(levels[0]).toEqual({ onHand: 10, reserved: 0 });
-        // The other order's 4 are untouched: the sweep did not release the line never taken.
+        expect(levels[0]).toEqual({ onHand: 10, reserved: 2 });
+        // The other order's units on both products are untouched: the sweep did not release the line never taken.
         expect(levels[1]).toEqual({ onHand: 10, reserved: 4 });
         expect(await outcome).toBe('rejected');
         expect(await levelOf(secondId)).toEqual({ onHand: 10, reserved: 4 });
-        expect(await levelOf(firstId)).toEqual({ onHand: 10, reserved: 0 });
+        expect(await levelOf(firstId)).toEqual({ onHand: 10, reserved: 2 });
         expect(await reservationRepository.findByOrderId(ORDER)).toBeNull();
         // The unwind found the hold already released: it gave nothing back a second time and
         // left the sweep's ledger rows (the take and the release of A) exactly as they were.
         expect(sweepRows).toHaveLength(2);
         expect(await ledgerIdsOf(ORDER)).toEqual(sweepRows);
+    });
+});
+
+describe('a rollback whose release throws', () => {
+    it('keeps the hold held, and the sweep frees the units', async () => {
+        const product = await createProduct({ onHand: 10 });
+        const productId = String(product._id);
+        // The second line has no level row, so the reserve refuses and unwinds the first line.
+        const missing = 'f'.repeat(24);
+        failOnce(StockMovementReason.release);
+
+        const outcome = await inventoryService.reserveForOrder(ORDER, [
+            { productId, quantity: 4 },
+            { productId: missing, quantity: 1 }
+        ]);
+
+        expect(outcome.held).toBe(false);
+
+        const hold = await reservationRepository.findByOrderId(ORDER);
+        expect(hold?.status).toBe('held');
+        expect(await levelOf(productId)).toEqual({ onHand: 10, reserved: 4 });
+
+        await reservationModel.updateOne({ orderId: ORDER }, { expiresAt: new Date(0) });
+        await inventoryService.runReservationSweep();
+
+        expect(await levelOf(productId)).toEqual({ onHand: 10, reserved: 0 });
     });
 });

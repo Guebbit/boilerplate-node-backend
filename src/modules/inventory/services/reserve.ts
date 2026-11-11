@@ -18,35 +18,31 @@ import { releaseForOrder } from './holds';
 import { MINUTE_MS } from '@domain-primitives/time';
 
 /**
- * Give back everything an unfinished reserve took, and delete the hold that named it — shared by
+ * Give back everything an unfinished reserve took, then delete the hold that named it — shared by
  * a refused line and a line whose write threw.
  *
  * The hold lists only lines whose counters moved in the same transaction, so the claim-guarded
- * release gives back exactly those. A crash partway through this cleanup leaves a hold the sweep
- * releases the same way; a hold the sweep already claimed releases nothing here (no double give-back).
- * Each failure is logged rather than thrown, so one failed give-back doesn't hide the others.
+ * release gives back exactly those. A hold the sweep already claimed releases nothing here (no
+ * double give-back). The delete runs only once the release resolved: a release that threw leaves
+ * the hold `held`, which is what the sweep reads to free the units later.
+ * The delete is cleanup, not a retry need: `place.ts` mints a fresh order id on every checkout.
+ * A failure is logged rather than thrown, so the caller still reports the original refusal.
  *
  * @param orderId - the order whose reserve is being unwound
  * @param hold - the hold document to delete once its lines are given back
  */
-const giveBackAndDeleteHold = async (orderId: string, hold: ReservationDocument): Promise<void> => {
-    await releaseForOrder(orderId).catch((error: unknown) => {
-        // Stryker disable all
-        logger.error({
-            message: `Inventory: could not release the lines taken while rolling back a failed reserve for order ${orderId}`,
-            error
+const giveBackAndDeleteHold = (orderId: string, hold: ReservationDocument): Promise<void> =>
+    releaseForOrder(orderId)
+        .then(() => reservationRepository.deleteOne(hold))
+        .then(() => undefined)
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Inventory: could not roll back the reserve for order ${orderId}; the sweep frees what is left`,
+                error
+            });
+            // Stryker restore all
         });
-        // Stryker restore all
-    });
-    await reservationRepository.deleteOne(hold).catch((error: unknown) => {
-        // Stryker disable all
-        logger.error({
-            message: `Inventory: could not delete the hold for order ${orderId} after rolling back its reserve`,
-            error
-        });
-        // Stryker restore all
-    });
-};
 
 /**
  * The lines in the order they are taken: by product id, whatever order the caller listed them in.
