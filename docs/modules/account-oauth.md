@@ -74,7 +74,29 @@ This boilerplate owns no Google or GitHub app, so a real sign-in needs yours. Pe
 3. Put the client id and secret in the provider's two `NODE_OAUTH_*` variables (`.env-example` § C5).
    A provider is offered only once both are set.
 4. Sign in once with each provider by hand. The tests drive the `fake` provider, so nothing else
-   proves the real console settings.
+   proves the real console settings. That check belongs to the first real deployment: an app is
+   tied to one address, so one registered for `localhost` is thrown away later.
+
+Google:
+
+- Application type Web application, user type External, scopes `openid email profile` only.
+- Testing status is enough to try it. With only those scopes nobody needs to be a listed test user
+  and nothing expires after 7 days.
+- "Publish app" (In production) needs a homepage and a privacy-policy link on the consent screen.
+- Brand verification (name and logo on the consent screen) needs both on a Search-Console-verified
+  domain. Without it the consent screen shows the domain instead.
+
+GitHub:
+
+- One OAuth app per environment. The callback must match exactly, so keep wildcard matching off.
+
+Locally, register the callback on the same host as `NODE_URL` (`localhost` in the defaults). Do not
+switch to `127.0.0.1` on its own: the `__Host-` state cookie is set on the host the frontend's
+`VITE_API_URL` names, so the start and the callback must share a host.
+
+The client id and secret go in the client's `.env`, not in `secrets/`
+([optional integrations](../getting-started-production.md)). Rotate the secret in the console if it
+leaks.
 
 The callback hands the library that same URL with the request's **raw query string** attached
 (`oauthCallbackUrl`, sliced off `request.originalUrl`), not a rebuilt one. The library then judges

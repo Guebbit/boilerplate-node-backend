@@ -175,7 +175,8 @@ docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml e
 ```
 
 - `ps`: every service `healthy`, or `exited (0)` for the one-shot `setup` and `mongo-rs-init`.
-- `env | grep`: at most `NODE_SMTP_PASS`, an optional integration that stays in `.env` by design.
+- `env | grep`: at most the optional integrations' secrets (SMTP, payments, OAuth, antibot), which
+  stay in `.env` by design.
   Never a Mongo, Redis or RabbitMQ password: those reach the app as files. A test checks the compose
   file, but only this sees a value someone put straight into the client's `.env`.
 
