@@ -24,6 +24,7 @@ import type { CastError } from 'mongoose';
 import { ClientClosedError } from 'redis';
 import { makeResponseStub } from '@tests/express';
 import { SpanStatusCode, trace, type Span } from '@opentelemetry/api';
+import { queryTimeoutsTotal } from '@infrastructure/observability/metrics-database';
 
 jest.mock('@infrastructure/adapters/logger', () => ({
     __esModule: true,
@@ -414,6 +415,70 @@ describe('isInfrastructureError', () => {
     it('is false for a request-shape error, and for nothing at all', () => {
         expect(isInfrastructureError(makeBsonError())).toBe(false);
         expect(isInfrastructureError(undefined)).toBe(false);
+    });
+});
+
+/** What mongod answers when a query runs past `maxTimeMS`: code 50, `MaxTimeMSExpired`. */
+const makeQueryTimeoutError = () =>
+    Object.assign(new Error('operation exceeded time limit'), {
+        code: 50,
+        codeName: 'MaxTimeMSExpired'
+    });
+
+/** The `query_timeouts_total` series' current value. */
+const timeoutCount = () =>
+    queryTimeoutsTotal.get().then(({ values }) => values.find(() => true)?.value ?? 0);
+
+describe('query-timeout branch', () => {
+    it('reads a killed query as the server being temporarily unable', () => {
+        expect(isInfrastructureError(makeQueryTimeoutError())).toBe(true);
+    });
+
+    it("answers 503 with its own detail, not the outage's and not the catch-all 500", () => {
+        expect(databaseErrorInterpreter(makeQueryTimeoutError())).toEqual([503, 'Query timed out']);
+    });
+
+    it("answers QUERY_TIMEOUT with a Retry-After hint from a controller's catch", () => {
+        const response = makeResponseStub();
+        const setHeader = jest.fn();
+        Object.assign(response, { setHeader });
+
+        rejectDatabaseError(response, 'getProducts', makeQueryTimeoutError());
+
+        expect(response.status).toHaveBeenCalledWith(503);
+        expect(setHeader).toHaveBeenCalledWith('Retry-After', expect.any(String));
+        expect(response.json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                errors: [expect.objectContaining({ code: 'QUERY_TIMEOUT' })]
+            })
+        );
+    });
+
+    it('carries the same code on a service envelope', () => {
+        expect(rejectDatabaseEnvelope('auth', makeQueryTimeoutError()).errors).toEqual([
+            expect.objectContaining({ code: 'QUERY_TIMEOUT' })
+        ]);
+    });
+
+    it('logs its own line at error level and counts it, apart from an outage', async () => {
+        const before = await timeoutCount();
+        const error = makeQueryTimeoutError();
+
+        rejectDatabaseError(makeResponseStub(), 'getProducts', error);
+
+        expect(mockedLogger.error).toHaveBeenCalledWith('getProducts - Query timed out', {
+            status: 503,
+            error
+        });
+        expect(await timeoutCount()).toBe(before + 1);
+    });
+
+    it('does not count an outage as a query timeout', async () => {
+        const before = await timeoutCount();
+
+        rejectDatabaseError(makeResponseStub(), 'getProducts', makeConnectionError());
+
+        expect(await timeoutCount()).toBe(before);
     });
 });
 

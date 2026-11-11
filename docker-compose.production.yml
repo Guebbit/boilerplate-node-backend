@@ -410,11 +410,13 @@ services:
 
         volumes:
             - ./docker/crontab:/app/crontab:ro
-            # `reap:quarantine` and `reap:mail-spool` both sweep directories
-            # `app` writes, so cron mounts the same two volumes. Without these the jobs would
-            # walk an empty read-only path and report nothing to do, every night, silently.
+            # `reap:quarantine`, `reap:mail-spool` and `reap:orphaned-images` sweep directories
+            # `app` writes, and an account erasure run from here deletes the avatar file. So cron
+            # mounts the same three volumes. Without them the jobs walk an empty read-only path,
+            # report nothing to do every night, and an erased person's picture stays served.
             - storage:/app/tmp/storage
             - quarantine:/app/tmp/quarantine
+            - uploads:/app/public/images
             # Same reasoning as `app`'s own mount — `scripts/ops/reap-*`/`sweep:*` connect to
             # Mongo too.
             - mongo-ca-dir:/ca-dir:ro

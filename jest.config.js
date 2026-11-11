@@ -175,12 +175,13 @@ module.exports = {
     },
     /*
      * Default is "ignore everything under node_modules", carved open for `@scure`/`@noble` and for
-     * the ESM-only OAuth/JWT stack (`jose`, `openid-client` and its `oauth4webapi`).
+     * the ESM-only OAuth/JWT stack (`jose`, `openid-client` and its `oauth4webapi`) and
+     * `@mdit-vue` (the docs checker's heading slugger, which a unit test imports).
      * Not anchored to "right after node_modules": `@noble/hashes` sometimes lands nested in its own
      * unhoisted copy, so the check is "does either scope appear anywhere past this point".
      */
     transformIgnorePatterns: [
-        'node_modules/(?!.*(?:@(?:scure|noble)|(?:jose|oauth4webapi|openid-client)/))'
+        'node_modules/(?!.*(?:@(?:scure|noble|mdit-vue)|(?:jose|oauth4webapi|openid-client)/))'
     ],
     moduleNameMapper: {
         '^@api/(.*)$': '<rootDir>/api/$1',

@@ -4,7 +4,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { appAnswering, statusOf, withReloadedRateLimits } from '@tests/rate-limit-harness';
 
 /**
- * Anti-automation Rung 1 (see `docs/tools/security.md#identity--and-block-keyed-budgets--signup-password-reset-the-contact-form`):
+ * Anti-automation Rung 1 (see `docs/tools/security.md#identity-and-block-keyed-budgets-—-signup-password-reset-the-contact-form`):
  * `contactLimiters` adds an identity (submitted email) dimension on top of `submissionLimiter`'s
  * per-address budget — the address-only case already lives in
  * `submission-rate-limit.test.ts`. Built against a trivial handler — the property under test

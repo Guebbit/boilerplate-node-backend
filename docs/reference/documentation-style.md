@@ -87,7 +87,11 @@ to everyone who has not opened the tree. This is the only check that looks for i
 | Tokens starting with `/` skipped   | HTTP routes, not files. The contract owns those, and `lint:openapi` refuses a missing one.    |
 | Directories count as targets       | `src/infrastructure/` resolves without naming a file.                                         |
 | The paired repo's name resolves    | Over THERE, which makes citing it by package name instead of directory name a finding.        |
+| Code citations are checked too     | A `docs/…md#anchor` in `src/`, `scripts/`, contract YAML or `.env-example` must resolve.      |
 | `<!-- doc-paths:ignore -->`        | Skips the whole line, for prose that names an absent path on purpose (a rename table).        |
+
+The code-citation half only asks whether a link is dead (page tracked, anchor a heading, same
+slugger); a peer repo's page, a URL and a `../` path are left alone. It checks nothing else.
 
 The sweep has floors: one that silently reads zero pages would report a clean tree forever, which
 is worse than no sweep.

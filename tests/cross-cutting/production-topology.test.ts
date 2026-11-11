@@ -38,6 +38,7 @@ interface ComposeFile {
             cap_add?: string[];
             security_opt?: string[];
             ports?: PortMapping[];
+            volumes?: string[];
             environment?: Record<string, string> | string[];
             command?: string | string[];
             entrypoint?: string | string[];
@@ -247,6 +248,21 @@ describe('cron refuses a bad environment before it schedules anything', () => {
         expect(command).toMatch(
             /node --import tsx scripts\/ops\/check-config\.ts && exec supercronic /
         );
+    });
+});
+
+describe('cron mounts every volume app mounts', () => {
+    /*
+     * Same image, same code, same paths: a mount only `app` has is a path cron's jobs see empty.
+     * The orphan sweep and a cron-run erasure's file step then succeed having touched nothing.
+     * Derived from `app`'s own list, so a new or renamed mount needs no edit here.
+     */
+    it('lists every app mount verbatim in cron', () => {
+        const appVolumes = compose.services.app?.volumes ?? [];
+        const cronVolumes = compose.services.cron?.volumes ?? [];
+
+        expect(appVolumes.length).toBeGreaterThan(0);
+        expect(appVolumes.filter((volume) => !cronVolumes.includes(volume))).toEqual([]);
     });
 });
 

@@ -265,10 +265,13 @@ The Database Tools spell TLS `--ssl --sslCAFile`, and the bundled `database` req
 4. **Re-apply the erasures, before anything starts:**
 
     ```sh
-    npm run ops:reapply-erasures -- --since <the snapshot time, ISO> --snapshot <restic id> --by <your name>
+    docker compose -f docker-compose.production.yml run --rm --no-deps cron \
+        node --import tsx scripts/ops/reapply-erasures.ts --since <the snapshot time, ISO> --snapshot <restic id> --by <your name>
     ```
 
-    Step 1 is the guard: it does not check that the app and cron are stopped, and the purge job (which has no
+    Run it in `cron`: it mounts `uploads`, so an erased account's avatar is deleted again too, and the
+    production image has no npm. `--no-deps` because step 1 stopped `app` and `cron`, and `run` would
+    otherwise start their dependencies. Step 1 is the guard: it does not check that the app and cron are stopped, and the purge job (which has no
     HTTP port to probe) must not run beside it. It erases again each account the ledger names since `--since`,
     keeping the original erasure date, and writes one restoration-log audit row (`auth.erasures.reapplied`: who,
     which snapshot, the counts and ids). Safe to repeat; it exits non-zero while

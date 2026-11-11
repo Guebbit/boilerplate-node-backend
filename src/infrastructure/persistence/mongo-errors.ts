@@ -18,6 +18,25 @@ export const isDuplicateKey = (error: unknown): boolean =>
     typeof error === 'object' && error !== null && 'code' in error && error.code === 11_000;
 
 /**
+ * The server's own code for `MaxTimeMSExpired`: a query killed at its `maxTimeMS`.
+ * https://www.mongodb.com/docs/manual/reference/error-codes/
+ */
+const MAX_TIME_MS_EXPIRED = 50;
+
+/**
+ * Whether mongod killed the query for running past its time limit (`MaxTimeMSExpired`, code 50).
+ * The CODE is checked, not `instanceof`, for the same reason as {@link isDuplicateKey}. The
+ * HTTP layer answers it 503 with its own `QUERY_TIMEOUT` code, not the outage's.
+ *
+ * @param error - whatever the caught rejection actually was
+ */
+export const isQueryTimeout = (error: unknown): boolean =>
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === MAX_TIME_MS_EXPIRED;
+
+/**
  * Driver/Mongoose error NAMES that mean "no server was reachable", never a request-shape problem
  * — checked the same way `isPermanentConnectError` (`runtime/database.ts`) does: by `.name`, not
  * `instanceof`, since `mongodb` is a transitive
