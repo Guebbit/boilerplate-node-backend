@@ -139,9 +139,15 @@ past it, instead of letting it hold a connection and a core for as long as it li
 - **Opting into more.** A query that names its own limit keeps it, `0` meaning none:
   `.maxTimeMS(60_000)`. The scheduled jobs go through `startJob()`, which sets the longer
   `JOB_MAX_TIME_MS` (10 min) for every query they run.
-- **What it cannot reach.** `save`, `insertMany`, `bulkWrite` and raw `collection.*` calls. The
-  writes are accepted, with a comment at each site; the raw reads (`db:sync`'s duplicate scan, the
-  demo snapshot) set a limit by hand.
+- **What it cannot reach.** `save`, `insertMany`, `bulkWrite`, `updateOne`/`updateMany`/
+  `deleteMany` and raw `collection.*` calls. The writes are accepted, with a comment at each site;
+  the raw reads (`db:sync`'s duplicate scan, the demo snapshot) set a limit by hand. A
+  multi-document write is out of reach on purpose: a kill mid-way would leave the rows already
+  visited changed and the rest not. Do not name a `maxTimeMS` on one.
+- **What a kill answers.** `503` with the code `QUERY_TIMEOUT` and a `Retry-After` hint (the
+  server is busy, not broken), one `error` log line (`<operation> - Query timed out`) and
+  `query_timeouts_total`. A keyed write stores that 503, so the checkout screen treats it like a
+  500 and re-reads the cart.
 - **Tests** run with a ceiling a busy host cannot trip (`tests/support/setup-environment.ts`);
   `tests/integration/persistence/query-time-limit.test.ts` proves the server really kills a slow
   find and a slow aggregate.

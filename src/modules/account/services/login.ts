@@ -31,15 +31,12 @@ const DUMMY_PASSWORD_HASH = hashPasswordSync(randomBytes(32).toString('hex'));
 /**
  * Login user by email/password. The account returned may be in the grace of its own deletion
  * (`isRestorable`): the caller then offers the restore instead of minting a session.
+ *
+ * @param body - the request body as received; parsed here against the strict `LoginBody`, so an
+ * unknown key is a 422 that still lands after the caller's failure record
  */
-export const login = (
-    email?: string,
-    password?: string
-): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    const parseResult = LoginBody.safeParse({
-        email,
-        password
-    });
+export const login = (body: unknown): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
+    const parseResult = LoginBody.safeParse(body);
 
     if (!parseResult.success)
         return Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
@@ -47,24 +44,23 @@ export const login = (
     return (
         accountUserService
             // `password` is select:false — this is one of the few flows that legitimately needs it.
-            // `parseResult.data.email`, not the raw `email` param: the parse above is what proves
-            // it's actually a string, which the outer `email?: string` signature can't itself tell TS.
             .findForLogin(parseResult.data.email)
             .then((user) => {
                 // Compare against DUMMY_PASSWORD_HASH on a miss, so an
                 // unknown email costs the same as a wrong password — an unconditional `return`
                 // here would answer 401 before the hash's own cost, the timing gap that lets an
                 // attacker tell "no such account" from "wrong password" by response time alone.
-                return verifyPassword(password ?? '', user?.password ?? DUMMY_PASSWORD_HASH).then(
-                    (doMatch) => {
-                        // The lookup also returns an account in its deletion grace; one whose
-                        // grace ran out since the query is neither, and is refused like a wrong
-                        // password.
-                        if (!user || !doMatch || !(isAuthenticatable(user) || isRestorable(user)))
-                            return generateReject(401, [t('account.login.wrong-data')]);
-                        return generateSuccess<UserDocument>(user);
-                    }
-                );
+                return verifyPassword(
+                    parseResult.data.password,
+                    user?.password ?? DUMMY_PASSWORD_HASH
+                ).then((doMatch) => {
+                    // The lookup also returns an account in its deletion grace; one whose
+                    // grace ran out since the query is neither, and is refused like a wrong
+                    // password.
+                    if (!user || !doMatch || !(isAuthenticatable(user) || isRestorable(user)))
+                        return generateReject(401, [t('account.login.wrong-data')]);
+                    return generateSuccess<UserDocument>(user);
+                });
             })
             .catch((error: unknown) => rejectDatabaseEnvelope('auth', error))
     );

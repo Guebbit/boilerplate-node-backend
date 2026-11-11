@@ -31,6 +31,7 @@ Liveness and readiness are separate: `/livez` and `/readyz`, see [Health Checks]
 | `dependency_up`                                           | each backing service serving (1) or not (0); unconfigured ones are not reported |
 | `cache_invalidation_failures_total`                       | writes whose stale cached response survived                                     |
 | `cache_requests_total`                                    | `setCache` lookups by outcome — hit/miss/stale/refresh                          |
+| `query_timeouts_total`                                    | database queries killed at the time limit (answered 503 `QUERY_TIMEOUT`)        |
 | `rate_limit_store_fallback_total`                         | limiter operations served without the `limits` Redis                            |
 | `rate_limit_refusals_total`                               | requests refused with 429, by budget                                            |
 | `process_unhandled_rejections_total`                      | promise rejections nobody handled (the process keeps running)                   |

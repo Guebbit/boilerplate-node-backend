@@ -12,11 +12,16 @@
 
 import { logger } from '@infrastructure/adapters/logger';
 import { t } from '@infrastructure/i18n';
-import { isDuplicateKey, isConnectionError } from '@infrastructure/persistence/mongo-errors';
+import {
+    isDuplicateKey,
+    isConnectionError,
+    isQueryTimeout
+} from '@infrastructure/persistence/mongo-errors';
 import { PreconditionFailedError } from '@infrastructure/persistence/versioning';
 import { isRedisConnectionError } from '@infrastructure/adapters/redis';
 import { ServiceBusyError } from '@infrastructure/runtime/busy';
 import { recordErrorOnActiveSpan } from '@infrastructure/observability/tracer';
+import { queryTimeoutsTotal } from '@infrastructure/observability/metrics-database';
 import { generateReject, rejectResponse } from './response';
 // Type-only — see `response.ts`'s own import for why: this file sits on `contracts:bundle`'s
 // incidental module-load path, which runs before `@api/error-codes` exists.
@@ -37,15 +42,18 @@ export class ConflictError extends Error {
 }
 
 /**
- * Whether a failure means an infrastructure dependency (Mongo, Redis) was unreachable, or a bounded
- * queue (the PDF renders) was full, rather
+ * Whether a failure means an infrastructure dependency (Mongo, Redis) was unreachable, a bounded
+ * queue (the PDF renders) was full, or a query ran past the server's time limit, rather
  * than a request the server understood and refused. RFC 9110 §15.6.4: 503 says the SERVER is
  * temporarily broken; every other branch below is about the REQUEST.
  *
  * @param error - whatever the caught rejection actually was
  */
 export const isInfrastructureError = (error: unknown): boolean =>
-    isConnectionError(error) || isRedisConnectionError(error) || error instanceof ServiceBusyError;
+    isConnectionError(error) ||
+    isRedisConnectionError(error) ||
+    isQueryTimeout(error) ||
+    error instanceof ServiceBusyError;
 
 /**
  * Decide what status a driver failure deserves — the request's fault (4xx), a dependency outage
@@ -88,8 +96,11 @@ export function databaseErrorInterpreter(error: unknown): [number, string] {
         if (error instanceof ConflictError) return [409, error.message || 'Unknown error'];
         // The caller's `If-Match` no longer describes the row: 412, and the row is untouched.
         if (error instanceof PreconditionFailedError) return [412, 'Precondition failed'];
-        // Mongo/Redis unreachable — the server is temporarily broken, not the request. Checked
-        // before the generic fallback below, which would otherwise answer 500 and imply a bug.
+        // A query ran past the server's time limit: 503 like an outage, but its own detail, so the
+        // log line and the response code (`QUERY_TIMEOUT`) say which of the two it was.
+        if (isQueryTimeout(error)) return [503, 'Query timed out'];
+        // Mongo/Redis unreachable, or a full queue — the server is temporarily broken, not the
+        // request. Checked before the generic fallback below, which would answer 500 (a bug).
         if (isInfrastructureError(error)) return [503, 'Service unavailable'];
         // An unknown server-side failure, but still Error-SHAPED — own or inherited `.message`,
         // never gated on `instanceof`: a driver/test fixture built via `Object.assign` onto a
@@ -102,20 +113,27 @@ export function databaseErrorInterpreter(error: unknown): [number, string] {
     return [500, 'Unknown error'];
 }
 
-/** The one error item every 503 carries, whichever path noticed the outage. */
-const serviceUnavailableError = (): { code: ErrorCode; message: string } => ({
-    code: 'SERVICE_UNAVAILABLE',
-    message: t('generic.error-service-unavailable')
-});
+/**
+ * The one error item a 503 carries, whichever path noticed it: `QUERY_TIMEOUT` for a query the
+ * server killed at its time limit, `SERVICE_UNAVAILABLE` for everything else.
+ *
+ * @param error - the failure behind the 503, when the caller has one
+ */
+const serviceUnavailableError = (error?: unknown): { code: ErrorCode; message: string } =>
+    isQueryTimeout(error)
+        ? { code: 'QUERY_TIMEOUT', message: t('generic.error-query-timeout') }
+        : { code: 'SERVICE_UNAVAILABLE', message: t('generic.error-service-unavailable') };
 
 /**
- * Answer a dependency outage: 503, `SERVICE_UNAVAILABLE` — the same answer from the global
- * error handler and from a controller's own `.catch`. `rejectResponse` adds the `Retry-After` hint.
+ * Answer a 503: `SERVICE_UNAVAILABLE` for a dependency outage, `QUERY_TIMEOUT` for a killed
+ * query — the same answer from the global error handler and from a controller's own `.catch`.
+ * `rejectResponse` adds the `Retry-After` hint.
  *
  * @param response - the express response
+ * @param error - the failure behind it, when there is one; picks the code
  */
-export const rejectServiceUnavailable = (response: Response) => {
-    return rejectResponse(response, 503, [serviceUnavailableError()]);
+export const rejectServiceUnavailable = (response: Response, error?: unknown) => {
+    return rejectResponse(response, 503, [serviceUnavailableError(error)]);
 };
 
 /**
@@ -139,6 +157,7 @@ const logDatabaseFailure = (
 ): void => {
     // A 5xx is the server's own failure: mark the trace red too, which is how its error rate counts.
     if (status >= 500) recordErrorOnActiveSpan(error);
+    if (isQueryTimeout(error)) queryTimeoutsTotal.inc();
     // The interpreter's 500 detail IS the error's message, which can quote data: the headline
     // for a 500 names the error class instead. `error` under its own key, not folded into the
     // message string, is what lets the logger's own serializer attach a stack trace and scrub
@@ -176,7 +195,9 @@ export const rejectDatabaseError = (response: Response, context: string, error: 
         typeof requestId === 'string' ? requestId : undefined
     );
 
-    return status === 503 ? rejectServiceUnavailable(response) : rejectResponse(response, status);
+    return status === 503
+        ? rejectServiceUnavailable(response, error)
+        : rejectResponse(response, status);
 };
 
 /**
@@ -195,6 +216,6 @@ export const rejectDatabaseEnvelope = (context: string, error: unknown) => {
 
     // No `Retry-After` here: `rejectResponse` adds it when this envelope is sent.
     return status === 503
-        ? generateReject(503, [serviceUnavailableError()])
+        ? generateReject(503, [serviceUnavailableError(error)])
         : generateReject(status);
 };

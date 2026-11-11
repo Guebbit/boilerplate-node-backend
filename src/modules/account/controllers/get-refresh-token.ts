@@ -58,7 +58,7 @@ export const getRefreshToken = (request: Request, response: Response) => {
             // treats 401 as a definitive sign-out, so it gets a retryable 503 instead.
             .catch((error: unknown) => {
                 if (isInfrastructureError(error)) {
-                    rejectServiceUnavailable(response);
+                    rejectServiceUnavailable(response, error);
                     return;
                 }
                 authRefreshTotal.inc({ status: 'failure' });

@@ -3,7 +3,11 @@
  */
 
 import mongoose from 'mongoose';
-import { isDuplicateKey, isConnectionError } from '@infrastructure/persistence/mongo-errors';
+import {
+    isDuplicateKey,
+    isConnectionError,
+    isQueryTimeout
+} from '@infrastructure/persistence/mongo-errors';
 
 /** A driver duplicate-key error: the numeric `code` is the discriminator, never the message. */
 const makeDuplicateKeyError = () =>
@@ -32,6 +36,19 @@ describe('isDuplicateKey', () => {
 
     it('does not treat a near-miss code as a duplicate', () => {
         expect(isDuplicateKey(Object.assign(new Error('x'), { code: 11_001 }))).toBe(false);
+    });
+});
+
+describe('isQueryTimeout', () => {
+    it('recognises MaxTimeMSExpired by its code, not its message', () => {
+        expect(isQueryTimeout(Object.assign(new Error('x'), { code: 50 }))).toBe(true);
+        expect(isQueryTimeout(new Error('operation exceeded time limit'))).toBe(false);
+    });
+
+    it('is false for a duplicate key, an ordinary error, and nothing at all', () => {
+        expect(isQueryTimeout(Object.assign(new Error('x'), { code: 11_000 }))).toBe(false);
+        expect(isQueryTimeout(new Error('connection reset'))).toBe(false);
+        expect(isQueryTimeout(undefined)).toBe(false);
     });
 });
 
