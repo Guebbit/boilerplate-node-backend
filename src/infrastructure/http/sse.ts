@@ -8,12 +8,57 @@
  */
 
 import type { Response } from 'express';
+import { sseConfig } from '@infrastructure/http/config';
+import { rejectServiceUnavailable } from '@infrastructure/http/errors';
+import { generateRateLimited, rejectResponse } from '@infrastructure/http/response';
 
 /**
  * How often an open stream re-proves its caller still holds the key that opened it. Revocation
  * lands on the next request everywhere else; a stream has no next request until this closes it.
  */
 const REVERIFY_INTERVAL_MS = 30_000;
+
+/**
+ * What a refused per-account open tells the client to wait, seconds. The FE client backs off to
+ * 30 s on its own; this is the same ceiling.
+ */
+const PER_USER_RETRY_AFTER_SECONDS = 30;
+
+/** User id to how many streams that user holds open in this process. */
+const openPerUser = new Map<string, number>();
+
+/** Streams open in this process, all users. */
+let openTotal = 0;
+
+/**
+ * Take a slot for `userId`, or answer the refusal on `response`: 503 when the process is full
+ * (the server's limit), 429 when this account holds its share.
+ *
+ * @returns whether a slot was taken
+ */
+const admit = (response: Response, userId: string): boolean => {
+    const limits = sseConfig();
+    if (openTotal >= limits.NODE_SSE_MAX_STREAMS) {
+        rejectServiceUnavailable(response);
+        return false;
+    }
+    const held = openPerUser.get(userId) ?? 0;
+    if (held >= limits.NODE_SSE_MAX_STREAMS_PER_USER) {
+        rejectResponse(response, 429, generateRateLimited(PER_USER_RETRY_AFTER_SECONDS).errors);
+        return false;
+    }
+    openPerUser.set(userId, held + 1);
+    openTotal += 1;
+    return true;
+};
+
+/** Give back the slot `admit` took. */
+const release = (userId: string): void => {
+    const held = openPerUser.get(userId) ?? 0;
+    if (held <= 1) openPerUser.delete(userId);
+    else openPerUser.set(userId, held - 1);
+    openTotal -= 1;
+};
 
 /**
  * An opened stream, as its owner sees it.
@@ -30,12 +75,19 @@ export interface SseStream {
  * Open an SSE stream: headers, flush, and a recheck that ends the stream when access is lost.
  *
  * @param response - the response to hold open
+ * @param userId - whose stream it is, for the per-account cap
  * @param reverify - re-answers "does this caller still hold the key that opened the stream". A
  *   plain callback so this file stays agnostic of how a caller is authenticated. A rejection
  *   counts as "no": an error is not "still allowed".
- * @returns the handle to register cleanup on
+ * @returns the handle to register cleanup on, or `undefined` when a cap refused the open: the
+ *   429/503 is already sent, and the caller must return without registering anything
  */
-export const openSseStream = (response: Response, reverify: () => Promise<boolean>): SseStream => {
+export const openSseStream = (
+    response: Response,
+    userId: string,
+    reverify: () => Promise<boolean>
+): SseStream | undefined => {
+    if (!admit(response, userId)) return undefined;
     response.status(200);
     // The MIME type that makes this an SSE stream for the browser's `EventSource`.
     response.setHeader('Content-Type', 'text/event-stream');
@@ -50,10 +102,11 @@ export const openSseStream = (response: Response, reverify: () => Promise<boolea
     const cleanups: (() => void)[] = [];
     let closed = false;
 
-    // Idempotent: a revoked stream ends itself, and its `close` event then fires teardown again.
+    // Idempotent, so the slot is freed once: a revoked stream ends itself, and its `close` event then fires teardown again.
     const teardown = () => {
         if (closed) return;
         closed = true;
+        release(userId);
         clearInterval(reverifyTimer);
         for (const cleanup of cleanups) cleanup();
     };

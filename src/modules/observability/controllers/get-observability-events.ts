@@ -8,6 +8,8 @@
 
 import type { Request, Response } from 'express';
 import { stillHoldsRuleViaCookie } from '@kernel/middlewares/authorizations';
+import { t } from '@infrastructure/i18n';
+import { rejectResponse } from '@infrastructure/http/response';
 import { observabilityService } from '../services';
 
 /**
@@ -20,8 +22,17 @@ import { observabilityService } from '../services';
  */
 export const getObservabilityEvents = (request: Request, response: Response) => {
     // `requirePermissionViaCookie` already resolved a rule-holding caller and left its recheck on
-    // the request, or this handler would never run.
-    observabilityService.streamObservabilityMetrics(response, () =>
+    // the request, or this handler would never run. Read without `!` (this route is not behind
+    // `isAuth`); absent means fail closed.
+    const user = request.authContext;
+    if (!user) {
+        rejectResponse(response, 401, [
+            { code: 'UNAUTHORIZED', message: t('generic.error-unauthorized') }
+        ]);
+        return;
+    }
+
+    observabilityService.streamObservabilityMetrics(response, user.id, () =>
         stillHoldsRuleViaCookie(request, 'read', 'ObservabilitySnapshot')
     );
 };

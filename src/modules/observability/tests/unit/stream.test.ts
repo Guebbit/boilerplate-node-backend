@@ -117,7 +117,7 @@ describe('the SSE metrics stream', () => {
     /** Opens a stream whose recheck always passes, unless a test needs it to fail. */
     const open = (reverify: () => Promise<boolean> = () => Promise.resolve(true)) => {
         const fake = makeResponse();
-        streamObservabilityMetrics(fake.response, reverify);
+        streamObservabilityMetrics(fake.response, 'staff-1', reverify);
         opened.push(fake);
         return fake;
     };

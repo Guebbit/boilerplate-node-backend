@@ -57,6 +57,10 @@ the SSE stream authenticates by cookie because an `EventSource` cannot send a he
 Prometheus scrape endpoint takes a static credential because a scraper has no session. `routes.ts`
 documents each choice at the line that makes it.
 
+The SSE stream counts against the same per-account cap as the notifications stream (a staff tab
+holds two), and against the process ceiling: `NODE_SSE_MAX_STREAMS_PER_USER`,
+`NODE_SSE_MAX_STREAMS`. See [denial of service](../theory/defences/denial-of-service.md).
+
 Deleting this module removes the dashboard, not the measurements. The metrics keep being collected;
 nothing serves them.
 

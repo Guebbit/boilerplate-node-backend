@@ -19,7 +19,8 @@ jest.mock('@kernel/middlewares/authorizations', () => ({
 }));
 
 /** What `requirePermissionViaCookie` leaves behind once it admitted the caller. */
-const cookieRequest = () => asStub<Request>({ sessionRecheck: jest.fn() });
+const cookieRequest = () =>
+    asStub<Request>({ sessionRecheck: jest.fn(), authContext: { id: 'staff-1' } });
 
 const streamObservabilityMetrics = jest.spyOn(observabilityService, 'streamObservabilityMetrics');
 
@@ -37,7 +38,11 @@ describe('GET /observability/events', () => {
 
         // SSE owns the response for its lifetime: headers, keep-alives and the close. Anything
         // this handler sent first would end the stream before it began.
-        expect(streamObservabilityMetrics).toHaveBeenCalledWith(response, expect.any(Function));
+        expect(streamObservabilityMetrics).toHaveBeenCalledWith(
+            response,
+            'staff-1',
+            expect.any(Function)
+        );
     });
 
     it('wires the recheck to the key and the request the stream connected with', async () => {
@@ -46,10 +51,9 @@ describe('GET /observability/events', () => {
         jest.mocked(stillHoldsRuleViaCookie).mockResolvedValueOnce(true);
 
         getObservabilityEvents(request, response);
-        const [, recheck] = streamObservabilityMetrics.mock.calls[0] as [
-            Response,
-            () => Promise<boolean>
-        ];
+        const recheck = (
+            streamObservabilityMetrics.mock.calls[0] as [Response, string, () => Promise<boolean>]
+        )[2];
         await recheck();
 
         expect(stillHoldsRuleViaCookie).toHaveBeenCalledWith(

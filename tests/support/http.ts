@@ -11,6 +11,8 @@
  * optional, because `getCacheValue` resolves `undefined` on any failure and the request is
  * treated as a cache miss.
  */
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import request from 'supertest';
 import { createApp } from '../../src/app';
 import { cookieValue, setCookie } from './cookies';
@@ -25,6 +27,19 @@ const { app } = createApp();
 
 /** A fresh supertest agent against the app, for one request. */
 export const api = () => request(app);
+
+/**
+ * The same app on a real listening socket, for a test that must keep a response open (a live
+ * stream) and read it from a plain `node:http` client. The caller closes it, with
+ * `closeAllConnections()` first if streams are still held.
+ */
+export const listen = (): Promise<{ server: Server; port: number }> =>
+    new Promise((resolve) => {
+        // Port 0: the OS picks a free one.
+        const server = createServer(app).listen(0, () => {
+            resolve({ server, port: (server.address() as AddressInfo).port });
+        });
+    });
 
 /** What every `authenticateAs*` helper resolves to — the account and its bearer token. */
 interface AuthenticatedTestUser {
