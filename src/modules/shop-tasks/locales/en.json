@@ -17,7 +17,7 @@
                 "returns-awaiting-goods": "{{n}} returns are overdue for their goods: ask the buyer once for proof of posting, and keep the refund on hold",
                 "returns-undecided": "{{n}} return requests still need a decision",
                 "low-stock": "{{n}} products are low on stock",
-                "unshipped": "{{n}} paid orders have not shipped",
+                "unshipped": "{{n}} paid orders still have goods to ship",
                 "awaiting-tracking": "{{n}} shipped parcels still have no tracking code",
                 "undelivered": "{{n}} parcels were shipped and never marked arrived",
                 "stale-refunds": "{{n}} refunds have been open too long"

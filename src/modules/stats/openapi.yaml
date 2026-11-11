@@ -554,7 +554,7 @@ components:
                 paidNotShipped:
                     type: integer
                     minimum: 0
-                    description: Orders `paid` or `processing`, so not yet handed to a carrier.
+                    description: The orders `fulfillmentStatus=awaiting_shipment` lists, live.
 
         # The ceilings every period read enforces, carried on each period answer so a form can
         # refuse a period before a round trip does — no read of its own.
