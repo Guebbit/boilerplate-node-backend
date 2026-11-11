@@ -155,6 +155,8 @@ flowchart LR
   each handler dedupes on its key (`task-opened:<id>` and so on).
 - **The shop's codes.** `shop-tasks.staff.*` register their own route with each call, so the table
   above is not theirs: see [shop-tasks](./shop-tasks.md#the-notices) for their sets and mail class.
+  One of them, `shop-tasks.staff.outcome-unknown` (mail `now`), is written in-process from the
+  idempotency ledger when a refund, a ship or a stock write has a key whose outcome is unknown.
 - **Task notices.** The task codes name their sets per notice (`per-notice` in the route
   table): the set of the opened task's kind. Params are the task id, its kind and a contact
   message's category, nothing the visitor typed. A contact message is the bell's alone for each

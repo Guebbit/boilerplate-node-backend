@@ -4,12 +4,12 @@
  * order the table is read (first match wins), and the listing filter that must agree with it.
  */
 
-import { OrderStatus } from '@types';
-import type { OrderFulfillmentStatus } from '@types';
+import { OrderFulfillmentStatus, OrderStatus } from '@types';
 import {
     NO_FULFILLMENT,
     fulfillmentStatusFilter,
     fulfillmentStatusOf,
+    isAwaitingGoods,
     settlementFor,
     type FulfillmentSummary
 } from '../../domain';
@@ -133,14 +133,8 @@ const matches = (
     });
 
 describe('fulfillmentStatusFilter', () => {
-    const values: OrderFulfillmentStatus[] = [
-        'unfulfilled',
-        'in_progress',
-        'on_hold',
-        'partially_fulfilled',
-        'shipped',
-        'fulfilled'
-    ];
+    // Every carried value, so one missing from the filter enum is a type error.
+    const values: OrderFulfillmentStatus[] = Object.values(OrderFulfillmentStatus);
 
     it.each(values)('selects exactly the orders that read %s', (wanted) => {
         const selected = SAMPLES.filter((sample) =>
@@ -153,6 +147,25 @@ describe('fulfillmentStatusFilter', () => {
         expect(selected).toEqual(expected);
         // Every value is reachable by some sample, so an empty answer cannot pass for the right one.
         expect(expected.length).toBeGreaterThan(0);
+    });
+
+    it('selects awaiting_shipment as exactly the samples whose status still owes goods', () => {
+        const selected = SAMPLES.filter((sample) =>
+            matches(fulfillmentStatusFilter('awaiting_shipment'), sample)
+        );
+
+        expect(selected).toEqual(SAMPLES.filter((sample) => isAwaitingGoods(sample.status)));
+        expect(selected.length).toBeGreaterThan(0);
+        // Whatever it selects reads one of the four owed values, never shipped or fulfilled.
+        const owed: OrderFulfillmentStatus[] = [
+            'unfulfilled',
+            'in_progress',
+            'on_hold',
+            'partially_fulfilled'
+        ];
+        for (const sample of selected) {
+            expect(owed).toContain(fulfillmentStatusOf(sample.status, sample.fulfillment));
+        }
     });
 });
 

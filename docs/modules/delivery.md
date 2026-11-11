@@ -709,19 +709,19 @@ date this order was expecting, not the product's previous date.
 
 ## Routes and events
 
-| Route                                                      | Answers                                                                                           |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `GET /delivery/methods`                                    | the shipping methods and what each costs                                                          |
-| `GET /delivery/fulfillment-orders` · `/summary`            | [the preorder board](#the-preorder-board)'s two reads                                             |
-| `GET /delivery/fulfillment-orders/restock-date-impact`     | orders a restock-date move would email, before it is saved                                        |
-| `GET /orders/{id}/fulfillment-orders` · `/shipments`       | `{ items[] }` each, every item with its own `actions`; unpaged                                    |
-| `POST /orders/{id}/process`                                | the order, `processing`                                                                           |
-| `POST /delivery/fulfillment-orders/{id}/shipments`         | `201` + `Location` + the shipment; optional `Idempotency-Key` (a retry would cut a second parcel) |
-| `POST /delivery/fulfillment-orders/{id}/fulfill`           | `201` + `Location` like ship, the shipment delivered; same optional `Idempotency-Key`             |
-| `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | the fulfillment order                                                                             |
-| `PATCH /delivery/shipments/{id}`                           | the shipment, tracking added or corrected, at any time (shipped, delivered or lost)               |
-| `POST /delivery/shipments/{id}/deliver`                    | the shipment                                                                                      |
-| `POST /delivery/shipments/{id}/mark-lost`                  | the shipment, `lost`                                                                              |
+| Route                                                      | Answers                                                                                                                                                                           |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /delivery/methods`                                    | the shipping methods and what each costs                                                                                                                                          |
+| `GET /delivery/fulfillment-orders` · `/summary`            | [the preorder board](#the-preorder-board)'s two reads                                                                                                                             |
+| `GET /delivery/fulfillment-orders/restock-date-impact`     | orders a restock-date move would email, before it is saved                                                                                                                        |
+| `GET /orders/{id}/fulfillment-orders` · `/shipments`       | `{ items[] }` each, every item with its own `actions`; unpaged                                                                                                                    |
+| `POST /orders/{id}/process`                                | the order, `processing`                                                                                                                                                           |
+| `POST /delivery/fulfillment-orders/{id}/shipments`         | `201` + `Location` + the shipment; REQUIRED `Idempotency-Key` (a retry would cut a second parcel), see [do-not-retry operations](../tools/idempotency.md#do-not-retry-operations) |
+| `POST /delivery/fulfillment-orders/{id}/fulfill`           | `201` + `Location` like ship, the shipment delivered; optional `Idempotency-Key` (it takes the whole remainder, so a re-run is refused by the order's state)                      |
+| `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | the fulfillment order                                                                                                                                                             |
+| `PATCH /delivery/shipments/{id}`                           | the shipment, tracking added or corrected, at any time (shipped, delivered or lost)                                                                                               |
+| `POST /delivery/shipments/{id}/deliver`                    | the shipment                                                                                                                                                                      |
+| `POST /delivery/shipments/{id}/mark-lost`                  | the shipment, `lost`                                                                                                                                                              |
 
 The key each route asks is in `src/modules/delivery/routes.ts`: the shipment doors take `update:Shipment` (`fulfill` also `start:Shipment` from `paid`), `process` takes `start:Shipment`, the reads are `display:Order`, the order's owner, or public for the methods.
 

@@ -106,6 +106,11 @@ export interface RefundRequest {
     capAtRemaining?: boolean;
     /** The legal deadline this record is stamped with when it opens; absent when the law sets none. */
     due?: RefundDue;
+    /**
+     * The `order.canceled` event this request answers, when the outbox delivered it. The record it
+     * opens stamps the id on the payment in the same write, so a redelivery cannot open another.
+     */
+    cancelEventId?: string;
 }
 
 /** The request the automatic callers make: everything left, for a cancellation. */
@@ -256,12 +261,28 @@ const announceOwedByHand = (
           )
         : Promise.resolve();
 
+/** How many times a stamped refund write may miss and be retried before the call throws. */
+const CANCEL_EVENT_WRITE_RETRIES = 5;
+
+/**
+ * Whether the payment already handled the cancel event a request answers. The write that opens a
+ * refund misses on exactly this, and a re-read that retried it would never stop.
+ *
+ * @param payment - the payment, freshly read
+ * @param request - the request, carrying its cancel event id when it has one
+ */
+const handledCancelEvent = (payment: PaymentDocument, request: RefundRequest): boolean =>
+    request.cancelEventId !== undefined &&
+    payment.handledCancelEvents.includes(request.cancelEventId);
+
 /**
  * Open a refund on a payment: reserve the amount and append its record in one conditional write.
  *
  * A miss means another write moved `amountRefunded` between the caller's read and this one — so the
  * payment is re-read and the whole check runs again against what is really left, instead of
- * refunding from a stale figure. Each miss means someone else made progress, so it ends.
+ * refunding from a stale figure. Each miss means someone else made progress, so it ends. A miss
+ * because the request's cancel event was handled meanwhile ends at once, with `null`; a stamped
+ * request whose write keeps missing throws after {@link CANCEL_EVENT_WRITE_RETRIES} retries.
  *
  * The order's timeline row commits with the record, in one transaction: a refund exists exactly
  * when its `refund_issued` does.
@@ -271,6 +292,7 @@ const announceOwedByHand = (
  * @param actor - the operator who asked, when one did; absent for the automatic listener
  * @param session - the caller's transaction, when the record belongs to one (a settlement that
  *   found its order gone); absent, the record opens in a transaction of its own
+ * @param retriesLeft - retries left for a stamped request; at zero it throws instead of retrying
  * @returns the opened record and the payment after it, or `null` when nothing (or not that much)
  *   is left to refund
  */
@@ -278,7 +300,8 @@ export const openRefund = (
     payment: PaymentDocument,
     request: RefundRequest,
     actor?: string | null,
-    session?: ClientSession
+    session?: ClientSession,
+    retriesLeft = CANCEL_EVENT_WRITE_RETRIES
 ): Promise<OpenedRefund | null> => {
     const { currency, _id: paymentId, orderId, amountRefunded } = payment;
     const remaining = remainingOf(payment);
@@ -318,7 +341,8 @@ export const openRefund = (
                 amountRefunded,
                 toDecimalString(newTotal, currency),
                 refund,
-                active
+                active,
+                request.cancelEventId
             )
             .then((updated) =>
                 updated
@@ -349,11 +373,17 @@ export const openRefund = (
         // Inside a caller's transaction the payment is the one that caller just wrote: a miss is
         // final, and a re-read outside the transaction would see something older.
         if (session) return null;
+        // A stamped request never gives up quietly: `null` would let the caller mark the event
+        // handled with no refund opened. Throwing leaves it unmarked, so the outbox redelivers.
+        if (request.cancelEventId !== undefined && retriesLeft <= 0)
+            throw new Error(
+                `Payments: the refund for order ${String(orderId)} could not be opened, its write kept missing`
+            );
         return paymentRepository
             .findByOrderId(String(orderId))
             .then((fresh) =>
-                fresh?.status === REFUNDABLE_PAYMENT_STATUS
-                    ? openRefund(fresh, request, actor)
+                fresh?.status === REFUNDABLE_PAYMENT_STATUS && !handledCancelEvent(fresh, request)
+                    ? openRefund(fresh, request, actor, undefined, retriesLeft - 1)
                     : null
             );
     });
@@ -1139,31 +1169,57 @@ const cancellationRequestOf = (canceled: CanceledOrder | undefined): RefundReque
  * The `order.canceled` listener's refund: give the money back if any was taken. The event is the
  * only promise of it, delivered by the outbox until this resolves.
  *
- * Idempotent: a redelivery, or a cancel of a never-paid order, finds nothing left to return and
- * does nothing. Once a refund record is open, that record is the durable promise —
- * {@link retryOpenRefunds} finishes it, forever and with the same idempotency key — so a provider
- * refusal ({@link RefundLeftOpenError}) is logged and not rethrown. A throw BEFORE the record exists (the database is down)
- * still rejects, and the outbox delivers the event again.
+ * Idempotent: the payment remembers every event id it handled, even one with nothing to return,
+ * so a redelivery skips it before any write — also after staff voided the refund it opened. A
+ * redelivery does not finish an open record: {@link retryOpenRefunds} does, forever and with the
+ * same idempotency key, so a provider refusal ({@link RefundLeftOpenError}) is logged and not
+ * rethrown. A throw BEFORE the event is marked (the database is down) still rejects, and the
+ * outbox delivers the event again. With no `eventId` (an in-process emit) nothing is remembered:
+ * a repeat finds nothing left to return.
  *
  * A hand-paid order opens its record and waits for an operator (`leaveForOperator`).
  *
  * @param orderId - the order that was canceled
  * @param canceled - why it was canceled and when the buyer told the shop, from the `order.canceled` fact
+ * @param eventId - the outbox row id of the delivery; absent for an in-process emit
  * @internal The `order.canceled` listener's refund, which has no caller of its own to check: only
  *   this module's `subscribe` may run it, so it is not on `paymentService`.
  */
-export const refundForOrder = (orderId: string, canceled?: CanceledOrder): Promise<void> =>
-    performRefund(orderId, undefined, cancellationRequestOf(canceled))
-        .then(() => undefined)
-        .catch((error: unknown) => {
-            if (!(error instanceof RefundLeftOpenError)) throw error;
-            // Stryker disable all
-            logger.error({
-                message: `Payments: the refund for order ${orderId} was refused — its record is open, and the refund sweep tries again`,
-                error
-            });
-            // Stryker restore all
-        });
+export const refundForOrder = (
+    orderId: string,
+    canceled?: CanceledOrder,
+    eventId?: string
+): Promise<void> =>
+    (eventId === undefined
+        ? Promise.resolve(false)
+        : paymentRepository
+              .findByOrderId(orderId)
+              .then((payment) => payment?.handledCancelEvents.includes(eventId) === true)
+    ).then((handled) =>
+        handled
+            ? undefined
+            : performRefund(orderId, undefined, {
+                  ...cancellationRequestOf(canceled),
+                  ...(eventId === undefined ? {} : { cancelEventId: eventId })
+              })
+                  .then(() => undefined)
+                  .catch((error: unknown) => {
+                      if (!(error instanceof RefundLeftOpenError)) throw error;
+                      // Stryker disable all
+                      logger.error({
+                          message: `Payments: the refund for order ${orderId} was refused — its record is open, and the refund sweep tries again`,
+                          error
+                      });
+                      // Stryker restore all
+                  })
+                  // Every outcome that did not throw is a handled event: the refund opened (already
+                  // stamped, this is a no-op), or there was nothing to return.
+                  .then(() =>
+                      eventId === undefined
+                          ? undefined
+                          : paymentRepository.markCancelEventHandled(orderId, eventId)
+                  )
+    );
 
 /**
  * May this caller return money for a return? Three kinds of caller: the system actor; staff who

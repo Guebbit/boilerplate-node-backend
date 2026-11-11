@@ -17,6 +17,7 @@ import { stopLimitsRedis } from '@infrastructure/adapters/limits-redis';
 import { stopQueue } from '@infrastructure/adapters/queue';
 import { stopLocaleOverrideRefresh } from '@infrastructure/i18n';
 import { settleRenders } from '@infrastructure/adapters/pdf';
+import { settleIdempotencyMarks } from '@infrastructure/http/middlewares/idempotency';
 import { isTestEnvironment, serverConfig } from '@infrastructure/runtime/config';
 import { markServerDraining } from '@infrastructure/runtime/readiness';
 
@@ -90,6 +91,12 @@ const RENDER_SHARE = 0.25;
 const IN_FLIGHT_SHARE = 0.1;
 
 /**
+ * Share of the shutdown deadline the idempotency ledger's pending done-marks get. A mark is one
+ * small write, so this is a ceiling for a stalled database, not an expected wait.
+ */
+const IDEMPOTENCY_SHARE = 0.05;
+
+/**
  * Promisify server.close() — resolves once all connections are drained.
  *
  * `http.Server.close()` stops accepting new connections while letting in-flight requests finish,
@@ -148,6 +155,9 @@ export const shutdownInfra = (
         // Renders already started finish (or time out) before the process can exit: an exit
         // mid-render orphans the Chromium it launched, and its temporary profile with it.
         .then(() => settleRenders(getShutdownTimeoutMs() * RENDER_SHARE))
+        // Done-marks written after an answer went out finish before the database closes: cut, one
+        // strands its key in flight, which a do-not-retry client sees as a false "outcome unknown".
+        .then(() => settleIdempotencyMarks(getShutdownTimeoutMs() * IDEMPOTENCY_SHARE))
         // Work the caller started (event deliveries) finishes before the queue and database go:
         // cut mid-write, it would log errors against a closed client on every deploy.
         .then(() => settleInFlight?.(getShutdownTimeoutMs() * IN_FLIGHT_SHARE))

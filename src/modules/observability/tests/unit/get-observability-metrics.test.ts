@@ -13,6 +13,7 @@ import {
     metricsRegistry
 } from '@infrastructure/observability/metrics-registry';
 import { logger } from '@infrastructure/adapters/logger';
+import { recordErrorOnActiveSpan } from '@infrastructure/observability/tracer';
 
 /*
  * Only `getPrometheusMetrics` is replaced. `metricsRegistry` is the REAL one: every module
@@ -25,6 +26,11 @@ jest.mock('@infrastructure/observability/metrics-registry', () => ({
     ...jest.requireActual('@infrastructure/observability/metrics-registry'),
     __esModule: true,
     getPrometheusMetrics: jest.fn()
+}));
+
+jest.mock('@infrastructure/observability/tracer', () => ({
+    __esModule: true,
+    recordErrorOnActiveSpan: jest.fn()
 }));
 
 jest.mock('@infrastructure/adapters/logger', () => ({
@@ -106,5 +112,18 @@ describe('GET /observability/metrics', () => {
         expect(logger.error).toHaveBeenCalledWith('Failed to collect Prometheus metrics', {
             error: failure
         });
+    });
+
+    it('marks the active span failed, so the scrape error is counted on the trace', async () => {
+        const failure = new Error('registry exploded');
+        jest.mocked(getPrometheusMetrics).mockRejectedValueOnce(failure);
+        const { response } = fakeResponse();
+
+        getObservabilityMetrics({} as never, response);
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(recordErrorOnActiveSpan).toHaveBeenCalledWith(failure);
     });
 });

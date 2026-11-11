@@ -15,7 +15,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { StockMovementReason } from '@types';
 import { inventoryService } from '../../services';
 import { reservationRepository, stockLevelRepository } from '../../repository';
-import { stockLevelModel } from '../../model';
+import { stockLevelModel, reservationModel, stockMovementModel } from '../../model';
 
 setupTestDb();
 
@@ -108,5 +108,72 @@ describe('a line whose counters refuse', () => {
         const hold = await reservationRepository.findByOrderId(ORDER);
         expect(hold?.status).toBe('held');
         expect(await levelOf(firstId)).toEqual({ onHand: 10, reserved: 4 });
+    });
+});
+
+/** Ids of the ledger rows that name the order, oldest first. */
+const ledgerIdsOf = (orderId: string): Promise<string[]> =>
+    stockMovementModel
+        .find({ reference: orderId })
+        .sort({ _id: 1 })
+        .exec()
+        .then((rows) => rows.map((row) => String(row._id)));
+
+/** How many lines the order's hold names right now. */
+const itemCount = (): Promise<number> =>
+    reservationRepository.findByOrderId(ORDER).then((hold) => hold?.items.length ?? 0);
+
+describe('a checkout killed between two lines', () => {
+    it("lets the sweep free only the lines it took, never another order's units", async () => {
+        const first = await createProduct({ onHand: 10 });
+        const second = await createProduct({ onHand: 10 });
+        const [firstId, secondId] = [String(first._id), String(second._id)].toSorted();
+        const other = 'f'.repeat(24);
+        await inventoryService.reserveForOrder(other, [{ productId: secondId, quantity: 4 }]);
+
+        // The second line's counter write waits for the sweep, as a killed process would never
+        // get there; it is released afterwards so no transaction hangs past teardown.
+        const realApplyDelta = stockLevelRepository.applyDelta;
+        const gate: { open?: () => void } = {};
+        const sweepDone = new Promise<void>((resolve) => {
+            gate.open = resolve;
+        });
+        jest.spyOn(stockLevelRepository, 'applyDelta').mockImplementation(
+            async (productId, reason, quantity, delta, session) => {
+                if (productId === secondId && reason === StockMovementReason.reserve)
+                    await sweepDone;
+                return realApplyDelta(productId, reason, quantity, delta, session);
+            }
+        );
+        const checkout = inventoryService.reserveForOrder(ORDER, [
+            { productId: firstId, quantity: 3 },
+            { productId: secondId, quantity: 3 }
+        ]);
+        const outcome = checkout.then(
+            () => 'resolved',
+            () => 'rejected'
+        );
+
+        // Wait until the first line is in the hold, then expire it and sweep.
+        while ((await itemCount()) === 0) await new Promise((resolve) => setTimeout(resolve, 5));
+        await reservationModel.updateOne({ orderId: ORDER }, { expiresAt: new Date(0) });
+        await inventoryService.runReservationSweep();
+        const swept = await reservationRepository.findByOrderId(ORDER);
+        const levels = [await levelOf(firstId), await levelOf(secondId)];
+        const sweepRows = await ledgerIdsOf(ORDER);
+        gate.open?.();
+
+        expect(swept?.status).toBe('released');
+        expect(levels[0]).toEqual({ onHand: 10, reserved: 0 });
+        // The other order's 4 are untouched: the sweep did not release the line never taken.
+        expect(levels[1]).toEqual({ onHand: 10, reserved: 4 });
+        expect(await outcome).toBe('rejected');
+        expect(await levelOf(secondId)).toEqual({ onHand: 10, reserved: 4 });
+        expect(await levelOf(firstId)).toEqual({ onHand: 10, reserved: 0 });
+        expect(await reservationRepository.findByOrderId(ORDER)).toBeNull();
+        // The unwind found the hold already released: it gave nothing back a second time and
+        // left the sweep's ledger rows (the take and the release of A) exactly as they were.
+        expect(sweepRows).toHaveLength(2);
+        expect(await ledgerIdsOf(ORDER)).toEqual(sweepRows);
     });
 });

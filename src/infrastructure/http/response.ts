@@ -396,6 +396,20 @@ const problemOf = (rejection: ResponseReject, instance: string | undefined): Pro
     errors: rejection.errors
 });
 
+/** Responses of a do-not-retry operation: a wait hint on their 503 would invite a repeat of the write. */
+const doNotRetryResponses = new WeakSet<Response>();
+
+/**
+ * Mark a response as a do-not-retry operation's, so its 503 carries no `Retry-After`: the write may
+ * already have taken effect when the 503 fires (a query killed after the commit), and a hint to
+ * retry would be wrong. Set by `requireIdempotencyKey`.
+ *
+ * @param response - the response of the operation
+ */
+export const markDoNotRetry = (response: Response): void => {
+    doNotRetryResponses.add(response);
+};
+
 /**
  * Send a normalized error payload instead of leaking framework-specific response shapes.
  *
@@ -425,7 +439,9 @@ export const rejectResponse = (
     )
         response.append('RateLimit', rateLimitItem(policy, 0, retryAfter));
     // A 503 carries a wait hint too (RFC 9110 §15.6.4); a guard that knows better sets it first.
-    if (status === 503 && !response.hasHeader('Retry-After'))
+    // Not on a do-not-retry operation (`requireIdempotencyKey`): its 503 can fire after the write
+    // committed, so a hint to retry would be wrong.
+    if (status === 503 && !response.hasHeader('Retry-After') && !doNotRetryResponses.has(response))
         response.setHeader('Retry-After', String(SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS));
     // A 401 MUST carry a challenge (RFC 9110 §15.5.2, §11.6.1): the default says which scheme the
     // API takes. A guard that names a more specific one (`error="invalid_token"`) sets it first.

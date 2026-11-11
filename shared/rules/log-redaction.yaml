@@ -63,7 +63,9 @@ personalFields:
     - zip
     - fullname
 
-# Query parameters no trace span may carry: the OAuth callback's one-time `code` and CSRF `state`.
+# Query parameters no trace span may carry: the OAuth callback's one-time `code` and CSRF `state`,
+# and the `email` a staff search puts in the URL.
 traceUrlSecrets:
     - code
     - state
+    - email

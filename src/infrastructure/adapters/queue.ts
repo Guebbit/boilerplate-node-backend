@@ -201,6 +201,33 @@ const RECOVERY_OPTIONS = {
 };
 
 /**
+ * Retries a scheduled job's connection gets before it gives up (backoff 100, 200, 400 ms). A job
+ * process has no forced-exit deadline, so an unbounded retry timer would keep it alive forever.
+ */
+const JOB_MAX_RETRIES = 3;
+
+/** Whether this process is a scheduled job, set by {@link boundQueueRetries}. */
+let boundedRetries = false;
+
+/**
+ * Make this process give up on an unreachable broker after a few tries instead of retrying
+ * forever. Called by the job runner, which has no forced-exit deadline; a server never calls it.
+ */
+export const boundQueueRetries = (): void => {
+    boundedRetries = true;
+};
+
+/** The recovery options for the next dial: {@link RECOVERY_OPTIONS}, capped when a job. */
+const recoveryOptions = () =>
+    boundedRetries ? { ...RECOVERY_OPTIONS, maxRetries: JOB_MAX_RETRIES } : RECOVERY_OPTIONS;
+
+/**
+ * Bumped by {@link stopQueue}. A dial remembers the value it started under; a connection that
+ * lands after a stop belongs to a dead generation and is closed instead of kept.
+ */
+let connectionGeneration = 0;
+
+/**
  * Kick off the recovering connection if nothing has already — idempotent, so every public
  * function below may call it defensively without risking a second connection racing the first.
  *
@@ -214,12 +241,16 @@ const ensureConnecting = (): void => {
     // `isQueueEnabled()` already implies a URL; this is the type narrowing.
     if (!url) return;
     connectionStarted = true;
+    const generation = connectionGeneration;
 
     // https://github.com/amqp-node/amqplib#opt-in-recovery — `setup` is awaited before THIS
     // promise resolves, so by the time it does, `currentChannel` is already set.
     void amqplib
-        .connect(url, { recovery: RECOVERY_OPTIONS })
+        .connect(url, { recovery: recoveryOptions() })
         .then((model) => {
+            // Landed after `stopQueue()`, which found nothing to close: close it here, or its open
+            // socket keeps a job process alive for good.
+            if (generation !== connectionGeneration) return model.close().catch(() => undefined);
             recoveringConnection = model;
 
             // Fires on every RECONNECT — never on this first connect, which is what THIS promise
@@ -233,6 +264,7 @@ const ensureConnecting = (): void => {
                 currentChannel = undefined;
                 unavailabilityLog.report(error);
             });
+            return undefined;
         })
         // Only reachable when `maxRetries` is finite (`NODE_ENV=test` above) — production's
         // `Infinity` default never rejects this promise, so there is nothing to catch there.
@@ -305,15 +337,16 @@ export const startQueue = (): Promise<void> => {
 /**
  * Gracefully close the RabbitMQ connection.
  *
- * A connection never reached (the broker stayed down for this process's whole life) has nothing
- * of ours to close — amqplib's own retry timer is still running underneath, and is left to the
- * process's forced-exit deadline (`server-lifecycle.ts`) rather than chased here.
+ * A connection still dialling has nothing of ours to close yet: it is closed the moment it lands
+ * (see {@link connectionGeneration}). A broker that never answers is left to the server's
+ * forced-exit deadline (`server-lifecycle.ts`), or, in a job, to {@link boundQueueRetries}.
  */
 export const stopQueue = (): Promise<void> => {
     const connection = recoveringConnection;
     const channel = currentChannel;
     recoveringConnection = undefined;
     connectionStarted = false;
+    connectionGeneration += 1;
     unavailabilityLog.clear();
     if (!connection) {
         currentChannel = undefined;

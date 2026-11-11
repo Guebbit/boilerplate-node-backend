@@ -6,16 +6,18 @@
 
 import { z } from 'zod';
 import { redactSensitiveFields, serializeError } from '@infrastructure/adapters/logger';
+import { redactUrlSecrets } from '@infrastructure/runtime/otel-sdk';
 import { correlationDigest } from '@infrastructure/security/pseudonymise';
 import { caseBase, describeCases } from '@tests/cases';
 
-/** One case: a key and whether its value is replaced, or a message and what it is masked to. */
+/** One case: a key and whether its value is replaced, a span's request target, or a message and what it is masked to. */
 const redactionCase = z.discriminatedUnion('kind', [
     caseBase.extend({
         kind: z.literal('key'),
         key: z.string().min(1),
         expect: z.enum(['redact', 'keep'])
     }),
+    caseBase.extend({ kind: z.literal('traceUrl'), input: z.string(), expect: z.string() }),
     caseBase.extend({ kind: z.literal('message'), input: z.string(), expect: z.string() })
 ]);
 
@@ -27,6 +29,11 @@ describeCases('log-redaction', redactionCase, (one) => {
         const result = redactSensitiveFields({ [one.key]: 'value' }) as Record<string, unknown>;
 
         expect(result[one.key] === 'value' ? 'keep' : 'redact').toBe(one.expect);
+        return;
+    }
+
+    if (one.kind === 'traceUrl') {
+        expect(redactUrlSecrets(one.input)).toBe(one.expect);
         return;
     }
 

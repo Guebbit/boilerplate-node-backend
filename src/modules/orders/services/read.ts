@@ -25,7 +25,7 @@ import { parseOrderNumber } from './order-numbering';
  * and AND them into the scope; the rest of the search goes through unchanged.
  *
  * - `fulfillmentStatus` is derived on read, not stored: the filter is built from the same table
- *   that serializes the value, so it cannot disagree with it.
+ *   that serializes the value, so it cannot disagree with it (or it is the one aggregate).
  * - `orderNumber` is canonicalised (`#2026-41` is `2026-000041`). One that is not a number at all
  *   finds nothing, an empty page rather than an error, as payments' `transferReference` does.
  *

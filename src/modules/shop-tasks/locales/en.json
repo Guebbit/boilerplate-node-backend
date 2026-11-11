@@ -7,6 +7,12 @@
                 "title": "A purchase hold was placed",
                 "summary": "A buyer cancelled or let expire several unpaid orders, so their checkout is paused until {{until}}. Every cancellation was processed normally; nothing is blocked except placing a new order. The pause ends by itself; place a manual hold on the account to keep it longer."
             },
+            "outcome-unknown": {
+                "subject": "Check the result: {{operation}} on {{subjectName}}",
+                "meta-title": "Outcome unknown",
+                "title": "A write began and never reported how it ended",
+                "summary": "The {{operation}} on {{subjectName}} (started {{since}}) began and the server never reported how it ended. It was not run again, so money or stock may or may not have moved. Open the screen, check the result, and only then act again; a repeat with a new key is a new write."
+            },
             "digest": {
                 "subject": "Work waiting for you",
                 "meta-title": "Daily summary",
@@ -17,7 +23,7 @@
                 "returns-awaiting-goods": "{{n}} returns are overdue for their goods: ask the buyer once for proof of posting, and keep the refund on hold",
                 "returns-undecided": "{{n}} return requests still need a decision",
                 "low-stock": "{{n}} products are low on stock",
-                "unshipped": "{{n}} paid orders have not shipped",
+                "unshipped": "{{n}} paid orders still have goods to ship",
                 "awaiting-tracking": "{{n}} shipped parcels still have no tracking code",
                 "undelivered": "{{n}} parcels were shipped and never marked arrived",
                 "stale-refunds": "{{n}} refunds have been open too long"

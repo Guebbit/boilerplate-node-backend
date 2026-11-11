@@ -171,10 +171,11 @@ paths:
         post:
             tags: [Inventory]
             summary: Receive stock
-            description: Units arrive from a supplier — `onHand` rises, `reserved` does not, so the delivery becomes available immediately. The only transition that can create units, and the reason a shop that has sold out can sell again. Send an `Idempotency-Key` — a retried receipt with the same key replays the first answer instead of counting the delivery twice.
+            description: Units arrive from a supplier — `onHand` rises, `reserved` does not, so the delivery becomes available immediately. The only transition that can create units, and the reason a shop that has sold out can sell again. Requires an `Idempotency-Key` header — a retried receipt with the same key replays the first answer instead of counting the delivery twice, and a request without it answers 400 `IDEMPOTENCY_KEY_REQUIRED`. If the first attempt never reported an outcome, the same key answers 409 `IDEMPOTENCY_OUTCOME_UNKNOWN` and runs nothing; read the stock level back before receiving again with a new key.
             operationId: receiveStock
             x-error-codes:
-                '409': [IDEMPOTENCY_IN_FLIGHT]
+                '400': [IDEMPOTENCY_KEY_REQUIRED]
+                '409': [IDEMPOTENCY_IN_FLIGHT, IDEMPOTENCY_OUTCOME_UNKNOWN]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: ['create:StockMovement']
@@ -186,7 +187,7 @@ paths:
                   schema:
                       $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                   description: The product whose counter moves.
-                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/RequiredIdempotencyKeyHeader'
             requestBody:
                 required: true
                 content:
@@ -211,10 +212,11 @@ paths:
         post:
             tags: [Inventory]
             summary: Adjust stock
-            description: A stocktake correction — signed, because shrinkage is the common case and it is negative. Refuses to take `onHand` below what is already reserved, because those units are promised to orders that exist — the fix for finding fewer units than were sold is to cancel orders, not to make availability negative. Send an `Idempotency-Key` — a retried correction with the same key replays the first answer instead of applying the delta twice.
+            description: A stocktake correction — signed, because shrinkage is the common case and it is negative. Refuses to take `onHand` below what is already reserved, because those units are promised to orders that exist — the fix for finding fewer units than were sold is to cancel orders, not to make availability negative. Requires an `Idempotency-Key` header — a retried correction with the same key replays the first answer instead of applying the delta twice, and a request without it answers 400 `IDEMPOTENCY_KEY_REQUIRED`. If the first attempt never reported an outcome, the same key answers 409 `IDEMPOTENCY_OUTCOME_UNKNOWN` and runs nothing; read the stock level back before adjusting again with a new key.
             operationId: adjustStock
             x-error-codes:
-                '409': [IDEMPOTENCY_IN_FLIGHT, INVENTORY_BELOW_RESERVED]
+                '400': [IDEMPOTENCY_KEY_REQUIRED]
+                '409': [IDEMPOTENCY_IN_FLIGHT, IDEMPOTENCY_OUTCOME_UNKNOWN, INVENTORY_BELOW_RESERVED]
                 '422': [IDEMPOTENCY_KEY_MISMATCH]
             security:
                 - bearerAuth: ['create:StockMovement']
@@ -226,7 +228,7 @@ paths:
                   schema:
                       $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                   description: The product whose counter moves.
-                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/RequiredIdempotencyKeyHeader'
             requestBody:
                 required: true
                 content:

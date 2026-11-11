@@ -32,24 +32,19 @@ import { start as startDatabase } from '@infrastructure/runtime/database';
 import { startCache } from '@infrastructure/adapters/cache';
 import { startQueue } from '@infrastructure/adapters/queue';
 import { registerWorkers } from '@app/workers';
-import { registerTemplateDirectories } from '@infrastructure/adapters/mailer';
 import { logger } from '@infrastructure/adapters/logger';
 import { serverConfig } from '@infrastructure/runtime/config';
 import { registerValidationMessages } from '@infrastructure/http/validation-messages';
 import { listenOn, shutdownInfra } from '@infrastructure/runtime/server-lifecycle';
 import { markServerListening } from '@infrastructure/runtime/readiness';
-import {
-    bootI18n,
-    isLocaleOverrideAvailable,
-    refreshLocaleOverrides,
-    startLocaleOverrideRefresh
-} from '@infrastructure/i18n';
+import { isLocaleOverrideAvailable, startLocaleOverrideRefresh } from '@infrastructure/i18n';
 import { isTranslationAvailable } from '@kernel/translation';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { settleWithin } from '@infrastructure/runtime/settle';
 
 import { registerModules } from '@kernel/registry';
-import { enabledModules, enabledModuleDirectories } from './modules';
+import { enabledModules } from './modules';
+import { bootRendering } from './app/boot-rendering';
 import { APP_CONFIG_SLICES } from '@app/config';
 
 import { applyServerTimeouts, installRequestParsing, installSecurity } from '@app/security';
@@ -151,27 +146,8 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
             .then(() => startCache())
             .then(() => startQueue())
             .then(() => registerWorkers())
-            .then(() =>
-                // Modules carry their own copy, so deleting one deletes its strings. `infrastructure`
-                // sits below every module and cannot go looking for them, so the paths are handed in.
-                // Every dictionary in shared/locales is registered, so dropping in a file is the only
-                // step needed to add a language — the middleware negotiates against the same list.
-                bootI18n(enabledModuleDirectories('locales'))
-            )
-            .then(() => {
-                // Same reasoning, for a module's own EJS templates — before the first
-                // request or queue job that could resolve a template name against them.
-                registerTemplateDirectories(enabledModuleDirectories('templates'));
-            })
-            /*
-             * Layer whatever has been edited on top of the files just loaded, then keep doing it.
-             *
-             * NOT awaited for correctness — `refreshLocaleOverrides` never rejects and an empty overlay
-             * is a working state — but awaited for ordering: a request served between `init` and the
-             * first refresh would answer with un-overridden copy, and boot is the one moment where
-             * waiting a few milliseconds to avoid that costs nothing.
-             */
-            .then(() => refreshLocaleOverrides())
+            // Files, templates, then the admin's edits — the same step every scheduled job runs.
+            .then(() => bootRendering())
             // No provider (`locales` uninstalled) means every refresh would be a no-op forever —
             // a timer with nothing to poll is a leak of intent, not just of a file descriptor.
             .then(() => {

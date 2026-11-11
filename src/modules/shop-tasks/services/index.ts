@@ -9,6 +9,7 @@
 import { runStaffDigest } from './digest';
 import { onFulfillmentOrderDelayed } from './delayed';
 import { shopNotices } from './notices';
+import { tellOutcomeUnknown } from './outcome-unknown';
 import { shopTasks } from './tasks';
 import { workSummary } from './work-summary';
 
@@ -17,6 +18,7 @@ export const shopTasksService = {
     ...shopTasks,
     ...shopNotices,
     onFulfillmentOrderDelayed,
+    tellOutcomeUnknown,
     runStaffDigest,
     workSummary
 };

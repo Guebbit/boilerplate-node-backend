@@ -60,9 +60,6 @@ export const appJobs: readonly JobDeclaration[] = [
         run: () =>
             relayOutbox().then((result) => {
                 logger.info({ message: 'outbox: sweep finished', ...result });
-            }),
-        // Publishing an event is calling its subscribers, and `relayOutbox` refuses to run in a
-        // process where none are registered.
-        needs: { subscriptions: true }
+            })
     }
 ];

@@ -221,6 +221,12 @@ export interface PaymentDocument extends Document {
     refunds: RefundRecord[];
     /** Disputes the buyer's bank opened on this payment, oldest first. Staff only on the wire. */
     disputes: DisputeRecord[];
+    /**
+     * Outbox ids of the `order.canceled` events already handled, including one that had nothing to
+     * refund. A redelivery finds its id here and refunds nothing, even after staff voided the
+     * first refund. Internal: never on the wire.
+     */
+    handledCancelEvents: string[];
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -357,6 +363,10 @@ export const paymentSchema = new Schema<PaymentDocument>(
         disputes: {
             type: [disputeSchema],
             default: []
+        },
+        handledCancelEvents: {
+            type: [String],
+            default: []
         }
     },
     {
@@ -427,7 +437,7 @@ const wireRefund = (refund: Record<string, unknown>): Record<string, unknown> =>
  * as publish it.
  */
 export const applyPaymentTransform = applySerialization(paymentSchema, {
-    omit: ['providerRef', 'transferReference', 'payBy'],
+    omit: ['providerRef', 'transferReference', 'payBy', 'handledCancelEvents'],
     after: (serialized) => {
         // The embedded refunds get the same treatment a top-level document does, by hand: the lean
         // path never runs the subschema's own transform, and the `toJSON` path runs it on

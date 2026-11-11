@@ -391,6 +391,20 @@ names one order). The value is read the way customers type it (`parseOrderNumber
 answer: the filter and the value a row serializes with cannot disagree, and a unit test holds them to
 each other.
 
+The filter (`OrderFulfillmentFilter`) takes every carried value plus one aggregate no order ever
+carries, `awaiting_shipment`: `paid` or `processing` (`isAwaitingGoods`), so goods still owed, none or
+some already sent. It is the set behind the digest's unshipped row, the sales-orders badge and the
+stats card `paidNotShipped`. It keys on `status`, never on refunds, so a canceled order whose money
+was kept is out and a partly refunded one that still owes goods is in. Responses keep the six-value
+`OrderFulfillmentStatus`.
+
+| Ours                              | Shopify                                                        |
+| --------------------------------- | -------------------------------------------------------------- |
+| `awaiting_shipment` (filter-only) | `unfulfilled` (null or partial) inside `status=open`, and paid |
+| `unfulfilled`                     | `unshipped`                                                    |
+| `on_hold`, `partially_fulfilled`  | `on_hold`, `partial`                                           |
+| `shipped`, `fulfilled`            | `fulfilled` (filter `shipped`)                                 |
+
 The summary is also why `cancel` and `withdraw` read the order, not its status (and `withdrawBlocked`
 carries the reason a withdrawal is refused, so a client disables the button instead of hiding it): a whole-order cancel
 refuses once any shipment left (`actions.cancel` is `false`, and the write itself is conditional on

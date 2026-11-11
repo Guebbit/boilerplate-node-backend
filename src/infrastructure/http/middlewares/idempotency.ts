@@ -6,8 +6,9 @@
  * reservation keyed on a domain key, and so on) should not pay for a second mechanism.
  *
  * Opt-in at the header level on most routes: a caller who sends no `Idempotency-Key` gets no
- * protection and no refusal. A route where a repeat moves money twice uses `requireIdempotencyKey`
- * and refuses a missing key with 400.
+ * protection and no refusal. A do-not-retry operation (one where a repeat moves money or stock
+ * twice) uses `requireIdempotencyKey` and refuses a missing key with 400. Past the lease, such a key
+ * is never run again: it answers a stored 409 "outcome unknown" and tells staff.
  *
  * The record lives in Mongo, not Redis: `docker-compose.yml` runs the cache with
  * `--maxmemory-policy allkeys-lru`, which can evict a live record under memory pressure and turn
@@ -23,7 +24,7 @@
 
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { canonicalize } from '@guebbit/js-toolkit';
-import { rejectResponse } from '@infrastructure/http/response';
+import { markDoNotRetry, rejectResponse } from '@infrastructure/http/response';
 import { keepEtag } from '@infrastructure/http/preconditions';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { logger } from '@infrastructure/adapters/logger';
@@ -35,6 +36,7 @@ import {
 } from '@infrastructure/http/middlewares/idempotency-model';
 import { ERROR_CODES } from '@api/error-codes';
 import { MINUTE_MS } from '@domain-primitives/time';
+import { settleWithin } from '@infrastructure/runtime/settle';
 
 /** The header this middleware reads. Express lower-cases header names on `request.header()`. */
 const IDEMPOTENCY_KEY_HEADER = 'idempotency-key';
@@ -122,8 +124,85 @@ type StoredRecord = Pick<
     | 'location'
     | 'contentType'
     | 'headers'
+    | 'createdAt'
     | 'updatedAt'
 >;
+
+/**
+ * What a do-not-retry route names about itself, once, where it mounts the key: the operation staff
+ * will read about, and which path parameter holds the thing it acts on.
+ */
+export interface DoNotRetrySubject {
+    /** A short stable name for the operation (`refund`, `ship`); the sink maps it to words. */
+    operation: string;
+    /** The route parameter that carries the subject's id (`id`, `productId`). */
+    subjectParam: string;
+}
+
+/**
+ * The facts of a do-not-retry key whose first attempt never reported an outcome, handed to the
+ * registered {@link OutcomeUnknownSink}.
+ */
+export interface OutcomeUnknownFacts extends DoNotRetrySubject {
+    /** The shop the caller acted in. */
+    tenantId: string;
+    /** The id the route's `subjectParam` held. */
+    subjectId: string;
+    /** When the first attempt began: the ledger record's creation. */
+    since: Date;
+    /** One value per stuck ledger record, so a second takeover of it is told once. */
+    recordId: string;
+}
+
+/**
+ * Where an outcome-unknown notice goes. A port, like `AuditSink`: `infrastructure` cannot import
+ * the module that writes the notice, so that module registers itself from its `onRegistered`.
+ * Implementations MUST NOT throw and MUST NOT reject: the 409 is already being answered.
+ */
+export type OutcomeUnknownSink = (facts: OutcomeUnknownFacts) => void;
+
+/** The registered sink, if any; unregistered (unit tests, a project without a shop) is supported. */
+let outcomeUnknownSink: OutcomeUnknownSink | undefined;
+
+/**
+ * Install the sink that tells staff a do-not-retry key's outcome is unknown.
+ *
+ * @param sink - fire-and-forget: no awaiting, no throwing
+ */
+export const registerOutcomeUnknownSink = (sink: OutcomeUnknownSink): void => {
+    outcomeUnknownSink = sink;
+};
+
+/**
+ * Everything one request knows when it claims, taken or lost, a key: the three identity parts of
+ * the record, and the do-not-retry facts when its route is one.
+ */
+interface Claim {
+    /** The caller-supplied key, unquoted. */
+    key: string;
+    /** See {@link callerKeyOf}. */
+    caller: string;
+    /** See {@link fingerprintOf}. */
+    fingerprint: string;
+    /** Present on a do-not-retry route; `tenantId` is absent when no shop could be named. */
+    doNotRetry?: DoNotRetryFacts;
+}
+
+/** What a do-not-retry request adds to its {@link Claim}. */
+type DoNotRetryFacts = DoNotRetrySubject & { subjectId: string; tenantId?: string };
+
+/** Every done-mark write started and not yet finished: what {@link settleIdempotencyMarks} waits for. */
+const pendingMarks = new Set<Promise<void>>();
+
+/**
+ * Wait for every done-mark already started, up to `timeoutMs`. The mark is written after the
+ * answer has gone out, so a process stopped right then would strand the key `in_flight` and, on a
+ * do-not-retry route, turn a client's retry into a false "outcome unknown".
+ *
+ * @param timeoutMs - the most it may wait
+ */
+export const settleIdempotencyMarks = (timeoutMs: number): Promise<void> =>
+    settleWithin(pendingMarks, timeoutMs);
 
 /**
  * The headers an answer carries that a retry must see too: the challenge of a 401, the allowed
@@ -151,15 +230,18 @@ const replayedHeadersOf = (response: Response): Record<string, string> =>
 
 /**
  * How long an 'in_flight' record holds its key. Past this, the attempt that claimed it is taken
- * to be dead (a crash, a killed process) and a retry may claim the key again. Without it, a crash
- * mid-request answers 409 to every retry for the whole retention window.
+ * to be dead (a crash, a killed process) and a retry may claim the key again: an ordinary key runs
+ * the handler again, a do-not-retry key answers "outcome unknown" and runs nothing. Without it, a
+ * crash mid-request answers 409 to every retry for the whole retention window.
  *
  * Far above any real handler: a live request running this long is already past every timeout.
  */
 const IN_FLIGHT_LEASE_MS = 5 * MINUTE_MS;
 
 /**
- * Whether an 'in_flight' record outlived {@link IN_FLIGHT_LEASE_MS}.
+ * Whether an 'in_flight' record outlived {@link IN_FLIGHT_LEASE_MS}. It says the lease ran out,
+ * not that the attempt is dead: a live but slow one is rare, and a do-not-retry key treats it as
+ * unknown rather than as free.
  *
  * @param existing - the record holding the key
  */
@@ -169,38 +251,117 @@ const isAbandoned = (existing: StoredRecord): boolean =>
     Date.now() - existing.updatedAt.getTime() > IN_FLIGHT_LEASE_MS;
 
 /**
- * Take over an abandoned 'in_flight' record, atomically: the filter pins the `updatedAt` this
- * request saw, so of two retries racing for the same dead record exactly one wins. The winner runs
- * the handler with its answer captured; the loser answers 409, as for any live attempt.
+ * Answer a do-not-retry key whose lease ran out: 409 "outcome unknown", stored so every later
+ * retry replays it, and staff told once. The handler never runs: the first attempt may have taken
+ * effect, and running it again could move the money or the stock a second time.
  *
+ * @param claim - the key being taken over
+ * @param doNotRetry - the claim's do-not-retry facts
+ * @param existing - the abandoned record, for the first attempt's time
+ */
+const answerOutcomeUnknown = (
+    claim: Claim,
+    doNotRetry: DoNotRetryFacts,
+    existing: StoredRecord,
+    response: Response
+): Response => {
+    armOutcomeCapture(response, claim);
+    tellStaffOutcomeUnknown(claim, doNotRetry, existing);
+    return rejectResponse(response, 409, [
+        {
+            code: ERROR_CODES.IDEMPOTENCY_OUTCOME_UNKNOWN,
+            message: t('generic.error-idempotency-outcome-unknown')
+        }
+    ]);
+};
+
+/**
+ * Hand the stuck key to the registered sink. Fire-and-forget: a notice that cannot be raised is
+ * logged at `error` and the 409 still goes out; the client's own re-read is the safety net.
+ *
+ * @param claim - the key being taken over
+ * @param doNotRetry - the claim's do-not-retry facts
+ * @param existing - the abandoned record
+ */
+const tellStaffOutcomeUnknown = (
+    claim: Claim,
+    doNotRetry: DoNotRetryFacts,
+    existing: StoredRecord
+): void => {
+    const { tenantId, ...subject } = doNotRetry;
+    const sink = outcomeUnknownSink;
+    if (tenantId === undefined || !sink) {
+        logger.error({
+            message: 'A do-not-retry key has an unknown outcome and no one could be told.',
+            operation: subject.operation,
+            subjectId: subject.subjectId
+        });
+        return;
+    }
+    // A promise chain, not a bare call: a sink that throws synchronously, against its contract,
+    // must still not fail the 409 that is being answered.
+    Promise.resolve()
+        .then(() =>
+            sink({
+                ...subject,
+                tenantId,
+                since: existing.createdAt ?? new Date(),
+                recordId: `${claim.caller}:${claim.key}`
+            })
+        )
+        .catch((error: unknown) => {
+            logger.error({
+                message: 'A do-not-retry outcome-unknown notice could not be raised.',
+                operation: subject.operation,
+                error
+            });
+        });
+};
+
+/**
+ * Take over an abandoned 'in_flight' record, atomically: the filter pins the `updatedAt` this
+ * request saw, so of two retries racing for the same dead record exactly one wins. On an ordinary
+ * key the winner runs the handler with its answer captured; on a do-not-retry key it answers
+ * "outcome unknown" instead (see {@link answerOutcomeUnknown}). The loser answers 409, as for any
+ * live attempt.
+ *
+ * @param claim - the key being taken over
  * @param existing - the abandoned record — see {@link isAbandoned}
  */
 const reclaimAbandoned = (
-    raw: string,
-    caller: string,
+    claim: Claim,
     existing: StoredRecord,
     response: Response,
     next: NextFunction
 ): Promise<void> =>
     idempotencyRecordModel
         .updateOne(
-            { key: raw, caller, state: 'in_flight', updatedAt: existing.updatedAt },
+            {
+                key: claim.key,
+                caller: claim.caller,
+                state: 'in_flight',
+                updatedAt: existing.updatedAt
+            },
             // `timestamps: true` restamps `updatedAt`, which restarts the lease for this attempt.
             { $set: { state: 'in_flight' } }
         )
         .exec()
         .then(({ modifiedCount }) => {
-            if (modifiedCount === 1) {
-                armOutcomeCapture(response, raw, caller);
-                next();
+            if (modifiedCount !== 1) {
+                rejectResponse(response, 409, [
+                    {
+                        code: ERROR_CODES.IDEMPOTENCY_IN_FLIGHT,
+                        message: t('generic.error-idempotency-in-flight')
+                    }
+                ]);
                 return;
             }
-            rejectResponse(response, 409, [
-                {
-                    code: ERROR_CODES.IDEMPOTENCY_IN_FLIGHT,
-                    message: t('generic.error-idempotency-in-flight')
-                }
-            ]);
+            if (claim.doNotRetry) {
+                answerOutcomeUnknown(claim, claim.doNotRetry, existing, response);
+                return;
+            }
+            armOutcomeCapture(response, claim);
+            next();
         });
 
 /**
@@ -237,18 +398,22 @@ const warnUnrecordableEnd = (key: string): void => {
  * too and records it with no body; `json` ends through `end`, hence the `recorded` latch.
  * An `end` that carries bytes (or follows a `write`) is not recorded: see {@link endsBodiless}.
  *
+ * The write is tracked in {@link pendingMarks}, so a shutdown waits for it. One that fails leaves
+ * the key `in_flight`: harmless to an ordinary key (a retry takes it over after the lease), but on
+ * a do-not-retry key a retry then answers "outcome unknown", so it logs at `error`.
+ *
  * @param response - the response whose `json` and `end` methods are being overridden
- * @param key - the caller-supplied `Idempotency-Key`
- * @param caller - this request's caller identity — see {@link callerKeyOf}
+ * @param claim - the key this attempt holds
  */
-const armOutcomeCapture = (response: Response, key: string, caller: string): void => {
+const armOutcomeCapture = (response: Response, claim: Claim): void => {
+    const { key, caller } = claim;
     let recorded = false;
 
     /** Writes the outcome once; a second call (json, then the end it triggers) is a no-op. */
     const record = (body: unknown): void => {
         if (recorded) return;
         recorded = true;
-        void idempotencyRecordModel
+        const write = idempotencyRecordModel
             .updateOne(
                 { key, caller },
                 {
@@ -265,12 +430,13 @@ const armOutcomeCapture = (response: Response, key: string, caller: string): voi
                 }
             )
             .exec()
+            .then(() => undefined)
             .catch((error: unknown) => {
                 // The response has already gone out — there is nothing left to roll back. Left
-                // 'in_flight', the record simply rides out its TTL and a retry sees 409 until
-                // then, exactly as if the process had crashed here.
+                // 'in_flight', the record rides out its TTL, exactly as if the process had
+                // crashed here; a retry past the lease is then treated as a crashed attempt.
                 // Stryker disable all
-                logger.warn({
+                logger[claim.doNotRetry ? 'error' : 'warn']({
                     message:
                         'Idempotency record could not be marked done; it will expire in-flight.',
                     key,
@@ -278,6 +444,12 @@ const armOutcomeCapture = (response: Response, key: string, caller: string): voi
                 });
                 // Stryker restore all
             });
+        pendingMarks.add(write);
+        // `write` never rejects (its own `catch` logs), so both arms only forget it.
+        const forget = (): void => {
+            pendingMarks.delete(write);
+        };
+        void write.then(forget, forget);
     };
 
     const responseJson = response.json.bind(response);
@@ -349,26 +521,35 @@ const respondToCollision = (
  * mechanism exists to prevent. `retriesLeft` bounds it to one attempt: past that, two concurrent
  * retries have now genuinely raced each other into re-creating the record, so the second one's own
  * E11000 finds a real row to collide with on its `findOne` — the ordinary path, not the vanished
- * one.
+ * one. A do-not-retry key never falls through to `next()` at all: still nothing after the retry
+ * means another request is racing for the slot, so it answers 409 in flight.
  *
+ * @param claim - the key being claimed
  * @param retriesLeft - how many more times the create may be retried after a vanished record
  */
 const onDuplicateKey = (
-    raw: string,
-    caller: string,
-    fingerprint: string,
+    claim: Claim,
     response: Response,
     next: NextFunction,
     retriesLeft: number
 ): Promise<void> =>
     idempotencyRecordModel
-        .findOne({ key: raw, caller })
+        .findOne({ key: claim.key, caller: claim.caller })
         .lean()
         .exec()
         .then((existing) => {
             if (!existing) {
                 if (retriesLeft > 0) {
-                    claimIdempotencyKey(raw, caller, fingerprint, response, next, retriesLeft - 1);
+                    claimIdempotencyKey(claim, response, next, retriesLeft - 1);
+                    return;
+                }
+                if (claim.doNotRetry) {
+                    rejectResponse(response, 409, [
+                        {
+                            code: ERROR_CODES.IDEMPOTENCY_IN_FLIGHT,
+                            message: t('generic.error-idempotency-in-flight')
+                        }
+                    ]);
                     return;
                 }
                 // Retried and still nothing to claim or find — give up rather than loop
@@ -377,10 +558,10 @@ const onDuplicateKey = (
                 return;
             }
 
-            if (existing.fingerprint === fingerprint && isAbandoned(existing))
-                return reclaimAbandoned(raw, caller, existing, response, next);
+            if (existing.fingerprint === claim.fingerprint && isAbandoned(existing))
+                return reclaimAbandoned(claim, existing, response, next);
 
-            respondToCollision(response, existing, fingerprint);
+            respondToCollision(response, existing, claim.fingerprint);
         })
         .catch((error: unknown) => {
             // The collision branch is the NORMAL path for a retried request — a failure
@@ -396,17 +577,20 @@ const onDuplicateKey = (
  * what the collision actually means.
  */
 const claimIdempotencyKey = (
-    raw: string,
-    caller: string,
-    fingerprint: string,
+    claim: Claim,
     response: Response,
     next: NextFunction,
     retriesLeft: number
 ): void => {
     idempotencyRecordModel
-        .create({ key: raw, caller, fingerprint, state: 'in_flight' })
+        .create({
+            key: claim.key,
+            caller: claim.caller,
+            fingerprint: claim.fingerprint,
+            state: 'in_flight'
+        })
         .then(() => {
-            armOutcomeCapture(response, raw, caller);
+            armOutcomeCapture(response, claim);
             next();
         })
         .catch((error: unknown) => {
@@ -415,21 +599,22 @@ const claimIdempotencyKey = (
                 return;
             }
 
-            return onDuplicateKey(raw, caller, fingerprint, response, next, retriesLeft);
+            return onDuplicateKey(claim, response, next, retriesLeft);
         });
 };
 
 /**
- * `Idempotency-Key` support for one route — see the module doc for when to reach for it.
+ * The shared body of {@link idempotencyKey} and {@link requireIdempotencyKey}: read and validate
+ * the header, then claim the key. `doNotRetry` is the route's own mark, absent on an ordinary one.
  *
- * No key on the request: a no-op, straight to `next()`. A key present: {@link claimIdempotencyKey}
- * does the rest.
+ * @param doNotRetry - the route's operation, for a do-not-retry route
  */
-export const idempotencyKey: RequestHandler = (
+const handleKey = (
     request: Request,
     response: Response,
-    next: NextFunction
-) => {
+    next: NextFunction,
+    doNotRetry?: DoNotRetrySubject
+): void => {
     const raw = request.header(IDEMPOTENCY_KEY_HEADER);
     if (!raw) {
         next();
@@ -459,29 +644,79 @@ export const idempotencyKey: RequestHandler = (
         return;
     }
 
-    claimIdempotencyKey(key, callerKeyOf(request), fingerprintOf(request), response, next, 1);
+    claimIdempotencyKey(
+        {
+            key,
+            caller: callerKeyOf(request),
+            fingerprint: fingerprintOf(request),
+            ...(doNotRetry && { doNotRetry: doNotRetryFactsOf(request, doNotRetry) })
+        },
+        response,
+        next,
+        1
+    );
 };
 
 /**
- * {@link idempotencyKey}, but the header is mandatory: a request without it answers 400 and never
- * reaches the handler. For a route where one repeated request moves money twice. A key that is
- * present goes through exactly the same claim, replay and mismatch rules.
- * https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
+ * What a do-not-retry request adds to its claim: the route's operation, the subject's id from the
+ * path, and the shop the caller acts in (none for a caller no guard resolved to a shop).
+ *
+ * @param request - the incoming request, already past its permission guard
+ * @param subject - the route's own mark
  */
-export const requireIdempotencyKey: RequestHandler = (
+const doNotRetryFactsOf = (request: Request, subject: DoNotRetrySubject): DoNotRetryFacts => {
+    const { caller } = request;
+    const subjectId = request.params[subject.subjectParam];
+    return {
+        ...subject,
+        subjectId: typeof subjectId === 'string' ? subjectId : '',
+        ...(caller?.scope === 'tenant' && { tenantId: caller.tenantId })
+    };
+};
+
+/**
+ * `Idempotency-Key` support for one route — see the module doc for when to reach for it.
+ *
+ * No key on the request: a no-op, straight to `next()`. A key present: {@link claimIdempotencyKey}
+ * does the rest.
+ */
+export const idempotencyKey: RequestHandler = (
     request: Request,
     response: Response,
     next: NextFunction
 ) => {
-    if (!request.header(IDEMPOTENCY_KEY_HEADER)) {
-        rejectResponse(response, 400, [
-            {
-                code: ERROR_CODES.IDEMPOTENCY_KEY_REQUIRED,
-                message: t('generic.error-idempotency-key-required')
-            }
-        ]);
-        return;
-    }
-
-    idempotencyKey(request, response, next);
+    handleKey(request, response, next);
 };
+
+/**
+ * {@link idempotencyKey} for a do-not-retry operation: one repeated request moves money or stock
+ * twice. The header is mandatory (a request without it answers 400 and never reaches the
+ * handler), and a key whose first attempt never reported an outcome is never run again — past the
+ * lease it answers a stored 409 `IDEMPOTENCY_OUTCOME_UNKNOWN` and staff are told. A key that is
+ * present goes through exactly the same claim, replay and mismatch rules.
+ *
+ * A 5xx on such a route carries no `Retry-After`: the write may already have taken effect, so
+ * "retry later" would be a lie.
+ *
+ * The returned handler is named `requireIdempotencyKey` on purpose: the route walks that look for
+ * the key claim in a chain (the limiters-before-the-key test) match by function name.
+ * https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
+ *
+ * @param subject - the operation and which path parameter names what it acts on
+ */
+export const requireIdempotencyKey = (subject: DoNotRetrySubject): RequestHandler =>
+    function requireIdempotencyKey(request: Request, response: Response, next: NextFunction) {
+        if (!request.header(IDEMPOTENCY_KEY_HEADER)) {
+            rejectResponse(response, 400, [
+                {
+                    code: ERROR_CODES.IDEMPOTENCY_KEY_REQUIRED,
+                    message: t('generic.error-idempotency-key-required')
+                }
+            ]);
+            return;
+        }
+
+        // A 503 here is not an invitation to retry: `rejectResponse` leaves its `Retry-After` off.
+        markDoNotRetry(response);
+        handleKey(request, response, next, subject);
+    };

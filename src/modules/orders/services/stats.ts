@@ -12,6 +12,7 @@ import type { PipelineStage } from 'mongoose';
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 import { bucketOf, type ReportWindow } from '@infrastructure/persistence/report';
 import { toMinorUnits, type Money } from '@domain-primitives/money';
+import { fulfillmentStatusFilter } from '../domain/fulfillment';
 import { orderRepository } from '../repository';
 
 /** Orders paid in a window: a `$match` on `paidAt`, live orders only. */
@@ -316,7 +317,14 @@ export const pipeline = (): Promise<PipelineRead> =>
                         }
                     ],
                     paid: [
-                        { $match: { status: { $in: ['paid', 'processing'] }, deletedAt: null } },
+                        {
+                            $match: {
+                                $and: [
+                                    fulfillmentStatusFilter('awaiting_shipment'),
+                                    { deletedAt: null }
+                                ]
+                            }
+                        },
                         { $count: 'n' }
                     ]
                 }

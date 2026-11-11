@@ -32,6 +32,7 @@ import { mailPaymentReceived, mailRefundIssued, mailRefundUndeliverable } from '
 import { callerScope, payerScope, buyerOrderScope, readsAllPayments } from './scope';
 import {
     getById,
+    orderIdOf,
     getForOrder,
     listForOrder,
     getRefund,
@@ -71,6 +72,7 @@ export const paymentService = {
     receiveWebhook,
     applyWebhookSettlement,
     getById,
+    orderIdOf,
     getForOrder,
     listForOrder,
     getRefund,

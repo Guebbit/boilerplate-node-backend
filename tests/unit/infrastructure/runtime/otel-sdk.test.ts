@@ -31,12 +31,14 @@ import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { asStub } from '@tests/stub';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { NoopSpanProcessor } from '@opentelemetry/sdk-trace';
+import { correlationDigest } from '@infrastructure/security/pseudonymise';
 import packageJson from '../../../../package.json';
 import {
     SERVICE_VERSION,
     buildProcessors,
     linkInboundTrace,
     publicEndpointPropagator,
+    onIncomingRequest,
     redactUrlSecrets
 } from '@infrastructure/runtime/otel-sdk';
 
@@ -141,6 +143,10 @@ describe('otel-sdk — redactUrlSecrets', () => {
         expect(redactUrlSecrets('/account/oauth/google/callback?code=abc&state=xyz&x=1')).toBe(
             '/account/oauth/google/callback?code=REDACTED&state=REDACTED&x=1'
         );
+    });
+
+    it("hides a staff search's email, however it is encoded", () => {
+        expect(redactUrlSecrets('/users?email=ada%40example.com')).toBe('/users?email=REDACTED');
     });
 
     it('leaves a URL with nothing to hide untouched', () => {
@@ -268,5 +274,75 @@ describe('otel-sdk — SERVICE_VERSION', () => {
     it('is the version package.json declares, not an npm-injected variable', () => {
         expect(SERVICE_VERSION).toBe(packageJson.version);
         expect(SERVICE_VERSION).not.toBe('0.0.0');
+    });
+});
+
+/** An incoming request and a span that already holds the instrumentation's attributes. */
+const incomingWithAddresses = (url: string) => {
+    const request = new IncomingMessage(new Socket());
+    request.url = url;
+    const setAttribute = jest.fn();
+    const span = asStub<Span>({
+        attributes: { 'client.address': '203.0.113.9', 'network.peer.address': '10.0.0.2' },
+        setAttribute,
+        setAttributes: jest.fn(),
+        addLink: jest.fn()
+    });
+    return { request, span, setAttribute };
+};
+
+describe('otel-sdk — onIncomingRequest', () => {
+    it('replaces both caller addresses with the digest a log line shows for `ip`', async () => {
+        const { request, span, setAttribute } = incomingWithAddresses('/products');
+
+        await withEnvironmentOverrides({ NODE_LOG_PERSONAL_FIELDS: 'hash' }, () => {
+            onIncomingRequest(span, request);
+            return Promise.resolve();
+        });
+
+        expect(setAttribute).toHaveBeenCalledWith(
+            'client.address',
+            correlationDigest('203.0.113.9')
+        );
+        expect(setAttribute).toHaveBeenCalledWith(
+            'network.peer.address',
+            correlationDigest('10.0.0.2')
+        );
+    });
+
+    it('replaces both caller addresses with the log marker in redact mode', async () => {
+        const { request, span, setAttribute } = incomingWithAddresses('/products');
+
+        await withEnvironmentOverrides({ NODE_LOG_PERSONAL_FIELDS: 'redact' }, () => {
+            onIncomingRequest(span, request);
+            return Promise.resolve();
+        });
+
+        expect(setAttribute).toHaveBeenCalledWith('client.address', '[REDACTED]');
+        expect(setAttribute).toHaveBeenCalledWith('network.peer.address', '[REDACTED]');
+    });
+
+    it('leaves the addresses alone in plain mode', async () => {
+        const { request, span, setAttribute } = incomingWithAddresses('/products');
+
+        await withEnvironmentOverrides({ NODE_LOG_PERSONAL_FIELDS: 'plain' }, () => {
+            onIncomingRequest(span, request);
+            return Promise.resolve();
+        });
+
+        expect(setAttribute).not.toHaveBeenCalled();
+    });
+
+    it('rewrites a staff search email out of every URL attribute', () => {
+        const { request, span } = incomingWithAddresses('/users?email=ada%40example.com');
+
+        onIncomingRequest(span, request);
+
+        expect(span.setAttributes).toHaveBeenCalledWith(
+            expect.objectContaining({
+                'http.target': '/users?email=REDACTED',
+                'url.query': 'email=REDACTED'
+            })
+        );
     });
 });

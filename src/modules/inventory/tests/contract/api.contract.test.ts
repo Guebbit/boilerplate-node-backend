@@ -5,6 +5,7 @@
  * the counters off a customer's screen. The transitions' own rules live in the unit suite.
  */
 
+import { randomUUID } from 'node:crypto';
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, authenticateAsRole } from '@tests/http';
@@ -117,6 +118,7 @@ describe('GET /inventory/movements', () => {
         for (let index = 0; index < 5; index += 1)
             await api()
                 .post(`/inventory/levels/${String(product._id)}/receive`)
+                .set('Idempotency-Key', randomUUID())
                 .set('Authorization', bearer)
                 .send({ quantity: 1 });
 
@@ -141,10 +143,12 @@ describe('GET /inventory/movements', () => {
         const product = await createProduct();
         await api()
             .post(`/inventory/levels/${String(product._id)}/receive`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', bearer)
             .send({ quantity: 5 });
         await api()
             .post(`/inventory/levels/${String(product._id)}/adjust`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', bearer)
             .send({ delta: -2 });
 
@@ -162,6 +166,7 @@ describe('GET /inventory/movements', () => {
         const product = await createProduct();
         await api()
             .post(`/inventory/levels/${String(product._id)}/receive`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', bearer)
             .send({ quantity: 5 });
 
@@ -187,6 +192,7 @@ describe('POST /inventory/levels/{productId}/receive', () => {
 
         const response = await api()
             .post(`/inventory/levels/${String(product._id)}/receive`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', bearer)
             .send({ quantity: 7 });
 
@@ -199,6 +205,7 @@ describe('POST /inventory/levels/{productId}/receive', () => {
 
         const response = await api()
             .post(`/inventory/levels/${MISSING_ID}/receive`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', bearer)
             .send({ quantity: 7 });
 
@@ -211,6 +218,7 @@ describe('POST /inventory/levels/{productId}/receive', () => {
 
         const response = await api()
             .post(`/inventory/levels/${String(product._id)}/receive`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', bearer)
             .send({ quantity: 0 });
 
@@ -225,6 +233,7 @@ describe('POST /inventory/levels/{productId}/adjust', () => {
 
         const response = await api()
             .post(`/inventory/levels/${String(product._id)}/adjust`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', bearer)
             .send({ delta: -4, note: 'damaged in transit' });
 
@@ -238,6 +247,7 @@ describe('POST /inventory/levels/{productId}/adjust', () => {
 
         const response = await api()
             .post(`/inventory/levels/${String(product._id)}/adjust`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', bearer)
             .send({ delta: -5 });
 
@@ -251,6 +261,7 @@ describe('POST /inventory/levels/{productId}/adjust', () => {
 
         const response = await api()
             .post(`/inventory/levels/${String(product._id)}/adjust`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', bearer)
             .send({ delta: 0 });
 

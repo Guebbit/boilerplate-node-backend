@@ -366,8 +366,10 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
             RefundRecord,
             'createdAt' | 'providerRefundRef' | 'failureReason' | 'settledAt' | 'nextAttemptAt'
         >,
-        session?: ClientSession
+        session?: ClientSession,
+        cancelEventId?: string
     ) => Promise<PaymentDocument | null>;
+    markCancelEventHandled: (orderId: string, eventId: string) => Promise<void>;
     importRefund: (
         paymentId: string,
         expectedRefunded: string,
@@ -646,20 +648,44 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * @param newRefunded - `amountRefunded` once this refund is counted
      * @param refund - the record to append
      * @param session - the caller's transaction, when the timeline row must commit with it
+     * @param cancelEventId - the `order.canceled` event this refund answers: it is stamped in the
+     *   same write, and the write misses when the payment already handled that event
      * @returns the payment as it now stands, or `null` if the guard no longer held
      */
-    addRefund: (paymentId, expectedRefunded, newRefunded, refund, session) =>
+    addRefund: (paymentId, expectedRefunded, newRefunded, refund, session, cancelEventId) =>
         paymentModel
             .findOneAndUpdate(
                 {
                     _id: toObjectId(paymentId),
                     status: REFUNDABLE_PAYMENT_STATUS,
-                    amountRefunded: expectedRefunded
+                    amountRefunded: expectedRefunded,
+                    ...(cancelEventId ? { handledCancelEvents: { $ne: cancelEventId } } : {})
                 },
-                { $set: { amountRefunded: newRefunded }, $push: { refunds: refund } },
+                {
+                    $set: { amountRefunded: newRefunded },
+                    $push: { refunds: refund },
+                    // `$addToSet` on the array the filter just proved lacks the id: one atomic write.
+                    ...(cancelEventId ? { $addToSet: { handledCancelEvents: cancelEventId } } : {})
+                },
                 { returnDocument: 'after', ...(session ? { session } : {}) }
             )
             .exec(),
+
+    /**
+     * Remember that an `order.canceled` event was handled, whatever came of it. A no-op when the
+     * payment already holds the id, and when the order has no payment row.
+     *
+     * @param orderId - the canceled order
+     * @param eventId - the outbox row id, stable across redeliveries
+     */
+    markCancelEventHandled: (orderId, eventId) =>
+        paymentModel
+            .updateOne(
+                { orderId: toObjectId(orderId) },
+                { $addToSet: { handledCancelEvents: eventId } }
+            )
+            .exec()
+            .then(() => undefined),
 
     /**
      * Record a refund made in the provider's own dashboard: append the settled record and raise

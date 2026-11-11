@@ -358,7 +358,10 @@ Three rules the connection layer keeps because of how amqplib's own recovery wor
 `maxRetries` is `0` under `NODE_ENV=test`: amqplib's retry timer is never `.unref()`'d, so an
 unreachable broker — the routine case locally, since `.env` names the compose hostname, which
 resolves nowhere outside it — would otherwise keep a test process from exiting on its own.
-Production keeps the library default, `Infinity`.
+Production keeps the library default, `Infinity`, except in a scheduled job: `run-job.ts` calls
+`boundQueueRetries()` (3 retries), because a job process has no forced-exit deadline. A job never
+calls `startQueue()`; a mail built in its first moments goes inline, and a connection that lands
+after `stopQueue()` is closed instead of kept, so a job always exits.
 
 ## Graceful shutdown
 

@@ -137,6 +137,9 @@ A handler on the bus receives `(payload, meta)`. Rules:
 - **Be idempotent on `meta.eventId` where a duplicate does harm** (stock, money, webhook fan-out);
   a mail may repeat, see [rabbitmq.md](rabbitmq.md). `webhooks/services/publish.ts` is the
   reference: a unique index plus "duplicate key means already done".
+  `payments` is the second example: the payment records every `order.canceled` event id it
+  handled, even one with nothing to refund, and a redelivery of a known id returns before any
+  write. It must be the payment that remembers, not the refund record: staff can void a refund.
 - **Attempt every target, then fail.** `fanOut` uses `Promise.allSettled` so one bad subscription
   does not starve the rest, then throws so the relay retries; already-created rows are skipped.
 
@@ -162,6 +165,8 @@ a crash between the commit and the send no longer loses the mail. The rules that
 
 - **A duplicate is accepted.** Delivery is at-least-once, so a mail can go out twice; no dedupe
   field is kept. A duplicate beats a lost mail, see [rabbitmq.md](rabbitmq.md#emails-fire-and-forget).
+- **A failed BUILD is a setup bug, not a failed send.** Every job boots like the app
+  (`prepareJob`), so a listener in cron has the translations and templates it builds from.
 - **A failed mail never fails the act.** The listener logs and swallows, and the buyer-mail
   lookup is `orders`' `mailBuyerOfOrder`. `enqueueEmail` itself never rejects, so the outbox covers
   the crash window, not a failed send.
@@ -182,6 +187,8 @@ db.outboxevents.find({ status: 'dead' });
 ```
 
 Fix the consumer, then set the row back with `status: 'pending', attempts: 0, nextAttemptAt: new Date()`.
+Reviving a dead row re-runs every listener of its event. `payments` skips an `order.canceled` it
+already handled; a mail may repeat.
 Reviving a dead invoice event (`order.status_changed` to `paid`) also issues the credit notes of the
 refunds that settled meanwhile and found no invoice: see
 [`invoicing`](../modules/invoicing.md#issuing-a-document). Reviving a dead `paid` event also makes the

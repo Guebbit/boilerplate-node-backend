@@ -308,6 +308,35 @@ export const traceContextFormat = winston.format((info) => {
     return info;
 });
 
+/** winston's own key for the extra arguments of a log call; `triple-beam` is its transitive dependency. */
+const SPLAT = Symbol.for('splat');
+
+/**
+ * Undo winston's merge of an Error passed as metadata (`logger.error('text', error)`).
+ *
+ * winston copies the error's own enumerable fields onto the record (a Mongo error's
+ * `errorResponse.errmsg` and `keyValue` quote the offending email), appends its message to the
+ * headline and lifts `stack` and `cause`: none of it passes through {@link serializeError}.
+ * Those copies are deleted and the error goes back under `error`, where the scrub applies.
+ * An `error` the caller set explicitly wins; the merged one is then dropped, not logged raw.
+ *
+ * @param info - the record, mutated in place
+ */
+const restoreSplatError = (info: Record<string | symbol, unknown>): void => {
+    const splat: unknown = info[SPLAT];
+    const merged = Array.isArray(splat) ? (splat[0] as unknown) : undefined;
+    if (!(merged instanceof Error)) return;
+
+    for (const key of Object.keys(merged)) {
+        if (key !== 'level' && key !== 'message') Reflect.deleteProperty(info, key);
+    }
+    Reflect.deleteProperty(info, 'stack');
+    Reflect.deleteProperty(info, 'cause');
+    if (typeof info.message === 'string' && info.message.endsWith(` ${merged.message}`))
+        info.message = info.message.slice(0, -merged.message.length - 1);
+    info.error ??= merged;
+};
+
 /**
  * Apply error serialization and redaction before transport output.
  *
@@ -318,6 +347,8 @@ export const traceContextFormat = winston.format((info) => {
  * redacts nothing in production.
  */
 export const redactFormat = winston.format((info) => {
+    restoreSplatError(info);
+
     // `level` and `message` are winston's own reserved fields; separating them means the
     // redaction walk only sees caller-supplied metadata.
     const { level, message, ...rest } = info;

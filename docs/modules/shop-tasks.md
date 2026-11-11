@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — the shop's side of the helpdesk: the to-dos a payment, stock or delivery situation opens, the buyer's messages, the staff's work notices and the daily and weekly staff digest. One read route (the nav badge counts), no collection: [`tasks`](./tasks.md) and [`notifications`](./notifications.md) do the writing.
-**Depends on** — `tasks` and `notifications` (the doors it writes through), `payments`, `orders`, `inventory`, `delivery`, `returns`, `cart`, `wishlist` and `stock-alerts` (the events it hears, and the counts the digest reads), `users` (who can act today) and `shop` (the shop's country).
+**Depends on** — `tasks` and `notifications` (the doors it writes through), `payments`, `orders`, `inventory`, `delivery`, `returns`, `cart`, `wishlist` and `stock-alerts` (the events it hears; `products` names a product for the unknown-outcome notice, and the counts the digest reads), `users` (who can act today) and `shop` (the shop's country).
 **Breaks if you change** — a `shop-tasks.*` notice code: the code is its own dictionary key in both repos, so renaming one orphans the copy that words it.
 :::
 
@@ -23,6 +23,7 @@ flowchart LR
     notifications["notifications"]
     orders["orders"]
     payments["payments"]
+    products["products"]
     returns["returns"]
     shop["shop"]
     stock_alerts["stock-alerts"]
@@ -35,6 +36,7 @@ flowchart LR
     shop_tasks --> notifications
     shop_tasks --> orders
     shop_tasks --> payments
+    shop_tasks --> products
     shop_tasks --> returns
     shop_tasks --> shop
     shop_tasks --> stock_alerts
@@ -66,7 +68,7 @@ flowchart LR
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
-    class cart,orders core;
+    class cart,orders,products core;
     class delivery,inventory,notifications,payments,returns,shop,stock_alerts,wishlist supporting;
     class tasks generic;
     class shop_tasks centre;
@@ -169,6 +171,7 @@ union by `openapi.notifications.yaml` and to the stream's `NotificationPayload` 
 | `shop-tasks.stock-alert`                                  | buyer    | `stock_alert.sent`                   | who asked                          | —                     |
 | `shop-tasks.staff.purchase-hold-placed`                   | staff    | `order.purchase_hold_placed`         | `UserBanning`                      | now                   |
 | `shop-tasks.staff.return-requested`                       | staff    | `return.requested` (not withdrawals) | `ReturnManagement`                 | —                     |
+| `shop-tasks.staff.outcome-unknown`                        | staff    | the idempotency ledger (no event)    | the route's own set, see below     | now                   |
 | the ten summary rows, see [the digest](#the-staff-digest) | staff    | the digest jobs                      | the set that does the counted work | digest, where overdue |
 
 The `fulfillment-delayed` and `shipment-lost` params name their dates (`agreedAt`, `expectedAt`) as plain shop days (`YYYY-MM-DD`), converted from the event's instants when the row is written, so the inbox prints the same day as the mail.
@@ -177,6 +180,18 @@ A notice that points at an order names it. `fulfillment-delayed`, `fulfillment-h
 `staff.return-requested` carry a required `orderNumber` (`2026-000041`, printed as `#2026-000041`), copied
 from their event, which got it where the order was already in hand. The row does no orders read, and two
 notices for two orders never read as the same link. A later notice that names an order does the same.
+
+`shop-tasks.staff.outcome-unknown` is the one notice that is not written on an event. When a
+do-not-retry write (a refund, a ship, a stock receipt or adjustment) has a key whose first attempt
+never reported back, the ledger in `infrastructure` calls a sink this module installs in its
+`onRegistered`, and the notice is written in-process (never through the outbox, so the mail does not
+wait for the relay). It is told to the holders of the route's own permission set: `PaymentRefunding`
+for a refund, `DeliveryManagement` for a ship, `InventoryManagement` for stock. Its params name the
+subject (`subjectName`: the order's number printed as `#…`, or the product's name; `subjectId`: the
+order's or the product's id, the screen it opens) because two such notices must not read the same.
+Unlike the other order notices this one does read: no event carries the order number, so the sink asks
+`payments` or `delivery` for the order of the payment or fulfillment order and `orders` for its number.
+One notice per stuck key. See [Do-not-retry operations](../tools/idempotency.md#do-not-retry-operations).
 
 `fulfillment_order.delayed` is both a to-do and a message. One module has one handler per event, so
 a single handler runs the to-do first (idempotent by `eventId`) and then the notice: a redelivery
@@ -193,7 +208,7 @@ per run.
 | Summary row                               | Counts                                    | Run    | Set told              | Mail   |
 | ----------------------------------------- | ----------------------------------------- | ------ | --------------------- | ------ |
 | `shop-tasks.staff.transfers-due`          | bank transfers due soon                   | daily  | `PaymentRecording`    | bell   |
-| `shop-tasks.staff.unshipped`              | paid orders not shipped                   | daily  | `DeliveryStart`       | digest |
+| `shop-tasks.staff.unshipped`              | paid orders with goods still to ship      | daily  | `DeliveryStart`       | digest |
 | `shop-tasks.staff.returns-undecided`      | return requests still undecided           | daily  | `ReturnManagement`    | digest |
 | `shop-tasks.staff.returns-awaiting-goods` | approved returns overdue for their goods  | daily  | `ReturnReceiving`     | digest |
 | `shop-tasks.staff.delivery-holds-open`    | held orders open too long                 | daily  | `DeliveryManagement`  | digest |
@@ -213,7 +228,8 @@ returns list shows the ones still inside their days.
 Each row carries `params.work`: the filtered list path, from the `staffPages:` block of
 `shared/rules/frontend-links.yaml` (`SUMMARY_PAGES`). The bell opens it as it is, and the digest mail
 links the same entry, so the two cannot drift. Some rows open a list slightly wider than the count
-(for instance `unshipped` shows every paid order, not only the late ones).
+(`unshipped` lists every age, not only the late ones). Its link,
+`fulfillmentStatus=awaiting_shipment&deleted=false`, otherwise opens exactly the counted set.
 
 There is no digest extension point in `notifications`: all ten rows are the shop's, so a registry
 would have one caller. The primitives (`writeSummary`, `clearSummary`, `staffRecipients`) are the
@@ -231,7 +247,7 @@ the caller holds the screen's route gate; zero is sent as `0`, never left out.
 
 | Key              | Screen           | Gate              | Counts                                                  |
 | ---------------- | ---------------- | ----------------- | ------------------------------------------------------- |
-| `salesOrders`    | sales orders     | `display:Order`   | orders `paid` or `processing`, live, held ones included |
+| `salesOrders`    | sales orders     | `display:Order`   | orders with `fulfillmentStatus=awaiting_shipment`, live |
 | `salesPayments`  | payments         | `display:Payment` | the rows of `GET /payments/attention`, all six sources  |
 | `returns`        | sales returns    | `read:Return`     | returns with `status=requested`                         |
 | `salesPreorders` | preorders board  | `display:Order`   | fulfillment orders with `late=true`                     |
@@ -277,6 +293,7 @@ flowchart LR
     E["a domain event<br/>(bus or outbox)"] --> D{"to-do, notice,<br/>or both?"}
     D -->|"to-do"| OT["taskService.openSystemTask<br/>routeSet + work"]
     D -->|"notice"| NS["notificationsService<br/>create / notifyStaff<br/>route + link"]
+    LG["the idempotency ledger<br/>(do-not-retry key, outcome unknown)"] -->|"registered sink"| NS
     OT -. "task.opened" .-> TN["notifications: task notice<br/>to the holders of routeSet<br/>link = work"]
     NS --> BELL["the bell<br/>(SSE to open tabs)"]
     TN --> BELL
@@ -286,6 +303,7 @@ flowchart LR
     E -->|"public event"| WH["webhooks<br/>to subscribers"]
 ```
 
+- A do-not-retry write that may or may not have happened is told in-process, not through an event: [Do-not-retry operations](../tools/idempotency.md#do-not-retry-operations).
 - To-do kinds, openers, closers, who works them: [Tasks](./tasks.md#who-is-told) and the kind table above.
 - Notice codes, sets and mail class: [Notifications](./notifications.md#work-notices-for-staff).
 - The daily and weekly counts: [the staff digest](#the-staff-digest) above.

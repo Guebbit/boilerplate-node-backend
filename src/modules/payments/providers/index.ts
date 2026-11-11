@@ -202,6 +202,10 @@ export interface PaymentProvider {
      * An adapter with no intent object keeps this rule itself, with a provider key built from
      * `providerRef` + `paymentMethodRef`. A retry after a decline stays allowed (a new method, a new key).
      *
+     * An adapter must time its request out well under the idempotency ledger's five-minute lease
+     * (`IN_FLIGHT_LEASE_MS`): a call past it makes a retry of a do-not-retry write read a false
+     * "outcome unknown".
+     *
      * @param providerRef - what {@link prepare} returned
      * @param paymentMethodRef - the provider's opaque handle for the card (`pm_…`). NOT a card
      *   number: a server that receives one of those is in the wrong PCI bracket.
@@ -230,9 +234,11 @@ export interface PaymentProvider {
      * this application's two callers never reach the provider at the same time to begin with.
      *
      * An adapter must time its request out well inside the refund sweep's lease (10 minutes for
-     * up to 200 payments): a call that hangs holds the whole sweep.
+     * up to 200 payments): a call that hangs holds the whole sweep. A refund sent by staff also
+     * runs inside a request, so the same bound applies to the idempotency ledger's five-minute
+     * lease (`IN_FLIGHT_LEASE_MS`): a call past it makes a retry read a false "outcome unknown".
      *
-     * Beyond the provider's key window (Stripe v1: 24 h from first use; your provider's key window) a reused key makes a NEW
+     * Beyond the provider's key window (your provider's key window; Stripe v1: 24 h from first use) a reused key makes a NEW
      * refund, so the adapter must stay idempotent itself:
      * docs/modules/payments-provider-port.md#a-key-the-provider-forgot
      *

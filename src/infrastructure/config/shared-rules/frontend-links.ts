@@ -50,6 +50,10 @@ export const frontendLinksSchema = z.strictObject({
         task: template,
         /** One return. */
         return: template,
+        /** One order, the screen a refund or a shipment is read back on. */
+        order: template,
+        /** The stock board and its ledger. */
+        inventory: template,
         /** The payments list. */
         salesPayments: template,
         /** Summary row: bank transfers still unpaid, on the awaiting tab. */

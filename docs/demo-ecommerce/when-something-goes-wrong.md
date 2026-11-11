@@ -26,6 +26,7 @@ note field, and leaves the decision to a person. Each entry below has the same t
 | A parcel was lost and the shelf has none left to send again            | [Lost, and none left](#lost-none-left)                         |
 | A parcel marked lost has arrived after all                             | [The lost parcel arrived](#lost-parcel-arrived)                |
 | A parcel came back to the shop (returned to sender)                    | [It came back to us](#parcel-came-back)                        |
+| The server stopped while a refund, stock change or shipment was sent   | [After the server crashed](#after-server-crashed)              |
 
 ::: tip More entries come with their features
 Each entry here describes something the shop does today. When a new tool lands (a buyer who never
@@ -534,3 +535,29 @@ parcel was reported lost earlier, ship again from the same order: you do not nee
 else.
 
 **Whose job.** The warehouse.
+
+## After the server crashed {#after-server-crashed}
+
+**What you see.** A bell notice and a mail, "Check the result", naming an order (`#2026-000041`) or a
+product. A refund, a stock receipt, a stock adjustment or a shipment began and the shop never
+learned how it ended: the server stopped, or was restarted, at that moment. A button you pressed
+again then showed "we can't tell whether this went through". The shop did **not** run it a second
+time, because that could move the money or the stock twice.
+
+**What to do.** Look at what that screen shows now, and decide:
+
+1. A refund: open the order's payment and read its refunds. One that is there succeeded: stop. None:
+   it did not happen, refund again if you still mean to.
+2. A stock receipt or adjustment: open the product's ledger and compare the last movements with
+   what you entered. The counter is either already changed or not.
+3. A shipment: open the order's shipments. A parcel that is there is real, so do not cut another.
+4. Around the time of the crash, also look at refunds, stock receipts and adjustments, and shipments
+   started then that nobody was told about: the shop only tells you about the ones somebody retried.
+   A refund that was sent twice is the [two refunds by mistake](#two-refunds) case.
+
+Sending the same thing again always counts as a new action and takes a new key: that is your
+decision, never the shop's.
+
+**Whose job.** The people who hold the permission of that action: the moderator or the admin for
+refunds, the warehouse for stock and shipments.
+→ [`idempotency`](../tools/idempotency.md#do-not-retry-operations)

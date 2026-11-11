@@ -5,6 +5,7 @@
  * from `paid` is in the sweep: it needs `start:Shipment` as well as `update:Shipment`.
  * Each case gets its own order, because the door writes.
  */
+import { randomUUID } from 'node:crypto';
 import { setupTestDb } from '@tests/setup-test-db';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { api, authenticateAsRole } from '@tests/http';
@@ -68,6 +69,7 @@ describe('the ship action and the ship door agree', () => {
                             `/delivery/fulfillment-orders/${String(fulfillmentOrder._id)}/shipments`
                         )
                         .set('Authorization', staff.bearer)
+                        .set('Idempotency-Key', randomUUID())
                         .send({})
                 );
 

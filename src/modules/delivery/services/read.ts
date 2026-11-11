@@ -95,6 +95,20 @@ export const listShipmentsForOrder = (
     });
 
 /**
+ * The order a fulfillment order belongs to, with no caller's scope — for a notice that must name
+ * the order whatever the reader may see.
+ *
+ * @param fulfillmentOrderId - the fulfillment order
+ * @returns the order's id, or `undefined` for a missing fulfillment order
+ */
+export const orderIdOfFulfillmentOrder = (
+    fulfillmentOrderId: string
+): Promise<string | undefined> =>
+    fulfillmentOrderRepository
+        .findById(fulfillmentOrderId)
+        .then((found) => (found ? String(found.orderId) : undefined));
+
+/**
  * One shipment by its own id — the item read of the shipments `listShipmentsForOrder` lists, at the address
  * `PATCH /delivery/shipments/:id` writes. Scoped like the order it belongs to: a buyer reads their
  * own, `display:Order` reads any; someone else's is the same 404 as a missing one.

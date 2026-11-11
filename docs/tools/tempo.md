@@ -22,6 +22,7 @@ App  →  OTel Collector (OTLP/HTTP :4318)  →  Tempo (OTLP/gRPC :4317)  →  G
 
 - Grafana UI: `http://localhost:3001` → **Explore** → **Tempo**.
 - Search by `service.name = "api"` (the `NODE_SERVICE_NAME` default), by `trace_id`, by HTTP route, or by error.
+- A span carries no personal data in clear: `client.address` and `network.peer.address` follow `NODE_LOG_PERSONAL_FIELDS` like a log line's `ip`: the same keyed digest by default (search by that digest, not by address), `[REDACTED]` in `redact` mode, the address itself in `plain`, and the `code`, `state` and `email` query parameters read `REDACTED` in `url.query`, `http.target` and `http.url`. A 4xx leaves the server span's status unset; only a 5xx marks it as an error.
 
 ## Works with
 

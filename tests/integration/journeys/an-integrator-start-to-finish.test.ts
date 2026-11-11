@@ -9,6 +9,7 @@
  *
  * Replay is not walked here; the frontend's journeys walk it.
  */
+import { randomUUID } from 'node:crypto';
 import '@tests/contract';
 import {
     CreateReturn201Response,
@@ -105,6 +106,7 @@ it('delivers every event once, signed, in causal order', async () => {
     const shipment = bodyOf(
         await api()
             .post(`/delivery/fulfillment-orders/${fulfillmentOrder.id}/shipments`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', admin)
             .send({ trackingCode: 'TRK-INTEGRATOR1' }),
         ShipFulfillmentOrder201Response

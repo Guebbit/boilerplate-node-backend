@@ -20,6 +20,7 @@ x-extends:
         - NotificationCartMergeRefused
         - NotificationStaffPurchaseHoldPlaced
         - NotificationStaffReturnRequested
+        - NotificationStaffOutcomeUnknown
         - NotificationStaffTransfersDue
         - NotificationStaffPreordersLate
         - NotificationStaffDeliveryHoldsOpen
@@ -400,6 +401,54 @@ components:
                     enum: [shop-tasks.staff.return-requested]
                 params:
                     $ref: '#/components/schemas/ReturnRequestedParams'
+                severity:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        OutcomeUnknownParams:
+            type: object
+            additionalProperties: false
+            required: [operation, subjectId, subjectName, since]
+            description: >-
+                A do-not-retry write whose first attempt never reported an outcome. Nothing was run
+                again; staff read the subject back and decide.
+            properties:
+                operation:
+                    type: string
+                    enum: [refund, receive-stock, adjust-stock, ship]
+                    description: Which write it was.
+                subjectId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                    description: The order's id for a refund or a ship, the product's id for a stock movement.
+                subjectName:
+                    type: string
+                    description: The order's number as the buyer knows it (`2026-000041`, shown as `#…`) for a refund or a ship, the product's name for a stock movement.
+                since:
+                    type: string
+                    format: date-time
+                    description: When the first attempt began.
+
+        NotificationStaffOutcomeUnknown:
+            type: object
+            additionalProperties: false
+            description: A refund, a ship or a stock movement began and never reported how it ended; staff who do that work check the result.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [shop-tasks.staff.outcome-unknown]
+                params:
+                    $ref: '#/components/schemas/OutcomeUnknownParams'
                 severity:
                     $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
                 readAt:

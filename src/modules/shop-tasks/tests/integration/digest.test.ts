@@ -95,14 +95,17 @@ const digestMails = () =>
 
 /** A paid order the warehouse has not shipped for `days` days. */
 let buyers = 0;
-const paidAndWaiting = async (days: number) => {
+const paidAndWaiting = async (days: number, extras: { deletedAt?: Date } = {}) => {
     buyers += 1;
     const user = await createUser({
         email: `buyer${String(buyers)}@example.com`,
         username: `buyer${String(buyers)}`
     });
     const product = await createProduct();
-    const order = await createOrder(user, [toOrderItem(product, 1)], { status: OrderStatus.paid });
+    const order = await createOrder(user, [toOrderItem(product, 1)], {
+        status: OrderStatus.paid,
+        ...extras
+    });
     await markOrderPaidAt(String(order._id), new Date(Date.now() - days * DAY_MS));
     return order;
 };
@@ -122,6 +125,18 @@ describe('the daily digest', () => {
         await expect(summariesOf('support', support.id)).resolves.toEqual([]);
     });
 
+    it('does not count a deleted paid order', async () => {
+        const warehouse = await staff('warehouse', 'warehouse@example.com');
+        await paidAndWaiting(5);
+        await paidAndWaiting(5, { deletedAt: new Date() });
+
+        await runStaffDigest('daily');
+
+        await expect(summariesOf('warehouse', warehouse.id)).resolves.toEqual([
+            ['shop-tasks.staff.unshipped', 1]
+        ]);
+    });
+
     it('mails the overdue summary once, in the reader’s language, and not a second run', async () => {
         const warehouse = await staff('warehouse', 'warehouse@example.com', 'it');
         await paidAndWaiting(5);
@@ -131,7 +146,7 @@ describe('the daily digest', () => {
 
         // The bell carries the filtered list path, and the mail links the very same one.
         const work = await unshippedWorkOf('warehouse', warehouse.id);
-        expect(work).toEqual(expect.stringContaining('sales/orders?'));
+        expect(work).toBe('sales/orders?fulfillmentStatus=awaiting_shipment&deleted=false');
 
         const mails = digestMails();
         expect(mails).toHaveLength(1);

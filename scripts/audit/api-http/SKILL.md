@@ -184,8 +184,12 @@ Output goes to `tmp/reports/audit-<run>/api-http/<SCOPE>…`. `<run>` and `<SCOP
           service of each
         - `idempotency-key-*`: every POST or PATCH. The house rule
           (`docs/api/write-methods.md#retrying-a-post`): one whose repeat would write again accepts
-          an optional key, and one whose repeat would move money twice requires it. The rest sit in a
+          an optional key, and one whose repeat would move money or stock twice (the do-not-retry class) requires it. The rest sit in a
           class of `docs/tools/idempotency.md` "Named exceptions". A write in neither is a finding.
+          `idempotency-key-missing-400` is guarded: the request-contract case "every operation that
+          requires an Idempotency-Key" (`tests/contract/request-contract.test.ts`) sends none to each
+          operation the spec marks with the required header; skip the 400 itself and check only that
+          a do-not-retry write carries the mark.
           Rank worst first: harm a retry can do twice (money, stock, an account) > MUST > SHOULD >
           docs
     - Part D:

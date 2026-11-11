@@ -67,9 +67,10 @@ describe('GET /shop-tasks/summary', () => {
 
         expect(response.status).toBe(200);
         expect(response.body).toEqual({
-            salesOrders:
-                (await listTotal(bearer, '/orders?status=paid&deleted=false&pageSize=1')) +
-                (await listTotal(bearer, '/orders?status=processing&deleted=false&pageSize=1')),
+            salesOrders: await listTotal(
+                bearer,
+                '/orders?fulfillmentStatus=awaiting_shipment&deleted=false&pageSize=1'
+            ),
             salesPayments: 0,
             returns: await listTotal(bearer, '/returns?status=requested&pageSize=1'),
             salesPreorders: await listTotal(
