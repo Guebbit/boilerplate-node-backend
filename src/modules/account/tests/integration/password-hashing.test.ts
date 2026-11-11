@@ -29,7 +29,10 @@ describe('login with an unknown address', () => {
     it('still verifies against an argon2id hash, so a miss costs what a wrong password costs', async () => {
         const verify = observePort(passwordHash.verifyPassword);
 
-        const response = await accountService.login('nobody@example.com', 'whatever-it-is');
+        const response = await accountService.login({
+            email: 'nobody@example.com',
+            password: 'whatever-it-is'
+        });
 
         expect(response.success).toBe(false);
         expect(verify).toHaveBeenCalledTimes(1);
@@ -42,8 +45,14 @@ describe('a long password', () => {
         const prefix = 'L0ng-pass!'.repeat(8);
         const user = await createUser({ password: `${prefix}-the-real-ending` });
 
-        const real = await accountService.login(user.email, `${prefix}-the-real-ending`);
-        const sameStart = await accountService.login(user.email, `${prefix}-a-different-ending`);
+        const real = await accountService.login({
+            email: user.email,
+            password: `${prefix}-the-real-ending`
+        });
+        const sameStart = await accountService.login({
+            email: user.email,
+            password: `${prefix}-a-different-ending`
+        });
 
         expect(real.success).toBe(true);
         expect(sameStart.success).toBe(false);
@@ -61,7 +70,10 @@ describe('the password shape', () => {
             PASSPHRASE_PASSWORD,
             testCallerContext
         );
-        const login = await accountService.login(user.email, PASSPHRASE_PASSWORD);
+        const login = await accountService.login({
+            email: user.email,
+            password: PASSPHRASE_PASSWORD
+        });
 
         expect(changed.success).toBe(true);
         expect(login.success).toBe(true);

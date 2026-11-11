@@ -153,7 +153,10 @@ describe('accountService.login', () => {
     it('returns a success response with correct credentials', async () => {
         await createUser({ email: 'login@example.com' });
 
-        const result = await accountService.login('login@example.com', PLAIN_PASSWORD);
+        const result = await accountService.login({
+            email: 'login@example.com',
+            password: PLAIN_PASSWORD
+        });
 
         expect(result.success).toBe(true);
         expect((result as ResponseSuccess<UserDocument>).data.email).toBe('login@example.com');
@@ -162,14 +165,20 @@ describe('accountService.login', () => {
     it('rejects with 401 for the wrong password', async () => {
         await createUser({ email: 'login@example.com' });
 
-        const result = await accountService.login('login@example.com', 'WrongPassword!');
+        const result = await accountService.login({
+            email: 'login@example.com',
+            password: 'WrongPassword!'
+        });
 
         expect(result.success).toBe(false);
         expect((result as ResponseReject).status).toBe(401);
     });
 
     it('rejects with 401 for a non-existent email', async () => {
-        const result = await accountService.login('nobody@example.com', PLAIN_PASSWORD);
+        const result = await accountService.login({
+            email: 'nobody@example.com',
+            password: PLAIN_PASSWORD
+        });
 
         expect(result.success).toBe(false);
         expect((result as ResponseReject).status).toBe(401);
@@ -178,7 +187,10 @@ describe('accountService.login', () => {
     it('rejects soft-deleted users', async () => {
         await createUser({ email: 'deleted@example.com', deletedAt: new Date() });
 
-        const result = await accountService.login('deleted@example.com', PLAIN_PASSWORD);
+        const result = await accountService.login({
+            email: 'deleted@example.com',
+            password: PLAIN_PASSWORD
+        });
 
         expect(result.success).toBe(false);
         expect((result as ResponseReject).status).toBe(401);
@@ -261,7 +273,10 @@ describe('passwordChange', () => {
         await passwordChange(user, 'BrandNew1!', 'BrandNew1!');
 
         const refreshed = await userRepository.findById(id);
-        const loginResult = await accountService.login('pwdchange@example.com', 'BrandNew1!');
+        const loginResult = await accountService.login({
+            email: 'pwdchange@example.com',
+            password: 'BrandNew1!'
+        });
         expect(loginResult.success).toBe(true);
         expect(refreshed).not.toBeNull();
     });

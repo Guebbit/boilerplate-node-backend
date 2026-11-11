@@ -30,35 +30,36 @@ import { accountAuditActions } from '../audit';
 import { analyticsAnswer, termsAcceptance } from '../consent-record';
 
 /**
- * Everything `POST /account/signup` collects. One object rather than a positional list because
- * some of these are optional and two are booleans — an argument order nothing but a comment
- * would keep honest. No image: signup takes none, so the new account has none.
+ * The body `POST /account/signup` accepts, once parsed: the contract's `SignupBody` (strict, so an
+ * unknown key is a 422) plus the two rules the contract cannot say — the repeat matches, and the
+ * terms are accepted. No image: signup takes none, so the new account has none.
  */
-export interface SignupInput {
-    /** The submitted address; `SignupBody` owns its shape. */
-    email: string;
+const signupSchema = SignupBody.extend({
+    // Shared with `PUT/PATCH /account`'s: both decode the same multipart-string trap
+    // (`optionalBooleanSchema`'s own doc covers it), signup just narrows it to
+    // non-optional-by-intent (absent lands as `undefined`, stored as `false`).
+    analyticsConsent: optionalBooleanSchema,
+    // Not `optionalBooleanSchema`'s shape: signup needs the multipart decode
+    // (`parseFormBoolean`) but a literal-true requirement, not an optional one.
+    termsAccepted: z.preprocess(
+        parseFormBoolean,
+        z.literal(true, { error: () => t('account.signup.terms-not-accepted') })
+    )
+}).superRefine(({ passwordConfirm, password }, refinementContext) => {
+    if (passwordConfirm !== password)
+        refinementContext.addIssue({
+            code: 'custom',
+            message: t('account.signup.password-dont-match'),
+            path: ['passwordConfirm']
+        });
+});
 
-    /** The submitted display name. */
-    username: string;
-
-    /** The submitted password, in the clear; hashed on the way to the document. */
-    password: string;
-
-    /** The repeat, compared against `password` and never stored. */
-    passwordConfirm: string;
-
-    /**
-     * Optional like `UpdateAccountRequest`'s, but with no "leave it alone" reading — there is no
-     * prior value at signup, so absent and `false` mean the same thing here.
-     */
-    analyticsConsent: boolean | undefined;
-
-    /**
-     * The checkbox itself. `signup`'s schema rejects anything but `true`; what is stored is the
-     * moment and the text version (`termsAcceptance`), not this boolean.
-     */
-    termsAccepted: boolean;
-}
+/**
+ * Everything `POST /account/signup` collects, as the parse leaves it. `analyticsConsent` has no
+ * "leave it alone" reading — there is no prior value at signup, so absent and `false` mean the
+ * same thing here.
+ */
+export type SignupInput = z.infer<typeof signupSchema>;
 
 /**
  * Rejects a password found in a breach corpus. Checked ahead of the email-policy check and the
@@ -133,53 +134,25 @@ const createAccountIfEmailFree = (
 /**
  * Register new user.
  *
- * @param input - the submitted fields and the server-derived image paths
+ * @param body - the request body as received; parsed here against `signupSchema`, so every caller
+ * gets the same 422, an unknown key included
  * @param callerContext - the request's context, for the audit and analytics records
  */
 export const signup = (
-    input: SignupInput,
+    body: unknown,
     callerContext: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    const { email, username, password, passwordConfirm, analyticsConsent, termsAccepted } = input;
-
-    const parseResult = SignupBody.extend({
-        // Shared with `PUT/PATCH /account`'s: both decode the same multipart-string trap
-        // (`optionalBooleanSchema`'s own doc covers it), signup just narrows it to
-        // non-optional-by-intent (absent lands as `undefined`, stored as `false`).
-        analyticsConsent: optionalBooleanSchema,
-        // Not `optionalBooleanSchema`'s shape: signup needs the multipart decode
-        // (`parseFormBoolean`) but a literal-true requirement, not an optional one.
-        termsAccepted: z.preprocess(
-            parseFormBoolean,
-            z.literal(true, { error: () => t('account.signup.terms-not-accepted') })
-        )
-    })
-        .superRefine(({ passwordConfirm, password }, refinementContext) => {
-            if (passwordConfirm !== password)
-                refinementContext.addIssue({
-                    code: 'custom',
-                    message: t('account.signup.password-dont-match'),
-                    path: ['passwordConfirm']
-                });
-        })
-        .safeParse({
-            email,
-            username,
-            password,
-            passwordConfirm,
-            analyticsConsent,
-            termsAccepted
-        });
+    const parseResult = signupSchema.safeParse(body);
 
     // One gate per line: a breached password, then the antibot decoy, then the email-taken
     // lookup that creates the account — the first one to answer is what signup returns.
     const outcome: Promise<ResponseSuccess<UserDocument> | ResponseReject> = parseResult.success
-        ? guardBreachedPassword(password)
+        ? guardBreachedPassword(parseResult.data.password)
               .then<ResponseReject | ResponseSuccess<UserDocument> | undefined>(
-                  (rejected) => rejected ?? guardEmailPolicy(input)
+                  (rejected) => rejected ?? guardEmailPolicy(parseResult.data)
               )
               .then<ResponseReject | ResponseSuccess<UserDocument>>(
-                  (settled) => settled ?? createAccountIfEmailFree(input)
+                  (settled) => settled ?? createAccountIfEmailFree(parseResult.data)
               )
         : Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
 

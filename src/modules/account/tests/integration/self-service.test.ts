@@ -359,8 +359,14 @@ describe('passwordChangeWithCurrent', () => {
 
         // The new credential works and the old one is dead — both directions, or the test
         // passes on a no-op.
-        const withNew = await accountService.login(user.email, REPLACEMENT_PASSWORD);
-        const withOld = await accountService.login(user.email, PASSPHRASE_PASSWORD);
+        const withNew = await accountService.login({
+            email: user.email,
+            password: REPLACEMENT_PASSWORD
+        });
+        const withOld = await accountService.login({
+            email: user.email,
+            password: PASSPHRASE_PASSWORD
+        });
         expect(withNew.success).toBe(true);
         expect(withOld.success).toBe(false);
     });
@@ -380,7 +386,10 @@ describe('passwordChangeWithCurrent', () => {
 
         expect(response.status).toBe(422);
         // And nothing changed.
-        const login = await accountService.login(user.email, PASSPHRASE_PASSWORD);
+        const login = await accountService.login({
+            email: user.email,
+            password: PASSPHRASE_PASSWORD
+        });
         expect(login.success).toBe(true);
     });
 
@@ -398,7 +407,10 @@ describe('passwordChangeWithCurrent', () => {
         );
 
         expect(response.status).toBe(422);
-        const login = await accountService.login(user.email, PASSPHRASE_PASSWORD);
+        const login = await accountService.login({
+            email: user.email,
+            password: PASSPHRASE_PASSWORD
+        });
         expect(login.success).toBe(true);
     });
 });
@@ -1046,7 +1058,10 @@ describe('what a completed reset leaves behind', () => {
 
         asSuccess(await resetWithLink(user));
 
-        const withNew = await accountService.login(user.email, REPLACEMENT_PASSWORD);
+        const withNew = await accountService.login({
+            email: user.email,
+            password: REPLACEMENT_PASSWORD
+        });
         expect(withNew.success).toBe(true);
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -1088,7 +1103,10 @@ describe('what a completed reset leaves behind', () => {
         const result = asSuccess(await resetWithLink(user));
 
         expect(result.data?.email).toBe(user.email);
-        const withNew = await accountService.login(user.email, REPLACEMENT_PASSWORD);
+        const withNew = await accountService.login({
+            email: user.email,
+            password: REPLACEMENT_PASSWORD
+        });
         expect(withNew.success).toBe(true);
         // Fire-and-forget: give the rejected lookup's own microtask a turn before asserting.
         await Promise.resolve();
