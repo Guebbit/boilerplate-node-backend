@@ -199,6 +199,8 @@ permission list; re-derive from the authoritative source on every check).
 permission that is dead on arrival. GitHub's sudo mode likewise keeps sensitive actions to a fresh
 human login.
 
+**A do-not-retry write needs the header.** An API key holding `create:StockMovement` (or `update:Shipment`, which is mintable too) must send an `Idempotency-Key` on stock receipts, stock adjustments and shipments: without it the route answers 400. See [Do-not-retry operations](./idempotency.md#do-not-retry-operations).
+
 **Tenant-scoped only.** A credential can never satisfy a `platform.` key — `requirePermission`
 refuses one outright, distinctly from a missing permission, since this repo's deployment model is a
 silo (one organisation per stack) and every real use case is shop-level.

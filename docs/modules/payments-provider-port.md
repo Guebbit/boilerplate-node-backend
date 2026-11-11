@@ -114,9 +114,10 @@ Anything unrecognised succeeds, with its last four digits taken from the referen
 visitor poking at a demo should reach the happy path, and each interesting case stays one
 documented value away.
 
-`retrieve` answers `processing` for a reference it does not know. That is deliberate: `processing`
-is the only status that settles nothing in either direction, and an intent the stub has forgotten
-(a restart, a second worker) must move no money.
+`retrieve` answers `open` for a reference it does not know. That is deliberate: `open` settles
+nothing in either direction, and an intent the stub has forgotten (a restart, a second worker) must
+move no money. `confirm` on a reference that already `succeeded` answers that state and writes
+nothing new, whatever method comes with it (money duty 1, below); after a decline it stays allowed.
 
 `cancel` refuses once a reference has settled to `succeeded` — the only rest state a `confirm` on
 this stub ever writes down, since it settles eagerly rather than staying `processing` at rest. A
@@ -130,6 +131,18 @@ the outside. The log line is the fake's substitute for that trail. It carries th
 and never more, the same rule the payment document follows.
 :::
 
+## Money duties {#money-duties}
+
+Whatever the provider, an adapter keeps three rules so that a retry never moves money twice:
+
+1. `confirm`: at most one successful charge per `providerRef`. A confirm on an intent that already
+   succeeded answers that state and never charges again. An adapter with no intent object keeps
+   the rule itself, with a provider key built from `providerRef` + `paymentMethodRef`. A retry
+   after a decline stays allowed.
+2. `refund`: send the idempotency key, stamp `refundId` on the provider's refund and echo it.
+3. Past the provider's key window: adopt the refund by `refundId` instead of creating one
+   ([A key the provider forgot](#a-key-the-provider-forgot)).
+
 ## Adding a real adapter (Stripe as the example)
 
 Nothing here ships a PSP adapter; Stripe is the worked example.
@@ -142,7 +155,8 @@ Nothing here ships a PSP adapter; Stripe is the worked example.
 3. Set `NODE_PAYMENT_PROVIDER`, and `NODE_PAYMENT_WEBHOOK_SECRET` to the vendor's webhook signing secret.
    Your adapter reads its own secret key, and refuses its vendor's test key outside development
    (Stripe's is `sk_test_`).
-4. Point the vendor's dashboard at `POST /payments/webhook/<name>` (the name the adapter is registered under), which needs a public HTTPS endpoint.
+4. Keep the [money duties](#money-duties).
+5. Point the vendor's dashboard at `POST /payments/webhook/<name>` (the name the adapter is registered under), which needs a public HTTPS endpoint.
 
 The frontend swaps its method widget for the vendor's, which is the point of the exercise — the app
 stops touching card data. The service and the contract's shape stay as they are; settlement stays too, with one added input: the adapter reports `amountReceived`, `currency` and `paymentId` with every `succeeded`, converted from its minor units, and echoes the `metadata.paymentId` it was given at `prepare`. A success that disagrees with the frozen payment is refused, see [the final write](./payments.md#the-pre-check-and-the-final-write).
@@ -192,13 +206,27 @@ Send every report you get, repeated and out of order: the application keeps only
 
 ## A key the provider forgot
 
-A provider remembers an idempotency key for a limited time (Stripe: a day from its FIRST use; reuse
-does not extend it). After that, resending a refund under the same key creates a second one, which
-for a partial refund pays the buyer twice. So the adapter must not rely on the key alone:
+A provider remembers an idempotency key for a limited time (reuse does not extend it). After that,
+resending a refund under the same key creates a second one, which for a partial refund pays the
+buyer twice. So the adapter must not rely on the key alone:
 
 - stamp `refundId` on the provider's refund (Stripe: `metadata.refund_record`);
-- when `createdAt` is more than a day old, list the payment's refunds first and adopt the one
-  carrying `refundId`; create a new one only if there is none.
+- when `createdAt` is older than the provider's key window, list the payment's refunds first and
+  adopt the one carrying `refundId`; create a new one only if there is none.
+
+| Provider  | Key window                                    |
+| --------- | --------------------------------------------- |
+| Stripe v1 | 24 h from first use                           |
+| Adyen     | 7-14 days (from memory)                       |
+| PayPal    | per API (from memory)                         |
+| Square    | not published (from memory)                   |
+| Stripe v2 | 30 days (payments are not on v2; from memory) |
+
+Two provider behaviours to map, not to fight (both from memory):
+
+- Stripe v1 replays a cached 500 for the same key, so a retry of a failed call may answer the failure again.
+- Adyen answers 704 ("in progress") while a request with that key still runs: map it to "in flight",
+  not to a failure.
 
 The fake behaves this way: it replays an answer (a definite refusal too) for a day, forgets the key
 after, and adopts by `refundId` for an old record. Its levers (`scenarios/support/doubles/payments/fake.ts`):

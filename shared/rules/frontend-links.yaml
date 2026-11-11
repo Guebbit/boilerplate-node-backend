@@ -39,6 +39,8 @@ staffPages:
     webhookSubscription: webhooks/subscriptions/{id}
     task: tasks/{id}
     return: returns/{id}
+    order: orders/{id}
+    inventory: inventory
     salesPayments: sales/payments
     # The ten summary rows ("{n} things need you"): each opens the list filtered to what it counts.
     # The query keys are the ones the list's own URL state reads. The bell and the digest mail share

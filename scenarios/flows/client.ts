@@ -10,6 +10,7 @@
  * See: docs/tools/demo-profile.md
  */
 
+import { randomUUID } from 'node:crypto';
 import { generate } from 'otplib';
 
 /** The problem-details members a refusal carries that are read here. */
@@ -104,12 +105,16 @@ const send = (
         method,
         // A `FormData` body is a multipart upload: fetch must set its own boundary header, so the
         // JSON content type is dropped for it. https://developer.mozilla.org/docs/Web/API/FormData
-        headers:
-            body instanceof FormData
+        headers: {
+            ...(body instanceof FormData
                 ? Object.fromEntries(
                       Object.entries(headers).filter(([name]) => name !== 'content-type')
                   )
-                : headers,
+                : headers),
+            // A fresh key on every write: a do-not-retry route (refund, ship, stock) refuses one
+            // without, and a route that takes none ignores it.
+            ...(method !== 'GET' && { 'idempotency-key': randomUUID() })
+        },
         body: body === undefined || body instanceof FormData ? body : JSON.stringify(body)
     }).then(readAttempt);
 

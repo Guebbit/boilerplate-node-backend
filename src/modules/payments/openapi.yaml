@@ -314,7 +314,9 @@ paths:
 
                 Requires an `Idempotency-Key` header: a retry that repeats the key replays the first
                 answer instead of returning the money again, and a request without it answers 400
-                `IDEMPOTENCY_KEY_REQUIRED`.
+                `IDEMPOTENCY_KEY_REQUIRED`. If the first attempt never reported an outcome, the same
+                key answers 409 `IDEMPOTENCY_OUTCOME_UNKNOWN` and runs nothing: read the payment back
+                before refunding again with a new key.
                 Requires a session that has re-proved itself within the last few minutes — a
                 valid-but-stale token answers 401 with `errors[].code` `REAUTH_REQUIRED`, and the
                 caller re-authenticates and retries the same request.
@@ -322,7 +324,7 @@ paths:
             x-error-codes:
                 '400': [IDEMPOTENCY_KEY_REQUIRED]
                 # A provider refusal is not here: it answers 201 with the failed record.
-                '409': [IDEMPOTENCY_IN_FLIGHT, PAYMENT_DISPUTED, PAYMENT_NOT_REFUNDABLE]
+                '409': [IDEMPOTENCY_IN_FLIGHT, IDEMPOTENCY_OUTCOME_UNKNOWN, PAYMENT_DISPUTED, PAYMENT_NOT_REFUNDABLE]
                 '422': [IDEMPOTENCY_KEY_MISMATCH, PAYMENT_REFUND_EXCEEDS_REMAINING]
             security:
                 - bearerAuth: ['create:Refund']

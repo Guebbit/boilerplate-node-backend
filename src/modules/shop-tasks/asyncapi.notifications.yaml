@@ -16,6 +16,7 @@ x-extends:
         - NotificationWishlistItemRemovedPayload
         - NotificationCartMergeRefusedPayload
         - NotificationStaffReturnRequestedPayload
+        - NotificationStaffOutcomeUnknownPayload
         - NotificationStaffTransfersDuePayload
         - NotificationStaffPreordersLatePayload
         - NotificationStaffDeliveryHoldsOpenPayload
@@ -532,6 +533,70 @@ components:
                         - shop-tasks.staff.return-requested
                 params:
                     $ref: '#/components/schemas/ReturnRequestedParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        OutcomeUnknownParamsPayload:
+            title: OutcomeUnknownParamsPayload
+            type: object
+            required:
+                - operation
+                - subjectId
+                - subjectName
+                - since
+            properties:
+                operation:
+                    type: string
+                    enum:
+                        - refund
+                        - receive-stock
+                        - adjust-stock
+                        - ship
+                subjectId:
+                    type: string
+                subjectName:
+                    type: string
+                since:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationStaffOutcomeUnknownPayload:
+            title: NotificationStaffOutcomeUnknownPayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - shop-tasks.staff.outcome-unknown
+                params:
+                    $ref: '#/components/schemas/OutcomeUnknownParamsPayload'
                 severity:
                     type: string
                     enum:

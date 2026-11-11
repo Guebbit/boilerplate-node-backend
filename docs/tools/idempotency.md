@@ -32,7 +32,11 @@ sequenceDiagram
     else duplicate key, in_flight, under 5 minutes old
         Middleware-->>Client: 409 Conflict
     else duplicate key, in_flight, older (the attempt died)
-        Middleware->>Handler: take the key over, next()
+        alt ordinary key
+            Middleware->>Handler: take the key over, next()
+        else do-not-retry key
+            Middleware-->>Client: 409 IDEMPOTENCY_OUTCOME_UNKNOWN, stored, staff told
+        end
     else duplicate key, done, fingerprint matches
         Middleware-->>Client: stored response, Idempotent-Replayed: true
     else duplicate key, done, fingerprint differs
@@ -56,13 +60,15 @@ password. See [Pseudonymised identifiers](./security.md#pseudonymised-identifier
 it in `idempotency-model.ts`. Mounted per route — never globally, the same way
 `src/infrastructure/http/middlewares/cache.ts`'s `setCache` is — and a no-op when the caller
 sends no header at all: on most routes the feature is a courtesy the client opts into. Where a
-repeat would move money twice (the refund) the key is required, and no header is a 400.
+repeat would move money or stock twice (a [do-not-retry operation](#do-not-retry-operations)) the
+key is required, and no header is a 400.
 
 The lock is one atomic insert against a unique index on `(key, caller)`. Whoever's insert lands
 first runs the handler; every other insert collides with `E11000`, and that collision — not a
 second lookup — is what decides which of the outcomes above a retry gets. An `in_flight` record
-older than five minutes belongs to an attempt that crashed; a retry takes it over with a
-conditional update, so of two racing retries exactly one wins. "Caller" is the
+older than five minutes belongs to an attempt taken to be dead; a retry takes it over with a
+conditional update, so of two racing retries exactly one wins. An ordinary key then runs the
+handler again. A do-not-retry key never does: see below. "Caller" is the
 authenticated account id, or the request's address for a public route with no account yet
 (signup, the contact form) — scoping by caller is what stops one person from reading another's
 cached reply merely by guessing or observing their key.
@@ -78,26 +84,27 @@ source of truth, so — like every other durable, TTL-bound collection in this r
 
 ## Where it is mounted
 
-| Route                                                                                                | Why                                                                                                                                                                                       |
-| ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /orders`                                                                                       | Admin order creation; a retried request must replay the same order, not mint a second one.                                                                                                |
-| `POST /cart/checkout`                                                                                | Places the order; a retry after a lost response must replay it, never place a second.                                                                                                     |
-| `POST /cart/merge`                                                                                   | A retry must not add the guest's quantities twice.                                                                                                                                        |
-| `POST /cart/items`, `POST /cart/reorder`                                                             | A retry after a lost answer must not grow the line twice. A deliberate second click carries a new key and adds again.                                                                     |
-| `POST /payments/{id}/confirm`                                                                        | Charges the card.                                                                                                                                                                         |
-| `POST /orders/{id}/payments`                                                                         | An admin recording money by hand; a repeat must not record it twice.                                                                                                                      |
-| `POST /payments/{id}/refunds`                                                                        | Returns money — a double submit must refund once. The key is REQUIRED: no header, a 400.                                                                                                  |
-| `POST /payments/{id}/refunds/{refundId}/cancel`                                                      | Voids a refund; the key is optional, a second cancel is refused by the record (409).                                                                                                      |
-| `POST /payments/{id}/refunds/{refundId}/settle`                                                      | Books a refund the provider could not settle; a repeat must not book it twice.                                                                                                            |
-| `POST /delivery/fulfillment-orders/{id}/shipments`, `POST /delivery/fulfillment-orders/{id}/fulfill` | A partial ship creates a NEW shipment, so no state machine catches a retry: it would cut a second parcel and take the stock twice. Both shipment doors take the key so they answer alike. |
-| `POST /returns`, `POST /returns/{id}/receive`                                                        | A retried return request or receipt must replay, not open or receive twice.                                                                                                               |
-| `POST /inventory/levels/{productId}/receive`, `POST /inventory/levels/{productId}/adjust`            | Stock never moves twice for one delivery or one correction.                                                                                                                               |
-| `POST /account/signup`                                                                               | Sybil accounts aside, a retried signup must not create two.                                                                                                                               |
-| `POST /examples`                                                                                     | The template's idempotent create: a retried create replays the first answer, not a second draft.                                                                                          |
-| `POST /tasks`                                                                                        | The public contact form has no other identity to dedupe a retry on.                                                                                                                       |
-| `POST /orders/{id}/timeline/notes`, `POST /tasks/{id}/notes`                                         | A retry after a lost answer must not write the same note twice. A task note has no delete door, so a duplicate would stay for good.                                                       |
-| `POST /products`                                                                                     | A product with no SKU has no other key: a retry would put a second live product in the shop, and the opening stock would land on the copy. See the limits below.                          |
-| `POST /account/addresses`                                                                            | A retry must not write a duplicate entry that burns a slot of the address cap.                                                                                                            |
+| Route                                                                                     | Why                                                                                                                                                                       |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /orders`                                                                            | Admin order creation; a retried request must replay the same order, not mint a second one.                                                                                |
+| `POST /cart/checkout`                                                                     | Places the order; a retry after a lost response must replay it, never place a second.                                                                                     |
+| `POST /cart/merge`                                                                        | A retry must not add the guest's quantities twice.                                                                                                                        |
+| `POST /cart/items`, `POST /cart/reorder`                                                  | A retry after a lost answer must not grow the line twice. A deliberate second click carries a new key and adds again.                                                     |
+| `POST /payments/{id}/confirm`                                                             | Charges the card.                                                                                                                                                         |
+| `POST /orders/{id}/payments`                                                              | An admin recording money by hand; a repeat must not record it twice.                                                                                                      |
+| `POST /payments/{id}/refunds`                                                             | Returns money — a double submit must refund once. A do-not-retry operation: the key is REQUIRED, no header, a 400.                                                        |
+| `POST /payments/{id}/refunds/{refundId}/cancel`                                           | Voids a refund; the key is optional, a second cancel is refused by the record (409).                                                                                      |
+| `POST /payments/{id}/refunds/{refundId}/settle`                                           | Books a refund the provider could not settle; a repeat must not book it twice.                                                                                            |
+| `POST /delivery/fulfillment-orders/{id}/shipments`                                        | A ship creates a NEW shipment, so no state machine catches a retry: it would cut a second parcel and take the stock twice. A do-not-retry operation: the key is REQUIRED. |
+| `POST /delivery/fulfillment-orders/{id}/fulfill`                                          | The digital door takes the whole remainder, so a re-run is refused with a 409 by the order's own state. The key is optional.                                              |
+| `POST /returns`, `POST /returns/{id}/receive`                                             | A retried return request or receipt must replay, not open or receive twice.                                                                                               |
+| `POST /inventory/levels/{productId}/receive`, `POST /inventory/levels/{productId}/adjust` | Stock never moves twice for one delivery or one correction. Do-not-retry operations: the key is REQUIRED.                                                                 |
+| `POST /account/signup`                                                                    | Sybil accounts aside, a retried signup must not create two.                                                                                                               |
+| `POST /examples`                                                                          | The template's idempotent create: a retried create replays the first answer, not a second draft.                                                                          |
+| `POST /tasks`                                                                             | The public contact form has no other identity to dedupe a retry on.                                                                                                       |
+| `POST /orders/{id}/timeline/notes`, `POST /tasks/{id}/notes`                              | A retry after a lost answer must not write the same note twice. A task note has no delete door, so a duplicate would stay for good.                                       |
+| `POST /products`                                                                          | A product with no SKU has no other key: a retry would put a second live product in the shop, and the opening stock would land on the copy. See the limits below.          |
+| `POST /account/addresses`                                                                 | A retry must not write a duplicate entry that burns a slot of the address cap.                                                                                            |
 
 ### The product create is multipart
 
@@ -112,9 +119,67 @@ multer has parsed them. Three limits come with that:
   orphan sweep (files older than an hour) and the quarantine reaper (24 hours) remove it. The SKU
   index stays the secondary key.
 
-The refund uses `requireIdempotencyKey`: the IETF Idempotency-Key draft makes a missing key on a
-non-idempotent write a client error, and a refund repeated by a retry returns the money twice. Its
-contract parameter is `RequiredIdempotencyKeyHeader`, and the error code `IDEMPOTENCY_KEY_REQUIRED`.
+## Do-not-retry operations
+
+A do-not-retry operation is a write that creates a new real thing every time it runs: a refund
+returns money, a stock receipt or adjustment moves the counter, a ship cuts a parcel and takes the
+stock. No state machine refuses its repeat, so if a retry runs one a second time, money or stock no
+longer adds up. Four operations carry the mark, and the mark is the route's own:
+
+| Operation       | Route                                              | Told to (the route's permission set)           |
+| --------------- | -------------------------------------------------- | ---------------------------------------------- |
+| `refund`        | `POST /payments/{id}/refunds`                      | `PaymentRefunding` (`create:Refund`)           |
+| `receive-stock` | `POST /inventory/levels/{productId}/receive`       | `InventoryManagement` (`create:StockMovement`) |
+| `adjust-stock`  | `POST /inventory/levels/{productId}/adjust`        | `InventoryManagement`                          |
+| `ship`          | `POST /delivery/fulfillment-orders/{id}/shipments` | `DeliveryManagement` (`update:Shipment`)       |
+
+They are mounted with `requireIdempotencyKey({ operation, subjectParam })`, which changes three
+things against an ordinary keyed route:
+
+- **The key is required.** No header is a 400 `IDEMPOTENCY_KEY_REQUIRED`. The contract parameter is
+  `RequiredIdempotencyKeyHeader`; the IETF draft makes a missing key on a non-idempotent write a
+  client error. A request-contract case walks every operation the spec marks with it and sends none.
+- **A takeover never runs the handler.** Past the five-minute lease the first attempt may have
+  committed (a crash after the commit, a process killed before the done-mark was written). The retry
+  that wins the takeover answers a stored `409 IDEMPOTENCY_OUTCOME_UNKNOWN`: every later retry
+  replays it, and nothing runs again. The client re-reads the subject and, only if a human decides
+  to, sends the operation again with a NEW key. If the record vanishes twice under TTL reclaim, a
+  do-not-retry key answers `409 IDEMPOTENCY_IN_FLIGHT` instead of running uncaptured.
+- **Staff are told once.** The ledger calls a registered sink (`registerOutcomeUnknownSink`, the way
+  `registerAuditSink` works: `infrastructure` cannot import the module that writes the notice).
+  `shop-tasks` installs it. It names the subject in words (the order's number for a refund or a
+  ship, the product's name for stock), writes the work notice
+  `shop-tasks.staff.outcome-unknown` to the holders of the route's permission set and mails them
+  now. The notice is raised in-process, never through the outbox, so the mail does not wait for the
+  relay. One notice per stuck ledger record (`dedupeKey` = caller + key), however often it is
+  retried. A failed done-mark on such a key is logged at `error`, not `warn`.
+
+A 5xx on these routes never carries `Retry-After`: the 503 of a killed query (`QUERY_TIMEOUT`) can
+fire after the commit, and "retry later" would be wrong. A live first attempt that is only slow
+still writes its real answer over the stored "unknown" when it finishes: that is the better answer,
+and no fencing token is kept for these keys.
+
+```mermaid
+flowchart TD
+    A[retry with the same key] --> B{record}
+    B -- done --> C[replay the stored answer]
+    B -- in flight, under 5 min --> D[409 IDEMPOTENCY_IN_FLIGHT]
+    B -- in flight, past the lease --> E{do-not-retry?}
+    E -- no --> F[run the handler again]
+    E -- yes --> G[409 IDEMPOTENCY_OUTCOME_UNKNOWN, stored]
+    G --> H[staff told once: bell and mail]
+```
+
+**What was left out, and why.** Confirming a payment, fulfilling a digital order, returns, admin
+order creation and `POST /products` stay ordinary: each is refused by its own state, heals itself,
+or leaves a duplicate staff can see. Shopify's mandatory list is the refund plus inventory and
+location mutations only. A key on the money row itself (AWS's token-on-the-mutation) was judged more
+than the case needs.
+
+The done-mark is written after the answer has gone out, so a process stopped right then would strand
+the key in flight, and a client's retry would read a false "unknown". `settleIdempotencyMarks` waits
+for pending marks in `shutdownInfra` (beside the PDF renders) for that reason; the MongoDB driver
+cuts in-use connections on `close()`, so without it a deploy loses a mark now and then.
 
 ## Named exceptions
 
@@ -146,6 +211,9 @@ The replay carries the stored status, body, `Content-Type` and the `Location`,
 `WWW-Authenticate`, `Allow`, `ETag` and `Content-Location` headers the original answer had.
 `Retry-After` is not replayed: a stored 503 must not say "retry later" for the whole retention
 window, under a key that can never succeed.
+
+The one answer the ledger stores that no handler wrote is `IDEMPOTENCY_OUTCOME_UNKNOWN`: it
+spends the key like any other stored answer.
 
 The ledger never sees a 429. Every budget refuses before the key is claimed (a limiter is mounted
 before `idempotencyKey` on every keyed route, walked by

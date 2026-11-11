@@ -75,6 +75,19 @@ export const listForOrder = (
     });
 
 /**
+ * The order a payment belongs to, with no caller's scope — for a notice that must name the order
+ * of a payment whatever the reader may see, like the staff notice for a refund whose outcome is
+ * unknown.
+ *
+ * @param paymentId - the payment
+ * @returns the order's id, or `undefined` for a missing payment
+ */
+export const orderIdOf = (paymentId: string): Promise<string | undefined> =>
+    paymentRepository
+        .findByIdScoped(paymentId)
+        .then((payment) => (payment ? String(payment.orderId) : undefined));
+
+/**
  * One payment by its own id — the address `Location` names after `POST /payments`.
  *
  * @param paymentId - the payment

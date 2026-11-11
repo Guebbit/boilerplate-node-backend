@@ -12,6 +12,7 @@
  * other half: the summary write is conditional on the order still being fulfillable, and the cancel
  * on nothing having shipped, so exactly one of them wins.
  */
+import { randomUUID } from 'node:crypto';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
@@ -64,6 +65,7 @@ describe('two admins racing the same ship door', () => {
         const results = await raceN(RACE_SIZE, () =>
             api()
                 .post(`/delivery/fulfillment-orders/${String(fulfillmentOrder._id)}/shipments`)
+                .set('Idempotency-Key', randomUUID())
                 .set('Authorization', bearer)
                 .send({})
         );
@@ -98,6 +100,7 @@ describe('two admins racing the same ship door', () => {
         const results = await raceN(RACE_SIZE, () =>
             api()
                 .post(`/delivery/fulfillment-orders/${String(fulfillmentOrder._id)}/shipments`)
+                .set('Idempotency-Key', randomUUID())
                 .set('Authorization', bearer)
                 .send({ lines: [line] })
         );
@@ -126,6 +129,7 @@ describe('a ship racing a cancel of the whole order', () => {
         const [ship, cancel] = await Promise.all([
             api()
                 .post(`/delivery/fulfillment-orders/${String(fulfillmentOrder._id)}/shipments`)
+                .set('Idempotency-Key', randomUUID())
                 .set('Authorization', bearer)
                 .send({}),
             api()
@@ -171,6 +175,7 @@ describe('a first shipment from a paid order that moved away meanwhile', () => {
 
         const response = await api()
             .post(`/delivery/fulfillment-orders/${String(fulfillmentOrder._id)}/shipments`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', bearer)
             .send({});
 

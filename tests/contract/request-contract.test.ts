@@ -585,3 +585,49 @@ describe('every write operation (contract-derived)', () => {
         }
     );
 });
+
+// ─── a required header ─────────────────────────────────────────────────────────────────────────
+//
+// The walks above SEND every required header. This is the other half: leave it off and the
+// operation must refuse with 400 `IDEMPOTENCY_KEY_REQUIRED`. It is what keeps a new do-not-retry
+// route (one the contract marks with a required `Idempotency-Key`) from being mounted with the
+// optional middleware: the contract says required, the walk finds the route, the route must answer 400.
+
+/** Every operation the contract marks with a required `Idempotency-Key`. */
+const KEY_REQUIRED_OPERATIONS = listOperations().filter((operation) =>
+    operation.requiredHeaders.some((name) => name.toLowerCase() === 'idempotency-key')
+);
+
+describe('every operation that requires an Idempotency-Key (contract-derived)', () => {
+    it('walks the do-not-retry operations the spec declares', () => {
+        // A vacuous pass would read as green: this walk would check nothing if the filter found none.
+        expect(
+            KEY_REQUIRED_OPERATIONS.map((operation) => operation.operationId).toSorted()
+        ).toEqual(
+            expect.arrayContaining([
+                'adjustStock',
+                'createRefund',
+                'receiveStock',
+                'shipFulfillmentOrder'
+            ])
+        );
+    });
+
+    it.each(KEY_REQUIRED_OPERATIONS.map((operation) => ({ label: labelOf(operation), operation })))(
+        '$label refuses a request without the key as 400 IDEMPOTENCY_KEY_REQUIRED',
+        async ({ operation }) => {
+            const { user, bearer } = await authenticateAs(roleReaching(operation));
+            const world = await seedWorld(user);
+
+            const response = await api()
+                [operation.method](buildUrl(operation, world))
+                .set('Authorization', bearer)
+                .set('Accept-Language', 'en');
+
+            expect([response.status, response.body.errors?.[0]?.code]).toEqual([
+                400,
+                'IDEMPOTENCY_KEY_REQUIRED'
+            ]);
+        }
+    );
+});

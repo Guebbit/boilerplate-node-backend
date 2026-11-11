@@ -20,10 +20,14 @@ jest.mock('@infrastructure/http/middlewares/idempotency-model', () => ({
 }));
 
 import { logger } from '@infrastructure/adapters/logger';
+import { rejectResponse } from '@infrastructure/http/response';
 import { idempotencyRecordModel } from '@infrastructure/http/middlewares/idempotency-model';
 import {
     idempotencyKey,
-    requireIdempotencyKey
+    registerOutcomeUnknownSink,
+    requireIdempotencyKey,
+    settleIdempotencyMarks,
+    type OutcomeUnknownSink
 } from '@infrastructure/http/middlewares/idempotency';
 
 const create = idempotencyRecordModel.create as jest.Mock;
@@ -36,6 +40,8 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 /** A minimal request carrying only what `idempotencyKey` reads. */
 const makeRequest = (key: string | undefined, body: unknown, path = '/widgets') =>
     asStub<Request>({
+        params: { id: 'subject-1' },
+        caller: { scope: 'tenant', tenantId: 'shop-1', id: 'staff-1' },
         header: (name: string) => (name.toLowerCase() === 'idempotency-key' ? key : undefined),
         method: 'POST',
         baseUrl: '',
@@ -541,6 +547,12 @@ describe('an answer that is stored and replayed', () => {
     });
 });
 
+/** The route's own mark, as `routes.ts` passes it. */
+const REFUND = { operation: 'refund', subjectParam: 'id' } as const;
+
+/** The do-not-retry handler for {@link REFUND}. */
+const requireKey = requireIdempotencyKey(REFUND);
+
 describe('requireIdempotencyKey', () => {
     beforeEach(() => {
         create.mockReset();
@@ -551,7 +563,7 @@ describe('requireIdempotencyKey', () => {
         const next = jest.fn();
         const response = makeResponseStub();
 
-        requireIdempotencyKey(makeRequest(undefined, { a: 1 }), response, next);
+        requireKey(makeRequest(undefined, { a: 1 }), response, next);
         await flush();
 
         expect(response.status).toHaveBeenCalledWith(400);
@@ -567,7 +579,7 @@ describe('requireIdempotencyKey', () => {
     it('claims the key and runs the handler when the header is present, like idempotencyKey', async () => {
         const next = jest.fn();
 
-        requireIdempotencyKey(makeRequest('key-1', { a: 1 }), makeResponseStub(), next);
+        requireKey(makeRequest('key-1', { a: 1 }), makeResponseStub(), next);
         await flush();
 
         expect(create).toHaveBeenCalledTimes(1);
@@ -577,9 +589,213 @@ describe('requireIdempotencyKey', () => {
     it('still refuses a malformed key with 422, not 400', async () => {
         const response = makeResponseStub();
 
-        requireIdempotencyKey(makeRequest('bad key!', {}), response, jest.fn());
+        requireKey(makeRequest('bad key!', {}), response, jest.fn());
         await flush();
 
         expect(response.status).toHaveBeenCalledWith(422);
+    });
+
+    it('is named for the route walks that look for the key claim by name', () => {
+        expect(requireKey.name).toBe('requireIdempotencyKey');
+    });
+
+    it('leaves Retry-After off a 503 answered through it, and keeps it on any other route', async () => {
+        const doNotRetry = makeResponseStub();
+        const ordinary = makeResponseStub();
+        requireKey(makeRequest('key-1', {}), doNotRetry, jest.fn());
+        await flush();
+
+        rejectResponse(doNotRetry, 503, ['down']);
+        rejectResponse(ordinary, 503, ['down']);
+
+        expect(doNotRetry.hasHeader('Retry-After')).toBe(false);
+        expect(ordinary.hasHeader('Retry-After')).toBe(true);
+    });
+});
+
+describe('a do-not-retry key whose lease ran out', () => {
+    const OLD = 60 * 60_000;
+    const sink: jest.MockedFunction<OutcomeUnknownSink> = jest.fn();
+
+    beforeEach(() => {
+        create.mockReset();
+        create.mockResolvedValue(undefined);
+        updateOne.mockClear();
+        sink.mockReset();
+        registerOutcomeUnknownSink(sink);
+    });
+
+    /** Collide with an abandoned in-flight record of the same request, first attempt an hour ago. */
+    const collideWithAbandoned = async () => {
+        const fingerprint = await fingerprintOfFirstClaim();
+        create.mockReset();
+        create.mockRejectedValueOnce({ code: 11_000 });
+        findOne.mockReturnValueOnce({
+            lean: () => ({
+                exec: () =>
+                    Promise.resolve({
+                        state: 'in_flight',
+                        fingerprint,
+                        createdAt: new Date(Date.now() - OLD),
+                        updatedAt: new Date(Date.now() - OLD)
+                    })
+            })
+        });
+    };
+
+    it('answers 409 outcome unknown, never runs the handler, and tells staff once', async () => {
+        await collideWithAbandoned();
+        updateOne.mockReturnValueOnce({ exec: () => Promise.resolve({ modifiedCount: 1 }) });
+        const response = makeResponseStub();
+        // The ledger wraps `json` to store the answer; keep the recording mock to read it back.
+        const sentJson = response.json;
+        const next = jest.fn();
+
+        requireKey(makeRequest('key-1', { a: 1 }), response, next);
+        await flush();
+        await flush();
+
+        expect(next).not.toHaveBeenCalled();
+        expect(response.status).toHaveBeenCalledWith(409);
+        expect(sentJson).toHaveBeenCalledWith(
+            expect.objectContaining({
+                errors: [expect.objectContaining({ code: 'IDEMPOTENCY_OUTCOME_UNKNOWN' })]
+            })
+        );
+        expect(sink).toHaveBeenCalledTimes(1);
+        expect(sink).toHaveBeenCalledWith(
+            expect.objectContaining({
+                tenantId: 'shop-1',
+                operation: 'refund',
+                subjectId: 'subject-1',
+                recordId: 'staff-1:key-1'
+            })
+        );
+        expect(sink.mock.calls[0][0].since.getTime()).toBeLessThan(Date.now() - OLD + 1000);
+    });
+
+    it('stores the unknown, so a later retry replays it instead of taking over again', async () => {
+        await collideWithAbandoned();
+        updateOne.mockReturnValueOnce({ exec: () => Promise.resolve({ modifiedCount: 1 }) });
+        const response = makeResponseStub();
+        Object.assign(response, { statusCode: 409 });
+
+        requireKey(makeRequest('key-1', { a: 1 }), response, jest.fn());
+        await flush();
+        await flush();
+
+        const [, update] = updateOne.mock.calls.at(-1) as [
+            unknown,
+            { $set: Record<string, unknown> }
+        ];
+        expect(update.$set).toMatchObject({ state: 'done', status: 409 });
+        expect(update.$set.body).toMatchObject({
+            errors: [expect.objectContaining({ code: 'IDEMPOTENCY_OUTCOME_UNKNOWN' })]
+        });
+    });
+
+    it('does not tell staff, nor run anything, for the retry that loses the race', async () => {
+        await collideWithAbandoned();
+        updateOne.mockReturnValueOnce({ exec: () => Promise.resolve({ modifiedCount: 0 }) });
+        const response = makeResponseStub();
+        const next = jest.fn();
+
+        requireKey(makeRequest('key-1', { a: 1 }), response, next);
+        await flush();
+        await flush();
+
+        expect(response.json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                errors: [expect.objectContaining({ code: 'IDEMPOTENCY_IN_FLIGHT' })]
+            })
+        );
+        expect(next).not.toHaveBeenCalled();
+        expect(sink).not.toHaveBeenCalled();
+    });
+
+    it('still answers 409 when the sink throws', async () => {
+        await collideWithAbandoned();
+        updateOne.mockReturnValueOnce({ exec: () => Promise.resolve({ modifiedCount: 1 }) });
+        sink.mockImplementation(() => {
+            throw new Error('inbox down');
+        });
+        const error = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+        const response = makeResponseStub();
+
+        requireKey(makeRequest('key-1', { a: 1 }), response, jest.fn());
+        await flush();
+        await flush();
+
+        expect(response.status).toHaveBeenCalledWith(409);
+        expect(error).toHaveBeenCalled();
+        error.mockRestore();
+    });
+
+    it('answers 409 in flight, not an uncaptured run, when the record vanishes twice', async () => {
+        const next = jest.fn();
+        create.mockRejectedValueOnce({ code: 11_000 });
+        create.mockRejectedValueOnce({ code: 11_000 });
+        findOne.mockReturnValueOnce({ lean: () => ({ exec: () => Promise.resolve(null) }) });
+        findOne.mockReturnValueOnce({ lean: () => ({ exec: () => Promise.resolve(null) }) });
+        const response = makeResponseStub();
+
+        requireKey(makeRequest('key-1', { a: 1 }), response, next);
+        await flush();
+        await flush();
+        await flush();
+
+        expect(response.status).toHaveBeenCalledWith(409);
+        expect(next).not.toHaveBeenCalled();
+    });
+
+    it('logs at error when the done-mark of a do-not-retry key cannot be written', async () => {
+        updateOne.mockReturnValueOnce({
+            exec: () => Promise.reject(new Error('primary stepped down'))
+        });
+        const error = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+        const response = makeHeaderResponse();
+        response.statusCode = 201;
+
+        requireKey(makeRequest('key-1', { a: 1 }), response, jest.fn());
+        await flush();
+        response.json({ ok: true });
+        await flush();
+
+        expect(error).toHaveBeenCalledTimes(1);
+        error.mockRestore();
+    });
+});
+
+describe('settleIdempotencyMarks', () => {
+    beforeEach(() => {
+        create.mockReset();
+        create.mockResolvedValue(undefined);
+    });
+
+    it('waits for a done-mark still being written, and resolves at once when none is', async () => {
+        await settleIdempotencyMarks(1000);
+
+        let finish: (value: undefined) => void = () => undefined;
+        updateOne.mockReturnValueOnce({
+            exec: () =>
+                new Promise<undefined>((resolve) => {
+                    finish = resolve;
+                })
+        });
+        const response = makeHeaderResponse();
+        idempotencyKey(makeRequest('key-1', { a: 1 }), response, jest.fn());
+        await flush();
+        response.json({ ok: true });
+
+        let settled = false;
+        const settling = settleIdempotencyMarks(5000).then(() => {
+            settled = true;
+        });
+        await flush();
+        expect(settled).toBe(false);
+
+        finish(undefined);
+        await settling;
+        expect(settled).toBe(true);
     });
 });

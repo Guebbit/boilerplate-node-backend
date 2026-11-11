@@ -15,6 +15,7 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
+import { registerOutcomeUnknownSink } from '@infrastructure/http/middlewares/idempotency';
 import { CART_LINES_REMOVED, CART_MERGE_REFUSED } from '@modules/cart';
 import {
     FULFILLMENT_ORDER_CANCELED,
@@ -43,12 +44,25 @@ import { shopTasksJobs } from './jobs';
 import { router } from './routes';
 import { shopTasksService } from './services';
 
+/**
+ * Installs the sink that tells staff a do-not-retry key's outcome is unknown, once this module is
+ * known to be enabled (same reason as `audit-logs`: not at import time, not in `app.ts`).
+ * Fire-and-forget: the 409 the client gets never waits on the notice.
+ */
+const onRegistered = (): void => {
+    registerOutcomeUnknownSink((facts) => {
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises -- tellOutcomeUnknown never rejects (it logs its own failure)
+        void shopTasksService.tellOutcomeUnknown(facts);
+    });
+};
+
 /** This module's manifest entry: event subscriptions, the digest jobs, config, locales and the digest template. */
 export default {
     name: 'shop-tasks',
     mounts: [{ basePath: '/shop-tasks', routes: router }],
     config: [shopTasksConfig.slice],
     jobs: shopTasksJobs,
+    onRegistered,
     // Writes through `tasks` and `notifications`, which export and erase their own rows.
     personalData: 'none',
     subscribe: () => {

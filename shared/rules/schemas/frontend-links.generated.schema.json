@@ -89,6 +89,14 @@
           "type": "string",
           "minLength": 1
         },
+        "order": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inventory": {
+          "type": "string",
+          "minLength": 1
+        },
         "salesPayments": {
           "type": "string",
           "minLength": 1
@@ -139,6 +147,8 @@
         "webhookSubscription",
         "task",
         "return",
+        "order",
+        "inventory",
         "salesPayments",
         "transfersDue",
         "preordersLate",

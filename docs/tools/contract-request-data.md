@@ -11,6 +11,8 @@
 | A hand-rolled Mulberry32 PRNG                                                          | Deterministic, seeded, reproducible fixture values — see "Why not `@faker-js/faker`"                                            |
 | [Jest](https://jestjs.io/) + [orval](https://orval.dev/)'s strict response Zod schemas | Same runner and response-shape judge as [Contract Testing](./contract-testing.md)                                               |
 
+Required headers are walked too, from the other side: the walks above send every required header, and one more case (`every operation that requires an Idempotency-Key`) sends none to each operation that requires it and expects 400 `IDEMPOTENCY_KEY_REQUIRED`, so a do-not-retry route cannot be mounted with the optional key.
+
 ## Why an in-repo walker instead of a library
 
 `zod-fixture` and `@anatine/zod-mock` both exist for exactly this purpose. Both lag zod majors, and this project is on zod v4 — a dependency-version-lag risk not worth taking for what's really about 150 lines of schema-AST traversal. `_zod.def` is zod v4's own typed introspection surface, so the walker isn't reading private internals; it's reading the same shape zod itself exposes.

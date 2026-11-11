@@ -8,7 +8,10 @@
 
 import { Router } from 'express';
 import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
-import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
+import {
+    idempotencyKey,
+    requireIdempotencyKey
+} from '@infrastructure/http/middlewares/idempotency';
 import { noStore } from '@infrastructure/http/middlewares/cache';
 import { getShippingMethods } from './controllers/get-shipping-methods';
 import { postShipFulfillmentOrder } from './controllers/post-ship-fulfillment-order';
@@ -90,20 +93,21 @@ router.get(
 // POST /delivery/fulfillment-orders/:id/shipments — cuts a shipment; the order moves processing ->
 // shipped only when nothing remains anywhere. From `paid` the act makes the start move itself, so
 // the service also asks for `start:Shipment` there. No step-up: shipping is an ordinary act.
-// `idempotencyKey` sits after the permission check so a 401/403 is never stored as the answer: a
-// partial ship creates a new shipment, so a retry without a key would cut a second parcel.
+// The key is REQUIRED and sits after the permission check so a 401/403 is never stored as the
+// answer: a ship creates a new shipment, so a retry without a key would cut a second parcel.
 router.post(
     '/fulfillment-orders/:id/shipments',
     getAuth,
     isAuth,
     requirePermission('update', 'Shipment'),
-    idempotencyKey,
+    requireIdempotencyKey({ operation: 'ship', subjectParam: 'id' }),
     postShipFulfillmentOrder
 );
 
 // POST /delivery/fulfillment-orders/:id/fulfill — the digital door: a shipment with no parcel,
 // born delivered. Like shipping, it makes the start move itself from `paid`. A physical
-// fulfillment order cannot use this door at all. Keyed like the ship door, so both answer alike.
+// fulfillment order cannot use this door at all. The key stays optional: it takes the whole
+// remainder, so a re-run is refused with a 409 by the order's own state, never repeated.
 router.post(
     '/fulfillment-orders/:id/fulfill',
     getAuth,

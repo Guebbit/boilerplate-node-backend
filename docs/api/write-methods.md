@@ -234,8 +234,10 @@ the same language, the same `translations` and stock counters for the same grant
 ### Retrying a POST
 
 A POST is not idempotent: sent twice, it may create twice. Every POST or PATCH whose repeat would
-write again accepts an optional `Idempotency-Key`. Where a repeat would move money twice the key is
-required (400 without it). A deliberate second click is a new intent with a new key, and acts
+write again accepts an optional `Idempotency-Key`. Where a repeat would move money or stock twice (the do-not-retry class) the key is
+required (400 without it), and a key whose first attempt never reported an outcome answers a stored
+409 `IDEMPOTENCY_OUTCOME_UNKNOWN` instead of running again. See
+[Do-not-retry operations](../tools/idempotency.md#do-not-retry-operations). A deliberate second click is a new intent with a new key, and acts
 again. A PATCH whose merge patch sets absolute values is idempotent by construction and needs
 none. Everything else is named, by class, in
 [Named exceptions](../tools/idempotency.md#named-exceptions).

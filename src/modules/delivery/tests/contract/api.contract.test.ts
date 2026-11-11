@@ -6,6 +6,7 @@
  * branch is reached over HTTP; the acts' own rules live in the unit and integration suites.
  */
 
+import { randomUUID } from 'node:crypto';
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import {
@@ -251,6 +252,7 @@ describe('POST /delivery/fulfillment-orders/{id}/shipments', () => {
 
         const response = await api()
             .post(`/delivery/fulfillment-orders/${fulfillmentOrderId}/shipments`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', bearer)
             .send({ trackingCode: 'TRK-SHIPDOOR1' });
 
@@ -270,6 +272,7 @@ describe('POST /delivery/fulfillment-orders/{id}/shipments', () => {
 
         const response = await api()
             .post(`/delivery/fulfillment-orders/${fulfillmentOrderId}/shipments`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', bearer)
             .send({ lines: [{ productId, quantity: 1 }] });
 
@@ -287,6 +290,7 @@ describe('POST /delivery/fulfillment-orders/{id}/shipments', () => {
 
         const response = await api()
             .post(`/delivery/fulfillment-orders/${fulfillmentOrderId}/shipments`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', bearer)
             .send({});
 
@@ -300,6 +304,7 @@ describe('POST /delivery/fulfillment-orders/{id}/shipments', () => {
 
         const response = await api()
             .post(`/delivery/fulfillment-orders/${fulfillmentOrderId}/shipments`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', bearer)
             .send({ lines: [{ productId, quantity: 2 }] });
 
@@ -312,6 +317,7 @@ describe('POST /delivery/fulfillment-orders/{id}/shipments', () => {
 
         const response = await api()
             .post(`/delivery/fulfillment-orders/${fulfillmentOrderId}/shipments`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', bearer)
             .send({
                 lines: [
@@ -334,6 +340,7 @@ describe('POST /delivery/fulfillment-orders/{id}/shipments', () => {
 
         const response = await api()
             .post(`/delivery/fulfillment-orders/${String(fulfillmentOrder._id)}/shipments`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', bearer)
             .send({});
 
@@ -346,6 +353,7 @@ describe('POST /delivery/fulfillment-orders/{id}/shipments', () => {
         const ship = () =>
             api()
                 .post(`/delivery/fulfillment-orders/${fulfillmentOrderId}/shipments`)
+                .set('Idempotency-Key', randomUUID())
                 .set('Authorization', bearer)
                 .set('Idempotency-Key', 'ship-two-of-three')
                 .send({ lines: [{ productId, quantity: 2 }] });
@@ -366,6 +374,7 @@ describe('POST /delivery/fulfillment-orders/{id}/shipments', () => {
         const ship = (quantity: number) =>
             api()
                 .post(`/delivery/fulfillment-orders/${fulfillmentOrderId}/shipments`)
+                .set('Idempotency-Key', randomUUID())
                 .set('Authorization', bearer)
                 .set('Idempotency-Key', 'one-key-two-bodies')
                 .send({ lines: [{ productId, quantity }] });
@@ -381,6 +390,7 @@ describe('POST /delivery/fulfillment-orders/{id}/shipments', () => {
 
         const missing = await api()
             .post(`/delivery/fulfillment-orders/${MISSING_ID}/shipments`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', bearer)
             .send({});
 
@@ -779,6 +789,7 @@ describe('POST /delivery/shipments/{id}/mark-lost', () => {
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
         await api()
             .post(`/delivery/fulfillment-orders/${String(fulfillmentOrder._id)}/shipments`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', bearer)
             .send({});
 
@@ -841,6 +852,7 @@ describe('shipping and delivering never demand a step-up (SD-10)', () => {
 
         const response = await api()
             .post(`/delivery/fulfillment-orders/${String(fulfillmentOrder._id)}/shipments`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', bearer)
             .send({});
 

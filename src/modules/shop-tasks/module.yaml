@@ -3,11 +3,12 @@ subdomain: supporting
 group: shop
 dependsOn:
     - cart # subscribes to its two events
-    - delivery # subscribes to its events; the digest counts its parcels
+    - delivery # subscribes to its events; the digest counts its parcels; names a fulfillment order's order
     - inventory # subscribes to its event, a paid order with no stock set aside; the digest counts low stock
     - notifications # writes the buyer's messages and staff notices, and the digest rows
     - orders # subscribes to its events; the digest counts its orders
-    - payments # subscribes to its refund and dispute events; the digest counts stale refunds
+    - payments # subscribes to its refund and dispute events; the digest counts stale refunds; names a payment's order
+    - products # names the product of a stock movement whose outcome is unknown
     - returns # subscribes to its event, a return requested; the digest counts its returns
     - shop # the shop's country, which decides who owes a delay-consent reminder
     - stock-alerts # subscribes to its event, a back-in-stock request answered

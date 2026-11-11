@@ -7,6 +7,12 @@
                 "title": "È stato applicato un blocco acquisti",
                 "summary": "Un acquirente ha annullato o lasciato scadere diversi ordini non pagati, quindi il suo checkout è sospeso fino a {{until}}. Ogni annullamento è stato elaborato normalmente; è bloccato solo l'inserimento di un nuovo ordine. La sospensione termina da sola; applica un blocco manuale all'account per prolungarla."
             },
+            "outcome-unknown": {
+                "subject": "Controlla il risultato: {{operation}} su {{subjectName}}",
+                "meta-title": "Esito sconosciuto",
+                "title": "Un'operazione è iniziata e non ha mai riportato come è finita",
+                "summary": "L'operazione {{operation}} su {{subjectName}} (iniziata {{since}}) è partita e il server non ha mai riportato come è finita. Non è stata rieseguita, quindi denaro o scorte potrebbero essere stati mossi oppure no. Apri la schermata, controlla il risultato e solo dopo agisci di nuovo; una ripetizione con una nuova chiave è una nuova operazione."
+            },
             "digest": {
                 "subject": "Lavoro in attesa",
                 "meta-title": "Riepilogo giornaliero",

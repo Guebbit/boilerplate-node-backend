@@ -34,6 +34,13 @@ export const SHOP_STAFF_ROUTES = {
         email: 'none',
         severity: NotificationSeverity.info
     },
+    // A refund, a ship or a stock movement began and never reported back, and was not run again.
+    // Money or stock may or may not have moved: the people who do that work check now.
+    'shop-tasks.staff.outcome-unknown': {
+        sets: 'per-notice',
+        email: 'now',
+        severity: NotificationSeverity.error
+    },
     // The summary rows below are counts the daily digest rewrites. The ones that mail are the
     // overdue ones (something is late and nobody has acted); a count of work in the normal course
     // is the bell's alone.

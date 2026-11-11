@@ -5,6 +5,7 @@
  * row, which `products` may only reach through the `kernel/translation.ts` port.
  */
 
+import { randomUUID } from 'node:crypto';
 import '@tests/contract';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { setupTestDb } from '@tests/setup-test-db';
@@ -169,6 +170,7 @@ describe('POST /products', () => {
 
         const received = await api()
             .post(`/inventory/levels/${id}/receive`)
+            .set('Idempotency-Key', randomUUID())
             .set('Authorization', bearer)
             .set('Idempotency-Key', 'opening-count-1')
             .send({ quantity: 7 });

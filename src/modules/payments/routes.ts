@@ -97,7 +97,8 @@ router.post(
 );
 
 // POST /payments/:id/refunds — the operator returns the money, order untouched. The key
-// is REQUIRED: a retried refund would otherwise return the money twice.
+// is REQUIRED: a retried refund would otherwise return the money twice, and a key whose first
+// attempt never reported an outcome answers "outcome unknown" instead of running again.
 /*
  * No `requireFreshAuth` here: `create:Refund` carries `stepUp: critical` in
  * `shared/authorization-keys.generated.yaml`, so the guard demands the fresh session and audits that it did.
@@ -107,7 +108,7 @@ router.post(
 router.post(
     '/:id/refunds',
     requirePermission('create', 'Refund'),
-    requireIdempotencyKey,
+    requireIdempotencyKey({ operation: 'refund', subjectParam: 'id' }),
     postPaymentRefund
 );
 
