@@ -28,6 +28,10 @@ metrics:
         name: http_requests_in_flight
         kind: gauge
         help: Number of HTTP requests currently in flight.
+    queryTimeoutsTotal:
+        name: query_timeouts_total
+        kind: counter
+        help: Database queries the server stopped at its time limit (MaxTimeMSExpired), answered 503.
     cacheInvalidationFailuresTotal:
         name: cache_invalidation_failures_total
         kind: counter

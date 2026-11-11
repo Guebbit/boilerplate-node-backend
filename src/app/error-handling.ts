@@ -12,6 +12,8 @@ import { logger, auditLogger } from '@infrastructure/adapters/logger';
 import { fieldError, rejectResponse } from '@infrastructure/http/response';
 import { scrubError } from '@infrastructure/adapters/log-scrub';
 import { databaseErrorInterpreter, rejectServiceUnavailable } from '@infrastructure/http/errors';
+import { isQueryTimeout } from '@infrastructure/persistence/mongo-errors';
+import { queryTimeoutsTotal } from '@infrastructure/observability/metrics-database';
 import { recordErrorOnActiveSpan } from '@infrastructure/observability/tracer';
 import { processUnhandledRejectionsTotal } from '@infrastructure/observability/metrics-process';
 import { t } from '@infrastructure/i18n';
@@ -152,7 +154,10 @@ export const handleUncaughtError = (
     }
 
     // A dependency outage — the same answer a controller's own `.catch` gives it.
-    if (status === 503) return rejectServiceUnavailable(response);
+    if (status === 503) {
+        if (isQueryTimeout(error)) queryTimeoutsTotal.inc();
+        return rejectServiceUnavailable(response, error);
+    }
 
     /*
      * The client is told that something failed, and nothing else: a CONSTANT, never
