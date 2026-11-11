@@ -1,7 +1,7 @@
 /**
  * The write path under load — log in, fill a cart, check out.
  *
- * THIS is the scenario worth having, and the reason k6 earns its place beside autocannon. A GET
+ * THIS is the scenario worth having, the one a single-URL hammer (`hit.js`) cannot be. A GET
  * flood measures how fast a cached read is. This measures the thing that can actually break under
  * concurrency: `reserveForOrder` taking a hold on stock while other virtual users are taking one
  * on the same product. `tests/integration/concurrency/cart-races.test.ts` proves that logic is

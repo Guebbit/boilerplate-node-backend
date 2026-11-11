@@ -587,7 +587,8 @@ scripts: JavaScript for the k6 Go runtime, not this project's TypeScript. Jest's
 `*.test.ts` and never sees them, and `eslint.config.ts` ignores the directory outright, because
 they import from `k6/http` — a specifier that resolves only inside k6.
 
-| File                     | What it is                                                                                                                                       | Read next                                |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
-| `tests/load/browse.js`   | The read path under load: the storefront as an anonymous visitor sees it. Where autocannon hammers one URL at a flat rate, this walks a journey. | [Load Testing](../tools/load-testing.md) |
-| `tests/load/checkout.js` | The write path: log in, fill a cart, check out. The scenario worth having, and the reason k6 earns its place beside autocannon.                  | [Load Testing](../tools/load-testing.md) |
+| File                     | What it is                                                                                                                                     | Read next                                |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `tests/load/hit.js`      | One URL at constant virtual users, k6's summary and no thresholds: `npm run bench`.                                                            |
+| `tests/load/browse.js`   | The read path under load: the storefront as an anonymous visitor sees it. Where `hit.js` hammers one URL at a flat rate, this walks a journey. | [Load Testing](../tools/load-testing.md) |
+| `tests/load/checkout.js` | The write path: log in, fill a cart, check out. The scenario worth having: a write path no single-URL hammer can exercise.                     | [Load Testing](../tools/load-testing.md) |

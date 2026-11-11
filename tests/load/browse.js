@@ -1,10 +1,10 @@
 /**
  * The read path under load — the storefront as an anonymous visitor sees it.
  *
- * WHAT THIS IS FOR, and how it differs from `npm run bench`. Autocannon hammers one URL at a flat
+ * WHAT THIS IS FOR, and how it differs from `npm run bench`. `hit.js` hammers one URL at a flat
  * concurrency and reports numbers; this RAMPS, walks more than one endpoint, and — the part that
  * matters — asserts. `thresholds` below turn "how fast is it" into a verdict the shell can act on,
- * which is the whole reason to have both tools rather than one.
+ * which is the whole reason to have both scripts rather than one.
  *
  * ── The thresholds are placeholders and you must replace them ────────────────────────────────
  * They are set at values this API comfortably meets, on purpose: a threshold invented before

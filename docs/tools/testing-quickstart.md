@@ -140,7 +140,7 @@ see [Docker & Podman](./docker-and-podman.md#running-the-gate-in-a-container).
 Two tools, deliberately:
 
 ```bash
-npm run bench            # autocannon: one endpoint, flat load, reports numbers
+npm run bench            # k6: one endpoint, flat load, reports numbers
 npm run bench:k6         # k6: ramping load, several endpoints, PASSES OR FAILS
 npm run bench:k6 checkout  # the write path — login, cart, checkout under contention
 ```
