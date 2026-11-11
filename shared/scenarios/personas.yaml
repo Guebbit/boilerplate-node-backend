@@ -3,8 +3,7 @@
 # Each password is public on purpose: the demo profile never reaches a database anyone but a
 # developer or CI can see. `NODE_SEED_<NAME>_PASSWORD` overrides it per account.
 # The paired frontend's Cypress suite reads each login from the scenario description (`GET
-# /__test/scenario`), so it keeps no copy. The generated tables in `docs/tools/demo-profile.md`
-# read this file.
+# /__test/scenario`), so it keeps no copy. `docs/tools/demo-profile.md` links here.
 #
 # state:
 #   verified          proved the address (no verify-your-email nag)

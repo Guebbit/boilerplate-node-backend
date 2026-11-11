@@ -116,18 +116,10 @@ flowchart LR
 Who they are, what they hold and the state they start in is `shared/scenarios/personas.yaml`; their
 ids live in `scenarios/accounts.ts` — outside `src/` entirely, like every other scenario file, even
 though `users` owns the record. Four of them are the owner and the ordinary customer, plus one per
-tenant role worth trying on its own. The tables on this page are generated from that file.
+tenant role worth trying on its own.
 
-<!-- persona-named:start -->
-
-| Account     | Login                   | Roles                                | State                                  |
-| ----------- | ----------------------- | ------------------------------------ | -------------------------------------- |
-| `admin`     | `root@root.it`          | tenant `admin` + platform `operator` | authenticator app armed (`totpSecret`) |
-| `user`      | `customer@example.com`  | customer                             | opted in to analytics                  |
-| `editor`    | `editor@example.com`    | tenant `editor`                      | authenticator app armed (`totpSecret`) |
-| `moderator` | `moderator@example.com` | tenant `moderator`                   | authenticator app armed (`totpSecret`) |
-
-<!-- persona-named:end -->
+Their logins, roles and starting state (`admin`, `user`, `editor`, `moderator`) are entries of
+`accounts` in `shared/scenarios/personas.yaml`.
 
 Several scenario files need a piece of them: `users` seeds the accounts, `account` seeds the address
 book an order ships to, `wishlist` seeds a row belonging to a person, and `flows/shop-history.ts`
@@ -163,17 +155,8 @@ Five more customers, each in one state a journey starts from. They are written s
 collection (`scenarios/users.ts`), because reaching the state through the API needs a mail or a
 code the seeder never reads. Each password is `NODE_SEED_<NAME>_PASSWORD`.
 
-<!-- persona-persona:start -->
-
-| Account         | Login                        | Roles    | State                                                           |
-| --------------- | ---------------------------- | -------- | --------------------------------------------------------------- |
-| `unverified`    | `unverified@example.com`     | customer | never proved the address                                        |
-| `twoFactor`     | `two-factor@example.com`     | customer | email 2FA armed; five known backup codes (`backupCodes`)        |
-| `pendingEmail`  | `pending-email@example.com`  | customer | asked to move to `pending-new-address@example.com`, unconfirmed |
-| `banned`        | `banned@example.com`         | customer | switched off (`active: false`), every login refused             |
-| `secondShopper` | `second-shopper@example.com` | customer | verified customer                                               |
-
-<!-- persona-persona:end -->
+Their logins, roles and starting state (`unverified`, `twoFactor`, `pendingEmail`, `banned`,
+`secondShopper`) are entries of `accounts` in `shared/scenarios/personas.yaml`.
 
 The banned persona is separate from `marcus`, whom the shop flow bans through the API so the audit
 trail records it. The persona exists so `blank` carries one too.
@@ -184,16 +167,8 @@ Four more logins, each holding exactly one role. Three are shop roles; the opera
 platform role only, with no shop membership, so it holds none of a shop's keys. Each password is
 `NODE_SEED_<NAME>_PASSWORD`.
 
-<!-- persona-staff:start -->
-
-| Account     | Login                   | Roles               | State                                  |
-| ----------- | ----------------------- | ------------------- | -------------------------------------- |
-| `manager`   | `manager@example.com`   | tenant `manager`    | authenticator app armed (`totpSecret`) |
-| `warehouse` | `warehouse@example.com` | tenant `warehouse`  | authenticator app armed (`totpSecret`) |
-| `support`   | `support@example.com`   | tenant `support`    | authenticator app armed (`totpSecret`) |
-| `operator`  | `operator@example.com`  | platform `operator` | authenticator app armed (`totpSecret`) |
-
-<!-- persona-staff:end -->
+Their logins, roles and starting state (`manager`, `warehouse`, `support`, `operator`) are entries of
+`accounts` in `shared/scenarios/personas.yaml`.
 
 None of them keeps an address book of its own seeding: staff and administrators do not shop, so
 no persona above needs a billing address to check out. The second shopper a two-customer journey

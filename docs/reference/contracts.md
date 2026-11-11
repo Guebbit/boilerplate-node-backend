@@ -85,15 +85,11 @@ a valid document must pass.
 
 ## The client collections
 
-Four exports of the same contract, one per tool, so a reviewer can open the API in whatever they
-already use. All four are written by the collection generator from `openapi.yaml` — never by hand,
-and never edited to fix a request. None is committed: all four are gitignored and built on demand
-(`npm run contracts:bundle -- <postman|insomnia|bruno|mockoon>`), so a checkout holds only the ones
-somebody has generated.
+One export of the same contract, for Bruno, so a reviewer can open the API in a client. It is written
+by the collection generator from `openapi.yaml` — never by hand, and never edited to fix a request. It
+is not committed: it is gitignored and built on demand (`npm run contracts:bundle -- bruno`).
+The library `@guebbit/openapi-runnable-collections` can also emit Insomnia, Postman and Mockoon collections: add the tool's name to `COLLECTION_TOOLS` in `scripts/contracts/client-collections-bundle.ts` (and a bundle in `bundle-registry.ts`) to get one.
 
-| File                     | What it is                                                                                                           | Read next                                                   |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `contract.postman.json`  | The Postman collection.                                                                                              | [Contract Testing (Response)](../tools/contract-testing.md) |
-| `contract.insomnia.json` | The Insomnia export.                                                                                                 | [Contract Testing (Response)](../tools/contract-testing.md) |
-| `contract.bruno.yml`     | The Bruno collection.                                                                                                | [Contract Testing (Response)](../tools/contract-testing.md) |
-| `contract.mockoon.json`  | The Mockoon environment — a mock server that answers from the contract, for a frontend working ahead of an endpoint. | [Contract Testing (Response)](../tools/contract-testing.md) |
+| File                 | What it is            | Read next                                                   |
+| -------------------- | --------------------- | ----------------------------------------------------------- |
+| `contract.bruno.yml` | The Bruno collection. | [Contract Testing (Response)](../tools/contract-testing.md) |

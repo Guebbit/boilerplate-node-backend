@@ -92,6 +92,14 @@ const factoriesImportPattern = {
 };
 
 /**
+ * The message for a side-effect import banned outside the service layer.
+ * @param what - the action, in plain words
+ * @returns the lint message
+ */
+const sideEffectMessage = (what: string): string =>
+    `A controller, repository or model does not ${what}: that fact belongs to the service that knows it, so a job or sibling module calling the service inherits it. See docs/theory/layers.md.`;
+
+/**
  * The whole lint configuration, as a flat-config array: ignores first, then the shared rule set,
  * then scoped blocks that adjust it, then Prettier's off-switch last.
  * `tseslint.config` only types and flattens its arguments.
@@ -870,6 +878,55 @@ export default tseslint.config(
         files: ['src/modules/*/controllers/**/*.ts', 'scripts/ops/**/*.ts'],
         rules: {
             'no-restricted-imports': ['error', { patterns: [factoriesImportPattern] }]
+        }
+    },
+
+    /**
+     * The four side-effect calls belong to the service layer (docs/theory/layers.md).
+     *
+     * A queued mail, an audit record, an analytics event and a domain event each report a fact
+     * about the DOMAIN. Published from a service, a second caller (a job, a sibling module)
+     * inherits it; published from a controller, a job path silently skips it. Repositories and
+     * models are persistence and know no such fact either.
+     *
+     * Stated AFTER the controllers block above, and `factoriesImportPattern` rides along, because
+     * the last matching `no-restricted-imports` block replaces the others' options.
+     */
+    {
+        files: [
+            'src/modules/*/controllers/**/*.ts',
+            'src/modules/*/repository.ts',
+            'src/modules/*/model.ts'
+        ],
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    paths: [
+                        {
+                            name: '@infrastructure/adapters/mailer',
+                            importNames: ['enqueueEmail'],
+                            message: sideEffectMessage('queue a mail')
+                        },
+                        {
+                            name: '@infrastructure/observability/audit',
+                            importNames: ['recordAudit'],
+                            message: sideEffectMessage('record an audit entry')
+                        },
+                        {
+                            name: '@infrastructure/observability/analytics',
+                            importNames: ['emitAnalyticsEvent'],
+                            message: sideEffectMessage('emit an analytics event')
+                        },
+                        {
+                            name: '@kernel/events',
+                            importNames: ['emitDomainEvent'],
+                            message: sideEffectMessage('emit a domain event')
+                        }
+                    ],
+                    patterns: [factoriesImportPattern]
+                }
+            ]
         }
     },
 

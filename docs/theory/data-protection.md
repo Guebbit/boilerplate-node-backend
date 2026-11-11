@@ -88,27 +88,11 @@ purpose and lifetime cells translated.
 
 ### Cookies the backend sets
 
-Generated from `shared/rules/cookies.yaml`, the file the code reads its cookie names and
-lifetimes from and the log scrubber reads its secret names from. A new backend cookie is a row
-there and shows up here on `npm run regenerate`. The browser-side rows above are the frontend's
-own inventory, shown to the visitor on its privacy page.
-
-<!-- cookie-inventory:start -->
-
-| Cookie                            | What it holds                                                                                                                                                                                  | Lifetime                            | Why it needs no consent                           |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------- |
-| `__Host-session`                  | The credential, httpOnly and never readable by script: the refresh token in `jwt` mode, the random session id in `cookie` mode. It IS the login the visitor asked for.                         | the session's own lifetime          | strictly necessary (ePrivacy Art. 5(3) exemption) |
-| `isAuth`                          | The signed-in flag. The frontend only reads it and clears it at sign-out. It holds no credential.                                                                                              | the session's own lifetime          | strictly necessary (ePrivacy Art. 5(3) exemption) |
-| `__Host-device`                   | Up to five HMAC tokens, each tied to one account's email under a server secret, httpOnly, host-bound. Lets the owner's browser keep signing in while a guesser has used up the failure budget. | 180 days                            | strictly necessary (ePrivacy Art. 5(3) exemption) |
-| `__Host-oauth_state`              | The CSRF state of a sign-in-with-a-provider attempt in flight. It IS the sign-in the visitor asked for.                                                                                        | 5 minutes                           | strictly necessary (ePrivacy Art. 5(3) exemption) |
-| `__Host-oauth_verifier`           | The PKCE verifier of the same attempt.                                                                                                                                                         | 5 minutes                           | strictly necessary (ePrivacy Art. 5(3) exemption) |
-| `__Host-oauth_continue`           | The page to return to once the provider has sent the visitor back.                                                                                                                             | 5 minutes                           | strictly necessary (ePrivacy Art. 5(3) exemption) |
-| `__Host-oauth_locale`             | The language the visitor was using when the attempt began.                                                                                                                                     | 5 minutes                           | strictly necessary (ePrivacy Art. 5(3) exemption) |
-| `__Host-oauth_link`               | The link attempt, set only when a signed-in account connects a provider.                                                                                                                       | 5 minutes                           | strictly necessary (ePrivacy Art. 5(3) exemption) |
-| `__Host-oauth_mfa_challenge`      | The second-factor step of a provider sign-in: the login challenge, carried across the redirect instead of in the URL.                                                                          | as long as the challenge it carries | strictly necessary (ePrivacy Art. 5(3) exemption) |
-| `__Host-oauth_deletion_challenge` | The restore-a-pending-deletion step of a provider sign-in: the claim check, carried across the redirect instead of in the URL.                                                                 | as long as the challenge it carries | strictly necessary (ePrivacy Art. 5(3) exemption) |
-
-<!-- cookie-inventory:end -->
+The list is `shared/rules/cookies.yaml`, the file the code reads its cookie names and
+lifetimes from and the log scrubber reads its secret names from: each cookie carries its purpose
+and lifetime there. A new backend cookie is a row in that file. The visitor-facing list is the
+frontend's privacy page (`#cookies`); the browser-side rows above are the frontend's own
+inventory.
 
 ## Sub-processor list
 

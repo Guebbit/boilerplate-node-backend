@@ -778,6 +778,9 @@ jobs:
         # It duplicates every other job here on purpose: they answer WHICH thing broke, this one
         # answers whether the container lane still works AT ALL.
         #
+        # This job is what makes CI cover the whole gate (a `--no-verify` commit or a fork PR still
+        # runs `npm run complete`): keep it in the `ci` job's `needs:`.
+        #
         # 120 minutes: `npm run complete` is every other job's work in one container, one suite
         # after another, with two jest workers. Measured on this runner: the static checks take 3
         # minutes, unit 17, cross-cutting 3 and integration ~16, before contract and fuzz.

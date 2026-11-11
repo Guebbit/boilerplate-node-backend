@@ -27,9 +27,9 @@ sources; two of them — `openapi` and `asyncapi-public` — also exist in
 `boilerplate-vue-frontend` as byte-identical copies, because the frontend's toolchain reads them.
 Four more shared files travel with them (`shared/authorization-keys.generated.yaml` and three webhook-sink TLS
 PEMs); the full list is `SHARED_FILES` in `scripts/pairing/spec-identity.ts`.
-The four client collections stay in this repo only — they are derived from `openapi.yaml`, so a
+The client collection stays in this repo only — it is derived from `openapi.yaml`, so a
 frontend copy could never disagree without the spec disagreeing first, and nothing there reads
-them:
+it:
 
 | Bundle            | Written to                                  | Built from                                                     |
 | ----------------- | ------------------------------------------- | -------------------------------------------------------------- |
@@ -37,9 +37,6 @@ them:
 | `asyncapi`        | `asyncapi.yaml`                             | `src/modules/<name>/asyncapi.yaml` + `shared/contracts/asyncapi.{root,workers}.yaml` — **merged** |
 | `asyncapi-public` | `asyncapi.public.yaml`                      | the same sources minus the backend-only ones — the half the frontend receives |
 | `bruno`           | `contract.bruno.yml` *(untracked)*          | `openapi.yaml` + the demo dataset — **generated whole**         |
-| `insomnia`        | `contract.insomnia.json` *(untracked)*      | `openapi.yaml` + the demo dataset — **generated whole**         |
-| `mockoon`         | `contract.mockoon.json` *(untracked)*       | `openapi.yaml` + the demo dataset — **generated whole**         |
-| `postman`         | `contract.postman.json` *(untracked)*       | `openapi.yaml` + the demo dataset — **generated whole**         |
 
 Whatever more than one domain reads stays in `shared/contracts/`, and each bundle's section order,
 layout and shared parts are declared in one file under `scripts/contracts/`.
@@ -51,7 +48,7 @@ layout and shared parts are declared in one file under `scripts/contracts/`.
 | `openapi.yaml`           | **compiled**  | `redocly bundle` resolves `$ref` across whole documents, then the root's `x-app-level-responses` (429, 500 and 503 for every operation; 400/413/415 for a body-carrying one; 415 for a body-less write too — none of them any one module's business) is merged into every operation that doesn't already declare its own. A step (`scripts/contracts/image-upload-encoding.ts`) stamps the root's `x-image-upload-types` onto every multipart `imageUpload` part as `encoding.imageUpload.contentType`. A second step (`scripts/contracts/cookie-auth.ts`) adds `cookieAuth` as an alternative to every operation that takes `bearerAuth`, and the origin `403` to its unsafe methods. A step (`scripts/contracts/response-headers.ts`) stamps the root's `x-app-level-headers` (`x-request-id`, `Cache-Control`, `Content-Language`, `Vary`, `RateLimit-Policy`, `RateLimit`, `ETag`) onto every response that does not declare the same header itself, and `Idempotent-Replayed` onto every response of an operation that takes an `Idempotency-Key` except a 429 (the ledger never sees one), through a `<Name>Replayable` twin of each shared response. A step (`scripts/contracts/fill-enum.ts`) fills a schema marked `x-enum-from: <source>` with that source's values (after any written `enum`, which is how a module extends another's enum), so the webhook event names are never copied into `webhooks/openapi.yaml`. A step (`scripts/contracts/openapi-extensions.ts`) merges another module's `openapi.<owner>.yaml` variants into the owner's `oneOf` unions ([Extending another module's contract](#extending-another-modules-contract)). An operation's own `x-error-codes: { '<status>': [CODE, ...] }` lists the codes it answers with, and the bundle fails if a name is not in the collected catalogue or sits under another status; a catalogue entry's optional `scope: app` marks a code any operation may send, so none lists it ([what an operation lists](./errors.md#what-an-operation-lists)) |
 | `asyncapi.yaml`          | **merged**    | `scripts/contracts/asyncapi-bundles.ts` copies five maps; `$ref`s stay untouched |
 | `asyncapi.public.yaml`   | **merged**    | the same merge over the shared sections only — one `SHARED_SECTIONS` list decides which |
-| the 4 client collections | **generated** | produced whole from `openapi.yaml` + the dataset, nothing on disk between; untracked |
+| the client collection | **generated** | produced whole from `openapi.yaml` + the dataset, nothing on disk between; untracked |
 
 A 405 is not merged in: it answers a request that matched no operation, so it is the
 `METHOD_NOT_ALLOWED` code in the root's `x-error-codes` and a guard built from `api/operation-routes.ts`
@@ -106,7 +103,7 @@ flowchart TD
 ```
 
 The picture is drawn for `openapi.yaml`; the other five bundles differ only in what reads the output
-(the realtime type generator, four API clients). Three properties fall out of
+(the realtime type generator, the API client). Three properties fall out of
 it, and each is load-bearing:
 
 1. **Fragments are authored here, and only here.** A module owns its slice of every shared document
@@ -562,11 +559,11 @@ A hand-written collection rots exactly as a copy does: endpoints go missing, URL
 serves stay in, and a mock server serving shapes the frontend cannot parse is worse than no mock
 server.
 
-So `scripts/contracts/client-collections-bundle.ts` produces them — **one gitignored file
-per tool, generated whole.** There is no intermediate on disk: no per-module slice to hand-edit, no
+So `scripts/contracts/client-collections-bundle.ts` produces it — **one gitignored file
+generated whole.** There is no intermediate on disk: no per-module slice to hand-edit, no
 header to keep in step with a footer, and nothing under `src/` that must never be opened.
 
-The traversal, the example synthesis and the four emitters live in
+The traversal, the example synthesis and the emitters live in
 [`@guebbit/openapi-runnable-collections`](https://www.npmjs.com/package/@guebbit/openapi-runnable-collections),
 which knows nothing about this repo. That file is **configuration**: which module owns which path,
 where the values come from, where the probes are, and where the output lands. Everything below is a
@@ -584,7 +581,7 @@ property of that configuration rather than of the package.
   file cannot name — a title, a price, a description — falls to a type- and format-shaped default;
 - **ownership comes from the module contracts** — a path in `src/modules/orders/openapi.yaml`
   is the orders module's, so the mapping is recorded once and a path that moves between modules
-  moves in all four collections with it;
+  moves in the collection with it;
 - **identifiers are hashed from method and path**, not generated fresh, so regenerating rewrites
   only what actually changed rather than re-forking all three files.
 
@@ -596,8 +593,7 @@ missing while they rotted.
 collection is also where you keep the requests that prove the API *rejects* things, and a spec
 describes valid calls and their declared answers, so no generator can derive them. A module declares
 its probes as data — method, path, headers, body, and a `why` that becomes the description — and
-they are emitted after its contract-derived requests. Not into Mockoon: a mock server answers
-requests, it does not send them.
+they are emitted after its contract-derived requests.
 
 They are TypeScript rather than YAML, and the generator is called with them directly. That buys two
 things a data file cannot: the seed tokens and the probe shape are typechecked, and a module deleted
@@ -621,17 +617,7 @@ tokens are filled in `scripts/contracts/client-collections-bundle.ts` from the s
 a fixture that stops being soft-deleted takes its probe with it instead of leaving one that quietly
 tests nothing. An unknown token fails the generator with the list of known ones.
 
-**Two serialisations, four tools.** Bruno and Insomnia are YAML; Mockoon and Postman are JSON.
-Mockoon needs one thing the others do not — every route appears twice, once in `routes` and once as
-a `rootChildren` reference fixing the order its UI shows them in — and the generator handles that
-inside its own document rather than leaving two lists for this repo to keep in step. A test still
-asserts the two arrays match.
-
-**Why Postman is its own emitter and not a renamed Insomnia**, since the two look interchangeable
-from outside: Insomnia exports `collection.insomnia.rest/5.0` YAML, while Postman reads Collection
-Format v2.1 JSON, which splits a URL into `raw`/`host`/`path`/`query` and reads the *parts* rather
-than the string. The compatibility runs one way only — Insomnia imports Postman, Postman does not
-import Insomnia — so one emitter could not have served both.
+**One tool.** The collection is Bruno's YAML. `@guebbit/openapi-runnable-collections` can also emit Insomnia, Postman and Mockoon collections: add the tool's name to `COLLECTION_TOOLS` in `scripts/contracts/client-collections-bundle.ts` (and a bundle in `bundle-registry.ts`) to get one.
 
 ## What the frontend does — and does not — do
 

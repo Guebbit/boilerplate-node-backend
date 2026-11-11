@@ -1,9 +1,6 @@
 api
 .prism
 contract.bruno.yml
-contract.insomnia.json
-contract.mockoon.json
-contract.postman.json
 src/types/asyncapi.generated.ts
 
 # The REST contract. `redocly bundle` decides its layout now — 2-space, its own key order — and

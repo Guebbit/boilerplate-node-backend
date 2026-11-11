@@ -50,27 +50,12 @@ const collectionBundle = (tool: CollectionTool, file: string): ContractBundle =>
 /** The Bruno collection bundle. */
 const brunoBundle = collectionBundle('bruno', 'contract.bruno.yml');
 
-/**
- * The Insomnia collection bundle. Named `.json` after the tool's own export convention, and YAML
- * inside — Insomnia's importer accepts either and keys on the content, not the extension.
- */
-const insomniaBundle = collectionBundle('insomnia', 'contract.insomnia.json');
-
-/** The Mockoon environment bundle. */
-const mockoonBundle = collectionBundle('mockoon', 'contract.mockoon.json');
-
-/** The Postman collection bundle. */
-const postmanBundle = collectionBundle('postman', 'contract.postman.json');
-
 /** Every contract bundle the repo knows, authored and generated alike. */
 export const CONTRACT_BUNDLES: readonly ContractBundle[] = [
     openapiBundle,
     asyncapiBundle,
     asyncapiPublicBundle,
-    brunoBundle,
-    insomniaBundle,
-    mockoonBundle,
-    postmanBundle
+    brunoBundle
 ] as const;
 
 /** One bundle by its CLI handle. */
