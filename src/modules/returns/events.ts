@@ -17,6 +17,8 @@ declare module '@kernel/events' {
         'return.requested': {
             returnId: string;
             orderId: string;
+            /** The order's number, as the buyer knows it: what a notice names the order by. */
+            orderNumber: string;
             reason: ReturnReason;
             /** When the buyer asked or stated it (ISO), not when the shop recorded it. */
             requestedAt: string;

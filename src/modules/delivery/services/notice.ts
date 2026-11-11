@@ -47,6 +47,7 @@ const payloadOf = (
     const shipCountry = orderService.shippingAddressOf(order)?.country;
     return {
         orderId: String(fulfillmentOrder.orderId),
+        orderNumber: order.orderNumber,
         fulfillmentOrderId: String(fulfillmentOrder._id),
         ...(buyerIdOf(order) ? { userId: buyerIdOf(order) } : {}),
         titles: fulfillmentOrder.lines.map(({ title }) => title),

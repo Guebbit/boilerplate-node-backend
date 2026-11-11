@@ -95,6 +95,7 @@ const DISPUTE: DomainEventMap['payment.dispute_opened'] = {
 };
 const DELAY: DomainEventMap['fulfillment_order.delayed'] = {
     orderId: ORDER,
+    orderNumber: '2026-000041',
     fulfillmentOrderId: 'fo1',
     titles: ['Mug'],
     agreedAt: '2031-02-01T00:00:00.000Z',

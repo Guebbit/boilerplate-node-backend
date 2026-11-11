@@ -73,7 +73,7 @@ components:
         FulfillmentDelayedParams:
             type: object
             additionalProperties: false
-            required: [orderId, fulfillmentOrderId, titles, agreedAt]
+            required: [orderId, fulfillmentOrderId, titles, agreedAt, orderNumber]
             description: >-
                 What the buyer needs to read a late-preorder notice: which order and fulfillment order,
                 what is waiting, the date they were promised and the date now expected (absent when there
@@ -81,6 +81,9 @@ components:
             properties:
                 orderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderNumber:
+                    type: string
+                    description: The order's number as the buyer knows it (`2026-000041`), shown as `#…`.
                 fulfillmentOrderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 titles:
@@ -100,7 +103,7 @@ components:
         ShipmentLostParams:
             type: object
             additionalProperties: false
-            required: [orderId, shipmentId, reason]
+            required: [orderId, shipmentId, reason, orderNumber]
             description: >-
                 What the buyer needs to read a lost-parcel notice: which order and shipment, whether it
                 was lost or damaged in transit, the sentence staff wrote for them if any, and the
@@ -109,6 +112,9 @@ components:
             properties:
                 orderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderNumber:
+                    type: string
+                    description: The order's number as the buyer knows it (`2026-000041`), shown as `#…`.
                 shipmentId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 reason:
@@ -130,7 +136,7 @@ components:
         FulfillmentHeldParams:
             type: object
             additionalProperties: false
-            required: [orderId, fulfillmentOrderId, notice]
+            required: [orderId, fulfillmentOrderId, notice, orderNumber]
             description: >-
                 What the buyer needs to read a hold notice: which order and fulfillment order, whether
                 the address needs a look (`check_address`) or the order is only `delayed`, and the
@@ -138,6 +144,9 @@ components:
             properties:
                 orderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderNumber:
+                    type: string
+                    description: The order's number as the buyer knows it (`2026-000041`), shown as `#…`.
                 fulfillmentOrderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 notice:
@@ -365,13 +374,16 @@ components:
         ReturnRequestedParams:
             type: object
             additionalProperties: false
-            required: [returnId, orderId]
+            required: [returnId, orderId, orderNumber]
             description: A return request is waiting for a decision. Ids only, the return's page has the rest.
             properties:
                 returnId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 orderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderNumber:
+                    type: string
+                    description: The order's number as the buyer knows it (`2026-000041`), shown as `#…`.
 
         NotificationStaffReturnRequested:
             type: object

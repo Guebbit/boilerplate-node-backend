@@ -105,7 +105,12 @@ describe('a release date that moves', () => {
         expect(waiting.lastNoticeAt).toBeInstanceOf(Date);
         expect(waiting.status).toBe('on_hold');
         expect(await delayedEvents()).toMatchObject([
-            { orderId, reason: 'moved', titles: expect.any(Array) }
+            {
+                orderId,
+                orderNumber: expect.stringMatching(/^\d{4}-\d{6}$/),
+                reason: 'moved',
+                titles: expect.any(Array)
+            }
         ]);
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
     });
@@ -126,6 +131,7 @@ describe('a release date that moves', () => {
                 'expectedAt',
                 'fulfillmentOrderId',
                 'orderId',
+                'orderNumber',
                 'promisedAt',
                 'reason',
                 'titles',
