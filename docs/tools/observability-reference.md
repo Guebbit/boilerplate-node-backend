@@ -23,9 +23,9 @@ flowchart LR
 
     subgraph Logs["Logs"]
         Stdout["stdout\n(container log file)"]
-        Promtail["Promtail\nlog shipper"]
+        Alloy["Alloy\nlog shipper"]
         Loki["Loki\n:3100"]
-        Stdout --> Promtail --> Loki
+        Stdout --> Alloy --> Loki
     end
 
     Grafana["Grafana\n:3001"]
@@ -46,7 +46,7 @@ flowchart LR
     class App app;
     class OTel,Tempo traces;
     class Prom,Alert metrics;
-    class Stdout,Promtail,Loki logs;
+    class Stdout,Alloy,Loki logs;
     class Grafana ui;
 ```
 
@@ -56,7 +56,7 @@ flowchart LR
 | ----------- | ----------------------------------------------------------- | ----------------------- | --------------------------------------------------------- | --------------------------------------------------------- |
 | **Traces**  | App → OTel Collector → Tempo                                | Tempo volume            | Grafana → Explore → Tempo                                 | [OpenTelemetry](./opentelemetry.md) · [Tempo](./tempo.md) |
 | **Metrics** | Prometheus scrapes `/observability/metrics` → Prometheus DB | Prometheus volume (7 d) | Grafana → Explore → Prometheus or `http://localhost:9090` | [Prometheus](./prometheus.md)                             |
-| **Logs**    | Winston → stdout → Promtail → Loki                          | Loki volume (7 d)       | Grafana → Explore → Loki                                  | [Winston](./winston.md) · [Loki](./loki.md)               |
+| **Logs**    | Winston → stdout → Alloy → Loki                             | Loki volume (7 d)       | Grafana → Explore → Loki                                  | [Winston](./winston.md) · [Loki](./loki.md)               |
 | **Alerts**  | Prometheus evaluates rules → Alertmanager                   | in-memory               | `http://localhost:9093`                                   | [Prometheus](./prometheus.md)                             |
 
 ## Tool-by-tool config reference
@@ -123,24 +123,20 @@ Repo file: [`/docker/observability/loki.config.yaml`](../../docker/observability
 | `limits_config.retention_period` + `compactor.retention_enabled` | log retention enforcement     | `168h` keeps one week logs           | shorter retention if disk constrained | prod retention follows compliance/cost rules |
 | `ruler.alertmanager_url`                                         | forwards Loki alerts          | wired to local Alertmanager          | add rule files and enable alerts      | prod typically HA Alertmanager               |
 
-### Promtail
+### Alloy (container logs)
 
-**What it does:** tails log files and pushes entries to Loki.
+**What it does:** tails log files and pushes entries to Loki. The dev and production stacks load the same file.
 
-Two config files ship with the repo — one per container runtime:
+Repo file: [`/docker/observability/alloy.logs.config.alloy`](../../docker/observability/alloy.logs.config.alloy)
 
-| File                                                                                                          | Runtime                              | Log format           |
-| ------------------------------------------------------------------------------------------------------------- | ------------------------------------ | -------------------- |
-| [`/docker/observability/promtail.config.yaml`](../../docker/observability/promtail.config.yaml)               | Docker (`json-file` driver)          | Docker JSON envelope |
-| [`/docker/observability/promtail.podman.config.yaml`](../../docker/observability/promtail.podman.config.yaml) | Podman (`k8s-file` driver, rootless) | CRI format           |
+It reads both runtimes at once, so nothing selects a config: Docker's `json-file` driver (JSON envelope) and Podman's `k8s-file` driver (CRI format). `CONTAINER_LOGS_PATH` in `.env` supplies the host log directory and defaults to docker's — see [Docker & Podman](./docker-and-podman.md).
 
-`PROMTAIL_CONFIG` in `.env` selects which of the two is mounted, and `CONTAINER_LOGS_PATH` supplies the host log directory; both default to docker's — see [Docker & Podman](./docker-and-podman.md).
-
-| Config section                     | What it does                          | Why local value                                     | Common tweak                     | Dev vs prod                                      |
-| ---------------------------------- | ------------------------------------- | --------------------------------------------------- | -------------------------------- | ------------------------------------------------ |
-| `scrape_configs[].labels.__path__` | filesystem path to tail               | Docker or Podman log path depending on runtime      | add extra paths/jobs             | prod often uses Kubernetes discovery             |
-| `pipeline_stages`                  | transforms/parses entries before send | `json` stages for Docker; `cri` + `json` for Podman | add json/timestamp/labels stages | prod pipelines are usually richer and normalized |
-| `positions.filename`               | stores read offsets                   | avoids rereading on restart                         | change to persistent mount       | prod keeps positions on durable storage          |
+| Config block                 | What it does                       | Why local value                              | Common tweak                   | Dev vs prod                         |
+| ---------------------------- | ---------------------------------- | -------------------------------------------- | ------------------------------ | ----------------------------------- |
+| `local.file_match`           | filesystem glob to tail            | one block per engine, under the fixed mount  | add extra paths/jobs           | same file in both stacks            |
+| `stage.docker` / `stage.cri` | unwrap the engine's envelope       | the glob that matches nothing is harmless    | none                           | same file in both stacks            |
+| `loki.process "app"`         | parse Winston JSON, promote labels | `level`, `service`, `log_type` become labels | add a label (mind cardinality) | same file in both stacks            |
+| `loki.write`                 | push endpoint                      | `http://loki:3100/loki/api/v1/push`          | point at another Loki          | prod keeps read offsets in a volume |
 
 ### OpenTelemetry Collector
 
@@ -167,8 +163,8 @@ Repo file: [`/docker/observability/otel-collector.config.yaml`](../../docker/obs
     - Check app env `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318`.
     - Check collector and tempo containers are running.
 - **No logs in Loki**
-    - Check Promtail can read `/var/lib/docker/containers/*/*-json.log`.
-    - Verify `clients.url` points to `http://loki:3100/loki/api/v1/push`.
+    - Check Alloy can read `/var/lib/docker/containers/*/*-json.log`.
+    - Verify `loki.write` `endpoint.url` points to `http://loki:3100/loki/api/v1/push`.
 - **Prometheus target is down**
     - Open Prometheus → _Status > Targets_ and verify `app:3000/observability/metrics`.
     - Confirm app container and `/observability/metrics` endpoint are up.

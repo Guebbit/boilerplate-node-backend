@@ -284,11 +284,11 @@ prevent.
 
 Observability is the ability to understand what a running system is doing from its outputs. Three complementary signals cover the full picture:
 
-| Signal      | Question it answers                                         | Tool in this repo                            |
-| ----------- | ----------------------------------------------------------- | -------------------------------------------- |
-| **Traces**  | What did one specific request actually do, step by step?    | OpenTelemetry → OTel Collector → Tempo       |
-| **Metrics** | How is the system behaving in aggregate over time?          | Prometheus → Grafana                         |
-| **Logs**    | What text events happened, in what order, on which request? | Winston → stdout → Promtail → Loki → Grafana |
+| Signal      | Question it answers                                         | Tool in this repo                         |
+| ----------- | ----------------------------------------------------------- | ----------------------------------------- |
+| **Traces**  | What did one specific request actually do, step by step?    | OpenTelemetry → OTel Collector → Tempo    |
+| **Metrics** | How is the system behaving in aggregate over time?          | Prometheus → Grafana                      |
+| **Logs**    | What text events happened, in what order, on which request? | Winston → stdout → Alloy → Loki → Grafana |
 
 ---
 
@@ -370,19 +370,19 @@ Observability is the ability to understand what a running system is doing from i
 
 **Problem it solves.** Full-text indexed log stores (Elasticsearch) are expensive to run and scale because every word in every log line is indexed. Most log queries start with a label filter anyway (`service=api, level=error`). Loki's label-only index makes it much cheaper to operate while remaining fast for the most common query patterns.
 
-**In this repo.** Receives log lines from Promtail. Winston writes structured JSON to stdout; the container runtime captures it to a log file; Promtail tails that file and pushes to Loki. Labels parsed: `service`, `level`, `job`. Retention is 7 days. Queried via LogQL in Grafana.
+**In this repo.** Receives log lines from Alloy. Winston writes structured JSON to stdout; the container runtime captures it to a log file; Alloy tails that file and pushes to Loki. Labels parsed: `service`, `level`, `job`. Retention is 7 days. Queried via LogQL in Grafana.
 
 → [Loki](./loki.md)
 
 ---
 
-### Promtail (log shipping)
+### Alloy (log shipping)
 
-**What it is.** Promtail is Grafana's log shipper — a lightweight agent that tails log files on the host, applies pipeline transformations (parse JSON, add labels, drop noise), and pushes log entries to Loki.
+**What it is.** Alloy is Grafana's telemetry collector — an agent that tails log files on the host, applies pipeline transformations (parse JSON, add labels, drop noise), and pushes log entries to Loki. It replaces Promtail, which has been end of life since March 2026.
 
-**Problem it solves.** Loki does not pull logs — something must push them. Promtail sits on the host, knows where each container writes its log file, and handles the Docker vs Podman format differences without changes to the app itself.
+**Problem it solves.** Loki does not pull logs — something must push them. Alloy sits on the host, knows where each container writes its log file, and handles the Docker vs Podman format differences without changes to the app itself.
 
-**In this repo.** Two configs ship with the repo: one for Docker (`json-file` log driver) and one for Podman (`k8s-file` / CRI format). `PROMTAIL_CONFIG` in `.env` selects which one is mounted (docker's is the default), and on Podman `CONTAINER_LOG_DRIVER=k8s-file` is what makes the log files exist at all — its own default, `journald`, writes none. Config lives at `docker/observability/promtail*.config.yaml`.
+**In this repo.** One config, `docker/observability/alloy.logs.config.alloy`, reads both Docker (`json-file` log driver) and Podman (`k8s-file` / CRI format) at once, and the production stack loads the same file. `CONTAINER_LOGS_PATH` in `.env` says where the host keeps the logs (docker's is the default), and on Podman `CONTAINER_LOG_DRIVER=k8s-file` is what makes the log files exist at all — its own default, `journald`, writes none.
 
 → [Loki](./loki.md) · [Docker & Podman](./docker-and-podman.md)
 

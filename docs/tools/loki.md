@@ -3,7 +3,7 @@
 ## What it is
 
 [Grafana Loki](https://grafana.com/oss/loki/) is the **log store** of this boilerplate.
-It receives container logs shipped by **Promtail** and makes them searchable in Grafana.
+It receives container logs shipped by **Alloy** and makes them searchable in Grafana.
 
 ## How it is wired
 
@@ -11,10 +11,10 @@ It receives container logs shipped by **Promtail** and makes them searchable in 
 
 ```
 All containers → stdout → Docker JSON log files
-Docker JSON log files → Promtail → Loki → Grafana
+Docker JSON log files → Alloy → Loki → Grafana
 ```
 
-- Promtail reads `/var/lib/docker/containers/*/*-json.log` on the host.
+- Alloy reads `/var/lib/docker/containers/*/*-json.log` on the host.
 - It parses Docker's JSON envelope, then Winston's structured JSON fields (`level`, `service.name`, `trace_id`) as Loki labels; the `service` label is read from `service.name`, the
   OpenTelemetry name the logger writes. See [Winston](./winston.md#field-names-in-the-log-line).
 
@@ -22,13 +22,13 @@ Docker JSON log files → Promtail → Loki → Grafana
 
 ```
 All containers → stdout → Podman k8s-file log files (CRI format)
-Podman log files → Promtail (CRI pipeline) → Loki → Grafana
+Podman log files → Alloy (CRI stage) → Loki → Grafana
 ```
 
-- Promtail reads `$HOME/.local/share/containers/storage/overlay-containers/*/userdata/*.log` on the host.
-- Podman's default driver is `journald`, which writes no log file — set `CONTAINER_LOG_DRIVER=k8s-file` or Promtail tails nothing.
-- `k8s-file` uses CRI format, so a separate pipeline stage is used.
-- `CONTAINER_LOGS_PATH` and `PROMTAIL_CONFIG` in `.env` point Promtail at that path and parser.
+- Alloy reads `$HOME/.local/share/containers/storage/overlay-containers/*/userdata/*.log` on the host.
+- Podman's default driver is `journald`, which writes no log file — set `CONTAINER_LOG_DRIVER=k8s-file` or Alloy tails nothing.
+- `k8s-file` uses CRI format; `alloy.logs.config.alloy` reads both framings at once, so nothing selects a parser.
+- `CONTAINER_LOGS_PATH` in `.env` points Alloy at that path.
 - Run `npm run compose:rebuild` (or `compose:restart`) to use the Podman-ready stack.
 
 ## Querying logs in Grafana
@@ -47,7 +47,7 @@ Open **Grafana → Explore → Loki**:
 ```
 
 ::: warning Those labels depend on the log line being JSON
-`service` and `level` are not attached by Loki — Promtail parses each line as JSON and promotes
+`service` and `level` are not attached by Loki — Alloy parses each line as JSON and promotes
 the fields out of it. So the queries above work only while the app is emitting JSON, which is why
 `resolveConsoleFormat` also checks `process.stdout.isTTY`, not `NODE_ENV` alone: a container has no
 TTY and gets JSON, a developer's terminal gets the colourised layout. Key that choice off
@@ -73,7 +73,7 @@ Config file: `docker/observability/loki.config.yaml`
 
 ## Works with
 
-- **[Winston](./winston.md)** — Winston writes structured JSON to stdout; Promtail tails those container log files and ships them here. Without Winston's `trace_id` field there would be no link between log lines and traces.
+- **[Winston](./winston.md)** — Winston writes structured JSON to stdout; Alloy tails those container log files and ships them here. Without Winston's `trace_id` field there would be no link between log lines and traces.
 - **[Tempo](./tempo.md)** — log lines carry `trace_id`; Grafana uses it to jump from a Loki log entry to the Tempo trace for that request, and back. → [Trace ↔ log correlation](#trace-log-correlation)
 - **[Grafana](./grafana.md)** — Loki is queried exclusively through Grafana's Explore view. Grafana also reads the `trace_id` derived field to render the clickable Tempo link next to each log line.
 

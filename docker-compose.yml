@@ -1,12 +1,12 @@
-# How each container's stdout is stored on the host, and therefore whether Promtail can read it.
+# How each container's stdout is stored on the host, and therefore whether Alloy can read it.
 #
-# Promtail tails log FILES. Docker writes them by default (`json-file`), podman does not: its
+# Alloy tails log FILES. Docker writes them by default (`json-file`), podman does not: its
 # default here is `journald`, which keeps log lines in the systemd journal and writes no file at
-# all — so Promtail tails a glob that matches nothing, Loki stays empty, and Grafana's log panels
+# all — so Alloy tails a glob that matches nothing, Loki stays empty, and Grafana's log panels
 # are blank with no error anywhere. `k8s-file` is podman's file-based driver and writes the CRI
-# format `promtail.podman.config.yaml` already parses.
+# format `alloy.logs.config.alloy` already parses.
 #
-# Anchored rather than repeated: every service needs the same driver, because Promtail scrapes the
+# Anchored rather than repeated: every service needs the same driver, because Alloy scrapes the
 # whole directory and a service left on the default would simply be missing from the logs.
 x-logging: &container-logging
     driver: ${CONTAINER_LOG_DRIVER:-json-file}
@@ -470,7 +470,7 @@ services:
         ports:
             - '127.0.0.1:${GATUS_PORT:-3071}:8080'
 
-    # Loki: stores log lines shipped by Promtail. Grafana queries it for log exploration.
+    # Loki: stores log lines shipped by Alloy. Grafana queries it for log exploration.
     loki:
         logging: *container-logging
         profiles: ['observability']
@@ -482,27 +482,6 @@ services:
             - loki_volume:/var/loki
         ports:
             - '127.0.0.1:${LOKI_PORT:-3100}:3100'
-
-    # Promtail: tails Docker container log files and ships them to Loki.
-    promtail:
-        logging: *container-logging
-        profiles: ['observability']
-        image: grafana/promtail:3.6.8
-        restart: unless-stopped
-        command: ['-config.file=/etc/promtail/promtail-config.yaml']
-        # The only part of this stack that differs between docker and podman, and it is two
-        # values: where the host keeps container logs, and which parser reads them (docker wraps
-        # each line in a JSON envelope, podman's k8s-file driver writes CRI). Both come from
-        # `.env`, which compose reads on its own — so there is no override file to select and no
-        # `-f` list to get wrong. Defaults are docker's, so docker users set neither.
-        #
-        # The host path is mounted at one fixed location whichever engine you run, which is why
-        # both configs below can hardcode their `__path__` under it.
-        volumes:
-            - ./docker/observability/${PROMTAIL_CONFIG:-promtail.config.yaml}:/etc/promtail/promtail-config.yaml:Z
-            - ${CONTAINER_LOGS_PATH:-/var/lib/docker/containers}:/var/log/host-containers:ro
-        depends_on:
-            - loki
 
     # Grafana: single UI to explore traces (Tempo), metrics (Prometheus), and logs (Loki).
     grafana:
@@ -525,21 +504,32 @@ services:
             - prometheus
             - loki
 
-    # Alloy: browser-facing collector for the frontend (Grafana Faro Web SDK).
-    # Receives errors/logs/web-vitals/traces from the browser on the Faro port, then fans
-    # them into Loki (logs) and the OTel Collector -> Tempo (traces). See the config for wiring.
+    # Alloy: two jobs in one process, each its own file under /etc/alloy/conf.d.
+    #   faro.alloy  browser-facing collector for the frontend (Grafana Faro Web SDK): errors, logs,
+    #               web-vitals and traces in, Loki and the OTel Collector -> Tempo out.
+    #   logs.alloy  tails the container log files and ships them to Loki. The same file the
+    #               production stack runs, so dev and prod share one log pipeline.
     alloy:
         logging: *container-logging
         profiles: ['observability']
         image: grafana/alloy:v1.20.1
         restart: unless-stopped
+        # Root, because the engine's log files are root-owned (rootless podman maps it to your user).
+        user: root
         command:
             - 'run'
             - '--server.http.listen-addr=0.0.0.0:12345'
             - '--storage.path=/tmp/alloy'
-            - '/etc/alloy/config.alloy'
+            # A directory: every `.alloy` file in it is one configuration.
+            # https://grafana.com/docs/alloy/latest/reference/cli/run/
+            - '/etc/alloy/conf.d'
         volumes:
-            - ./docker/observability/alloy.config.alloy:/etc/alloy/config.alloy:Z
+            - ./docker/observability/alloy.config.alloy:/etc/alloy/conf.d/faro.alloy:Z
+            - ./docker/observability/alloy.logs.config.alloy:/etc/alloy/conf.d/logs.alloy:Z
+            # The only part of this stack that differs between docker and podman: where the host
+            # keeps container logs. Mounted at one fixed path whichever engine runs, which is why
+            # the log config can hardcode its globs. Docker's path is the default.
+            - ${CONTAINER_LOGS_PATH:-/var/lib/docker/containers}:/var/log/host-containers:ro
         ports:
             # `NODE_HOST`, like the API: a phone on the LAN testing the frontend posts telemetry here.
             - '${NODE_HOST:-127.0.0.1}:${ALLOY_FARO_PORT:-12347}:12347' # Faro receiver — the frontend posts telemetry here
@@ -648,7 +638,7 @@ services:
             # In-memory on purpose: a restart clearing captured requests is right for a demo sink,
             # and it keeps the container stateless, so there is no volume to declare below.
             STORAGE_DRIVER: 'memory'
-            # Structured lines, so Promtail ships them to Loki parsed rather than as opaque text.
+            # Structured lines, so Alloy ships them to Loki parsed rather than as opaque text.
             LOG_FORMAT: 'json'
         # No published port: the host reaches it only through `webhook-tester-tls` below, because
         # every webhook URL is https — the contract refuses any other scheme.

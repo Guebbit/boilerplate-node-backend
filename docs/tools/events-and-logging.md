@@ -40,7 +40,7 @@ them belongs on a code path whose correctness depends on the write succeeding.
 
 | Signal                | Entry point                                                             | Where it goes                                            | Who reads it               | Detailed page                                                       |
 | --------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------- |
-| **Application log**   | `logger` — `@infrastructure/adapters/logger`                            | stdout → Promtail → Loki                                 | you, debugging             | [Winston & Audit Logs](./winston.md)                                |
+| **Application log**   | `logger` — `@infrastructure/adapters/logger`                            | stdout → Alloy → Loki                                    | you, debugging             | [Winston & Audit Logs](./winston.md)                                |
 | **Audit trail**       | `emitAuditEvent` — `@infrastructure/observability/audit`                | `auditLogger` → stdout → Loki, **and** Mongo `auditlogs` | admins, compliance         | [Winston & Audit Logs](./winston.md#audit-events)                   |
 | **Product analytics** | `emitAnalyticsEvent` — `@infrastructure/observability/analytics`        | Umami (default), PostHog, or none                        | product, marketing         | [Product Analytics](./analytics.md)                                 |
 | **Metrics**           | counters in `metrics-http.ts` / each module's `metrics.ts`              | Prometheus registry → `GET /observability/metrics`       | ops, alerting              | [Prometheus](./prometheus.md)                                       |
@@ -72,7 +72,7 @@ Everything else here has a single sink. Audit has two, on purpose:
 
 ```
 emitAuditEvent()
-   ├─→ auditLogger (Winston) → stdout → Promtail → Loki      the compliance record
+   ├─→ auditLogger (Winston) → stdout → Alloy → Loki      the compliance record
    └─→ AuditSink → auditLogService.record → Mongo auditlogs  the queryable copy
 ```
 
