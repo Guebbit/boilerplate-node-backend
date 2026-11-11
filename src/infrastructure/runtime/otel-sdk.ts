@@ -35,6 +35,7 @@ import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 // Relative: this file loads first, before anything that resolves path aliases is wired.
 import { isRelaxedEnvironment, loggingConfig, tracingConfig } from './config';
 import { correlationDigest } from '../security/pseudonymise';
+import { maskMessage } from '../adapters/log-scrub';
 import { scrubbingExporter } from './span-scrub';
 import packageJson from '../../../package.json';
 // Auto-instrumentations: each one monkey-patches its target library so spans are created
@@ -42,6 +43,7 @@ import packageJson from '../../../package.json';
 // which keeps startup cost lower than the `@opentelemetry/auto-instrumentations-node` bundle.
 import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
 import { IncomingMessage, type ClientRequest } from 'node:http';
+import type { NextFunction, Request, Response } from 'express';
 import {
     ROOT_CONTEXT,
     defaultTextMapGetter,
@@ -56,30 +58,71 @@ import { loadSharedRules } from '../config/shared-rules/load';
 import { logRedactionSchema } from '../config/shared-rules/log-redaction';
 
 /**
+ * The marker the logger writes for a removed value, the same string on a span: one marker to
+ * search for, whichever signal it shows up in.
+ */
+const REDACTED = '[REDACTED]';
+
+/**
  * Query parameters no span may carry in clear: the OAuth callback's one-time `code` and its CSRF
  * `state`, and the `email` of a staff search, which the HTTP instrumentation otherwise records in
  * the span's URL attributes.
  * The list is `shared/rules/log-redaction.yaml`'s `traceUrlSecrets`.
  */
-const QUERY_SECRETS = loadSharedRules('log-redaction', logRedactionSchema).traceUrlSecrets;
+const QUERY_SECRETS = new Set(loadSharedRules('log-redaction', logRedactionSchema).traceUrlSecrets);
 
 /**
- * `target` (a path plus query) with every {@link QUERY_SECRETS} value replaced by `REDACTED`;
- * returned as-is when it carries none.
+ * What stands in for a caller's address on a span, by `NODE_LOG_PERSONAL_FIELDS`, the one policy a
+ * log line's `ip` follows:
+ * - `hash`   the digest the log shows, so a trace and its logs still correlate.
+ * - `redact` the `[REDACTED]` marker: the operator asked for removal, not a pseudonym.
+ * - `plain`  the address itself (local dev).
+ *
+ * @param address - an email or IP address, lowercased
+ */
+const standIn = (address: string): string => {
+    const mode = loggingConfig().NODE_LOG_PERSONAL_FIELDS;
+    if (mode === 'plain') return address;
+    return mode === 'redact' ? REDACTED : correlationDigest(address);
+};
+
+/**
+ * One raw `name=value` pair of a query string, with a secret's value replaced by the marker and
+ * an email or IP address in any other value replaced by its stand-in. The name is kept as sent.
+ *
+ * @param pair - the pair as it appears in the request target, still percent-encoded
+ */
+const redactQueryPair = (pair: string): string => {
+    // Decoded the way the app reads it, so `ada%40example.com` is seen as the email it is.
+    const [[name = '', value = ''] = []] = new URLSearchParams(pair);
+    const rawName = pair.split('=', 1)[0] ?? '';
+    if (QUERY_SECRETS.has(name)) return `${rawName}=${REDACTED}`;
+    const masked = maskMessage(value, standIn);
+    return masked === value ? pair : `${rawName}=${masked}`;
+};
+
+/**
+ * `target` (a path plus query) with the value of every {@link QUERY_SECRETS} parameter replaced by
+ * `[REDACTED]` and every email or IP address in any other value replaced by its stand-in (a
+ * staff search by `text=ada@example.com` carries one under a parameter nobody listed).
+ * Returned as-is when nothing changed.
  *
  * @param target - the request target, e.g. `/account/oauth/google/callback?code=…&state=…`
  */
 export const redactUrlSecrets = (target: string): string => {
-    const url = new URL(target, 'http://placeholder');
-    const secrets = QUERY_SECRETS.filter((name) => url.searchParams.has(name));
-    if (secrets.length === 0) return target;
-    for (const name of secrets) url.searchParams.set(name, 'REDACTED');
-    return `${url.pathname}${url.search}`;
+    const split = target.indexOf('?');
+    if (split === -1) return target;
+    const query = target
+        .slice(split + 1)
+        .split('&')
+        .map((pair) => redactQueryPair(pair))
+        .join('&');
+    return `${target.slice(0, split + 1)}${query}`;
 };
 
 /**
  * Overwrite an incoming span's URL attributes, both semantic-convention generations, when the
- * request's query carries a secret.
+ * request's query carries a secret or an address.
  *
  * @param span - the span the instrumentation just started
  * @param request - the incoming request; outgoing ones are left alone
@@ -94,6 +137,14 @@ const redactIncomingUrl = (span: Span, request: ClientRequest | IncomingMessage)
         'url.query': target.split('?', 2)[1] ?? ''
     });
 };
+
+/**
+ * What a Redis span records as its statement: the command name, never the arguments. They are
+ * keys and values, and a rate-limit bucket's key carries a caller's address.
+ *
+ * @param commandName - the Redis command, e.g. `INCR`
+ */
+export const redisCommandOnly = (commandName: string): string => commandName;
 
 /**
  * The propagator for an API reachable by anyone: it injects `traceparent` on outgoing calls but
@@ -152,41 +203,66 @@ export const linkInboundTrace = (span: Span, request: ClientRequest | IncomingMe
 const ADDRESS_ATTRIBUTES = ['client.address', 'network.peer.address'];
 
 /**
- * Apply `NODE_LOG_PERSONAL_FIELDS` to the caller's IP address on an incoming span, the one policy
- * a log line's `ip` follows:
- * - `hash`   the digest the log shows, so a trace and its logs still correlate.
- * - `redact` the `[REDACTED]` marker: the operator asked for removal, not a pseudonym.
- * - `plain`  left as it is (local dev).
+ * Apply {@link standIn} to the caller's IP address on an incoming span.
  *
  * The attribute is read back off the span rather than recomputed: the instrumentation derives
  * `client.address` from `Forwarded` / `X-Forwarded-For` / the socket, and a copy of that logic
- * would drift.
+ * would drift. That derived value trusts the caller's header, so {@link stampClientAddress} later
+ * replaces `client.address` with the one Express resolves.
  *
  * @param span - the span the instrumentation just started
  */
 const pseudonymiseAddresses = (span: Span): void => {
-    const mode = loggingConfig().NODE_LOG_PERSONAL_FIELDS;
-    if (mode === 'plain') return;
+    if (loggingConfig().NODE_LOG_PERSONAL_FIELDS === 'plain') return;
     // A single narrowing cast: the `Span` interface cannot be read, the SDK's class behind it can.
     const { attributes = {} } = span as Partial<ReadableSpan>;
     for (const name of ADDRESS_ATTRIBUTES) {
         const address = attributes[name];
-        if (typeof address === 'string')
-            span.setAttribute(name, mode === 'redact' ? '[REDACTED]' : correlationDigest(address));
+        if (typeof address === 'string') span.setAttribute(name, standIn(address));
     }
 };
 
 /**
- * The hook run on every incoming request span: redact URL secrets, pseudonymise the caller's
- * address, then link the caller's trace
- * unless an ingress already vouches for it (then it is the parent, not a link).
+ * The server span of each request in flight, by request. Weak, so a request that ends takes its
+ * entry with it.
+ */
+const serverSpans = new WeakMap<IncomingMessage, Span>();
+
+/**
+ * Middleware, mounted after `trust proxy`: set the server span's `client.address` from
+ * `request.ip`, the address Express resolves by counting the configured proxy hops back from the
+ * socket. The instrumentation's own value comes from the leftmost `X-Forwarded-For` entry, which
+ * the caller writes, so a span would otherwise name whatever address the caller claimed.
+ *
+ * @param request - the request; `request.ip` follows the app's `trust proxy`
+ * @param _response - unused
+ * @param next - continues the chain
+ */
+export const stampClientAddress = (
+    request: Request,
+    _response: Response,
+    next: NextFunction
+): void => {
+    const span = serverSpans.get(request);
+    if (span && request.ip && loggingConfig().NODE_LOG_PERSONAL_FIELDS !== 'plain')
+        span.setAttribute('client.address', standIn(request.ip));
+    next();
+};
+
+/**
+ * The hook run on every incoming request span: pseudonymise the caller's address, redact URL
+ * secrets, then link the caller's trace unless an ingress already vouches for it (then it is the
+ * parent, not a link).
  *
  * @param span - the span the instrumentation just started
  * @param request - the incoming request; outgoing ones are left alone
  */
 export const onIncomingRequest = (span: Span, request: ClientRequest | IncomingMessage): void => {
+    if (request instanceof IncomingMessage) {
+        pseudonymiseAddresses(span);
+        serverSpans.set(request, span);
+    }
     redactIncomingUrl(span, request);
-    if (request instanceof IncomingMessage) pseudonymiseAddresses(span);
     if (!tracingConfig().NODE_TRUSTED_INGRESS) linkInboundTrace(span, request);
 };
 
@@ -269,8 +345,8 @@ export const startTracing = (): void => {
             // Inbound/outbound HTTP: creates the root SERVER span per request and
             // injects the W3C `traceparent` header on outgoing calls.
             // `requestHook` rewrites the URL attributes of an incoming span whose query carries
-            // a secret — see `redactUrlSecrets` — and links the caller's trace (`onIncomingRequest`).
-            // (`redactedQueryParams` covers outgoing requests only.)
+            // a secret or an address — see `redactUrlSecrets` — and links the caller's trace
+            // (`onIncomingRequest`).
             // https://www.npmjs.com/package/@opentelemetry/instrumentation-http
             new HttpInstrumentation({ requestHook: onIncomingRequest }),
             // Express: adds child spans per middleware and per route handler, and supplies
@@ -279,7 +355,9 @@ export const startTracing = (): void => {
             // Mongoose: one span per query with collection, operation and (optionally) filter.
             new MongooseInstrumentation(),
             // Redis: one span per command — makes cache hit/miss latency visible in the trace.
-            new RedisInstrumentation()
+            // `dbStatementSerializer` decides what `db.query.text` holds — see `redisCommandOnly`.
+            // https://www.npmjs.com/package/@opentelemetry/instrumentation-redis
+            new RedisInstrumentation({ dbStatementSerializer: redisCommandOnly })
         ]
     });
 

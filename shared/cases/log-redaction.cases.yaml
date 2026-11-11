@@ -7,6 +7,8 @@
 #                 address AS HASHED: lowercased, without the port. The mask itself is code in each
 #                 backend; these rows are what pins it.
 # kind `traceUrl`: a request target as a span would record it; `expect` is the target a span may carry.
+#                 A listed secret's value becomes `[REDACTED]`; an email or IP address in the value of
+#                 ANY other parameter becomes its digest (`{hash:X}`, as in kind `message`).
 cases:
     - name: a plain password key is redacted
       kind: key
@@ -183,12 +185,20 @@ cases:
     - name: a staff search's email in the query is replaced, whatever its encoding
       kind: traceUrl
       input: '/users?email=ada%40example.com&page=2'
-      expect: '/users?email=REDACTED&page=2'
+      expect: '/users?email=[REDACTED]&page=2'
     - name: the OAuth callback's code and state are replaced
       kind: traceUrl
       input: '/account/oauth/google/callback?code=abc&state=xyz'
-      expect: '/account/oauth/google/callback?code=REDACTED&state=REDACTED'
+      expect: '/account/oauth/google/callback?code=[REDACTED]&state=[REDACTED]'
     - name: a query with no secret is left alone
       kind: traceUrl
       input: '/products?page=2'
       expect: '/products?page=2'
+    - name: an email under a parameter nobody listed is replaced by its digest
+      kind: traceUrl
+      input: '/users?text=Ada%40Example.com&page=2'
+      expect: '/users?text={hash:ada@example.com}&page=2'
+    - name: an IP address under a parameter nobody listed is replaced by its digest
+      kind: traceUrl
+      input: '/orders?from=203.0.113.9'
+      expect: '/orders?from={hash:203.0.113.9}'

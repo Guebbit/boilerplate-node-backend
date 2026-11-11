@@ -39,7 +39,8 @@ import {
     linkInboundTrace,
     publicEndpointPropagator,
     onIncomingRequest,
-    redactUrlSecrets
+    redactUrlSecrets,
+    redisCommandOnly
 } from '@infrastructure/runtime/otel-sdk';
 
 /**
@@ -141,12 +142,12 @@ describe('otel-sdk — buildProcessors, error text', () => {
 describe('otel-sdk — redactUrlSecrets', () => {
     it("hides the OAuth callback's code and state", () => {
         expect(redactUrlSecrets('/account/oauth/google/callback?code=abc&state=xyz&x=1')).toBe(
-            '/account/oauth/google/callback?code=REDACTED&state=REDACTED&x=1'
+            '/account/oauth/google/callback?code=[REDACTED]&state=[REDACTED]&x=1'
         );
     });
 
     it("hides a staff search's email, however it is encoded", () => {
-        expect(redactUrlSecrets('/users?email=ada%40example.com')).toBe('/users?email=REDACTED');
+        expect(redactUrlSecrets('/users?email=ada%40example.com')).toBe('/users?email=[REDACTED]');
     });
 
     it('leaves a URL with nothing to hide untouched', () => {
@@ -340,9 +341,47 @@ describe('otel-sdk — onIncomingRequest', () => {
 
         expect(span.setAttributes).toHaveBeenCalledWith(
             expect.objectContaining({
-                'http.target': '/users?email=REDACTED',
-                'url.query': 'email=REDACTED'
+                'http.target': '/users?email=[REDACTED]',
+                'url.query': 'email=[REDACTED]'
             })
         );
+    });
+});
+
+describe('otel-sdk — an address in a query value', () => {
+    it('is replaced by its digest under a parameter nobody listed', async () => {
+        await withEnvironmentOverrides({ NODE_LOG_PERSONAL_FIELDS: 'hash' }, () => {
+            expect(redactUrlSecrets('/users?text=Ada%40Example.com&page=2')).toBe(
+                `/users?text=${correlationDigest('ada@example.com')}&page=2`
+            );
+            expect(redactUrlSecrets('/orders?from=203.0.113.9')).toBe(
+                `/orders?from=${correlationDigest('203.0.113.9')}`
+            );
+            return Promise.resolve();
+        });
+    });
+
+    it('is replaced by the marker in redact mode', async () => {
+        await withEnvironmentOverrides({ NODE_LOG_PERSONAL_FIELDS: 'redact' }, () => {
+            expect(redactUrlSecrets('/users?text=ada%40example.com')).toBe(
+                '/users?text=[REDACTED]'
+            );
+            return Promise.resolve();
+        });
+    });
+
+    it('stays in plain mode, while a listed secret is still hidden', async () => {
+        await withEnvironmentOverrides({ NODE_LOG_PERSONAL_FIELDS: 'plain' }, () => {
+            expect(redactUrlSecrets('/users?text=ada%40example.com&code=abc')).toBe(
+                '/users?text=ada%40example.com&code=[REDACTED]'
+            );
+            return Promise.resolve();
+        });
+    });
+});
+
+describe('otel-sdk — redisCommandOnly', () => {
+    it('keeps the command and drops the key a rate limiter built from an address', () => {
+        expect(redisCommandOnly('INCR')).toBe('INCR');
     });
 });

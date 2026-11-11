@@ -262,6 +262,23 @@ const maskText = (text: string): string =>
     resolvePersonalFieldMode() === 'plain' ? text : maskMessage(text, applyPersonalFieldMode);
 
 /**
+ * The fields of a non-database error that name its kind and carry no data: the system error code,
+ * errno and syscall (`ECONNRESET`, `connect`) and an HTTP-style `status`. Winston's merge of an
+ * error into the record is undone by {@link restoreSplatError}, which drops these with the rest of
+ * the error's own fields, so they are put back here. Only strings and numbers are kept.
+ *
+ * @param error - the error being serialised
+ */
+const identifyingFields = (error: Error): Record<string, string | number> => {
+    const kept: Record<string, string | number> = {};
+    for (const name of ['code', 'errno', 'syscall', 'status']) {
+        const value: unknown = Reflect.get(error, name);
+        if (typeof value === 'string' || typeof value === 'number') kept[name] = value;
+    }
+    return kept;
+};
+
+/**
  * Normalize unknown thrown values into log-safe plain objects.
  *
  * - A known class that quotes data in its message (a database or SMTP error) keeps only its
@@ -278,7 +295,8 @@ export const serializeError = (error: unknown): Record<string, unknown> => {
         const { stack, ...fields } = scrubError(error) ?? {
             name: error.name,
             message: error.message,
-            stack: error.stack
+            stack: error.stack,
+            ...identifyingFields(error)
         };
         return {
             ...fields,

@@ -22,7 +22,7 @@ App  →  OTel Collector (OTLP/HTTP :4318)  →  Tempo (OTLP/gRPC :4317)  →  G
 
 - Grafana UI: `http://localhost:3001` → **Explore** → **Tempo**.
 - Search by `service.name = "api"` (the `NODE_SERVICE_NAME` default), by `trace_id`, by HTTP route, or by error.
-- A span carries no personal data in clear: `client.address` and `network.peer.address` follow `NODE_LOG_PERSONAL_FIELDS` like a log line's `ip`: the same keyed digest by default (search by that digest, not by address), `[REDACTED]` in `redact` mode, the address itself in `plain`, and the `code`, `state` and `email` query parameters read `REDACTED` in `url.query`, `http.target` and `http.url`. A 4xx leaves the server span's status unset; only a 5xx marks it as an error.
+- A span carries no personal data in clear: `client.address` and `network.peer.address` follow `NODE_LOG_PERSONAL_FIELDS` like a log line's `ip`: the same keyed digest by default (search by that digest, not by address), `[REDACTED]` in `redact` mode, the address itself in `plain`, `client.address` is the address Express resolves from `trust proxy` (`request.ip`), never the leftmost `X-Forwarded-For` entry a caller can write. `url.query`, `http.target` and `http.url` appear only on a span whose query carried something to hide: the `code`, `state` and `email` parameters read `[REDACTED]`, and an email or IP address in the value of any other parameter is replaced by the same stand-in as `client.address`. A Redis span's `db.query.text` is the command name only (`INCR`), never its key, because a rate-limit key carries a caller's address. A 4xx leaves the server span's status unset; only a 5xx marks it as an error.
 
 ## Works with
 

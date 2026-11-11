@@ -25,6 +25,7 @@ import { OPERATION_ROUTES } from '@api/operation-routes';
 import { answerOptions } from '@infrastructure/http/middlewares/method-not-allowed';
 import { isAllowedOrigin } from '@infrastructure/http/origins';
 import { dropUnownedValidators } from '@infrastructure/http/preconditions';
+import { stampClientAddress } from '@infrastructure/runtime/otel-sdk';
 import { appConfig } from './config';
 import { enabledModules, servedModuleNames } from '../modules';
 
@@ -121,6 +122,10 @@ export const installSecurity = (app: Express): void => {
      */
     const trustProxyHops = appConfig().NODE_TRUST_PROXY_HOPS;
     app.set('trust proxy', trustProxyHops === 0 ? false : trustProxyHops);
+
+    // After `trust proxy`, so `request.ip` is the resolved address: the span's `client.address`
+    // follows it, not the caller's own `X-Forwarded-For`.
+    app.use(stampClientAddress);
 
     /**
      * Secure headers

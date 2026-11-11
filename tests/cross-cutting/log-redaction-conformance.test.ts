@@ -33,7 +33,9 @@ describeCases('log-redaction', redactionCase, (one) => {
     }
 
     if (one.kind === 'traceUrl') {
-        expect(redactUrlSecrets(one.input)).toBe(one.expect);
+        expect(redactUrlSecrets(one.input)).toBe(
+            one.expect.replaceAll(HASH_SPAN, (_span, address: string) => correlationDigest(address))
+        );
         return;
     }
 

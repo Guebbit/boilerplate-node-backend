@@ -972,6 +972,39 @@ describe('redactFormat — an Error passed as log metadata', () => {
     });
 });
 
+/** A system error as Node raises it: the kind is in `code`, `errno` and `syscall`. */
+const refused = () =>
+    Object.assign(new Error('connect ECONNREFUSED 10.0.0.5:6379'), {
+        code: 'ECONNREFUSED',
+        errno: -111,
+        syscall: 'connect',
+        status: 502,
+        address: '10.0.0.5',
+        detail: { email: 'ada@example.com' }
+    });
+
+describe('serializeError — what names an error without quoting data', () => {
+    it('keeps code, errno, syscall and status, and nothing else the error carries', () => {
+        const result = serializeError(refused());
+
+        expect(result).toMatchObject({
+            code: 'ECONNREFUSED',
+            errno: -111,
+            syscall: 'connect',
+            status: 502
+        });
+        expect(result).not.toHaveProperty('address');
+        expect(result).not.toHaveProperty('detail');
+    });
+
+    it('survives winston merging the error into the record', () => {
+        const line = lineOf((target) => target.error('cache down', refused()));
+
+        expect(line.error).toMatchObject({ code: 'ECONNREFUSED', syscall: 'connect' });
+        expect(line).not.toHaveProperty('address');
+    });
+});
+
 describe('serializeError — Mongoose errors that name themselves differently', () => {
     class MongooseError extends Error {}
     class DocumentNotFoundError extends MongooseError {}
