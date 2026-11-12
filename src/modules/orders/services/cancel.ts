@@ -24,7 +24,8 @@ import {
 } from '@infrastructure/http/response';
 import { ownOrderFlag } from '@modules/access';
 import { inventoryService } from '@modules/inventory';
-import { announceInTransaction } from '@kernel/outbox';
+import { announceInTransaction, announceWithin } from '@kernel/outbox';
+import type { OutboxAnnouncement } from '@kernel/outbox';
 import type { ClientSession } from 'mongoose';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -66,6 +67,8 @@ const giveBackStock = async (orderId: string, session: ClientSession): Promise<v
  * @param actorId - the account that canceled, when a person did
  * @param informedAt - when the shop was told, for a cancel that is the buyer's own act; carried on
  *   the announcement as the start of the refund deadline
+ * @param within - a transaction the caller already owns: the cancel joins it, and the caller
+ *   commits, nudges the relay and refreshes the stock cache (see {@link withdrawWithin})
  * @returns the canceled order, or `null` when the conditional move matched nothing
  */
 const moveToCanceled = (
@@ -75,40 +78,42 @@ const moveToCanceled = (
     refund: boolean,
     cause: CancelCause,
     actorId: string | undefined,
-    informedAt: Date | undefined
-): Promise<OrderDocument | null> =>
-    announceInTransaction(
-        async (session) => {
-            const order = await withTimeline(
-                (active) =>
-                    orderRepository.updateStatusIfIn(id, from, OrderStatus.canceled, {
-                        scope,
-                        session: active
-                    }),
-                () => [
-                    {
-                        type: 'canceled',
-                        actor: actorId,
-                        data: { by: CANCEL_CAUSES[cause].by, cause, refund }
-                    }
-                ]
-            )(session);
-            if (order) await giveBackStock(id, session);
-            return order;
+    informedAt: Date | undefined,
+    within?: ClientSession
+): Promise<OrderDocument | null> => {
+    const write = async (session: ClientSession): Promise<OrderDocument | null> => {
+        const order = await withTimeline(
+            (active) =>
+                orderRepository.updateStatusIfIn(id, from, OrderStatus.canceled, {
+                    scope,
+                    session: active
+                }),
+            () => [
+                {
+                    type: 'canceled',
+                    actor: actorId,
+                    data: { by: CANCEL_CAUSES[cause].by, cause, refund }
+                }
+            ]
+        )(session);
+        if (order) await giveBackStock(id, session);
+        return order;
+    };
+    const announce = (): OutboxAnnouncement<typeof ORDER_CANCELED> => ({
+        name: ORDER_CANCELED,
+        payload: {
+            orderId: id,
+            refund,
+            cause,
+            ...(informedAt ? { informedAt: informedAt.toISOString() } : {})
         },
-        () => ({
-            name: ORDER_CANCELED,
-            payload: {
-                orderId: id,
-                refund,
-                cause,
-                ...(informedAt ? { informedAt: informedAt.toISOString() } : {})
-            },
-            aggregateId: id
-        })
-    ).then((order) =>
+        aggregateId: id
+    });
+    if (within) return announceWithin(within, write, announce);
+    return announceInTransaction(write, announce).then((order) =>
         order ? inventoryService.refreshStockCacheForOrder(id).then(() => order) : order
     );
+};
 
 /**
  * Why an order was canceled. One value per reason, never inferred from which argument happens to
@@ -240,34 +245,37 @@ export const afterCancel = (
 };
 
 /**
- * The one cancel behind every door: a conditional status move, not read-check-write. The filter
- * carries the caller's scope AND the cause's lifecycle column, so a racing admin "shipped" (or a
- * double-click) resolves at the storage layer — exactly one write matches. The follow-up read on
- * `null` only tells 404 from 409; the decision is already made.
- *
- * Private on purpose: a caller states a reason by choosing a door, and nothing outside this file
- * can pick a cause for another caller's reason.
+ * What one cancel decided, before anything is reported: the order it moved (`null` when the
+ * conditional move matched nothing) and what the report needs.
+ */
+interface CancelAttempt {
+    order: OrderDocument | null;
+    refund: boolean;
+    scope: Record<string, unknown> | undefined;
+}
+
+/**
+ * The cancel's write, in its own transaction or in the caller's. The filter carries the caller's
+ * scope AND the cause's lifecycle column, so a racing admin "shipped" (or a double-click) resolves
+ * at the storage layer — exactly one write matches.
  *
  * @param id - the order to cancel
  * @param cause - why; see {@link CANCEL_CAUSES}
  * @param authContext - the caller; `SYSTEM_ACTOR` for the causes nobody asked for
- * @param refundChoice - an operator's choice to cancel without returning the money; ignored by
- *   every cause that always refunds
- * @param context - omitted by every system-initiated caller, which is not a request
- * @param onBuyersBehalf - staff recording a withdrawal the buyer stated outside the shop: the write
- *   then runs on the operator's scope instead of the buyer's own orders
- * @param statedAt - the day the buyer stated that withdrawal, when staff record a back-dated one;
- *   absent, the shop was told now
+ * @param refundChoice - an operator's choice to cancel without returning the money
+ * @param onBuyersBehalf - staff recording a withdrawal: the write runs on the operator's scope
+ * @param statedAt - the day the buyer stated a withdrawal staff record back-dated
+ * @param within - a transaction the caller owns, when the cancel must commit with the caller's writes
  */
-const cancel = (
+const attemptCancel = (
     id: string,
     cause: CancelCause,
     authContext: AuthContext,
-    refundChoice?: boolean,
-    context?: CallerContext,
-    onBuyersBehalf = false,
-    statedAt?: Date
-): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
+    refundChoice: boolean | undefined,
+    onBuyersBehalf: boolean,
+    statedAt: Date | undefined,
+    within?: ClientSession
+): Promise<CancelAttempt> => {
     const rules: CauseRules = CANCEL_CAUSES[cause];
     const refund = rules.refundIsChoice ? (refundChoice ?? true) : true;
 
@@ -292,24 +300,58 @@ const cancel = (
         // A system cancel has no account behind it.
         rules.by === 'system' ? undefined : authContext.id,
         // Only the buyer's own act starts the refund clock; the shop's cancels have no such date.
-        cause === 'customer' || cause === 'withdrawal' ? (statedAt ?? new Date()) : undefined
-    ).then((order) =>
-        order
-            ? afterCancel(order, cause, refund, context)
-            : // Which refusal was it? This read only informs the message — the write
-              // above already decided nothing changes.
-              getById(id, scope).then((existing) =>
-                  existing
-                      ? generateReject(409, [
-                            {
-                                code: ERROR_CODES.ORDER_NOT_CANCELABLE,
-                                message: t('orders.cancel.not-cancelable')
-                            }
-                        ])
-                      : generateReject(404, [t('orders.not-found')])
-              )
-    );
+        cause === 'customer' || cause === 'withdrawal' ? (statedAt ?? new Date()) : undefined,
+        within
+    ).then((order) => ({ order, refund, scope }));
 };
+
+/**
+ * Which refusal a cancel that moved nothing was. This read only informs the message — the write
+ * already decided nothing changes.
+ * @param id - the order
+ * @param scope - the caller's write scope
+ */
+const refusalOf = (
+    id: string,
+    scope: Record<string, unknown> | undefined
+): Promise<ResponseReject> =>
+    getById(id, scope).then((existing) =>
+        existing
+            ? generateReject(409, [
+                  {
+                      code: ERROR_CODES.ORDER_NOT_CANCELABLE,
+                      message: t('orders.cancel.not-cancelable')
+                  }
+              ])
+            : generateReject(404, [t('orders.not-found')])
+    );
+
+/**
+ * The one cancel behind every door: a conditional status move, not read-check-write. The follow-up
+ * read on `null` only tells 404 from 409; the decision is already made.
+ *
+ * Private on purpose: a caller states a reason by choosing a door, and nothing outside this file
+ * can pick a cause for another caller's reason.
+ *
+ * @param id - the order to cancel
+ * @param cause - why; see {@link CANCEL_CAUSES}
+ * @param authContext - the caller; `SYSTEM_ACTOR` for the causes nobody asked for
+ * @param refundChoice - an operator's choice to cancel without returning the money; ignored by
+ *   every cause that always refunds
+ * @param context - omitted by every system-initiated caller, which is not a request
+ */
+const cancel = (
+    id: string,
+    cause: CancelCause,
+    authContext: AuthContext,
+    refundChoice?: boolean,
+    context?: CallerContext
+): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
+    attemptCancel(id, cause, authContext, refundChoice, false, undefined).then<
+        ResponseSuccess<OrderDocument> | ResponseReject
+    >(({ order, refund, scope }) =>
+        order ? afterCancel(order, cause, refund, context) : refusalOf(id, scope)
+    );
 
 /**
  * `POST /orders/{id}/cancel` — a customer cancelling their own order, or an operator cancelling
@@ -355,23 +397,58 @@ export const withdrawById = (
     cancel(id, 'withdrawal', authContext, undefined, context);
 
 /**
- * Staff recording the withdrawal a buyer stated by phone, email or letter, before anything shipped:
- * the same cancel as the buyer's own (cause `withdrawal`, refunded in full), run on the operator's
- * scope because the order is not the caller's. `returns` has checked the keys and writes the
- * dated record; the timeline row names the staff member.
- *
- * @param id - the order being withdrawn from
- * @param authContext - the staff member
- * @param context - the staff member's context, audited
- * @param statedAt - the day the buyer stated it: the refund deadline counts from there
+ * What {@link withdrawWithin} hands back: the cancel's refusal, or `settle` — the steps that
+ * follow the owner's commit (stock cache, audit row, analytics event).
  */
-export const withdrawOnBuyersBehalfById = (
+export type WithinWithdrawal =
+    | ResponseReject
+    | { success: true; settle: () => Promise<ResponseSuccess<OrderDocument>> };
+
+/**
+ * A withdrawal's cancel inside a transaction the CALLER owns, so `returns` can commit the dated
+ * withdrawal record and the cancel together or not at all. Buyer, or staff recording the one the
+ * buyer stated by phone, email or letter: the same cancel (cause `withdrawal`, refunded in full),
+ * run on the operator's scope when staff do it, the timeline naming the staff member. `returns`
+ * has checked the keys.
+ *
+ * Opens no transaction and reports nothing: the owner commits, nudges the outbox, then calls
+ * `settle` for the stock cache, the audit row and the analytics event.
+ *
+ * @param session - the caller's open transaction
+ * @param id - the order being withdrawn from
+ * @param authContext - the buyer, or the staff member
+ * @param context - the caller's context, audited by `settle`
+ * @param onBuyersBehalf - true when staff record it
+ * @param statedAt - the day the buyer stated it: the refund deadline counts from there
+ * @returns the refusal, or the moved order and the after-commit step
+ */
+export const withdrawWithin = (
+    session: ClientSession,
     id: string,
     authContext: AuthContext,
-    context?: CallerContext,
+    context: CallerContext | undefined,
+    onBuyersBehalf: boolean,
     statedAt?: Date
-): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
-    cancel(id, 'withdrawal', authContext, undefined, context, true, statedAt);
+): Promise<WithinWithdrawal> =>
+    attemptCancel(
+        id,
+        'withdrawal',
+        authContext,
+        undefined,
+        onBuyersBehalf,
+        statedAt,
+        session
+    ).then<WithinWithdrawal>(({ order, refund, scope }) =>
+        order
+            ? {
+                  success: true as const,
+                  settle: () =>
+                      inventoryService
+                          .refreshStockCacheForOrder(id)
+                          .then(() => afterCancel(order, 'withdrawal', refund, context))
+              }
+            : refusalOf(id, scope)
+    );
 
 /**
  * A checkout hold that timed out: the units are already released, so the shop cancels the order

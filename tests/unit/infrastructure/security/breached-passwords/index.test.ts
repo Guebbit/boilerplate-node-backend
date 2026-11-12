@@ -66,6 +66,15 @@ describe('checkHibpRange', () => {
         });
     });
 
+    it('ignores a padding line for the matching suffix, which carries count 0', async () => {
+        const hash = createHash('sha1').update(NOT_IN_LIST_PASSWORD).digest('hex').toUpperCase();
+        jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+            textResponse(`${hash.slice(5)}:0\r\nSOMEOTHERSUFFIX0000000000000000000:1`)
+        );
+
+        await expect(checkHibpRange(NOT_IN_LIST_PASSWORD)).resolves.toEqual({ breached: false });
+    });
+
     it('never follows a redirect', async () => {
         const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(textResponse(''));
 

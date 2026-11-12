@@ -48,6 +48,24 @@ const resolveName = (name: string): string | undefined =>
 export type AppendExport = (text: string) => Promise<void>;
 
 /**
+ * Opens the temporary file, hands `produce` an `append` that writes into it, and closes the file
+ * whether `produce` resolved or not.
+ *
+ * @param temporary - the temporary file's path
+ * @param produce - writes the file by calling `append` in order
+ */
+const produceInto = (
+    temporary: string,
+    produce: (append: AppendExport) => Promise<void>
+): Promise<void> =>
+    open(temporary, 'w').then((handle) =>
+        // `FileHandle#write(string)` resolves once the bytes are handed to the OS, so a slow
+        // disk paces the producer without a drain handler of our own.
+        // https://nodejs.org/api/fs.html#filehandlewritestring-position-encoding
+        produce((text) => handle.write(text).then(() => undefined)).finally(() => handle.close())
+    );
+
+/**
  * Build an export file piece by piece, atomically: `produce` appends to a temporary file in the
  * same directory, and only a `produce` that resolves has it renamed over the final name. A reader
  * sees either no file or a whole one, never half of one; a failed build leaves nothing behind.
@@ -64,16 +82,7 @@ export const writeExport = (
     if (!target) return Promise.reject(new Error(`Not a storable export name: ${name}`));
 
     return mkdir(exportRoot(), { recursive: true }).then(() =>
-        writeFileAtomically(target, (temporary) =>
-            open(temporary, 'w').then((handle) =>
-                // `FileHandle#write(string)` resolves once the bytes are handed to the OS, so a slow
-                // disk paces the producer without a drain handler of our own.
-                // https://nodejs.org/api/fs.html#filehandlewritestring-position-encoding
-                produce((text) => handle.write(text).then(() => undefined)).finally(() =>
-                    handle.close()
-                )
-            )
-        )
+        writeFileAtomically(target, (temporary) => produceInto(temporary, produce))
     );
 };
 

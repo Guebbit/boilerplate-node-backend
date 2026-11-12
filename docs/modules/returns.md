@@ -238,6 +238,10 @@ the refund waits for the goods.
   acknowledge the date, time and content), and so `GET /returns?orderId=` answers "what happened to
   my withdrawal" the same way whatever the order's state. The client reloads the order from
   `Return.orderId`.
+- **One transaction.** The cancel (status, stock, `order.canceled` row) and the record (the Return,
+  `return.requested`, `return.closed`) commit together under the order's lock row, as a remainder
+  cancel does: a crash leaves both or neither, never a canceled order with no dated proof. A cancel
+  refused by a shipment that landed first writes nothing.
 - **The money does not move through the Return.** The cancel's own refund runs as for any cancel
   (the `refund` on `order.canceled`, finished by the refund sweep if the provider refuses), so its `payment.refunded`
   carries no `returnId`, and `returns` does not close anything on it: the Return was closed already.
