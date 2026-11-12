@@ -10,6 +10,7 @@
 import { cpSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
+import { gitEnvironment } from '../git-base';
 
 /** Top-level entries never copied into the scratch tree: regenerated or symlinked instead. */
 const SKIP_ENTRIES = new Set(['node_modules', '.git', '.claude', 'tmp']);
@@ -17,6 +18,9 @@ const SKIP_ENTRIES = new Set(['node_modules', '.git', '.claude', 'tmp']);
 /**
  * Run a command in the scratch tree and report whether it succeeded. Never throws: a failing
  * command is usually the measurement, not the script's own error.
+ *
+ * The environment drops every `GIT_*` variable: under a git hook they point at the real index,
+ * and `git add --all` in a scratch folder must never reach it.
  * @param scratch - the scratch root
  * @param command - the executable
  * @param commandArguments - its arguments
@@ -26,7 +30,9 @@ export const runIn = (
     scratch: string,
     command: string,
     commandArguments: readonly string[]
-): boolean => spawnSync(command, commandArguments, { cwd: scratch, stdio: 'inherit' }).status === 0;
+): boolean =>
+    spawnSync(command, commandArguments, { cwd: scratch, stdio: 'inherit', env: gitEnvironment() })
+        .status === 0;
 
 /**
  * Copy the checkout into `scratch`, link its dependencies and make it a git repository.

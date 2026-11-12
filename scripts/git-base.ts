@@ -14,7 +14,7 @@ import { REPO_ROOT } from './modules-on-disk';
  * https://git-scm.com/docs/git-rev-parse#Documentation/git-rev-parse.txt---local-env-vars
  *
  * Pass this as `env` to every `execFileSync('git', …)` whose `cwd` or `-C` argument is not
- * `REPO_ROOT` itself. The FE's `scripts/audit/check-clean.ts` carries an identical copy.
+ * `REPO_ROOT` itself. The FE's `scripts/git-base.ts` carries an identical copy.
  */
 export const gitEnvironment = (): NodeJS.ProcessEnv =>
     Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')));
