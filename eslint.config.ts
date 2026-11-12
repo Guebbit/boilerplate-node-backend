@@ -7,7 +7,7 @@ import pluginBoundaries from 'eslint-plugin-boundaries';
 import pluginJsdoc from 'eslint-plugin-jsdoc';
 import pluginJest from 'eslint-plugin-jest';
 import comments from '@eslint-community/eslint-plugin-eslint-comments/configs';
-import { globalIgnores } from 'eslint/config';
+import { defineConfig, globalIgnores } from 'eslint/config';
 import path from 'node:path';
 import localRules from './scripts/eslint';
 
@@ -102,10 +102,11 @@ const sideEffectMessage = (what: string): string =>
 /**
  * The whole lint configuration, as a flat-config array: ignores first, then the shared rule set,
  * then scoped blocks that adjust it, then Prettier's off-switch last.
- * `tseslint.config` only types and flattens its arguments.
- * https://typescript-eslint.io/packages/typescript-eslint#config
+ * `defineConfig` only types and flattens its arguments (it also resolves `extends`); it replaces
+ * `tseslint.config`, which typescript-eslint deprecated in its favour.
+ * https://eslint.org/docs/latest/use/configure/configuration-files#configuration-file
  */
-export default tseslint.config(
+export default defineConfig(
     /**
      * Excluded files — GENERATED OR FOREIGN ONLY.
      *
@@ -503,9 +504,6 @@ export default tseslint.config(
                     trailingUnderscore: 'allow'
                 }
             ],
-
-            // https://github.com/sindresorhus/eslint-plugin-unicorn/blob/HEAD/docs/rules/better-regex.md
-            'unicorn/better-regex': 'error',
 
             // https://github.com/sindresorhus/eslint-plugin-unicorn/blob/HEAD/docs/rules/consistent-destructuring.md
             'unicorn/consistent-destructuring': 'error',
