@@ -99,6 +99,34 @@ const markSystemMove = (
 };
 
 /**
+ * What a payment's retake of released units resolved to, short of `short` (which never gets here).
+ */
+type Retaken = Exclude<
+    Awaited<ReturnType<typeof inventoryService.retakeReleasedForOrder>>,
+    'short'
+>;
+
+/**
+ * The tail of a late payment once its units are back: write the order `paid` and commit the
+ * stock, or, when a racing move won the order meanwhile, give retaken units back.
+ * @param orderId - the order the payment was for
+ * @param retake - what the retake did; `none` means there was nothing to give back
+ * @param movePaid - writes the order `paid`, `null` when it lost the race
+ * @param session - the settlement's transaction
+ */
+const settleRetaken = (
+    orderId: string,
+    retake: Retaken,
+    movePaid: () => Promise<OrderDocument | null>,
+    session: ClientSession
+): Promise<OrderDocument | null> =>
+    movePaid().then((order) => {
+        if (order) return inventoryService.commitForOrder(orderId, session).then(() => order);
+        if (retake === 'none') return null;
+        return inventoryService.releaseForOrder(orderId, 'release', session).then(() => null);
+    });
+
+/**
  * Report that a payment settled. `payments`' `settlePayment` is the one caller — see that
  * module's docblock for why there is only one place money is reconciled.
  *
@@ -156,19 +184,13 @@ export const markPaid = (
                 // refund path, and the late cancel ends the order. Retaken but the order was
                 // lost to a racing move meanwhile, the units go back: a canceled order never
                 // keeps stock.
-                return inventoryService.retakeReleasedForOrder(orderId, active).then((retake) => {
-                    if (retake === 'short') return null;
-                    return movePaid(active).then((order) => {
-                        if (order)
-                            return inventoryService
-                                .commitForOrder(orderId, active)
-                                .then(() => order);
-                        if (retake === 'none') return null;
-                        return inventoryService
-                            .releaseForOrder(orderId, 'release', active)
-                            .then(() => null);
-                    });
-                });
+                return inventoryService
+                    .retakeReleasedForOrder(orderId, active)
+                    .then((retake) =>
+                        retake === 'short'
+                            ? null
+                            : settleRetaken(orderId, retake, () => movePaid(active), active)
+                    );
             }),
         () => statusChangedEvent(orderId, from[0], to)
     );
