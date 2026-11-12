@@ -307,10 +307,13 @@ export default defineConfig(
              */
             'local/comment-links': 'error',
             /*
-             * `nesting <= 3 levels`, the block-statement half. The callback half is
-             * `max-nested-callbacks`, deliberately not set — see docs/reference/root.md.
+             * `nesting <= 3 levels`, the block-statement half. The callback half follows.
+             * A chain nests one `.then` deeper per step, so 4 is the line: past it, name the step.
+             * Tests are exempt — `describe` > `describe` > `it` > `expect` callbacks are the
+             * shape of a spec, not a smell.
              */
             'max-depth': ['error', 3],
+            'max-nested-callbacks': ['error', 4],
             /*
              * `!` is allowed where a value has ALREADY been proven present by something the
              * compiler cannot follow — the `isAdmin` middleware guaranteeing `request.authContext`,
@@ -1819,7 +1822,9 @@ export default defineConfig(
              * the third `for`, and flattening it into `flatMap` hides the very shape the case is
              * asserting. The limit still holds where nesting is logic rather than enumeration.
              */
-            'max-depth': ['error', 4]
+            'max-depth': ['error', 4],
+            // Specs nest `describe` > `describe` > `it` > `expect` callbacks by shape.
+            'max-nested-callbacks': 'off'
         }
     },
 

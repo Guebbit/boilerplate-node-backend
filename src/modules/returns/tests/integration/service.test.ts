@@ -1220,8 +1220,8 @@ describe('what a new return leaves behind', () => {
 
     it('answers a withdrawal before dispatch with the cancel refusal untouched when the order cannot be canceled', async () => {
         const { user, orderId } = await orderIn(OrderStatus.paid);
-        jest.spyOn(orderService, 'withdrawById').mockResolvedValue(
-            asStub<Awaited<ReturnType<typeof orderService.withdrawById>>>({
+        jest.spyOn(orderService, 'withdrawWithin').mockResolvedValue(
+            asStub<Awaited<ReturnType<typeof orderService.withdrawWithin>>>({
                 success: false,
                 status: 409,
                 message: 'nope',
@@ -1242,9 +1242,9 @@ describe('what a new return leaves behind', () => {
     it('opens a return when a shipment lands between the read and the cancel, never a full refund', async () => {
         const { user, orderId } = await orderIn(OrderStatus.processing);
         const [fulfillmentOrder] = await fulfillmentOrdersOf(orderId);
-        const realWithdraw = orderService.withdrawById.bind(orderService);
+        const realWithdraw = orderService.withdrawWithin.bind(orderService);
         // The shipment lands after the "before dispatch" read and before the cancel runs.
-        jest.spyOn(orderService, 'withdrawById').mockImplementationOnce((...args) =>
+        jest.spyOn(orderService, 'withdrawWithin').mockImplementationOnce((...args) =>
             deliveryService
                 .shipFulfillmentOrder(
                     String(fulfillmentOrder._id),

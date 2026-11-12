@@ -11,7 +11,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, readOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
-import { settleOutboxNudges } from '@kernel/outbox';
+import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { OrderStatus } from '@types';
 import { inventoryService } from '@modules/inventory';
@@ -158,5 +158,51 @@ describe('a withdrawal before dispatch on a paid order', () => {
         expect(named('returns.notice')).toHaveLength(1);
         // A withdrawal is acknowledged by `returns`; the person-cancel mail is not for it.
         expect(named('orders.order-canceled')).toHaveLength(0);
+    });
+});
+
+/** The withdrawal's own outbox rows for the order, whatever their delivery state. */
+const withdrawalRows = (orderId: string) =>
+    outboxEventModel.countDocuments({
+        aggregateId: orderId,
+        name: { $in: ['order.canceled', 'return.requested', 'return.closed'] }
+    });
+
+describe('a withdrawal before dispatch that dies half way', () => {
+    it('keeps the order and writes nothing when the dated record cannot be written', async () => {
+        const { user, orderId } = await paidOrder();
+        jest.spyOn(returnRepository, 'create').mockRejectedValueOnce(new Error('disk full'));
+
+        await expect(
+            returnService.createReturn(
+                { orderId, reason: 'withdrawal' },
+                asCustomer(user.id),
+                testCallerContext
+            )
+        ).rejects.toThrow('disk full');
+
+        // Record and cancel both or neither: the cancel rolled back with the record.
+        const stored = await readOrder(orderId);
+        expect(stored?.status).toBe(OrderStatus.paid);
+        expect(await returnRepository.findByOrderId(orderId)).toEqual([]);
+        expect(await withdrawalRows(orderId)).toBe(0);
+    });
+
+    it('writes no record when the cancel cannot announce itself', async () => {
+        const { user, orderId } = await paidOrder();
+        jest.spyOn(outboxEventModel, 'create').mockRejectedValueOnce(new Error('disk full'));
+
+        await expect(
+            returnService.createReturn(
+                { orderId, reason: 'withdrawal' },
+                asCustomer(user.id),
+                testCallerContext
+            )
+        ).rejects.toThrow('disk full');
+
+        const stored = await readOrder(orderId);
+        expect(stored?.status).toBe(OrderStatus.paid);
+        expect(await returnRepository.findByOrderId(orderId)).toEqual([]);
+        expect(await withdrawalRows(orderId)).toBe(0);
     });
 });

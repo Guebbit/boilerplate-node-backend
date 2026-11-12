@@ -61,6 +61,46 @@ const destinationFor = (
         : Promise.resolve(undefined);
 
 /**
+ * Inserts the shipment row for a cut: the shipped lines with their titles, its number and its
+ * encrypted destination.
+ * @param input - what the shipment is made from
+ * @param shipmentId - the shipment's pre-allocated `_id`
+ * @param destination - the encrypted address, or `undefined` for a shipment that goes nowhere
+ * @param number - the shipment's number within its order
+ * @param session - the act's transaction
+ */
+const writeShipment = (
+    input: CutInput,
+    shipmentId: Types.ObjectId,
+    destination: ShipmentDocument['destination'],
+    number: number,
+    session: ClientSession
+): Promise<ShipmentDocument> => {
+    const { fulfillmentOrder: before, lines, delivered, at } = input;
+    return shipmentRepository.create(
+        {
+            _id: shipmentId,
+            ...(destination ? { destination } : {}),
+            orderId: before.orderId,
+            fulfillmentOrderId: before._id,
+            number,
+            kind: before.kind,
+            status: delivered ? 'delivered' : 'shipped',
+            lines: lines.map(({ productId, quantity }) => ({
+                productId,
+                quantity,
+                title: before.lines.find((line) => line.productId === productId)?.title ?? ''
+            })),
+            forced: input.forced,
+            shippedAt: at,
+            ...(input.trackingCode ? { trackingCode: input.trackingCode } : {}),
+            ...(delivered ? { deliveredAt: at } : {})
+        },
+        session
+    );
+};
+
+/**
  * Cut the shipment: claim the fulfillment order with the shipped lines added, write the shipment,
  * and — unless told otherwise — take its units off the shelf.
  *
@@ -69,7 +109,7 @@ const destinationFor = (
  * @throws {ActRefusal} when the fulfillment order moved since the act read it
  */
 export const cutShipment = (input: CutInput, session: ClientSession): Promise<Cut> => {
-    const { fulfillmentOrder: before, lines, delivered, at } = input;
+    const { fulfillmentOrder: before, lines } = input;
     const orderId = String(before.orderId);
     const shippedLines = withShipped(before.lines, lines);
 
@@ -92,38 +132,17 @@ export const cutShipment = (input: CutInput, session: ClientSession): Promise<Cu
             const shipmentId = new Types.ObjectId();
             // One read after the other: a transaction's session does not take parallel operations.
             return destinationFor(before, shipmentId, session).then((destination) =>
-                shipmentRepository.nextNumber(orderId, session).then((number) =>
-                    shipmentRepository
-                        .create(
-                            {
-                                _id: shipmentId,
-                                ...(destination ? { destination } : {}),
-                                orderId: before.orderId,
-                                fulfillmentOrderId: before._id,
-                                number,
-                                kind: before.kind,
-                                status: delivered ? 'delivered' : 'shipped',
-                                lines: lines.map(({ productId, quantity }) => ({
-                                    productId,
-                                    quantity,
-                                    title:
-                                        before.lines.find((line) => line.productId === productId)
-                                            ?.title ?? ''
-                                })),
-                                forced: input.forced,
-                                shippedAt: at,
-                                ...(input.trackingCode ? { trackingCode: input.trackingCode } : {}),
-                                ...(delivered ? { deliveredAt: at } : {})
-                            },
-                            session
-                        )
-                        .then((shipment) =>
-                            (input.takeStock
-                                ? orderService.shipStock(orderId, lines, session)
-                                : Promise.resolve(true)
-                            ).then(() => ({ shipment, fulfillmentOrder: claimed }))
-                        )
-                )
+                shipmentRepository
+                    .nextNumber(orderId, session)
+                    .then((number) =>
+                        writeShipment(input, shipmentId, destination, number, session)
+                    )
+                    .then((shipment) =>
+                        (input.takeStock
+                            ? orderService.shipStock(orderId, lines, session)
+                            : Promise.resolve(true)
+                        ).then(() => ({ shipment, fulfillmentOrder: claimed }))
+                    )
             );
         });
 };

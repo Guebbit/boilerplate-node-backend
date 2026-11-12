@@ -24,6 +24,7 @@ import {
 } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { returnPostagePayer } from '@modules/shop';
+import type { ResponseReject } from '@infrastructure/http/response';
 import type { AuthContext, CallerContext } from '@types';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
@@ -50,54 +51,76 @@ const refundOwedOn = (order: OrderDocument): string =>
     order.paidAt ? orderTotal(order) : padDecimal('0', order.currency);
 
 /**
- * Write the record of a withdrawal the cancel already settled: closed at birth, no lines (nothing
- * is coming back), the full refund owed. The cancel's own pending-refund marker and the payment
- * sweep carry the money; this row is the dated proof of what the customer asked for. Its
- * `return.requested` and `return.closed` are written with it, in that order.
+ * The record of a withdrawal: closed at birth, no lines (nothing is coming back), the full refund
+ * owed. The cancel's own pending-refund marker and the payment sweep carry the money; this row is
+ * the dated proof of what the customer asked for.
  *
- * @param order - the order that was withdrawn from
+ * @param order - the order that is being withdrawn from
  * @param opener - when the buyer stated it, how, and the staff member recording it, if any
+ */
+const withdrawalRow = (order: OrderDocument, opener: Opener): Partial<ReturnDocument> => {
+    const now = new Date();
+    return {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        currency: order.currency,
+        status: 'closed',
+        reason: 'withdrawal',
+        lines: [],
+        returnPostage: returnPostagePayer(),
+        requestedAt: opener.statement.requestedAt,
+        ...(opener.statement.statedVia ? { statedVia: opener.statement.statedVia } : {}),
+        openedBy: opener.staffId === undefined ? 'buyer' : 'staff',
+        decidedAt: now,
+        closedAt: now,
+        refundAmount: refundOwedOn(order)
+    };
+};
+
+/**
+ * What the transaction decided: the cancel's refusal, or the record it wrote and the cancel's
+ * after-commit step.
+ */
+type Withdrawn =
+    | { canceled: ResponseReject }
+    | { created: ReturnDocument; settle: () => Promise<unknown> };
+
+/**
+ * The withdrawal's one transaction, under the order's lock row like a remainder cancel: the order
+ * is canceled (status, stock, `order.canceled` row), the Return is written closed, and its
+ * `return.requested` and `return.closed` rows land in that order. A crash between the pieces
+ * leaves neither — never a canceled order without its dated record, nor a record of a withdrawal
+ * that did not cancel. A refused cancel (a shipment landed first) writes nothing.
+ *
+ * @param order - the order being withdrawn from
+ * @param opener - when the buyer stated it, how, and the staff member recording it, if any
+ * @param authContext - the buyer, or the staff member
  * @param context - for audit
  */
-const writeWithdrawalRecord = (
+const cancelAndRecord = (
     order: OrderDocument,
     opener: Opener,
+    authContext: AuthContext,
     context: CallerContext
-): Promise<ReturnDocument> => {
-    const now = new Date();
-    return withTransaction((session) =>
-        returnRepository
-            .create(
-                {
-                    orderId: order._id,
-                    orderNumber: order.orderNumber,
-                    currency: order.currency,
-                    status: 'closed',
-                    reason: 'withdrawal',
-                    lines: [],
-                    returnPostage: returnPostagePayer(),
-                    requestedAt: opener.statement.requestedAt,
-                    ...(opener.statement.statedVia
-                        ? { statedVia: opener.statement.statedVia }
-                        : {}),
-                    openedBy: opener.staffId === undefined ? 'buyer' : 'staff',
-                    decidedAt: now,
-                    closedAt: now,
-                    refundAmount: refundOwedOn(order)
-                },
-                session
-            )
-            .then((created) =>
-                enqueueRequested(created, session)
-                    .then(() => enqueueClosed(created, session))
-                    .then(() => created)
-            )
-    ).then((created) => {
-        nudgeOutbox();
-        recordOpened(order, created, context);
-        return created;
+): Promise<Withdrawn> =>
+    withTransaction(async (session): Promise<Withdrawn> => {
+        const orderId = String(order._id);
+        await returnRepository.lockOrder(orderId, session);
+        const canceled = await orderService.withdrawWithin(
+            session,
+            orderId,
+            authContext,
+            context,
+            opener.staffId !== undefined,
+            opener.statement.requestedAt
+        );
+        if (!canceled.success) return { canceled };
+
+        const created = await returnRepository.create(withdrawalRow(order, opener), session);
+        await enqueueRequested(created, session);
+        await enqueueClosed(created, session);
+        return { created, settle: canceled.settle };
     });
-};
 
 /**
  * A withdrawal from an order the shop has started on, when some of it is goods Art. 16 excludes
@@ -202,23 +225,16 @@ export const withdrawBeforeDispatch = (
     const missing = byStaff ? missingKeyOf(authContext) : undefined;
     if (missing) return Promise.resolve(forbidden(order, missing, context));
 
-    const orderId = String(order._id);
-    const cancelling = byStaff
-        ? orderService.withdrawOnBuyersBehalfById(
-              orderId,
-              authContext,
-              context,
-              opener.statement.requestedAt
-          )
-        : orderService.withdrawById(orderId, authContext, context);
-    return cancelling.then((canceled) => {
-        if (!canceled.success)
+    return cancelAndRecord(order, opener, authContext, context).then((done) => {
+        if ('canceled' in done)
             // Not `ownOrder`: a staff member reads the order's new state through the same door
             // that let them in, so the race falls back to a return for them too.
             return openableOrder(input.orderId, authContext).then((fresh) =>
-                fresh && !isBeforeDispatch(fresh.order) ? openAsReturn() : canceled
+                fresh && !isBeforeDispatch(fresh.order) ? openAsReturn() : done.canceled
             );
 
-        return writeWithdrawalRecord(order, opener, context).then(opened);
+        nudgeOutbox();
+        recordOpened(order, done.created, context);
+        return done.settle().then(() => opened(done.created));
     });
 };

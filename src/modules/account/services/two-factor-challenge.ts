@@ -110,6 +110,27 @@ export interface VerifiedChallenge {
 }
 
 /**
+ * Right code: spend the challenge before minting anything. A wrong code leaves it live —
+ * `mfaChallengeLimiter` bounds how often it can be tried. Only the request whose own write removed
+ * it may mint: a concurrent twin is refused like a challenge that never existed.
+ * @param user - the account the challenge names
+ * @param amr - how the challenge's first factor was proven
+ * @param challenge - the challenge token to spend
+ */
+const redeemChallenge = (
+    user: UserDocument,
+    amr: VerifiedChallenge['amr'],
+    challenge: string
+): Promise<ResponseSuccess<VerifiedChallenge> | ResponseReject> =>
+    spendLiveToken(MFA_CHALLENGE_TOKEN_TYPE, challenge).then((spentByThisRequest) =>
+        spentByThisRequest
+            ? accountUserService
+                  .persistTwoFactorMethods(user)
+                  .then((saved) => generateSuccess({ user: saved, amr }))
+            : generateReject(401, [t('account.two-factor.challenge-invalid')])
+    );
+
+/**
  * `POST /account/login/2fa` — the second step of a 2FA login. Verifies the challenge and the code
  * against the account it names, but does NOT mint a session — see the module doc. A challenge
  * that fails to verify (missing, wrong type, expired) and an account with no 2FA enabled both
@@ -133,23 +154,7 @@ export const verifyLoginChallenge = (
             const { amr } = entry;
 
             return verifyArmedFactor(user, code, context).then((verdict) =>
-                settleVerdict(verdict, user, () =>
-                    // Right code: spend the challenge before minting anything. A wrong code leaves
-                    // it live — `mfaChallengeLimiter` bounds how often it can be tried. Only the
-                    // request whose own write removed it may mint: a concurrent twin is refused
-                    // like a challenge that never existed.
-                    spendLiveToken(MFA_CHALLENGE_TOKEN_TYPE, challenge).then(
-                        (spentByThisRequest) =>
-                            spentByThisRequest
-                                ? accountUserService.persistTwoFactorMethods(user).then((saved) =>
-                                      generateSuccess({
-                                          user: saved,
-                                          amr
-                                      })
-                                  )
-                                : generateReject(401, [t('account.two-factor.challenge-invalid')])
-                    )
-                )
+                settleVerdict(verdict, user, () => redeemChallenge(user, amr, challenge))
             );
         })
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));

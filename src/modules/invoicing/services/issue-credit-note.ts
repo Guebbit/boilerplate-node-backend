@@ -8,7 +8,7 @@
  * See: docs/modules/invoicing.md
  */
 
-import { Types } from 'mongoose';
+import { Types, type ClientSession } from 'mongoose';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { orderService, orderTotal } from '@modules/orders';
 import { paymentService } from '@modules/payments';
@@ -106,6 +106,31 @@ const reversedFigures = (
 };
 
 /**
+ * Records `credit_note_issued` on the order's timeline, in the credit note's own transaction.
+ * @param orderId - the order the credit note belongs to
+ * @param note - the credit note just inserted
+ * @param refundId - the refund it reverses
+ * @param session - the issuing transaction
+ * @returns the same credit note, for the caller's chain
+ */
+const appendIssuedRow = (
+    orderId: Types.ObjectId,
+    note: CreditNoteDocument,
+    refundId: RefundedInput['refundId'],
+    session: ClientSession
+): Promise<CreditNoteDocument> =>
+    orderService
+        .appendTimeline(
+            String(orderId),
+            {
+                type: 'credit_note_issued',
+                data: { creditNoteId: String(note._id), number: note.number, refundId }
+            },
+            session
+        )
+        .then(() => note);
+
+/**
  * Freezes and numbers a credit note for one refund of the invoice already issued on the order. A
  * no-op — `undefined`, never a throw — when no invoice exists to correct. That is right when the
  * money never paid for a sale (a late payment on a canceled order, an amount mismatch): no
@@ -166,22 +191,7 @@ export const issueCreditNote = (input: RefundedInput): Promise<CreditNoteDocumen
                         session
                     )
                     // The order's timeline row commits with the credit note; the race's loser aborts both.
-                    .then((note) =>
-                        orderService
-                            .appendTimeline(
-                                String(invoice.orderId),
-                                {
-                                    type: 'credit_note_issued',
-                                    data: {
-                                        creditNoteId: String(_id),
-                                        number: note.number,
-                                        refundId: input.refundId
-                                    }
-                                },
-                                session
-                            )
-                            .then(() => note)
-                    )
+                    .then((note) => appendIssuedRow(invoice.orderId, note, input.refundId, session))
             )
         ).catch(readWinner(() => invoicingRepository.findCreditNoteByRefundId(input.refundId)));
     });

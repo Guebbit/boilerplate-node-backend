@@ -80,7 +80,9 @@ export const checkHibpRange = (
             const match = body
                 .split(/\r?\n/)
                 .map((line) => parseRangeLine(line))
-                .find((entry) => entry?.suffix === suffix);
+                // Padding entries (`Add-Padding`) carry count 0 and are fake: discard them.
+                // https://haveibeenpwned.com/API/v3#PwnedPasswordsPadding
+                .find((entry) => entry?.suffix === suffix && entry.count > 0);
             return match ? { breached: true, count: match.count } : { breached: false };
         })
         .catch((error: unknown) => {
