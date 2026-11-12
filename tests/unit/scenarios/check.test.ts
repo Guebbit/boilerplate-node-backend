@@ -52,7 +52,7 @@ describe('assertScenarioGuarantees', () => {
         // throws with or without the shop's own guarantees present.
         expect(() =>
             assertScenarioGuarantees('shop', { 'ghost.leftBehind': '65dc8a99604c307b702b5ccc' })
-        ).toThrow(/\[scenario-check] shop guarantees not met/);
+        ).toThrow(/\[scenario-check\] shop guarantees not met/);
     });
 
     it('returns quietly when the two lists agree', () => {

@@ -377,7 +377,7 @@ describe('revoking', () => {
             expect.objectContaining({
                 outcome: 'success',
                 targetId: minted.id,
-                metadata: { credential: expect.stringMatching(/^[A-Za-z0-9_-]+$/u) }
+                metadata: { credential: expect.stringMatching(/^[\w-]+$/u) }
             })
         ]);
     });

@@ -5,6 +5,7 @@ import configPrettier from 'eslint-config-prettier';
 import pluginUnicorn from 'eslint-plugin-unicorn';
 import pluginBoundaries from 'eslint-plugin-boundaries';
 import pluginJsdoc from 'eslint-plugin-jsdoc';
+import pluginRegexp from 'eslint-plugin-regexp';
 import pluginJest from 'eslint-plugin-jest';
 import comments from '@eslint-community/eslint-plugin-eslint-comments/configs';
 import { globalIgnores } from 'eslint/config';
@@ -182,6 +183,12 @@ export default tseslint.config(
      * Unicorn plugin
      */
     pluginUnicorn.configs['flat/recommended'],
+
+    /**
+     * Regular expressions: ReDoS-prone and useless patterns, unreadable classes and escapes.
+     * https://ota-meshi.github.io/eslint-plugin-regexp/
+     */
+    pluginRegexp.configs['flat/recommended'],
 
     /**
      * `unicorn/recommended` rules that are OFF here, in three groups, rather than exempted site
@@ -506,9 +513,6 @@ export default tseslint.config(
                     trailingUnderscore: 'allow'
                 }
             ],
-
-            // https://github.com/sindresorhus/eslint-plugin-unicorn/blob/HEAD/docs/rules/better-regex.md
-            'unicorn/better-regex': 'error',
 
             // https://github.com/sindresorhus/eslint-plugin-unicorn/blob/HEAD/docs/rules/consistent-destructuring.md
             'unicorn/consistent-destructuring': 'error',

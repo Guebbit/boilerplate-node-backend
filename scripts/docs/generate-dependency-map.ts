@@ -83,7 +83,7 @@ const walk = (directory: string): string[] =>
         const full = path.join(directory, entry.name);
         if (entry.isDirectory()) return entry.name === 'tests' ? [] : walk(full);
         if (!/\.[cm]?[jt]s$/.test(entry.name)) return [];
-        if (/\.(test|spec)\.[cm]?[jt]s$/.test(entry.name)) return [];
+        if (/\.(?:test|spec)\.[cm]?[jt]s$/.test(entry.name)) return [];
         return [full];
     });
 
@@ -108,7 +108,7 @@ const ownerOf = (file: string): string => {
  * only — a relative or `@`-aliased path (`@modules/*`, `@kernel/*`, …) is never a dependency.
  */
 const importSpecifiers = (source: string): string[] =>
-    [...source.matchAll(/(?:from\s+|require\()\s*["']([^"']+)["']/g)]
+    [...source.matchAll(/(?:from\s|require\()\s*["']([^"']+)["']/g)]
         .map((match) => match[1])
         .filter(
             (specifier) =>

@@ -53,7 +53,7 @@ const OVERVIEW_CONTROLLER = path.join(
  * the overview endpoint depends on most.
  */
 const withoutComments = (source: string): string =>
-    source.replaceAll(/\/\*[\S\s]*?\*\//g, '').replaceAll(/^[^\S\n]*\/\/.*$/gm, '');
+    source.replaceAll(/\/\*[\s\S]*?\*\//g, '').replaceAll(/^[^\S\n]*\/\/.*$/gm, '');
 
 /** Every `src/modules/<name>/metrics.ts`, discovered rather than listed. */
 const metricFiles = (): { module: string; file: string }[] =>
@@ -71,7 +71,7 @@ const declarations = (): Declaration[] => [
     ...metricFiles().flatMap(({ module, file }) =>
         [
             ...withoutComments(readFileSync(file, 'utf8')).matchAll(
-                /new (?:Counter|Gauge|Histogram|Summary)\({\s*name: '([^']+)'/g
+                /new (?:Counter|Gauge|Histogram|Summary)\(\{\s*name: '([^']+)'/g
             )
         ].map(([, name]) => ({ module, name }))
     ),
@@ -99,7 +99,7 @@ const namesReadByLiteral = (): string[] =>
 
 /** The names the controller treats as optional, read from its `SHOP_METRIC_NAMES` literal. */
 const shopMetricNames = (): string[] => {
-    const block = /SHOP_METRIC_NAMES = \[([^\]]*)]/.exec(
+    const block = /SHOP_METRIC_NAMES = \[([^\]]*)\]/.exec(
         withoutComments(readFileSync(OVERVIEW_CONTROLLER, 'utf8'))
     );
     return [...(block?.[1] ?? '').matchAll(/'([^']+)'/g)].map(([, name]) => name);
@@ -151,7 +151,7 @@ describe('metric names', () => {
             }))
             .flatMap(({ module, source }) => {
                 const declared = [...source.matchAll(/new (?:Counter|Gauge|Histogram|Summary)\(/g)];
-                const registered = [...source.matchAll(/registers: \[metricsRegistry]/g)];
+                const registered = [...source.matchAll(/registers: \[metricsRegistry\]/g)];
                 return declared.length === registered.length
                     ? []
                     : [

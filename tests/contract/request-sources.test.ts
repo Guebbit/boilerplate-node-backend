@@ -64,7 +64,7 @@ const readMountPrefixes = (): Map<string, string> => {
     // the mistake this check should catch rather than paper over.
     const registry = read('src/modules.ts');
     const listed = new Set(
-        (/enabledModules[^=]*=\s*\[([^\]]*)]/.exec(registry)?.[1] ?? '')
+        (/enabledModules[^=]*=\s*\[([^\]]*)\]/.exec(registry)?.[1] ?? '')
             .split(',')
             .map((entry) => entry.trim())
             .filter(Boolean)
@@ -79,7 +79,7 @@ const readMountPrefixes = (): Map<string, string> => {
         // binding to file, so each mount's prefix lands on the file that declares its router.
         const files = new Map<string, string>();
         for (const [, imported, alias, file] of manifest.matchAll(
-            /import\s*{\s*(\w+)(?:\s+as\s+(\w+))?\s*}\s*from\s*'\.\/([^']*)'/g
+            /import\s*\{\s*(\w+)(?:\s+as\s+(\w+))?\s*\}\s*from\s*'\.\/([^']*)'/g
         ))
             files.set(alias ?? imported, file);
 
@@ -97,7 +97,7 @@ const readMountPrefixes = (): Map<string, string> => {
     const app = read('src/app/routes.ts');
     const imports = new Map<string, string>();
     for (const [, binding, module] of app.matchAll(
-        /import\s+(?:\*\s+as\s+)?{?\s*(?:router\s+as\s+)?(\w+)\s*}?\s+from\s+'([^']*)'/g
+        /import\s+(?:\*\s+as\s+)?(?:\{\s*)?(?:router\s+as\s+)?(\w+)(?:\s*\})?\s+from\s+'([^']*)'/g
     ))
         imports.set(binding, module);
 
@@ -121,7 +121,7 @@ const readControllerImports = (source: string, routeFile: string): Map<string, s
     const imports = new Map<string, string>();
 
     for (const [, bindings, module] of source.matchAll(
-        /import\s*{([^}]+)}\s*from\s*'\.\/controllers\/([^']+)'/g
+        /import\s*\{([^}]+)\}\s*from\s*'\.\/controllers\/([^']+)'/g
     ))
         for (const binding of bindings.split(','))
             imports.set(binding.trim(), `${path.dirname(routeFile)}/controllers/${module}.ts`);
@@ -150,9 +150,9 @@ const readMountedRoutes = (): MountedRoute[] => {
         const imports = readControllerImports(source, routeFile);
 
         for (const [, method, routePath, argumentList] of source.matchAll(
-            /router\.(get|post|put|delete|patch)\(\s*'([^']*)',([\S\s]*?)\);/g
+            /router\.(get|post|put|delete|patch)\(\s*'([^']*)',([\s\S]*?)\);/g
         )) {
-            const identifiers = [...argumentList.matchAll(/(\w+)\s*(?=[\s),]*$|,\s*$)/gm)]
+            const identifiers = [...argumentList.matchAll(/(\w+)(?=[\s),]*$)/gm)]
                 .map(([, name]) => name)
                 .filter((name) => imports.has(name));
             const controller = identifiers.at(-1);
@@ -184,12 +184,12 @@ const readMountedRoutes = (): MountedRoute[] => {
  * declaration below read as "declares nothing" and every assertion pass vacuously.
  */
 const readSurfaceSources = (): Record<string, RequestInputSource[]> => {
-    const block = /SURFACE_SOURCES[^=]*=\s*{([^}]*)}/.exec(
+    const block = /SURFACE_SOURCES[^=]*=\s*\{([^}]*)\}/.exec(
         read('src/infrastructure/http/request.ts')
     )?.[1];
     const table: Record<string, RequestInputSource[]> = {};
 
-    for (const [, surface, list] of (block ?? '').matchAll(/(\w+):\s*\[([^\]]*)]/g))
+    for (const [, surface, list] of (block ?? '').matchAll(/(\w+):\s*\[([^\]]*)\]/g))
         table[surface] = [...list.matchAll(/'(params|body|query)'/g)].map(
             ([, name]) => name as RequestInputSource
         );

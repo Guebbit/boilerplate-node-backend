@@ -60,7 +60,8 @@ const LITERAL_PARAMETERS: Record<string, string> = {
 const parameterValue = (path: string, name: string, world: World): string => {
     if (name in LITERAL_PARAMETERS) return LITERAL_PARAMETERS[name];
     if (name.toLowerCase().includes('token')) return 'tok';
-    if (name === 'productId' || /^\/(products|wishlist|cart)\//.test(path)) return world.productId;
+    if (name === 'productId' || /^\/(?:products|wishlist|cart)\//.test(path))
+        return world.productId;
     if (name === 'orderId' || path.startsWith('/orders/')) return world.orderId;
     if (path.startsWith('/users/')) return world.userId;
     // `entityType` is fixed to `product` above, so the entity is the seeded product.

@@ -31,7 +31,7 @@ export interface ModuleNames {
 }
 
 /** A folder name a module may carry: lower-case letters only, hyphen-separated. */
-const MODULE_NAME = /^[a-z]+(-[a-z]+)*$/;
+const MODULE_NAME = /^[a-z]+(?:-[a-z]+)*$/;
 
 /** A PascalCase entity name. */
 const ENTITY_NAME = /^[A-Z][A-Za-z]*$/;

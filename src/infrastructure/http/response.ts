@@ -204,7 +204,7 @@ const resolveErrorCode = (status: number): ErrorCode => {
     if (status >= 500 && status !== 503) return ERROR_CODES.INTERNAL_SERVER_ERROR;
     const derived = resolveErrorTitle(status)
         .replaceAll("'", '')
-        .replaceAll(/[^A-Za-z0-9]+/g, '_')
+        .replaceAll(/[^A-Z0-9]+/gi, '_')
         .toUpperCase();
     return isErrorCode(derived) ? derived : ERROR_CODES.CLIENT_ERROR;
 };

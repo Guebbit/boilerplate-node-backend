@@ -158,7 +158,7 @@ export const isSameOriginPath = (value: unknown): value is string => {
  * serves — the frontend decides what it speaks; this only keeps a value that will be echoed into
  * a redirect URL from being anything but a tag.
  */
-const LOCALE_TAG = /^[A-Za-z]{2,3}(?:-[\dA-Za-z]{2,8}){0,3}$/;
+const LOCALE_TAG = /^[A-Z]{2,3}(?:-[\dA-Z]{2,8}){0,3}$/i;
 
 /**
  * Whether `value` is shaped like a locale tag — the one form a saved `locale` is ever allowed to

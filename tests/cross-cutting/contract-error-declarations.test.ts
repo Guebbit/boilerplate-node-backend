@@ -69,7 +69,7 @@ const METHODS = new Set(['get', 'post', 'put', 'patch', 'delete']);
  * Matched on the parameter NAME rather than on a list of routes, because that is the actual
  * trigger: every one of these carries a value `requireId` may refuse.
  */
-const TAKES_AN_ID = /{[^}]*[Ii]d}/;
+const TAKES_AN_ID = /\{[^}]*[Ii]d\}/;
 
 interface Operation {
     module: string;
@@ -171,7 +171,7 @@ interface Obligation {
 const obligationsOf = (route: MountedRoute): Obligation[] => {
     const obliged: Obligation[] = [];
 
-    if (route.guards.some((guard) => /^requireFreshAuth(When)?\(/.test(guard)))
+    if (route.guards.some((guard) => /^requireFreshAuth(?:When)?\(/.test(guard)))
         obliged.push({ status: '401', code: REAUTH });
 
     for (const ask of route.permissions) {

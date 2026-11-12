@@ -101,11 +101,11 @@ const readEdges = (): [from: string, to: string][] => {
     );
 
     const labels = new Map(
-        [...raw.matchAll(/^([\dA-Za-z]+)\["([^"]+)"]/gm)].map((m) => [m[1], m[2]])
+        [...raw.matchAll(/^([\dA-Z]+)\["([^"]+)"\]/gim)].map((m) => [m[1], m[2]])
     );
 
     const edges: [string, string][] = [];
-    for (const match of raw.matchAll(/^([\dA-Za-z]+)-->([\dA-Za-z]+)/gm)) {
+    for (const match of raw.matchAll(/^([\dA-Z]+)-->([\dA-Z]+)/gim)) {
         const from = labels.get(match[1]);
         const to = labels.get(match[2]);
         // `modules.ts` is the registry, not a domain — see the header.
@@ -154,7 +154,7 @@ const readEventEdgesInFile = (source: string, subscriber: string): EventEdge[] =
 
     // Which sibling each imported symbol came from, so a subscription can name its owner.
     const owners = new Map<string, string>();
-    for (const line of source.matchAll(/import\s*{([^}]+)}\s*from\s*'@modules\/([^']+)'/g))
+    for (const line of source.matchAll(/import\s*\{([^}]+)\}\s*from\s*'@modules\/([^']+)'/g))
         for (const symbol of line[1].split(',')) owners.set(symbol.trim(), line[2]);
 
     for (const call of source.matchAll(/onDomainEvent\(\s*([A-Z][\dA-Z_]*)/g)) {

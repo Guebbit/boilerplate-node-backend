@@ -31,7 +31,7 @@ describe('permission rule conditions', () => {
     });
 
     it('uses no $exists-style operator', () => {
-        const stray = conditions.filter(({ path }) => /(^|\.)\$exists$/.test(path));
+        const stray = conditions.filter(({ path }) => /(?:^|\.)\$exists$/.test(path));
         expect(stray).toEqual([]);
     });
 });

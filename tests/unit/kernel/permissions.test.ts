@@ -303,7 +303,9 @@ describe('audience roles', () => {
     // one left off the customer audience would leave a proven account unable to use the shop.
     it('gives the customer every own, shopping and storefront set', () => {
         const customer = new Set(AUDIENCE_ROLES.customer.permissions);
-        const missing = PERMISSION_SETS.filter((set) => /(Own|Shopping|Storefront)$/.test(set.name))
+        const missing = PERMISSION_SETS.filter((set) =>
+            /(?:Own|Shopping|Storefront)$/.test(set.name)
+        )
             .flatMap((set) => set.rules.map((rule) => `${set.name}:${rule}`))
             .filter((entry) => !customer.has(entry.slice(entry.indexOf(':') + 1)));
 

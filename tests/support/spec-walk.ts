@@ -434,7 +434,7 @@ export const listOperations = (spec: SpecDocument = readSpec()): Operation[] => 
                 path: pathName,
                 method,
                 operationId: operation.operationId as string | undefined,
-                pathParameters: [...pathName.matchAll(/{(\w+)}/g)].map(([, name]) => name),
+                pathParameters: [...pathName.matchAll(/\{(\w+)\}/g)].map(([, name]) => name),
                 pathParameterSchemas: Object.fromEntries(
                     parametersIn(declared, spec, 'path').map((parameter) => [
                         String(parameter.name),

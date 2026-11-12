@@ -15,7 +15,7 @@ import type { $ZodIssue } from 'zod/v4/core';
 import { t } from '@infrastructure/i18n';
 
 /** A field name: a letter, then word characters or hyphens. Skips indexes and locale-like keys with dots. */
-const FIELD_NAME = /^[A-Za-z][\w-]*$/;
+const FIELD_NAME = /^[A-Z][\w-]*$/i;
 
 /** What `t` answers when a label key is absent; no real label can equal it. */
 const NO_LABEL = '\u0000no-label';

@@ -28,7 +28,7 @@ interface SchemaShape {
  *
  * Multipart: excluded — the factory validates the JSON-shaped schema for both content types.
  */
-const REPLACE_OR_UPDATE = /^(Replace|Update)(.+)Request$/;
+const REPLACE_OR_UPDATE = /^(?:Replace|Update)(.+)Request$/;
 
 /** Every `components.schemas` entry declared by every module's own contract fragment. */
 const schemas = (): SchemaShape[] =>
@@ -59,7 +59,7 @@ const pairedSchemas = (): Map<string, [SchemaShape, SchemaShape]> => {
     for (const schema of schemas()) {
         const match = REPLACE_OR_UPDATE.exec(schema.name);
         if (!match) continue;
-        const entity = match[2];
+        const entity = match[1];
         byEntity.set(entity, [...(byEntity.get(entity) ?? []), schema]);
     }
 

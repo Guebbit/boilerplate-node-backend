@@ -29,16 +29,16 @@ export const headingSlugs = (markdown: string): Set<string> => {
 
     for (const line of markdown.split('\n')) {
         // A `#` line inside a fenced block is a code comment, not a heading.
-        if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
-        const heading = inFence ? undefined : /^#{1,6}\s+(.+)$/.exec(line)?.[1];
+        if (/^\s*(?:```|~~~)/.test(line)) inFence = !inFence;
+        const heading = inFence ? undefined : /^#{1,6}\s+(\S.*)$/.exec(line)?.[1];
         if (!heading) continue;
 
-        const explicit = /{#([\w-]+)}\s*$/.exec(heading)?.[1];
+        const explicit = /\{#([\w-]+)\}\s*$/.exec(heading)?.[1];
         // The title VitePress slugs is the heading's text: link targets, code ticks and
         // emphasis marks are not part of it.
         const text = heading
-            .replace(/{#[\w-]+}\s*$/, '')
-            .replaceAll(/\[([^\]]*)]\([^)]*\)/g, '$1')
+            .replace(/\{#[\w-]+\}\s*$/, '')
+            .replaceAll(/\[([^\]]*)\]\([^)]*\)/g, '$1')
             .replaceAll(/[*`]/g, '');
         const base = explicit ?? slugify(text);
 

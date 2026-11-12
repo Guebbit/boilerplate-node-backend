@@ -45,7 +45,7 @@ const listSourceFiles = (directory: string): string[] =>
  * The value is either an inline object literal — no nesting is possible in a sort spec, so a
  * non-greedy match to the first `}` is exact — or an identifier naming a shared constant.
  */
-const SORT_STAGE = /\$sort:\s*({[^{}]*}|[$A-Z_a-z][\w$]*(?:\s*\?\?\s*[$A-Z_a-z][\w$]*)?)/g;
+const SORT_STAGE = /\$sort:\s*(\{[^{}]*\}|[$A-Z_a-z][\w$]*(?:\s*\?\?\s*[$A-Z_a-z][\w$]*)?)/g;
 
 /** The keys of an inline sort spec, in the order they were declared. */
 const sortKeys = (literal: string): string[] =>

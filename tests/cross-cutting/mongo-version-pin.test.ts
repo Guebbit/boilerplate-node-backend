@@ -33,7 +33,7 @@ const mongoTags = (file: string): string[] => {
     const compose = parse(readFileSync(path.join(REPO_ROOT, file), 'utf8')) as ComposeFile;
     return Object.values(compose.services)
         .map((service) => service.image ?? '')
-        .filter((image) => /(^|\/)mongo:/.test(image))
+        .filter((image) => /(?:^|\/)mongo:/.test(image))
         .map((image) => /:([^@]+)@/.exec(image)?.[1] ?? '');
 };
 

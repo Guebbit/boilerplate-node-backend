@@ -18,7 +18,7 @@
  * are transitive dependencies and a second copy would make `instanceof` answer false.
  */
 const DATABASE_ERROR_NAME =
-    /^(?:Mongo\w*Error|Mongoose\w*Error|ValidationError|ValidatorError|CastError|VersionError|DocumentNotFoundError|StrictModeError|BSONError)$/;
+    /^(?:Mongo\w*Error|ValidationError|ValidatorError|CastError|VersionError|DocumentNotFoundError|StrictModeError|BSONError)$/;
 
 /**
  * Whether the error, or any class it extends, carries a database error's name. The prototype
@@ -89,9 +89,9 @@ const ADDRESS = (() => {
     const octet = String.raw`(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)`;
     const v4 = String.raw`${octet}(?:\.${octet}){3}`;
     const tail = `(?:(?:${group}:){0,5}${v4}|${group}(?::${group}){0,6})`;
-    const v6 = String.raw`(?<![\w:])(?:(?:${group}:){7}${group}|${group}(?::${group}){0,6}::(?:${tail})?|::${tail})(?![\w:])`;
+    const v6 = String.raw`(?<![\w:])(?:(?:${group}:){7}${group}|${group}(?::${group}){0,6}::${tail}?|::${tail})(?![\w:])`;
     const email = String.raw`[\p{L}\p{N}._%+-]+@(?!\d+x\.)[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\.\p{L}{2,}`;
-    const ipv4 = String.raw`(?<![\w.])${v4}(?![\w]|\.\d)`;
+    const ipv4 = String.raw`(?<![\w.])${v4}(?!\w|\.\d)`;
     return new RegExp(`${email}|${v6}|${ipv4}`, 'giu');
 })();
 

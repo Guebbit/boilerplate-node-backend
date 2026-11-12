@@ -39,7 +39,7 @@ describe('job_last_success_timestamp_seconds', () => {
         const metrics = await getPrometheusMetrics();
 
         expect(mockedListLeaseSummaries).not.toHaveBeenCalled();
-        expect(metrics).not.toMatch(/^job_last_success_timestamp_seconds{/m);
+        expect(metrics).not.toMatch(/^job_last_success_timestamp_seconds\{/m);
     });
 
     it('reports one series per job that has succeeded at least once', async () => {
@@ -64,7 +64,7 @@ describe('job_last_success_timestamp_seconds', () => {
         const metrics = await getPrometheusMetrics();
 
         expect(metrics).toContain('# HELP process_uptime_seconds');
-        expect(metrics).not.toMatch(/^job_last_success_timestamp_seconds{/m);
+        expect(metrics).not.toMatch(/^job_last_success_timestamp_seconds\{/m);
     });
 });
 
@@ -79,7 +79,7 @@ describe('job_last_run_timestamp_seconds', () => {
         const metrics = await getPrometheusMetrics();
 
         expect(mockedListLeaseSummaries).not.toHaveBeenCalled();
-        expect(metrics).not.toMatch(/^job_last_run_timestamp_seconds{/m);
+        expect(metrics).not.toMatch(/^job_last_run_timestamp_seconds\{/m);
     });
 
     it('reports a job that has run but never succeeded, which the success gauge omits', async () => {
@@ -109,7 +109,7 @@ describe('job_last_run_timestamp_seconds', () => {
         const metrics = await getPrometheusMetrics();
 
         expect(metrics).toContain('# HELP process_uptime_seconds');
-        expect(metrics).not.toMatch(/^job_last_run_timestamp_seconds{/m);
+        expect(metrics).not.toMatch(/^job_last_run_timestamp_seconds\{/m);
     });
 });
 
