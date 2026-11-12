@@ -161,7 +161,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
         filter: QueryFilter<UserDocument>,
         update: UpdateQuery<UserDocument>
     ) => Promise<UpdateWriteOpResult>;
-    findByIdWithCredentials: (id: string) => Promise<UserDocument | null>;
+    findByIdWithCredentials: (id: string, session?: ClientSession) => Promise<UserDocument | null>;
     findOneWithCredentials: (where: QueryFilter<UserDocument>) => Promise<UserDocument | null>;
     findByIdWithPendingEmail: (id: string) => Promise<UserDocument | null>;
     emailOrPendingEmailTaken: (email: string, excludingId: string) => Promise<boolean>;
@@ -256,8 +256,12 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     /**
      * Fetch a user by id WITH its credential fields. Use only where they are actually needed.
      */
-    findByIdWithCredentials: (id: string) =>
-        userModel.findById(id).select(CREDENTIAL_FIELDS).exec(),
+    findByIdWithCredentials: (id: string, session?: ClientSession) =>
+        userModel
+            .findById(id)
+            .select(CREDENTIAL_FIELDS)
+            .session(session ?? null)
+            .exec(),
 
     /**
      * Fetch the first user matching the filter WITH its credential fields.

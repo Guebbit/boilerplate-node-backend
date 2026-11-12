@@ -17,6 +17,7 @@ import { rehostRemoteImage } from '@infrastructure/adapters/remote-image';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
 import { recordAccountAudit } from './caller';
@@ -206,7 +207,12 @@ export const linkProviderToSignedInAccount = (
                         { provider, providerId: identity.providerId, connectedAt: new Date() },
                         session
                     )
-                );
+                ).catch((error: unknown) => {
+                    // Another account took this identity between the check above and the write:
+                    // `users_oauth_identity` (unique) refuses it, the only unique index this
+                    // `$push` can hit. Answered like the check's own refusal; the spend rolled back.
+                    throw isDuplicateKey(error) ? new OAuthIdentityTakenError(provider) : error;
+                });
             })
             .then((linked) => {
                 // Lost the spend to a twin request: the link is gone, as for any spent token.

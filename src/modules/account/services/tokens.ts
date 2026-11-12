@@ -141,6 +141,9 @@ export const spendLiveToken = (
  * again on a transient error, and a mail or an audit row would go out twice. Those, the session-row
  * cleanup and the outbox wake-up all run after this resolves.
  *
+ * The outbox nudge fires for every won spend, including an `act` that announced nothing: waking
+ * the relay with nothing new to read is harmless.
+ *
  * Why not "act, then delete the token": two requests would both act (a password reset is unsafe
  * that way). Why not "delete, then act": a crash between the two burns the link for nothing.
  * See docs/modules/account-sessions.md#spending-a-link.

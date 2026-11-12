@@ -26,7 +26,11 @@ import {
 } from '@modules/users/tests/factories';
 import { verificationTokenRepository } from '../../repository';
 import { buildLoginChallenge } from '../../services/two-factor-challenge';
-import { linkProviderToSignedInAccount, startOAuthLink } from '../../services/oauth';
+import {
+    linkProviderToSignedInAccount,
+    OAuthIdentityTakenError,
+    startOAuthLink
+} from '../../services/oauth';
 import { plantToken, sessionRowsOf, tokenTypesOf } from '../factories';
 
 setupTestDb();
@@ -195,6 +199,24 @@ describe('email change confirmation link', () => {
     });
 });
 
+describe('email change confirmation link, a later write failing', () => {
+    it('leaves the address as it was when the announcing outbox row cannot be written', async () => {
+        const user = await pendingChange();
+        jest.spyOn(outboxEventModel, 'create').mockRejectedValueOnce(connectionReset());
+
+        const failed = await api()
+            .post('/account/email-change/confirm')
+            .send({ token: 'confirm-me' });
+
+        expect(failed.status).toBeGreaterThanOrEqual(500);
+        expect(await addressesOf(user.id)).toMatchObject({
+            email: 'before@example.com',
+            pendingEmail: 'after@example.com'
+        });
+        expect(await holds(user.id, 'email-change')).toBe(true);
+    });
+});
+
 describe('email change undo link', () => {
     it('stays live when the write fails, and works on retry', async () => {
         const user = await changedAccount();
@@ -245,6 +267,35 @@ describe('email change undo link', () => {
     });
 });
 
+describe('email change undo link racing a confirmation', () => {
+    it('restores the old address when the change was confirmed after the link was found', async () => {
+        const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
+        await userRepository.updateMany(
+            { _id: user.id },
+            { $set: { pendingEmail: 'after@example.com' } }
+        );
+        await plantToken(user.id, 'email-change-undo', 'undo-me');
+        // The thief confirms between the undo's lookup (still pending) and its transaction.
+        const { spend } = verificationTokenRepository;
+        jest.spyOn(verificationTokenRepository, 'spend').mockImplementationOnce((...args) =>
+            userRepository
+                .updateMany(
+                    { _id: user.id },
+                    {
+                        $set: { email: 'after@example.com', previousEmail: 'before@example.com' },
+                        $unset: { pendingEmail: '' }
+                    }
+                )
+                .then(() => spend(...args))
+        );
+
+        const response = await api().post('/account/email-change/undo').send({ token: 'undo-me' });
+
+        expect(response.status).toBe(204);
+        expect(await addressesOf(user.id)).toMatchObject({ email: 'before@example.com' });
+    });
+});
+
 describe('account restore link', () => {
     it('stays live when the write fails, and works on retry', async () => {
         const user = await lockedAccount('locked@example.com');
@@ -265,7 +316,7 @@ describe('account restore link', () => {
         expect(await storedField(user.id, 'deletedBy')).toBeUndefined();
     });
 
-    it('is not spent for an account whose grace already ran out', async () => {
+    it('refuses and burns the link once the grace ran out', async () => {
         const user = await lockedAccount('locked@example.com');
         await userRepository.updateMany(
             { _id: user.id },
@@ -276,6 +327,7 @@ describe('account restore link', () => {
         const response = await api().post('/account/restore').send({ token: 'restore-late' });
 
         expect(response.status).toBe(422);
+        expect(await holds(user.id, 'account-restore')).toBe(false);
         expect(await storedField(user.id, 'deletedBy')).toBe('owner');
     });
 });
@@ -322,6 +374,31 @@ describe('OAuth connect link', () => {
         expect(await storedField(user.id, 'oauthAccounts')).toHaveLength(1);
     });
 
+    it('answers already-linked when another account takes the identity during the write', async () => {
+        const user = await createUser({ email: 'oauth@example.com', verifiedAt: new Date() });
+        const other = await createUser({
+            email: 'other@example.com',
+            username: 'other',
+            verifiedAt: new Date()
+        });
+        const link = await startOAuthLink(user.id);
+        // The other account links the same identity after this attempt's ownership check.
+        const linkAccount = userRepository.linkOAuthAccount;
+        jest.spyOn(userRepository, 'linkOAuthAccount').mockImplementationOnce((...args) =>
+            linkAccount(other.id, {
+                provider: 'google',
+                providerId: identity.providerId,
+                connectedAt: new Date()
+            }).then(() => linkAccount(...args))
+        );
+
+        await expect(
+            linkProviderToSignedInAccount(link, user.id, 'google', identity, testCallerContext)
+        ).rejects.toBeInstanceOf(OAuthIdentityTakenError);
+
+        expect(await holds(user.id, 'oauth-link')).toBe(true);
+    });
+
     it('does not burn the link for an attempt it refuses', async () => {
         const user = await createUser({ email: 'oauth@example.com', verifiedAt: new Date() });
         const link = await startOAuthLink(user.id);
@@ -366,10 +443,32 @@ describe('password reset link', () => {
         expect(await holds(user.id, 'password')).toBe(false);
         expect(await storedField(user.id, 'password')).not.toBe(before);
     });
+
+    it('rolls the new password back when a LATER write of the same action fails', async () => {
+        const user = await createUser({ email: 'reset@example.com' });
+        const before = await storedField(user.id, 'password');
+        await plantToken(user.id, 'password', 'reset-me');
+        jest.spyOn(userRepository, 'bumpSessionEpoch').mockRejectedValueOnce(connectionReset());
+
+        const failed = await api().post('/account/password/reset/confirm').send({
+            token: 'reset-me',
+            password: REPLACEMENT_PASSWORD,
+            passwordConfirm: REPLACEMENT_PASSWORD,
+            termsAccepted: true
+        });
+
+        expect(failed.status).toBeGreaterThanOrEqual(500);
+        expect(await storedField(user.id, 'password')).toBe(before);
+        expect(await holds(user.id, 'password')).toBe(true);
+        const login = await api()
+            .post('/account/login')
+            .send({ email: user.email, password: PLAIN_PASSWORD });
+        expect(login.status).toBe(200);
+    });
 });
 
 describe('second-factor login challenge', () => {
-    it('stays live when the spend fails, and works on retry with another code', async () => {
+    it('a failed spend leaves the challenge usable', async () => {
         const { user, backupCodes } = await armedAccount();
         const loaded = await userRepository.findByIdWithCredentials(user.id);
         const { challenge } = await buildLoginChallenge(loaded!, ['pwd']);

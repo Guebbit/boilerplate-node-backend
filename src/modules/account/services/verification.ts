@@ -299,20 +299,23 @@ const swappableEmail = (user: UserDocument): string | undefined =>
  * Nothing to undo (the change was already canceled) is not an error: the account is as the caller
  * wants it.
  *
- * @param user - the link's holder, loaded with credentials (`pendingEmail`, `previousEmail`)
- * @param restores - whether the change was already confirmed, decided once before the transaction
- *   (the restore edits `user` in place, and the driver may run the transaction again)
+ * Reads the account INSIDE the transaction: whether the change was confirmed is decided from what
+ * is stored now, not from a copy taken before the spend. A confirmation that lands between the
+ * link's lookup and the spend must be restored, not skipped.
+ *
+ * @param userId - the link's holder
  * @param session - the transaction that also deletes the link
+ * @returns the saved account, or `undefined` when it no longer exists
  * @throws a duplicate-key error when another account took the previous address since
  */
-const undoWrite = (
-    user: UserDocument,
-    restores: boolean,
-    session: ClientSession
-): Promise<UserDocument> =>
-    restores
-        ? accountUserService.restorePreviousEmail(user, session)
-        : accountUserService.cancelPendingEmail(user, session);
+const undoWrite = (userId: string, session: ClientSession): Promise<UserDocument | undefined> =>
+    accountUserService.findByIdWithCredentials(userId, session).then((fresh) => {
+        if (!fresh) return undefined;
+
+        return undoRestoresPreviousEmail(emailChangeStateOf(fresh))
+            ? accountUserService.restorePreviousEmail(fresh, session)
+            : accountUserService.cancelPendingEmail(fresh, session);
+    });
 
 /**
  * `POST /account/email-verification/confirm` — spend the verification link and mark the address
@@ -363,21 +366,26 @@ export const confirmEmailChange = (
         const newEmail = swappableEmail(user);
         return spendThen(EMAIL_CHANGE_TOKEN_TYPE, token, (session) =>
             newEmail
-                ? accountUserService.applyEmailChange(user, newEmail, session)
-                : Promise.resolve(user)
-        ).then((saved) =>
-            saved
-                ? revokeFor('email-change-confirm', saved.id)
-                      .then(() =>
-                          auditProvenAddress(
-                              saved,
-                              context,
-                              accountAuditActions.AUTH_EMAIL_CHANGE_COMPLETED
-                          )
-                      )
-                      .then(() => generateSuccess(undefined, 200))
-                : refuseLink(context, 'email_change', 'account.email-change.token-not-found')
-        );
+                ? accountUserService
+                      .applyEmailChange(user, newEmail, session)
+                      .then((saved) => ({ saved, swapped: true }))
+                : Promise.resolve({ saved: user, swapped: false })
+        ).then((result) => {
+            if (!result)
+                return refuseLink(context, 'email_change', 'account.email-change.token-not-found');
+            // Nothing was swapped: no sessions to end, no address proven to audit.
+            if (!result.swapped) return generateSuccess(undefined, 200);
+
+            return revokeFor('email-change-confirm', result.saved.id)
+                .then(() =>
+                    auditProvenAddress(
+                        result.saved,
+                        context,
+                        accountAuditActions.AUTH_EMAIL_CHANGE_COMPLETED
+                    )
+                )
+                .then(() => generateSuccess(undefined, 200));
+        });
     });
 
 /**
@@ -403,12 +411,11 @@ export const undoEmailChangeByToken = (
     findLiveToken(EMAIL_CHANGE_UNDO_TOKEN_TYPE, token).then((user) =>
         user
             ? revokeFor('email-change-undo', user.id)
-                  .then(() => {
-                      const restores = undoRestoresPreviousEmail(emailChangeStateOf(user));
-                      return spendThen(EMAIL_CHANGE_UNDO_TOKEN_TYPE, token, (session) =>
-                          undoWrite(user, restores, session)
-                      );
-                  })
+                  .then(() =>
+                      spendThen(EMAIL_CHANGE_UNDO_TOKEN_TYPE, token, (session) =>
+                          undoWrite(user.id, session)
+                      )
+                  )
                   .then((saved) =>
                       saved
                           ? auditProvenAddress(
