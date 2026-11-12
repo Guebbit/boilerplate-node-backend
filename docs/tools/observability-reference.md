@@ -65,7 +65,7 @@ flowchart LR
 
 **What it does:** scrapes metrics, evaluates alert rules, forwards alerts.
 
-Repo files: [`/docker/observability/prometheus.config.yaml`](../../docker/observability/prometheus.config.yaml), [`/docker/observability/prometheus.alert-rules.yaml`](../../docker/observability/prometheus.alert-rules.yaml)
+Repo files: [`docker/observability/prometheus.config.yaml`](https://github.com/Guebbit/boilerplate-node-backend/blob/main/docker/observability/prometheus.config.yaml), [`docker/observability/prometheus.alert-rules.yaml`](https://github.com/Guebbit/boilerplate-node-backend/blob/main/docker/observability/prometheus.alert-rules.yaml)
 
 | Config section                                  | What it does                                                                                         | Why local value                                | Common tweak                   | Dev vs prod                             |
 | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------ | --------------------------------------- |
@@ -78,7 +78,7 @@ Repo files: [`/docker/observability/prometheus.config.yaml`](../../docker/observ
 
 **What it does:** groups/routes alerts to notification receivers.
 
-Repo file: [`/docker/observability/alertmanager.config.template.yaml`](../../docker/observability/alertmanager.config.template.yaml)
+Repo file: [`docker/observability/alertmanager.config.template.yaml`](https://github.com/Guebbit/boilerplate-node-backend/blob/main/docker/observability/alertmanager.config.template.yaml)
 
 | Config section                                             | What it does                       | Why local value                                  | Common tweak                     | Dev vs prod                             |
 | ---------------------------------------------------------- | ---------------------------------- | ------------------------------------------------ | -------------------------------- | --------------------------------------- |
@@ -90,7 +90,7 @@ Repo file: [`/docker/observability/alertmanager.config.template.yaml`](../../doc
 
 **What it does:** unified UI for metrics, logs, traces.
 
-Repo files: [`/docker/observability/grafana.datasources.yaml`](../../docker/observability/grafana.datasources.yaml), [`/docker/observability/grafana.dashboard-providers.yaml`](../../docker/observability/grafana.dashboard-providers.yaml), [`/docker/observability/grafana/dashboards/api-traces.json`](../../docker/observability/grafana/dashboards/api-traces.json)
+Repo files: [`docker/observability/grafana.datasources.yaml`](https://github.com/Guebbit/boilerplate-node-backend/blob/main/docker/observability/grafana.datasources.yaml), [`docker/observability/grafana.dashboard-providers.yaml`](https://github.com/Guebbit/boilerplate-node-backend/blob/main/docker/observability/grafana.dashboard-providers.yaml), [`docker/observability/grafana/dashboards/api-traces.json`](https://github.com/Guebbit/boilerplate-node-backend/blob/main/docker/observability/grafana/dashboards/api-traces.json)
 
 | Config section                    | What it does                                | Why local value                    | Common tweak                         | Dev vs prod                                |
 | --------------------------------- | ------------------------------------------- | ---------------------------------- | ------------------------------------ | ------------------------------------------ |
@@ -102,7 +102,7 @@ Repo files: [`/docker/observability/grafana.datasources.yaml`](../../docker/obse
 
 **What it does:** stores and serves distributed traces.
 
-Repo file: [`/docker/observability/tempo.config.yaml`](../../docker/observability/tempo.config.yaml)
+Repo file: [`docker/observability/tempo.config.yaml`](https://github.com/Guebbit/boilerplate-node-backend/blob/main/docker/observability/tempo.config.yaml)
 
 | Config section                         | What it does                | Why local value              | Common tweak                       | Dev vs prod                                 |
 | -------------------------------------- | --------------------------- | ---------------------------- | ---------------------------------- | ------------------------------------------- |
@@ -114,7 +114,7 @@ Repo file: [`/docker/observability/tempo.config.yaml`](../../docker/observabilit
 
 **What it does:** stores indexed logs and serves LogQL queries.
 
-Repo file: [`/docker/observability/loki.config.yaml`](../../docker/observability/loki.config.yaml)
+Repo file: [`docker/observability/loki.config.yaml`](https://github.com/Guebbit/boilerplate-node-backend/blob/main/docker/observability/loki.config.yaml)
 
 | Config section                                                   | What it does                  | Why local value                      | Common tweak                          | Dev vs prod                                  |
 | ---------------------------------------------------------------- | ----------------------------- | ------------------------------------ | ------------------------------------- | -------------------------------------------- |
@@ -127,7 +127,7 @@ Repo file: [`/docker/observability/loki.config.yaml`](../../docker/observability
 
 **What it does:** tails log files and pushes entries to Loki. The dev and production stacks load the same file.
 
-Repo file: [`/docker/observability/alloy.logs.config.alloy`](../../docker/observability/alloy.logs.config.alloy)
+Repo file: [`docker/observability/alloy.logs.config.alloy`](https://github.com/Guebbit/boilerplate-node-backend/blob/main/docker/observability/alloy.logs.config.alloy)
 
 It reads both runtimes at once, so nothing selects a config: Docker's `json-file` driver (JSON envelope) and Podman's `k8s-file` driver (CRI format). `CONTAINER_LOGS_PATH` in `.env` supplies the host log directory and defaults to docker's — see [Docker & Podman](./docker-and-podman.md).
 
@@ -142,7 +142,7 @@ It reads both runtimes at once, so nothing selects a config: Docker's `json-file
 
 **What it does:** receives telemetry, processes it, exports it to backends.
 
-Repo file: [`/docker/observability/otel-collector.config.yaml`](../../docker/observability/otel-collector.config.yaml)
+Repo file: [`docker/observability/otel-collector.config.yaml`](https://github.com/Guebbit/boilerplate-node-backend/blob/main/docker/observability/otel-collector.config.yaml)
 
 | Config section                                | What it does                                   | Why local value                        | Common tweak                       | Dev vs prod                                          |
 | --------------------------------------------- | ---------------------------------------------- | -------------------------------------- | ---------------------------------- | ---------------------------------------------------- |
@@ -155,7 +155,7 @@ Repo file: [`/docker/observability/otel-collector.config.yaml`](../../docker/obs
 - **View traces:** [Grafana](./grafana.md) → Explore → [Tempo](./tempo.md) → query `service.name="api"`. See [TraceQL](https://grafana.com/docs/tempo/latest/traceql/) for advanced queries.
 - **Query metrics:** Grafana Explore ([Prometheus](./prometheus.md)) or `http://localhost:9090` with `up{job="api"}`. See [PromQL basics](https://prometheus.io/docs/prometheus/latest/querying/basics/) for query syntax.
 - **Filter logs:** Grafana Explore ([Loki](./loki.md)) with `{job="docker"} |= "error"`. See [LogQL](https://grafana.com/docs/loki/latest/query/) for query syntax.
-- **Create alerts:** add/modify rules in [`prometheus.alert-rules.yaml`](../../docker/observability/prometheus.alert-rules.yaml), then reload/restart [Prometheus](./prometheus.md) and verify in Alertmanager UI (`http://localhost:9093`).
+- **Create alerts:** add/modify rules in [`prometheus.alert-rules.yaml`](https://github.com/Guebbit/boilerplate-node-backend/blob/main/docker/observability/prometheus.alert-rules.yaml), then reload/restart [Prometheus](./prometheus.md) and verify in Alertmanager UI (`http://localhost:9093`).
 
 ## FAQ / troubleshooting
 
