@@ -136,10 +136,17 @@ and emails, plus `export type *` from its model. See `docs/theory/strategic-ddd.
 
 ## Scope
 
-- MUST NOT preserve backward compatibility (old field names, deprecated endpoints, legacy code
-  paths, dual-write transitions) unless the user explicitly asks for it. Replace, don't shim.
-- MUST NOT leave deprecated code in place — no `@deprecated` tag kept "for later." When a change
-  supersedes something, remove it in the same change.
+- **Backward compatibility is the default.** A change keeps working for what the previous release
+  left behind:
+  - API clients, including a browser tab still running the old frontend: add fields and endpoints;
+    never rename, remove or tighten in place.
+  - Stored and in-flight data (documents, outbox rows, queued jobs, session tokens, cache entries):
+    expand → contract. Add the new shape, migrate or accept both for one release, and remove the
+    old one in the next.
+- MUST NOT keep compatibility code past that one release: no permanent field aliases, no
+  deprecated endpoints or `@deprecated` tags left "for later".
+- **Pre-release opt-out:** when the project's `HANDOFF.md` or the user's prompt says "pre-release:
+  no backward compatibility", replace instead. No shims, no bridges, no deprecation period.
 - MUST NOT build guardrails for administrators against their own choices: no repair commands, no
   boot warnings, no refusals for a lock-out or a misconfiguration (removing the last
   administrator, an odd role set-up).
