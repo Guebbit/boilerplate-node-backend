@@ -163,12 +163,10 @@ module.exports = {
             severity: 'error',
             from: {},
             /*
-             * `type-only` edges are excluded, and the exclusion is the whole reason this rule is
-             * trustworthy. `tsPreCompilationDeps` below reports the TYPE graph as well as the
-             * runtime one, and a type-only cycle is not a cycle: `import type` is erased, so
-             * `cache.ts ⇄ dependency-health.ts` — which reads as four violations — has no edge at
-             * all once the TypeScript is compiled. Left in, this rule would report eight problems
-             * that cannot be fixed and cannot happen, which is how a gate gets switched off.
+             * Runs on the RUNTIME graph, which is why a type-only cycle never shows up here:
+             * `import type` is erased by the compiler, so `cache.ts ⇄ dependency-health.ts` has no
+             * edge at all once the TypeScript is compiled. `tsPreCompilationDeps` is left off in
+             * `options` below for exactly that reason — see the comment there.
              */
             to: { circular: true }
         },
