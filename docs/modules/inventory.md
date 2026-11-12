@@ -108,6 +108,8 @@ read keeps showing `available` once the counters move here:
 3. **`products` keeps a maintained projection.** Chosen. `onHand`/`reserved` stay columns on the
    product document, but this module is still their only writer — `productService.syncStockCache`
    sets them, and nothing else may.
+   The copy is written only if newer: each level write bumps a `version`, the copy remembers the
+   version it was taken at, and an older snapshot that arrives late matches nothing.
 
 The sync on a stock write is a **plain awaited function call inside `applyTransition`**, never a
 domain event. This module deliberately has no stock event (see "The story" above): an event a

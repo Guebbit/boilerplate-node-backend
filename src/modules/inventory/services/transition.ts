@@ -35,7 +35,8 @@ export const refreshStockCache = (productId: string): Promise<void> =>
                           onHand: level.onHand,
                           reserved: level.reserved,
                           backorderLimit: level.backorderLimit,
-                          backordered: level.backordered
+                          backordered: level.backordered,
+                          version: level.version
                       })
                       .then(() => invalidateCacheTagsLogged(['products']))
                 : undefined

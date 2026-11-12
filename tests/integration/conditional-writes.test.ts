@@ -570,7 +570,7 @@ describe('the translations route of a product, fenced on the product', () => {
         const path = `/locales/translations/product/${product.id}`;
         const tag = etagOf(await api().get(path).set('Authorization', bearer));
 
-        await productRepository.syncStockCache(product.id, { onHand: 3, reserved: 1 });
+        await productRepository.syncStockCache(product.id, { onHand: 3, reserved: 1, version: 0 });
         const write = await api()
             .patch(path)
             .set('Authorization', bearer)
@@ -713,7 +713,7 @@ describe('writes that are not an edit leave the tag alone', () => {
         const path = `/products/${product.id}`;
         const tag = etagOf(await api().get(path).set('Authorization', bearer));
 
-        await productRepository.syncStockCache(product.id, { onHand: 3, reserved: 1 });
+        await productRepository.syncStockCache(product.id, { onHand: 3, reserved: 1, version: 0 });
         const write = await api()
             .patch(path)
             .set('Authorization', bearer)

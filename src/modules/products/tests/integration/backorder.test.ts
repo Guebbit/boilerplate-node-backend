@@ -193,10 +193,10 @@ describe('product.buyable_again', () => {
         const product = await createProduct({ onHand: 0 });
         const id = String(product._id);
 
-        await productService.syncStockCache(id, { onHand: 4, reserved: 0 });
-        await productService.syncStockCache(id, { onHand: 9, reserved: 0 });
-        await productService.syncStockCache(id, { onHand: 9, reserved: 9 });
-        await productService.syncStockCache(id, { onHand: 9, reserved: 0 });
+        await productService.syncStockCache(id, { onHand: 4, reserved: 0, version: 1 });
+        await productService.syncStockCache(id, { onHand: 9, reserved: 0, version: 2 });
+        await productService.syncStockCache(id, { onHand: 9, reserved: 9, version: 3 });
+        await productService.syncStockCache(id, { onHand: 9, reserved: 0, version: 4 });
 
         expect(await fired(id)).toBe(2);
     });

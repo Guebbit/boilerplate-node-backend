@@ -64,7 +64,11 @@ describe('GET /cart’s line availability', () => {
         const product = await createProduct({ onHand: 5 });
         await cartService.addItemById(user.id, String(product._id), 4);
 
-        await productService.syncStockCache(String(product._id), { onHand: 0, reserved: 0 });
+        await productService.syncStockCache(String(product._id), {
+            onHand: 0,
+            reserved: 0,
+            version: 0
+        });
 
         await expect(flagOf(user.id)).resolves.toBe('in_stock');
     });

@@ -57,6 +57,8 @@ export interface ProductRecord extends Omit<
      */
     backorderLimit?: number | null;
     backordered?: number;
+    /** The stock level version the copy above was taken at; sync-only, never returned. */
+    stockVersion?: number;
     createdAt?: Date;
     updatedAt?: Date;
     deletedAt?: Date;
@@ -77,6 +79,7 @@ export type ProductSnapshot = Omit<
     | 'reserved'
     | 'backorderLimit'
     | 'backordered'
+    | 'stockVersion'
     | 'active'
     | 'purchasable'
     | 'allowBackorder'
@@ -317,6 +320,12 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             default: 0,
             min: 0
         },
+        // Version of the stock level the counters were copied at. `syncStockCache` writes only a
+        // newer one. Default -1: a fresh product is older than the level's first snapshot (0).
+        stockVersion: {
+            type: Number,
+            default: -1
+        },
         // No default: a product with no description has no field, never `''`.
         description: {
             type: String
@@ -493,6 +502,7 @@ const applyProductAvailability = (serialized: Record<string, unknown>) => {
     // Read above, never returned: the contract's `Product` does not carry the allowance.
     delete serialized.backorderLimit;
     delete serialized.backordered;
+    delete serialized.stockVersion;
 };
 
 /**

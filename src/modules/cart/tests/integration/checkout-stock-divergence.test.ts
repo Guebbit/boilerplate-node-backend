@@ -98,7 +98,11 @@ describe('the cache says there is stock, the level collection says there is not'
         // The cache believes nothing is reserved; the level knows 8 of 10 are held for others.
         const { user, product } = await shopperBuyingThree(10);
         await forceStockLevel(product._id, 10, 8);
-        await productRepository.syncStockCache(String(product._id), { onHand: 10, reserved: 0 });
+        await productRepository.syncStockCache(String(product._id), {
+            onHand: 10,
+            reserved: 0,
+            version: 0
+        });
 
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 

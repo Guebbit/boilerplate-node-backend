@@ -572,7 +572,11 @@ describe('a catalogue stock cache that sits low', () => {
         await giveAddress(user.id);
         const product = await createProduct({ onHand: 10 });
         // The cache lags the ledger (a missed sync): it says nothing is left, the level says 10.
-        await productService.syncStockCache(String(product._id), { onHand: 0, reserved: 0 });
+        await productService.syncStockCache(String(product._id), {
+            onHand: 0,
+            reserved: 0,
+            version: 0
+        });
         await cartService.addItemById(user.id, String(product._id), 3);
         await cartRepository.setShippingMethod(user.id, 'pickup');
 

@@ -277,7 +277,8 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
                         reserved: 0,
                         available: 0,
                         backorderLimit: 0,
-                        backordered: 0
+                        backordered: 0,
+                        version: 0
                     }
                 },
                 { upsert: true, session }
@@ -353,7 +354,8 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
                         onHand: delta.onHandDelta,
                         reserved: delta.reservedDelta,
                         backordered: delta.backorderedDelta,
-                        available: delta.onHandDelta - delta.reservedDelta
+                        available: delta.onHandDelta - delta.reservedDelta,
+                        version: 1
                     }
                 },
                 { timestamps: false, session }
@@ -414,6 +416,7 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
                 { productId: toObjectId(productId) },
                 {
                     $set: { backorderLimit },
+                    $inc: { version: 1 },
                     $setOnInsert: { onHand: 0, reserved: 0, available: 0, backordered: 0 }
                 },
                 { upsert: true }

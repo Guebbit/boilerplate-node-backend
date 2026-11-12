@@ -57,6 +57,8 @@ export interface StockCounters {
     backorderLimit?: number | null;
     /** Units already claimed against that allowance. */
     backordered?: number;
+    /** The stock level's `version` this snapshot was read at; the copy is written only if newer. */
+    version: number;
 }
 
 /** The catalogue's repository: base CRUD from the factory, extended with scoping, facets, and the stock-cache mirror. */
@@ -202,20 +204,23 @@ export const productRepository: Repository<ProductDocument, Product> & {
             })),
 
     /**
-     * Mirror `@modules/inventory`'s stock level onto this document — an unconditional `$set`, never
-     * guarded, because this write does not decide anything: `@modules/inventory` already decided,
-     * this only copies the answer. `timestamps: false` — a stock change isn't an edit an admin made.
+     * Mirror `@modules/inventory`'s stock level onto this document. It decides nothing:
+     * `@modules/inventory` already decided, this only copies the answer. The one guard is
+     * ordering: the copy is written only if `counters.version` is newer than `stockVersion`, so a
+     * slow older snapshot cannot overwrite a newer one (lost update). `timestamps: false` — a
+     * stock change isn't an edit an admin made.
      *
      * @param productId - the product
      * @param counters - the values to write, verbatim
      * @param session - the transaction the write joins, when the caller announces in it
-     * @returns the product as it stood BEFORE the write, `null` when there is none
+     * @returns the product as it stood BEFORE the write, `null` when there is none or the
+     *   snapshot was stale and nothing was written
      */
     syncStockCache: (productId, counters, session) =>
         productModel
             .findOneAndUpdate(
-                { _id: toObjectId(productId) },
-                { $set: counters },
+                { _id: toObjectId(productId), stockVersion: { $not: { $gte: counters.version } } },
+                { $set: { ...counters, stockVersion: counters.version } },
                 { timestamps: false, returnDocument: 'before', session }
             )
             .lean<Lean<ProductDocument> | null>()

@@ -137,6 +137,11 @@ export interface StockLevelDocument extends Document {
      * `applyTransition`, like the other counters — a preorder hold moves this and never `reserved`.
      */
     backordered: number;
+    /**
+     * Counts every write to this row. The catalogue's copy carries the version it was taken at,
+     * so a slower, older snapshot can never overwrite a newer one.
+     */
+    version: number;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -181,6 +186,11 @@ export const stockLevelSchema = new Schema<StockLevelDocument>(
             min: 0
         },
         backordered: {
+            type: Number,
+            default: 0
+        },
+        // Bumped by `$inc` in every level write (`repository.ts`), never set directly.
+        version: {
             type: Number,
             default: 0
         }
