@@ -7,6 +7,10 @@ export default withMermaid(
     defineConfig({
         title: 'Boilerplate Node Backend',
         description: 'ADHD-friendly docs for the Express + MongoDB + Mongoose REST boilerplate',
+        // VitePress reads a link with an extension it does not know (`.alloy`) as a page link and
+        // fails the build; `check-references` already proves the linked repo file exists.
+        // https://vitepress.dev/reference/site-config#ignoredeadlinks
+        ignoreDeadLinks: [/\.alloy$/],
         themeConfig: {
             search: {
                 provider: 'local'
