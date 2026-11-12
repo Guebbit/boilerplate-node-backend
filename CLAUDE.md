@@ -64,8 +64,8 @@ when you hit one, not because the doc is the guard.
 - MUST apply SOLID principles.
 - MUST keep functions focused — one responsibility each.
 - MUST keep nesting ≤ 3 levels; extract a helper for anything deeper. `max-depth` enforces the
-  block half of this (4 in tests, where an exhaustive table walk is the clearest form). Nested
-  callbacks are not counted by a rule — chain, or name the step.
+  block half of this (4 in tests, where an exhaustive table walk is the clearest form);
+  `max-nested-callbacks` caps callbacks at 4 in production code — chain, or name the step.
 - MUST prefer pure functions and shared abstractions over duplicated inline logic.
 - MUST NOT extract a function, file or wrapper unless it hides real complexity, names a domain
   rule, is a boundary (port, adapter, third-party call), or has ≥ 2 callers today. A three-line
@@ -385,7 +385,7 @@ Conventional Commits, enforced by commitlint on the `commit-msg` hook
 
 - `type(scope): subject` — lowercase, imperative, no trailing full stop. Lengths are commitlint's
   business, not this file's; it will tell you.
-- Types: `feat` `fix` `refactor` `perf` `test` `docs` `build` `ci` `chore` `revert`.
+- Types: `feat` `fix` `refactor` `perf` `test` `docs` `style` `build` `ci` `chore` `revert`.
 - Scope is the module or area it lands in: `feat(antibot):`, `fix(rate-limit):`,
   `refactor(testing):`.
 - The subject says what the change **does for the system**, not which files moved —
@@ -400,6 +400,9 @@ Conventional Commits, enforced by commitlint on the `commit-msg` hook
 - MUST commit with the pathspec, `git commit -m "…" -- <paths>`, not bare `git commit` after `git add`.
   A commit the hook rejects leaves its files staged, and the retry then commits them together with
   whatever else got staged since. After a failed hook, run `git status` before retrying.
+  - Untracking a file (`git rm --cached`) is the one exception: a pathspec commit re-adds the
+    working-tree copy. Check `git diff --cached --name-status` shows only the deletions, then run a
+    plain `git commit`.
 - The container engine here is **podman** (rootless); there is no Docker. `docker` on this box is
   the podman shim, `CONTAINER_ENGINE` defaults to `podman`, and a hung `docker run` means the
   podman service is wedged, not that the image is missing.
