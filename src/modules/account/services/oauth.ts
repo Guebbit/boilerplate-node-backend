@@ -17,6 +17,7 @@ import { rehostRemoteImage } from '@infrastructure/adapters/remote-image';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
 import { recordAccountAudit } from './caller';
@@ -26,7 +27,7 @@ import { OAUTH_LINK_TOKEN_TYPE, OAUTH_LINK_TTL_MS } from '../token-types';
 import { greetableName, recipientLocale, signInMethodChangedEmail } from '../emails';
 import type { SignInMethodChange } from '../emails';
 import { sendAccountMail } from './mail';
-import { issueToken, redeemLiveToken } from './tokens';
+import { issueToken, findLiveToken, spendThen } from './tokens';
 
 /**
  * The provider vouches for this identity, but its email matches an EXISTING account whose own
@@ -186,7 +187,9 @@ export const linkProviderToSignedInAccount = (
     identity: OAuthIdentity,
     context: CallerContext
 ): Promise<UserDocument> =>
-    redeemLiveToken(OAUTH_LINK_TOKEN_TYPE, linkToken ?? '').then((user) => {
+    // Every refusal below comes BEFORE the spend, so a refused attempt leaves the token live; the
+    // link and the spend then commit together or not at all.
+    findLiveToken(OAUTH_LINK_TOKEN_TYPE, linkToken ?? '').then((user) => {
         if (!user) throw new OAuthLinkExpiredError();
         // Refused as an expired attempt: the FE has one message for it, and a new reason code would
         // be a contract change. A session that ended inside the five minutes fails the link too.
@@ -198,24 +201,32 @@ export const linkProviderToSignedInAccount = (
             .then((owner) => {
                 if (owner && owner.id !== user.id) throw new OAuthIdentityTakenError(provider);
 
-                return accountUserService
-                    .linkOAuthAccount(user.id, {
-                        provider,
-                        providerId: identity.providerId,
-                        connectedAt: new Date()
-                    })
-                    .then((linked) => {
-                        if (!linked) return user;
+                return spendThen(OAUTH_LINK_TOKEN_TYPE, linkToken ?? '', (session) =>
+                    accountUserService.linkOAuthAccount(
+                        user.id,
+                        { provider, providerId: identity.providerId, connectedAt: new Date() },
+                        session
+                    )
+                ).catch((error: unknown) => {
+                    // Another account took this identity between the check above and the write:
+                    // `users_oauth_identity` (unique) refuses it, the only unique index this
+                    // `$push` can hit. Answered like the check's own refusal; the spend rolled back.
+                    throw isDuplicateKey(error) ? new OAuthIdentityTakenError(provider) : error;
+                });
+            })
+            .then((linked) => {
+                // Lost the spend to a twin request: the link is gone, as for any spent token.
+                if (linked === undefined) throw new OAuthLinkExpiredError();
+                if (!linked) return user;
 
-                        return recordAccountAudit(context, user.id, {
-                            action: accountAuditActions.AUTH_OAUTH_LINKED,
-                            outcome: 'success',
-                            metadata: { via: provider }
-                        }).then(() => {
-                            notifySignInMethod(user, 'linked', provider, context);
-                            return user;
-                        });
-                    });
+                return recordAccountAudit(context, user.id, {
+                    action: accountAuditActions.AUTH_OAUTH_LINKED,
+                    outcome: 'success',
+                    metadata: { via: provider }
+                }).then(() => {
+                    notifySignInMethod(user, 'linked', provider, context);
+                    return user;
+                });
             });
     });
 

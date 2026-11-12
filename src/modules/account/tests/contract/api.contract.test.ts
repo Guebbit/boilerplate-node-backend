@@ -1466,7 +1466,7 @@ describe('POST /account/email-change and /account/email-change/confirm', () => {
      * still collides is a genuine concurrent race that check cannot see (two requests landing
      * within the same brief window), which a sequential test cannot reproduce deterministically.
      * The other account's email is forced straight through the repository instead, standing in
-     * for whichever write actually won that race — what's under test is `completeEmailChange`'s
+     * for whichever write actually won that race — what's under test is `confirmEmailChange`'s
      * handling of the resulting E11000, not how the collision came about.
      */
     it('answers 409 when the new address was claimed by someone else in the meantime', async () => {

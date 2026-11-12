@@ -19,7 +19,7 @@ import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { MfaChallenge, TwoFactorDelivery } from '@types';
 import { accountAuditActions } from '../audit';
-import { issueToken, findLiveTokenEntry, findLiveToken, spendLiveToken } from './tokens';
+import { issueToken, findLiveTokenEntry, findLiveToken, spendThen } from './tokens';
 import { MFA_CHALLENGE_TOKEN_TYPE } from '../token-types';
 import { armedEntries, audited, deliverArmedCode, summarize } from './two-factor-outcomes';
 import { verifyArmedFactor, settleVerdict } from './two-factor-lockout';
@@ -51,7 +51,7 @@ export const MFA_CHALLENGE_DELIVERED_TTL_MS = 10 * MINUTE_MS;
  *
  * The challenge itself is the SAME single-use, revocable, hashed-at-rest mechanism
  * `password-reset` and account-deletion confirmation use (`verificationtokens`), not a
- * JWT: `verifyLoginChallenge` spends it via `spendLiveToken` on a right code, so a second
+ * JWT: `verifyLoginChallenge` spends it via `spendThen` on a right code, so a second
  * presentation of an already-answered challenge is refused outright, not merely re-checked.
  *
  * @param user - the account whose FIRST factor just checked out, with credentials loaded
@@ -122,12 +122,15 @@ const redeemChallenge = (
     amr: VerifiedChallenge['amr'],
     challenge: string
 ): Promise<ResponseSuccess<VerifiedChallenge> | ResponseReject> =>
-    spendLiveToken(MFA_CHALLENGE_TOKEN_TYPE, challenge).then((spentByThisRequest) =>
-        spentByThisRequest
-            ? accountUserService
-                  .persistTwoFactorMethods(user)
-                  .then((saved) => generateSuccess({ user: saved, amr }))
-            : generateReject(401, [t('account.two-factor.challenge-invalid')])
+    // No action of its own to commit with the spend: the second factor was already proven and
+    // consumed, each by its own atomic write.
+    spendThen(MFA_CHALLENGE_TOKEN_TYPE, challenge, () => Promise.resolve(true)).then(
+        (spentByThisRequest) =>
+            spentByThisRequest
+                ? accountUserService
+                      .persistTwoFactorMethods(user)
+                      .then((saved) => generateSuccess({ user: saved, amr }))
+                : generateReject(401, [t('account.two-factor.challenge-invalid')])
     );
 
 /**

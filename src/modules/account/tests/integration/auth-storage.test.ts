@@ -285,7 +285,9 @@ describe('verificationTokenRepository.findLive / spend', () => {
         await plantToken(user.id, 'password', 'one-shot');
 
         const results = await raceN(RACE_SIZE, () =>
-            verificationTokenRepository.spend('password', hashToken('one-shot'))
+            withTransaction((session) =>
+                verificationTokenRepository.spend('password', hashToken('one-shot'), session)
+            )
         );
 
         expect(
@@ -298,7 +300,9 @@ describe('verificationTokenRepository.findLive / spend', () => {
         await plantToken(user.id, 'mfa-challenge', 'shared');
 
         await expect(
-            verificationTokenRepository.spend('password', hashToken('shared'))
+            withTransaction((session) =>
+                verificationTokenRepository.spend('password', hashToken('shared'), session)
+            )
         ).resolves.toBe(false);
         expect(await tokenRowsOf(user.id)).toHaveLength(1);
     });

@@ -9,11 +9,19 @@
  * newest email is the one that works" and a re-send never confuses the user.
  */
 
+import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import { accountConfig } from '../config';
 import { type UserDocument } from '@modules/users';
 import { accountUserService } from '@modules/users/friends/account';
-import { issueToken, tokenSentAt, redeemLiveToken, refuseLink } from './tokens';
+import {
+    issueToken,
+    tokenSentAt,
+    findLiveToken,
+    redeemLiveToken,
+    spendThen,
+    refuseLink
+} from './tokens';
 import { verifyRequestEmail, recipientLocale, greetableName } from '../emails';
 import { sendAccountMail } from './mail';
 import { revokeFor } from './revocation';
@@ -243,7 +251,7 @@ export const resendPendingEmailVerificationFor = (
  *
  * Mutates `verifiedAt` on the document, unpersisted — the caller's own `save` covers it.
  * `password-reset.ts#markResetCompleted` is the one caller, and the reset passes that to
- * `writePassword` as `beforeSave`, so a verification lands in the same write as the new password —
+ * `passwordWrite` as `beforeSave`, so a verification lands in the same write as the new password —
  * a spent reset token proves the same mailbox a verify token does. `completeEmailVerification`/
  * `completeEmailChange` below do NOT call this: they call the equivalent `accountUserService` operation
  * directly, which mutates and persists in one step.
@@ -255,8 +263,8 @@ export const markVerified = (user: UserDocument): void => {
 };
 
 /**
- * Records that `user`'s address has been proven — signup verification or an email change, whoever
- * calls this.
+ * Record that `user`'s address has been proven — signup verification or an email change, whoever
+ * calls this. Runs after the transaction that proved it has committed.
  * @param user - the account whose address was just proven
  * @param context - the caller context, for the audit record
  * @param action - which flow this proof completes
@@ -270,92 +278,50 @@ const auditProvenAddress = (
     recordAccountAudit(context, user.id, { action, outcome: 'success' }).then(() => user);
 
 /**
- * Spend a verification token and mark the account verified.
- * `postVerifyConfirm` already found and spent the token — the race is settled by the atomic
- * delete in `spendLiveToken` — so this is deliberately just the write and its emit, not a
- * second copy of that check. See `./tokens` for why finding and spending are two calls.
- * @internal Marks an address verified with no token check; only `confirmEmailVerification` may, so it stays off `accountService`.
+ * The address an `email-change` link swaps in, or `undefined` when there is nothing to swap.
+ * Defensive: `findLiveToken` only returns a holder of a live `email-change` token. Issuing one
+ * always sets `pendingEmail` first, and cancelling one revokes it before clearing `pendingEmail`
+ * (`cancelPendingEmailChange`) — the table refuses `confirm` outside a caller bug.
+ *
+ * Read ONCE, before the transaction: the swap edits `user` in place and the driver may run the
+ * transaction again, by which time the copy no longer says "pending".
+ *
+ * @param user - the link's holder, loaded with credentials (`pendingEmail`)
  */
-export const completeEmailVerification = (
-    user: UserDocument,
-    context: CallerContext
-): Promise<UserDocument> =>
-    accountUserService
-        .markEmailVerified(user)
-        .then((saved) =>
-            auditProvenAddress(saved, context, accountAuditActions.AUTH_EMAIL_VERIFY_COMPLETED)
-        );
+const swappableEmail = (user: UserDocument): string | undefined =>
+    emailChangeNext(emailChangeStateOf(user), 'confirm') === undefined
+        ? undefined
+        : user.pendingEmail;
 
 /**
- * Spend an `email-change` token: swap `pendingEmail` into `email`, mark the account verified —
- * the new address just proved itself — and revoke every refresh token. `postEmailChangeConfirm`
- * already found and spent the token before calling this, same split as
- * {@link completeEmailVerification}.
+ * The write of an undo link: put the account back as it was before the change. While the change is
+ * still pending it is canceled; once the new address was confirmed the previous one is restored.
+ * Nothing to undo (the change was already canceled) is not an error: the account is as the caller
+ * wants it.
  *
- * The revoke is deliberate: an email change is the stronger takeover primitive of the two, and
- * this is the same treatment `writePassword` already gives a changed password
- * (docs/modules/account.md#proving-an-address). The epoch moves in the swap's own save, so no
- * failing second write can leave the old sessions live; only the refresh-token cleanup is separate.
- * @param user - the token's holder, loaded with credentials (`pendingEmail`)
- * @param context - the caller context, for the audit record
- * @internal Swaps the address with no token check; only `confirmEmailChange` may, so it stays off `accountService`.
- */
-export const completeEmailChange = (
-    user: UserDocument,
-    context: CallerContext
-): Promise<UserDocument> => {
-    const newEmail = user.pendingEmail;
-    // Defensive: `findLiveToken` only returns a holder of a live `email-change` token. Issuing one
-    // always sets `pendingEmail` first, and cancelling one revokes it before clearing `pendingEmail`
-    // (`cancelPendingEmailChange`) — the table refuses `confirm` outside a caller bug.
-    if (emailChangeNext(emailChangeStateOf(user), 'confirm') === undefined || !newEmail)
-        return Promise.resolve(user);
-
-    return accountUserService
-        .applyEmailChange(user, newEmail)
-        .then((saved) => revokeFor('email-change-confirm', saved.id).then(() => saved))
-        .then((saved) =>
-            auditProvenAddress(saved, context, accountAuditActions.AUTH_EMAIL_CHANGE_COMPLETED)
-        );
-};
-
-/**
- * Spend an undo link's work: put the account back as it was before the change. While the change is
- * still pending it is canceled and its confirmation link dies; once the new address was confirmed
- * the previous one is restored. Either way every session ends — the owner is saying "this was not
- * me", so what a thief holds must stop working. Nothing to undo (the change was already canceled)
- * is not an error: the account is as the caller wants it.
+ * Reads the account INSIDE the transaction: whether the change was confirmed is decided from what
+ * is stored now, not from a copy taken before the spend. A confirmation that lands between the
+ * link's lookup and the spend must be restored, not skipped.
  *
- * `postEmailChangeUndo` already found and spent the token, the same split as
- * {@link completeEmailChange}.
- *
- * @param user - the token's holder, loaded with credentials (`pendingEmail`, `previousEmail`)
- * @param context - the caller context, for the audit record
+ * @param userId - the link's holder
+ * @param session - the transaction that also deletes the link
+ * @returns the saved account, or `undefined` when it no longer exists
  * @throws a duplicate-key error when another account took the previous address since
- * @internal Restores the previous address with no token check; only `undoEmailChangeByToken` may, so it stays off `accountService`.
  */
-export const undoEmailChange = (
-    user: UserDocument,
-    context: CallerContext
-): Promise<UserDocument> =>
-    // The sessions end FIRST, as their own write: the undo token is already spent, so a restore
-    // that fails (409) must not leave a thief signed in with no way for the owner to retry. Every
-    // pending link dies with them, the confirmation link included: it would swap back in the
-    // address the owner just refused.
-    revokeFor('email-change-undo', user.id)
-        .then(() =>
-            undoRestoresPreviousEmail(emailChangeStateOf(user))
-                ? accountUserService.restorePreviousEmail(user)
-                : accountUserService.cancelPendingEmail(user)
-        )
-        .then((saved) =>
-            auditProvenAddress(saved, context, accountAuditActions.AUTH_EMAIL_CHANGE_UNDONE)
-        );
+const undoWrite = (userId: string, session: ClientSession): Promise<UserDocument | undefined> =>
+    accountUserService.findByIdWithCredentials(userId, session).then((fresh) => {
+        if (!fresh) return undefined;
+
+        return undoRestoresPreviousEmail(emailChangeStateOf(fresh))
+            ? accountUserService.restorePreviousEmail(fresh, session)
+            : accountUserService.cancelPendingEmail(fresh, session);
+    });
 
 /**
- * `POST /account/email-verification/confirm` — spend the verification link and mark the address verified.
- * Find then spend: the find is a read two simultaneous clicks both pass; only the atomic spend
- * picks a winner, and the loser gets the same "token not found" an invented token would.
+ * `POST /account/email-verification/confirm` — spend the verification link and mark the address
+ * verified, in one transaction: a failing write leaves the link live for a retry. Of two
+ * simultaneous clicks only one wins the spend; the loser gets the same "token not found" an
+ * invented token would.
  *
  * @param token - the token from the mailed link
  * @param context - the caller
@@ -365,36 +331,73 @@ export const confirmEmailVerification = (
     token: string,
     context: CallerContext
 ): Promise<ResponseSuccess<undefined> | ResponseReject> =>
-    redeemLiveToken(EMAIL_VERIFY_TOKEN_TYPE, token).then((user) =>
-        user
-            ? completeEmailVerification(user, context).then(() => generateSuccess(undefined, 200))
+    redeemLiveToken(EMAIL_VERIFY_TOKEN_TYPE, token, (user, session) =>
+        accountUserService.markEmailVerified(user, session)
+    ).then((saved) =>
+        saved
+            ? auditProvenAddress(
+                  saved,
+                  context,
+                  accountAuditActions.AUTH_EMAIL_VERIFY_COMPLETED
+              ).then(() => generateSuccess(undefined, 200))
             : refuseLink(context, 'email_verify', 'account.verify.token-not-found')
     );
 
 /**
  * `POST /account/email-change/confirm` — spend the `email-change` link and swap `pendingEmail` into
- * `email`. A `verify` token never matches this type: the two prove different addresses and must
- * not do each other's work.
+ * `email`, in one transaction. A `verify` token never matches this type: the two prove different
+ * addresses and must not do each other's work. Once committed, the session rows are cleaned up and
+ * the proof audited.
  *
  * @param token - the token from the mailed link
  * @param context - the caller
  * @returns success, or a 422 for a link that is unknown, expired or already used
- * @throws a duplicate-key error when another account took the new address meanwhile
+ * @throws a duplicate-key error when another account took the new address meanwhile; the link
+ *   stays live
  */
 export const confirmEmailChange = (
     token: string,
     context: CallerContext
 ): Promise<ResponseSuccess<undefined> | ResponseReject> =>
-    redeemLiveToken(EMAIL_CHANGE_TOKEN_TYPE, token).then((user) =>
-        user
-            ? completeEmailChange(user, context).then(() => generateSuccess(undefined, 200))
-            : refuseLink(context, 'email_change', 'account.email-change.token-not-found')
-    );
+    findLiveToken(EMAIL_CHANGE_TOKEN_TYPE, token).then((user) => {
+        if (!user)
+            return refuseLink(context, 'email_change', 'account.email-change.token-not-found');
+
+        const newEmail = swappableEmail(user);
+        return spendThen(EMAIL_CHANGE_TOKEN_TYPE, token, (session) =>
+            newEmail
+                ? accountUserService
+                      .applyEmailChange(user, newEmail, session)
+                      .then((saved) => ({ saved, swapped: true }))
+                : Promise.resolve({ saved: user, swapped: false })
+        ).then((result) => {
+            if (!result)
+                return refuseLink(context, 'email_change', 'account.email-change.token-not-found');
+            // Nothing was swapped: no sessions to end, no address proven to audit.
+            if (!result.swapped) return generateSuccess(undefined, 200);
+
+            return revokeFor('email-change-confirm', result.saved.id)
+                .then(() =>
+                    auditProvenAddress(
+                        result.saved,
+                        context,
+                        accountAuditActions.AUTH_EMAIL_CHANGE_COMPLETED
+                    )
+                )
+                .then(() => generateSuccess(undefined, 200));
+        });
+    });
 
 /**
  * `POST /account/email-change/undo` — spend the undo link mailed to the OLD address and put the
  * account back as it was. Refusals are recorded like every other flow's: the endpoint is public
  * and the token is the credential.
+ *
+ * Order: find, end every session, then spend and restore in one transaction. The owner is saying
+ * "this was not me", so what a thief holds must stop working even if the restore then fails; every
+ * pending link dies with the sessions, the confirmation link included (it would swap back in the
+ * address the owner just refused). A failed restore (409) rolls the spend back, so the undo link
+ * stays live for a retry.
  *
  * @param token - the token from the mailed link
  * @param context - the caller
@@ -405,8 +408,26 @@ export const undoEmailChangeByToken = (
     token: string,
     context: CallerContext
 ): Promise<ResponseSuccess<undefined> | ResponseReject> =>
-    redeemLiveToken(EMAIL_CHANGE_UNDO_TOKEN_TYPE, token).then((user) =>
+    findLiveToken(EMAIL_CHANGE_UNDO_TOKEN_TYPE, token).then((user) =>
         user
-            ? undoEmailChange(user, context).then(() => generateSuccess(undefined, 200))
+            ? revokeFor('email-change-undo', user.id)
+                  .then(() =>
+                      spendThen(EMAIL_CHANGE_UNDO_TOKEN_TYPE, token, (session) =>
+                          undoWrite(user.id, session)
+                      )
+                  )
+                  .then((saved) =>
+                      saved
+                          ? auditProvenAddress(
+                                saved,
+                                context,
+                                accountAuditActions.AUTH_EMAIL_CHANGE_UNDONE
+                            ).then(() => generateSuccess(undefined, 200))
+                          : refuseLink(
+                                context,
+                                'email_change_undo',
+                                'account.email-change.token-not-found'
+                            )
+                  )
             : refuseLink(context, 'email_change_undo', 'account.email-change.token-not-found')
     );

@@ -339,7 +339,7 @@ The challenge is a single-use, revocable, hashed-at-rest token — the same `ver
 `password-reset` and account-deletion confirmation use (`account/services/tokens.ts#issueToken`), not a JWT — so
 there is no shared secret to keep straight from an access token: it simply fails ordinary token
 verification. `POST /account/login/2fa` spends it the moment a right code arrives
-(`spendLiveToken`), so a second presentation of an already-answered challenge is refused outright,
+(`spendThen`), so a second presentation of an already-answered challenge is refused outright,
 not merely re-checked. It lives 5 minutes for a device-only account and **10** for one with a
 delivered method armed, because a mailed code has an SMTP queue and an app switch to survive.
 

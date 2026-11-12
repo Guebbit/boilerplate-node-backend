@@ -14,6 +14,7 @@ import { systemCallerContext } from '@kernel/permissions';
 import { createUser, userRepository } from '@modules/users/tests/factories';
 import { accountUserService } from '@modules/users/friends/account';
 import { RACE_SIZE } from '@tests/race';
+import { withTransaction } from '@infrastructure/runtime/database';
 
 setupTestDb();
 
@@ -49,7 +50,13 @@ describe('restore against the purge at the boundary', () => {
                         new Date()
                     ),
                     // A node whose clock is a second behind still sees the grace running.
-                    accountUserService.restoreOwnAccount(user, new Date(purgeAt.getTime() - 1))
+                    withTransaction((session) =>
+                        accountUserService.restoreOwnAccount(
+                            user,
+                            new Date(purgeAt.getTime() - 1),
+                            session
+                        )
+                    )
                 ])
             )
         );

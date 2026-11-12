@@ -130,20 +130,15 @@ export const scheduleOwnDeletion = (
  *
  * @param user - the account to restore
  * @param now - the moment to judge `purgeAt` against
- * @param alsoInTransaction - a write that must commit with the restore or not at all
+ * @param session - the caller's transaction: the restore joins it, and so does the caller's own
+ *   write (`account`'s erasure-ledger row, the spent link)
  * @returns whether THIS call restored it; `false` once the purge is due, or if another restore won
  */
 export const restoreOwnAccount = (
     user: UserDocument,
-    now: Date = new Date(),
-    alsoInTransaction?: InTransaction
-): Promise<boolean> =>
-    withTransaction((session) =>
-        userRepository.restoreScheduledDeletion(user.id, now, session).then((restored) => {
-            if (!restored || !alsoInTransaction) return restored;
-            return alsoInTransaction(session).then(() => restored);
-        })
-    );
+    now: Date,
+    session: ClientSession
+): Promise<boolean> => userRepository.restoreScheduledDeletion(user.id, now, session);
 
 /**
  * Hard-delete an account whose owner-scheduled grace has run out: the purge job's door. The first

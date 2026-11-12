@@ -7,6 +7,7 @@
  * See: docs/theory/data-retention.md#self-deletion-a-grace-under-one-month
  */
 
+import type { ClientSession } from 'mongoose';
 import { type UserDocument } from '@modules/users';
 import { accountUserService } from '@modules/users/friends/account';
 import type { CallerContext } from '@types';
@@ -108,37 +109,42 @@ export const scheduleAccountDeletion = (
 };
 
 /**
- * Cancel a scheduled deletion on the owner's behalf: clear the lock, drop any live restore link,
- * record it and mail the confirmation. A no-op answering `false` once the grace has run out.
+ * The writes of a restore, for a transaction that also spends the proof (the mailed link or the
+ * sign-in claim check): clear the lock, and record the cancellation in the erasure ledger. Commit
+ * together, or neither.
  *
  * Restoring does not sign anyone in or revive a session: the epoch moved at the lock stays.
  *
  * @param user - the locked account
+ * @param restoredAt - one clock: the lock and the ledger row carry the same instant
+ * @returns a write to hand to the spending transaction; it answers whether THIS call restored the
+ *   account, `false` once the grace has run out or another restore won
+ */
+export const restoreWrites =
+    (user: UserDocument, restoredAt: Date) =>
+    (session: ClientSession): Promise<boolean> =>
+        accountUserService
+            .restoreOwnAccount(user, restoredAt, session)
+            .then((restored) =>
+                restored ? recordCancellation(user.id, restoredAt, session).then(() => true) : false
+            );
+
+/**
+ * What follows a committed restore: drop any live restore link, then audit, count and mail it.
+ * Housekeeping once the lock is cleared, so it runs after the commit.
+ *
+ * @param user - the restored account
  * @param via - which proof the owner gave
  * @param context - the caller
- * @returns whether THIS call restored the account
  */
-export const restoreAccount = (
+export const finishRestore = (
     user: UserDocument,
     via: RestoreVia,
     context: CallerContext
-): Promise<boolean> => {
-    // One clock: the lock and the ledger row carry the same instant.
-    const restoredAt = new Date();
-    // The ledger row joins the restore's transaction: committed together, or neither.
-    return accountUserService
-        .restoreOwnAccount(user, restoredAt, (session) =>
-            recordCancellation(user.id, restoredAt, session)
-        )
-        .then((restored) => {
-            if (!restored) return false;
-
-            return removeTokens(user.id, [ACCOUNT_RESTORE_TOKEN_TYPE]).then(() => {
-                announceRestored(user, via, context);
-                return true;
-            });
-        });
-};
+): Promise<void> =>
+    removeTokens(user.id, [ACCOUNT_RESTORE_TOKEN_TYPE]).then(() => {
+        announceRestored(user, via, context);
+    });
 
 /**
  * The record of a restore: audit row, analytics event, metric and the mail. One place, so the
@@ -177,7 +183,8 @@ const announceRestored = (
 };
 
 /**
- * `POST /account/restore` — spend the mailed link and cancel the deletion. Does not sign in.
+ * `POST /account/restore` — spend the mailed link and cancel the deletion, in one transaction: a
+ * failing write leaves the link live for a retry. Does not sign in.
  *
  * @param token - the token from the mailed link
  * @param context - the caller
@@ -186,16 +193,18 @@ const announceRestored = (
 export const restoreAccountByLink = (
     token: string,
     context: CallerContext
-): Promise<ResponseSuccess<undefined> | ResponseReject> =>
-    redeemLiveToken(ACCOUNT_RESTORE_TOKEN_TYPE, token).then((user) =>
-        user
-            ? restoreAccount(user, 'link', context).then((restored) =>
-                  restored
-                      ? generateSuccess(undefined, 200)
-                      : refuseLink(context, 'account_restore', 'account.delete.token-not-found')
+): Promise<ResponseSuccess<undefined> | ResponseReject> => {
+    const restoredAt = new Date();
+    return redeemLiveToken(ACCOUNT_RESTORE_TOKEN_TYPE, token, (user, session) =>
+        restoreWrites(user, restoredAt)(session).then((restored) => ({ user, restored }))
+    ).then((outcome) =>
+        outcome?.restored
+            ? finishRestore(outcome.user, 'link', context).then(() =>
+                  generateSuccess(undefined, 200)
               )
             : refuseLink(context, 'account_restore', 'account.delete.token-not-found')
     );
+};
 
 /**
  * Staff canceled a deletion through `users`: drop the restore link, which has nothing left to

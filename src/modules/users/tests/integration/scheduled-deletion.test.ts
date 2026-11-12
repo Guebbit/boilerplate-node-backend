@@ -11,6 +11,7 @@ import { accountUserService } from '../../friends/account';
 import { isAuthenticatable, isRestorable } from '../../authenticatable';
 import { createUser } from '@modules/users/tests/factories';
 import { systemCallerContext } from '@kernel/permissions';
+import { withTransaction } from '@infrastructure/runtime/database';
 
 setupTestDb();
 
@@ -19,6 +20,10 @@ const daysFromNow = (days: number): Date => new Date(Date.now() + days * 24 * 60
 
 /** The stored copy of an account, or `null` once erased. */
 const stored = (id: string) => userModel.findById(id).exec();
+
+/** The restore, in the transaction its caller (`account`) always owns. */
+const restore = (user: Awaited<ReturnType<typeof scheduled>>) =>
+    withTransaction((session) => accountUserService.restoreOwnAccount(user, new Date(), session));
 
 /** An account its owner scheduled for erasure at `purgeAt`. */
 const scheduled = async (email: string, purgeAt: Date) => {
@@ -64,7 +69,7 @@ describe('restoreOwnAccount', () => {
     it('clears the lock inside the grace and leaves the sessions dead', async () => {
         const user = await scheduled('inside@example.com', daysFromNow(5));
 
-        expect(await accountUserService.restoreOwnAccount(user)).toBe(true);
+        expect(await restore(user)).toBe(true);
 
         const after = await stored(user.id);
         expect(after?.deletedAt).toBeUndefined();
@@ -76,7 +81,7 @@ describe('restoreOwnAccount', () => {
     it('does nothing once purgeAt has passed', async () => {
         const user = await scheduled('past@example.com', daysFromNow(-1));
 
-        expect(await accountUserService.restoreOwnAccount(user)).toBe(false);
+        expect(await restore(user)).toBe(false);
         const after = await stored(user.id);
         expect(after?.deletedBy).toBe('owner');
     });
@@ -84,10 +89,7 @@ describe('restoreOwnAccount', () => {
     it('lets only one of two concurrent restores win', async () => {
         const user = await scheduled('twice@example.com', daysFromNow(5));
 
-        const results = await Promise.all([
-            accountUserService.restoreOwnAccount(user),
-            accountUserService.restoreOwnAccount(user)
-        ]);
+        const results = await Promise.all([restore(user), restore(user)]);
 
         expect(results.toSorted()).toEqual([false, true]);
     });
@@ -121,7 +123,7 @@ describe('eraseScheduledDeletion', () => {
     it('refuses an account that was restored after the job read it', async () => {
         const user = await scheduled('raced@example.com', daysFromNow(-1));
         await userModel.updateOne({ _id: user.id }, { $set: { purgeAt: daysFromNow(5) } }).exec();
-        await accountUserService.restoreOwnAccount(user);
+        await restore(user);
 
         const result = await accountUserService.eraseScheduledDeletion(
             user,
