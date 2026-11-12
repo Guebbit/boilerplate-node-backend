@@ -265,9 +265,16 @@ The Database Tools spell TLS `--ssl --sslCAFile`, and the bundled `database` req
 4. **Re-apply the erasures, before anything starts:**
 
     ```sh
-    docker compose -f docker-compose.production.yml run --rm --no-deps cron \
+    docker compose --env-file "clients/$COMPOSE_PROJECT_NAME/.env" -f docker-compose.production.yml \
+        run --rm --no-deps cron \
         node --import tsx scripts/ops/reapply-erasures.ts --since <the snapshot time, ISO> --snapshot <restic id> --by <your name>
     ```
+
+    `--env-file` is not optional: without it the client's settings never reach `cron` and the script stops
+    with "DB connection refused by configuration". A manual run also needs `APP_IMAGE` exported: the image
+    currently deployed, the image on the last line of `clients/<name>/deploys.log` (`docker/deploy.sh` sets
+    it for you). `docker compose` stands for your engine's compose: `podman compose` where the engine is
+    podman (the repo's `npm run compose` picks it).
 
     Run it in `cron`: it mounts `uploads`, so an erased account's avatar is deleted again too, and the
     production image has no npm. `--no-deps` because step 1 stopped `app` and `cron`, and `run` would
