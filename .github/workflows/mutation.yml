@@ -299,7 +299,7 @@ jobs:
                   retention-days: 14
 
     mutation-notify:
-        # A red nightly run must not pass unnoticed: "check the Actions tab deliberately" produces
+        # A red monthly sweep must not pass unnoticed: "check the Actions tab deliberately" produces
         # exactly that silence. One issue, updated in place, surfaces where the repo is already read
         # instead of adding a channel nobody watches.
         needs:
@@ -325,7 +325,7 @@ jobs:
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
               with:
                   persist-credentials: false # no step after the checkout needs the token on disk
-            - name: Open or update the weekly-failure issue
+            - name: Open or update the sweep-failure issue
               uses: ./.github/actions/notify-failure
               with:
                   title: 'Weekly mutation sweep failed'

@@ -1,7 +1,7 @@
 name: Notify on failure
 description: Open or update one tracking issue when a recurring workflow fails.
 
-# Opens or updates one tracking issue for a recurring nightly workflow's failure, instead of
+# Opens or updates one tracking issue for a recurring scheduled workflow's failure, instead of
 # adding a channel nobody watches.
 
 inputs:
