@@ -576,6 +576,9 @@ Consequences worth knowing:
   (the address was taken meanwhile) leaves the link live; the owner frees the address and follows
   the same link again. The undo ends every session first, as its own write, so the thief stays out
   even though the restore failed.
+- **The undo reads the account inside its transaction.** Restore-or-cancel is decided from that
+  fresh copy, not from the one read when the link was looked up: a confirmation that lands between
+  the two is restored, not skipped.
 - **A refused OAuth attempt keeps its token** (no session, wrong account, identity taken): the
   checks run before the spend, and the token expires on its own after five minutes.
 - **The login challenge's spend has no action of its own.** The code was consumed by its own

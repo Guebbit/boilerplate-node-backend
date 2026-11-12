@@ -159,7 +159,9 @@ signed out), and `api-keys` revokes the keys the person minted: the owner is say
 not theirs. The link is the credential, so the route is public like the confirm one. The spend of
 a confirm or undo link and the address write commit in one transaction
 ([Spending a link](./account-sessions.md#spending-a-link)): a 409 on the restore or the swap
-leaves the link live, so it can be followed again once the address is free.
+leaves the link live, so it can be followed again once the address is free. The undo reads the
+account inside that transaction and decides cancel-or-restore from that fresh copy, so a
+confirmation racing it is restored, not skipped.
 
 A change never writes `user.email` directly. It parks the requested address in `pendingEmail`, so
 the account keeps its current, proven address — and its `verified` flag, which describes that
