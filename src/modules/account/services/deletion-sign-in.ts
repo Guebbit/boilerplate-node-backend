@@ -18,9 +18,9 @@ import {
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { DELETION_RESTORE_TOKEN_TYPE } from '../token-types';
-import { restoreAccount } from './account-deletion';
+import { finishRestore, restoreWrites } from './account-deletion';
 import { MFA_CHALLENGE_TTL_MS } from './two-factor-challenge';
-import { findLiveTokenEntry, issueToken, spendLiveToken } from './tokens';
+import { findLiveTokenEntry, issueToken, spendThen } from './tokens';
 
 /**
  * The `DeletionPending` body a sign-in answers with for an account in its grace. Minted only
@@ -52,7 +52,8 @@ export interface RestoredSignIn {
 }
 
 /**
- * Spend the claim check a live lookup found and restore its account, or refuse.
+ * Spend the claim check a live lookup found and restore its account in one transaction, or refuse.
+ * A failing write rolls the spend back, so the claim check stays live for a retry.
  *
  * @param found - the live claim check and its holder, when there was one
  * @param challenge - the claim check as presented, for the spend
@@ -69,12 +70,11 @@ const redeem = (
     const { user } = found;
 
     // Only the request whose own write removed the claim check may restore.
-    return spendLiveToken(DELETION_RESTORE_TOKEN_TYPE, challenge).then((spent) =>
-        spent
-            ? restoreAccount(user, 'sign-in', context).then((restored) =>
-                  restored ? generateSuccess({ user, amr }) : refusal
-              )
-            : refusal
+    return spendThen(DELETION_RESTORE_TOKEN_TYPE, challenge, restoreWrites(user, new Date())).then(
+        (restored) =>
+            restored
+                ? finishRestore(user, 'sign-in', context).then(() => generateSuccess({ user, amr }))
+                : refusal
     );
 };
 

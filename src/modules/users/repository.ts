@@ -161,7 +161,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
         filter: QueryFilter<UserDocument>,
         update: UpdateQuery<UserDocument>
     ) => Promise<UpdateWriteOpResult>;
-    findByIdWithCredentials: (id: string) => Promise<UserDocument | null>;
+    findByIdWithCredentials: (id: string, session?: ClientSession) => Promise<UserDocument | null>;
     findOneWithCredentials: (where: QueryFilter<UserDocument>) => Promise<UserDocument | null>;
     findByIdWithPendingEmail: (id: string) => Promise<UserDocument | null>;
     emailOrPendingEmailTaken: (email: string, excludingId: string) => Promise<boolean>;
@@ -175,7 +175,11 @@ export const userRepository: Repository<UserDocument, UserWire> & {
         now: Date
     ) => Promise<UserDocument | null>;
     clearLapsedPreviousEmail: (keepUserIds: readonly string[]) => Promise<number>;
-    linkOAuthAccount: (userId: string, account: OAuthAccount) => Promise<boolean>;
+    linkOAuthAccount: (
+        userId: string,
+        account: OAuthAccount,
+        session?: ClientSession
+    ) => Promise<boolean>;
     unlinkOAuthAccount: (userId: string, provider: string) => Promise<boolean>;
     reserveMfaAttempt: (id: string, maxFailures: number, lockMs: number) => Promise<MfaReservation>;
     resetMfaAttempts: (id: string) => Promise<void>;
@@ -252,8 +256,12 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     /**
      * Fetch a user by id WITH its credential fields. Use only where they are actually needed.
      */
-    findByIdWithCredentials: (id: string) =>
-        userModel.findById(id).select(CREDENTIAL_FIELDS).exec(),
+    findByIdWithCredentials: (id: string, session?: ClientSession) =>
+        userModel
+            .findById(id)
+            .select(CREDENTIAL_FIELDS)
+            .session(session ?? null)
+            .exec(),
 
     /**
      * Fetch the first user matching the filter WITH its credential fields.
@@ -391,14 +399,14 @@ export const userRepository: Repository<UserDocument, UserWire> & {
      * refuses. `loginOrCreateFromOAuth` only ever reaches here for an account that already proved
      * the address itself, so there is nothing left for a second write to promote.
      */
-    linkOAuthAccount: (userId: string, account: OAuthAccount) =>
+    linkOAuthAccount: (userId: string, account: OAuthAccount, session?: ClientSession) =>
         userModel
             .updateOne(
                 // One entry per provider: a link for a provider the account already holds matches
                 // nothing, so a repeated callback cannot grow the array.
                 { _id: toObjectId(userId), 'oauthAccounts.provider': { $ne: account.provider } },
                 { $push: { oauthAccounts: account } },
-                { timestamps: false }
+                { timestamps: false, session }
             )
             .exec()
             .then(({ modifiedCount }) => modifiedCount > 0),

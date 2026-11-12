@@ -235,7 +235,9 @@ another account's, is `?error=link_expired`; no new reason code, so no contract 
 identity to that account (whatever email the provider holds), mints no session, audits
 `AUTH_OAUTH_LINKED`, mails the owner and redirects with `?linked=<provider>`. A provider account that
 already belongs to another account is `?error=already_linked`; a missing, spent or expired token is
-`?error=link_expired`. Because removal is permanent and nothing re-links by email match, a provider
+`?error=link_expired`. Every refusal comes before the token is spent, so a refused attempt leaves it
+live until it expires; the spend and the `$push` of the identity commit in one transaction
+([Spending a link](./account-sessions.md#spending-a-link)). Because removal is permanent and nothing re-links by email match, a provider
 the owner disconnected can never come back without them.
 
 Two identities minting the **same** never-before-seen account at once is the race the

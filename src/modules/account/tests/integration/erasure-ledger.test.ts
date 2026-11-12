@@ -16,12 +16,12 @@ import { userService } from '@modules/users';
 import * as auditPort from '@infrastructure/observability/audit';
 import { accountService } from '../../services';
 import { countsOf, reapplyErasures, recordSchedule } from '../../services/erasure-ledger';
-import { handleRestoredByStaff, restoreAccount } from '../../services/account-deletion';
+import { handleRestoredByStaff, restoreAccountByLink } from '../../services/account-deletion';
 import { erasureLedgerRepository } from '../../repository';
 import { systemCallerContext } from '@kernel/permissions';
 import { erasureLedgerModel } from '../../model';
 import { accountAuditActions } from '../../audit';
-import { plantToken } from '../factories';
+import { plantToken, tokenRowsOf } from '../factories';
 
 jest.mock('@infrastructure/observability/audit', () =>
     jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
@@ -439,20 +439,23 @@ describe('the lock and its ledger row commit together', () => {
         expect(await rowsOf(user.id)).toEqual([]);
     });
 
-    it('keeps the lock when the ledger row fails (owner cancel)', async () => {
+    it('keeps the lock when the ledger row fails (owner cancel, by link)', async () => {
         const user = await lockedInSnapshot(
             'cancel-rollback@example.com',
             new Date(Date.now() + 5 * DAY)
         );
+        await plantToken(user.id, 'account-restore', 'restore-link', { ttlMs: 5 * DAY });
         jest.spyOn(erasureLedgerRepository, 'upsert').mockRejectedValueOnce(new Error('simulated'));
 
-        await expect(restoreAccount(user, 'sign-in', testCallerContext)).rejects.toThrow(
+        await expect(restoreAccountByLink('restore-link', testCallerContext)).rejects.toThrow(
             'simulated'
         );
 
         const reloaded = await userRepository.findById(user.id);
         expect(reloaded!.deletedBy).toBe('owner');
         expect(await rowsOf(user.id)).toEqual([]);
+        // The link was spent in the same transaction, so it is still good for a retry.
+        expect(await tokenRowsOf(user.id)).toHaveLength(1);
     });
 
     it('dates a staff cancel by the event, so a late retry does not re-date it', async () => {

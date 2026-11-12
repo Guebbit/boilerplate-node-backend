@@ -1,14 +1,14 @@
 /**
  * @module
- * Completing a password reset from its mailed link: find the link, check the password, spend the
- * link, write, then tell the owner. Asking for the link is `./password-reset-request`.
+ * Completing a password reset from its mailed link: find the link, check the password, then spend
+ * the link and write in one transaction, then tell the owner. Asking for the link is `./password-reset-request`.
  */
 
 import { logger } from '@infrastructure/adapters/logger';
 import { resetConfirmEmail, greetableName, recipientLocale } from '../emails';
 import { sendAccountMail } from './mail';
 import { markVerified } from './verification';
-import { findLiveToken, spendLiveToken, refuseLink } from './tokens';
+import { findLiveToken, spendThen, refuseLink } from './tokens';
 import {
     generateReject,
     fieldError,
@@ -21,7 +21,7 @@ import { type UserDocument } from '@modules/users';
 import type { CallerContext } from '@types';
 import { accountAuditActions } from '../audit';
 import { recordAccountAudit } from './caller';
-import { validatePasswordChange, writePassword } from './password';
+import { validatePasswordChange, passwordWrite, afterPasswordWrite } from './password';
 import { PASSWORD_RESET_TOKEN_TYPE } from '../token-types';
 import { termsAcceptance } from '../consent-record';
 import { t } from '@infrastructure/i18n';
@@ -108,7 +108,8 @@ const resetLinkRefused = (context: CallerContext): ResponseReject =>
 
 /**
  * The tail of {@link completePasswordReset} once the link is FOUND: breach check, then the
- * atomic spend, then the write. The spend stays last so a refused password never burns the link.
+ * spend and the write in one transaction. The spend stays last so a refused password never burns
+ * the link.
  *
  * @param user - the holder of the live token
  * @param token - the token from the mailed link
@@ -135,10 +136,16 @@ const resetWith = (
     return assertPasswordNotBreached(password).then((breachErrors) => {
         if (breachErrors.length > 0) return generateReject(422, breachErrors);
 
-        return spendLiveToken(PASSWORD_RESET_TOKEN_TYPE, token).then((spentByThisRequest) =>
-            spentByThisRequest
-                ? writePassword(user, password, markResetCompleted, 'password-reset').then(
-                      (result) => afterReset(result, user, context)
+        // One transaction: the spend and the new password commit together, so a failing write
+        // leaves the link live for a retry.
+        return spendThen(
+            PASSWORD_RESET_TOKEN_TYPE,
+            token,
+            passwordWrite(user, password, markResetCompleted, 'password-reset')
+        ).then((saved) =>
+            saved
+                ? afterPasswordWrite(saved, 'password-reset').then((result) =>
+                      afterReset(result, user, context)
                   )
                 : resetLinkRefused(context)
         );

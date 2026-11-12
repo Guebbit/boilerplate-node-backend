@@ -3,6 +3,7 @@
  * The `account` end of the shared kernel, read side: named lookups over `userRepository`.
  */
 
+import type { ClientSession } from 'mongoose';
 import { userRepository } from '../repository';
 
 /*
@@ -19,8 +20,12 @@ import { userRepository } from '../repository';
 /** An authenticatable account by id — `active`/soft-delete already excluded by the query. */
 export const findAuthenticatableById = (id: string) => userRepository.findAuthenticatableById(id);
 
-/** The hydrated document with every `select: false` field loaded (password, tokens, 2FA). */
-export const findByIdWithCredentials = (id: string) => userRepository.findByIdWithCredentials(id);
+/**
+ * The hydrated document with every `select: false` field loaded (password, tokens, 2FA).
+ * With a `session`, the read joins that transaction.
+ */
+export const findByIdWithCredentials = (id: string, session?: ClientSession) =>
+    userRepository.findByIdWithCredentials(id, session);
 
 /**
  * The credentialed account attempting an email/password login, `select: false` fields (the

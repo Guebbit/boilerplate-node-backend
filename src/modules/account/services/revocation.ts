@@ -49,7 +49,8 @@ export const sessionsRevokedAnnouncement = (
 /**
  * The one-time token kinds a cause with `pending` kills, listed by name rather than "everything":
  * a kind added later must opt IN to being purged, and the email-change undo token deliberately
- * never does (it is already spent by the time its cause runs).
+ * never does (its own flow ends the sessions first and spends the link right after, in the
+ * restore's transaction; purging it here would kill the link before its action ran).
  */
 const PENDING_TOKEN_TYPES: readonly VerificationTokenType[] = [
     PASSWORD_RESET_TOKEN_TYPE,
