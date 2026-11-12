@@ -100,10 +100,14 @@ if (!baseline) {
  * not running.
  *
  * @param comparisons - the verdicts of this run
+ * @param recorded - whether this run writes the baseline; "new file recorded" is claimed only then
  */
-const printProgress = (comparisons: readonly FileComparison[]): void => {
-    for (const { file, current: score } of comparisons.filter(({ verdict }) => verdict === 'new'))
-        console.log(`[mutation-baseline] new file recorded: ${file} at ${score!.toFixed(2)}%`);
+const printProgress = (comparisons: readonly FileComparison[], recorded: boolean): void => {
+    if (recorded)
+        for (const { file, current: score } of comparisons.filter(
+            ({ verdict }) => verdict === 'new'
+        ))
+            console.log(`[mutation-baseline] new file recorded: ${file} at ${score!.toFixed(2)}%`);
 
     for (const { file, baseline: before, current: after } of comparisons.filter(
         ({ verdict }) => verdict === 'improved'
@@ -120,7 +124,7 @@ const printProgress = (comparisons: readonly FileComparison[]): void => {
 if (merge) {
     const comparisons = compareMerged(current, baseline);
 
-    printProgress(comparisons);
+    printProgress(comparisons, true);
 
     writeBaseline(mergeIntoBaseline(current, baseline));
     console.log(
@@ -176,7 +180,7 @@ const counts = {
     removed: comparisons.filter(({ verdict }) => verdict === 'removed').length
 };
 
-printProgress(comparisons);
+printProgress(comparisons, update);
 
 // Files the baseline knows that this run did not measure.
 for (const { file } of comparisons.filter(({ verdict }) => verdict === 'removed'))
