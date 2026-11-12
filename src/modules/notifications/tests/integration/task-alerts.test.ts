@@ -21,7 +21,8 @@ import { resetDomainEvents } from '@kernel/events';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { registerModules } from '@kernel/registry';
 import { TaskCategory } from '@types';
-import { asSuccess } from '@tests/response';
+import { asReject, asSuccess } from '@tests/response';
+import { ERROR_CODES } from '@api/error-codes';
 import { enabledModules } from '../../../../modules';
 
 // The queue, not the copy.
@@ -295,14 +296,29 @@ describe('a task handed to a colleague', () => {
         await expect(bellOf('admin', giver.id)).resolves.toEqual([]);
     });
 
-    it('tells again when it is handed over a second time', async () => {
+    it('tells again when it is handed back to the same colleague through another', async () => {
         const { giver, taker, id } = await handOver();
+        const third = await staff('admin', 'third@example.com');
         const asGiver = callerContextAs('admin', giver.id);
 
         asSuccess(await taskService.assign(id, taker.id, asGiver));
         await new Promise((resolve) => setTimeout(resolve, 5));
+        asSuccess(await taskService.assign(id, third.id, asGiver));
+        await new Promise((resolve) => setTimeout(resolve, 5));
         asSuccess(await taskService.assign(id, taker.id, asGiver));
 
         await expect(bellOf('admin', taker.id)).resolves.toHaveLength(2);
+    });
+
+    it('refuses a repeat hand-over to the same colleague with a 409 and no second bell', async () => {
+        const { giver, taker, id } = await handOver();
+        const asGiver = callerContextAs('admin', giver.id);
+
+        asSuccess(await taskService.assign(id, taker.id, asGiver));
+        const again = asReject(await taskService.assign(id, taker.id, asGiver));
+
+        expect(again.status).toBe(409);
+        expect(again.errors[0]).toMatchObject({ code: ERROR_CODES.TASK_ALREADY_ASSIGNED });
+        await expect(bellOf('admin', taker.id)).resolves.toHaveLength(1);
     });
 });
