@@ -328,6 +328,6 @@ jobs:
             - name: Open or update the sweep-failure issue
               uses: ./.github/actions/notify-failure
               with:
-                  title: 'Weekly mutation sweep failed'
+                  title: 'Monthly mutation sweep failed'
                   label: 'mutation-sweep'
                   workflow-name: 'mutation'
