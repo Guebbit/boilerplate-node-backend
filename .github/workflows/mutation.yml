@@ -60,9 +60,6 @@ concurrency:
     # run is still replaced by the next push.
     cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-env:
-    NODE_VERSION: 24
-
 jobs:
     preflight:
         # `--dryRunOnly`: Stryker's initial test run, then stop — no mutant is tested. `users/model.ts`
@@ -81,8 +78,6 @@ jobs:
 
             - name: Set up the runner
               uses: ./.github/actions/mutation-runner
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
 
             - name: Run the widest initial test run
               # Same heap, worker count, `--expose-gc` and dry-run budget as a wave shard
@@ -173,8 +168,6 @@ jobs:
 
             - name: Setup
               uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
 
             - name: Download every finished shard's report
               # No shard finishing is a result the merge reports, not an error here.
@@ -288,7 +281,6 @@ jobs:
             - name: Setup Node
               uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
               with:
-                  node-version: ${{ env.NODE_VERSION }}
                   cache: npm
                   cache-dependency-path: package-lock.json
 

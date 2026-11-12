@@ -20,9 +20,6 @@ on:
 permissions:
     contents: read
 
-env:
-    NODE_VERSION: 24
-
 jobs:
     plan:
         runs-on: ubuntu-latest
@@ -38,8 +35,6 @@ jobs:
 
             - name: Setup
               uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
 
             - name: Name the previous wave
               # Expressions have no arithmetic, and the artifact names below need `wave - 1`.
@@ -114,8 +109,6 @@ jobs:
 
             - name: Set up the runner
               uses: ./.github/actions/mutation-runner
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
 
             - name: Download this wave's plan
               uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0

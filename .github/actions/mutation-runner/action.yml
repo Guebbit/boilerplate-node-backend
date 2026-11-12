@@ -8,19 +8,12 @@ description: Set up a GitHub runner to run Stryker over this repo — Node, mong
 # outside any heap cap (docs/tools/mutation-testing.md#the-bson-warning-sign). Swap turns a spike
 # into a slow minute instead of a killed worker. Best effort: no room, no swap.
 
-inputs:
-    node-version:
-        description: Node major version to install.
-        required: false
-        default: '24'
-
 runs:
     using: composite
     steps:
         - name: Setup
           uses: ./.github/actions/setup
           with:
-              node-version: ${{ inputs.node-version }}
               setup-mongod: 'true'
 
         - name: Add swap

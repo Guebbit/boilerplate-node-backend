@@ -51,9 +51,6 @@ concurrency:
     group: ci-${{ github.workflow }}-${{ github.ref }}
     cancel-in-progress: true
 
-env:
-    NODE_VERSION: 24
-
 jobs:
     commitlint:
         # Push-only backstop: lint the pushed range against the conventional-commit rules in
@@ -75,8 +72,6 @@ jobs:
 
             - name: Setup
               uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
 
             - name: Lint commit messages
               run: npx commitlint --from ${{ github.event.before }} --to ${{ github.event.after }} --verbose
@@ -96,8 +91,6 @@ jobs:
 
             - name: Setup
               uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
 
             - name: Lint
               run: npm run lint
@@ -117,8 +110,6 @@ jobs:
 
             - name: Setup
               uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
 
             - name: Check formatting
               run: npm run prettier:check
@@ -138,8 +129,6 @@ jobs:
 
             - name: Setup
               uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
 
             - name: Lint OpenAPI spec
               run: npm run lint:openapi
@@ -158,8 +147,6 @@ jobs:
 
             - name: Setup
               uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
 
             - name: Lint AsyncAPI spec
               run: npm run lint:asyncapi
@@ -224,8 +211,6 @@ jobs:
 
             - name: Setup
               uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
 
             - name: Compare the shared contract files
               env:
@@ -288,8 +273,6 @@ jobs:
 
             - name: Setup
               uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
 
             - name: Lint per-module OpenAPI fragments
               run: npm run lint:openapi:modules
@@ -308,8 +291,6 @@ jobs:
 
             - name: Setup
               uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
 
             - name: Lint per-module AsyncAPI fragments
               run: npm run lint:asyncapi:modules
@@ -337,8 +318,6 @@ jobs:
 
             - name: Setup
               uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
 
             - name: Check for breaking changes to the public event catalogue
               run: npx tsx scripts/contracts/check-asyncapi-breaking.ts --base=origin/${{ github.base_ref }}
@@ -370,8 +349,6 @@ jobs:
 
             - name: Setup
               uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
 
             - name: Rate limiting spends one budget across workers
               # The service container above is already listening, so the suite uses it instead of
@@ -411,8 +388,6 @@ jobs:
 
             - name: Setup
               uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
 
             - name: The queue adapter against a real broker
               # The service container above is already listening, so the suite uses it instead of
@@ -437,8 +412,6 @@ jobs:
 
             - name: Setup
               uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
 
             # The same three passes `npm run check` makes: the whole graph, the module walls, and
             # the clean-checkout bootstrap guard.
@@ -474,8 +447,6 @@ jobs:
 
             - name: Setup
               uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
 
             - name: Check every generated artifact is current
               run: npx tsx scripts/regenerate-artifacts.ts --check
@@ -500,8 +471,6 @@ jobs:
 
             - name: Setup
               uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
 
             - name: Type check
               run: npm run ts-check
@@ -527,7 +496,6 @@ jobs:
             - name: Setup
               uses: ./.github/actions/setup
               with:
-                  node-version: ${{ env.NODE_VERSION }}
                   setup-mongod: 'true'
 
             # `--json --outputFile` is jest's per-test report; `mkdir -p` first, because jest does
@@ -573,7 +541,6 @@ jobs:
             - name: Setup
               uses: ./.github/actions/setup
               with:
-                  node-version: ${{ env.NODE_VERSION }}
                   setup-mongod: 'true'
 
             - name: Run integration tests
@@ -608,7 +575,6 @@ jobs:
             - name: Setup
               uses: ./.github/actions/setup
               with:
-                  node-version: ${{ env.NODE_VERSION }}
                   setup-mongod: 'true'
 
             - name: Run contract tests
@@ -632,7 +598,6 @@ jobs:
             - name: Setup
               uses: ./.github/actions/setup
               with:
-                  node-version: ${{ env.NODE_VERSION }}
                   setup-mongod: 'true'
 
             - name: Run contract tests in cookie mode
@@ -707,7 +672,6 @@ jobs:
             - name: Setup
               uses: ./.github/actions/setup
               with:
-                  node-version: ${{ env.NODE_VERSION }}
                   setup-mongod: 'true'
 
             - name: Checkout paired frontend
@@ -970,8 +934,6 @@ jobs:
 
             - name: Setup
               uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
 
             - name: Audit dependencies
               run: npm audit --omit=dev --audit-level=moderate
@@ -994,7 +956,6 @@ jobs:
             - name: Setup
               uses: ./.github/actions/setup
               with:
-                  node-version: ${{ env.NODE_VERSION }}
                   setup-mongod: 'true'
 
             - name: Measure the scaffolder

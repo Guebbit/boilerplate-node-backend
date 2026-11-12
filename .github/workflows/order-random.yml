@@ -21,9 +21,6 @@ concurrency:
     group: order-random-${{ github.workflow }}-${{ github.ref }}
     cancel-in-progress: true
 
-env:
-    NODE_VERSION: 24
-
 jobs:
     order-random:
         runs-on: ubuntu-latest
@@ -40,7 +37,6 @@ jobs:
             - name: Setup
               uses: ./.github/actions/setup
               with:
-                  node-version: ${{ env.NODE_VERSION }}
                   setup-mongod: 'true'
 
             # Rerun a red night with `npx jest --seed=<seed>` on the same suites to reproduce it.

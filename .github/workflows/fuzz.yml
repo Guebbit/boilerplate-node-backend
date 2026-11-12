@@ -30,9 +30,6 @@ concurrency:
     group: fuzz-${{ github.workflow }}-${{ github.ref }}
     cancel-in-progress: true
 
-env:
-    NODE_VERSION: 24
-
 jobs:
     fuzz:
         runs-on: ubuntu-latest
@@ -51,7 +48,6 @@ jobs:
             - name: Setup
               uses: ./.github/actions/setup
               with:
-                  node-version: ${{ env.NODE_VERSION }}
                   setup-mongod: 'true'
 
             # No Mongo service container: the suite uses `mongodb-memory-server` against a
