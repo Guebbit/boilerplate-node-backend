@@ -28,16 +28,18 @@ doing one of these:
 
 Anything else is a candidate. The shapes, with the names the literature gives them:
 
-| Shape                      | What it looks like                                        | Source                                           |
-| -------------------------- | --------------------------------------------------------- | ------------------------------------------------ |
-| **Lazy Element**           | a 1–3 line function with one or two callers               | Fowler, _Refactoring_ — fix: _Inline Function_   |
-| **Middle Man**             | a function whose body only forwards to another            | Fowler; Ousterhout's _pass-through method_       |
-| **Classitis** (file-level) | a file with one or two exports and one or two importers   | Ousterhout, _A Philosophy of Software Design_    |
-| **Speculative Generality** | a parameter, option, generic or interface no caller needs | Fowler — fix: _Remove Parameter_, _Inline Class_ |
-| **Dead Code**              | an unused file, export, type or dependency                | Fowler — fix: delete it                          |
-| **Duplicated Code**        | the same logic pasted twice or more                       | Fowler — fix: _Extract Function_                 |
+| Shape                      | What it looks like                                        | Source                                                |
+| -------------------------- | --------------------------------------------------------- | ----------------------------------------------------- |
+| **Lazy Element**           | a 1–3 line function with one or two callers               | Fowler, _Refactoring_ — fix: _Inline Function_        |
+| **Middle Man**             | a function whose body only forwards to another            | Fowler; Ousterhout's _pass-through method_            |
+| **Classitis** (file-level) | a file with one or two exports and one or two importers   | Ousterhout, _A Philosophy of Software Design_         |
+| **Speculative Generality** | a parameter, option, generic or interface no caller needs | Fowler — fix: _Remove Parameter_, _Inline Class_      |
+| **Dead Code**              | an unused file, export, type or dependency                | Fowler — fix: delete it                               |
+| **Duplicated Code**        | the same logic pasted twice or more                       | Fowler — fix: _Extract Function_                      |
+| **Large Class**            | a service, controller or repository doing several jobs    | Fowler — fix: _Extract Class_ / _Extract Function_    |
+| **Repeated Switches**      | two `if`/`switch` chains over the same union              | Fowler — fix: _Replace Conditional with Polymorphism_ |
 
-The first four say "too much structure". The last says "too little". Both directions are judged in
+The first four say "too much structure". The last three say "too little". Both directions are judged in
 one audit so the report can never tell you to inline a helper and extract the same thing back.
 
 ## Naming the scope
@@ -65,7 +67,7 @@ statuses. A House ruling overrides a carried verdict: the row is listed as `verd
 ### 1 — run the counters
 
 The tools count; you judge. Never count call sites or importers yourself — a text search misses
-an import alias and a re-export, and a wrong count produces a wrong verdict.
+an import alias, a re-export, an `obj.fn` read and a destructured name, and a wrong count produces a wrong verdict.
 
 Translate the scope to paths first: a module is `src/modules/<name>`.
 
@@ -86,16 +88,18 @@ Hand each list to its own reviewer: a sub-agent where your tool has them, otherw
 another in a fresh pass each. A reviewer reads the code around every candidate it is given, and
 nothing else.
 
-| #   | Reviewer               | Its input                                                                      |
-| --- | ---------------------- | ------------------------------------------------------------------------------ |
-| 1   | Lazy Element           | `shallow.json` → `smallAndRare`                                                |
-| 2   | Middle Man             | `shallow.json` → `passThroughs`                                                |
-| 3   | Classitis              | `shallow.json` → `lazyFiles`                                                   |
-| 4   | Speculative Generality | `shallow.json` → `optionalNeverPassed`, plus its own read of the scope (below) |
-| 5   | Dead Code              | `knip.json`                                                                    |
-| 6   | Duplicated Code        | `jscpd-report.json` — `kind: exact` and `kind: similar` (near-miss) both       |
+| #   | Reviewer               | Its input                                                                                                                                                                            |
+| --- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Lazy Element           | `shallow.json` → `smallAndRare`                                                                                                                                                      |
+| 2   | Middle Man             | `shallow.json` → `passThroughs`                                                                                                                                                      |
+| 3   | Classitis              | `shallow.json` → `lazyFiles`                                                                                                                                                         |
+| 4   | Speculative Generality | `shallow.json` → `optionalNeverPassed`, plus its own read of the scope (below)                                                                                                       |
+| 5   | Dead Code              | `knip.json`                                                                                                                                                                          |
+| 6   | Duplicated Code        | `jscpd-report.json` — `kind: exact` and `kind: similar` (near-miss) both                                                                                                             |
+| 7   | Large Class            | its own read: every service, controller or repository over 300 lines in scope — list them with `wc -l`, then name each job it does; two or more unrelated jobs is a candidate        |
+| 8   | Repeated Switches      | its own read: `rg -n -e "switch \(" -e "=== '"` over a `*Status` or kind union; two `switch`/`if` chains over the same union in different files is a candidate. Say how it was found |
 
-Reviewer 4 is the only one allowed to find candidates no tool listed, because no tool counts them:
+Reviewers 4, 7 and 8 are the only ones allowed to find candidates no tool listed, because no tool counts them:
 an interface with one implementation, a generic parameter only ever given one type, a config key
 nothing sets to anything but its default. Each such row says how it was found — the search and its
 count — so the reader can repeat it.
@@ -110,6 +114,8 @@ count — so the reader can repeat it.
 | **DELETE**   | Nothing uses it.                                                                                                      | 4, 5    |
 | **FIX**      | knip found a real defect: an unlisted dependency, an unresolved import.                                               | 5       |
 | **EXTRACT**  | Real duplication: name the shared function and where it goes.                                                         | 6       |
+| **SPLIT**    | Large Class: name the pieces and which job each takes.                                                                | 7       |
+| **LIFT**     | Repeated Switches: name the one place the chain belongs (a map, a domain function).                                   | 8       |
 | **KEEP**     | It earns its place. Give the reason code below.                                                                       | all     |
 
 KEEP reason codes — one per row, never "seems fine":
@@ -181,7 +187,7 @@ Write `tmp/reports/audit-<run>/code-shape/<SCOPE>.md`:
 
 ## Rules
 
-- Every row cites a `file:line` taken from the tool output, or — reviewer 4 only — the search that
+- Every row cites a `file:line` taken from the tool output, or — reviewers 4, 7 and 8 only — the search that
   found it.
 - Never call a function shallow from its name alone. Read its body and its callers.
 - A `published: true` candidate is never INLINE or DELETE, whatever else it looks like.

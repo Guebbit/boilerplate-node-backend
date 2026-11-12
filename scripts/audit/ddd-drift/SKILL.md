@@ -21,6 +21,8 @@ so `--diff` is a starting point, not a boundary: widen it as the steps below say
 Output goes to `tmp/reports/audit-<run>/ddd-drift/<SCOPE>…`. `<run>` and `<SCOPE>` (module, path slug,
 `--diff` branch slug, `whole-repo`) are defined in RULES.md rule 4.
 
+Copy the "What this audit is not" list into the report header.
+
 ## What this audit is not
 
 Already machine-enforced, so skip it: a barrel bypass, an undeclared module edge, purity inside
@@ -157,7 +159,8 @@ was too loose.
 
 `tmp/reports/audit-<run>/ddd-drift/<SCOPE>.md`, in this order:
 
-- **Claims table** — `| claim (file:line) | code says (file:line) | match |`
+- **Claims table** — `| claim (file:line) | code says (file:line) | match |`. Keep the rows that are
+  false-positive controls (a search hit judged fine): they show the search was honest.
 - **Findings** — `| class | where | rule broken (doc file:line) | drift / DELIBERATE / NOT-TRACED | wrong side | severity | smallest fix |`
 - HIGH first, then one line of totals: claims checked, drift, DELIBERATE, NOT-TRACED. At `whole-repo`
   it names the slices read and unread, and says page claims outside the DDD kinds were not taken.

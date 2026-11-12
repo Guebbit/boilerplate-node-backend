@@ -79,7 +79,7 @@ has no equivalent of — and its own
 
 Only `spec-drift`, `spec-gaps`, `suite-bloat` and `test-honesty` exist on both sides, because what
 they ask — does the test agree with the spec, is anything uncovered, is anything redundant, can the
-test fail at all — is about specs and suites rather than about a runtime. `code-shape` and the two `api-*` audits exist only here: the contract they read is this repo's.
+test fail at all — is about specs and suites rather than about a runtime. `code-shape` and `ddd-drift` exist on both sides as forks (the frontend's reads each SFC's script and keeps its own drift classes). The two `api-*` audits exist only here: the contract they read is this repo's.
 
 Nothing keeps even those four in step, and nothing should try. None is in `SHARED_FILES`, whose
 rule is that a shared file must be owned by one side and regenerated. Improve one where you find
@@ -194,6 +194,10 @@ object a barrel publishes carries counts as published. A type-only re-export pub
 limit: `obj.fn` on an interface-typed object is not followed, so only its `{ fn }` slot counts. No
 library does this: TypeScript's
 find-references and knip both miss `obj.fn`. It lives in `scripts/audit/code-shape/scripts/`.
+
+Two more shapes have no tool: Large Class (a service, controller or repository over 300 lines doing
+several jobs; verdict SPLIT) and Repeated Switches (two chains over the same union in different
+files; verdict LIFT). Their reviewers read the scope themselves and say how each row was found.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 50}}}%%
