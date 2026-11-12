@@ -156,8 +156,10 @@ this one). Only the newest request's link lives. While the change is pending the
 once the new address was confirmed it restores `previousEmail`, a field written at the swap. Either
 way every session ends, first and as its own write (so a 409 on the restore still leaves the thief
 signed out), and `api-keys` revokes the keys the person minted: the owner is saying the change was
-not theirs. The link is the
-credential, so the route is public like the confirm one.
+not theirs. The link is the credential, so the route is public like the confirm one. The spend of
+a confirm or undo link and the address write commit in one transaction
+([Spending a link](./account-sessions.md#spending-a-link)): a 409 on the restore or the swap
+leaves the link live, so it can be followed again once the address is free.
 
 A change never writes `user.email` directly. It parks the requested address in `pendingEmail`, so
 the account keeps its current, proven address — and its `verified` flag, which describes that

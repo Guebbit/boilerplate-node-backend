@@ -1,13 +1,13 @@
 /**
  * @module
- * Changing the password: the shared write every flow ends at, and the signed-in change that
+ * Changing the password: the write both flows share, and the signed-in change that
  * proves the current password first. Reset links are `./password-reset`.
  */
 
 import { z } from 'zod';
 import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
-import { announceInTransaction } from '@kernel/outbox';
+import { announceWithin, nudgeOutbox } from '@kernel/outbox';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { announces, type RevocationCause } from '../domain/revocation';
 import { revokeFor, sessionsRevokedAnnouncement } from './revocation';
@@ -73,7 +73,7 @@ type PasswordCause = Extract<RevocationCause, 'password-change' | 'password-rese
 
 /**
  * The authenticated change's check-then-write: validate the new pair, refuse a breached password,
- * then hand the write to {@link writePassword}, which also revokes every refresh token.
+ * then write it and revoke every refresh token ({@link passwordWrite}, {@link afterPasswordWrite}).
  * Order matters — save first, revoke second: a revoke landing against a password write that then
  * fails would log everyone out for nothing.
  * `passwordChangeWithCurrent`'s caller re-mints its own session on top — see `postPasswordChange`
@@ -97,62 +97,62 @@ export const passwordChange = (
     return assertPasswordNotBreached(password).then((breachErrors) => {
         if (breachErrors.length > 0) return generateReject(422, breachErrors);
 
-        return writePassword(user, password, undefined, 'password-change');
+        // The write, then the housekeeping that follows its commit.
+        return withTransaction(passwordWrite(user, password, undefined, 'password-change'))
+            .then((saved) => {
+                if (announces('password-change')) nudgeOutbox();
+                return afterPasswordWrite(saved, 'password-change');
+            })
+            .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
     });
 };
 
 /**
- * The state change of {@link writePassword}: password and session epoch, on one session.
- *
- * @param user - the account, carrying its credential fields
- * @param password - the new password, already accepted
- * @returns a write to hand to a transaction
- */
-const passwordAndEpochWrite =
-    (user: UserDocument, password: string) =>
-    (session: ClientSession): Promise<UserDocument> =>
-        accountUserService
-            .setPassword(user, password, session)
-            .then((saved) =>
-                accountUserService.bumpSessionEpoch(saved.id, undefined, session).then(() => saved)
-            );
-
-/**
- * The shared final write of a new password: {@link passwordChange} and the reset both end here.
- * Every check on the password itself — shape, match, breach — is the caller's, done before.
- * The revoke lives here, so a caller cannot forget it.
- *
- * One transaction holds the new password, the session epoch and, when the cause announces, the
- * `account.sessions_revoked` outbox row: the credential cannot change while old sessions stay live,
- * and the event exists exactly when the change does. The purge that follows is housekeeping
- * (the epoch already refuses every old token), so `revokeFor` logs its failure, not a 500.
+ * The writes of a new password, for a transaction: password and session epoch and, when the cause
+ * announces, the `account.sessions_revoked` outbox row. The credential cannot change while old
+ * sessions stay live, and the event exists exactly when the change does. The reset hands this to
+ * the transaction that also spends its link; the caller wakes the outbox relay after the commit.
  *
  * @param user - the account, carrying its credential fields
  * @param password - the new password, already accepted
  * @param beforeSave - a caller's own mutation to ride along in the same write, or `undefined`
- * @param cause - which password event this is, and so what it announces and purges
- * @internal No shape, breach or current-password check; only `passwordChange` and the reset's `resetWith` may reach it.
+ * @param cause - which password event this is, and so what it announces
+ * @returns a write to hand to a transaction
  */
-export const writePassword = (
-    user: UserDocument,
-    password: string,
-    beforeSave: ((user: UserDocument) => void) | undefined,
+export const passwordWrite =
+    (
+        user: UserDocument,
+        password: string,
+        beforeSave: ((user: UserDocument) => void) | undefined,
+        cause: PasswordCause
+    ) =>
+    (session: ClientSession): Promise<UserDocument> => {
+        beforeSave?.(user);
+        const write = (own: ClientSession) =>
+            accountUserService
+                .setPassword(user, password, own)
+                .then((saved) =>
+                    accountUserService.bumpSessionEpoch(saved.id, undefined, own).then(() => saved)
+                );
+        return announces(cause)
+            ? announceWithin(session, write, (saved) =>
+                  sessionsRevokedAnnouncement(saved.id, cause)
+              )
+            : write(session);
+    };
+
+/**
+ * What follows a committed password write: delete the session rows and pending links. Housekeeping
+ * (the epoch already refuses every old token), so `revokeFor` logs its failure, not a 500.
+ *
+ * @param saved - the account as written
+ * @param cause - which password event this was, and so what it purges
+ */
+export const afterPasswordWrite = (
+    saved: UserDocument,
     cause: PasswordCause
-): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    Promise.resolve()
-        .then(() => {
-            beforeSave?.(user);
-            const write = passwordAndEpochWrite(user, password);
-            return announces(cause)
-                ? announceInTransaction(write, (saved) =>
-                      sessionsRevokedAnnouncement(saved.id, cause)
-                  )
-                : withTransaction(write);
-        })
-        .then((savedUser) =>
-            revokeFor(cause, savedUser.id).then(() => generateSuccess<UserDocument>(savedUser))
-        )
-        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
+): Promise<ResponseSuccess<UserDocument>> =>
+    revokeFor(cause, saved.id).then(() => generateSuccess<UserDocument>(saved));
 
 /**
  * Tell the account holder, out of band, that their password just changed. Fire-and-forget: the

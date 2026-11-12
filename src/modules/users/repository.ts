@@ -175,7 +175,11 @@ export const userRepository: Repository<UserDocument, UserWire> & {
         now: Date
     ) => Promise<UserDocument | null>;
     clearLapsedPreviousEmail: (keepUserIds: readonly string[]) => Promise<number>;
-    linkOAuthAccount: (userId: string, account: OAuthAccount) => Promise<boolean>;
+    linkOAuthAccount: (
+        userId: string,
+        account: OAuthAccount,
+        session?: ClientSession
+    ) => Promise<boolean>;
     unlinkOAuthAccount: (userId: string, provider: string) => Promise<boolean>;
     reserveMfaAttempt: (id: string, maxFailures: number, lockMs: number) => Promise<MfaReservation>;
     resetMfaAttempts: (id: string) => Promise<void>;
@@ -391,14 +395,14 @@ export const userRepository: Repository<UserDocument, UserWire> & {
      * refuses. `loginOrCreateFromOAuth` only ever reaches here for an account that already proved
      * the address itself, so there is nothing left for a second write to promote.
      */
-    linkOAuthAccount: (userId: string, account: OAuthAccount) =>
+    linkOAuthAccount: (userId: string, account: OAuthAccount, session?: ClientSession) =>
         userModel
             .updateOne(
                 // One entry per provider: a link for a provider the account already holds matches
                 // nothing, so a repeated callback cannot grow the array.
                 { _id: toObjectId(userId), 'oauthAccounts.provider': { $ne: account.provider } },
                 { $push: { oauthAccounts: account } },
-                { timestamps: false }
+                { timestamps: false, session }
             )
             .exec()
             .then(({ modifiedCount }) => modifiedCount > 0),

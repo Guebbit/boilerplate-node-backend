@@ -554,14 +554,21 @@ const findLiveVerificationToken = (
 
 /**
  * Spend a token: delete its row. Of two simultaneous uses of one link, only one deletes anything.
+ * The session is required: the spend and the action it unlocks commit together or not at all
+ * (docs/modules/account-sessions.md#spending-a-link).
  *
  * @param type - the kind the link must be
  * @param tokenHash - the digest of the presented value
+ * @param session - the transaction the action's own writes share
  * @returns whether THIS call removed the row
  */
-const spendVerificationToken = (type: VerificationTokenType, tokenHash: string): Promise<boolean> =>
+const spendVerificationToken = (
+    type: VerificationTokenType,
+    tokenHash: string,
+    session: ClientSession
+): Promise<boolean> =>
     verificationTokenModel
-        .deleteOne({ type, tokenHash })
+        .deleteOne({ type, tokenHash }, { session })
         .exec()
         .then(({ deletedCount }) => deletedCount > 0);
 

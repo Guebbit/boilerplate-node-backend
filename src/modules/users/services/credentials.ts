@@ -4,7 +4,7 @@
  */
 
 import { Error as MongooseError, type ClientSession } from 'mongoose';
-import { announceInTransaction } from '@kernel/outbox';
+import { announceWithin } from '@kernel/outbox';
 import { DELIVERED_CODE_FIELDS } from '../model';
 import { USER_PROFILE_CHANGED } from '../events';
 import type { DeliveredCodeSlot, DeliveredCodeState, MfaReservation, UserDocument } from '../model';
@@ -34,8 +34,8 @@ const NOT_AN_EDIT_PATHS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Set an account's password — `account/services/password.ts`'s `writePassword` is the only
- * caller, the final write both a password reset and an authenticated password change go through.
+ * Set an account's password — `account/services/password.ts`'s `passwordWrite` is the only
+ * caller, the write both a password reset and an authenticated password change go through.
  * Takes the already-loaded, already-validated account: each door refuses a weak or breached
  * password with its own breach check well before this point, so nothing here re-checks either.
  *
@@ -72,27 +72,34 @@ export const markSessionsEnded = (user: UserDocument, at: Date = new Date()): vo
 /**
  * Prove an account's email: stamp `verifiedAt` and save — document-only, per this file's own
  * module docblock. The `unverified` → `customer` promotion that follows a self-service
- * verification is `account`'s own flow's job (`completeEmailVerification`), not this operation's;
+ * verification is `account`'s own flow's job (`confirmEmailVerification`), not this operation's;
  * see `markVerified` in `account/services/verification.ts` for the same split on the
- * password-reset path. Takes the already-loaded holder of the spent token, not an id:
- * `completeEmailVerification`'s caller already found and spent it (see that file's own docblock
- * on why finding and spending are two calls), and a second fetch here would just be a redundant
- * round trip.
+ * password-reset path. Takes the already-loaded holder of the link, not an id: the caller found
+ * it already, and a second fetch here would just be a redundant round trip.
+ *
+ * @param user - the holder of the link being spent
+ * @param session - the transaction that also deletes the link
  */
-export const markEmailVerified = (user: UserDocument): Promise<UserDocument> => {
+export const markEmailVerified = (
+    user: UserDocument,
+    session: ClientSession
+): Promise<UserDocument> => {
     user.verifiedAt = new Date();
-    return userRepository.save(user);
+    return userRepository.save(user, session);
 };
 
 /**
- * Save an address that really moved, with the `user.profile_changed` outbox row in the same
- * transaction: the webhook exists exactly when the new address does (GDPR Art. 19).
+ * Save an address that really moved, with the `user.profile_changed` outbox row in the caller's
+ * transaction: the webhook exists exactly when the new address does (GDPR Art. 19). The caller
+ * wakes the relay after the commit. Mongoose does not nest transactions, hence `announceWithin`.
  *
  * @param user - the account, with `email` already assigned
+ * @param session - the caller's open transaction
  */
-const saveAnnouncingEmail = (user: UserDocument): Promise<UserDocument> =>
-    announceInTransaction(
-        (session) => userRepository.save(user, session),
+const saveAnnouncingEmail = (user: UserDocument, session: ClientSession): Promise<UserDocument> =>
+    announceWithin(
+        session,
+        (own) => userRepository.save(user, own),
         (saved) => ({
             name: USER_PROFILE_CHANGED,
             payload: { userId: saved.id, changed: ['email'] },
@@ -106,16 +113,25 @@ const saveAnnouncingEmail = (user: UserDocument): Promise<UserDocument> =>
  * still-`unverified` role, since an email change can be the first proof an `unverified` signup
  * ever completes. The sessions end in this same save (`markSessionsEnded`); purging the links and
  * session rows that follow is the caller's job, not this operation's.
+ *
+ * @param user - the holder of the link being spent
+ * @param newEmail - the proven address
+ * @param session - the transaction that also deletes the link
  */
-export const applyEmailChange = (user: UserDocument, newEmail: string): Promise<UserDocument> => {
+export const applyEmailChange = (
+    user: UserDocument,
+    newEmail: string,
+    session: ClientSession
+): Promise<UserDocument> => {
     // Kept for the undo link: the only copy of the address the account is being moved away from.
-    user.previousEmail = user.email;
+    // Guarded: the driver may run the transaction again, and by then `email` is already the new one.
+    if (user.email !== newEmail) user.previousEmail = user.email;
     user.email = newEmail;
     user.pendingEmail = undefined;
     user.verifiedAt = new Date();
     // The address is the recovery channel: whoever held the account under the old one is out now.
     markSessionsEnded(user);
-    return saveAnnouncingEmail(user);
+    return saveAnnouncingEmail(user, session);
 };
 
 /**
@@ -125,22 +141,32 @@ export const applyEmailChange = (user: UserDocument, newEmail: string): Promise<
  * error when another account has taken the old address since, which the caller answers as 409.
  *
  * @param user - the account, loaded with `previousEmail`
+ * @param session - the transaction that also deletes the undo link
  */
-export const restorePreviousEmail = (user: UserDocument): Promise<UserDocument> => {
+export const restorePreviousEmail = (
+    user: UserDocument,
+    session: ClientSession
+): Promise<UserDocument> => {
     if (user.previousEmail) user.email = user.previousEmail;
     user.previousEmail = undefined;
     user.pendingEmail = undefined;
-    return saveAnnouncingEmail(user);
+    return saveAnnouncingEmail(user, session);
 };
 
 /**
  * Discard a pending email change without proving the new address — its own explicit action
  * (`DELETE /account/email-change`), distinct from {@link applyEmailChange}'s swap-on-proof. A
  * no-op when nothing is pending, so the caller does not need to check first.
+ *
+ * @param user - the account
+ * @param session - the transaction that also deletes the undo link; absent for the owner's own cancel
  */
-export const cancelPendingEmail = (user: UserDocument): Promise<UserDocument> => {
+export const cancelPendingEmail = (
+    user: UserDocument,
+    session?: ClientSession
+): Promise<UserDocument> => {
     user.pendingEmail = undefined;
-    return userRepository.save(user);
+    return userRepository.save(user, session);
 };
 
 /**

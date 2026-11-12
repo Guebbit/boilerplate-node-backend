@@ -1,8 +1,9 @@
 import { findLiveToken, spendLiveToken } from '@modules/account/services/tokens';
 import {
-    completeEmailChange,
-    completeEmailVerification
+    confirmEmailChange,
+    confirmEmailVerification
 } from '@modules/account/services/verification';
+import { withTransaction } from '@infrastructure/runtime/database';
 /**
  * @module
  * The self-service account surface — profile update, password change, session revocation, email
@@ -283,21 +284,21 @@ describe('cancelPendingEmailChange', () => {
     });
 });
 
-describe('completeEmailChange', () => {
+describe('confirmEmailChange', () => {
     it('swaps pendingEmail into email, marks verified, clears pendingEmail, and revokes refresh tokens', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
         await plantSession(user.id, 'live-session', { ttlMs: 60_000 });
         await accountService.requestEmailChange(user.id, 'after@example.com', testCallerContext);
-        const loaded = await userRepository.findByIdWithCredentials(user.id);
+        await plantToken(user.id, EMAIL_CHANGE_TOKEN_TYPE, 'swap-token', { ttlMs: 3_600_000 });
 
-        const saved = await completeEmailChange(loaded!, testCallerContext);
+        const result = await confirmEmailChange('swap-token', testCallerContext);
 
-        expect(saved.email).toBe('after@example.com');
-        expect(saved.verifiedAt).toBeInstanceOf(Date);
-        expect(saved.pendingEmail).toBeUndefined();
+        expect(result.success).toBe(true);
         const stored = await userRepository.findByIdWithCredentials(user.id);
+        expect(stored?.verifiedAt).toBeInstanceOf(Date);
         expect(stored?.email).toBe('after@example.com');
+        expect(stored?.previousEmail).toBe('before@example.com');
         expect(stored?.pendingEmail).toBeUndefined();
         expect(await sessionRowsOf(user.id)).toEqual([]);
         expect(auditSpy).toHaveBeenCalledWith(
@@ -763,14 +764,15 @@ describe('resendPendingEmailVerificationFor', () => {
     });
 });
 
-describe('completeEmailVerification', () => {
+describe('confirmEmailVerification', () => {
     it('marks the account verified and audits it', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser({});
+        await plantToken(user.id, EMAIL_VERIFY_TOKEN_TYPE, 'verify-token', { ttlMs: 3_600_000 });
 
-        const saved = await completeEmailVerification(user, testCallerContext);
+        const result = await confirmEmailVerification('verify-token', testCallerContext);
 
-        expect(saved.verifiedAt).toBeInstanceOf(Date);
+        expect(result.success).toBe(true);
         const stored = await userRepository.findById(user.id);
         expect(stored?.verifiedAt).toBeInstanceOf(Date);
         expect(auditSpy).toHaveBeenCalledWith(
@@ -1158,6 +1160,10 @@ describe('findLiveToken', () => {
     });
 });
 
+/** One spend in its own transaction, the way every flow takes it. */
+const spend = (type: 'password', token: string) =>
+    withTransaction((session) => spendLiveToken(type, token, session));
+
 /**
  * Spending is what settles a race, and it is deliberately a second call — see `services/tokens.ts`
  * for why `post-reset-confirm` needs to validate a password between the two.
@@ -1167,14 +1173,14 @@ describe('spendLiveToken', () => {
         const user = await createUser();
         await plantToken(user.id, 'password', 'one-shot', { ttlMs: 3_600_000 });
 
-        await expect(spendLiveToken('password', 'one-shot')).resolves.toBe(true);
-        await expect(spendLiveToken('password', 'one-shot')).resolves.toBe(false);
+        await expect(spend('password', 'one-shot')).resolves.toBe(true);
+        await expect(spend('password', 'one-shot')).resolves.toBe(false);
     });
 
     it('leaves a spent token unfindable', async () => {
         const user = await createUser();
         await plantToken(user.id, 'password', 'burn-me', { ttlMs: 3_600_000 });
-        await spendLiveToken('password', 'burn-me');
+        await spend('password', 'burn-me');
 
         await expect(findLiveToken('password', 'burn-me')).resolves.toBeUndefined();
     });

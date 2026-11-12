@@ -7,8 +7,8 @@
  * The last describe below pins that list against the contract, so a staff route that sets one
  * cannot appear unnoticed. System-scoped because the paths span the contract, not one module.
  *
- * Two of the three are one function under the hood — `account/services/password.ts#writePassword`
- * is the shared step `completePasswordReset` (reset) and `passwordChangeWithCurrent` (change) both
+ * Two of the three are one function under the hood — `account/services/password.ts#passwordWrite`
+ * is the shared write `completePasswordReset` (reset) and `passwordChangeWithCurrent` (change) both
  * end at, so "change" and "reset" are two ENTRY POINTS sharing one already-tested rule, not two
  * independent implementations. Signup runs its own check — see `signup.ts#signup`.
  */

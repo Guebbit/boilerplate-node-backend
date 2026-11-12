@@ -2,14 +2,17 @@
  * @module
  * The one-time tokens an account holds in `verificationtokens` — reset, verification, deletion
  * confirmation, email-change and its undo, and the login's MFA challenge. "Live" is defined once
- * here. {@link findLiveToken}/{@link spendLiveToken} stay separate for `two-factor-challenge.ts`
- * and the password reset, which do other work between finding a token and spending it;
- * {@link redeemLiveToken} composes both for the confirm controllers that don't — a refusal never
- * says why.
+ * here. Finding and spending are separate for `two-factor-challenge.ts` and the password reset,
+ * which check something between the two; {@link redeemLiveToken} composes them for the confirm
+ * flows that don't. Spending always happens in the same transaction as the action it unlocks
+ * ({@link spendThen}) — a refusal never says why.
  */
 
 import { randomBytes } from 'node:crypto';
+import type { ClientSession } from 'mongoose';
 import type { CallerContext } from '@types';
+import { nudgeOutbox } from '@kernel/outbox';
+import { withTransaction } from '@infrastructure/runtime/database';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { accountAuditActions } from '../audit';
@@ -113,42 +116,75 @@ export const findLiveToken = (
     findLiveTokenEntry(type, token).then((found) => found?.user);
 
 /**
- * Spend a token found by {@link findLiveToken}, atomically: the row is deleted, and of two
- * simultaneous uses of one link only one deletes anything.
+ * Spend a token found by {@link findLiveToken}, inside the transaction that carries the action the
+ * link unlocks. The row is deleted, and of two simultaneous uses of one link only one deletes
+ * anything.
  *
  * @param type - the kind the link must be
  * @param token - the token value from the link
+ * @param session - the transaction the action's own writes share
  * @returns `true` only for the request whose own write removed the row. A `false` here is the
  *   loser of a race between two simultaneous uses of one link, and is answered exactly like a
  *   token that never existed.
  * @internal Burns a link; only this module's confirm flows may, so it stays off `accountService`.
  */
-export const spendLiveToken = (type: VerificationTokenType, token: string): Promise<boolean> =>
-    verificationTokenRepository.spend(type, hashToken(token));
+export const spendLiveToken = (
+    type: VerificationTokenType,
+    token: string,
+    session: ClientSession
+): Promise<boolean> => verificationTokenRepository.spend(type, hashToken(token), session);
 
 /**
- * {@link findLiveToken} then {@link spendLiveToken}, for a confirm controller that has no work of
- * its own to do between the two. The password reset is not one of these: its breach check needs
- * the found user and must run before the spend, so `completePasswordReset` does the two halves
- * itself.
+ * Spend a link and do its action in ONE transaction: both commit, or neither does. A write that
+ * fails (a connection reset, a duplicate key) rolls the spend back with it, so the link is still
+ * live for a retry. Nothing that is not a database write belongs in `act`: the driver may run it
+ * again on a transient error, and a mail or an audit row would go out twice. Those, the session-row
+ * cleanup and the outbox wake-up all run after this resolves.
+ *
+ * Why not "act, then delete the token": two requests would both act (a password reset is unsafe
+ * that way). Why not "delete, then act": a crash between the two burns the link for nothing.
+ * See docs/modules/account-sessions.md#spending-a-link.
+ *
+ * @param type - the kind the link must be
+ * @param token - the token value from the link
+ * @param act - the action's writes; pass `session` to every one
+ * @returns what `act` resolved with, or `undefined` when this request did not win the spend. An
+ *   `act` must therefore resolve with something other than `undefined`
+ * @internal Burns a link; only this module's confirm flows may, so it stays off `accountService`.
+ */
+export const spendThen = <T>(
+    type: VerificationTokenType,
+    token: string,
+    act: (session: ClientSession) => Promise<T>
+): Promise<T | undefined> =>
+    withTransaction((session) =>
+        spendLiveToken(type, token, session).then((spent) => (spent ? act(session) : undefined))
+    ).then((result) => {
+        // After the commit: the relay must not look for rows that are not visible yet.
+        if (result !== undefined) nudgeOutbox();
+        return result;
+    });
+
+/**
+ * {@link findLiveToken} then {@link spendThen}, for a confirm controller whose action is one
+ * transaction on the holder. The password reset and the MFA challenge are not one of these: they
+ * check something between the find and the spend, so they call the two halves themselves.
  *
  * @param type - which kind of token the link claims to carry
  * @param token - the token value from the link the user followed
- * @returns the holder, once THIS request's spend removed the row — `undefined` for every kind of
- *   refusal, including the losing side of a race between two uses of one link
- * @internal Turns a link into its account; only this module's confirm flows may, so it stays off `accountService`.
+ * @param act - the action's writes on the holder; pass `session` to every one
+ * @returns what `act` resolved with, once THIS request's spend removed the row — `undefined` for
+ *   every kind of refusal, including the losing side of a race between two uses of one link
+ * @internal Turns a link into its action; only this module's confirm flows may, so it stays off `accountService`.
  */
-export const redeemLiveToken = (
+export const redeemLiveToken = <T>(
     type: VerificationTokenType,
-    token: string
-): Promise<UserDocument | undefined> =>
-    findLiveToken(type, token).then((user) => {
-        if (!user) return undefined;
-
-        return spendLiveToken(type, token).then((spentByThisRequest) =>
-            spentByThisRequest ? user : undefined
-        );
-    });
+    token: string,
+    act: (user: UserDocument, session: ClientSession) => Promise<T>
+): Promise<T | undefined> =>
+    findLiveToken(type, token).then((user) =>
+        user ? spendThen(type, token, (session) => act(user, session)) : undefined
+    );
 
 /** The confirm flows that spend a one-time link token. */
 export type OneTimeTokenFlow =

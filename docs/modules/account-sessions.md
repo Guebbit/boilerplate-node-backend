@@ -522,13 +522,67 @@ this purge, and is deliberately not among the links it kills.
 leave an old session live: the password's transaction, the swap's `save`, the factor's `save`. Two
 cases stand apart. Logout everywhere writes the epoch and its `account.sessions_revoked`
 [outbox](../tools/outbox.md) row in one transaction. The email undo does the same **before**
-restoring the address, because its link is already spent: if the old address was taken meanwhile
-the restore answers 409, and the owner has no retry, so the thief must already be out. Deleting the
-session rows afterwards is housekeeping; its failure is logged.
+restoring the address: if the old address was taken meanwhile the restore answers 409, and the
+thief must already be out when the owner retries (the undo link survives that 409, see
+[Spending a link](#spending-a-link)). Deleting the session rows afterwards is housekeeping; its
+failure is logged.
 
 `POST /account/reauth` deletes the session it was given when it re-mints, leaving one live
 session rather than two. A token stamped in the very second of a bump is kept, which is what lets
 the caller's re-minted session survive its own bump.
+
+## Spending a link {#spending-a-link}
+
+A one-time email link (verify, email-change confirm and undo, restore, OAuth connect, password
+reset, the login challenge) is a token row in `verificationtokens`. Spending it deletes the row,
+and the action it unlocks writes to the account. Those two writes commit in **one transaction**
+(`spendThen`, `services/tokens.ts`): both land or neither does.
+
+| Order                      | What a crash between the two does                                     |
+| -------------------------- | --------------------------------------------------------------------- |
+| delete the token, then act | burns the link for nothing: the user must ask for another             |
+| act, then delete the token | two simultaneous clicks both act; for a password reset that is unsafe |
+| both in one transaction    | nothing lands; the link is still live; the same click works on retry  |
+
+Only database writes go inside. The driver may run the work again on a transient error, so a
+mail, an audit row, the session-row cleanup and the outbox wake-up (`nudgeOutbox`) all run after
+the commit. Mongoose does not nest transactions, so a write that also announces an event uses
+`announceWithin(session, …)` rather than `announceInTransaction`.
+
+```mermaid
+sequenceDiagram
+    participant U as Browser
+    participant S as Service
+    participant DB as MongoDB
+    U->>S: POST confirm { token }
+    S->>DB: find live token (read)
+    S->>S: checks that must not burn the link (OAuth: session, identity)
+    S->>DB: withTransaction begins
+    S->>DB: delete token row (the spend)
+    alt this request deleted the row
+        S->>DB: the action's writes, plus any outbox row
+        DB-->>S: commit, or abort and the row is back
+    else a twin request got there first
+        DB-->>S: nothing deleted: refused like an unknown token
+    end
+    S->>DB: session rows, pending links (housekeeping)
+    S->>S: audit, mail, nudge the outbox relay
+    S-->>U: 204 (or the error, with the link still live)
+```
+
+Consequences worth knowing:
+
+- **A refused action no longer burns its link.** An email-change confirm or undo that answers 409
+  (the address was taken meanwhile) leaves the link live; the owner frees the address and follows
+  the same link again. The undo ends every session first, as its own write, so the thief stays out
+  even though the restore failed.
+- **A refused OAuth attempt keeps its token** (no session, wrong account, identity taken): the
+  checks run before the spend, and the token expires on its own after five minutes.
+- **The login challenge's spend has no action of its own.** The code was consumed by its own
+  atomic write before the spend; a crash after that burns the code, and the user signs in again
+  with the next one.
+- **The password reset** hands `passwordWrite` (password, epoch and the `account.sessions_revoked`
+  row) to the same transaction; `afterPasswordWrite` (session rows, links) follows the commit.
 
 ## Refresh rotation
 

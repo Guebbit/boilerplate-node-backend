@@ -4,6 +4,7 @@
  * own transaction for a real rectification, absent for a no-op, and never carrying a value.
  */
 
+import { withTransaction } from '@infrastructure/runtime/database';
 import { setupTestDb } from '@tests/setup-test-db';
 import { callerContextAs } from '@tests/callers';
 import { outboxEventModel } from '@kernel/outbox';
@@ -70,8 +71,13 @@ describe('user.profile_changed', () => {
         const user = await createUser({ email: 'old@example.com', username: 'emailer' });
         const loaded = await userModel.findById(user.id).orFail();
 
-        await accountUserService.applyEmailChange(loaded, 'new@example.com');
-        await accountUserService.restorePreviousEmail(await userModel.findById(user.id).orFail());
+        await withTransaction((session) =>
+            accountUserService.applyEmailChange(loaded, 'new@example.com', session)
+        );
+        const reloaded = await userModel.findById(user.id).orFail();
+        await withTransaction((session) =>
+            accountUserService.restorePreviousEmail(reloaded, session)
+        );
 
         expect(await payloads()).toMatchObject([{ changed: ['email'] }, { changed: ['email'] }]);
     });

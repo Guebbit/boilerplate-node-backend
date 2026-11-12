@@ -3,6 +3,7 @@
  * Account creation for `account`'s flows: self-service, OAuth, the decoy, and the undo.
  */
 
+import type { ClientSession } from 'mongoose';
 import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
 
@@ -92,9 +93,13 @@ export const unlinkOAuthAccount = (userId: string, provider: string): Promise<bo
  *
  * No check here: `account` has already verified the provider's claim (`friends/account.ts`).
  *
+ * @param userId - the account
+ * @param account - the identity to attach
+ * @param session - the transaction that also deletes the link token
  * @returns whether the link was written; `false` when the account already holds that provider
  */
 export const linkOAuthAccount = (
     userId: string,
-    account: Parameters<typeof userRepository.linkOAuthAccount>[1]
-) => userRepository.linkOAuthAccount(userId, account);
+    account: Parameters<typeof userRepository.linkOAuthAccount>[1],
+    session: ClientSession
+) => userRepository.linkOAuthAccount(userId, account, session);
