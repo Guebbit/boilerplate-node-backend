@@ -94,7 +94,7 @@ describe('a resource with a lifecycle status publishes required actions', () => 
      * Schemas that carry a `status` enum without being a record a caller acts on: a request body,
      * a personal-data export row (`actions` never travels in an export), a health read.
      */
-    const NOT_A_RECORD = /^(Search|Export|Update|Create|Observability)/;
+    const NOT_A_RECORD = /^(?:Search|Export|Update|Create|Observability)/;
 
     /**
      * Records that carry a status and still publish no `actions`, with the reason. The staleness

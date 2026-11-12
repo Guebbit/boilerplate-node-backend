@@ -40,7 +40,7 @@ const walkTypeScript = (directory: string): string[] =>
  * an ESLint rule's test input, this script's own tests — is not mistaken for one.
  */
 const SPECIFIER_PATTERNS: readonly RegExp[] = [
-    /^\s*(?:import|export)\b[^"';]*?\bfrom\s+["']([^"']+)["']/gm,
+    /^\s*(?:import|export)\b[^"';]+?\bfrom\s+["']([^"']+)["']/gm,
     /^\s*import\s+["']([^"']+)["']/gm,
     /^[^\n"'`]*\b(?:jest\.(?:mock|requireActual|doMock)|import|require)\(\s*["']([^"']+)["']/gm
 ];
@@ -50,7 +50,7 @@ const SPECIFIER_PATTERNS: readonly RegExp[] = [
  * subjects and roles, say — says so on a `// requires-module: a, b` line. Deleting a listed module
  * deletes the file, the same as an import would.
  */
-const REQUIRES_MODULE = /^\/\/ requires-module:\s*(.+)$/gm;
+const REQUIRES_MODULE = /^\/\/ requires-module:\s*(\S.*)$/gm;
 
 /**
  * The module names a file declares it requires.

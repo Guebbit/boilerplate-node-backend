@@ -76,7 +76,7 @@ const LIGHT_SUITES = ['unit', 'cross-cutting'] as const;
  * @returns true for a `.test.ts` file under a `tests/` folder outside every light layer
  */
 export const isOutsideLightGate = (path: string): boolean =>
-    /(^|\/)tests\/.*\.test\.ts$/.test(path) &&
+    /(?:^|\/)tests\/.*\.test\.ts$/.test(path) &&
     LIGHT_SUITES.every((name) =>
         SUITES[name].patterns.every((pattern) => !new RegExp(pattern).test(path))
     );

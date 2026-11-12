@@ -336,7 +336,9 @@ export const userSchema = new Schema<UserDocument, UserModel>(
             // - `[^\s@]` over `\S` in the local/domain parts blocks a second `@` or a
             //   whitespace-free comma-joined address (`a@b.com,evil@c.test`) that `\S+@\S+` would
             //   let through.
-            match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+            // - the domain is split as one char, then non-dots, then the dot: the same language
+            //   as `[^\s@]+\.`, but the dot can only match once, so it cannot backtrack badly.
+            match: /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/,
             // Mongoose applies both casters before validation and on every `$set`/`$or`/`$in`
             // built against this path, so login, signup, OAuth and admin writes are all covered
             // with no call-site change — `normalizeEmail` (re-exported below, from

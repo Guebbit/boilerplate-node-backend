@@ -57,7 +57,7 @@ interface Finding {
  */
 const toPath = (span: string): { path: string; anchor?: string } | undefined => {
     if (NOT_A_PATH.test(span)) return undefined;
-    if (/^(https?|mailto):/.test(span)) return undefined;
+    if (/^(?:https?|mailto):/.test(span)) return undefined;
     // VitePress resolves these against the page, and `docs:build` already fails on a dead one.
     if (span.startsWith('./') || span.startsWith('../')) return undefined;
     // An HTTP route. The contract owns those, and `lint:openapi` refuses one that does not exist.
@@ -171,10 +171,10 @@ const brokenLinkAnchors = (
     let inFence = false;
 
     for (const line of markdown.split('\n')) {
-        if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
+        if (/^\s*(?:```|~~~)/.test(line)) inFence = !inFence;
         if (inFence || line.includes(IGNORE_LINE)) continue;
 
-        for (const [, target, anchor] of line.matchAll(/]\(([^)#\s]*)#([^)\s]+)\)/g)) {
+        for (const [, target, anchor] of line.matchAll(/\]\(([^)#\s]*)#([^)\s]+)\)/g)) {
             // Only a link to a page this repo tracks: another site or a non-`.md` file is skipped.
             if (/^[a-z]+:/.test(target) || (target && !target.endsWith('.md'))) continue;
 

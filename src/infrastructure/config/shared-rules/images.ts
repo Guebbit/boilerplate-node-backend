@@ -42,6 +42,7 @@ export const imagesSchema = z.strictObject({
     images: z
         .strictObject({
             /** The version segment of every thumbnail path. */
+            // eslint-disable-next-line regexp/prefer-d -- the pattern is written into the shared JSON schema the twin reads: keep the explicit ASCII class
             thumbnailVersion: z.string().regex(/^v[0-9]+$/),
             /** Every accepted format. */
             formats: z.array(imageFormatSchema).min(1)

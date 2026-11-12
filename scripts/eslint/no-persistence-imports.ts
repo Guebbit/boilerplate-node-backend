@@ -35,7 +35,7 @@ const DEFAULT_BINDINGS = ['Repository', 'Model'];
  * `@infrastructure/persistence/base-repository` is the shared helper every repository is built
  * from, not a collection's door, and a bare `endsWith('repository')` would report it.
  */
-const PERSISTENCE_PATH = /(^|\/)(model|repository)$/;
+const PERSISTENCE_PATH = /(?:^|\/)(?:model|repository)$/;
 
 /**
  * Every name an import specifier reaches for: what was exported, and what it is called here.

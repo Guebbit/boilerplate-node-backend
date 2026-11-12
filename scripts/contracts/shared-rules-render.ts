@@ -78,7 +78,7 @@ const renderKeyed = (entries: readonly KeyedEntry[]): string => {
  */
 const withNumericSeparators = (json: string): string =>
     json.replaceAll(/("(?:[^"\\]|\\.)*")|\b\d{5,}\b/g, (match, quoted: string | undefined) =>
-        quoted === undefined ? match.replaceAll(/\B(?=(\d{3})+$)/g, '_') : match
+        quoted === undefined ? match.replaceAll(/\B(?=(?:\d{3})+$)/g, '_') : match
     );
 
 /**

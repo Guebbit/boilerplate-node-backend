@@ -44,7 +44,7 @@ export interface ModuleFragment {
 }
 
 /** A `$ref` into a module fragment's path item — what the root's `paths` holds per module path. */
-const PATH_REF = /^\.\.\/\.\.\/src\/modules\/([^/]+)\/openapi\.yaml#\/paths\/(.+)$/;
+const PATH_REF = /^\.\.\/\.\.\/src\/modules\/[^/]+\/openapi\.yaml#\/paths\/.+$/;
 
 /** JSON Pointer escaping: `~` then `/`, in that order. */
 const encodePointer = (segment: string): string =>

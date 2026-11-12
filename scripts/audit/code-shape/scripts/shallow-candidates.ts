@@ -37,7 +37,7 @@ const NEVER_A_CANDIDATE = /^src\/modules\/[^/]+\/tests\/|\.generated\.ts$|^api\/
  * Files the module layout itself asks for, one per role or per route — never a lazy file.
  * The layout: `docs/theory/modules.md#what-a-module-contains`.
  */
-const LAID_OUT_FILE = /^src\/modules\/[^/]+\/([^/]+\.ts|controllers\/.+)$/;
+const LAID_OUT_FILE = /^src\/modules\/[^/]+\/(?:[^/]+\.ts|controllers\/.+)$/;
 
 /**
  * One named function and how it is used.

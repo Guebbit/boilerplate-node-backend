@@ -114,7 +114,7 @@ const BACKING_SERVICES = [
  * @returns the interface, e.g. `127.0.0.1`
  */
 const hostInterfaceOf = (port: PortMapping): string | undefined =>
-    typeof port === 'string' ? /^(\[[^\]]+]|[\d.]+):/.exec(port)?.[1] : port.host_ip;
+    typeof port === 'string' ? /^(\[[^\]]+\]|[\d.]+):/.exec(port)?.[1] : port.host_ip;
 
 describe('production container logs are bounded', () => {
     /*
@@ -486,9 +486,9 @@ describe('the cache and the limits are two Redis instances', () => {
      */
     it('evicts on the cache, never on the limits', () => {
         expect(commandLineOf('cache')).toMatch(
-            /--maxmemory-policy \$\{NODE_REDIS_MAXMEMORY_POLICY:-allkeys-lru}/
+            /--maxmemory-policy \$\{NODE_REDIS_MAXMEMORY_POLICY:-allkeys-lru\}/
         );
-        expect(commandLineOf('cache')).toMatch(/--maxmemory \$\{NODE_REDIS_MAXMEMORY:-256mb}/);
+        expect(commandLineOf('cache')).toMatch(/--maxmemory \$\{NODE_REDIS_MAXMEMORY:-256mb\}/);
         expect(commandLineOf('limits')).toMatch(/--maxmemory-policy noeviction/);
         expect(commandLineOf('limits')).toMatch(/--maxmemory \S+/);
     });

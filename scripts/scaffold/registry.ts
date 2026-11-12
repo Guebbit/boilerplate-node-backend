@@ -81,7 +81,7 @@ const retermRun = (
 };
 
 /** An array-entry line of `enabledModules`. */
-const isEntry = (line: string): boolean => /^ {4}[a-zA-Z]+[,;]?$/.test(line);
+const isEntry = (line: string): boolean => /^ {4}[a-z]+[,;]?$/i.test(line);
 
 /** A member line of the `ModuleName` union. */
 const isMember = (line: string): boolean => /^ {4}\| '/.test(line);

@@ -135,6 +135,7 @@
         "eslint-plugin-boundaries": "^7.2.0",
         "eslint-plugin-jest": "^29.16.6",
         "eslint-plugin-jsdoc": "^64.3.6",
+        "eslint-plugin-regexp": "^3.3.3",
         "eslint-plugin-unicorn": "^76.0.0",
         "fast-check": "^4.9.0",
         "globals": "^17.4.0",

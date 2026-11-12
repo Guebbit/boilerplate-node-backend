@@ -84,7 +84,7 @@ export const allowed = (token: string): boolean =>
  * a bare `.ts` naming the language does not — and neither does a dot-led suffix CONVENTION like
  * `.visual.cy.ts`, which is what `claimsAPath` below relies on to leave it alone.
  */
-const FILENAME = /^[^.][^/]*\.(ts|tsx|js|cjs|mjs|json|ya?ml|md|vue|sql|sh|css|scss|conf|lock)$/;
+const FILENAME = /^[^.][^/]*\.(?:ts|tsx|js|cjs|mjs|json|ya?ml|md|vue|sql|sh|css|scss|conf|lock)$/;
 
 /**
  * Characters that mean this span is prose, a glob, a type or a command — never one real path.

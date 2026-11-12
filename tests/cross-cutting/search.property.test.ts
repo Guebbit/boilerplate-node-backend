@@ -111,6 +111,7 @@ describe('escapeRegex', () => {
     it('leaves ANY alphanumeric text untouched, not just the sampled phrase', () => {
         // No over-escaping either: mangling plain words would quietly break search.
         fc.assert(
+            // eslint-disable-next-line regexp/use-ignore-case -- fast-check's stringMatching rejects the `i` flag
             fc.property(fc.stringMatching(/^[\d A-Za-z]*$/), (value) => {
                 expect(escapeRegex(value)).toBe(value);
             }),

@@ -42,7 +42,7 @@ const DECLARED_ROUTES: DeclaredRoute[] = listOperations()
     )
     .map((operation) => ({
         method: operation.method,
-        regex: new RegExp(`^${operation.path.replaceAll(/{[^}]+}/g, '[^/]+')}$`),
+        regex: new RegExp(`^${operation.path.replaceAll(/\{[^}]+\}/g, '[^/]+')}$`),
         operationId: operation.operationId,
         paramCount: operation.pathParameters.length
     }));
@@ -182,7 +182,7 @@ const SESSION_ANSWERS: ReadonlySet<string> = new Set([
  */
 export const isPackedRuleOperand = (operationId: string, path: string): boolean =>
     SESSION_ANSWERS.has(operationId) &&
-    /^(account\.)?abilities\.(tenant|platform)\.\d+\.2\.deletedAt$/.test(path);
+    /^(?:account\.)?abilities\.(?:tenant|platform)\.\d+\.2\.deletedAt$/.test(path);
 
 /**
  * Throws when a PUT answer carries a validator. RFC 9110 §9.3.4 allows one only when the stored

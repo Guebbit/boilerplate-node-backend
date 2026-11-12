@@ -11,7 +11,7 @@ import type { Operation } from './spec-walk';
 /**
  * The basket, the card steps of a payment (intent, confirm, sync), and enrolling a second factor — an armed administrator would be asked for a code first.
  */
-const SHOPPER_ROUTE = /^\/(cart|account\/2fa|payments\/(\{id\}\/(confirm|sync)|intent))/;
+const SHOPPER_ROUTE = /^\/(?:cart|account\/2fa|payments\/(?:\{id\}\/(?:confirm|sync)|intent))/;
 
 /**
  * The seeded role that reaches an operation's controller.

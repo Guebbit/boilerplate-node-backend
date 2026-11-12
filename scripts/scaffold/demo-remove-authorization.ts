@@ -72,7 +72,7 @@ export const stripRoleGrants = (repoRoot: string, removed: RemovedAuthorization)
         .filter((line) => !removed.sets.has(NAME_LINE.exec(line)?.[1] ?? ''));
 
     const out = lines.map((line, index) => {
-        const emptied = /^(\s*)sets:(?: &\w+)?\s*$/.exec(line);
+        const emptied = /^\s*sets:(?: &\w+)?\s*$/.exec(line);
         // Comments may sit between the heading and its first item; only a real line decides.
         const next = lines.slice(index + 1).find((each) => !/^\s*(?:#.*)?$/.test(each)) ?? '';
         return emptied && !NAME_LINE.test(next) ? line.replace(/\s*$/, ' []') : line;
@@ -88,7 +88,7 @@ export const stripRoleGrants = (repoRoot: string, removed: RemovedAuthorization)
 const splitCases = (cases: string): string[] => cases.split(/\n(?=\s*(?:#[^\n]*\n\s*)*- name:)/);
 
 /** Inline `permissions: [...]` lists in a chunk, as their raw inner text. */
-const INLINE_PERMISSIONS = /permissions:\s*\[([^\]]*)]/g;
+const INLINE_PERMISSIONS = /permissions:\s*\[([^\]]*)\]/g;
 
 /**
  * Prune one case chunk: `undefined` when the case is about a removed subject or was left holding
