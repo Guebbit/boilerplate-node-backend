@@ -4,6 +4,9 @@
  */
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
+import { listOperations, type HttpMethod, type Operation } from '@tests/spec-walk';
+import { buildUrl, seedWorld } from '@tests/spec-world';
+import { authenticateAs } from '@tests/http';
 
 setupTestDb();
 
@@ -35,6 +38,59 @@ describe('a wrong method on a known path', () => {
         expect(response.status).toBe(405);
         expect(response.headers.allow).toBe('GET, HEAD, OPTIONS');
     });
+});
+
+/** Every verb the spec can declare an operation under. */
+const ALL_METHODS: HttpMethod[] = ['get', 'post', 'put', 'patch', 'delete'];
+
+/**
+ * Templates the generated path table cannot match yet: its pattern treats `{page}` inside a
+ * segment (`products-{page}.xml`) as literal text, so a real `POST /sitemap/products-1.xml` is a
+ * 404, not a 405. Open finding: the generator reads only whole-segment `{param}`s.
+ */
+const UNMATCHABLE_TEMPLATES = new Set(['/sitemap/products-{page}.xml']);
+
+/**
+ * One row per path the spec declares: the operation that names it, and the methods it declares.
+ * Derived from the spec, so a path added tomorrow is swept with no list to update.
+ */
+const PATHS = [...new Set(listOperations().map((operation) => operation.path))]
+    .filter((route) => !UNMATCHABLE_TEMPLATES.has(route))
+    .map((route): [string, Operation, HttpMethod[]] => {
+        const operations = listOperations().filter((operation) => operation.path === route);
+        return [route, operations[0], operations.map((operation) => operation.method)];
+    });
+
+describe('every path of the spec, asked with every method it does not declare', () => {
+    it('walks some paths', () => {
+        // A walk that found nothing would pass the sweep below by testing nothing.
+        expect(PATHS.length).toBeGreaterThan(40);
+    });
+
+    it.each(PATHS)(
+        '%s answers 405 + Allow for each undeclared method',
+        async (_route, operation, declared) => {
+            // As admin: a router-level auth guard answers an anonymous caller 401 before the 405 guard runs.
+            const { user, bearer } = await authenticateAs('admin');
+            const url = buildUrl(operation, await seedWorld(user));
+            // HEAD rides on GET, and OPTIONS is listed wherever the path has any method (the guard's rule).
+            const allow = [
+                ...declared.map((method) => method.toUpperCase()),
+                ...(declared.includes('get') ? ['HEAD'] : []),
+                'OPTIONS'
+            ]
+                .toSorted()
+                .join(', ');
+
+            for (const method of ALL_METHODS.filter((candidate) => !declared.includes(candidate))) {
+                const response = await api()[method](url).set('Authorization', bearer);
+
+                expect([method, response.status]).toEqual([method, 405]);
+                expect(response.headers.allow).toBe(allow);
+            }
+        },
+        60_000
+    );
 });
 
 describe('what stays as it was', () => {
