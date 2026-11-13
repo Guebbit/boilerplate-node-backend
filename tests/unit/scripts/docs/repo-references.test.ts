@@ -5,13 +5,19 @@
  *                   `GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE` and reads the WRONG repo; this
  *                   strips them before every such call.
  * `trackedTargets`: what a citation may resolve to — and what it may not.
+ * `allowed`:        the paths a clean checkout legitimately lacks.
  */
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { gitEnvironment, resolves, trackedTargets } from '../../../../scripts/docs/repo-references';
+import {
+    allowed,
+    gitEnvironment,
+    resolves,
+    trackedTargets
+} from '../../../../scripts/docs/repo-references';
 import { setProcessEnvironment } from '@tests/environment';
 
 /** `execFile` without blocking the event loop. */
@@ -62,5 +68,25 @@ describe('trackedTargets', () => {
 
     it('does not let a `.2brain` mirror page vouch for a source file that is gone', () => {
         expect(resolves(trackedTargets(root).targets, 'src/gone.ts')).toBe(false);
+    });
+});
+
+describe('allowed', () => {
+    it('accepts a path under an allowlisted prefix, and the directory itself', () => {
+        expect(allowed('tmp/reports/mutation.json')).toBe(true);
+        expect(allowed('tmp/reports')).toBe(true);
+    });
+
+    it('accepts a directory on the way to an allowlisted prefix', () => {
+        expect(allowed('docs/.vitepress')).toBe(true);
+    });
+
+    it('accepts a generated file whichever tail of its path is spelled', () => {
+        expect(allowed('jobs.generated.ts')).toBe(true);
+    });
+
+    it('refuses a path that is neither allowlisted nor on the way to one', () => {
+        expect(allowed('src/gone.ts')).toBe(false);
+        expect(allowed('docs/gone')).toBe(false);
     });
 });

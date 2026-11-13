@@ -72,12 +72,17 @@ const GENERATED_SUFFIXES: readonly string[] = ['.generated.ts', 'asyncapi.public
 
 /**
  * Whether an allowlist entry covers this token — the directory itself as well as what is under
- * it, since a page naming `tmp/reports` and a page naming `tmp/reports/mutation/` make the same
- * claim.
+ * it and any directory on the way to one, since a page naming `tmp` and a page naming
+ * `tmp/reports/mutation/` make the same claim.
  */
 export const allowed = (token: string): boolean =>
     GENERATED_SUFFIXES.some((suffix) => token.endsWith(suffix)) ||
-    ALLOWED.some(({ prefix }) => token === prefix.replace(/\/$/, '') || token.startsWith(prefix));
+    ALLOWED.some(
+        ({ prefix }) =>
+            token === prefix.replace(/\/$/, '') ||
+            token.startsWith(prefix) ||
+            prefix.startsWith(`${token}/`)
+    );
 
 /**
  * A filename: a non-empty stem and a known extension. `package.json` qualifies with no `/` in it;

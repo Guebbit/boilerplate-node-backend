@@ -147,6 +147,22 @@ One table, two readers: `tests/support/contract-data.ts` reads it too, so a tric
 
 It also drives **one request at a time**. `create order → pay → cancel → pay again` is a real class of bug — a status check that only runs on the happy path, a reservation released twice — and nothing above can see it, because nothing above remembers the response of one request while building the next.
 
+## Negative mode
+
+`tests/fuzz/negative.fuzz.test.ts` is the other direction: values the spec does **not** allow, in the
+path and query parameters the 422 sweeps do not reach. One parameter per request is swapped for a
+hostile value (control bytes, injection shapes, a JSON object, an emoji, 5000 characters) or an
+edge value (`''`, `1e999`, `NaN`). Two assertions:
+
+- never 5xx, and the answer matches the contract, for every value;
+- 4xx where the parameter's schema is closed (enum, number, boolean, contract id), since no hostile
+  value can be a legal one.
+
+A second block asks every list read with query-string shapes no schema describes (`a[$ne]=1`,
+repeated keys, a malformed `%`). The operation list comes from the spec walk, so a new route is
+covered with no list to update. The sibling sweep for wrong methods is
+`tests/integration/method-not-allowed.test.ts` (405 plus `Allow` on every path).
+
 ## Sequences and cross-user access
 
 Neither is fuzzed. Each is covered by a test that builds the state it needs:
@@ -171,6 +187,7 @@ it passes the oracle, but it locks `authenticateAs` out and the fuzzing quietly 
 | Path                                 | Contents                                                                                                   |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
 | `tests/fuzz/endpoints.fuzz.test.ts`  | The driver: three callers per operation, the two assertions, the self-tripwire                             |
+| `tests/fuzz/negative.fuzz.test.ts`   | Negative mode: hostile path and query values, never 5xx, 4xx where the schema is closed                    |
 | `tests/support/spec-walk.ts`         | Parses `openapi.yaml`, resolves `$ref` and folds `allOf`, enumerates operations, owns `SUPPORTED_KEYWORDS` |
 | `tests/support/spec-world.ts`        | The seeded rows a path parameter names, shared with the request-contract walk                              |
 | `tests/support/spec-arbitraries.ts`  | JSON Schema → `fast-check` arbitrary, and the hostile-value tables                                         |
