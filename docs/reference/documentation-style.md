@@ -88,6 +88,7 @@ to everyone who has not opened the tree. This is the only check that looks for i
 | Directories count as targets       | `src/infrastructure/` resolves without naming a file.                                         |
 | The paired repo's name resolves    | Over THERE, which makes citing it by package name instead of directory name a finding.        |
 | Code citations are checked too     | A `docs/…md#anchor` in `src/`, `scripts/`, contract YAML or `.env-example` must resolve.      |
+| `npm run <x>` is checked too       | Any page, fenced or inline: `x` must be a script here or in the paired frontend.              |
 | `<!-- doc-paths:ignore -->`        | Skips the whole line, for prose that names an absent path on purpose (a rename table).        |
 
 The code-citation half only asks whether a link is dead (page tracked, anchor a heading, same
