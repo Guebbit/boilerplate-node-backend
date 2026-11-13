@@ -456,6 +456,7 @@ const armOutcomeCapture = (response: Response, claim: Claim): void => {
     response.json = ((body: unknown) => {
         record(body);
         return responseJson(body);
+        // The wrapper records the body then returns what the original `json` returns.
     }) as Response['json'];
 
     const responseEnd = response.end.bind(response);
@@ -466,6 +467,8 @@ const armOutcomeCapture = (response: Response, claim: Claim): void => {
             else warnUnrecordableEnd(key);
         }
         return responseEnd(...endArguments);
+        // `end` is overloaded, so the wrapper's rest-args signature cannot be matched to any one
+        // overload; it forwards its arguments untouched.
     }) as Response['end'];
 };
 

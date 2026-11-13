@@ -36,6 +36,7 @@ const listArtifacts = (): Promise<GitHubArtifact[]> =>
     run('gh', [
         'api',
         `repos/{owner}/{repo}/actions/artifacts?name=${REPORT_ARTIFACT}&per_page=100`
+        // `gh api` prints GitHub's artifacts-list JSON; only `artifacts` is read.
     ]).then(({ stdout }) => (JSON.parse(stdout) as { artifacts: GitHubArtifact[] }).artifacts);
 
 /**

@@ -243,6 +243,7 @@ const appendVariants = (
     schemas: Record<string, unknown>,
     fragment: ExtensionFragment
 ): void => {
+    // A union schema carries a `oneOf` list; the caller picks only unions.
     const oneOf = union.oneOf as unknown[];
     const discriminator = isPlainObject(union.discriminator) ? union.discriminator : undefined;
     const mapping =

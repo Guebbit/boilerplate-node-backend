@@ -140,6 +140,8 @@ export const posthogAnalyticsProvider: AnalyticsProvider = {
         ).then((response) => {
             if (!response.ok)
                 throw new Error(`PostHog person deletion refused with status ${response.status}`);
+            // `response.json()` answers `Promise<any>`; only PostHog's documented `deletion_errors`
+            // field is read, optionally.
             return (response.json() as Promise<BulkDeleteResponse>).then((body) => {
                 if (body.deletion_errors?.length)
                     throw new Error('PostHog reported errors deleting the person');

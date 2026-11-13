@@ -111,6 +111,8 @@ export const withBrowserEvents = (
                 throw new Error(
                     `[openapi] browser event ${name} (${event}) is declared twice — the second is ${file}.`
                 );
+            // `localiseReferences` only rewrites `$ref` strings and keeps the shape, so a schema in
+            // is a schema out.
             added[name] = localiseReferences(schema) as Schema;
             mapping[event] = `#/components/schemas/${name}`;
         }

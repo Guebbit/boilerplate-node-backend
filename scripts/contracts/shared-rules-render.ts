@@ -49,6 +49,7 @@ const sliceOf = (document: unknown, field: string | undefined): unknown => {
     if (field === undefined) return document;
     if (typeof document !== 'object' || document === null || !(field in document))
         throw new Error(`the rules file has no \`${field}\` field`);
+    // The `typeof` and `in` checks above prove `document` is an object holding `field`.
     return (document as Record<string, unknown>)[field];
 };
 
@@ -92,7 +93,9 @@ const renderExport = (document: unknown, spec: GeneratedExport): string => {
     const slice = sliceOf(document, spec.field);
     const literal =
         spec.shape === 'keyed-list'
-            ? renderKeyed(slice as readonly KeyedEntry[])
+            ? // A `keyed-list` spec means the YAML slice is a list of keyed entries; the render step
+              // validates each.
+              renderKeyed(slice as readonly KeyedEntry[])
             : `${withNumericSeparators(JSON.stringify(slice, undefined, 4))} as const`;
     return `${docblock(spec.description)}\nexport const ${spec.exportName} = ${literal};\n`;
 };

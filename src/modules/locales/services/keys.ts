@@ -51,11 +51,13 @@ const descend = (
     key: string,
     path: string
 ): Record<string, unknown> => {
+    // `Object.create` answers `any`; widened to `unknown` to match the node's value type.
     if (node[segment] === undefined) node[segment] = Object.create(null) as unknown;
     else if (!isPlainObject(node[segment]))
         throw new Error(
             `locale key "${key}" needs "${path}" to be a group, but it is already a string`
         );
+    // Either created as an object on the first line or checked with `isPlainObject` on the second.
     return node[segment] as Record<string, unknown>;
 };
 

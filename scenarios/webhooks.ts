@@ -31,7 +31,6 @@ import { Types } from 'mongoose';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { webhookSubscriptionRepository } from '@modules/webhooks/repository';
 import { encryptRingSecret } from '@modules/webhooks/secrets';
-import type { WebhookSubscriptionDocument } from '@modules/webhooks/model';
 import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
 import { demoSinkConfig } from '@scenarios/config';
 
@@ -63,15 +62,13 @@ export const seedWebhooksCollection = (): Promise<SeedOutcome[]> => {
     const sinkBaseUrl = demoSinkConfig().NODE_WEBHOOK_DEMO_SINK_URL;
     if (!sinkBaseUrl) return Promise.resolve([]);
 
-    // `id`/`ciphertext` only — `createdAt` is the ring entry's own subdocument timestamp
-    // (`model.ts`'s `{ timestamps: { createdAt: true } }`) and stamps itself on insert.
+    // `createdAt` is set here only to satisfy the ring entry's type; the subdocument's own
+    // `{ timestamps: { createdAt: true } }` stamps the same instant on insert.
     const entry = {
         id: WEBHOOK_DEMO_SECRET_ID,
-        ciphertext: encryptRingSecret(WEBHOOK_DEMO_SECRET, WEBHOOK_DEMO_SECRET_ID)
+        ciphertext: encryptRingSecret(WEBHOOK_DEMO_SECRET, WEBHOOK_DEMO_SECRET_ID),
+        createdAt: new Date()
     };
-    // No `createdAt`/`updatedAt`: the schema's own `{ timestamps: true }` stamps both on insert,
-    // same reasoning as the ring entry above. Cast because `fixture` is a plain literal, not a
-    // hydrated Mongoose document — `create()` builds one from it.
     const fixture = {
         _id: new Types.ObjectId(WEBHOOK_SUBSCRIPTION_ID),
         tenant: DEPLOYMENT_TENANT_ID,
@@ -80,7 +77,7 @@ export const seedWebhooksCollection = (): Promise<SeedOutcome[]> => {
         eventTypes: ['*'],
         consecutiveFailures: 0,
         secrets: [entry]
-    } as WebhookSubscriptionDocument;
+    };
 
     return insertIfAbsent(webhookSubscriptionRepository, fixture).then((outcome) => [outcome]);
 };

@@ -58,6 +58,8 @@ const resolveConditions = (
             continue;
         }
 
+        // The placeholder's name is data in a rule; an unknown key reads `undefined`, which the
+        // next line treats as unresolved.
         const source = caller[value.slice(PLACEHOLDER.length) as keyof Caller];
 
         if (source === undefined || source === null || source === '') {
@@ -228,5 +230,7 @@ export const permitsOnRows = <TAction extends string>(
                 action,
                 ability.can(action, subject(subjectName, { ...row, tenantId: caller.tenantId }))
             ])
+            // `Object.fromEntries` answers a plain string-keyed record; one entry is built per
+            // `actions` member.
         ) as Record<TAction, boolean>;
 };

@@ -85,6 +85,7 @@ const toStorage = (query: unknown): unknown => {
 
     const rewritten: Record<string, unknown> = {};
 
+    // The `typeof 'object'` and falsy checks above prove `query` is an object.
     for (const [field, value] of Object.entries(query as Record<string, unknown>)) {
         if (UNSTORED_FIELDS.has(field)) {
             continue;
@@ -129,6 +130,7 @@ const collapse = (filter: Record<string, unknown>): Record<string, unknown> => {
         return {};
     }
 
+    // Each `$or` branch is a condition object CASL compiled; the one-branch case is that object.
     return branches.length === 1 ? (branches[0] as Record<string, unknown>) : filter;
 };
 
@@ -176,6 +178,7 @@ export const accessibleFilterFor = (
         subject
     );
 
+    // `toStorage` returns an object for an object; CASL's compiled query is one.
     return collapse(toStorage(compiled) as Record<string, unknown>);
 };
 

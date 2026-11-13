@@ -433,6 +433,8 @@ export const quarantineUploadedImages: RequestHandler = (request, response, next
                     );
 
                 const keys = results.map(
+                    // Every rejected result was refused earlier in this chain, so only fulfilled
+                    // ones remain here.
                     (result) => (result as PromiseFulfilledResult<string>).value
                 );
 

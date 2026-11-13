@@ -34,7 +34,7 @@ export interface ResponseSuccess<T> extends ResponseNeutral {
     /** Generic payload — the endpoint's actual result. Always present; a service with nothing to return passes `undefined` as `T`. */
     data: T;
     /** Forbids constructing a success result that also carries errors — a check `success: true` alone cannot make. */
-    errors: never;
+    errors?: never;
 }
 
 /** One machine-readable failure. Endpoints can return several (e.g. per-field validation). */
@@ -75,14 +75,11 @@ export interface ResponseReject extends ResponseNeutral {
  * Split from `successResponse` so the result can be built without an Express `Response` —
  * useful in unit tests, and in workers that produce the same shape outside HTTP.
  */
-export const generateSuccess = <T>(data: T, status = 200) =>
-    ({
-        success: true,
-        status,
-        data
-        // `as` cast is required because `errors: never` cannot be satisfied by any literal:
-        // the field is deliberately absent at runtime and exists only to drive narrowing.
-    }) as ResponseSuccess<T>;
+export const generateSuccess = <T>(data: T, status = 200): ResponseSuccess<T> => ({
+    success: true,
+    status,
+    data
+});
 
 /**
  * Send the payload itself as the body of a success.
@@ -266,15 +263,17 @@ const normalizeErrors = (
  * safer accidental default than 500. No `message` parameter on purpose (see
  * {@link resolveErrorTitle}) — `errors` is the half the client is meant to read.
  */
-export const generateReject = (status = 400, errors: (string | ResponseErrorItem)[] = []) =>
-    ({
-        success: false,
-        status,
-        message: resolveErrorTitle(status),
-        // Explicitly present-but-undefined; see `ResponseReject.data`.
-        data: undefined,
-        errors: normalizeErrors(status, errors)
-    }) as ResponseReject;
+export const generateReject = (
+    status = 400,
+    errors: (string | ResponseErrorItem)[] = []
+): ResponseReject => ({
+    success: false,
+    status,
+    message: resolveErrorTitle(status),
+    // Explicitly present-but-undefined; see `ResponseReject.data`.
+    data: undefined,
+    errors: normalizeErrors(status, errors)
+});
 
 /**
  * The only door to a 429: `rejectResponse` turns `details.retryAfter` into `Retry-After`, so a
@@ -454,9 +453,13 @@ export const rejectResponse = (
     // earlier `text/csv` would otherwise leak onto its own error. An error is never an attachment.
     response.setHeader('Content-Type', PROBLEM_MEDIA_TYPE);
     response.removeHeader('Content-Disposition');
-    return response
-        .status(status)
-        .json(problemOf(rejection, instanceOf(response))) as Response<ProblemDetails>;
+    return (
+        response
+            .status(status)
+            // `.json()` answers the `Response` it was called on; the cast only names the body type it
+            // was given.
+            .json(problemOf(rejection, instanceOf(response))) as Response<ProblemDetails>
+    );
 };
 
 /**

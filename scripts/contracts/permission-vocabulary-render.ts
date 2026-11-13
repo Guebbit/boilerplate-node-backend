@@ -76,6 +76,8 @@ const fieldOfEach = (raw: Raw, key: string, field: string): string[] => {
     if (!Array.isArray(entries) || entries.length === 0)
         throw new Error(`authorization-keys.generated.yaml declares no \`${key}:\` list`);
     return entries.map((entry: unknown) => {
+        // `entry` is parsed YAML (`unknown`); a non-object yields `undefined` on read and fails the
+        // string check below.
         const value = (entry as Raw | null)?.[field];
         if (typeof value !== 'string' || value === '')
             throw new Error(
@@ -117,6 +119,8 @@ export const readPermissionVocabulary = (yamlText: string): PermissionVocabulary
     assertUnique(actions, 'actions:');
     assertUnique(setNames, 'sets:');
 
+    // The `rules:` list was read and refused above when empty or not a list, which is what proves
+    // it is an array.
     const rules = raw.rules as Raw[];
     for (const [index, rule] of rules.entries()) {
         const action = ruleActions[index];
@@ -140,6 +144,7 @@ export const readPermissionVocabulary = (yamlText: string): PermissionVocabulary
 
     const subjects = [...new Set(ruleSubjects)];
     const pairs: Record<string, string[]> = Object.fromEntries(
+        // Names the empty list's element type; `[]` alone infers `never[]`.
         subjects.map((subject) => [subject, [] as string[]])
     );
     for (const [index, action] of ruleActions.entries()) pairs[ruleSubjects[index]].push(action);

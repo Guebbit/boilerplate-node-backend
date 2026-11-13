@@ -111,6 +111,7 @@ const rectifiedFields = (
         website: data.website !== undefined && (data.website ?? undefined) !== user.website,
         imageUrl: imageMoved
     };
+    // `Object.keys` answers `string[]`; `moved` is built from exactly those field names.
     return (Object.keys(moved) as Exclude<UserChangedField, 'email'>[]).filter(
         (field) => moved[field]
     );

@@ -29,6 +29,8 @@ export const presentWebhookSubscription = (
     actions: WebhookSubscriptionActions
 ): WebhookSubscription =>
     carryVersion(document, {
+        // The schema's `toJSON` transform produces the stored shape `StoredWebhookSubscription`
+        // names; Mongoose types it as a generic object.
         ...(document.toJSON() as StoredWebhookSubscription),
         actions
     });

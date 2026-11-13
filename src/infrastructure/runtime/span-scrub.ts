@@ -48,6 +48,8 @@ const scrubSpan = (span: ReadableSpan): ReadableSpan => {
         get: (target, property) => {
             if (property === 'events') return events;
             if (property === 'status') return status;
+            // `Reflect.get` answers `any`; widened to `unknown` so the proxy passes it on
+            // unexamined.
             return Reflect.get(target, property) as unknown;
         }
     });

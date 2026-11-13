@@ -108,6 +108,7 @@ export const readReport = (): Record<string, number> => {
                 `mutation:full\` first — the \`json\` reporter in stryker.json is what writes it.`
         );
 
+    // The report is Stryker's own `mutation.json`; only the fields `MutationReport` names are read.
     return scoresFromReport(JSON.parse(readFileSync(reportPath, 'utf8')) as MutationReport);
 };
 
@@ -124,6 +125,7 @@ export const readReportsUnder = (directory: string): Record<string, number> => {
 
     for (const entry of readdirSync(directory, { recursive: true, encoding: 'utf8' })) {
         if (!entry.endsWith('mutation.json')) continue;
+        // Each file is a Stryker `mutation.json` written by a shard of this run.
         const report = JSON.parse(
             readFileSync(path.join(directory, entry), 'utf8')
         ) as MutationReport;
@@ -171,7 +173,10 @@ export const compareToBaseline = (
     const files = [...new Set([...Object.keys(previous), ...Object.keys(current)])].toSorted();
 
     return files.map((file) => {
+        // `Record<string, number>` indexing never answers `undefined` to the compiler; a file new
+        // to the baseline does.
         const before = previous[file] as number | undefined;
+        // Same as `before`: a file may be absent from one side.
         const now = current[file] as number | undefined;
 
         if (before === undefined) return { file, current: now, verdict: 'new' as const };
@@ -212,6 +217,8 @@ export const mergeIntoBaseline = (
     const files: Record<string, number> = { ...previous };
 
     for (const [file, score] of Object.entries(current)) {
+        // `Record<string, number>` indexing never answers `undefined` to the compiler; a file new
+        // to the baseline does.
         const before = previous[file] as number | undefined;
         files[file] = before === undefined ? score : Math.max(before, score);
     }
@@ -250,6 +257,8 @@ export const nextBaseline = (
     const files: Record<string, number> = {};
 
     for (const file of Object.keys(current).toSorted()) {
+        // `Record<string, number>` indexing never answers `undefined` to the compiler; a file new
+        // to the baseline does.
         const before = previous[file] as number | undefined;
         files[file] = before === undefined ? current[file] : Math.max(before, current[file]);
     }

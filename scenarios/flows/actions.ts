@@ -153,6 +153,8 @@ export const submitCard = (
                     `submitCard(${paymentMethodRef}) answered ${String(outcome.status)} — ` +
                         JSON.stringify(outcome.data)
                 );
+            // `outcome.data` is `unknown` for any endpoint; the 2xx check above proves this one
+            // answered the payment's own body.
             return (outcome.data as PaymentData).status;
         });
 

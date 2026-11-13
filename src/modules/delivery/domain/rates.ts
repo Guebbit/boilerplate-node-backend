@@ -124,6 +124,7 @@ export const cheapestStandardShipping = (itemsTotal: string, currency: string): 
         priceShippingMoney(method, itemsTotal, currency)
     );
     return toDecimalString(
+        // The minimum of `Money` values is one of them; `Math.min` loses the brand.
         prices.length > 0 ? (Math.min(...prices) as Money) : toMinorUnits(0, currency),
         currency
     );

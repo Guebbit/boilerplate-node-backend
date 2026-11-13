@@ -182,6 +182,8 @@ export const readAliases = (): { prefix: string; target: string }[] => {
         /^\s*\/\/.*$/gm,
         ''
     );
+    // Our own `tsconfig.json` (comments stripped above); only `compilerOptions.paths` is read,
+    // every level optional.
     const paths = (JSON.parse(raw) as { compilerOptions?: { paths?: Record<string, string[]> } })
         .compilerOptions?.paths;
 

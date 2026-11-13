@@ -250,11 +250,17 @@ const claim = (row: OutboxRow): Promise<{ token: string; attempts: number } | nu
  * @returns `undefined` when every consumer succeeded, otherwise what to record as the failure
  */
 const dispatch = (row: OutboxRow): Promise<string | undefined> =>
-    // `name` came from a `DomainEventName` at enqueue time, but a stored string cannot prove that
-    // to the compiler; a name nobody subscribes to any more simply has no handlers.
-    emitDomainEvent(row.name as DomainEventName, row.payload as never, {
-        eventId: String(row._id)
-    }).then(
+    // Both casts name what `enqueue` stored: `name` was a `DomainEventName` and `payload` the map's
+    // value for it (the row is written only through `enqueue`, which is typed). The compiler cannot
+    // see through the stored string and `Mixed`. A name nobody subscribes to any more has no
+    // handlers.
+    emitDomainEvent<DomainEventName>(
+        row.name as DomainEventName,
+        row.payload as DomainEventMap[DomainEventName],
+        {
+            eventId: String(row._id)
+        }
+    ).then(
         (settled) => (settled ? undefined : 'a consumer failed'),
         (error: unknown) => extractErrorMessage(error, String(error))
     );

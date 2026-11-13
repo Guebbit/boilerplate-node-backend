@@ -11,7 +11,7 @@
  */
 
 import { z } from 'zod';
-import type { $ZodIssue } from 'zod/v4/core';
+import type { $ZodRawIssue } from 'zod/v4/core';
 import { t } from '@infrastructure/i18n';
 
 /** A field name: a letter, then word characters or hyphens. Skips indexes and locale-like keys with dots. */
@@ -86,8 +86,8 @@ const NAMED_FORMATS = new Set(['email', 'url', 'uuid', 'datetime', 'date', 'time
  * `validation.invalid`, which is vague but translated, and vague-and-translated beats
  * precise-and-in-the-wrong-language on a form a person is looking at.
  */
-const messageFor = (issue: $ZodIssue): string => {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Zod types `path` as always set, but a raw top-level issue reaches the error map without it
+const messageFor = (issue: $ZodRawIssue): string => {
+    // A raw issue is a draft: `path` is optional until Zod finalises it.
     const attribute = attributeOf(issue.path ?? []);
 
     switch (issue.code) {
@@ -153,5 +153,5 @@ const messageFor = (issue: $ZodIssue): string => {
  */
 export const registerValidationMessages = (): void => {
     // `customError` is Zod's global message hook, used instead of overriding per schema.
-    z.config({ customError: (issue) => messageFor(issue as $ZodIssue) });
+    z.config({ customError: (issue) => messageFor(issue) });
 };
