@@ -50,9 +50,14 @@ when you hit one, not because the doc is the guard.
     parse through the generated schemas under `api/`.
   - One sanctioned exception, for hand-built test stubs only: `asStub<T>()` from
     `tests/support/stub.ts`. The cast happens once, behind a name, instead of everywhere.
-- A single `as X` is fine where it narrows something the compiler cannot see into — say why in a
-  comment. `!` likewise: allowed for a value already proven present by a guard the compiler cannot
-  follow, never to quiet a type error.
+- `as X` only **narrows**: it names which type a value already can be, proven by a check the
+  compiler cannot follow (`unknown` after a Zod parse, a union after a discriminant, an `Element`
+  after a selector check). Say which check, in a comment.
+- `as X` never **widens or claims**: no list item cast to a full record, no partial to a whole,
+  no `{}` to `T`. Model it with a union, a separate type or a parse. (An object literal cast to a
+  type is lint-enforced: `consistent-type-assertions`.)
+- `!` likewise: allowed for a value already proven present by a guard the compiler cannot follow,
+  never to quiet a type error.
 - MUST NOT use `@ts-ignore`. `@ts-expect-error` only where the type error is itself the thing under
   test, always with a `--` description.
 - Every `eslint-disable` carries a description of what it protects — a bare one is refused, on
@@ -420,8 +425,10 @@ Conventional Commits, enforced by commitlint on the `commit-msg` hook
 - A lane merges on `complete:light`. The full `npm run complete` (no live e2e, no mutation) runs on
   main every 20 commits; CI on push is authoritative.
 - Default: commit normally and let the hook run its light gate. Nothing more is required.
-- A new test the hook does not run (a Cypress journey, a live e2e) is run before the commit when the
-  stack can run it; otherwise right after, and the report says which.
+- Before the commit, run every test the hook does not run that the change touches: a new Cypress
+  journey or live e2e, AND every existing one whose screen, flow or response shape the change
+  alters, by file. If the stack cannot run it, the change does not merge until it has. The commit
+  message names what ran; "not run here" is not allowed.
 - **NEVER** use `--no-verify` unless a `complete` (regular or `:fix`) has been run right before, on
   the current tree, and finished with success (all green). Running it is not required to commit;
   it is only the price of skipping the hook. Targeted checks (eslint on a few files, one jest
