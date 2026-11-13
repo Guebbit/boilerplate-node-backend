@@ -20,7 +20,6 @@ import { issueToken } from '@modules/account/services/tokens';
 import { passwordChange } from '@modules/account/services/password';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { userRepository } from '@modules/users/tests/factories';
-import type { UserDocument } from '@modules/users';
 import { plantSession, plantToken, sessionRowsOf, tokenHashesOf, tokenRowsOf } from '../factories';
 import { asReject, asSuccess } from '@tests/response';
 import * as analyticsPort from '@infrastructure/observability/analytics';
@@ -329,13 +328,13 @@ describe('signup', () => {
 });
 
 describe('login', () => {
-    const createLoginUser = (overrides: Partial<UserDocument> = {}) =>
+    const createLoginUser = (overrides: NonNullable<Parameters<typeof createUser>[0]> = {}) =>
         createUser({
             email: 'login@example.com',
             username: 'loginuser',
             password: PLAIN_PASSWORD,
             ...overrides
-        } as Parameters<typeof createUser>[0]);
+        });
 
     it('returns the user for correct credentials', async () => {
         await createLoginUser();

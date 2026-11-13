@@ -18,9 +18,11 @@ export interface NotificationsView {
  * (`NewNotification` is built from the same union), so one cast here restores what they promised
  * rather than one switch arm per code, which a module adding codes could never extend.
  */
-const bodyOf = (notification: NotificationDocument): NotificationBody =>
+const bodyOf = (notification: NotificationDocument): NotificationBody => {
+    const stored = { code: notification.code, params: notification.params };
     // Narrowing, not widening: see the paragraph above.
-    ({ code: notification.code, params: notification.params }) as NotificationBody;
+    return stored as NotificationBody;
+};
 
 /** Turn one notification document into the contract's `Notification`, the variant for its code. */
 export const presentNotification = (notification: NotificationDocument): Notification => ({

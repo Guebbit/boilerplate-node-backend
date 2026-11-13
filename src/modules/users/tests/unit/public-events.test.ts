@@ -6,13 +6,14 @@
 
 import usersModule from '../../module';
 import { USER_ERASED, USER_PROFILE_CHANGED } from '../../events';
+import { asStub } from '@tests/stub';
 
 // `as never`: the slot takes `never` so one registry can hold every module's projections.
 describe('the users module’s public events', () => {
     it('tells subscribers an account was erased, with its id alone', () => {
         const target = usersModule.publicEvents[USER_ERASED];
 
-        const projected = target.toPublicEvent({ userId: 'u1', email: 'a@b.c' } as never);
+        const projected = target.toPublicEvent(asStub<never>({ userId: 'u1', email: 'a@b.c' }));
 
         expect(projected).toEqual({ eventType: 'user.erased', data: { userId: 'u1' } });
     });
@@ -20,7 +21,7 @@ describe('the users module’s public events', () => {
     it('tells subscribers which fields were rectified, never their values', () => {
         const target = usersModule.publicEvents[USER_PROFILE_CHANGED];
 
-        const projected = target.toPublicEvent({ userId: 'u1', changed: ['email'] } as never);
+        const projected = target.toPublicEvent(asStub<never>({ userId: 'u1', changed: ['email'] }));
 
         expect(projected).toEqual({
             eventType: 'user.updated',

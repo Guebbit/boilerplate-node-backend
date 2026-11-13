@@ -10,10 +10,11 @@
 import type { Server } from 'node:http';
 import { applyServerTimeouts } from '@app/security';
 import { setEnvironment } from '@tests/environment';
+import { asStub } from '@tests/stub';
 
 /** Just the three fields `applyServerTimeouts` writes, seeded with Node's own defaults. */
 const serverStub = () =>
-    ({ headersTimeout: 60_000, requestTimeout: 300_000, keepAliveTimeout: 5000 }) as Server;
+    asStub<Server>({ headersTimeout: 60_000, requestTimeout: 300_000, keepAliveTimeout: 5000 });
 
 describe('applyServerTimeouts', () => {
     it('bounds header receipt well below the 60s Node would otherwise allow', () => {

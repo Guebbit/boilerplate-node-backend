@@ -13,7 +13,7 @@ import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 
 const makeRequest = (params: Record<string, string> = {}) => asStub<Request>({ params });
 
-const response = {} as Response;
+const response = asStub<Response>({});
 
 describe('routeFlag', () => {
     it('writes the flag onto request.params so readInput can find it', () => {

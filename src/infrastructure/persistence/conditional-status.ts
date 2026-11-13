@@ -8,7 +8,7 @@
  * See: docs/theory/tactical-ddd.md#deciding-and-enforcing-stay-separate
  */
 
-import type { ClientSession, HydratedDocument, Model, QueryFilter } from 'mongoose';
+import type { ClientSession, HydratedDocument, Model } from 'mongoose';
 
 /** What a caller may add to the write beyond the status move itself. */
 export interface ConditionalStatusOptions {
@@ -39,9 +39,7 @@ export const updateStatusIfIn = <TDocument>(
 ): Promise<HydratedDocument<TDocument> | null> =>
     model
         .findOneAndUpdate(
-            // `as QueryFilter`: spreading a `Record<string, unknown>` widens the object past what the
-            // filter generic accepts, and typing every caller's scope per collection buys nothing.
-            { ...match, status: { $in: [...from] } } as QueryFilter<TDocument>,
+            { ...match, status: { $in: [...from] } },
             { $set: { ...set, status: to } },
             // `returnDocument: 'after'` answers the written row; `session` joins the transaction.
             // https://mongoosejs.com/docs/api/model.html#Model.findOneAndUpdate()

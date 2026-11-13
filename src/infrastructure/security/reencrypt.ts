@@ -149,11 +149,10 @@ const reencryptCollection = <TDocument extends Document>(
     cursor?: Types.ObjectId,
     report: ReencryptReport = emptyReport()
 ): Promise<ReencryptReport> => {
-    // Cast: `_id` paging on a generic document; every collection here has an ObjectId `_id`.
-    const where = {
+    const where: QueryFilter<TDocument> = {
         ...job.filter,
         ...(cursor ? { _id: { $gt: cursor } } : {})
-    } as QueryFilter<TDocument>;
+    };
 
     return job.model
         .find(where)

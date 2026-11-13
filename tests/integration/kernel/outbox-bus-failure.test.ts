@@ -1,6 +1,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { enqueueOutboxEvent, outboxEventModel, relayOutbox } from '@kernel/outbox';
+import { asStub } from '@tests/stub';
 
 /**
  * The relay when the event bus itself rejects, which `emitDomainEvent` never does on its own:
@@ -19,7 +20,7 @@ jest.mock('@kernel/events', () => ({
 describe('relayOutbox on a rejecting bus', () => {
     it('records the rejection message in lastError and reschedules', async () => {
         await withTransaction((session) =>
-            enqueueOutboxEvent('test.outbox' as never, { n: 1 } as never, 'agg-1', session)
+            enqueueOutboxEvent('test.outbox' as never, asStub<never>({ n: 1 }), 'agg-1', session)
         );
 
         expect(await relayOutbox()).toMatchObject({ retried: 1 });

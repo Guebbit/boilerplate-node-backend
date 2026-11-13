@@ -72,9 +72,9 @@ describe('auditLogRepository', () => {
         });
 
         it('rejects an entry missing a required field', async () => {
-            const incomplete = {
+            const incomplete = asStub<Partial<AuditLogDocument>>({
                 action: coreAuditActions.SECURITY_UNAUTHORIZED
-            } as Partial<AuditLogDocument>;
+            });
 
             await expect(auditLogRepository.create(incomplete)).rejects.toThrow();
         });

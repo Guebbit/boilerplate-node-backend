@@ -18,6 +18,7 @@ import {
     readUploadedImage,
     writeWithUploadedImage
 } from '@infrastructure/http/uploads';
+import { asStub } from '@tests/stub';
 
 /*
  * Image-store calls are mocked: the undo is asserted by WHICH store door it opens (`remove` for a
@@ -28,14 +29,14 @@ jest.mock('@infrastructure/adapters/image-store', () => ({
 }));
 
 /** A multer file stub — `path` is the only field these helpers touch. */
-const uploaded = (path: string) => ({ path }) as Express.Multer.File;
+const uploaded = (path: string) => asStub<Express.Multer.File>({ path });
 
 /**
  * A partial Request stub, `body` defaulted to `{}` so `readUploadedImage`'s own fallback branch
  * (which reads `request.body.imageUrl`) never sees `undefined` — `getFormFiles`'s cases never
  * read `body` at all, so the default changes nothing for them.
  */
-const requestWith = (parts: Partial<Request>): Request => ({ body: {}, ...parts }) as Request;
+const requestWith = (parts: Partial<Request>): Request => asStub<Request>({ body: {}, ...parts });
 
 describe('getFormFiles', () => {
     it('wraps a single-file upload (multer.single) in an array', () => {
@@ -91,7 +92,7 @@ describe('readUploadedImage', () => {
     it('ignores a staged file the store never committed', () => {
         expect(
             readUploadedImage(
-                requestWith({ file: { path: '/tmp/staging/a.png' } as Express.Multer.File })
+                requestWith({ file: asStub<Express.Multer.File>({ path: '/tmp/staging/a.png' }) })
             ).imageUrl
         ).toBeUndefined();
     });

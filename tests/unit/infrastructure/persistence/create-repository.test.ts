@@ -17,12 +17,13 @@ import {
     type Wire,
     withScope
 } from '@infrastructure/persistence/create-repository';
+import { asStub } from '@tests/stub';
 
 interface FixtureDocument extends Document {
     name: string;
 }
 
-const stubModel = {} as Model<FixtureDocument>;
+const stubModel = asStub<Model<FixtureDocument>>({});
 const identityTransform = (item: Record<string, unknown>): Record<string, unknown> => item;
 
 const buildWhereFor = (searchable: SearchSpec) =>

@@ -1441,7 +1441,7 @@ describe('invalidateCache', () => {
         const { response, listeners } = createResponse();
         const next = jest.fn() as NextFunction;
 
-        middleware({} as Request, response, next);
+        middleware(asStub<Request>({}), response, next);
 
         expect(next).toHaveBeenCalledTimes(1);
 
@@ -1458,7 +1458,7 @@ describe('invalidateCache', () => {
         const middleware = invalidateCache(['orders']);
         const { response, listeners } = createResponse();
 
-        middleware({} as Request, response, jest.fn() as NextFunction);
+        middleware(asStub<Request>({}), response, jest.fn() as NextFunction);
 
         response.statusCode = 500;
         listeners.get('finish')?.();

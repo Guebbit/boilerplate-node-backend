@@ -41,7 +41,7 @@ jest.mock('@infrastructure/adapters/logger', () => ({
 /** A response double recording only what this handler touches. */
 const fakeResponse = () => {
     const recorded = {
-        headers: {} as Record<string, string>,
+        headers: asStub<Record<string, string>>({}),
         status: undefined as number | undefined,
         body: undefined as unknown
     };
@@ -69,7 +69,7 @@ describe('GET /observability/metrics', () => {
         jest.mocked(getPrometheusMetrics).mockResolvedValueOnce('# HELP up\nup 1\n');
         const { response, recorded } = fakeResponse();
 
-        getObservabilityMetrics({} as never, response);
+        getObservabilityMetrics(asStub<never>({}), response);
         await Promise.resolve();
         await Promise.resolve();
 
@@ -84,7 +84,7 @@ describe('GET /observability/metrics', () => {
         jest.mocked(getPrometheusMetrics).mockRejectedValueOnce(new Error('registry exploded'));
         const { response, recorded } = fakeResponse();
 
-        getObservabilityMetrics({} as never, response);
+        getObservabilityMetrics(asStub<never>({}), response);
         await Promise.resolve();
         await Promise.resolve();
         await Promise.resolve();
@@ -101,7 +101,7 @@ describe('GET /observability/metrics', () => {
         jest.mocked(getPrometheusMetrics).mockRejectedValueOnce(failure);
         const { response } = fakeResponse();
 
-        getObservabilityMetrics({} as never, response);
+        getObservabilityMetrics(asStub<never>({}), response);
         await Promise.resolve();
         await Promise.resolve();
         await Promise.resolve();
@@ -119,7 +119,7 @@ describe('GET /observability/metrics', () => {
         jest.mocked(getPrometheusMetrics).mockRejectedValueOnce(failure);
         const { response } = fakeResponse();
 
-        getObservabilityMetrics({} as never, response);
+        getObservabilityMetrics(asStub<never>({}), response);
         await Promise.resolve();
         await Promise.resolve();
         await Promise.resolve();

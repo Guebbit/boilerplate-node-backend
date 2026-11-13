@@ -14,6 +14,7 @@ import { type AuditEntry } from '@infrastructure/observability/audit';
 import type { AuditLogDocument } from '@modules/audit-logs/model';
 import { auditSinkFailuresTotal } from '@modules/audit-logs/metrics';
 import type { AuditEntryItem } from '@types';
+import { asStub } from '@tests/stub';
 
 /**
  * The counter's current value, read back through prom-client rather than from a local tally: the
@@ -56,7 +57,7 @@ const makeEntry = (overrides: Partial<AuditEntry> = {}): AuditEntry => ({
 
 describe('auditLogService.record', () => {
     it('hands the entry to the repository unchanged', () => {
-        mockedRepository.create.mockResolvedValue({} as AuditLogDocument);
+        mockedRepository.create.mockResolvedValue(asStub<AuditLogDocument>({}));
         const entry = makeEntry({ targetId: 'prod-9' });
 
         auditLogService.record(entry);
@@ -67,7 +68,7 @@ describe('auditLogService.record', () => {
     it('returns void rather than the write, so no caller can await it', () => {
         // The signature is the contract: a caller that could await this would be able to make a
         // request wait on the audit trail, which is the coupling `record` exists to avoid.
-        mockedRepository.create.mockResolvedValue({} as AuditLogDocument);
+        mockedRepository.create.mockResolvedValue(asStub<AuditLogDocument>({}));
 
         // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression -- the assertion IS that record() returns undefined (fire-and-forget contract)
         expect(auditLogService.record(makeEntry())).toBeUndefined();
@@ -110,7 +111,7 @@ describe('auditLogService.record', () => {
 
     it('leaves the counter alone when the write succeeds', async () => {
         const before = await readCounter();
-        mockedRepository.create.mockResolvedValue({} as AuditLogDocument);
+        mockedRepository.create.mockResolvedValue(asStub<AuditLogDocument>({}));
 
         auditLogService.record(makeEntry());
         await Promise.resolve();

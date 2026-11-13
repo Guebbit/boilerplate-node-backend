@@ -7,6 +7,7 @@
 import module from '../../module';
 import { EXAMPLE_PUBLISHED } from '../../events';
 import { exampleRateLimits } from '../../rate-limits';
+import { asStub } from '@tests/stub';
 
 describe('the example manifest', () => {
     it('is named for its folder and mounted at the plural collection path', () => {
@@ -15,11 +16,13 @@ describe('the example manifest', () => {
     });
 
     it('projects example.published into the public event, carrying the id and title only', () => {
-        const projected = module.publicEvents[EXAMPLE_PUBLISHED].toPublicEvent({
-            exampleId: 'a'.repeat(24),
-            userId: 'b'.repeat(24),
-            title: 'Hello'
-        } as never);
+        const projected = module.publicEvents[EXAMPLE_PUBLISHED].toPublicEvent(
+            asStub<never>({
+                exampleId: 'a'.repeat(24),
+                userId: 'b'.repeat(24),
+                title: 'Hello'
+            })
+        );
 
         // The owner's id is not part of what a subscriber is told.
         expect(projected).toEqual({

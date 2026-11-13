@@ -36,7 +36,7 @@ export const histogram = (name: string) =>
 
 /** Run the controller and return the payload it handed to `successResponse`. */
 export const runOverview = async (): Promise<Overview> => {
-    await getObservabilityMetricsOverview({} as never, {} as never);
+    await getObservabilityMetricsOverview(asStub<never>({}), asStub<never>({}));
     const { calls } = (successResponse as jest.Mock).mock;
     return calls.at(-1)?.[1] as Overview;
 };

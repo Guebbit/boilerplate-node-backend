@@ -11,13 +11,14 @@ import { MODULES_ROOT } from '@tests/paths';
 import ordersModule from '../../module';
 import { CANCEL_CAUSES } from '../../services/cancel';
 import { ORDER_CANCELED, ORDER_CREATED, ORDER_REDACTED, ORDER_STATUS_CHANGED } from '../../events';
+import { asStub } from '@tests/stub';
 
 // `as never`: the slot takes `never` so one registry can hold every module's projections.
 describe('the orders module’s public events', () => {
     it('tells subscribers an order was created, with its id alone', () => {
         const target = ordersModule.publicEvents[ORDER_CREATED];
 
-        expect(target.toPublicEvent({ orderId: 'o1' } as never)).toEqual({
+        expect(target.toPublicEvent(asStub<never>({ orderId: 'o1' }))).toEqual({
             eventType: 'order.created',
             data: { orderId: 'o1' }
         });
@@ -26,11 +27,13 @@ describe('the orders module’s public events', () => {
     it('announces order.paid for a move to paid and nothing for any other move', () => {
         const target = ordersModule.publicEvents[ORDER_STATUS_CHANGED];
 
-        expect(target.toPublicEvent({ orderId: 'o1', to: 'paid' } as never)).toEqual({
+        expect(target.toPublicEvent(asStub<never>({ orderId: 'o1', to: 'paid' }))).toEqual({
             eventType: 'order.paid',
             data: { orderId: 'o1' }
         });
-        expect(target.toPublicEvent({ orderId: 'o1', to: 'shipped' } as never)).toBeUndefined();
+        expect(
+            target.toPublicEvent(asStub<never>({ orderId: 'o1', to: 'shipped' }))
+        ).toBeUndefined();
     });
 
     // Whether a cancel owes money back is a policy for `payments`: "owed" is not "paid back", and
@@ -40,11 +43,13 @@ describe('the orders module’s public events', () => {
         (refund) => {
             const target = ordersModule.publicEvents[ORDER_CANCELED];
 
-            const projected = target.toPublicEvent({
-                orderId: 'o1',
-                refund,
-                cause: 'operator'
-            } as never);
+            const projected = target.toPublicEvent(
+                asStub<never>({
+                    orderId: 'o1',
+                    refund,
+                    cause: 'operator'
+                })
+            );
 
             expect(projected).toEqual({
                 eventType: 'order.canceled',
@@ -59,7 +64,7 @@ describe('the orders module’s public events', () => {
         const target = ordersModule.publicEvents[ORDER_CANCELED];
 
         expect(
-            target.toPublicEvent({ orderId: 'o1', refund: false, cause: 'lost' } as never)
+            target.toPublicEvent(asStub<never>({ orderId: 'o1', refund: false, cause: 'lost' }))
         ).toEqual({ eventType: 'order.canceled', data: { orderId: 'o1', cause: 'lost' } });
     });
 
@@ -81,7 +86,7 @@ describe('the orders module’s public events', () => {
     it('tells subscribers an order was scrubbed, with its id alone', () => {
         const target = ordersModule.publicEvents[ORDER_REDACTED];
 
-        expect(target.toPublicEvent({ orderId: 'o1' } as never)).toEqual({
+        expect(target.toPublicEvent(asStub<never>({ orderId: 'o1' }))).toEqual({
             eventType: 'order.redacted',
             data: { orderId: 'o1' }
         });

@@ -109,12 +109,12 @@ registerAuthResolver({
         fromRefreshToken(token).then((resolution) =>
             'miss' in (resolution as object)
                 ? (resolution as never)
-                : ({
+                : asStub<never>({
                       ok: {
                           context: (resolution as { ok: AuthContext | undefined }).ok,
                           recheck: () => recheckFamily() as never
                       }
-                  } as never)
+                  })
         ),
     cookieAuthenticates: () => cookieAuthenticates,
     clearDeadCookie
@@ -480,7 +480,7 @@ describe('getAuth', () => {
 
     it('resolves once for a credential caller across two mounted routers', async () => {
         const request = makeRequest();
-        request.caller = { kind: 'credential', credentialId: 'cred-1' } as never;
+        request.caller = asStub<never>({ kind: 'credential', credentialId: 'cred-1' });
 
         const next = await runUntilNext(getAuth, request, makeResponseStub());
 

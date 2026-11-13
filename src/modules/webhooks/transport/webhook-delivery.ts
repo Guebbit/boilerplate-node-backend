@@ -58,7 +58,8 @@ const errorName = (error: unknown): string | undefined =>
     typeof error === 'object' &&
     error !== null &&
     typeof (error as { name?: unknown }).name === 'string'
-        ? (error as { name: string }).name
+        ? // The `typeof ... name === 'string'` check on the line above proves it.
+          (error as { name: string }).name
         : undefined;
 
 /**
