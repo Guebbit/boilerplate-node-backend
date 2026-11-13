@@ -150,8 +150,10 @@ const pipelineOf =
         const { versioned, input, update, present } = spec;
 
         // A malformed path id answers as an unknown one, before the body is even read.
+        // `=== undefined`, not falsy: an `idFrom` tag can normalize to `''`, which is an id that
+        // matches no row (the update's own 404), not a refusal already sent.
         const id = idOf(spec, request, response);
-        if (!id) return Promise.resolve();
+        if (id === undefined) return Promise.resolve();
 
         // `create` is `readInput`'s body-only surface: the id was resolved above, and a path
         // param merged into this object would fail the body's strict schema.

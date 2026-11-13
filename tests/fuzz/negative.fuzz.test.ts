@@ -84,12 +84,6 @@ const EDGE_VALUES = [
     'true'
 ];
 
-/*
- * Open finding, left out on purpose: a single space as the `{locale}` of `PUT` or `PATCH
- * /locales/{locale}` (`/locales/%20`) never answers, the request hangs. Add `' '` to
- * EDGE_VALUES once the route answers it.
- */
-
 /** A path or query parameter to attack, with the schema that tells whether 4xx is owed. */
 interface Target {
     /** `path` parameters are substituted into the URL; `query` ones are appended to it. */
