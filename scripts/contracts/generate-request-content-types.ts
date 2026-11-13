@@ -41,20 +41,18 @@ const document = parseOpenApi(readFileSync(INPUT, 'utf8'));
  * because Express routing is: `/Account` reaches the `/account` routes, so the gate must see it too.
  *
  * @param template - a contract path such as `/products/{id}/restore`
- * @returns the literal's source text, and how many `{param}` segments the template has
+ * @returns the literal's source text, and how many `{param}`s the template has
  */
 const compileTemplate = (template: string): { literal: string; parameterCount: number } => {
-    const segments = template.split('/');
-    const source = segments
-        .map((segment) =>
-            segment.startsWith('{')
-                ? '[^/]+'
-                : segment.replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`)
-        )
-        .join(String.raw`\/`);
+    // A `{param}` may sit inside a segment (`products-{page}.xml`): split on it, escape the text
+    // between, and put `[^/]+` where each one was.
+    const parts = template.split(/\{[^/{}]+\}/);
+    const source = parts
+        .map((part) => part.replaceAll(/[$()*+.?[\\\]^{|}/]/g, String.raw`\$&`))
+        .join('[^/]+');
     return {
         literal: `/^${source}$/i`,
-        parameterCount: segments.filter((segment) => segment.startsWith('{')).length
+        parameterCount: parts.length - 1
     };
 };
 

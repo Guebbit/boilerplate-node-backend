@@ -44,22 +44,15 @@ describe('a wrong method on a known path', () => {
 const ALL_METHODS: HttpMethod[] = ['get', 'post', 'put', 'patch', 'delete'];
 
 /**
- * Templates the generated path table cannot match yet: its pattern treats `{page}` inside a
- * segment (`products-{page}.xml`) as literal text, so a real `POST /sitemap/products-1.xml` is a
- * 404, not a 405. Open finding: the generator reads only whole-segment `{param}`s.
- */
-const UNMATCHABLE_TEMPLATES = new Set(['/sitemap/products-{page}.xml']);
-
-/**
  * One row per path the spec declares: the operation that names it, and the methods it declares.
  * Derived from the spec, so a path added tomorrow is swept with no list to update.
  */
-const PATHS = [...new Set(listOperations().map((operation) => operation.path))]
-    .filter((route) => !UNMATCHABLE_TEMPLATES.has(route))
-    .map((route): [string, Operation, HttpMethod[]] => {
+const PATHS = [...new Set(listOperations().map((operation) => operation.path))].map(
+    (route): [string, Operation, HttpMethod[]] => {
         const operations = listOperations().filter((operation) => operation.path === route);
         return [route, operations[0], operations.map((operation) => operation.method)];
-    });
+    }
+);
 
 describe('every path of the spec, asked with every method it does not declare', () => {
     it('walks some paths', () => {
