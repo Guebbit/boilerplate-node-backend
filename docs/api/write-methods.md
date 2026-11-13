@@ -389,7 +389,8 @@ A path the contract declares, asked with a method it does not give it, answers *
   `x-error-codes`.
 - **Swept over the whole spec.** `tests/integration/method-not-allowed.test.ts` asks every path of
   `openapi.yaml` with every verb it does not declare and expects 405 plus the exact `Allow`. It
-  asks as an admin: a router-level auth guard answers an anonymous caller 401 first.
+  asks as an admin: a router-level auth guard answers an anonymous caller 401 first, on purpose,
+  so an anonymous caller learns nothing about which routes and methods exist.
 
 ## `OPTIONS` says what a path accepts
 
