@@ -55,8 +55,11 @@ const modelVersion = permissionModelVersion(PERMISSION_RULES.map((entry) => entr
  */
 const rulesFor = (caller: Parameters<typeof buildAbility>[0]): PackedRules =>
     // The contract cannot spell a CASL tuple (OpenAPI has no tuple), so it declares each position as
-    // a union without `undefined`; `packRules` leaves a trailing `undefined` where a rule has no
-    // conditions. The wire drops it in JSON, so the cast only names what is sent.
+    // `string | 0 | 1 | object`. CASL's own tuple type admits `undefined` in the conditions slot
+    // only
+    // because `RawRule.conditions` is optional; `packRules` writes `0` there (`conditions || 0`)
+    // and
+    // pops trailing falsy members, so no `undefined` is ever produced and the cast only narrows.
     packRules(buildAbility(caller).rules) as PackedRules;
 
 /**

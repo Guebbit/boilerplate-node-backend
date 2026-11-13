@@ -321,7 +321,7 @@ const markDelivered = (
 ): Promise<OrderDocument | null> =>
     orderModel
         .findOneAndUpdate(
-            { _id: toObjectId(id), status: from } as QueryFilter<OrderDocument>,
+            { _id: toObjectId(id), status: from },
             {
                 $set: { status: OrderStatus.delivered },
                 // On a field that does not exist yet both operators simply set it.
@@ -353,7 +353,7 @@ const extendConformity = (
                 _id: toObjectId(id),
                 conformityUntil: observed,
                 conformityExtendedAt: { $exists: false }
-            } as QueryFilter<OrderDocument>,
+            },
             { $set: { conformityUntil: extended, conformityExtendedAt: new Date() } },
             // No `updatedAt` bump: a report on the guarantee is not an edit of the order.
             { session, timestamps: false }
@@ -388,7 +388,7 @@ const replaceShippingAddress = (
                     { 'fulfillment.shipped': { $ne: true } },
                     { 'fulfillment.remaining': { $gt: 0 } }
                 ]
-            } as QueryFilter<OrderDocument>,
+            },
             {
                 $set: {
                     shippingAddress: encryptOrderPii({ shippingAddress: address }, toObjectId(id))
@@ -514,7 +514,7 @@ const writeFulfillment = (
                         OrderStatus.delivered
                     ]
                 }
-            } as QueryFilter<OrderDocument>,
+            },
             { $set: { fulfillment: summary } },
             // No `updatedAt` bump: delivery's shipment report is not an edit of the order. The
             // status step a first or last shipment causes is a separate write and still bumps.
@@ -829,6 +829,8 @@ const deleteCanceledUnpaid = (document: OrderDocument): Promise<boolean> => {
                 moneyReceivedAt: null
             }
         });
+        // Mongoose's `deleteOne()` on a document answers a thenable whose result is the driver's
+        // delete outcome.
         return (document.deleteOne() as Promise<DeleteOutcome>)
             .then((outcome) => {
                 deleted = outcome.deletedCount > 0;

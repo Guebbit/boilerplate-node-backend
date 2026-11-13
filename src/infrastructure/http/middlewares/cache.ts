@@ -140,6 +140,8 @@ const serializeCachedResponse = (key: string, value: CachedResponse): string | u
 const isCachedResponse = (value: unknown): value is CachedResponse =>
     typeof value === 'object' &&
     value !== null &&
+    // The `typeof 'object'` and non-null checks above prove `value` is an object; the cast only
+    // allows reading its keys.
     typeof (value as Record<string, unknown>).status === 'number' &&
     typeof (value as Record<string, unknown>).staleAt === 'number' &&
     'body' in value &&
@@ -379,6 +381,8 @@ const armCacheWrite = (
         }
 
         return responseJson(body);
+        // The wrapper takes the same single `body` and returns what the original `json` does, so it
+        // fits the method's type.
     }) as Response['json'];
 };
 

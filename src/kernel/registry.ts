@@ -15,7 +15,7 @@ import type { ClientSession } from 'mongoose';
 import { assertModuleConfig } from '@kernel/module-config';
 import type { ConfigSlice } from '@infrastructure/config/define';
 import { markDomainEventsWired } from '@kernel/events';
-import type { RateLimitBudget } from '@types';
+import type { AnalyticsEventRequest, RateLimitBudget } from '@types';
 import type { AnalyticsEventInput } from '@infrastructure/observability/analytics';
 import type { ReencryptReport } from '@infrastructure/security/reencrypt';
 
@@ -201,15 +201,18 @@ export type BrowserEventReport = Pick<AnalyticsEventInput, 'event' | 'properties
  * `openapi.browser-events.yaml`.
  *
  * `analytics` cannot import the owning module (the same wall as {@link PublicEventTarget}), so it
- * resolves these through {@link resolveBrowserEvents}. `toReport` takes `never` for the same reason
- * `PublicEventTarget.toPublicEvent` does: one entry per event, called back with that event's body.
+ * resolves these through {@link resolveBrowserEvents}. One entry per event, called back with that
+ * event's body.
  */
 export interface BrowserEventTarget {
     /**
+     * Method syntax on purpose: its parameter is checked bivariantly, so an entry may take just
+     * its own event's shape while the relay passes the contract's whole union.
+     *
      * @param body - the validated request body of this event
      * @returns the report to hand the analytics port
      */
-    toReport: (body: never) => BrowserEventReport;
+    toReport(body: AnalyticsEventRequest): BrowserEventReport;
 }
 
 /**

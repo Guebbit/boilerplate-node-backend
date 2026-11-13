@@ -41,8 +41,8 @@ export const relayEvent = (event: AnalyticsEventRequest, context: CallerContext)
     if (!target) return;
     emitAnalyticsEvent({
         ...buildAnalyticsBase(context),
-        // `never`-typed call: the target was registered for exactly this event name, so the body
-        // it receives is the shape its own fragment declares.
-        ...target.toReport(event as never)
+        // The target was registered for exactly this event name, so the body it receives is the
+        // shape its own fragment declares.
+        ...target.toReport(event)
     });
 };

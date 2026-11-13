@@ -596,6 +596,8 @@ const applyOrderTax = (serialized: Record<string, unknown>, currency: string) =>
         currency
     });
 
+    // `items` is the serialized line list; one tax-breakdown line was computed per item above, so
+    // the index lines up.
     for (const [index, item] of (items as Record<string, unknown>[]).entries()) {
         item.taxAmount = breakdown.lines[index].taxAmount;
         item.netAmount = breakdown.lines[index].netAmount;
@@ -627,6 +629,7 @@ const applyOrderProjections = (serialized: Record<string, unknown>) => {
     );
     delete serialized.fulfillment;
     serialized.returnStatus = returnStatusOf(
+        // `returnStatus` is the stamp the order's own write path stored; it is read optionally.
         serialized.returnStatus as StampedReturnStatus | undefined
     );
 };

@@ -304,6 +304,12 @@ export default defineConfig(
             'no-console': 'warn',
             'no-debugger': 'warn',
             'no-restricted-syntax': ['error', ...bannedDoubleCasts],
+            // `as X` narrows a value that exists; an object literal cast to a type claims fields it
+            // may not have. Type a variable, or use `satisfies`, so the compiler checks the literal.
+            '@typescript-eslint/consistent-type-assertions': [
+                'error',
+                { assertionStyle: 'as', objectLiteralTypeAssertions: 'never' }
+            ],
             // `void p` is checked like `p`: `void` alone hides a rejection.
             // Handle it at the site, or opt out on the line with a reason.
             '@typescript-eslint/no-floating-promises': ['error', { ignoreVoid: false }],

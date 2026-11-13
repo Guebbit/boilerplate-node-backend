@@ -9,6 +9,7 @@
  */
 import type { Store } from 'express-rate-limit';
 import { rateLimitStore } from '@infrastructure/http/middlewares/rate-limit-store';
+import { asStub } from '@tests/stub';
 
 /** A 1-second base window, a cap of 2, and three doublings: lockouts of 1s, 2s, 4s, 8s. */
 const WINDOW_MS = 1000;
@@ -16,7 +17,7 @@ const WINDOW_MS = 1000;
 /** Builds a fresh escalating store on this file's window. */
 const freshStore = (): Store => {
     const store = rateLimitStore('test-escalation', 'memory', { limit: 2, doublings: 3 });
-    store.init({ windowMs: WINDOW_MS } as Parameters<NonNullable<Store['init']>>[0]);
+    store.init(asStub<Parameters<NonNullable<Store['init']>>[0]>({ windowMs: WINDOW_MS }));
     return store;
 };
 

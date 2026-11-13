@@ -131,6 +131,8 @@ const answerChallenge = (
     attempt: Attempt,
     totpSecret: string | undefined
 ): Promise<Attempt> => {
+    // `attempt.data` is `unknown` for any endpoint; this one is the login answer, and both MFA
+    // fields are optional so every read goes through `?.`.
     const data = attempt.data as { mfaRequired?: boolean; challenge?: string } | undefined;
     if (!totpSecret || data?.mfaRequired !== true) return Promise.resolve(attempt);
 
@@ -192,6 +194,8 @@ export const signIn = (
                     attemptAs(method, path, body).then((outcome) => {
                         if (outcome.status < 200 || outcome.status >= 300)
                             throw new ScenarioFlowError(email, method, path, outcome);
+                        // `T` is the flow's own claim about the endpoint's body; only the 2xx check
+                        // above is verified.
                         return outcome.data as T;
                     })
             };

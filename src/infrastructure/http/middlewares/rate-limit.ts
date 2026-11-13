@@ -282,7 +282,8 @@ const chargedStoreOf = (budget: RateLimitBudget): Store => {
     const store = rateLimitStore(budget.namespace, budget.onStoreError ?? 'memory');
     // The one option a store reads, replayed here because no `rateLimit()` instance calls `init`.
     // Cast: `windowMs` is the only option a store reads; the rest of `Options` is the limiter's.
-    store.init({ windowMs: budgetWindowMs(budget) } as Options);
+    const storeOptions = { windowMs: budgetWindowMs(budget) };
+    store.init(storeOptions as Options);
     chargedStores.set(budget.namespace, store);
     return store;
 };
@@ -354,7 +355,9 @@ export const readBodyField = (request: Request, field: string): string | undefin
     const body: unknown = request.body;
     const value =
         typeof body === 'object' && body !== null
-            ? (body as Record<string, unknown>)[field]
+            ? // The `typeof 'object'` and non-null checks above prove `body` is an object; a missing
+              // field reads `undefined`.
+              (body as Record<string, unknown>)[field]
             : undefined;
     return typeof value === 'string' ? value : undefined;
 };

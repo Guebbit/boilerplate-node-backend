@@ -98,6 +98,7 @@ const readReport = (file: string): Report => {
         );
         process.exit(2);
     }
+    // Jest's own JSON report; only the fields `Report` names are read.
     return JSON.parse(readFileSync(file, 'utf8')) as Report;
 };
 

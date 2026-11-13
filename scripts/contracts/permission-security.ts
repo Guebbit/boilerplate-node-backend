@@ -23,7 +23,13 @@
  * See: docs/api/contract-fragmentation.md#the-permission-on-an-operation
  */
 
-import { PRESET_ROLES, callerForSubject, findRule, staffRoleWithheld } from '@kernel/permissions';
+import {
+    PRESET_ROLES,
+    callerForSubject,
+    findRule,
+    staffRoleWithheld,
+    type PermissionSubject
+} from '@kernel/permissions';
 import { holds } from '@kernel/ability';
 import type { AuthContext } from '@types';
 import type { Operation, Step } from './openapi-document';
@@ -70,24 +76,30 @@ const sendsEnrollment = (name: string): boolean => {
 
     return PRESET_ROLES.some((role) =>
         [true, false].some((verified) => {
-            // Only the fields the two helpers read: id, roles and the armed flag decide the answer.
-            const context = {
+            // Only id, roles and the armed flag decide the answer; the rest is neutral filler.
+            const context: AuthContext = {
                 id: 'bundle',
+                email: 'bundle@example.test',
+                username: 'bundle',
                 tenantId: 'bundle',
                 verified,
+                authTime: 0,
+                amr: [],
+                twoFactorArmed: false,
                 authenticatorArmed: false,
                 roles: {
                     tenant: role.scope === 'tenant' ? role.name : null,
                     platform: role.scope === 'platform' ? role.name : null
                 }
-            } as AuthContext;
+            };
             const enrolled = { ...context, authenticatorArmed: true };
 
             return (
                 staffRoleWithheld(context) &&
-                // `as never`: the rule's own action/subject pair, which the generic cannot correlate.
-                holds(callerForSubject(enrolled, subject), action as never, subject as never) &&
-                !holds(callerForSubject(context, subject), action as never, subject as never)
+                // Widened to the whole subject union: the rule's own action/subject pair is valid
+                // by construction, but the generic cannot correlate two runtime values.
+                holds<PermissionSubject>(callerForSubject(enrolled, subject), action, subject) &&
+                !holds<PermissionSubject>(callerForSubject(context, subject), action, subject)
             );
         })
     );

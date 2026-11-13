@@ -122,6 +122,7 @@ const subscribeToTarget = (domainEventName: string, target: PublicEventTarget): 
         payload: unknown
     ) => PublicEventProjection | undefined;
 
+    // The registry is keyed by plain strings; an event name no module emits simply never fires.
     onDomainEvent(domainEventName as DomainEventName, (payload, meta) => {
         const publicEvent = toPublicEvent(payload);
         return publicEvent ? fanOut(publicEvent, meta.eventId) : undefined;

@@ -14,6 +14,7 @@ import {
     type SchemaNode
 } from '@tests/spec-walk';
 import { arbitraryFor } from '@tests/spec-arbitraries';
+import { asStub } from '@tests/stub';
 
 /** A spec document with just the schemas a case needs. */
 const specOf = (schemas: Record<string, SchemaNode>) => ({ paths: {}, components: { schemas } });
@@ -109,14 +110,14 @@ describe('resolveSchema: null', () => {
 describe('unsupportedKeywords', () => {
     it('refuses a 3.0 `nullable`, which 3.1 ignores without a word', () => {
         // The cast is the point: `SchemaNode` no longer has `nullable`, and this is a 3.0 spec.
-        const spec = specOf({ A: { type: 'string', nullable: true } as SchemaNode });
+        const spec = specOf({ A: asStub<SchemaNode>({ type: 'string', nullable: true }) });
 
         expect(unsupportedKeywords(spec)).toEqual(['nullable']);
     });
 
     it('accepts `unevaluatedProperties: false`, which holds for declared-properties-only draws', () => {
         const spec = specOf({
-            A: { allOf: [{ type: 'object' }], unevaluatedProperties: false } as SchemaNode
+            A: asStub<SchemaNode>({ allOf: [{ type: 'object' }], unevaluatedProperties: false })
         });
 
         expect(unsupportedKeywords(spec)).toEqual([]);
@@ -126,7 +127,7 @@ describe('unsupportedKeywords', () => {
         'still reports `unevaluatedProperties` when its value is %j',
         (value) => {
             const spec = specOf({
-                A: { allOf: [{ type: 'object' }], unevaluatedProperties: value } as SchemaNode
+                A: asStub<SchemaNode>({ allOf: [{ type: 'object' }], unevaluatedProperties: value })
             });
 
             expect(unsupportedKeywords(spec)).toEqual(['unevaluatedProperties']);

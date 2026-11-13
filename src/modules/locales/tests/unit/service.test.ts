@@ -11,17 +11,18 @@ import { LocaleDirection, LocaleSource } from '@types';
 import { BACKEND, FRONTEND } from './apps.fixture';
 import { localeService } from '../../services';
 import type { LocaleDocument } from '../../model';
+import { asStub } from '@tests/stub';
 
 /** A language row as `mergeCapabilities` reads it — the five fields it actually touches. */
 const language = (overrides: Partial<LocaleDocument> & { tag: string }): LocaleDocument =>
-    ({
+    asStub<LocaleDocument>({
         name: overrides.tag,
         nativeName: overrides.tag,
         direction: LocaleDirection.ltr,
         revision: 0,
         active: true,
         ...overrides
-    }) as LocaleDocument;
+    });
 
 describe('buildMessageTree', () => {
     it('expands flat dotted keys into the nested shape a client merges', () => {
@@ -85,7 +86,7 @@ describe('buildMessageTree', () => {
     it('cannot be made to pollute a prototype by a stored key', () => {
         const tree = localeService.buildMessageTree([{ key: '__proto__.polluted', value: 'yes' }]);
 
-        expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+        expect(asStub<Record<string, unknown>>({}).polluted).toBeUndefined();
         expect(tree.__proto__).toEqual({ polluted: 'yes' });
     });
 });

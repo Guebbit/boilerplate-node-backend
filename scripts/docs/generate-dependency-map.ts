@@ -75,6 +75,7 @@ interface PackageManifest {
 }
 
 const readManifest = (): PackageManifest =>
+    // Our own `package.json`; only the fields `PackageManifest` names are read.
     JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as PackageManifest;
 
 /** Every source file under `directory`, skipping any `tests/` folder and `.test.`/`.spec.` file. */

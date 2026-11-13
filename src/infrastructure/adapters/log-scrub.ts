@@ -31,9 +31,10 @@ const isDatabaseError = (error: Error): boolean => {
     if (DATABASE_ERROR_NAME.test(error.name)) return true;
     let prototype: unknown = Object.getPrototypeOf(error);
     while (typeof prototype === 'object' && prototype !== null) {
-        const constructorName = (
-            Reflect.get(prototype, 'constructor') as { name?: unknown } | undefined
-        )?.name;
+        const constructorName =
+            // `constructor` is a function or absent; only its `name` is read, and the `typeof`
+            // check below keeps a non-string out.
+            (Reflect.get(prototype, 'constructor') as { name?: unknown } | undefined)?.name;
         if (typeof constructorName === 'string' && DATABASE_ERROR_NAME.test(constructorName))
             return true;
         prototype = Object.getPrototypeOf(prototype);

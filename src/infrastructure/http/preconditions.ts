@@ -110,6 +110,7 @@ export const setEtag = (response: Response, row: unknown): void => {
     response.json = ((body: unknown) => {
         response.setHeader('ETag', etagOf(version, digestOf(body)));
         return responseJson(body);
+        // The wrapper sets the ETag then returns what the original `json` returns.
     }) as Response['json'];
 };
 
@@ -159,6 +160,8 @@ export const dropUnownedValidators: RequestHandler = (request, response, next) =
             if (request.method === 'PUT' || !ownTags.has(response)) response.removeHeader('ETag');
             if (request.method === 'PUT') response.removeHeader('Last-Modified');
             return writeHead(...arguments_);
+            // `writeHead` is overloaded, so the wrapper's rest-args signature cannot be matched to any
+            // one overload; it forwards its arguments untouched.
         }) as Response['writeHead'];
     }
     next();

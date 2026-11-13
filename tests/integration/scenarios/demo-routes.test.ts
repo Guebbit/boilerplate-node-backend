@@ -28,6 +28,7 @@ import { payByCard } from '@modules/payments/tests/factories';
 import { paymentModel } from '@modules/payments/model';
 import { rateLimitStore } from '@infrastructure/http/middlewares/rate-limit-store';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
+import { asStub } from '@tests/stub';
 
 /**
  * A one-shot switch: the next database step of a restore (`emptyDatabase()` for a scenario that is
@@ -153,7 +154,7 @@ describe('POST /__test/restore', () => {
 /** Builds an initialised store on a window long enough to outlive the test. */
 const spentStore = (escalation?: { limit: number; doublings: number }) => {
     const store = rateLimitStore('restore-test', 'memory', escalation);
-    store.init({ windowMs: 600_000 } as Parameters<typeof store.init>[0]);
+    store.init(asStub<Parameters<typeof store.init>[0]>({ windowMs: 600_000 }));
     return store;
 };
 

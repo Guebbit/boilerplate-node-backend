@@ -106,6 +106,7 @@ export const getOAuthCallback = (request: Request, response: Response) => {
         return;
     }
 
+    // Express types `query` as parsed-qs values; every field is re-validated below before use.
     const query = request.query as Record<string, unknown>;
 
     /** The language the visitor started the login in — re-validated for the same reason as

@@ -92,6 +92,7 @@ export const pruneUnused: Step = (document) => {
     const found: Findings = { refs: new Set(), schemes: new Set(), tags: new Set() };
     reachable(document, found);
 
+    // `components` is parsed OpenAPI, whose every section is a name-to-node map.
     for (const [kind, entries] of Object.entries((document.components ?? {}) as ComponentMap))
         for (const name of Object.keys(entries)) {
             const used =

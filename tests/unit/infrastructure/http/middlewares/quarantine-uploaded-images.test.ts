@@ -10,6 +10,7 @@
 import { EventEmitter } from 'node:events';
 import type { NextFunction, Request, Response } from 'express';
 import { quarantineUploadedImages } from '@infrastructure/http/middlewares/upload';
+import { asStub } from '@tests/stub';
 
 jest.mock('@infrastructure/adapters/image-store', () => ({
     imageStore: { quarantine: jest.fn(), removeQuarantined: jest.fn(), remove: jest.fn() }
@@ -42,7 +43,7 @@ const { digestQuarantinedImage } = jest.requireMock<{ digestQuarantinedImage: je
     '@infrastructure/adapters/image.worker'
 );
 
-const uploaded = (filePath: string) => ({ path: filePath }) as Express.Multer.File;
+const uploaded = (filePath: string) => asStub<Express.Multer.File>({ path: filePath });
 
 /** A response that can be closed with a status, the way Node's closes after the answer is sent. */
 const fakeResponse = (statusCode = 200) =>

@@ -10,7 +10,7 @@
  * See: docs/modules/locales.md
  */
 
-import type { ClientSession, Document, Model, QueryFilter, UpdateQuery } from 'mongoose';
+import type { ClientSession, Document, Model, UpdateQuery } from 'mongoose';
 import { clearedOrValue, setAndUnset } from './changes';
 import { toObjectId } from './create-repository';
 import { EDIT_REVISION } from './revision-plugin';
@@ -52,9 +52,12 @@ export const translatableColumnsOf = <TDocument extends Document>(
     // `async` because `toObjectId` throws on a malformed id.
     revisionOf: async (entityId) => {
         const row = await model
-            .findOne({ _id: toObjectId(entityId) } as QueryFilter<TDocument>, {
-                [EDIT_REVISION]: 1
-            })
+            .findOne(
+                { _id: toObjectId(entityId) },
+                {
+                    [EDIT_REVISION]: 1
+                }
+            )
             .lean<{ editRevision?: number }>()
             .exec();
         return row ? (row.editRevision ?? 0) : undefined;
@@ -63,7 +66,7 @@ export const translatableColumnsOf = <TDocument extends Document>(
     writeDerived: (entityId, fields, session) =>
         model
             .updateOne(
-                { _id: toObjectId(entityId) } as QueryFilter<TDocument>,
+                { _id: toObjectId(entityId) },
                 // `as`: the column names arrive as data (the port's `fields`), which a generic
                 // `TDocument` cannot show the compiler. A `null` becomes an `$unset`.
                 setAndUnset(
@@ -81,7 +84,7 @@ export const translatableColumnsOf = <TDocument extends Document>(
         const fence = preconditionFilter(entityId, EDIT_REVISION);
         return model
             .updateOne(
-                { _id: toObjectId(entityId), ...fence } as QueryFilter<TDocument>,
+                { _id: toObjectId(entityId), ...fence },
                 // The revision plugin sees this `updatedAt` stamp and adds the `$inc` of the counter.
                 { $set: { updatedAt: new Date() } },
                 { timestamps: false, session }

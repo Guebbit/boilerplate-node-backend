@@ -164,6 +164,8 @@ const setupChannel = async (model: ChannelModel): Promise<void> => {
         if (currentChannel !== ch) return;
         currentChannel = undefined;
         consumerTags.clear();
+        // A channel error is `unknown`; `code` is read optionally and compared by value, so any
+        // other shape falls through.
         if ((lastError as { code?: unknown } | undefined)?.code === PRECONDITION_FAILED) {
             // Not retried, and logged every time rather than through the once-only latch: this
             // is a configuration mismatch only a deploy fixes, and it must not read as a blip.

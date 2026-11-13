@@ -198,7 +198,7 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
         // instead of leaving it standing with no order and no number spent on it.
         const orderNumber = await allocateOrderNumber();
 
-        const orderData = {
+        const orderDraft = {
             _id: orderId,
             userId: toObjectId(input.userId),
             email: input.email,
@@ -219,10 +219,11 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
                       shippingCost: input.shipping.method.priceFor(items)
                   }
                 : {})
-            // The conditional spreads above widen to a plain index signature, which `create`'s
-            // typed input cannot narrow back on its own; every field it can carry is optional or
-            // spread in.
-        } as Partial<OrderDocument>;
+        };
+        // The conditional spreads above widen to a plain index signature, which `create`'s
+        // typed input cannot narrow back on its own; every field it can carry is optional or
+        // spread in.
+        const orderData = orderDraft as Partial<OrderDocument>;
 
         // Announced here rather than left to `recordCreated`: this is the one function that writes a
         // new order, so a future caller of it cannot forget to announce one the way a caller of

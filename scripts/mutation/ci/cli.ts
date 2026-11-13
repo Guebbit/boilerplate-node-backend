@@ -97,6 +97,8 @@ const readOutcomes = (directory: string): Map<string, ShardOutcome> =>
             ? readdirSync(directory)
                   .filter((file) => file.endsWith('.json'))
                   .map((file) => {
+                      // Outcome files are written by the shard job in this shape; `readJson`
+                      // answers `unknown`.
                       const { name, status } = readJson(path.join(directory, file)) as {
                           name: string;
                           status: ShardOutcome;
@@ -112,7 +114,9 @@ const planWave = (): void => {
     const plan =
         wave === 1
             ? firstWave(scope())
-            : nextWave(readJson(option('previous')) as WavePlan, readOutcomes(option('outcomes')));
+            : // The previous wave's plan file, written by `firstWave`/`nextWave` as JSON of this
+              // shape.
+              nextWave(readJson(option('previous')) as WavePlan, readOutcomes(option('outcomes')));
 
     writeOut(option('out'), JSON.stringify(plan));
     console.error(
@@ -156,7 +160,8 @@ const readFinished = (reportsDirectory: string, plans: readonly WavePlan[]): Sha
             const shard = shards.get(directory.replace(/^shard-/, ''));
             const file = path.join(reportsDirectory, directory, 'mutation.json');
             return shard && existsSync(file)
-                ? [{ shard, report: readJson(file) as StrykerReport }]
+                ? // `mutation.json` is Stryker's own report; `readJson` answers `unknown`.
+                  [{ shard, report: readJson(file) as StrykerReport }]
                 : [];
         });
 };
@@ -166,6 +171,7 @@ const merge = (): void => {
     const plansDirectory = option('plans');
     const plans = readdirSync(plansDirectory)
         .filter((file) => file.endsWith('.json'))
+        // Plan files are written by `firstWave`/`nextWave`, one `WavePlan` each.
         .map((file) => readJson(path.join(plansDirectory, file)) as WavePlan)
         .toSorted((a, b) => a.wave - b.wave);
     const last = plans.at(-1);

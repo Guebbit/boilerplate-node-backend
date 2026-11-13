@@ -153,6 +153,7 @@ const readDictionaryFile = (
 ): Record<string, unknown> | undefined => {
     const file = dictionaryPathIn(directory, locale);
     if (file === undefined) return undefined;
+    // A locale dictionary of this repo: a JSON object whose leaves the loader walks as `unknown`.
     return JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
 };
 

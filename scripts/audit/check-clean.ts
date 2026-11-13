@@ -84,6 +84,7 @@ export const diffSnapshots = (
     after: RepoSnapshot,
     folder: string
 ): string[] =>
+    // `Object.keys` answers `string[]`; `VIEWS` is declared per `RepoSnapshot` key, so each one is.
     (Object.keys(VIEWS) as (keyof RepoSnapshot)[]).flatMap((view) => {
         const was = new Set(before[view]);
         const now = new Set(after[view]);

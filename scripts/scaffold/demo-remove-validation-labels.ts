@@ -151,6 +151,8 @@ export const stripValidationLabels = (
         .filter((file) => file.endsWith('.json'))
         .flatMap((file) => {
             const full = path.join(directory, file);
+            // A locale dictionary of this repo; only the optional `validation.attributes` path is
+            // read.
             const dictionary = JSON.parse(readFileSync(full, 'utf8')) as {
                 validation?: { attributes?: Record<string, string> };
             };

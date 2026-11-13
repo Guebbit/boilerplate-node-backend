@@ -81,6 +81,8 @@ export const unlinkIfPresent = (
     unlink(filePath).then(
         () => true,
         (error: unknown) => {
+            // `unlink` rejects with an `ErrnoException`; `code` reads `undefined` on anything else,
+            // which is also not `ENOENT`.
             if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
                 // Stryker disable next-line all
                 logger.warn({ message, ...fields, error });

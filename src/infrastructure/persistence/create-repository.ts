@@ -198,6 +198,7 @@ const buildWhere = (filters: object, spec: SearchSpec): Record<string, unknown> 
     }
 
     if (spec.text && spec.text.length > 0)
+        // The route's query schema declares `text` as a string; `bag` is the untyped parsed query.
         addTextFilter(where, bag.text as string | undefined, spec.text);
 
     // Each bound is optional and independent: one-sided ranges are normal.
@@ -374,6 +375,8 @@ export function createRepository<TDocument extends Document, TWire>(
         const transformed: unknown[] = items.map((item) =>
             transform(item as Record<string, unknown>)
         );
+        // `transform` is the repository's own mapping from a stored row to `TWire`, so each item is
+        // one.
         return transformed as TWire[];
     };
 

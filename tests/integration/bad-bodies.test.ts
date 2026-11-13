@@ -34,6 +34,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { withoutInstance } from '@tests/problem';
 import { MISSING_ID } from '@tests/ids';
+import { asStub } from '@tests/stub';
 
 setupTestDb();
 
@@ -375,6 +376,6 @@ describe('hostile content in a well-formed body', () => {
             .send('{"email":"a@b.test","password":"whatever12","__proto__":{"polluted":true}}');
 
         expect(response.status).toBeLessThan(500);
-        expect(({} as { polluted?: unknown }).polluted).toBeUndefined();
+        expect(asStub<{ polluted?: unknown }>({}).polluted).toBeUndefined();
     });
 });

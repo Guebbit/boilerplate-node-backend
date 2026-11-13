@@ -83,6 +83,8 @@ const readModuleActions = async (
             value !== null &&
             Object.values(value).every((member) => typeof member === 'string')
     );
+    // The `every(typeof member === 'string')` filter above proves the entry's value is a string
+    // map.
     return { varName: entry?.[0] ?? '', actions: (entry?.[1] ?? {}) as Record<string, string> };
 };
 

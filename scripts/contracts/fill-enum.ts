@@ -106,6 +106,7 @@ const fillIn = (value: unknown, sources: EnumSources, where: string): number => 
     let filled = 0;
 
     if (!Array.isArray(value) && 'x-enum-from' in value) {
+        // The `'x-enum-from' in value` check above is what marks a node as a placeholder.
         const node = value as Placeholder;
         node.enum = enumFor(node, sources, where);
         // Instructions to this step, not part of the published contract.

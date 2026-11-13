@@ -41,12 +41,12 @@ const readCounter = (name: string): Promise<(MetricSample & { metricName?: strin
     const metric = metricsRegistry.getSingleMetric(name);
     if (!metric) return Promise.resolve([]);
 
-    return metric
-        .get()
-        .then(
-            (result) =>
-                (result as { values?: (MetricSample & { metricName?: string })[] }).values ?? []
-        );
+    return metric.get().then(
+        (result) =>
+            // prom-client's `get()` answers a generic metric object; only `values` is read, and
+            // absent reads as empty.
+            (result as { values?: (MetricSample & { metricName?: string })[] }).values ?? []
+    );
 };
 
 /**

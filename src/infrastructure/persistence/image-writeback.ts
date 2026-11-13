@@ -7,7 +7,7 @@
  * See: docs/tools/image-processing.md
  */
 
-import type { Document, Model, QueryFilter } from 'mongoose';
+import type { Document, Model } from 'mongoose';
 import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
 import { toObjectId } from './create-repository';
 
@@ -28,9 +28,7 @@ export const imageWritebackFor =
     (documentId, key, urls) =>
         model
             .updateOne(
-                // `as`: the filter and update name the three image fields every image-bearing
-                // schema carries, which a generic `TDocument` cannot show the compiler.
-                { _id: toObjectId(documentId), pendingImageKey: key } as QueryFilter<TDocument>,
+                { _id: toObjectId(documentId), pendingImageKey: key },
                 {
                     $set: { imageUrl: urls.imageUrl, thumbnailUrl: urls.thumbnailUrl },
                     $unset: { pendingImageKey: '' }
@@ -45,7 +43,7 @@ export const imageWritebackFor =
                           .exists({
                               _id: toObjectId(documentId),
                               imageUrl: urls.imageUrl
-                          } as QueryFilter<TDocument>)
+                          })
                           .exec()
                           .then((held) => held !== null)
             );

@@ -568,18 +568,20 @@ export const assembleCaller = (
     tenantId: string | null,
     scope: AuthorizationScope,
     permissions: readonly string[]
-): Caller =>
-    // `tenantId` and `scope` are correlated by every caller of this function (`null` only ever
-    // paired with 'platform', a shop id only ever paired with 'tenant') — a correlation runtime
-    // code guarantees but the type checker cannot see across four independent parameters.
-    ({
+): Caller => {
+    const assembled = {
         id,
         tenantId,
         scope,
         permissions,
         unrestricted: holdsEveryDeclaredRule(scope, permissions),
         system: id === SYSTEM_ACTOR_ID
-    }) as Caller;
+    };
+    // `tenantId` and `scope` are correlated by every caller of this function (`null` only ever
+    // paired with 'platform', a shop id only ever paired with 'tenant') — a correlation runtime
+    // code guarantees but the type checker cannot see across four independent parameters.
+    return assembled as Caller;
+};
 
 /**
  * The `Caller` an `AuthContext` becomes in a named scope — the primitive {@link callerForSubject}

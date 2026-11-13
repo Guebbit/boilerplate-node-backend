@@ -164,6 +164,8 @@ export const formatMoney = (locale: string, amount: string | number, currency: s
         currency,
         minimumFractionDigits: digits,
         maximumFractionDigits: digits
+        // `Intl.NumberFormat.format` takes a `number | bigint`; a branded `Money` is a number at
+        // runtime.
     }).format(amount as number);
 };
 

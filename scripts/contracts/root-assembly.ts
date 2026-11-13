@@ -179,6 +179,7 @@ const appendTagGroups = (document: Document, fragments: readonly ModuleFragment[
         if (!tags) {
             groups.add(document.createNode({ name: family, tags: [] }));
             const added = groups.items.at(-1);
+            // The node was created with `tags: []` on the line above, so `tags` is a sequence.
             tags = isMap(added) ? (added.get('tags') as YAMLSeq) : undefined;
             if (!tags) continue;
             tagsOf.set(family, tags);

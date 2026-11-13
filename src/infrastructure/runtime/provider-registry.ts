@@ -83,6 +83,7 @@ export const createSharedProviderRegistry = <T>(
     initial: Record<string, T> = {}
 ): ProviderRegistry<T> => {
     const key = sharedKey(name);
+    // Adds the symbol-keyed slot to `globalThis` so the registry survives a duplicate module load.
     const holder = globalThis as typeof globalThis & Record<symbol, Map<string, T> | undefined>;
     holder[key] ??= new Map<string, T>(Object.entries(initial));
     return registryOver(holder[key]);

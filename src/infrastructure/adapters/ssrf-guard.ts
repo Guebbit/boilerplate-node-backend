@@ -196,7 +196,8 @@ const abortReason = (signal: AbortSignal): Error => {
         'message' in reason &&
         typeof reason.name === 'string' &&
         typeof reason.message === 'string'
-        ? (reason as Error)
+        ? // The `name`/`message` string checks above are what make `reason` an `Error`.
+          (reason as Error)
         : new Error(String(reason));
 };
 

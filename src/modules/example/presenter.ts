@@ -29,6 +29,8 @@ export const presentExample = (
     actions: ExampleActions
 ): Example =>
     carryVersion(document, {
+        // The schema's `toJSON` transform produces the row shape `ExampleRow` names; Mongoose types
+        // it as a generic object.
         ...(document.toJSON() as ExampleRow),
         ownerName,
         actions

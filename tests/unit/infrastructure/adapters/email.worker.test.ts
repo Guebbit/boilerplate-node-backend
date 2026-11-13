@@ -33,6 +33,7 @@ import {
     handleEmailJob,
     EMAIL_QUEUE as workerEmailQueue
 } from '@infrastructure/adapters/email.worker';
+import { asStub } from '@tests/stub';
 
 const mockedMailer = sendTemplatedEmail as jest.MockedFunction<typeof sendTemplatedEmail>;
 
@@ -56,11 +57,11 @@ it('re-exports the email queue unchanged', () => {
 });
 
 describe('handleEmailJob', () => {
-    const job = {
+    const job = asStub<Parameters<typeof handleEmailJob>[0]>({
         request: { to: 'ada@example.com' },
         templateName: 'welcome',
         data: { name: 'Ada' }
-    } as Parameters<typeof handleEmailJob>[0];
+    });
 
     it('sends the job and acks it', async () => {
         mockedMailer.mockResolvedValue(undefined);
@@ -133,11 +134,11 @@ describe('handleEmailJob', () => {
      * does not.
      */
     describe('discarding the spooled attachment', () => {
-        const withAttachment = {
+        const withAttachment = asStub<Parameters<typeof handleEmailJob>[0]>({
             request: { to: 'ada@example.com', attachments: [{ filename: 'x.pdf', key: 'a.pdf' }] },
             templateName: 'welcome',
             data: {}
-        } as Parameters<typeof handleEmailJob>[0];
+        });
 
         it('discards it once the send succeeds', async () => {
             mockedMailer.mockResolvedValue(undefined);
