@@ -860,7 +860,7 @@ paths:
                 missing/`null` fallback locale.
             operationId: replaceEntityTranslations
             x-error-codes:
-                '404': [LOCALE_ENTITY_NOT_FOUND]
+                '404': [LOCALE_ENTITY_TYPE_UNKNOWN, LOCALE_ENTITY_NOT_FOUND]
             security:
                 - bearerAuth: ['update:Translation']
                 - apiKeyAuth: ['update:Translation']

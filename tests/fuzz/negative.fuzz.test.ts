@@ -126,17 +126,9 @@ const targetsOf = (operation: Operation): Target[] => [
     )
 ];
 
-/**
- * Operations whose hostile-parameter answer the contract does not describe yet. Open finding:
- * `PUT /locales/translations/{entityType}/{id}` answers 404 `LOCALE_ENTITY_TYPE_UNKNOWN` for an
- * unknown `entityType`, a code its `x-error-codes` does not list.
- */
-const CONTRACT_GAPS = new Set(['replaceEntityTranslations']);
-
 /** The operations with something to attack; multipart ones are skipped as in the valid-value fuzzer. */
 const ATTACKABLE = listOperations()
     .filter((operation) => !operation.isMultipart)
-    .filter((operation) => !CONTRACT_GAPS.has(String(operation.operationId)))
     .map((operation) => ({ operation, targets: targetsOf(operation) }))
     .filter(({ targets }) => targets.length > 0);
 
