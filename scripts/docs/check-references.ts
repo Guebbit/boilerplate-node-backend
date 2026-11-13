@@ -26,6 +26,7 @@ import {
 } from './repo-references';
 import { REPO_ROOT as ROOT } from '../modules-on-disk';
 import { deadCodeCitations, headingSlugs } from './code-citations';
+import { missingScripts } from './document-facts';
 
 /** The paired repo, addressed in prose by the directory it actually sits in. */
 const PEER_DIRECTORY = path.basename(DEFAULT_FRONTEND_PATH);
@@ -209,6 +210,33 @@ const anchorPageFor = (pages: string[]): Map<string, string> => {
     return byTail;
 };
 
+/**
+ * Script names in a `package.json`, or none when the file is absent (a bare clone has no peer).
+ */
+const scriptNamesIn = (directory: string): string[] => {
+    const file = path.join(directory, 'package.json');
+    if (!existsSync(file)) return [];
+    // Every `package.json` here declares a `scripts` map.
+    const json = JSON.parse(readFileSync(file, 'utf8')) as { scripts: Record<string, unknown> };
+    return Object.keys(json.scripts);
+};
+
+/**
+ * `npm run` claims no script answers to, in this repo or the paired frontend. Skipped without a
+ * peer checkout: the docs cite both, so a missing half would flag the peer's commands.
+ */
+const deadScriptFindings = (pages: string[], peerRoot: string): Finding[] => {
+    const peerScripts = scriptNamesIn(peerRoot);
+    if (peerScripts.length === 0) return [];
+
+    const known = new Set([...scriptNamesIn(ROOT), ...peerScripts]);
+    const read = pages.map((page) => ({
+        path: page,
+        text: readFileSync(path.join(ROOT, page), 'utf8')
+    }));
+    return missingScripts(read, known).map(({ page, problem }) => ({ page, token: problem }));
+};
+
 const run = (): number => {
     const aliases = readAliases();
     const own = trackedTargets(ROOT);
@@ -267,6 +295,8 @@ const run = (): number => {
         .filter(Boolean);
     for (const citation of deadCodeCitations(ROOT, tracked))
         findings.push({ page: 'outside docs/', token: citation });
+
+    findings.push(...deadScriptFindings(pages, peerRoot));
 
     if (pages.length < MIN_PAGES || references < MIN_REFERENCES) {
         console.error(
