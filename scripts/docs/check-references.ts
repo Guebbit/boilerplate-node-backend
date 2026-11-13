@@ -258,7 +258,14 @@ const run = (): number => {
 
     // Citations written in code, contract YAML and `.env-example`: a page that moved or a heading
     // that was renamed leaves them pointing at nothing, and no build opens them.
-    for (const citation of deadCodeCitations(ROOT))
+    const tracked = execFileSync('git', ['ls-files'], {
+        cwd: ROOT,
+        encoding: 'utf8',
+        env: gitEnvironment()
+    })
+        .split('\n')
+        .filter(Boolean);
+    for (const citation of deadCodeCitations(ROOT, tracked))
         findings.push({ page: 'outside docs/', token: citation });
 
     if (pages.length < MIN_PAGES || references < MIN_REFERENCES) {
