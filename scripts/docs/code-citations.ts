@@ -8,11 +8,9 @@
  * Skips:       a URL, a `../`-relative path and a peer repo's `<dir>/docs/…` (the lookbehind).
  */
 
-import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { slugify } from '@mdit-vue/shared';
-import { gitEnvironment } from './repo-references';
 
 /**
  * A page's heading slugs, VitePress's own way: its `slugify` (`@mdit-vue/shared`) over the
@@ -54,7 +52,7 @@ export const headingSlugs = (markdown: string): Set<string> => {
  * `docs/<path>.md` with an optional `#anchor`, not glued to a longer path or a URL. Starting at
  * the repo's own `docs/` is what leaves a peer repo's pages and `https://…/docs/…` alone.
  */
-const CITATION = /(?<![\w/.:-])(docs\/[\w./-]+\.md)(?:#([^\s)\]`'"<>,;]+))?/g;
+const CITATION = /(?<![\w/.:-])(docs\/[\w./-]+\.md)(?:#([^\s"$'),;<>\]`{}]+))?/g;
 
 /** Tracked files that may carry a citation: code, scripts, YAML contracts and the env example. */
 const isCitingFile = (file: string): boolean =>
@@ -68,17 +66,11 @@ const isCitingFile = (file: string): boolean =>
 /**
  * Every `docs/…` citation in the tracked non-docs files of `root` that points at nothing.
  *
- * @param root - repository root, a git work tree
+ * @param root - repository root the file names are relative to
+ * @param files - every file git tracks, relative to `root`
  * @returns one `file: citation` line per dead link, in file order
  */
-export const deadCodeCitations = (root: string): string[] => {
-    const files = execFileSync('git', ['ls-files'], {
-        cwd: root,
-        encoding: 'utf8',
-        env: gitEnvironment()
-    })
-        .split('\n')
-        .filter((file) => file !== '');
+export const deadCodeCitations = (root: string, files: string[]): string[] => {
     const pages = new Set(files.filter((file) => file.startsWith('docs/') && file.endsWith('.md')));
     // One parse per cited page, however many files cite it.
     const slugsCache = new Map<string, Set<string>>();
