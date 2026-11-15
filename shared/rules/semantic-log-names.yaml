@@ -11,6 +11,7 @@
 # case of its own field names; this table is the one place the target names live.
 semanticLogNames:
     service: service.name
+    pid: process.pid
     traceId: trace_id
     spanId: span_id
     requestId: app.request.id

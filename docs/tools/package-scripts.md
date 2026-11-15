@@ -31,17 +31,17 @@ off to `npm run` — see [Database & seed scripts](#database-seed-scripts). `com
 
 ## Runtime scripts
 
-| Script               | Job                                                                                                                              | Read more                                 |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `dev`                | watch-mode local runtime, one process, from `src/main.ts` — expects the compose hostnames from `.env`                            | [Runtime](./runtime.md)                   |
-| `demo`               | the real API, self-contained: in-memory Mongo, seeded, cache/queue disabled — what the paired frontend's dev and e2e run against | [Demo profile](./demo-profile.md)         |
-| `e2e:serve`          | the single-process runtime with `NODE_E2E_RUN=1`, for the frontend's end-to-end runs                                             | [Demo profile](./demo-profile.md)         |
-| `host`               | prefix wrapper: `npm run host -- dev` runs any script against `127.0.0.1` datastores                                             | [Runtime](./runtime.md)                   |
-| `start`              | start one process (`src/main.ts`) without watch mode; what the image runs                                                        | [Runtime](./runtime.md)                   |
-| `start:cluster`      | start `src/cluster.ts`: one worker per CPU, for a bare VM with no PM2 or systemd                                                 | [Clustering](../theory/clustering.md)     |
-| `debug`              | start with Node inspector break-on-start                                                                                         | [Runtime](./runtime.md)                   |
-| `dev:docker`         | single-worker hot reload inside Docker/Podman                                                                                    | [Docker & Podman](./docker-and-podman.md) |
-| `dev:docker:cluster` | clustered hot reload inside Docker/Podman                                                                                        | [Docker & Podman](./docker-and-podman.md) |
+| Script               | Job                                                                                                                                                                        | Read more                                 |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `dev`                | watch-mode local runtime, one process, from `src/main.ts` — expects the compose hostnames from `.env`                                                                      | [Runtime](./runtime.md)                   |
+| `demo`               | the real API, self-contained: in-memory Mongo, seeded, cache/queue disabled — what the paired frontend's dev and e2e run against                                           | [Demo profile](./demo-profile.md)         |
+| `e2e:serve`          | the single-process runtime with `NODE_E2E_RUN=1`, for the frontend's end-to-end runs                                                                                       | [Demo profile](./demo-profile.md)         |
+| `host`               | prefix wrapper: `npm run host -- dev` runs any script against `127.0.0.1` datastores                                                                                       | [Runtime](./runtime.md)                   |
+| `start`              | start one process (`src/main.ts`) without watch mode; what the image runs                                                                                                  | [Runtime](./runtime.md)                   |
+| `start:cluster`      | start `src/cluster.ts`: one worker per CPU, for a bare VM with no PM2 or systemd; refuses 2+ workers without `NODE_RATE_LIMIT_REDIS_URL` (or set `NODE_CLUSTER_WORKERS=1`) | [Clustering](../theory/clustering.md)     |
+| `debug`              | start with Node inspector break-on-start                                                                                                                                   | [Runtime](./runtime.md)                   |
+| `dev:docker`         | single-worker hot reload inside Docker/Podman                                                                                                                              | [Docker & Podman](./docker-and-podman.md) |
+| `dev:docker:cluster` | clustered hot reload inside Docker/Podman                                                                                                                                  | [Docker & Podman](./docker-and-podman.md) |
 
 ## Validation scripts
 

@@ -6,6 +6,9 @@
  * Redis (`src/infrastructure/adapters/limits-redis.ts`) makes it one budget again,
  * across processes and instances. It is a separate INSTANCE from the response cache, so a flood of
  * cache keys can never evict a counter.
+ *
+ * `start:cluster` refuses to boot with 2+ workers and no limits Redis (`src/cluster.ts`); replicas
+ * and PM2 cannot be detected from inside a process, so those stay the operator's to configure.
  */
 
 import {
@@ -27,9 +30,6 @@ import {
 import { closeRedisClient } from '@infrastructure/adapters/redis';
 import { createBreaker } from '@infrastructure/http/middlewares/store-breaker';
 import { rateLimitStoreFallbackTotal } from '@infrastructure/observability/metrics-rate-limit';
-import { availableParallelism } from 'node:os';
-import { clusterConfig } from '@infrastructure/runtime/config';
-import { workerTarget } from '@infrastructure/runtime/cluster-policy';
 
 /**
  * A `Store` whose `init` is known to be synchronous. `express-rate-limit` types it
@@ -169,36 +169,6 @@ const failoverStore = (
         resetKey: (key: string) => route((store) => store.resetKey(key)).then(() => undefined),
         get: (key: string) => route((store) => store.get?.(key))
     };
-};
-
-/**
- * Say, once per budget, that counting is per process: in cluster mode with more than one worker
- * and no Redis, a security control is silently off by a factor of the worker count.
- *
- * Cluster mode only: a single process (the default) cannot know how many replicas run beside it.
- * `error`, not `warn`: that belongs at the level someone is paged for, not in the noise.
- *
- * @param namespace - the budget
- */
-const warnPerProcessCounting = (namespace: string): void => {
-    const { NODE_ENABLE_CLUSTERING: clustered, NODE_CLUSTER_WORKERS: configuredWorkers } =
-        clusterConfig();
-    if (
-        limitsRedisUrl() ||
-        !clustered ||
-        workerTarget(configuredWorkers, availableParallelism()) < 2
-    )
-        return;
-    // Stryker disable all
-    logger.error({
-        message:
-            'Rate limiting is counting per process: no limits Redis is configured, so each process ' +
-            'keeps its own budget, and every NODE_RATE_LIMIT_* budget is multiplied by the number of ' +
-            'processes (cluster workers, and replicas on top of that). ' +
-            'Set NODE_RATE_LIMIT_REDIS_URL, or run NODE_CLUSTER_WORKERS=1.',
-        namespace
-    });
-    // Stryker restore all
 };
 
 /**
@@ -347,7 +317,6 @@ export const rateLimitStore = (
     onStoreError: NonNullable<RateLimitBudget['onStoreError']> = 'memory',
     escalation?: Escalation
 ): SyncInitStore => {
-    warnPerProcessCounting(namespace);
     const store = escalation
         ? escalatingStore(namespace, onStoreError, escalation)
         : plainStore(namespace, onStoreError);
