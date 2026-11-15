@@ -318,7 +318,29 @@ export default withMermaid(
                                     }
                                 ]
                             },
-                            { text: 'Getting Started — Production', link: '/operate/first-deploy' },
+                            {
+                                text: 'Getting Started — Production',
+                                link: '/operate/first-deploy',
+                                collapsed: true,
+                                items: [
+                                    {
+                                        text: 'After the first deploy',
+                                        link: '/operate/first-deploy-after-launch'
+                                    },
+                                    {
+                                        text: 'Proxy, uploads and backups',
+                                        link: '/operate/first-deploy-proxy-and-storage'
+                                    },
+                                    {
+                                        text: 'Monitoring and alerts',
+                                        link: '/operate/first-deploy-monitoring'
+                                    },
+                                    {
+                                        text: 'A staging copy',
+                                        link: '/operate/first-deploy-staging'
+                                    }
+                                ]
+                            },
                             { text: 'Hosting', link: '/operate/hosting' },
                             { text: 'Deploy and rollback', link: '/operate/deploy-and-rollback' },
                             { text: 'Two Client Stacks', link: '/operate/two-client-stacks' },
@@ -333,7 +355,18 @@ export default withMermaid(
                     {
                         text: 'Backups',
                         items: [
-                            { text: 'Backups', link: '/operate/backups' },
+                            {
+                                text: 'Backups',
+                                link: '/operate/backups',
+                                collapsed: true,
+                                items: [
+                                    {
+                                        text: 'The restore drill',
+                                        link: '/operate/backups-restore-drill'
+                                    },
+                                    { text: 'Restoring', link: '/operate/backups-restoring' }
+                                ]
+                            },
                             { text: 'Backup server', link: '/operate/backup-server' },
                             { text: 'restic', link: '/operate/restic' },
                             { text: 'rclone', link: '/operate/rclone' },

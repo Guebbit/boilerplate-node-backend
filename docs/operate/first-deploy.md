@@ -8,7 +8,7 @@ audience: [operator]
 The deployment shape of this stack, not the development one. `docker-compose.yml` bind-mounts the
 working tree and brings up the whole observability estate because seeing everything is the point
 of a dev box. `docker-compose.production.yml` is the other half: it runs the **built** image, binds
-the API port to loopback only, and keeps to what a host needs: `app`, `cron`, the one-shot `setup`, the datastores (`database`, `cache`, `limits`, `queue`), the `backup` job and a small monitoring set (`prometheus`, `alertmanager`, `loki`, `node-exporter`, `alloy`) — see [Monitoring and alerts](#monitoring-and-alerts).
+the API port to loopback only, and keeps to what a host needs: `app`, `cron`, the one-shot `setup`, the datastores (`database`, `cache`, `limits`, `queue`), the `backup` job and a small monitoring set (`prometheus`, `alertmanager`, `loki`, `node-exporter`, `alloy`) — see [Monitoring and alerts](./first-deploy-monitoring.md#monitoring-and-alerts).
 
 ::: warning Read this alongside the file, not instead of it
 Every decision below — why the port is loopback-only, why it is one process per container, why observability is
@@ -166,7 +166,7 @@ one of them silently gives every client the same application config.
 
 That builds `docker/Dockerfile.production` (multi-stage: type-checks in a build stage, ships only
 production dependencies in the runtime stage), runs `setup` once — indexes and the shop's row, see
-[below](#the-first-admin) — then starts the API, `cron`, and (bundled profile) `database`, `cache`,
+[below](./first-deploy-after-launch.md#the-first-admin) — then starts the API, `cron`, and (bundled profile) `database`, `cache`,
 `limits` and `queue` — the production names for Mongo, the cache Redis, the rate-limit Redis and RabbitMQ. No bind mount, no hot reload:
 what's running is exactly what was built.
 
@@ -186,7 +186,7 @@ docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml e
   file, but only this sees a value someone put straight into the client's `.env`.
 
 The port is published to `127.0.0.1`, not `0.0.0.0` — reachable from the host, not from the
-network. That is deliberate, see [Putting a reverse proxy in front](#putting-a-reverse-proxy-in-front) below.
+network. That is deliberate, see [Putting a reverse proxy in front](./first-deploy-proxy-and-storage.md#putting-a-reverse-proxy-in-front) below.
 
 ## Surviving a reboot
 
@@ -203,224 +203,54 @@ images survive too: they are on a named volume. Docker needs none of this; its d
 
 ## The first admin
 
-`setup` gives the database its shop and its preset roles, but nobody starts with a role above
-`customer` — the first signup racing to become admin is a known vulnerability pattern, so nothing
-does that automatically. Sign up through the app once, then the technician gives that account its
-role by writing the membership into the database by hand. There is no command for it, the first
-owner included, and the same hand-written fix is the way back if every admin is ever locked out.
-
-The write, from the stack's own `database` container (the id is the account's `_id`, shown by
-`db.users.findOne({ email: "<their email>" })`; the tenant id is the deployment's fixed one):
-
-```bash
-docker compose --env-file "clients/<name>/.env" -f docker-compose.production.yml \
-  exec database mongosh --tls --tlsCAFile /keyfile-dir/mongo-ca.crt \
-  -u "$MONGO_ROOT_USER" -p --authenticationDatabase admin "<MONGO_DB>" --eval '
-    db.memberships.updateOne(
-      { userId: "<the account id>", tenantId: "65dd20000000000000000001", scope: "tenant" },
-      { $set: { role: "admin" }, $currentDate: { updatedAt: true, createdAt: true } },
-      { upsert: true }
-    )
-  '
-```
-
-One membership per person per place, so the same command also _changes_ a role. An administrator
-that was switched off, or erased, comes back with `db.users.updateOne({ _id: ObjectId("<id>") },
-{ $set: { active: true }, $unset: { deletedAt: "" } })`. The app has no way to do either on an
-administrator's behalf: only a role manager changes one, and the app has no role manager above an administrator ([Authorization](../understand/authorization.md#protecting-people)).
+Create the first administrator once the stack is healthy: [After the first deploy](./first-deploy-after-launch.md#the-first-admin).
 
 ## Publish a disclosure contact
 
-Set `NODE_SECURITY_CONTACT`, `NODE_SECURITY_EXPIRES` (and optionally `NODE_SECURITY_POLICY_URL`) so
-a researcher who finds a bug in your deployment knows where to send it. Left unset, nothing is
-published. See [Reporting a vulnerability](../understand/security.md#reporting-a-vulnerability).
+Point the app at a security contact: [After the first deploy](./first-deploy-after-launch.md#publish-a-disclosure-contact).
 
 ## The first third-party integration
 
-The contracts ship at `0.1.0` (alpha: REST may break freely). Before the first partner script uses
-an `sk_` API key, or the first outside subscriber receives a webhook, bump `info.version` to
-`1.0.0` in `shared/contracts/openapi.root.yaml` and in the AsyncAPI roots and fragments. From then
-on a change that breaks a client goes through a deprecation window. See
-[Versioning and retiring an endpoint](../build/versioning.md).
+Wire SMTP, payments or OAuth: [After the first deploy](./first-deploy-after-launch.md#the-first-third-party-integration).
 
 ## What's different from dev
 
-| Dev (`docker-compose.yml`)                                  | Production (`docker-compose.production.yml`)                                                                                             |
-| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Source bind-mounted, `tsx` watches for changes              | Source baked into the image at build time                                                                                                |
-| API port published to `${NODE_HOST:-127.0.0.1}`             | API port published to `127.0.0.1` only                                                                                                   |
-| Full observability stack included                           | No observability containers — see [below](#monitoring-and-alerts)                                                                        |
-| `NODE_ENABLE_CLUSTERING=1` (optional, `dev:docker:cluster`) | The image runs `src/main.ts`: one process per container, always; scale with `--scale app=N`                                              |
-| Runs as whatever user starts compose                        | Runs as the non-root `node` user inside the image, `read_only` root filesystem, all Linux capabilities dropped                           |
-| Mongo is a single-member replica set with no auth           | Mongo is a single-node replica set (`rs0`), a scoped `readWrite` app user behind a root account, both Redis instances require a password |
-| Uploads/storage/quarantine are host paths or absent         | `uploads`, `storage` and `quarantine` are named volumes — `storage` also holds the outbound mail spool, so back it up                    |
-
-Clustering is off on purpose: scale replicas with `--scale app=N` or an orchestrator instead, so
-one thing decides how many processes are live, not two layers of process management fighting a
-rolling deploy.
+A table of dev against production: [Proxy, uploads and backups](./first-deploy-proxy-and-storage.md#what-s-different-from-dev).
 
 ## Putting a reverse proxy in front
 
-The app itself never terminates TLS; the `docker-compose.proxy.yml` Traefik overlay does, with Let's Encrypt certificates. The API is bound to loopback specifically so that publishing
-it on a public interface — plain HTTP, carrying the auth cookies this application sets — is not the
-easy path. Use that overlay, or put nginx, Caddy or a managed load balancer in front, terminate TLS there, and
-proxy to `127.0.0.1:${NODE_PORT}`.
-
-Rootless Podman cannot publish ports below 1024 by default, and the Traefik overlay publishes 80 and 443. Lower the limit once per host:
-
-```bash
-# Let unprivileged users bind 80 and up; the file makes it survive a reboot.
-echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee /etc/sysctl.d/90-unprivileged-ports.conf
-sudo sysctl --system
-```
-
-Then set `NODE_TRUST_PROXY_HOPS` to the number of proxies in front (usually `1`; the Traefik overlay
-below sets it to `1` unless the client file sets it, and `.env-example` leaves it commented). It defaults to `0`, which reads the caller's address from the socket — with a proxy in front, that is the proxy's
-address for every request, so every caller shares one rate-limit bucket and every audit row names
-the proxy. See [trust proxy](../understand/security.md#trust-proxy-and-the-two-ways-to-get-it-wrong).
-
-Running **several client stacks on one host** is different enough to have its own recipe —
-`docker-compose.proxy.yml` fronts them all with one shared Traefik that serves each stack from its
-own route file, with no Docker socket mounted. See [Two Client Stacks](./two-client-stacks.md).
+The API listens on loopback; TLS goes in front: [Proxy, uploads and backups](./first-deploy-proxy-and-storage.md#putting-a-reverse-proxy-in-front).
 
 ## Uploaded images do not outlive the container
 
-`imageStore` (`src/infrastructure/adapters/image-store.ts`) writes uploads to disk. The compose
-file mounts a named volume (`uploads:/app/public/images`) as the stopgap — without it, a redeploy
-loses every uploaded image. The volume still pins the deployment to one host, and two replicas do
-not share what they store. The durable answer is an S3-compatible `ImageStore` implementation;
-nothing selects a backend yet, on purpose.
+Mount a volume or lose uploads on redeploy: [Proxy, uploads and backups](./first-deploy-proxy-and-storage.md#uploaded-images-do-not-outlive-the-container).
 
 ## Backups
 
-Before the first real customer, in this order:
-
-1. **A second machine** (any host that runs Docker or Podman), running `docker-compose.backup-server.yml`:
-   an append-only restic server that refuses deletes. [Backup server](backup-server.md) has the steps.
-2. **The knobs** in `clients/acme/.env`: `COMPOSE_PROFILES=bundled,backup`,
-   `BACKUP_REPOSITORY=rest:https://<second machine>:8000/acme/`, `BACKUP_PRUNE=false`, and
-   `BACKUP_HEARTBEAT_URL` if you run Gatus ([one endpoint per client](gatus.md#backup-freshness)). The secrets are in [Secrets](#secrets); keep a copy of
-   `restic_password` off the host.
-3. **Run the restore drill once**: `docker compose ... --profile restore-drill run --rm restore-drill`.
-   It restores the latest snapshot into a throwaway Mongo and says how long that took.
-   A backup that has never been restored is a hope.
-
-Details and the knobs: [Backups](backups.md).
+Turn on the backup profile: [Proxy, uploads and backups](./first-deploy-proxy-and-storage.md#backups).
 
 ## Monitoring and alerts
 
-The `monitoring` profile adds five services, **off by default**: Prometheus (scrapes `app` and
-evaluates the alert rules), Alertmanager (routes what fires), node_exporter (the host's disk, for
-`DiskAlmostFull`), Loki (stores container logs) and Alloy (ships them). Turn it on with `COMPOSE_PROFILES=bundled,monitoring`. There is no Grafana: it costs
-about a gigabyte of memory and the alerts do not need a screen.
-
-```mermaid
-flowchart LR
-    app["app"] -- "/observability/metrics<br/>(metrics_token)" --> prom["prometheus"]
-    prom -- "rules: api + security" --> am["alertmanager"]
-    am -- "your receiver" --> you(["mail / chat / pager"])
-    logs[("container log files")] --> alloy["alloy"]
-    alloy --> loki["loki"]
-    alloy -. "audit lines only,<br/>if you configure it" .-> offhost[("off-host store")]
-```
-
-- **No host ports.** Prometheus and Alertmanager have web UIs with no login, so none of the five
-  publishes a port; they reach each other and `app` over the compose network. Reach a UI with
-  `docker compose exec` or an SSH tunnel, not a published port.
-- **One credential.** Prometheus scrapes with the `metrics_token` secret file the app reads its own
-  `NODE_METRICS_TOKEN` from, so rotating the token is one edit.
-- **The rules** are the files the local stack loads: `docker/observability/prometheus.alert-rules.yaml`.
-  The `security` group carries a "tune to your traffic" comment on every threshold.
-- **You need an alert receiver.** Alerts that fire into nothing are a dashboard nobody opens.
-  With no `ALERT_*` knob set, Alertmanager sends every alert to `null`, which notifies no one.
-  Set `ALERT_EMAIL_TO` / `ALERT_EMAIL_FROM` (sent through the app's own `NODE_SMTP_*`),
-  `ALERT_WEBHOOK_URL` (ntfy with a templated URL, or a bridge for anything else) and `ALERT_HEARTBEAT_URL` in the
-  client's `.env`. [Alert routing](prometheus.md#alert-routing) has the table.
-- **Prove it once, on staging.** `docker compose ... stop app`: within about two minutes
-  `[FIRING] ApiDown` reaches your `ALERT_*` receiver, and `start app` sends the resolution. Then stop
-  `alertmanager`: Gatus reports the missing heartbeat ([the drill](gatus.md#the-local-drill)).
-  An alert nobody has ever seen fire is not known to work.
-- **Logs.** Alloy tails the engine's container log files (Docker: `/var/lib/docker/containers`; set
-  `CONTAINER_LOGS_PATH` for Podman, together with `CONTAINER_LOG_DRIVER=k8s-file`, because Podman's
-  default driver writes no file). It reads the Docker and the Podman format at once.
-- **The audit stream, off the host.** An audit trail the application can write is one an attacker
-  who owns the application can rewrite, so the strongest copy lives on a system the application
-  cannot reach. The pipeline can forward the lines tagged `log_type=audit` to a target you choose:
-  copy `docker/observability/alloy.audit-forward.example.alloy`, fill in the target, and point
-  `ALLOY_AUDIT_FORWARD_CONFIG` at the copy. Where it goes is yours to pick; the options worth
-  weighing are object storage with object lock (WORM retention), a separate log host, or a managed
-  log service with its own access control. This boilerplate picks none: **with no target there is
-  no off-host copy**, and the audit entries live only in the host's logs and the application's
-  database. Why not a protected database instead: its role needs `createIndex`, so a compromised
-  app could plant a TTL index with `expireAfterSeconds: 0` and wipe the trail.
-
-Traces are not in the profile: set `OTEL_EXPORTER_OTLP_ENDPOINT` to a collector you already run (an
-empty value is a valid choice and means no traces leave the process). To run Tempo and Grafana here
-anyway, copy their definitions from `docker-compose.yml` into your own override file rather than
-layering the two compose files (`-f docker-compose.production.yml -f docker-compose.yml` drags the
-dev bind-mounts back in).
-
-See [Docker & Podman](../build/docker-and-podman.md) for what each of those containers does and
-[Observability Reference](./observability-reference.md) for how the app talks to them.
+Enable the monitoring set and prove an alert: [Monitoring and alerts](./first-deploy-monitoring.md#monitoring-and-alerts).
 
 ## A staging copy
 
-The test suite proves the code. It cannot prove the install: a real certificate, mail that lands in
-an inbox, a firewall, a reboot. Staging is where those get checked, before a customer does it for you.
-
-Staging is production in everything but its data: same compose file, same image, a throwaway machine.
-
-```mermaid
-flowchart TD
-    VM["1 · a small VM with Podman + Docker Compose"] --> DNS["2 · staging.&lt;domain&gt; points at it"]
-    DNS --> Conf["3 · clients/staging/.env + secrets/<br/>payments in test mode"]
-    Conf --> Up["4 · build + up -d"]
-    Up --> Smoke["5 · walk the money path by hand"]
-    Smoke --> Break["6 · fire an alert, reboot, scan from outside"]
-    Break --> Redo["7 · now and then: delete it, build it again"]
-
-    classDef step fill:#dbeafe,stroke:#2563eb,color:#111827;
-    classDef done fill:#dcfce7,stroke:#16a34a,color:#111827;
-    class VM,DNS,Conf,Up step;
-    class Smoke,Break,Redo done;
-```
-
-1. **A machine.** Any small VM that runs Podman, with Docker Compose as its
-   [compose provider](../build/docker-and-podman.md#the-compose-provider-behind-podman-compose).
-   [Hosting](./hosting.md) has what it needs.
-2. **A name.** A DNS record for `staging.<domain>` pointing at the VM, then the proxy:
-   [Putting a reverse proxy in front](#putting-a-reverse-proxy-in-front).
-3. **Configuration.** A client called `staging`, exactly as in [First run](#first-run) and [Secrets](#secrets).
-    - Mail: a real SMTP account, so you see what a customer sees, with
-      [SPF, DKIM and DMARC](./deployment-hardening.md#email-authentication-spf-dkim-dmarc) published.
-    - Payments: the provider's **test** keys, never live ones.
-4. **Boot it.** The same two commands as [First run](#first-run), with `COMPOSE_PROJECT_NAME=staging`,
-   then [Check it worked](#check-it-worked).
-5. **Walk the money path by hand**, at `https://staging.<domain>`, and again after every deploy:
-    - `/livez` and `/readyz` answer;
-    - sign up, and the verification mail arrives;
-    - log in, add a product, check out, pay with a test card;
-    - the order turns `paid`, and the confirmation mail arrives;
-    - delete the account.
-6. **The three things only a real host can show:**
-    - an alert reaches you: [Prove it once](#monitoring-and-alerts);
-    - a reboot brings everything back: [Surviving a reboot](#surviving-a-reboot);
-    - from another machine, only 80 and 443 answer and TLS is clean:
-      `nmap -Pn -p- staging.<domain>`, `testssl.sh staging.<domain>`,
-      and `curl -sI https://staging.<domain>/livez` to see the headers after Traefik.
-7. **Rebuild from scratch now and then.** A stack only ever upgraded in place hides what works only
-   because of leftovers.
+Rehearse on a second stack named `staging`: [A staging copy](./first-deploy-staging.md#a-staging-copy).
 
 ## Read next
 
-| You want to                                      | Read                                                 |
-| ------------------------------------------------ | ---------------------------------------------------- |
-| Run the dev stack instead                        | [Getting Started](../build/run-locally.md)           |
-| Understand every container, dev or production    | [Docker & Podman](../build/docker-and-podman.md)     |
-| Run two client stacks, or share one proxy        | [Two Client Stacks](./two-client-stacks.md)          |
-| Pick a host that can run this                    | [Hosting](./hosting.md)                              |
-| Back up what a stack holds                       | [Backups](./backups.md)                              |
-| Understand why one stack serves one client       | [Tenancy](../understand/tenancy.md)                  |
-| See every host port and its env var              | [Pairing & Ports](../build/pairing-and-ports.md)     |
-| Understand graceful shutdown under SIGTERM       | [Clustering & Shutdown](../understand/clustering.md) |
-| Look up a file in `docker/` or the compose files | [Ops & Assets](../reference/ops.md)                  |
+| You want to                                      | Read                                                              |
+| ------------------------------------------------ | ----------------------------------------------------------------- |
+| Create the first admin                           | [After the first deploy](./first-deploy-after-launch.md)          |
+| Put TLS in front, keep uploads, back up          | [Proxy, uploads and backups](./first-deploy-proxy-and-storage.md) |
+| Watch it                                         | [Monitoring and alerts](./first-deploy-monitoring.md)             |
+| Rehearse first                                   | [A staging copy](./first-deploy-staging.md)                       |
+| Run the dev stack instead                        | [Getting Started](../build/run-locally.md)                        |
+| Understand every container, dev or production    | [Docker & Podman](../build/docker-and-podman.md)                  |
+| Run two client stacks, or share one proxy        | [Two Client Stacks](./two-client-stacks.md)                       |
+| Pick a host that can run this                    | [Hosting](./hosting.md)                                           |
+| Back up what a stack holds                       | [Backups](./backups.md)                                           |
+| Understand why one stack serves one client       | [Tenancy](../understand/tenancy.md)                               |
+| See every host port and its env var              | [Pairing & Ports](../build/pairing-and-ports.md)                  |
+| Understand graceful shutdown under SIGTERM       | [Clustering & Shutdown](../understand/clustering.md)              |
+| Look up a file in `docker/` or the compose files | [Ops & Assets](../reference/ops.md)                               |

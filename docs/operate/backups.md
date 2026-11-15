@@ -10,7 +10,7 @@ and copies the uploaded files into an encrypted [restic](./restic.md) repository
 It is **off until you ask for it** (the `backup` profile) and **dormant until you name a
 repository** (`BACKUP_REPOSITORY`).
 
-A backup you have never restored is a hope, not a backup. [The restore drill](#the-restore-drill)
+A backup you have never restored is a hope, not a backup. [The restore drill](./backups-restore-drill.md#the-restore-drill)
 restores the latest one, for real, with one command; CI runs the same thing on every change.
 
 ## The design
@@ -195,173 +195,19 @@ hourly `forget` released. A failure turns the heartbeat red; the next good backu
 
 ## The restore drill
 
-One command, on the real deployment, against the real repository:
-
-```bash
-docker compose --env-file "clients/$COMPOSE_PROJECT_NAME/.env" -f docker-compose.production.yml \
-    --profile restore-drill run --rm restore-drill
-```
-
-It starts a **throwaway** Mongo (`restore-drill-db`: a plain instance on a tmpfs, no auth, no published
-port, gone afterwards) and never touches the live database. Then, in order:
-
-1. Restores the latest `db` snapshot into it (`mongorestore --oplogReplay`).
-2. Counts every collection in the restored copy and compares it with the counts saved at backup time.
-   A live dump window moves a count a little (the oplog replay lands later writes), so a collection may
-   drift by up to `max(5, 1%)`; a missing or emptied collection always fails.
-3. Restores the latest `files` snapshot and verifies every byte (`restic restore --verify`).
-4. `restic check --read-data-subset=10%` on the repository.
-5. Prints how long it took: **that is how long the shop is down on a bad day**, plus your own reaction time.
-
-```
-ok       `api.orders` 4000
-ok       `api.products` 4000
-ok       `api.users` 4100
-5 collections match, 0 do not
-... [backup] DRILL PASSED: restore and verification took 6s.
-```
-
-Exit code 0 only when every step passed. Knobs: `DRILL_CHECK_SUBSET` (default `10%`) and
-`DRILL_RESTORE_FILES` (default `true`; the files land in a 1 GB tmpfs, raise it for large uploads).
-Point `BACKUP_REPOSITORY` at the second machine's `rest:` URL to drill the off-site copy.
-
-**Run it quarterly**, and after any change to the backup settings. With more than a handful of clients,
-rotate which one gets drilled rather than testing all of them every time.
-On the real deployment, the first drill is the production readiness check for backups: this command, once, before launch.
-
-### CI proves it on every change
-
-The `backup-drill` job (`npm run backup:drill`, which anyone with Docker can run, `docker/backup/drill.sh`)
-builds the backup image and then, on one private network with no published port:
-
-| Step                                                               | What it proves                                                                                                         |
-| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| a replica-set Mongo, started as the compose file starts `database` | `docker/mongo-init.js` really creates the `backup` account, and the role can run `mongodump --oplog`                   |
-| back up, change 2.5%, back up, back up again                       | the second run after a small change stores a chunk or two; the third, with nothing changed, stores nothing             |
-| the restore drill                                                  | dump, counts, files and `restic check` all pass                                                                        |
-| a Gatus container as the heartbeat                                 | a good run pings green, a failed run (wrong database user) pings red                                                   |
-| an every-minute schedule, and an empty repository                  | the scheduler really runs the job, and a dormant container idles healthy                                               |
-| a repository with a data file deleted                              | the drill **fails**: it can say no                                                                                     |
-| the second machine's append-only server                            | a backup is accepted, `forget` is **refused** (403), the upkeep prunes on its own disk, and the drill restores from it |
-
-Backup **and** restore are tested end to end, not just the config.
+One command proves a backup restores: [The restore drill](./backups-restore-drill.md#the-restore-drill).
 
 ## Restoring
 
-The drill proves the machinery. For a real incident:
-
-| Situation                                           | Restore command                                                                        | Why                                                                                                                                                          |
-| --------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Give one client its own data back                   | `mongorestore --archive --ssl --sslCAFile ... --nsInclude="<client>.*" --drop`         | `--nsInclude` and `--oplogReplay` cannot be combined; this restores the client's collections as of the dump's end, not perfectly cross-collection consistent |
-| Disaster recovery: the host, or the volume, is gone | `mongorestore --archive --ssl --sslCAFile ... --oplogReplay` into a **fresh** instance | Full, oplog-consistent. Restoring `admin` and `config` over a LIVE replica set's own identity is not what you want, hence a fresh target                     |
-
-Both read the dump from restic: `restic dump <snapshot> mongodump.archive | mongorestore --archive ...`.
-The Database Tools spell TLS `--ssl --sslCAFile`, and the bundled `database` requires it.
-
-1. **Stop the writers.** `docker compose stop app cron`. They stay stopped until step 5.
-2. **Restore the database**, then the files (`restic restore <files snapshot> --target <dir>`, then copy
-   into the `uploads` volume and `storage/mail-spool`).
-3. **Put the newest erasure ledger back.** The restored copy only knows erasures from before the snapshot.
-    - **The live database still answers:** copy its `erasureledgers` collection over the restored one
-      (`mongodump --collection erasureledgers`, then `mongorestore --nsInclude="<db>.erasureledgers" --drop`).
-    - **The host is gone:** restore the **newest** snapshot's `erasureledgers` the same way
-      (`--nsInclude` cannot be combined with `--oplogReplay`, so this is its own `mongorestore` run after the
-      full restore of step 2).
-4. **Re-apply the erasures, before anything starts:**
-
-    ```sh
-    docker compose --env-file "clients/$COMPOSE_PROJECT_NAME/.env" -f docker-compose.production.yml \
-        run --rm --no-deps cron \
-        node --import tsx scripts/ops/reapply-erasures.ts --since <the snapshot time, ISO> --snapshot <restic id> --by <your name>
-    ```
-
-    `--env-file` is not optional: without it the client's settings never reach `cron` and the script stops
-    with "DB connection refused by configuration". A manual run also needs `APP_IMAGE` exported: the image
-    currently deployed, the image on the last line of `clients/<name>/deploys.log` (`docker/deploy.sh` sets
-    it for you). `docker compose` stands for your engine's compose: `podman compose` where the engine is
-    podman (the repo's `npm run compose` picks it).
-
-    Run it in `cron`: it mounts `uploads`, so an erased account's avatar is deleted again too, and the
-    production image has no npm. `--no-deps` because step 1 stopped `app` and `cron`, and `run` would
-    otherwise start their dependencies. Step 1 is the guard: it does not check that the app and cron are stopped, and the purge job (which has no
-    HTTP port to probe) must not run beside it. It erases again each account the ledger names since `--since`,
-    keeping the original erasure date, and writes one restoration-log audit row (`auth.erasures.reapplied`: who,
-    which snapshot, the counts and ids). Safe to repeat; it exits non-zero while
-    any account could not be erased.
-
-5. **Start the stack** and look: log in, open an order, fetch an image. Mail, stock alerts, the purge job
-   and webhooks only ever see the already-erased state.
+How to restore the database and the uploads: [Restoring](./backups-restoring.md#restoring). Erasures after a restore are in [the same page](./backups-restoring.md#erasures-after-a-restore).
 
 ### Erasures after a restore
 
-A backup kept for six months holds accounts erased since. GDPR's accepted standard (the ICO's guidance, the
-EDPB's 2025 enforcement report) lets a backup keep them until it ages out, **if** they stay "beyond use" and
-**every erasure is re-applied after a restore, before use** (SDM Baustein 60, M60.S10). This repo's promise is
-exactly that: [Data retention](../understand/data-retention.md#backups-and-erasure).
-
-```mermaid
-flowchart TD
-    Stop["1. stop app and cron"] --> Restore["2. restore database and files"]
-    Restore --> Ledger["3. put the newest ledger back<br/><i>live DB, or newest snapshot</i>"]
-    Ledger --> Reapply["4. ops:reapply-erasures --since"]
-    Reapply -->|failed greater than 0| Reapply
-    Reapply --> Start["5. start the stack"]
-```
-
-The list is the **erasure ledger** (`erasureledgers`): `{ userId, at, kind }`, written inside the erasure's own
-transaction (an owner's schedule and cancel too; a staff cancel reaches it a moment later, through the outbox), kept `NODE_ERASURE_LEDGER_RETENTION_DAYS` (220 by default, above the oldest backup with the default
-keep knobs; raise it with them). Raise `BACKUP_KEEP_MONTHLY` and the ledger must outlive it, or a restore of the
-oldest snapshot brings back an account the ledger has forgotten.
-
-**Deletion locks follow the ledger too.** Besides `erased`, the ledger records `scheduled` (with the
-`purgeAt` the owner was promised, stored and never recomputed) and `canceled`. For each account the command
-applies the latest event since `--since`: `erased` always wins; otherwise a later `scheduled` locks the account
-at the stored date (and ends its sessions), a later `canceled` clears the lock even if `purgeAt` has passed,
-and cancel-then-ask-again stays scheduled. The log prints the counts and then the ids of every account in each outcome (`erased`, `alreadyGone`, `rescheduled`, `unscheduled`, `unchanged`, `failed`): the restored audit log lost the rows written after the snapshot, so these ids are the record.
-No manual check is needed before starting the stack.
-
-**Only if the ledger is lost** (the host, and the newest snapshot's copy): fall back to the audit events, which
-are shorter-lived (`auditlogs` keeps 180 days, `NODE_AUDIT_RETENTION_DAYS`; Loki 7 by default).
-
-- **The database still answers:**
-
-    ```js
-    db.auditlogs.find(
-        {
-            action: {
-                $in: ['admin.user.erased', 'system.user.erased', 'auth.account_delete.completed']
-            },
-            outcome: 'success',
-            timestamp: { $gt: ISODate('<the snapshot time>') }
-        },
-        { action: 1, targetId: 1, actorUserId: 1, timestamp: 1 }
-    );
-    ```
-
-    The erased user is `targetId` for the admin and system events, `actorUserId` for a self-deletion.
-
-- **The database is gone:** the same events were logged as Winston lines in Loki
-  (`{service="api"} |= "user.erased"`), if the logs survived off the host.
-
-Then erase each listed user again (admin `DELETE /users/{id}?hardDelete=true`) **before step 5**. If no source
-survives, write it in the incident log, as the
-[Art. 33 runbook](../understand/data-protection.md#breach-runbook-art-33-—-72-hours) already asks: the erasures that
-could not be re-applied, and why.
+A restore can resurrect erased data; re-apply the erasures: [Restoring](./backups-restoring.md#erasures-after-a-restore).
 
 ## Uploaded images and the mail spool
 
-The dump covers the database only. Two named volumes hold durable state of their own: `uploads`
-(uploaded images) and the `mail-spool/` directory of `storage` (queued outbound mail a restart must
-not lose). A restore that skips them brings back rows pointing at files that no longer exist, so the
-backup container mounts both read-only and backs them up as plain files.
-
-**`storage/documents/` is deliberately left out.** It holds rendered invoice and credit-note PDFs, a
-regenerable copy of the frozen rows: losing it costs a re-render, never data.
-
-**Moving to a new host:** restore the files snapshot onto the new host's volumes before the new
-stack's first boot (`restic restore latest --tag files --target <dir>`, then copy into the volumes).
-Skipping this looks fine until a customer clicks a broken image or the reaper finds no mail queued
-that a customer swears was sent.
+Uploads and the mail spool are not in the database dump: [Restoring](./backups-restoring.md#uploaded-images-and-the-mail-spool).
 
 ## The tools
 
@@ -389,8 +235,10 @@ for small deployments. Past tens of GB, or when minutes of data loss matter:
 
 ## Read next
 
-| You want to                                   | Read                                        |
-| --------------------------------------------- | ------------------------------------------- |
-| Understand the replica set this backs up      | [Two Client Stacks](./two-client-stacks.md) |
-| See every index/data-migration concept        | [Data](../reference/data.md)                |
-| Pick where the restic repository itself lives | [Hosting](./hosting.md)                     |
+| You want to                                   | Read                                            |
+| --------------------------------------------- | ----------------------------------------------- |
+| Prove a backup restores                       | [The restore drill](./backups-restore-drill.md) |
+| Restore                                       | [Restoring](./backups-restoring.md)             |
+| Understand the replica set this backs up      | [Two Client Stacks](./two-client-stacks.md)     |
+| See every index/data-migration concept        | [Data](../reference/data.md)                    |
+| Pick where the restic repository itself lives | [Hosting](./hosting.md)                         |
