@@ -67,22 +67,25 @@ flowchart LR
 | Dev workflow        | bind mount source code into `/app`, keep `node_modules` inside the container, switch between single-process and clustered dev commands                                                                                               |
 | Podman support      | `compose:restart` and `compose:rebuild` run `${CONTAINER_ENGINE:-podman} compose`; export `CONTAINER_ENGINE=docker` to switch                                                                                                        |
 
-### After a new dependency: rebuild, don't just restart
+### After a new dependency: the container reinstalls by itself
 
 `node_modules` lives in an ANONYMOUS VOLUME mounted over `/app/node_modules`, so the bind-mounted
-source never shadows the container's own install. That volume is filled from the image **once**,
-when the container is first created, and is reused afterwards — so a dependency added to
-`package.json` is invisible to a container started with `compose:restart`, and the app crash-loops
-on `Cannot find module '<name>'` while every other service reports healthy.
+source never shadows the container's own install. Under podman-compose that volume keeps a stable
+name and is reused on every `up`, so it holds whatever was installed the day it was created.
+
+`app` and `cron` therefore start with `docker/ensure-deps.sh`: it hashes `package-lock.json`,
+compares it with a stamp inside the volume, and runs `npm ci` on a mismatch. A dependency added
+to the lockfile needs only `podman compose up -d` (or `compose:restart`). The dev image writes the
+same stamp at build time, so a fresh volume is not reinstalled.
+
+A change to `docker/Dockerfile` itself (system packages, the baked `mongod`) is not covered:
 
 ```sh
-npm run compose:rebuild      # down -v, build --no-cache, up -d — drops the database too
-# or, keeping the data:
-podman compose build app && podman compose rm -sf app && podman volume prune -f && podman compose up -d app
+podman compose up -d --build
 ```
 
-The symptom is specific enough to recognise: `MODULE_NOT_FOUND` for a package that `ls node_modules`
-on the host clearly shows, raised from inside `/app`.
+Without the reinstall the symptom was `MODULE_NOT_FOUND` for a package that `ls node_modules` on
+the host shows, raised from inside `/app`.
 
 ## Container reference
 
@@ -256,7 +259,7 @@ docker/boot-check.sh boot-check
 ## How to think about the setup
 
 - **Compose is the local truth**: one file wires together the app plus all sidecars needed for demos and local debugging.
-- **The `app` container owns the seeding**, not you: its startup command is `npm run db:bootstrap && npm run dev:docker` (`dev:docker:cluster` when `NODE_ENABLE_CLUSTERING` is set), so a fresh volume arrives furnished — [Which database am I looking at?](../getting-started.md#which-database-am-i-looking-at).
+- **The `app` container owns the seeding**, not you: its startup command is `docker/ensure-deps.sh && npm run db:bootstrap && npm run dev:docker` (`dev:docker:cluster` when `NODE_ENABLE_CLUSTERING` is set), so a fresh volume arrives furnished — [Which database am I looking at?](../getting-started.md#which-database-am-i-looking-at).
 - **The Dockerfile is intentionally simple**: install dependencies once, add Chromium for PDF support, then let compose decide runtime commands.
 - **Podman is treated as a compatible local engine**, not a separate architecture.
 

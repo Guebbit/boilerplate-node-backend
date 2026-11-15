@@ -61,7 +61,9 @@ COPY . .
 #   --omit=dev removes the devDependancies because you don't care about them in production.
 #   You can use npm install in development because you want devDependencies and you don't mind about possible non-determinism.
 #   add --omit=dev to omit dev dependencies in production
-RUN npm ci
+# Runs `npm ci` and writes the lockfile stamp, so a fresh `/app/node_modules` volume (copied from
+# this image) is not reinstalled by the compose services' own `docker/ensure-deps.sh` at start.
+RUN sh docker/ensure-deps.sh
 
 # Bakes a `mongod` into the image at build time, so the test suite (mongodb-memory-server) needs no
 # network to run. `MONGOMS_DOWNLOAD_DIR` is the library's own binary cache directory — set here it

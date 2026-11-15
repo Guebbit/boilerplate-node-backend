@@ -64,7 +64,7 @@
         "scenario:tls": "tsx scenarios/tools/generate-webhook-sink-tls.ts",
         "scenario:apply:reset": "tsx scenarios/apply.ts --reset",
         "db:cache:clear": "tsx scripts/db/cache-clear.ts",
-        "db:bootstrap": "npm run db:sync -- --prune && npm run scenario:apply",
+        "db:bootstrap": "tsx --import ./scenarios/support/development-doubles.ts scripts/db/sync-indexes.ts --prune && npm run scenario:apply",
         "access:bootstrap": "tsx scripts/db/bootstrap-access.ts",
         "deploy:setup": "npm run db:sync && npm run access:bootstrap",
         "config:check": "tsx scripts/ops/check-config.ts",

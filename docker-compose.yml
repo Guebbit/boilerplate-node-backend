@@ -108,9 +108,9 @@ services:
             #     Meaning: "Use the . folder (current) on my machine and make it appear at /app inside the container."
             #     Z is for SELinux that can cause problems (if its present)
             - .:/app:Z
-            # ANONYMOUS volume managed by docker/podman mounted at /app/node_modules inside the container.
-            #     It preserves/install node_modules independently of the host folder.
-            #     Good for ephemeral per-container storage. Use when you don't care about managing the volume later
+            # ANONYMOUS volume mounted at /app/node_modules, independent of the host folder.
+            #     NOT ephemeral under podman-compose: it keeps a stable name and is reused on every `up`.
+            #     `docker/ensure-deps.sh` (first step of `command`) re-runs `npm ci` when package-lock.json changes.
             - /app/node_modules
             # NAMED volume (need to be listed in the "volumes" section): same as the anonymous volume,
             #     but easy to reuse, inspect, backup, control lifecycle and, more importantly, to SHARE between containers.
@@ -118,7 +118,8 @@ services:
 
         # Commands to be executed at RUNTIME when the container starts. Replaces Dockerfile commands (if any)
         #
-        # `db:bootstrap` runs `db:sync` (indexes, reconciled against the schemas) then the seeder
+        # `db:bootstrap` runs the index sync (`db:sync`'s script, dev doubles preloaded so the `log` mail
+        # transport registers) reconciled against the schemas, then the seeder
         # (demo data) before the server starts, so a fresh `compose up` yields a populated, browsable
         # stack instead of empty lists that read as "not wired". `db:sync` is idempotent; the seeder
         # is not — it builds the shop's order book by driving real checkouts — so it SKIPS a
@@ -132,7 +133,7 @@ services:
             [
                 'sh',
                 '-c',
-                'npm run db:bootstrap && if [ "$${NODE_ENABLE_CLUSTERING:-0}" = "1" ]; then npm run dev:docker:cluster; else npm run dev:docker; fi'
+                'sh /app/docker/ensure-deps.sh && npm run db:bootstrap && if [ "$${NODE_ENABLE_CLUSTERING:-0}" = "1" ]; then npm run dev:docker:cluster; else npm run dev:docker; fi'
             ]
 
         # Containers which this container depends on. Affects container start order.
@@ -209,17 +210,16 @@ services:
             NODE_OPTIONS: '--require tsx/cjs --require ./scenarios/support/development-doubles.ts'
         volumes:
             - .:/app:Z
+            # Kept fresh by `docker/ensure-deps.sh` (see the `app` service).
             - /app/node_modules
             - ./docker/crontab:/app/crontab:ro,Z
         # Same as production: supercronic serves `/health` on loopback, and that is this
         # container's own check — see docs/tools/health-checks.md.
         command:
             [
-                'supercronic',
-                '-passthrough-logs',
-                '-prometheus-listen-address',
-                '127.0.0.1:9746',
-                '/app/crontab'
+                'sh',
+                '-c',
+                'sh /app/docker/ensure-deps.sh && exec supercronic -passthrough-logs -prometheus-listen-address 127.0.0.1:9746 /app/crontab'
             ]
         healthcheck:
             test:

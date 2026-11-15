@@ -35,14 +35,14 @@ checkout refuses it with `409 CART_PAYMENT_METHOD_NOT_AVAILABLE`. A deployment w
 
 ## The door: one preload
 
-| Who runs it                       | How                                                                     |
-| --------------------------------- | ----------------------------------------------------------------------- |
-| `dev`, `dev:docker*`, `e2e:serve` | `tsx … --import ./scenarios/support/development-doubles.ts src/main.ts` |
-| `demo`, `debug`                   | the same flag in front of `scenarios/run-server.ts` / `src/main.ts`     |
-| `scenario:apply`, `db:bootstrap`  | `scenarios/apply.ts` imports the preload at its top                     |
-| the cluster test suite            | `tests/cluster/support/cluster.ts` spawns `tsx --import …`              |
-| the dev `cron` container          | `NODE_OPTIONS=--require tsx/cjs --require …` in `docker-compose.yml`    |
-| jest                              | `tests/support/setup.ts` calls `registerDoubles()`                      |
+| Who runs it                       | How                                                                                                                                                              |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dev`, `dev:docker*`, `e2e:serve` | `tsx … --import ./scenarios/support/development-doubles.ts src/main.ts`                                                                                          |
+| `demo`, `debug`                   | the same flag in front of `scenarios/run-server.ts` / `src/main.ts`                                                                                              |
+| `scenario:apply`, `db:bootstrap`  | `scenarios/apply.ts` imports it at its top; `db:bootstrap`'s index sync loads it via `tsx --import`, because only the preload registers the `log` mail transport |
+| the cluster test suite            | `tests/cluster/support/cluster.ts` spawns `tsx --import …`                                                                                                       |
+| the dev `cron` container          | `NODE_OPTIONS=--require tsx/cjs --require …` in `docker-compose.yml`                                                                                             |
+| jest                              | `tests/support/setup.ts` calls `registerDoubles()`                                                                                                               |
 
 `cluster.fork()` hands `execArgv` to every worker, so a worker gets the doubles too.
 

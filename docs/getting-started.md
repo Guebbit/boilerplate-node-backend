@@ -124,7 +124,7 @@ flowchart LR
 
 `npm run host -- dev` did not put it there. `compose up` starts two things that matter here — the
 `database` container and the `app` container — and `app`'s startup command is
-`npm run db:bootstrap && npm run dev:docker` (`dev:docker:cluster` when `NODE_ENABLE_CLUSTERING=1` is set). The container seeded the fresh volume before it began
+`docker/ensure-deps.sh && npm run db:bootstrap && npm run dev:docker` (`dev:docker:cluster` when `NODE_ENABLE_CLUSTERING=1` is set). The container seeded the fresh volume before it began
 serving.
 
 Your host process then connects to that same mongod and finds a furnished shop. Two app processes,
