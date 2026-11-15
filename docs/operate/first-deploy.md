@@ -18,7 +18,7 @@ the API port to loopback only, and keeps to what a host needs: `app`, `cron`, th
 
 ::: warning Read this alongside the file, not instead of it
 Every decision below — why the port is loopback-only, why it is one process per container, why observability is
-absent — is explained inline in `docker-compose.production.yml` and `docker/Dockerfile.production`
+absent — is explained inline in `docker-compose.production.yml` and `docker/Dockerfile`
 themselves. This page is the short version; the compose file is the source of truth.
 :::
 
@@ -172,7 +172,7 @@ because compose reads it through two separate channels. `--env-file` resolves th
 substitutions in the compose file itself; `env_file:` is what the container receives. Naming only
 one of them silently gives every client the same application config.
 
-That builds `docker/Dockerfile.production` (multi-stage: type-checks in a build stage, ships only
+That builds the `runtime` stage of `docker/Dockerfile` (multi-stage: type-checks in a build stage, ships only
 production dependencies in the runtime stage), runs `setup` once — indexes and the shop's row, see
 [the first admin](./first-deploy-after-launch.md#the-first-admin) — then starts the API, `cron`, and (bundled profile) `database`, `cache`,
 `limits` and `queue` — the production names for Mongo, the cache Redis, the rate-limit Redis and RabbitMQ. No bind mount, no hot reload:

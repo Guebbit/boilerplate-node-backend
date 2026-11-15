@@ -23,8 +23,9 @@ services:
         # The name will be derived from this folder and the container name
         build:
             context: .
-            # Better to keep the "Dockerfile" name and use folders to group files per container/service
             dockerfile: docker/Dockerfile
+            # The one Dockerfile has several stages; this one is the dev image.
+            target: dev
 
         # no (default): Don't restart the container automatically
         # always: Always restart the container if it stops for any reason (even manual stop)
@@ -193,6 +194,7 @@ services:
         build:
             context: .
             dockerfile: docker/Dockerfile
+            target: dev
         restart: unless-stopped
         deploy:
             replicas: 1
@@ -606,7 +608,13 @@ services:
         profiles: ['docs']
         build:
             context: .
-            dockerfile: docker/Dockerfile.docs
+            dockerfile: docker/Dockerfile
+            target: docs
+            # The docs stage reads the repository's history for each page's "last updated" date.
+            # `.git` is outside the build context, so it comes in by name. Build from a checkout whose
+            # `.git` is a directory (not a linked worktree, where it is a pointer file).
+            additional_contexts:
+                gitdir: .git
         restart: unless-stopped
         ports:
             # 3090 sits in this repo's 3000-3099 block. It used to be 4173, which the paired

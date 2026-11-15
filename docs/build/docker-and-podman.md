@@ -106,23 +106,31 @@ Moved: [The compose provider behind `podman compose`](./docker-and-podman-podman
 
 ## Running the gate in a container
 
-`docker/Dockerfile` carries everything `npm run complete` needs, baked mongod included. The
-`container-gate` CI job builds it and runs the gate hermetically:
+The `dev` stage of `docker/Dockerfile` carries everything `npm run complete` needs, baked mongod
+included. The `container-gate` CI job builds it and runs the gate hermetically:
 
 ```sh
-docker build -f docker/Dockerfile . && docker run --rm --network=none <image> npm run complete
+docker build -f docker/Dockerfile --target dev -t gate .
+docker run --rm --network=none -v "$PWD/.git:/app/.git:ro" \
+  -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/app \
+  gate npm run complete
 ```
 
 No compose, no network, no `depends_on`: the image is self-contained or the job fails.
 
-`docker/Dockerfile.dockerignore` overrides the root `.dockerignore` for this one image, keeping
-`.git` in the build context — `npm run complete` runs `lint`, and the `local/comment-links` ESLint
-rule shells out to `git ls-files`; `docker/Dockerfile.production` has the same gap and sidesteps it
-by never running `lint` at all, which is not an option here.
+`--target dev` is required: a build without a target ends at `runtime`, which has no tests and no
+devDependencies.
+
+The root `.dockerignore` keeps `.git` out of every build context (129 MB). `npm run complete` runs
+`lint`, and the `local/comment-links` ESLint rule shells out to `git ls-files`, so the gate run
+mounts `.git` read-only instead. `safe.directory` is there because the checkout belongs to the
+runner's user and the container runs as root, which git refuses as "dubious ownership". The `runtime`
+stage never runs `lint`, so it needs no `.git`.
 
 **Image size**: ~2.4 GB, against Alpine's usual few-hundred-MB — Debian itself, Chromium and its
-font/rendering libraries, and the baked `mongod` all add up. None of it ships in
-`docker/Dockerfile.production`, which stays on Alpine — see the comment at the top of that file.
+font/rendering libraries, and the baked `mongod` all add up. None of it ships in the `runtime`
+stage, which stays on Alpine — see
+[why the image is shaped this way](../operate/ways-to-deploy/docker-server.md#why-the-image-is-shaped-this-way).
 
 **What the production image leaves out**: every `src/**/tests/` directory and every
 `src/**/factories.ts`. The build stage deletes them after the type-check gate and before the runtime
@@ -138,12 +146,12 @@ the compose file's `read_only`. `scripts/ops/` is copied whole: it holds only wh
 deployment, and developer tools (`demo:remove`, `refresh:breached-passwords`) live in other folders.
 A cross-cutting test checks that every crontab job's file is under `scripts/ops/`.
 
-**Boot check**: `docker/boot-check.sh <image>` starts the production image against a throwaway Mongo
+**Boot check**: `docker/boot-check.sh <image>` starts the `runtime` image against a throwaway Mongo
 with the fail-closed env set, waits for `/livez`, and fails if `node` can write under `/app/src`. CI's
 `boot` job and a developer run the same script:
 
 ```sh
-docker build -f docker/Dockerfile.production -t boot-check .
+docker build -f docker/Dockerfile --target runtime -t boot-check .
 docker/boot-check.sh boot-check
 ```
 

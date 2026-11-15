@@ -17,7 +17,6 @@ const config: KnipConfig = {
         'src/modules/*/probes.ts',
         // Spawned by `scripts/regenerate-artifacts.ts`, never imported.
         'scripts/docs/generate-*.ts',
-        'scripts/docker/generate-*.ts',
         // Loaded by directory scan in `scripts/contracts/client-collections-bundle.ts`.
         'scenarios/values/*.ts',
         // Loaded by dynamic import in `scripts/contracts/generate-shared-rule-schemas.ts`.

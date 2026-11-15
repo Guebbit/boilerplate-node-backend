@@ -2,7 +2,7 @@
 /**
  * Rebuild every generated artifact — `npm run regenerate`. Most of what it writes is gitignored
  * (`api/`, every `*.generated.ts`, the three bundles); the shared-rules schemas, the authorization
- * keys, the crontab, `docker/Dockerfile.dockerignore` and the docs tables the doc steps rewrite
+ * keys, the crontab and the docs tables the doc steps rewrite
  * are the committed exceptions. `--check` verifies instead of
  * writing — the first half of `npm run check`.
  *
@@ -139,12 +139,6 @@ const STEPS: readonly Step[] = [
         checks: true,
         because:
             "docs/operate/winston.md's audit action table, read off every module's audit.ts and its call sites' target types"
-    },
-    {
-        name: 'Dockerfile dockerignore',
-        command: ['tsx', 'scripts/docker/generate-dockerfile-dockerignore.ts'],
-        checks: true,
-        because: 'docker/Dockerfile.dockerignore, from the root .dockerignore (.git kept IN)'
     }
 ];
 

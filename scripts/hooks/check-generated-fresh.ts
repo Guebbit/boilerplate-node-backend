@@ -5,7 +5,7 @@
  * `.husky/pre-commit`. It only checks; it never stages and never writes into the working tree.
  *
  * Which files: whatever `regenerate` writes that is not gitignored (the shared-rules schemas,
- * `shared/authorization-keys.generated.yaml`, `docker/crontab`, `docker/Dockerfile.dockerignore`, the tables
+ * `shared/authorization-keys.generated.yaml`, `docker/crontab`, the tables
  * inside `docs/`). The core is `stale-generated-files.ts`.
  *
  * @see docs/build/regenerating.md#the-pre-commit-hook

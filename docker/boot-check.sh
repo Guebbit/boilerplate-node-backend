@@ -3,7 +3,7 @@
 #   1. the image starts fail-closed config included, and `/livez` answers;
 #   2. the runtime user (`node`) cannot write under `src/` — the code is root-owned.
 #
-# Usage:  docker/boot-check.sh <image>
+# Usage:  docker build -f docker/Dockerfile --target runtime -t boot-check . && docker/boot-check.sh boot-check
 # CI (`boot` job in ci.yml) and a developer run the same script, so the proof cannot drift.
 # Queue and cache are left out on purpose: they degrade, and `/livez` never touches them.
 set -euo pipefail

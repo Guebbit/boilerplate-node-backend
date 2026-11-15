@@ -4,7 +4,7 @@
 # server with hot reload, and brings up the full observability estate (Prometheus, Loki, Tempo,
 # Grafana, Alloy, Umami) because being able to see everything is the point of a development box.
 #
-# This file is the deployment. It runs the image built by `docker/Dockerfile.production`, mounts
+# This file is the deployment. It runs the image built by the `runtime` stage of `docker/Dockerfile`, mounts
 # no source, exposes no database port to the host, and stops at the four services the application
 # cannot run without. Its `setup` service runs `deploy:setup` (indexes plus the shop row) and
 # NEVER the demo seeder — `scenarios/apply.ts` refuses NODE_ENV=production outright, so a
@@ -276,7 +276,8 @@ services:
         image: '${APP_IMAGE:?set APP_IMAGE, or deploy with docker/deploy.sh <client>}'
         build:
             context: .
-            dockerfile: docker/Dockerfile.production
+            dockerfile: docker/Dockerfile
+            target: runtime
             args:
                 # ~200 MB of Chromium, needed only by the PDF invoice endpoint. See the Dockerfile.
                 INSTALL_CHROMIUM: '${INSTALL_CHROMIUM:-false}'

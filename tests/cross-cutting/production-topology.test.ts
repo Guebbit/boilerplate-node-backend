@@ -6,7 +6,7 @@ import { REPO_ROOT } from '@tests/paths';
 /**
  * Guard: the production deployment's security posture is a property of two files, not a memory.
  *
- * `docker-compose.production.yml` and `docker/Dockerfile.production` carry decisions that cost
+ * `docker-compose.production.yml` and the `build` and `runtime` stages of `docker/Dockerfile` carry decisions that cost
  * nothing to keep and are invisible to every other check in the gate — a container gains a
  * writable root, a database publishes a port, an `--inspect` flag survives a debugging session, a
  * dependency's postinstall runs during the image build, a service mounts a secret that is not its
@@ -75,8 +75,26 @@ if (!isComposeFile(parsedCompose))
 
 const compose = parsedCompose;
 
+/** The whole multi-stage Dockerfile; the dev stage runs lifecycle scripts on purpose, so only slices of it are asserted on. */
+const wholeDockerfile = readFileSync(path.join(REPO_ROOT, 'docker', 'Dockerfile'), 'utf8');
+
+/**
+ * The text of one `FROM … AS <name>` stage, up to the next `FROM`.
+ *
+ * @param name - the stage's alias
+ */
+const stageOf = (name: string): string => {
+    const start = wholeDockerfile.search(new RegExp(`^FROM .* AS ${name}$`, 'm'));
+    if (start === -1)
+        throw new Error(`[production-topology] no stage "${name}" in docker/Dockerfile.`);
+    const next = wholeDockerfile.slice(start + 1).search(/^FROM /m);
+    return next === -1
+        ? wholeDockerfile.slice(start)
+        : wholeDockerfile.slice(start, start + 1 + next);
+};
+
 /** The production image's build recipe, as text — the assertions below are about what it does NOT contain. */
-const dockerfile = readFileSync(path.join(REPO_ROOT, 'docker', 'Dockerfile.production'), 'utf8');
+const dockerfile = [stageOf('build'), stageOf('runtime')].join('\n');
 
 /**
  * The three services that run this repository's own code.
@@ -277,7 +295,7 @@ describe('the production image carries no package manager, so nothing starts thr
     });
 
     it('removes npm, npx, corepack and yarn from the runtime stage', () => {
-        const runtimeStage = dockerfile.slice(dockerfile.indexOf('AS runtime'));
+        const runtimeStage = stageOf('runtime');
 
         for (const removed of [
             '/usr/local/lib/node_modules/npm',

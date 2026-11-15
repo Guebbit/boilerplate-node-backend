@@ -1,6 +1,6 @@
 /**
  * Installs supercronic, the scheduler the `cron` service runs, into /usr/local/bin — at image
- * build time, for both `docker/Dockerfile` and `docker/Dockerfile.production`.
+ * build time, for the `dev` and `runtime` stages of `docker/Dockerfile`.
  *
  * Why supercronic and not busybox `crond`: crond resets the job's supplementary groups before
  * every run, which needs CAP_SETGID, so as the unprivileged `node` user every job failed while

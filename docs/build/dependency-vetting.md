@@ -88,7 +88,7 @@ What still guards a version change:
 
 - the lockfile integrity hash, and the human merge of the bump PR;
 - the 7-day dependabot `cooldown`, plus `.npmrc` `min-release-age=7` for local installs;
-- production installs with `--ignore-scripts` (`docker/Dockerfile.production`), so no script runs
+- production installs with `--ignore-scripts` (the `runtime` stage of `docker/Dockerfile`), so no script runs
   in the shipped image whatever `allowScripts` says.
 
 The counter-view: npm's own default and LavaMoat's allow-scripts pin the version, so that a hijacked

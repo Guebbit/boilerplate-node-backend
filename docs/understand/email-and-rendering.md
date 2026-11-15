@@ -204,7 +204,7 @@ flowchart LR
     PDF --> Response[HTTP response]
 ```
 
-`puppeteer-core` does **not** download Chromium. You must either install a system browser and point Puppeteer at it, or swap to the full `puppeteer` package. Without an executable, `GET /orders/{id}/invoice` and `/credit-notes/{creditNoteId}` both answer `500` — see [Hosting](../operate/hosting.md) and `docker/Dockerfile.production`'s own `INSTALL_CHROMIUM` note. The placed-order email carries no invoice at all (nothing is invoiced yet at that point), so it is unaffected either way.
+`puppeteer-core` does **not** download Chromium. You must either install a system browser and point Puppeteer at it, or swap to the full `puppeteer` package. Without an executable, `GET /orders/{id}/invoice` and `/credit-notes/{creditNoteId}` both answer `500` — see [Hosting](../operate/hosting.md) and the `INSTALL_CHROMIUM` note on the `runtime` stage of `docker/Dockerfile`. The placed-order email carries no invoice at all (nothing is invoiced yet at that point), so it is unaffected either way.
 
 **Renders are bounded, and a finished PDF is kept.** At most two Chromium processes run at once, up
 to 20 more renders wait, and the next is refused with `503` + `Retry-After` instead of queueing

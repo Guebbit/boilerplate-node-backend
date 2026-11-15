@@ -8,7 +8,7 @@ audience: [anyone]
 `scripts/` is the repo's own tooling: every file here is the implementation behind an `npm run`
 entry. Most of it never ships — `scripts/ops/` and `scripts/db/` are the two exceptions,
 because those run against a live deployment rather than from a developer's terminal;
-`docker/Dockerfile.production` copies all of `scripts/ops/`, `scripts/run-script.ts`, `scripts/cli.ts` and four named
+The `runtime` stage of `docker/Dockerfile` copies all of `scripts/ops/`, `scripts/run-script.ts`, `scripts/cli.ts` and four named
 files from `scripts/db/` (`index-sync.ts`, `sync-indexes.ts`, `cache-clear.ts`,
 `bootstrap-access.ts`) into the production image and nothing else under `scripts/`. `scripts/eslint/` holds the lint rules this codebase wrote for itself, `scripts/audit/`
 holds the AI audit prompts beside the scripts they run, and `.husky/` holds the git hooks.
@@ -94,7 +94,6 @@ classes are the StudlyCase spelling of these names. Abbreviations are a lint err
 | `scripts/testing/`    | The runner every `npm run test:*` goes through, and the two instruments that read a run afterwards (in no gate)                                                               | [Testing and docs](../build/testing-and-docs.md)                                                        |
 | `scripts/docs/`       | Generators that write the generated blocks into `docs/`, the jobs table and crontab, and the reference checker                                                                | [Writing these docs](../build/documentation-style.md)                                                   |
 | `scripts/audit/`      | One folder per AI audit: a `SKILL.md` the AI follows and a `scripts/` folder for what it runs                                                                                 | [AI auditing](../build/ai-auditing.md)                                                                  |
-| `scripts/docker/`     | Generators that write into `docker/`: the per-Dockerfile `.dockerignore` (the crontab comes from `scripts/docs/generate-jobs.ts`)                                             | [Docker & Podman](../build/docker-and-podman.md)                                                        |
 | `scripts/hooks/`      | What the pre-commit hook calls: the check that committed generated files are fresh                                                                                            | [Testing and docs](../build/testing-and-docs.md)                                                        |
 | `scripts/db/`         | Deploy-time database scripts, shipped in the production image: index sync, cache clear, access bootstrap                                                                      | [Data](./data.md)                                                                                       |
 | `scripts/ops/`        | The scheduled jobs and the operator tools (`reencrypt`); ships whole in the production image                                                                                  | [Scheduled jobs](./ops.md#scheduled-jobs)                                                               |

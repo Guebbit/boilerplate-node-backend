@@ -9,7 +9,7 @@ A platform that runs a built image for you. The image is a standard OCI image an
 
 ```mermaid
 flowchart LR
-    Image["image from\ndocker/Dockerfile.production"] --> Platform["PaaS runs the container"]
+    Image["image from\ndocker/Dockerfile (runtime stage)"] --> Platform["PaaS runs the container"]
     Platform --> Disk{"Persistent disk?"}
     Disk -->|"Yes"| Uploads(["Uploads survive deploys"])
     Disk -->|"No"| Lost(["Uploads are lost on deploy"])

@@ -41,7 +41,7 @@ export interface EphemeralMongo {
  * Points `mongodb-memory-server` at a pre-installed `mongod` when `MONGOMS_SYSTEM_BINARY` names
  * one on disk, so it skips its own ~100 MB first-run download. A no-op when the variable is unset
  * or the named binary is absent — the library then downloads its own copy (or reuses whatever it
- * finds cached under `MONGOMS_DOWNLOAD_DIR`, which `docker/Dockerfile` bakes at build time).
+ * finds cached under `MONGOMS_DOWNLOAD_DIR`, which the `dev` stage of `docker/Dockerfile` bakes at build time).
  *
  * Pure env-var bookkeeping, not a call into the library itself — this is what stays safe to do
  * from `src/`. Must run in the same process that calls `startInProcess`, and before it, or the

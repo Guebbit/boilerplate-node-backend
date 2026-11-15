@@ -69,7 +69,7 @@ only when you run compose yourself.
 
 ## With a registry
 
-`publish-image` in `.github/workflows/ci.yml` builds `docker/Dockerfile.production` once per merge to
+`publish-image` in `.github/workflows/ci.yml` builds the `runtime` stage of `docker/Dockerfile` once per merge to
 `main` and pushes it, so a deploy runs the exact bytes CI proved. It is **off** until a registry
 exists: with `IMAGE_REGISTRY` unset the job is skipped, and a run shows it as skipped.
 

@@ -735,8 +735,8 @@ jobs:
                   if-no-files-found: ignore
 
     container-gate:
-        # Proves the CONTAINER LANE, not just the code: builds `docker/Dockerfile` and runs
-        # `npm run complete` inside it — no compose, no service containers, no network — so a
+        # Proves the CONTAINER LANE, not just the code: builds the `dev` stage of `docker/Dockerfile`
+        # and runs `npm run complete` inside it — no compose, no service containers, no network — so a
         # passing run means the image genuinely carries everything it needs, baked `mongod`
         # included. This is the "hermetic" mode.
         #
@@ -763,21 +763,29 @@ jobs:
               with:
                   persist-credentials: false # no step after the checkout needs the token on disk
 
+            # `--target dev`: a bare build ends at `runtime`, which has no tests and no devDependencies.
             - name: Build the dev/test image
-              run: docker build -f docker/Dockerfile -t boilerplate-api-gate:${{ github.sha }} .
+              run: docker build -f docker/Dockerfile --target dev -t boilerplate-api-gate:${{ github.sha }} .
 
+            # `-v .git:ro`: the build context leaves `.git` out, and lint's `local/comment-links` rule runs
+            # `git ls-files`. `safe.directory`: the checkout is the runner's uid and the container runs as
+            # root, which git >= 2.35.2 refuses as "dubious ownership"; GIT_CONFIG_* sets it without a file.
             - name: Run the gate inside it — no services, no network
-              run: docker run --rm --network=none boilerplate-api-gate:${{ github.sha }} npm run complete
+              run: >
+                  docker run --rm --network=none
+                  -v "$PWD/.git:/app/.git:ro"
+                  -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/app
+                  boilerplate-api-gate:${{ github.sha }} npm run complete
 
     boot:
-        # Proves the image we SHIP starts: `docker/Dockerfile.production` against a real Mongo (queue
+        # Proves the image we SHIP starts: the `runtime` stage of `docker/Dockerfile` against a real Mongo (queue
         # and cache are left out, they degrade), with the fail-closed env set, `/livez` answering, and
         # the `node` user unable to write under `src/`. `container-gate` above builds the dev/test
         # image, so nothing else here ever boots the production one.
         #
         # Not in `image-scan.yml`: that workflow is path-filtered and Monday-only, and a boot
         # check that skips most pushes proves little. The same script runs on a laptop:
-        # `docker build -f docker/Dockerfile.production -t boot-check . && docker/boot-check.sh boot-check`.
+        # `docker build -f docker/Dockerfile --target runtime -t boot-check . && docker/boot-check.sh boot-check`.
         # Not in the `ci` job's `needs:` until its first real run on GitHub has passed.
         runs-on: ubuntu-latest
         timeout-minutes: 20
@@ -790,7 +798,7 @@ jobs:
                   persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Build the production image
-              run: docker build -f docker/Dockerfile.production -t boot-check:${{ github.sha }} .
+              run: docker build -f docker/Dockerfile --target runtime -t boot-check:${{ github.sha }} .
 
             - name: Boot it and check the runtime user
               run: docker/boot-check.sh boot-check:${{ github.sha }}
@@ -883,7 +891,7 @@ jobs:
                   username: ${{ vars.IMAGE_REGISTRY_USER }}
                   password: ${{ secrets.IMAGE_REGISTRY_TOKEN }}
 
-            # `file`: the production Dockerfile. `push`: send it. `provenance` / `sbom`: attach the build
+            # `file` and `target`: the `runtime` stage of the one Dockerfile. `push`: send it. `provenance` / `sbom`: attach the build
             # attestation and the software bill of materials to the image. `build-args`: Chromium is opt-in.
             # https://github.com/docker/build-push-action
             - name: Build and push
@@ -891,7 +899,8 @@ jobs:
               uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
               with:
                   context: .
-                  file: docker/Dockerfile.production
+                  file: docker/Dockerfile
+                  target: runtime
                   push: true
                   provenance: true
                   sbom: true

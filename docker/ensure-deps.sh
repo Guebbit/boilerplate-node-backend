@@ -8,7 +8,7 @@
 #   match         -> nothing to do
 #   no / old stamp -> `npm ci` (the same install the dev image runs), then write the stamp
 #
-# Callers: the `app` and `cron` services in docker-compose.yml, and docker/Dockerfile.
+# Callers: the `app` and `cron` services in docker-compose.yml, and the `dev` stage of docker/Dockerfile.
 set -eu
 
 lock_file=/app/package-lock.json
