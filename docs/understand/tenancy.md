@@ -84,7 +84,7 @@ is the right way round.
 ```mermaid
 flowchart TB
     Proxy(["TLS-terminating proxy\n(not shipped — put any in front)"]) --> App
-    subgraph Stack["one client's docker-compose.production.yml"]
+    subgraph Stack["one client's compose.production.yaml"]
         Setup["setup\none-shot: db:sync + access:bootstrap"] -.->|"must finish first"| App["app"]
         Setup -.-> Cron["cron"]
         App --> DB[("database\nreplica set rs0")]

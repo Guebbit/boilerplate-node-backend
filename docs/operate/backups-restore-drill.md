@@ -10,7 +10,7 @@ Prove a backup restores, on the real deployment, against the real repository.
 ## Before you start
 
 - A stack that has taken at least one backup ([Backups](./backups.md)).
-- The `restore-drill` profile available in `docker-compose.production.yml`.
+- The `restore-drill` profile available in `compose.production.yaml`.
 
 ## Steps
 
@@ -19,7 +19,7 @@ Prove a backup restores, on the real deployment, against the real repository.
 One command, on the real deployment, against the real repository:
 
 ```bash
-docker compose --env-file "clients/$COMPOSE_PROJECT_NAME/.env" -f docker-compose.production.yml \
+docker compose --env-file "clients/$COMPOSE_PROJECT_NAME/.env" -f compose.yaml -f compose.production.yaml \
     --profile restore-drill run --rm restore-drill
 ```
 

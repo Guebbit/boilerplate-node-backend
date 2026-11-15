@@ -5,9 +5,9 @@ audience: [operator]
 
 # Getting Started — Production
 
-The deployment shape of this stack, not the development one. `docker-compose.yml` bind-mounts the
+The deployment shape of this stack, not the development one. `compose.override.yaml` (loaded with `compose.yaml` when you run no `-f`) bind-mounts the
 working tree and brings up the whole observability estate because seeing everything is the point
-of a dev box. `docker-compose.production.yml` is the other half: it runs the **built** image, binds
+of a dev box. `compose.production.yaml` is the other half, always run as `-f compose.yaml -f compose.production.yaml`: it runs the **built** image, binds
 the API port to loopback only, and keeps to what a host needs: `app`, `cron`, the one-shot `setup`, the datastores (`database`, `cache`, `limits`, `queue`), with `database`, `cache`, `limits` and `queue` in the `bundled` profile, on by default (`COMPOSE_PROFILES=bundled` in `.env-example`), and three opt-in profiles: `backup` (the backup job), `restore-drill` (the restore drill) and `monitoring` (`prometheus`, `alertmanager`, `loki`, `node-exporter`, `alloy`) — see [Monitoring and alerts](./first-deploy-monitoring.md#monitoring-and-alerts).
 
 ## Before you start
@@ -18,7 +18,7 @@ the API port to loopback only, and keeps to what a host needs: `app`, `cron`, th
 
 ::: warning Read this alongside the file, not instead of it
 Every decision below — why the port is loopback-only, why it is one process per container, why observability is
-absent — is explained inline in `docker-compose.production.yml` and `docker/Dockerfile`
+absent — is explained inline in `compose.production.yaml` and `docker/Dockerfile`
 themselves. This page is the short version; the compose file is the source of truth.
 :::
 
@@ -36,7 +36,7 @@ flowchart TD
     Secrets --> Up["docker/deploy.sh acme\n(build, start, check, undo on failure)"]
     Up --> Setup["setup runs once:\nindexes + the shop's row"]
     Setup --> Running(["app, cron, database, cache, limits, queue\npublished to 127.0.0.1 only"])
-    Running --> Proxy["reverse proxy terminates TLS\nin front — the app does not;\nthe docker-compose.proxy.yml Traefik overlay does"]
+    Running --> Proxy["reverse proxy terminates TLS\nin front — the app does not;\nthe compose.proxy.yaml Traefik overlay does"]
 
     classDef step fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef done fill:#dcfce7,stroke:#16a34a,color:#111827;
@@ -181,10 +181,10 @@ what's running is exactly what was built.
 ### 3 · Check it worked {#check-it-worked}
 
 ```bash
-docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml logs -f app
+docker compose --env-file "clients/acme/.env" -f compose.yaml -f compose.production.yaml logs -f app
 curl http://127.0.0.1:3000/livez     # liveness probe
-docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml ps
-docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml exec app env | grep -i password
+docker compose --env-file "clients/acme/.env" -f compose.yaml -f compose.production.yaml ps
+docker compose --env-file "clients/acme/.env" -f compose.yaml -f compose.production.yaml exec app env | grep -i password
 ```
 
 - `ps`: every service `healthy`, or `exited (0)` for the one-shot `setup` and `mongo-rs-init`.

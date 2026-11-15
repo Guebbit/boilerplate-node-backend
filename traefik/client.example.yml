@@ -1,4 +1,4 @@
-# One client's route, for the shared Traefik of `docker-compose.proxy.yml`.
+# One client's route, for the shared Traefik of `compose.proxy.yaml`.
 #
 # Copy to `traefik/dynamic/<COMPOSE_PROJECT_NAME>.yml`, replace `acme` (three times), the host and
 # the port, and Traefik picks it up on its own — `--providers.file.watch=true` reloads it, no restart
@@ -19,7 +19,7 @@ http:
             entryPoints: [websecure]
             service: acme
             tls:
-                # The resolver `docker-compose.proxy.yml` declares (Let's Encrypt, HTTP challenge).
+                # The resolver `compose.proxy.yaml` declares (Let's Encrypt, HTTP challenge).
                 certResolver: le
     services:
         acme:

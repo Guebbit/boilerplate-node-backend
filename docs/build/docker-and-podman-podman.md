@@ -24,7 +24,7 @@ CONTAINER_LOGS_PATH=/home/youruser/.local/share/containers/storage/overlay-conta
 CONTAINER_LOG_DRIVER=k8s-file
 ```
 
-The defaults in `docker-compose.yml` are docker's, so on docker you set neither of them. The driver is
+The defaults in `compose.override.yaml` are docker's, so on docker you set neither of them. The driver is
 applied to every service through a YAML anchor rather than per service, because Alloy scrapes
 the whole directory and any service left on the default would simply be missing from the logs.
 Whichever path you give is mounted at `/var/log/host-containers`, so one config reads both: `alloy.logs.config.alloy`

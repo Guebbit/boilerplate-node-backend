@@ -9,7 +9,7 @@ global:
     # How often alert rules are evaluated.
     evaluation_interval: 15s
 
-# The rules file is mounted at /etc/prometheus/rules/alerts.yml by `docker-compose.production.yml`.
+# The rules file is mounted at /etc/prometheus/rules/alerts.yml by `compose.production.yaml`.
 rule_files:
     - /etc/prometheus/rules/*.yml
 
@@ -19,7 +19,7 @@ alerting:
               - targets: ['alertmanager:9093']
 
 # Extra scrape jobs a compose overlay mounts under /etc/prometheus/scrape.d (the Traefik one, from
-# docker-compose.proxy.yml). No file there, no job. https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config_files
+# compose.proxy.yaml). No file there, no job. https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config_files
 scrape_config_files:
     - /etc/prometheus/scrape.d/*.yml
 
@@ -45,7 +45,7 @@ scrape_configs:
     # Prometheus and Alertmanager themselves: the `alerting.rules` in prometheus.infra-rules.yaml
     # read these (failed notifications, rule evaluation errors). Nothing else would notice either
     # one misbehaving.
-    # The host's disk, from node_exporter (docker-compose.production.yml). Filesystem only.
+    # The host's disk, from node_exporter (compose.production.yaml). Filesystem only.
     - job_name: node
       static_configs:
           - targets: ['node-exporter:9100']

@@ -3,11 +3,11 @@ node_modules
 !.env-example
 clients
 
-# The second machine's own files (docker-compose.backup-server.yml): the htpasswd, the TLS key and each
+# The second machine's own files (compose.backup-server.yaml): the htpasswd, the TLS key and each
 # client's restic password. Never committed.
 backup-server/
 
-# Each client's Traefik route (docker-compose.proxy.yml). Names a client's domain, so it stays out of
+# Each client's Traefik route (compose.proxy.yaml). Names a client's domain, so it stays out of
 # the repository; `traefik/client.example.yml` is the template.
 traefik/dynamic/*
 !traefik/dynamic/.gitkeep

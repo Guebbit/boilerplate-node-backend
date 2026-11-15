@@ -9,7 +9,8 @@
 #   CONTAINER_ENGINE      podman (default) or docker; the same switch `npm run compose` uses
 #   DEPLOY_TIMEOUT        seconds to wait for a healthy stack (default 240)
 #   DEPLOY_KEEP           local `boilerplate-api:<sha>` images kept on the no-registry path (default 5)
-#   DEPLOY_COMPOSE_FILE   the compose file (default docker-compose.production.yml)
+#   DEPLOY_COMPOSE_FILES  the compose files, space-separated, each passed as `-f`
+#                         (default `compose.yaml compose.production.yaml`; add `compose.proxy.yaml` for the Traefik overlay)
 #
 # A deploy is "good" only when `setup` exited 0 and `app` and `cron` are running and healthy and
 # `/readyz` answers from inside `app`. Every good state is appended to `clients/<client>/deploys.log`
@@ -25,7 +26,11 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 ENGINE="${CONTAINER_ENGINE:-podman}"
-COMPOSE_FILE="${DEPLOY_COMPOSE_FILE:-docker-compose.production.yml}"
+# The list goes into an array of `-f` flags. An explicit `-f` turns off the auto-load of
+# `compose.override.yaml`, so the development stack can never be layered onto a server.
+read -r -a COMPOSE_FILES <<< "${DEPLOY_COMPOSE_FILES:-compose.yaml compose.production.yaml}"
+COMPOSE_FLAGS=()
+for file in "${COMPOSE_FILES[@]}"; do COMPOSE_FLAGS+=(-f "$file"); done
 TIMEOUT="${DEPLOY_TIMEOUT:-240}"
 KEEP="${DEPLOY_KEEP:-5}"
 IMAGE_REPO="boilerplate-api"
@@ -54,9 +59,9 @@ esac
 log_file="clients/$client/deploys.log"
 export COMPOSE_PROJECT_NAME="$client"
 
-# Compose against this client's env file and the production file, with `APP_IMAGE` as currently set.
+# Compose against this client's env file and the production files, with `APP_IMAGE` as currently set.
 compose() {
-    $ENGINE compose --env-file "clients/$client/.env" -f "$COMPOSE_FILE" "$@"
+    $ENGINE compose --env-file "clients/$client/.env" "${COMPOSE_FLAGS[@]}" "$@"
 }
 
 # The id of a service's container (empty when there is none). Both engines label by project and service.

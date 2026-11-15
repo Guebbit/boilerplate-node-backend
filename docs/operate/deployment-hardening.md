@@ -36,7 +36,7 @@ standard exists, and an equivalent is always noted.
 Already written up — do not duplicate it here:
 
 - [Putting a reverse proxy in front](first-deploy.md#putting-a-reverse-proxy-in-front)
-  — why `docker-compose.production.yml` binds the API to loopback, and the nginx / Caddy / Traefik
+  — why `compose.production.yaml` binds the API to loopback, and the nginx / Caddy / Traefik
   options.
 - [Many clients behind one proxy](./two-client-stacks.md#many-clients-behind-one-proxy) — the
   Traefik overlay for several stacks on one host.
@@ -168,7 +168,7 @@ default-deny practical here rather than aspirational.
 
 ## Network segmentation
 
-`docker-compose.production.yml` already does the important half: Mongo, Redis and RabbitMQ publish
+`compose.production.yaml` already does the important half: Mongo, Redis and RabbitMQ publish
 **no ports**, and the app publishes one, bound to loopback. The compose network is the segment.
 
 What a deployment adds beyond that:
@@ -220,7 +220,7 @@ host's — fix it there.
 
 ## Encryption at rest
 
-`mongo-data` in `docker-compose.production.yml` is a plain Docker named volume. MongoDB Community
+`mongo-data` in `compose.production.yaml` is a plain Docker named volume. MongoDB Community
 Edition — the image this repo bundles, `docker.io/library/mongo:9.0` — has
 [no native encrypted storage engine](https://www.mongodb.com/docs/manual/core/security-encryption-at-rest/);
 WiredTiger's own encryption option is Enterprise-only. That makes this a host job, not an app job:

@@ -14,7 +14,7 @@ What differs from dev, how to put TLS in front, where uploads live, and the firs
 
 ## What's different from dev
 
-| Dev (`docker-compose.yml`)                                  | Production (`docker-compose.production.yml`)                                                                                             |
+| Dev (`compose.override.yaml`)                               | Production (`compose.production.yaml`)                                                                                                   |
 | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Source bind-mounted, `tsx` watches for changes              | Source baked into the image at build time                                                                                                |
 | API port published to `${NODE_HOST:-127.0.0.1}`             | API port published to `127.0.0.1` only                                                                                                   |
@@ -32,7 +32,7 @@ rolling deploy.
 
 ### 1 · Putting a reverse proxy in front {#putting-a-reverse-proxy-in-front}
 
-The app itself never terminates TLS; the `docker-compose.proxy.yml` Traefik overlay does, with Let's Encrypt certificates. The API is bound to loopback specifically so that publishing
+The app itself never terminates TLS; the `compose.proxy.yaml` Traefik overlay does, with Let's Encrypt certificates. The API is bound to loopback specifically so that publishing
 it on a public interface — plain HTTP, carrying the auth cookies this application sets — is not the
 easy path. Use that overlay, or put nginx, Caddy or a managed load balancer in front, terminate TLS there, and
 proxy to `127.0.0.1:${NODE_PORT}`.
@@ -51,7 +51,7 @@ address for every request, so every caller shares one rate-limit bucket and ever
 the proxy. See [trust proxy](../understand/security.md#trust-proxy-and-the-two-ways-to-get-it-wrong).
 
 Running **several client stacks on one host** is different enough to have its own recipe —
-`docker-compose.proxy.yml` fronts them all with one shared Traefik that serves each stack from its
+`compose.proxy.yaml` fronts them all with one shared Traefik that serves each stack from its
 own route file, with no Docker socket mounted. See [Two Client Stacks](./two-client-stacks.md).
 
 ### 2 · Uploaded images do not outlive the container {#uploaded-images-do-not-outlive-the-container}
@@ -65,7 +65,7 @@ not share what they store. Where uploads live, and why: [Uploads and the host vo
 
 Before the first real customer, in this order:
 
-1. **A second machine** (any host that runs Docker or Podman), running `docker-compose.backup-server.yml`:
+1. **A second machine** (any host that runs Docker or Podman), running `compose.backup-server.yaml`:
    an append-only restic server that refuses deletes. [Backup server](backup-server.md) has the steps.
 2. **The knobs** in `clients/acme/.env`: `COMPOSE_PROFILES=bundled,backup`,
    `BACKUP_REPOSITORY=rest:https://<second machine>:8000/acme/`, `BACKUP_PRUNE=false`, and

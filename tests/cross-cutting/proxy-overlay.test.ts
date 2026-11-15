@@ -36,15 +36,12 @@ const isOverlay = (value: unknown): value is Overlay =>
  * gives for compose's own `!reset` tag, which it reads correctly as an empty list anyway.
  * https://eemeli.org/yaml/#options
  */
-const parsed: unknown = parse(
-    readFileSync(path.join(REPO_ROOT, 'docker-compose.proxy.yml'), 'utf8'),
-    {
-        merge: true,
-        logLevel: 'error'
-    }
-);
+const parsed: unknown = parse(readFileSync(path.join(REPO_ROOT, 'compose.proxy.yaml'), 'utf8'), {
+    merge: true,
+    logLevel: 'error'
+});
 if (!isOverlay(parsed))
-    throw new Error('[proxy-overlay] docker-compose.proxy.yml did not parse to an object.');
+    throw new Error('[proxy-overlay] compose.proxy.yaml did not parse to an object.');
 
 const { traefik, app } = parsed.services;
 

@@ -60,7 +60,7 @@ npm run db:sync -- --prune   # also drop every index no schema declares (dev; a 
 
 **Adding an index is one edit.** Declare it on the schema. The next `db:sync` builds it — in
 development `db:bootstrap` runs on every container boot, so there is nothing else to do; in
-production, `docker-compose.production.yml`'s one-shot `setup` service runs `db:sync` before `app`/
+production, `compose.production.yaml`'s one-shot `setup` service runs `db:sync` before `app`/
 `cron` ever start.
 
 ### Why a reconciliation and not a migration
@@ -133,7 +133,7 @@ index's window in place, so:
 
 So in development, `db:bootstrap` — which syncs before the server starts — is what makes a window
 change restart-safe. In production, turning `autoIndex` off is what makes it restart-safe instead:
-`docker-compose.production.yml`'s `setup` service runs `db:sync` before `app`/`cron` start, and a
+`compose.production.yaml`'s `setup` service runs `db:sync` before `app`/`cron` start, and a
 later restart with no `setup` re-run simply keeps running on the index that is already there.
 
 ## Data: a one-off script under `scripts/ops/`

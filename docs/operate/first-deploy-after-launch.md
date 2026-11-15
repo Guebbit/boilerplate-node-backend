@@ -25,7 +25,7 @@ The write, from the stack's own `database` container (the id is the account's `_
 `db.users.findOne({ email: "<their email>" })`; the tenant id is the deployment's fixed one):
 
 ```bash
-docker compose --env-file "clients/<name>/.env" -f docker-compose.production.yml \
+docker compose --env-file "clients/<name>/.env" -f compose.yaml -f compose.production.yaml \
   exec database mongosh --tls --tlsCAFile /keyfile-dir/mongo-ca.crt \
   -u "$MONGO_ROOT_USER" -p --authenticationDatabase admin "<MONGO_DB>" --eval '
     db.memberships.updateOne(

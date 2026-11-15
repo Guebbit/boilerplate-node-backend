@@ -19,12 +19,9 @@ services:
         # (Optional) Custom container name
         # container_name: boilerplate-node
 
-        # Build the image from the Dockerfile.
+        # Which stage of the shared Dockerfile to build (`context` and `dockerfile` live in compose.yaml).
         # The name will be derived from this folder and the container name
         build:
-            context: .
-            dockerfile: docker/Dockerfile
-            # The one Dockerfile has several stages; this one is the dev image.
             target: dev
 
         # no (default): Don't restart the container automatically
@@ -183,7 +180,8 @@ services:
     # non-zero exit code on failure.
     #
     # supercronic, the same scheduler as production (`docker/install-supercronic.mjs`), reading
-    # `docker/crontab` bind-mounted at `/app/crontab`.
+    # `docker/crontab`, which the repo bind mount already puts at `/app/docker/crontab`. A second
+    # mount at `/app/crontab` would make the engine create an empty `crontab` in the host's repo root.
     #
     # `replicas: 1` is the other half of the mutual-exclusion story. The Mongo lease
     # (`src/infrastructure/persistence/lease.ts`) makes a second holder harmless even if this were
@@ -214,14 +212,13 @@ services:
             - .:/app:Z
             # Kept fresh by `docker/ensure-deps.sh` (see the `app` service).
             - /app/node_modules
-            - ./docker/crontab:/app/crontab:ro,Z
         # Same as production: supercronic serves `/health` on loopback, and that is this
         # container's own check — see docs/operate/health-checks.md.
         command:
             [
                 'sh',
                 '-c',
-                'sh /app/docker/ensure-deps.sh && exec supercronic -passthrough-logs -prometheus-listen-address 127.0.0.1:9746 /app/crontab'
+                'sh /app/docker/ensure-deps.sh && exec supercronic -passthrough-logs -prometheus-listen-address 127.0.0.1:9746 /app/docker/crontab'
             ]
         healthcheck:
             test:
@@ -251,9 +248,7 @@ services:
         # Same
         # container_name: boilerplate-mongodb
 
-        # Official mongo image, downloaded from the web as is
-        # from docker hub (if not already present locally)
-        image: docker.io/library/mongo:9.0.4@sha256:452bdaf2127b8ff851e31410a267809b9829eded219979f2210e7c7efb85a058
+        # The image (official mongo, digest-pinned) is in compose.yaml, shared with production.
 
         # Same
         restart: unless-stopped
@@ -315,7 +310,6 @@ services:
     # stay. Counters and single-use claims live on `limits` below, because THIS instance evicts.
     cache:
         logging: *container-logging
-        image: docker.io/library/redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
         restart: unless-stopped
         # Redis defaults to `maxmemory 0` — unlimited — and would grow until the host or the
         # container limit stops it. That is the wrong default for a cache: entries here are worth
@@ -347,7 +341,6 @@ services:
     # https://redis.io/docs/latest/develop/reference/eviction/
     limits:
         logging: *container-logging
-        image: docker.io/library/redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
         restart: unless-stopped
         command: >-
             redis-server
@@ -357,7 +350,7 @@ services:
             - '127.0.0.1:${NODE_LIMITS_REDIS_PORT:-6380}:6379'
 
     # RabbitMQ: message broker for async tasks (email, PDF generation, etc.). Matches production
-    # (docker-compose.production.yml) — quorum-queue message priority is a 4.x feature, and dev
+    # (compose.production.yaml) — quorum-queue message priority is a 4.x feature, and dev
     # must run what prod runs. See docs/understand/rabbitmq.md#queue-type-quorum.
     queue:
         logging: *container-logging

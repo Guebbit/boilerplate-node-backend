@@ -12,8 +12,8 @@ import { REPO_ROOT } from '@tests/paths';
  * moves in the same PR.
  */
 
-/** The compose files that run a MongoDB image. */
-const COMPOSE_FILES = ['docker-compose.yml', 'docker-compose.production.yml'];
+/** The compose files that hold a MongoDB image: the shared base (`database`) and production (`mongo-rs-init`, `restore-drill-db`). */
+const COMPOSE_FILES = ['compose.yaml', 'compose.production.yaml'];
 
 /** The shape read out of a compose file: only each service's image matters here. */
 interface ComposeFile {

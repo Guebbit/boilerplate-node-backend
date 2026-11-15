@@ -21,7 +21,7 @@ if [ ! -s "$KEYFILE" ]; then
 fi
 
 # Wire TLS: a self-signed CA minted once, first-boot-only, same pattern as the keyFile above.
-# `docker-compose.production.yml`'s `mongod` command reads $SERVER_PEM as its own identity
+# `compose.production.yaml`'s `mongod` command reads $SERVER_PEM as its own identity
 # (`--tlsCertificateKeyFile`) and names $CA_CERT as its chain of trust (`--tlsCAFile`, which mongod
 # 8.3 requires), with `--tlsAllowConnectionsWithoutCertificates` so it never demands a certificate
 # back (mTLS is a heavier control than this deployment needs). Only the CLIENT side verifies

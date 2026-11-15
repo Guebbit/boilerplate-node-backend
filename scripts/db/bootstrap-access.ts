@@ -10,7 +10,7 @@
  * in the way this is. The preset roles need no bootstrap step of their own: they are read straight
  * from `shared/rules/authorization-roles.yaml` at import, never stored.
  *
- * Run before `app`/`cron` start — see `docker-compose.production.yml`'s `setup` service.
+ * Run before `app`/`cron` start — see `compose.production.yaml`'s `setup` service.
  *
  * @see docs/reference/ops.md
  */

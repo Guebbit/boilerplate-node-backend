@@ -46,7 +46,7 @@ checkout refuses it with `409 CART_PAYMENT_METHOD_NOT_AVAILABLE`. A deployment w
 | `demo`, `debug`                   | the same flag in front of `scenarios/run-server.ts` / `src/main.ts`                                                                                              |
 | `scenario:apply`, `db:bootstrap`  | `scenarios/apply.ts` imports it at its top; `db:bootstrap`'s index sync loads it via `tsx --import`, because only the preload registers the `log` mail transport |
 | the cluster test suite            | `tests/cluster/support/cluster.ts` spawns `tsx --import …`                                                                                                       |
-| the dev `cron` container          | `NODE_OPTIONS=--require tsx/cjs --require …` in `docker-compose.yml`                                                                                             |
+| the dev `cron` container          | `NODE_OPTIONS=--require tsx/cjs --require …` in `compose.override.yaml`                                                                                          |
 | jest                              | `tests/support/setup.ts` calls `registerDoubles()`                                                                                                               |
 
 `cluster.fork()` hands `execArgv` to every worker, so a worker gets the doubles too.

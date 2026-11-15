@@ -10,7 +10,7 @@ here is a bug in one program; every row is two programs that each behave correct
 same bytes differently.
 
 Most of this family lives at a layer this repo does not own — one Node process behind whatever
-proxy the deployment puts in front. `docker-compose.production.yml` binds the API to loopback
+proxy the deployment puts in front. `compose.production.yaml` binds the API to loopback
 precisely so that a proxy is structurally required, and that proxy's configuration is deliberately
 out of scope here. The rows below say which side each control sits on.
 

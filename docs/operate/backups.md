@@ -41,7 +41,7 @@ flowchart LR
 | Piece          | What                                                                                                                            |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | Image          | `docker/Dockerfile.backup`: restic, the [MongoDB Database Tools](./mongodb-database-tools.md), supercronic. Non-root, read-only |
-| Service        | `backup` in `docker-compose.production.yml`, `profiles: [backup]`. One per client stack                                         |
+| Service        | `backup` in `compose.production.yaml`, `profiles: [backup]`. One per client stack                                               |
 | Mounts         | `uploads` and `storage` volumes **read-only**, the Mongo CA certificate. **No Docker socket**                                   |
 | Secrets        | `restic_password`, `mongo_backup_password`, `restic_repository_env`: this container holds them, the app and `cron` do not       |
 | Scheduler      | supercronic builds its crontab at start from the knobs below (`docker/backup/entrypoint.sh`). It serves `/health` for the check |
@@ -166,7 +166,7 @@ the dump is skipped, the uploads and mail spool are still backed up.
 A backup on the same machine dies with the machine, and an attacker who owns the server finds the restic
 password on it, deletes every backup, then encrypts the database: encryption does not help, they have the
 key. The answer is a repository on **another machine that refuses deletes**: the
-[Backup server](./backup-server.md), shipped as `docker-compose.backup-server.yml`.
+[Backup server](./backup-server.md), shipped as `compose.backup-server.yaml`.
 
 On the client side it is two knobs: `BACKUP_REPOSITORY=rest:https://<host>:8000/<client>/` and
 `BACKUP_PRUNE=false`. The cleaning up (`forget --prune`, the keep knobs) then runs **on the second machine**,

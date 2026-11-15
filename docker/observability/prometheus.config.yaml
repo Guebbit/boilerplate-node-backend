@@ -30,7 +30,7 @@ scrape_configs:
       #
       # `credentials_file`, not an inline value: Prometheus has no access to `.env`, so
       # `npm run setup` writes this file with the API's own NODE_METRICS_TOKEN
-      # (docker-compose.yml mounts it read-only). Prometheus re-reads the file on every scrape, so
+      # (compose.override.yaml mounts it read-only). Prometheus re-reads the file on every scrape, so
       # rotating the token needs no restart on this side.
       authorization:
           type: Bearer

@@ -6,7 +6,7 @@ audience: [operator]
 # Backup server
 
 The second machine: where every client's [backups](./backups.md) land, and the **only** place old
-snapshots are deleted. It ships as `docker-compose.backup-server.yml`, **dormant** until someone
+snapshots are deleted. It ships as `compose.backup-server.yaml`, **dormant** until someone
 starts it on a machine of their own. Nothing in a client stack points at it until that client sets
 `BACKUP_REPOSITORY=rest:https://<host>:8000/<client>/`.
 
@@ -75,7 +75,7 @@ cp /path/from/client/restic_password backup-server/clients/acme/password
 chmod -R a+rX backup-server
 
 # 5. this stack's own knobs (.env next to the compose file): see .env-example, "backup-server"
-docker compose -f docker-compose.backup-server.yml up -d --build
+docker compose -f compose.backup-server.yaml up -d --build
 ```
 
 Then, on the **client**:
@@ -96,7 +96,7 @@ RESTIC_REST_PASSWORD=A_LONG_RANDOM_PASSWORD
 #### Adding a client
 
 Repeat steps 3 and 4 with the new name, restart `rest` so it re-reads the htpasswd file
-(`docker compose -f docker-compose.backup-server.yml restart rest`). The repository itself is created
+(`docker compose -f compose.backup-server.yaml restart rest`). The repository itself is created
 by the client's first run.
 
 #### Certificates

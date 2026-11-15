@@ -238,7 +238,7 @@ export const { connection } = mongoose;
  *          transaction resolves. See `docs/modules/payments.md#one-settlement-transaction` and
  *          `rearmPrecondition` (`persistence/versioning.ts`).
  * Needs:   a replica set; a standalone `mongod` refuses `startTransaction()` outright. Every
- *          entry point runs one: `scenarios/support/ephemeral-mongod.ts`, `docker-compose.yml`.
+ *          entry point runs one: `scenarios/support/ephemeral-mongod.ts`, `compose.override.yaml`.
  *
  * @param work - the work to run inside the transaction, given the session to pass to every write
  * @returns whatever `work` resolved with, once the transaction has committed

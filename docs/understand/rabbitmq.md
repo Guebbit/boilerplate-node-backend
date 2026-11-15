@@ -113,8 +113,8 @@ host and port; the boot log names the broker and its source.
 
 ## Docker Compose
 
-The `docker-compose.yml` includes a `queue` service with the management plugin, `rabbitmq:4-management-alpine` —
-the same 4.x line as `docker-compose.production.yml`'s digest-pinned `rabbitmq:4-alpine` image (the
+The `compose.override.yaml` includes a `queue` service with the management plugin, `rabbitmq:4-management-alpine` —
+the same 4.x line as `compose.production.yaml`'s digest-pinned `rabbitmq:4-alpine` image (the
 dev one adds the management UI), which is what makes quorum queues' 4.x
 behaviour ([Queue type: quorum](#queue-type-quorum), [Priority](#priority)) the same in dev as in
 production:

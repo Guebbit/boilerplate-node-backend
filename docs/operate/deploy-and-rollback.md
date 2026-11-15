@@ -63,7 +63,7 @@ last log lines of `setup`, `app` and `cron`, redeploys the previous good image w
 | **No registry** | `docker/deploy.sh acme`       | `build app`, tagged `boilerplate-api:<git short sha>` (`-dirty` when the tree has changes). Old tags are pruned: only the last 5 good ones stay.                           |
 | **A registry**  | `docker/deploy.sh acme <ref>` | `pull` (skipped when the exact ref is already on the host), then run it. Pass the **digest**, which never changes. A registry keeps its own history, so nothing is pruned. |
 
-`APP_IMAGE` has no default in `docker-compose.production.yml` any more. The old `latest` tag was
+`APP_IMAGE` has no default in `compose.production.yaml` any more. The old `latest` tag was
 overwritten by every build, so there was nothing to go back to. The script sets it; set it by hand
 only when you run compose yourself.
 

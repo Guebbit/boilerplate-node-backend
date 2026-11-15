@@ -1,8 +1,14 @@
 # Production stack for the API.
 #
-# `docker-compose.yml` is the DEVELOPMENT stack: it bind-mounts the working tree, runs the dev
-# server with hot reload, and brings up the full observability estate (Prometheus, Loki, Tempo,
-# Grafana, Alloy, Umami) because being able to see everything is the point of a development box.
+# The stack is three files. `compose.yaml` holds what both stacks share (service names, how `app` is
+# built, the image pins that are identical). `compose.override.yaml` is the DEVELOPMENT stack: it
+# bind-mounts the working tree, runs the dev server with hot reload, and brings up the full
+# observability estate (Prometheus, Loki, Tempo, Grafana, Alloy, Umami) because being able to see
+# everything is the point of a development box. This file is production.
+#
+# Always run it with BOTH files, `-f compose.yaml -f compose.production.yaml`. An explicit `-f` turns
+# off the auto-load of `compose.override.yaml`, so the development stack never arrives by accident.
+# A bare `docker compose up` on a server would load it, which is why `docker/deploy.sh` always names both.
 #
 # This file is the deployment. It runs the image built by the `runtime` stage of `docker/Dockerfile`, mounts
 # no source, exposes no database port to the host, and stops at the four services the application
@@ -14,76 +20,18 @@
 #   docker/deploy.sh acme                 # build, start, check it is healthy, undo it when it is not
 #   docker/deploy.sh acme --rollback      # run the previous good image again
 #   export COMPOSE_PROJECT_NAME=acme
-#   docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml logs -f app
-#   docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml down  # -v: data too
+#   docker compose --env-file "clients/acme/.env" -f compose.yaml -f compose.production.yaml logs -f app
+#   docker compose --env-file "clients/acme/.env" -f compose.yaml -f compose.production.yaml down  # -v: data too
 #
 # `APP_IMAGE` names the image `app`, `cron` and `setup` run and has no default: a `latest` tag was
 # overwritten by every build, so there was nothing to go back to. `docker/deploy.sh` sets it.
 #
-# ── ONE DEPLOYMENT PER CLIENT ────────────────────────────────────────────────────────────────────
-# This stack serves ONE client organisation. Many clients means many stacks, each with its own
-# database and its own domain — never one stack serving many.
-#
-# `COMPOSE_PROJECT_NAME` is the client's name and does two jobs at once: it namespaces every
-# container, network and volume, and it selects that client's config below. Unset, nothing starts.
-#
-# ── BEFORE THE FIRST DEPLOY ──────────────────────────────────────────────────────────────────────
-# Copy `.env-example` to `clients/<name>/.env` and set real values.
-#
-# The file is named twice on purpose, because compose reads it through two separate channels:
-# `--env-file` resolves the `${...}` substitutions in THIS file, while `env_file:` below is what
-# the container itself receives. Naming only one of them silently gives every client the same
-# application config.
-#
-# Every client needs its OWN secrets and its OWN NODE_PORT — never copy one client's keys to
-# another. `clients/` is in `.dockerignore` and `.gitignore` on purpose — mounted at runtime, never
-# baked into the image.
-#
-# ── SECRETS ARE FILES, AND EACH SERVICE GETS ONLY ITS OWN ───────────────────────────────────────
-# The credentials and keys live one per file in `clients/<name>/secrets/` (create the directory
-# 0700, each file 0644: compose ignores `uid`/`mode` for a file secret, and Redis (uid 999) and node
-# (uid 1000) must both read it). They are NOT in the client's `.env`, so `docker inspect` shows
-# none, and a child process of the app inherits none. The app reads them through `NODE_X_FILE`
-# variables (docs/operate/configuration.md#secrets-as-files); the data services read the same files.
-#
-#   mongo_root_password  database, mongo-rs-init    The only place the root account's password exists.
-#   mongo_app_password   database, app, cron, setup
-#   mongo_backup_password  database, backup, restore-drill   The `backup` role's login. Never root.
-#   restic_password      backup, restore-drill     Encrypts every snapshot. Lose it, lose the backups.
-#   restic_repository_env  backup, restore-drill     The repository's own login as `NAME=value` lines (the
-#                                                    REST server's, S3's). Empty for a local disk.
-#   redis_password       cache, app, cron        The response cache's Redis (it evicts).
-#   limits_password      limits, app, cron       The limits Redis: counters and single-use claims.
-#   rabbitmq_password    queue, app, cron
-#   the app's keys       app, cron, setup           token_access, token_refresh, totp_encryption_key,
-#                                                   pii_encryption_key, webhook_secret_encryption_key,
-#                                                   pseudonym_key, metrics_token
-#   metrics_token        prometheus (monitoring profile)   Its scrape credential, the same file the app reads.
-#
-# `cron` and `setup` hold the app's keys although they use few of them: every script validates the
-# whole configuration before it runs, and that gate refuses a missing key.
-#
-# Compose refuses to start a service whose secret file does not exist. On a managed backing service
-# leave its file EMPTY (an empty file reads as unset, so the password inside `NODE_DB_URI` /
-# `NODE_REDIS_URL` / `NODE_RABBITMQ_URL` stands), or put the managed password in the file and leave
-# it out of the URL. Optional integration secrets (SMTP, payments, OAuth, antibot) stay in the
-# client's `.env`, since a file secret cannot be optional here.
-# See: docs/operate/first-deploy.md#secrets
-#
-# ── BUNDLED OR MANAGED BACKING SERVICES ──────────────────────────────────────────────────────────
-# `database`/`cache`/`queue` below carry `profiles: [bundled]` and start only when
-# `COMPOSE_PROFILES` includes `bundled` — the client env file's production block sets that by
-# default, so a client who changes nothing gets today's all-in-one behaviour. Point at a managed
-# MongoDB/Redis/RabbitMQ instead by setting `NODE_DB_URI`/`NODE_REDIS_URL`/`NODE_RABBITMQ_URL` in
-# the client env file AND removing `bundled` from `COMPOSE_PROFILES` — the client value then wins
-# over the bundled-service default (`required: false` on `depends_on` is what lets `app`/`cron`/
-# `setup` start without the bundled containers present).
-#
-# ── ONE-SHOT SETUP ───────────────────────────────────────────────────────────────────────────────
-# `setup` runs `db:sync` and `access:bootstrap` once, then exits — the equivalent of an
-# `initContainer`/one-off Job in an orchestrator that isn't Compose. `app` and `cron` wait for it to
-# finish successfully before they start, so a fresh deployment gets its indexes and its shop's row
-# before anything serves a request.
+# One stack serves ONE client: many clients means many stacks, each with its own database and domain.
+# `COMPOSE_PROJECT_NAME` is the client's name; it namespaces every container, network and volume and
+# selects that client's config. The client's `.env` and `secrets/` live in `clients/<name>/`, never in
+# the image. Secrets are files, and each service gets only its own.
+# Which service reads which secret, the one-shot `setup`: docs/operate/ways-to-deploy/docker-server.md#the-production-compose-file
+# Bundled or managed backing services: docs/operate/first-deploy.md#secrets
 
 # ── CONTAINER LOGS, ONCE ────────────────────────────────────────────────────────────────────────
 # Merged into EVERY service with `logging: *logging`. Without `max-size` the default `json-file`
@@ -274,9 +222,8 @@ services:
         # it, never three separate builds of the same Dockerfile drifting apart. `build:` is the
         # no-registry path (`docker/deploy.sh`); with a registry, `APP_IMAGE` names a pushed digest.
         image: '${APP_IMAGE:?set APP_IMAGE, or deploy with docker/deploy.sh <client>}'
+        # `context` and `dockerfile` are in compose.yaml.
         build:
-            context: .
-            dockerfile: docker/Dockerfile
             target: runtime
             args:
                 # ~200 MB of Chromium, needed only by the PDF invoice endpoint. See the Dockerfile.
@@ -375,7 +322,7 @@ services:
             start_period: 30s
 
     # An external scheduler, not an in-process one — see the equivalent service in
-    # docker-compose.yml and docs/reference/ops.md#scheduled-jobs for the full reasoning. Same
+    # compose.override.yaml and docs/reference/ops.md#scheduled-jobs for the full reasoning. Same
     # image as `app` — `image:` rather than a second `build:`, so a client is never running two
     # images built from the same Dockerfile at slightly different times — only the command
     # differs, so this container runs `scripts/ops/reap-*`/`sweep:*` against the exact image
@@ -516,7 +463,6 @@ services:
 
     database:
         logging: *logging
-        image: docker.io/library/mongo:9.0.4@sha256:452bdaf2127b8ff851e31410a267809b9829eded219979f2210e7c7efb85a058
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
         profiles: [bundled]
@@ -599,8 +545,8 @@ services:
             - ./docker/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
         # No `ports:` entry, deliberately. The database is reachable from the compose network and
         # from nowhere else. Reach it for maintenance with
-        # `docker compose --env-file "clients/$COMPOSE_PROJECT_NAME/.env" -f docker-compose.production.yml
-        # exec database mongosh -u "$MONGO_ROOT_USER" -p` (it prompts; the password is in
+        # `docker compose --env-file "clients/$COMPOSE_PROJECT_NAME/.env" -f compose.yaml
+        # -f compose.production.yaml exec database mongosh -u "$MONGO_ROOT_USER" -p` (it prompts; the password is in
         # `clients/$COMPOSE_PROJECT_NAME/secrets/mongo_root_password`).
         healthcheck:
             # `ping` needs no auth even under `--keyFile` (which implies `--auth`), so this keeps
@@ -651,7 +597,6 @@ services:
 
     cache:
         logging: *logging
-        image: docker.io/library/redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
         profiles: [bundled]
@@ -709,7 +654,6 @@ services:
     # `--save 60 1`: a restart keeps the counters, so a Redis bounce is not a free budget reset.
     limits:
         logging: *logging
-        image: docker.io/library/redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
         profiles: [bundled]
@@ -838,8 +782,8 @@ services:
 
     # The drill itself: restore the latest snapshot into `restore-drill-db`, compare the counts,
     # restore the files, check a slice of the repository, print how long it took.
-    #   docker compose --env-file "clients/$COMPOSE_PROJECT_NAME/.env" -f docker-compose.production.yml \
-    #       --profile restore-drill run --rm restore-drill
+    #   docker compose --env-file "clients/$COMPOSE_PROJECT_NAME/.env" \
+    #       -f compose.yaml -f compose.production.yaml --profile restore-drill run --rm restore-drill
     restore-drill:
         logging: *logging
         image: '${BACKUP_IMAGE:-boilerplate-backup:latest}'
@@ -1051,10 +995,10 @@ volumes:
 # you already run, a managed backend, or nothing at all, which is what an empty value means and is
 # a valid choice.
 #
-# The development stack in `docker-compose.yml` runs Tempo, Grafana and an OTel collector next to
+# The development stack in `compose.override.yaml` runs Tempo, Grafana and an OTel collector next to
 # the API for a developer who wants the whole estate on one machine; their definitions and the
 # configuration under `docker/observability/` work unchanged if you want them here. Compose merges
 # files left to right, so
-#   docker compose -f docker-compose.production.yml -f docker-compose.yml up -d
+#   docker compose -f compose.yaml -f compose.production.yaml -f compose.override.yaml up -d
 # is the wrong way to do it — it drags the bind-mounts and dev commands back in. Copy the services
-# you want into an override file instead.
+# you want into an override file of your own instead.

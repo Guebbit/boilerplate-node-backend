@@ -10,7 +10,7 @@
 # that client sets `BACKUP_REPOSITORY=rest:https://<host>:8000/<client>/`. Run from this directory,
 # with its own `.env` (the BACKUP_SERVER_* and BACKUP_KEEP_* knobs; `.env-example` has the block):
 #
-#   docker compose -f docker-compose.backup-server.yml up -d
+#   docker compose -f compose.backup-server.yaml up -d
 #
 # Files this stack reads, all under ./backup-server/ (gitignored, never baked into an image):
 #   htpasswd                 one line per client: user = client name, bcrypt hash

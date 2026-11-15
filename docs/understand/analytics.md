@@ -139,12 +139,12 @@ start granting.
 
 ## Choosing a provider
 
-|                                     | `umami` (default)                                          | `posthog`            | `none` |
-| ----------------------------------- | ---------------------------------------------------------- | -------------------- | ------ |
-| Hosting                             | self-hosted, in `docker-compose.yml` (`analytics` profile) | cloud or self-hosted | —      |
-| Visitor identity                    | hash of IP + user-agent                                    | `distinct_id`        | —      |
-| Identity-level funnels              | no                                                         | yes                  | —      |
-| Shares a database with the frontend | yes                                                        | no                   | —      |
+|                                     | `umami` (default)                                             | `posthog`            | `none` |
+| ----------------------------------- | ------------------------------------------------------------- | -------------------- | ------ |
+| Hosting                             | self-hosted, in `compose.override.yaml` (`analytics` profile) | cloud or self-hosted | —      |
+| Visitor identity                    | hash of IP + user-agent                                       | `distinct_id`        | —      |
+| Identity-level funnels              | no                                                            | yes                  | —      |
+| Shares a database with the frontend | yes                                                           | no                   | —      |
 
 `umami` is the code default because it is the instance this repo's own compose stack can start
 (opt-in `analytics` profile), and the one the paired frontend reports to — so both halves land in

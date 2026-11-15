@@ -5,7 +5,7 @@ audience: [developer]
 
 # Docker & Podman
 
-This repo ships one local container implementation built around `docker-compose.yml`.
+This repo ships one local container implementation built around `compose.yaml` and `compose.override.yaml`.
 It works as a Docker flow and also maps cleanly to the Podman helper scripts in `package.json`.
 
 ## Container map
@@ -15,7 +15,7 @@ It works as a Docker flow and also maps cleanly to the Podman helper scripts in 
 flowchart LR
     Host([Host machine])
 
-    subgraph Compose["docker-compose.yml"]
+    subgraph Compose["compose.yaml + compose.override.yaml"]
         subgraph AppRuntime["App runtime"]
             App["app\nExpress API :3000"]
         end
@@ -68,7 +68,7 @@ flowchart LR
 | Area                | Current implementation                                                                                                                                                                                                               |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | App image           | `docker/Dockerfile` based on `node:24-trixie-slim` (Debian, glibc), with Chromium for Puppeteer-driven PDF rendering and a `mongod` baked in at build time — see [Running the gate in a container](#running-the-gate-in-a-container) |
-| Local orchestration | `docker-compose.yml` defines app, cron, MongoDB, two Redis instances, RabbitMQ, and opt-in profiles: observability, analytics, docs, integrations                                                                                    |
+| Local orchestration | `compose.yaml` and `compose.override.yaml` (loaded together) define app, cron, MongoDB, two Redis instances, RabbitMQ, and opt-in profiles: observability, analytics, docs, integrations                                             |
 | Dev workflow        | bind mount source code into `/app`, keep `node_modules` inside the container, switch between single-process and clustered dev commands                                                                                               |
 | Podman support      | `compose:restart` and `compose:rebuild` run `${CONTAINER_ENGINE:-podman} compose`; export `CONTAINER_ENGINE=docker` to switch                                                                                                        |
 

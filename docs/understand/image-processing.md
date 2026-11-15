@@ -33,7 +33,7 @@ digest job promotes it.
 `NODE_QUARANTINE_PATH`'s own unset default happens to live under `tmp/`, gitignored like everything
 else there — a local-dev convenience, not a contradiction of "durable": a real deployment always
 overrides the variable to point at its own mounted volume instead (see
-`docker-compose.production.yml`), and durability comes from that mount, never from the default
+`compose.production.yaml`), and durability comes from that mount, never from the default
 path's name.
 
 ## Architecture

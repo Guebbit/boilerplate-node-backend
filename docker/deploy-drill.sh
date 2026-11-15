@@ -30,7 +30,7 @@ cleanup() {
     local code=$?
     if [ -n "${DEPLOY_DRILL_KEEP:-}" ]; then echo "kept: client $CLIENT, tmp $TMP"; return; fi
     COMPOSE_PROJECT_NAME="$CLIENT" APP_IMAGE=unused \
-        $ENGINE compose --env-file "$DIR/.env" -f docker-compose.production.yml down -v --remove-orphans >/dev/null 2>&1 || true
+        $ENGINE compose --env-file "$DIR/.env" -f compose.yaml -f compose.production.yaml down -v --remove-orphans >/dev/null 2>&1 || true
     $ENGINE ps -aq --filter "label=com.docker.compose.project=$CLIENT" | xargs -r $ENGINE rm -f >/dev/null 2>&1 || true
     for tag in "${DRILL_TAGS[@]:-}"; do [ -n "$tag" ] && $ENGINE rmi -f "$tag" >/dev/null 2>&1 || true; done
     rm -rf "$DIR" "$TMP"

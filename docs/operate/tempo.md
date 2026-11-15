@@ -19,7 +19,7 @@ flowchart LR
     App["App"] -->|"OTLP/HTTP :4318"| Col["OTel Collector"] -->|"OTLP/gRPC :4317"| T["Tempo"] --> G["Grafana"]
 ```
 
-- The app exports OTLP/HTTP to the endpoint in `OTEL_EXPORTER_OTLP_ENDPOINT` (`http://otel-collector:4318` under compose); unset, trace export is off. `docker-compose.yml` passes the variable through from `.env`.
+- The app exports OTLP/HTTP to the endpoint in `OTEL_EXPORTER_OTLP_ENDPOINT` (`http://otel-collector:4318` under compose); unset, trace export is off. `compose.override.yaml` passes the variable through from `.env`.
 - The collector fans signals out to Tempo via internal gRPC.
 - Tempo runs in single-binary mode with local filesystem storage (`docker/observability/tempo.config.yaml`).
 - Grafana auto-provisions Tempo as the default datasource.

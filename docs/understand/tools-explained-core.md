@@ -162,7 +162,7 @@ The core stack and the data layer, tool by tool.
 
 **Problem it solves.** Whoever owns the app server also finds the restic password on it, and could delete every backup before encrypting the database. A repository on another machine that accepts new backups and refuses deletes (`--append-only`) makes the password alone useless for that.
 
-**In this repo.** `docker-compose.backup-server.yml`, dormant until started on a second machine: `rclone serve restic --append-only --private-repos` over TLS, one login per client, plus a weekly `forget --prune` and `check` on the machine's own disk. Pinned at 1.75.2; MIT.
+**In this repo.** `compose.backup-server.yaml`, dormant until started on a second machine: `rclone serve restic --append-only --private-repos` over TLS, one login per client, plus a weekly `forget --prune` and `check` on the machine's own disk. Pinned at 1.75.2; MIT.
 
 → [Backup server](../operate/backup-server.md) · [rclone](../operate/rclone.md)
 

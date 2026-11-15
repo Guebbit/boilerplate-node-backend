@@ -38,7 +38,7 @@ The Database Tools spell TLS `--ssl --sslCAFile`, and the bundled `database` req
 4. **Re-apply the erasures, before anything starts:**
 
     ```sh
-    docker compose --env-file "clients/$COMPOSE_PROJECT_NAME/.env" -f docker-compose.production.yml \
+    docker compose --env-file "clients/$COMPOSE_PROJECT_NAME/.env" -f compose.yaml -f compose.production.yaml \
         run --rm --no-deps cron \
         node --import tsx scripts/ops/reapply-erasures.ts --since <the snapshot time, ISO> --snapshot <restic id> --by <your name>
     ```

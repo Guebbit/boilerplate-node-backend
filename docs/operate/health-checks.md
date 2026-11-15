@@ -28,7 +28,7 @@ A health check tests **this container's own job**. Nothing else.
 | `app`      | `GET /livez`                                    | the image, and compose again (see [Podman](#podman)) |
 | `cron`     | supercronic's `GET /health` on `127.0.0.1:9746` | compose                                              |
 | `backup`   | the same supercronic `/health`, with `curl`     | `docker/Dockerfile.backup` (the image)               |
-| `setup`    | none: `healthcheck: disable: true`              | `docker-compose.production.yml`                      |
+| `setup`    | none: `healthcheck: disable: true`              | `compose.production.yaml`                            |
 | `database` | the database's own ping                         | compose                                              |
 | `cache`    | the cache's own ping                            | compose                                              |
 | `queue`    | the broker's own diagnostics                    | compose                                              |
@@ -110,7 +110,7 @@ same tick, so no probe sees it yet. A lame-duck delay between the two belongs wi
 ## Podman
 
 Podman builds OCI images by default, and OCI has no `HEALTHCHECK`. So the `app` service repeats the
-check in `docker-compose.production.yml` instead of leaning on the image. The compose block works
+check in `compose.production.yaml` instead of leaning on the image. The compose block works
 on both engines.
 
 ## Supercronic's `/health`

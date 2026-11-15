@@ -63,8 +63,8 @@ flowchart LR
 
 Traces are not in the profile: set `OTEL_EXPORTER_OTLP_ENDPOINT` to a collector you already run (an
 empty value is a valid choice and means no traces leave the process). To run Tempo and Grafana here
-anyway, copy their definitions from `docker-compose.yml` into your own override file rather than
-layering the two compose files (`-f docker-compose.production.yml -f docker-compose.yml` drags the
+anyway, copy their definitions from `compose.override.yaml` into your own override file rather than
+layering the development file onto production (`-f compose.yaml -f compose.production.yaml -f compose.override.yaml` drags the
 dev bind-mounts back in).
 
 See [Docker & Podman](../build/docker-and-podman.md) for what each of those containers does and

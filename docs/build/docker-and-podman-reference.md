@@ -11,9 +11,9 @@ Part of [Docker & Podman](./docker-and-podman.md): every container, grouped, and
 
 ### App runtime
 
-| Container | Image                                                                 | Port(s)                      | Role                                                                                                                         | Read next                           |
-| --------- | --------------------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| `app`     | `docker/Dockerfile` (node:24-trixie-slim + Chromium + baked `mongod`) | `NODE_PORT` (default `3000`) | Runs the Express API. In dev: bind-mounted source, hot-reload. Depends on `database`, `redis`, `rabbitmq`, `otel-collector`. | [Runtime](../understand/runtime.md) |
+| Container | Image                                                                 | Port(s)                      | Role                                                                                                                                | Read next                           |
+| --------- | --------------------------------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `app`     | `docker/Dockerfile` (node:24-trixie-slim + Chromium + baked `mongod`) | `NODE_PORT` (default `3000`) | Runs the Express API. In dev: bind-mounted source, hot-reload. Depends on `database`, `cache`, `limits`, `queue`, `otel-collector`. | [Runtime](../understand/runtime.md) |
 
 ### Scheduler
 
@@ -27,12 +27,12 @@ Part of [Docker & Podman](./docker-and-podman.md): every container, grouped, and
 | ---------- | ---------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
 | `database` | `mongo:9.0.4` (digest-pinned)                  | `27017`                                | Primary datastore. Persists in the named volume `boilerplate_mongodb_volume`; seeded by the `app` container's own startup command, never by a host `npm run dev` — see [Which database am I looking at?](run-locally.md#which-database-am-i-looking-at). | [MongoDB & Mongoose](../understand/mongodb-mongoose.md) |
 | `cache`    | `redis:8-alpine` (digest-pinned)               | `6379`                                 | Server-side response cache. Cache is intentionally ephemeral — data is lost on restart.                                                                                                                                                                  | [Redis Cache](../understand/redis-cache.md)             |
-| `limits`   | `redis:8-alpine` (digest-pinned)               | `6380` (loopback)                      | Second Redis for rate-limit counters and single-use claims. `noeviction`, so a counter is never dropped under memory pressure. The `redis` cache evicts freely.                                                                                          | [Redis Cache](../understand/redis-cache.md)             |
+| `limits`   | `redis:8-alpine` (digest-pinned)               | `6380` (loopback)                      | Second Redis for rate-limit counters and single-use claims. `noeviction`, so a counter is never dropped under memory pressure. The `cache` evicts freely.                                                                                                | [Redis Cache](../understand/redis-cache.md)             |
 | `queue`    | `rabbitmq:4-management-alpine` (digest-pinned) | `5672` (AMQP), `15672` (management UI) | Message broker for async jobs (email, PDF generation). Management UI available in browser.                                                                                                                                                               | [RabbitMQ](../understand/rabbitmq.md)                   |
 
 ### Backups (production, opt-in)
 
-In `docker-compose.production.yml`, behind the `backup` and `restore-drill` profiles
+In `compose.production.yaml`, behind the `backup` and `restore-drill` profiles
 (`COMPOSE_PROFILES=bundled,backup`). Built from `docker/Dockerfile.backup`, one image for all three.
 
 | Container          | Profile         | Role                                                                                                                                                  | Read next                                          |
@@ -41,7 +41,7 @@ In `docker-compose.production.yml`, behind the `backup` and `restore-drill` prof
 | `restore-drill-db` | `restore-drill` | A throwaway Mongo on a tmpfs, no auth, no published port: where the drill restores to                                                                 | [Backups](../operate/backups.md#the-restore-drill) |
 | `restore-drill`    | `restore-drill` | A one-shot: restore the latest snapshot into `restore-drill-db`, compare counts, check the repository, print how long it took                         | [Backups](../operate/backups.md#the-restore-drill) |
 
-The second machine has its own file, `docker-compose.backup-server.yml` (run from its own directory, on
+The second machine has its own file, `compose.backup-server.yaml` (run from its own directory, on
 another host): `init` (a one-shot that creates the repositories folder), `rest` (`rclone serve restic
 --append-only`, the one published port) and `maintenance` (weekly `forget --prune` and `check`). See
 [Backup server](../operate/backup-server.md).
@@ -51,7 +51,7 @@ All of them run read-only, with every capability dropped, as uid 1000.
 ### Observability stack
 
 Behind the `observability` profile: start it with `--profile observability` or `npm run compose:up:full`.
-Versions are in `docker-compose.yml`, not here; `docker/observability/validate-configs.sh` (CI `alert-rules` job) checks the Loki and production Alloy configs against the image their compose file names. Dev-only configs are not checked: a bad one fails on `compose up`.
+Versions are in `compose.override.yaml`, not here; `docker/observability/validate-configs.sh` (CI `alert-rules` job) checks the Loki and production Alloy configs against the image their compose file names. Dev-only configs are not checked: a bad one fails on `compose up`.
 
 | Container        | Role                                                                                                                                                                                                                 |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -64,7 +64,7 @@ Versions are in `docker-compose.yml`, not here; `docker/observability/validate-c
 | `alloy`          | Tails container log files and pushes entries to Loki, and receives browser telemetry (Grafana Faro) from the frontend, fanning it into Loki and the OTel Collector. Needs `CONTAINER_LOGS_PATH` in `.env` on Podman. |
 | `grafana`        | Unified UI: explore traces (Tempo), metrics (Prometheus), and logs (Loki). Anonymous admin access in local dev.                                                                                                      |
 
-Images are in `docker-compose.yml`; the host ports are [the host port map](./pairing-and-ports.md#host-port-map).
+Images are in `compose.override.yaml`; the host ports are [the host port map](./pairing-and-ports.md#host-port-map).
 
 ### Analytics and docs (opt-in)
 
@@ -72,7 +72,7 @@ Behind the `analytics` profile: `umami` (self-hosted product analytics, see [Pro
 
 ### Integrations (opt-in)
 
-One of four groups behind a compose **profile** in `docker-compose.yml`: `observability`, `analytics`,
+One of four groups behind a compose **profile** in `compose.override.yaml`: `observability`, `analytics`,
 `docs` and `integrations`. A plain `up` starts none of them, and `npm run compose:up:full` starts the
 first three. This one is started on its own:
 

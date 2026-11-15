@@ -11,7 +11,7 @@
 faro.receiver "frontend" {
     server {
         listen_address = "0.0.0.0"
-        // Container-internal port. The host mapping is set in docker-compose.yml
+        // Container-internal port. The host mapping is set in compose.override.yaml
         // via ${ALLOY_FARO_PORT}. The path the SDK posts to is "/collect".
         listen_port = 12347
         // Local dev: accept the browser from any origin. Tighten in production.

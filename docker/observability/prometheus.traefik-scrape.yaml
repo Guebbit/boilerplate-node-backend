@@ -1,5 +1,5 @@
 # The shared Traefik's metrics, scraped by a client stack's Prometheus.
-# Why a file of its own: only a stack layered with docker-compose.proxy.yml has a Traefik to
+# Why a file of its own: only a stack layered with compose.proxy.yaml has a Traefik to
 # scrape, and that overlay is what mounts this next to the production config
 # (`scrape_config_files` in prometheus.production.config.yaml). Without it nothing is scraped.
 

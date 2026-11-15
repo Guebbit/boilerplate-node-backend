@@ -233,11 +233,11 @@ jobs:
 
             - name: Check and test the rules
               # promtool ships in the Prometheus image; the folder is mounted read-only. The image
-              # is the one `docker-compose.production.yml` runs (same extraction as
+              # is the one `compose.production.yaml` runs (same extraction as
               # `validate-configs.sh`), so a bump there cannot leave the rules checked by an older tool.
               run: |
-                  image=$(sed -n -E 's#^ +image: (docker\.io/)?(prom/prometheus:[^ ]+).*#\2#p' docker-compose.production.yml | head -1)
-                  test -n "$image" || { echo "::error::no prom/prometheus image in docker-compose.production.yml"; exit 1; }
+                  image=$(sed -n -E 's#^ +image: (docker\.io/)?(prom/prometheus:[^ ]+).*#\2#p' compose.production.yaml | head -1)
+                  test -n "$image" || { echo "::error::no prom/prometheus image in compose.production.yaml"; exit 1; }
                   docker run --rm --entrypoint promtool \
                     -v "$PWD/docker/observability:/obs:ro" \
                     "$image" \
@@ -252,8 +252,8 @@ jobs:
               # `amtool check-config` and `amtool config routes test` prove where each alert
               # lands. amtool ships in the Alertmanager image, read from the production compose like the one above.
               run: |
-                  image=$(sed -n -E 's#^ +image: (docker\.io/)?(prom/alertmanager:[^ ]+).*#\2#p' docker-compose.production.yml | head -1)
-                  test -n "$image" || { echo "::error::no prom/alertmanager image in docker-compose.production.yml"; exit 1; }
+                  image=$(sed -n -E 's#^ +image: (docker\.io/)?(prom/alertmanager:[^ ]+).*#\2#p' compose.production.yaml | head -1)
+                  test -n "$image" || { echo "::error::no prom/alertmanager image in compose.production.yaml"; exit 1; }
                   docker run --rm --entrypoint sh \
                     -v "$PWD/docker/observability:/obs:ro" \
                     "$image" \
@@ -805,7 +805,7 @@ jobs:
 
     backup-drill:
         # Proves BACKUP and RESTORE end to end, not just their config: a replica-set Mongo started
-        # as docker-compose.production.yml starts it, the backup image dumping it through the
+        # as compose.production.yaml starts it, the backup image dumping it through the
         # `backup` role into a local repository, deduplication, the restore drill into a throwaway
         # Mongo, the Gatus heartbeat going green and red, a damaged repository failing the drill,
         # and the second machine's append-only server (a delete is refused, its upkeep prunes).

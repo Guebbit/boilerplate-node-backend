@@ -54,7 +54,7 @@ flowchart TD
 | Alloy          | Log shipper (Docker/Podman → Loki) and browser-facing Faro collector |
 | Grafana        | Unified UI                                                           |
 
-Images are in `docker-compose.yml`; the URLs are [the host port map](../build/pairing-and-ports.md#host-port-map).
+Images are in `compose.override.yaml`; the URLs are [the host port map](../build/pairing-and-ports.md#host-port-map).
 
 ## Admin API vs Grafana
 

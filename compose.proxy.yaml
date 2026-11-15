@@ -1,7 +1,7 @@
 # Traefik overlay for MANY client stacks on one host — layer with a second `-f`:
 #
 #   docker compose --env-file "clients/acme/.env" \
-#       -f docker-compose.production.yml -f docker-compose.proxy.yml up -d
+#       -f compose.yaml -f compose.production.yaml -f compose.proxy.yaml up -d
 #
 # Routing only: this overlay defines no database, no volume and no seeding, and changes nothing
 # about which data the stack it is layered onto holds.

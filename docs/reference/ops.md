@@ -35,14 +35,14 @@ flowchart LR
     class Otel,Prom,Alloy,Loki,Tempo,Alert,Graf obs;
 ```
 
-| Folder / file                     | What lives here                                                                                                                                                                                          | Read next                                                                                     |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `docker-compose*.yml` (repo root) | The development stack, its production shape (built image, no dev tooling), the backup server's second machine, and the shared proxy for several client stacks                                            | [Docker & Podman](../build/docker-and-podman.md) · [First deploy](../operate/first-deploy.md) |
-| `docker/`                         | The Dockerfiles, the container scripts (Mongo init and replica-set bootstrap, `deploy.sh`, `boot-check.sh`, `ensure-deps.sh`, supercronic install), the generated `crontab`, the nginx and Caddy configs | [Deploy and rollback](../operate/deploy-and-rollback.md)                                      |
-| `docker/backup/`                  | The backup container's scripts: entrypoint, one backup run, weekly maintenance                                                                                                                           | [Backups](../operate/backups.md)                                                              |
-| `docker/observability/`           | The Prometheus, Alertmanager, Loki, Tempo, Alloy and Grafana configs the stack mounts                                                                                                                    | [Observability](../operate/grafana.md)                                                        |
-| `traefik/`                        | The per-client route template for the shared proxy                                                                                                                                                       | [Two client stacks](../operate/two-client-stacks.md)                                          |
-| `.dockerignore`                   | What never enters the build context, `.git` included (the in-container `complete` gate mounts it read-only instead)                                                                                      | [Docker & Podman](../build/docker-and-podman.md)                                              |
+| Folder / file               | What lives here                                                                                                                                                                                          | Read next                                                                                     |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `compose*.yaml` (repo root) | The shared base, the development stack (auto-loaded beside it), its production shape (built image, no dev tooling), the backup server's second machine, and the shared proxy for several client stacks   | [Docker & Podman](../build/docker-and-podman.md) · [First deploy](../operate/first-deploy.md) |
+| `docker/`                   | The Dockerfiles, the container scripts (Mongo init and replica-set bootstrap, `deploy.sh`, `boot-check.sh`, `ensure-deps.sh`, supercronic install), the generated `crontab`, the nginx and Caddy configs | [Deploy and rollback](../operate/deploy-and-rollback.md)                                      |
+| `docker/backup/`            | The backup container's scripts: entrypoint, one backup run, weekly maintenance                                                                                                                           | [Backups](../operate/backups.md)                                                              |
+| `docker/observability/`     | The Prometheus, Alertmanager, Loki, Tempo, Alloy and Grafana configs the stack mounts                                                                                                                    | [Observability](../operate/grafana.md)                                                        |
+| `traefik/`                  | The per-client route template for the shared proxy                                                                                                                                                       | [Two client stacks](../operate/two-client-stacks.md)                                          |
+| `.dockerignore`             | What never enters the build context, `.git` included (the in-container `complete` gate mounts it read-only instead)                                                                                      | [Docker & Podman](../build/docker-and-podman.md)                                              |
 
 ## Images
 
@@ -178,7 +178,7 @@ on, raising or lowering any of these variables and RESTARTING fails the boot out
 refuses the conflicting options. `npm run db:sync` is what applies it: it replaces the index (drops it and
 rebuilds it), which is why `db:bootstrap` syncs before the server starts there. Production runs with
 `autoIndex` off for exactly this reason — a restart never asks Mongo to rebuild anything — and
-`docker-compose.production.yml`'s one-shot `setup` service is what runs `db:sync` on deploy instead,
+`compose.production.yaml`'s one-shot `setup` service is what runs `db:sync` on deploy instead,
 see [Data — TTL windows](./data.md#ttl-windows). `tasks`'s window
 is the longest on purpose: a contact request can be evidence in a commercial dispute, and 24 months
 sits inside the common limitation periods. It runs on `closedAt`, so an open task never expires and a

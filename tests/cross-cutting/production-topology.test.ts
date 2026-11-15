@@ -6,7 +6,7 @@ import { REPO_ROOT } from '@tests/paths';
 /**
  * Guard: the production deployment's security posture is a property of two files, not a memory.
  *
- * `docker-compose.production.yml` and the `build` and `runtime` stages of `docker/Dockerfile` carry decisions that cost
+ * `compose.production.yaml` and the `build` and `runtime` stages of `docker/Dockerfile` carry decisions that cost
  * nothing to keep and are invisible to every other check in the gate — a container gains a
  * writable root, a database publishes a port, an `--inspect` flag survives a debugging session, a
  * dependency's postinstall runs during the image build, a service mounts a secret that is not its
@@ -65,13 +65,11 @@ const isComposeFile = (value: unknown): value is ComposeFile =>
  * https://eemeli.org/yaml/#yaml-1-1-merge-keys
  */
 const parsedCompose: unknown = parse(
-    readFileSync(path.join(REPO_ROOT, 'docker-compose.production.yml'), 'utf8'),
+    readFileSync(path.join(REPO_ROOT, 'compose.production.yaml'), 'utf8'),
     { merge: true }
 );
 if (!isComposeFile(parsedCompose))
-    throw new Error(
-        '[production-topology] docker-compose.production.yml did not parse to an object.'
-    );
+    throw new Error('[production-topology] compose.production.yaml did not parse to an object.');
 
 const compose = parsedCompose;
 
@@ -323,10 +321,7 @@ describe('production runs no debugger', () => {
      * anchor, an override and an env file default are all covered by one match.
      */
     it('no --inspect flag survives in the production image or stack', () => {
-        const composeText = readFileSync(
-            path.join(REPO_ROOT, 'docker-compose.production.yml'),
-            'utf8'
-        );
+        const composeText = readFileSync(path.join(REPO_ROOT, 'compose.production.yaml'), 'utf8');
 
         expect(dockerfile).not.toMatch(/--inspect/);
         expect(composeText).not.toMatch(/--inspect/);
@@ -527,5 +522,47 @@ describe('the cache and the limits are two Redis instances', () => {
         expect(appEnvironment.NODE_RATE_LIMIT_REDIS_PASSWORD_FILE).toBe(
             '/run/secrets/limits_password'
         );
+    });
+});
+
+describe('compose.yaml shares names, builds and pins, and nothing the production verdicts read', () => {
+    /*
+     * Production runs as `-f compose.yaml -f compose.production.yaml`, and every assertion above reads
+     * `compose.production.yaml` alone. That is only sound while the base file sets none of the keys those
+     * assertions reason about: then the merge cannot change a verdict, and this file needs no compose-merge
+     * logic of its own.
+     */
+    const GUARDED_KEYS = new Set([
+        'ports',
+        'environment',
+        'command',
+        'secrets',
+        'read_only',
+        'cap_drop',
+        'cap_add',
+        'security_opt',
+        'logging',
+        'healthcheck',
+        'profiles'
+    ]);
+
+    const parsedBase: unknown = parse(readFileSync(path.join(REPO_ROOT, 'compose.yaml'), 'utf8'), {
+        merge: true
+    });
+    if (!isComposeFile(parsedBase))
+        throw new Error('[production-topology] compose.yaml did not parse to an object.');
+
+    it('lists at least one service to check', () => {
+        expect(Object.keys(parsedBase.services).length).toBeGreaterThan(0);
+    });
+
+    it.each(Object.entries(parsedBase.services))('sets no guarded key on %s', (_name, service) => {
+        expect(Object.keys(service).filter((key) => GUARDED_KEYS.has(key))).toEqual([]);
+    });
+
+    it('names in production every service it lists', () => {
+        expect(
+            Object.keys(parsedBase.services).filter((name) => !(name in compose.services))
+        ).toEqual([]);
     });
 });

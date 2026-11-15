@@ -10,7 +10,7 @@
  * twice) uses `requireIdempotencyKey` and refuses a missing key with 400. Past the lease, such a key
  * is never run again: it answers a stored 409 "outcome unknown" and tells staff.
  *
- * The record lives in Mongo, not Redis: `docker-compose.yml` runs the cache with
+ * The record lives in Mongo, not Redis: `compose.override.yaml` runs the cache with
  * `--maxmemory-policy allkeys-lru`, which can evict a live record under memory pressure and turn
  * an evicted entry into a silent duplicate write at exactly the moment the system is under load.
  * An idempotency ledger is a source of truth, so it goes in Mongo next to every other durable

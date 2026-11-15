@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # End-to-end proof of the backup system, with plain `docker run` (no compose, no host ports):
-#   1. a real replica-set Mongo, started the way docker-compose.production.yml starts `database`
+#   1. a real replica-set Mongo, started the way compose.production.yaml starts `database`
 #      (keyFile, TLS, the `backup` role created by docker/mongo-init.js), seeded with data
 #   2. the backup image backs it up into a local-disk repository: dump, counts, files
 #   3. a second run after a small change: restic deduplicates (the second run stores little)
@@ -19,8 +19,8 @@ NET="$ID"
 TMP="$(mktemp -d)"
 IMAGE="${BACKUP_DRILL_IMAGE:-boilerplate-backup:drill}"
 # The same pinned images the compose files use.
-MONGO_IMAGE="$(sed -n -E "s/^ +image: (docker.io\/library\/mongo:[^@ ]+@sha256:[0-9a-f]+).*/\1/p" docker-compose.production.yml | head -1)"
-RCLONE_IMAGE="$(sed -n -E 's/^ +image: (docker.io\/rclone\/rclone:[^ ]+).*/\1/p' docker-compose.backup-server.yml | head -1)"
+MONGO_IMAGE="$(sed -n -E "s/^ +image: (docker.io\/library\/mongo:[^@ ]+@sha256:[0-9a-f]+).*/\1/p" compose.yaml | head -1)"
+RCLONE_IMAGE="$(sed -n -E 's/^ +image: (docker.io\/rclone\/rclone:[^ ]+).*/\1/p' compose.backup-server.yaml | head -1)"
 GATUS_IMAGE="${BACKUP_DRILL_GATUS_IMAGE:-docker.io/twinproduction/gatus:v5.37.0}"
 PASS=0
 # Extra `docker run` flags for `backup_image` (none by default).
@@ -91,7 +91,7 @@ chmod 0755 "$TMP" "$TMP/secrets"
 docker network create --internal --label "$ID" "$NET" >/dev/null
 for v in mongo-data keyfile ca repo cache uploads storage; do volume "$ID-$v"; done
 
-step "a replica-set Mongo, as docker-compose.production.yml starts it"
+step "a replica-set Mongo, as compose.production.yaml starts it"
 run -d --name "$ID-database" --network "$NET" --network-alias database \
     --cap-drop ALL --cap-add CHOWN --cap-add SETUID --cap-add SETGID --cap-add DAC_OVERRIDE --cap-add FOWNER \
     --entrypoint bash \
@@ -269,7 +269,7 @@ chmod -R a+rX "$TMP/server"
 volume "$ID-data"
 run --rm --user 0 --cap-drop ALL --cap-add CHOWN --entrypoint sh -v "$ID-data:/data" "$IMAGE" \
     -c 'mkdir -p /data/repos && chown 1000:1000 /data/repos'
-# The same flags docker-compose.backup-server.yml gives the `rest` service.
+# The same flags compose.backup-server.yaml gives the `rest` service.
 run -d --name "$ID-rest" --network "$NET" --network-alias backup-server --user 1000:1000 --read-only --cap-drop ALL \
     --tmpfs /tmp:mode=1777,size=64m -e HOME=/tmp -v "$ID-data:/data" -v "$TMP/server:/run/secrets:ro" \
     "$RCLONE_IMAGE" serve restic /data/repos --addr=:8000 --append-only --private-repos --htpasswd=/run/secrets/htpasswd \

@@ -82,7 +82,7 @@ cached reply merely by guessing or observing their key.
 
 ## Why Mongo, not Redis
 
-`docker-compose.yml` runs the cache with `--maxmemory-policy allkeys-lru`: under memory
+`compose.override.yaml` runs the cache with `--maxmemory-policy allkeys-lru`: under memory
 pressure Redis evicts **any** key, including one written seconds ago with hours left on its TTL.
 An evicted idempotency record does not fail loudly — it silently becomes a duplicate write, at
 exactly the moment the system is under load and least able to notice. An idempotency ledger is a

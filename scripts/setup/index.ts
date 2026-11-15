@@ -9,7 +9,7 @@
  *    automatically), with a fresh `randomBytes(32)` value each.
  * 3. Hands Prometheus its own copy of `NODE_METRICS_TOKEN`, since it has no access to `.env` and
  *    reads its scrape credential from a file instead (`credentials_file` in
- *    `docker/observability/prometheus.config.yaml`, mounted by `docker-compose.yml`). Written
+ *    `docker/observability/prometheus.config.yaml`, mounted by `compose.override.yaml`). Written
  *    unconditionally, so the bind mount always finds a real file — an absent one, Docker/Podman
  *    silently creates as a directory instead, and Prometheus fails to read it.
  *

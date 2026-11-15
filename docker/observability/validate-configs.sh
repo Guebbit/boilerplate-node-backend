@@ -27,8 +27,8 @@ check() {
     docker run --rm -v "$PWD/docker/observability:/obs:ro" "$@" >/dev/null
 }
 
-dev=docker-compose.yml
-prod=docker-compose.production.yml
+dev=compose.override.yaml
+prod=compose.production.yaml
 
 # Loki runs in both stacks with the one config, so both versions have to accept it.
 for compose in "$dev" "$prod"; do

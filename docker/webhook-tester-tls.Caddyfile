@@ -1,5 +1,5 @@
 # The TLS door in front of `webhook-tester` — see the `webhook-tester-tls` service in
-# docker-compose.yml. Two knobs, both with the compose defaults, so a CI job that runs this beside
+# compose.override.yaml. Two knobs, both with the compose defaults, so a CI job that runs this beside
 # a host-network tester can point it elsewhere without a second file.
 {
 	# A fixed certificate: no ACME, no :80 redirect listener, no admin API.

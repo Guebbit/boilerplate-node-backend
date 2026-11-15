@@ -36,7 +36,7 @@ nothing, not even a Docker network, unless the [Traefik overlay](#many-clients-b
 below is layered on to share the proxy.
 
 ::: warning Read this alongside the compose files
-`docker-compose.production.yml` and `docker-compose.proxy.yml` explain each decision inline. This
+`compose.production.yaml` and `compose.proxy.yaml` explain each decision inline. This
 page is the walkthrough and the two demonstrations; the compose files are the source of truth.
 :::
 
@@ -50,8 +50,8 @@ cp .env-example clients/acme/.env   # then set real values
 # and create clients/acme/secrets/, one file per secret:
 # docs/operate/first-deploy.md#secrets
 export COMPOSE_PROJECT_NAME=acme
-docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml build app
-docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml up -d
+docker compose --env-file "clients/acme/.env" -f compose.yaml -f compose.production.yaml build app
+docker compose --env-file "clients/acme/.env" -f compose.yaml -f compose.production.yaml up -d
 ```
 
 `build app` first, because `setup` and `cron` run the image it builds. Then one `up -d` brings up
@@ -110,7 +110,7 @@ start anything that transitively requires an already-exited container. Generatin
 
 ```bash
 export COMPOSE_PROJECT_NAME=brava
-docker compose --env-file "clients/brava/.env" -f docker-compose.production.yml up -d
+docker compose --env-file "clients/brava/.env" -f compose.yaml -f compose.production.yaml up -d
 curl http://127.0.0.1:3102/products   # {"items":[],...} — brava has never heard of acme
 ```
 
@@ -121,7 +121,7 @@ shared state.
 **2. Deleting `brava` never touches `acme`.**
 
 ```bash
-docker compose -p brava -f docker-compose.production.yml down -v
+docker compose -p brava -f compose.yaml -f compose.production.yaml down -v
 curl http://127.0.0.1:3101/products   # acme's product and order are still there
 ```
 
@@ -132,7 +132,7 @@ GDPR-erasure story for a client relationship ending, demonstrated rather than as
 ## Many clients behind one proxy
 
 The base compose file stays proxy-agnostic — publish `127.0.0.1:${NODE_PORT}` and put any
-TLS-terminating proxy in front, same as a single-stack deployment. `docker-compose.proxy.yml` is
+TLS-terminating proxy in front, same as a single-stack deployment. `compose.proxy.yaml` is
 the recipe for the case that specifically needs SHARED infrastructure: several client stacks on one
 box, fronted by one proxy that serves each stack from its own small route file.
 
@@ -162,7 +162,7 @@ docker network create proxy   # once, per host
 export COMPOSE_PROJECT_NAME=acme
 cp traefik/client.example.yml traefik/dynamic/acme.yml   # then set its host and port
 docker compose --env-file "clients/acme/.env" \
-    -f docker-compose.production.yml -f docker-compose.proxy.yml up -d
+    -f compose.yaml -f compose.production.yaml -f compose.proxy.yaml up -d
 ```
 
 - **The alias.** The overlay gives `app` the network alias `<COMPOSE_PROJECT_NAME>-app` on `proxy`,

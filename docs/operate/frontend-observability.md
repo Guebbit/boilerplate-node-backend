@@ -29,7 +29,7 @@ Grafana stack does well.
 ## What this repo recommends (lightweight)
 
 Two light additions cover both jobs while staying self-hosted and podman-friendly. Both already
-ship in `docker-compose.yml` (`alloy`; `umami` behind the opt-in `analytics` profile).
+ship in `compose.override.yaml` (`alloy`; `umami` behind the opt-in `analytics` profile).
 
 ### Errors + FE traces → Grafana Faro + Alloy
 
@@ -163,7 +163,7 @@ Because each job is behind an SDK boundary, switching is localized:
    ([`analytics/posthog.ts`](../understand/analytics.md)). Set `NODE_ANALYTICS_PROVIDER=posthog` and point it
    (and the frontend SDK) at a self-hosted PostHog host instead of Umami — the event
    taxonomy does not change.
-3. Add the new services to [`docker-compose.yml`](../build/docker-and-podman.md) — one file, both
+3. Add the new services to [`compose.override.yaml`](../build/docker-and-podman.md) — one file, both
    runtimes.
 
 ## Read next

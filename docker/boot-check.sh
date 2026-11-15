@@ -34,7 +34,7 @@ chmod 644 "$secrets"/*
 
 docker network create "$network" >/dev/null
 # The same pinned image the production compose runs (first `mongo:` line; the three are identical).
-mongo_image="$(sed -n -E 's/^ +image: (docker.io\/library\/mongo:[^@ ]+@sha256:[0-9a-f]+).*/\1/p' "$(dirname "$0")/../docker-compose.production.yml" | head -1)"
+mongo_image="$(sed -n -E 's/^ +image: (docker.io\/library\/mongo:[^@ ]+@sha256:[0-9a-f]+).*/\1/p' "$(dirname "$0")/../compose.yaml" | head -1)"
 docker run -d --name "$mongo" --network "$network" "$mongo_image" >/dev/null
 
 # No `--read-only` here, unlike the production compose: that flag alone would make the write check

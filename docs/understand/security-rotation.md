@@ -48,7 +48,7 @@ does nothing to an existing volume — change the password inside Mongo itself, 
 to match:
 
 ```bash
-docker compose --env-file "clients/<name>/.env" -f docker-compose.production.yml \
+docker compose --env-file "clients/<name>/.env" -f compose.yaml -f compose.production.yaml \
   exec database mongosh -u "$MONGO_ROOT_USER" -p --authenticationDatabase admin --eval '
     db.getSiblingDB("<MONGO_DB>").updateUser("<MONGO_APP_USER>", { pwd: "<new password>" })
   '

@@ -2,7 +2,7 @@
  * @module
  * The webhooks module's slice of the demo dataset — the one `shopModules` entry
  * that seeds nothing by default. A demo subscription pointing at the sink (`webhook-tester`
- * behind `webhook-tester-tls`, `docker-compose.yml`'s `integrations` profile, or the frontend's
+ * behind `webhook-tester-tls`, `compose.override.yaml`'s `integrations` profile, or the frontend's
  * own Cypress listener) is a FIXTURE, not code, per
  * `docs/modules/webhooks.md`'s "Seeing it work" section: it reads the sink's base url from
  * `NODE_WEBHOOK_DEMO_SINK_URL` and seeds nothing when that is unset, so a developer who never
