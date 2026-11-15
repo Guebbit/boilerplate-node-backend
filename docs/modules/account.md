@@ -420,6 +420,15 @@ Directive Art. 5(1), GDPR Art. 13(1)(a)), so a project without the shop keeps it
 Legal notice and Privacy page. `shop` requires the phone on top of this (CRD Art. 6(1)(c)); `orders`
 (withdrawal notice) and `invoicing` (seller block) read the rest.
 
+## Why it stays one module {#one-module}
+
+Identity is one generic subdomain. Keycloak, Auth0 and better-auth all keep it as one context.
+
+- Split by flow inside the module: one file per flow under `services/*.ts`.
+- Keep the `session/`, `oauth/` and `two-factor/` folders.
+- No capability modules (a "login" module, a "tokens" module): they would share one collection.
+- No external identity provider: the contract is the core of a two-backend boilerplate.
+
 ## Related pages
 
 - [Sessions](./account-sessions.md) — the token mechanics, in detail
