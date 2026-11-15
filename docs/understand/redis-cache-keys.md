@@ -9,6 +9,15 @@ What makes a cache key, how big an entry may be, and what headers say.
 
 ## The key is what the request asked for, not how it was written
 
+```mermaid
+flowchart LR
+    P["path"] --> K(["cache key"])
+    Q["query parameters<br/><i>only those the route declares</i>"] --> K
+    S["scopeKey<br/><i>e.g. guest</i>"] --> K
+    L["locale"] --> K
+    X["undeclared parameter<br/>or different parameter order"] -.->|"changes nothing"| K
+```
+
 Every route declares which query parameters change its answer, and the key is built from those
 plus the resolved `scopeKey` and the locale:
 

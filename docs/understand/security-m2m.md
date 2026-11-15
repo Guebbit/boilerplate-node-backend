@@ -9,6 +9,17 @@ API keys and other non-human credentials.
 
 ## Machine-to-machine credentials
 
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 45}}}%%
+flowchart LR
+    REQ["request with a bearer token"] --> G{"starts with sk_ ?"}
+    G -->|no| JWT["verify as a JWT<br/><i>a person signed in</i>"]
+    G -->|yes| CR["CredentialResolver<br/><i>filled by api-keys</i>"]
+    CR --> H["sha256 digest lookup<br/><i>constant-time compare</i>"]
+    H --> F["floor: the minter's permissions<br/><i>re-derived now</i> ∩ the key's snapshot"]
+    F --> OK["caller with a subset of the minter's reach"]
+```
+
 A JWT proves a PERSON signed in; a partner integration or a webhook consumer calling back into the
 API has no person behind it, and handing it a person's password would put every request in the
 audit trail under that person's name while carrying their whole reach. `api-keys` is the answer: a

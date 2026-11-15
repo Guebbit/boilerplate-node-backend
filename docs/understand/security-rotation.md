@@ -9,6 +9,17 @@ Rotating signing keys, database credentials and keys.
 
 ## Signing-key rotation
 
+```mermaid
+sequenceDiagram
+    participant Op as Operator
+    participant App as Deployment
+    Op->>App: ring = new,old (deploy)
+    Note over App: signs with ring[0] (new), verifies by kid against either
+    Op->>Op: wait the longest refresh window, or force logout-all
+    Op->>App: ring = new (deploy)
+    Note over App: tokens signed with old now answer 401, log in again
+```
+
 `NODE_TOKEN_ACCESS` and `NODE_TOKEN_REFRESH` are each an ordered, comma-separated **ring** of
 secrets, newest first — `account/session/config.ts`'s `getAccessTokenRing`/`getRefreshTokenRing`.
 `account/session/jwt.ts` signs every new token with `ring[0]` and stamps a `kid` header

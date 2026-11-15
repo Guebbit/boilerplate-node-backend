@@ -9,6 +9,16 @@ POST in depth: create, action, child writes, repeats, retries.
 
 ## POST
 
+```mermaid
+flowchart TD
+    P["POST"] --> C{"what does the path name?"}
+    C -->|"a collection<br/>/products"| CR["create → 201 + Location"]
+    C -->|"an action on one thing<br/>/orders/{id}/cancel"| AC["action → 200, the thing as it now stands"]
+    C -->|"a search"| SE["search → 200"]
+    CR --> R["retried with the same Idempotency-Key → same answer replayed"]
+    AC --> R
+```
+
 ### Create → 201
 
 - The body answered is the created resource itself ([Success Responses](../reference/responses.md)) — a checkout answers the order

@@ -7,6 +7,18 @@ audience: [developer, architect]
 
 The observability tools, one by one.
 
+| Tool                                            |
+| ----------------------------------------------- |
+| [Winston (logs)](#winston-logs)                 |
+| [Prometheus (metrics)](#prometheus-metrics)     |
+| [Alertmanager](#alertmanager)                   |
+| [OpenTelemetry (traces)](#opentelemetry-traces) |
+| [OTel Collector](#otel-collector)               |
+| [Tempo (trace storage)](#tempo-trace-storage)   |
+| [Loki (log storage)](#loki-log-storage)         |
+| [Alloy (log shipping)](#alloy-log-shipping)     |
+| [Grafana (UI)](#grafana-ui)                     |
+
 ## Observability stack
 
 Observability is the ability to understand what a running system is doing from its outputs. Three complementary signals cover the full picture:

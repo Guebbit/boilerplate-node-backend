@@ -7,6 +7,21 @@ audience: [developer, architect]
 
 The core stack and the data layer, tool by tool.
 
+| Tool                                                                                  |
+| ------------------------------------------------------------------------------------- |
+| [Node.js + TypeScript](#node-js-typescript)                                           |
+| [Express](#express)                                                                   |
+| [Zod](#zod)                                                                           |
+| [Helmet](#helmet)                                                                     |
+| [JWT (jose) and password hashing (argon2id)](#jwt-jose-and-password-hashing-argon2id) |
+| [express-rate-limit](#express-rate-limit)                                             |
+| [MongoDB](#mongodb)                                                                   |
+| [Mongoose](#mongoose)                                                                 |
+| [Redis](#redis)                                                                       |
+| [RabbitMQ](#rabbitmq)                                                                 |
+| [restic (backups)](#restic-backups)                                                   |
+| [rclone (the append-only second machine)](#rclone-the-append-only-second-machine)     |
+
 ## Core stack
 
 ### Node.js + TypeScript

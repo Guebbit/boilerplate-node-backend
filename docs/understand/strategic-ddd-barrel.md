@@ -9,6 +9,14 @@ Published language: what a module lets its siblings reach.
 
 ## 5. Published language — the barrel
 
+```mermaid
+flowchart LR
+    SIB["a sibling module"] ==> B["index.ts<br/><i>the barrel</i>"]
+    B --> OK["services · domain rules · events · emails<br/><i>export *</i><br/>model and presenter types<br/><i>export type *</i>"]
+    B -.-x NO["repository · model value · routes · controllers<br/>module.ts · factories.ts"]
+    SIB -. "blocked by ESLint" .-> NO
+```
+
 `index.ts` is the one surface a sibling may import, and ESLint stops anyone reaching past it — every
 module has one, structurally, so there is no "no barrel, therefore unreachable" escape hatch left.
 

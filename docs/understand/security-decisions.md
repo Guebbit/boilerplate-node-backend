@@ -7,6 +7,16 @@ audience: [developer, architect]
 
 Why a handful of narrow security choices were made as they were.
 
+| Decision                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------ |
+| [Why the metrics endpoint has its own credential](#why-the-metrics-endpoint-has-its-own-credential)          |
+| [Why search text is escaped before it reaches `$regex`](#why-search-text-is-escaped-before-it-reaches-regex) |
+| [Redis and RabbitMQ stay plaintext](#redis-and-rabbitmq-stay-plaintext)                                      |
+| [One environment switch](#one-environment-switch)                                                            |
+| [`trust proxy`, and the two ways to get it wrong](#trust-proxy-and-the-two-ways-to-get-it-wrong)             |
+| [401 or 403, and why the guards agree](#_401-or-403-and-why-the-guards-agree)                                |
+| [Why the SSE endpoints authenticate by cookie](#why-the-sse-endpoints-authenticate-by-cookie)                |
+
 ## Why the metrics endpoint has its own credential
 
 `/observability/metrics` cannot use the bearer token the other observability routes check
