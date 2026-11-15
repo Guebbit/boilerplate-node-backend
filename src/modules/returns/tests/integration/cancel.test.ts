@@ -26,6 +26,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 setupTestDb();
@@ -72,6 +73,7 @@ const paidAndDelivered = async () => {
     return { user, shirt, mug, orderId };
 };
 
+/** What the arranging helper hands each case. */
 type Fixture = Awaited<ReturnType<typeof paidAndDelivered>>;
 
 /** Open a return on the fixture and, unless it is a withdrawal, approve it. */

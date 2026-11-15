@@ -5,6 +5,7 @@
 import { projectReturnStatus } from '../../domain';
 import type { ProjectedReturn } from '../../domain';
 
+/** The ordered quantity per product, which the projection compares against. */
 const ordered = new Map([
     ['a', 2],
     ['b', 1]

@@ -24,7 +24,7 @@ import { productRepository } from '../../repository';
 setupTestDb();
 
 describe('GET /products — the filters it now publishes', () => {
-    /*
+    /**
      * `title` and `active` were applied by the repository and named nowhere in the contract.
      * `title` is the one of the pair a stranger can use; `active` is admin-effective, because a
      * stranger's visibility scope pins `active: true` and the two clauses contradict rather than
@@ -48,7 +48,7 @@ describe('GET /products — the filters it now publishes', () => {
         expect(stranger.status).toBe(200);
         expect(stranger.body.items.map((p: { title: string }) => p.title)).toEqual(['Walnut desk']);
 
-        /*
+        /**
          * The invariant, asserted rather than the page shape: a stranger asking for the unlisted
          * rows does not get them. HOW that is achieved differs by backend — here the caller's scope
          * is merged last and overwrites the filter, so the answer is the active catalogue; the PHP
@@ -92,9 +92,11 @@ describe('GET /products', () => {
         expect(response.body.items).toHaveLength(2);
     });
 
-    // openapi.yaml declares `minimum: 1` / `maximum: 100` on these; an endpoint that quietly
-    // rewrote an out-of-range request instead of rejecting it was advertising a limit it never
-    // applied. Every search endpoint now answers the same way — see @infrastructure/http/schemas.
+    /**
+     * openapi.yaml declares `minimum: 1` / `maximum: 100` on these; an endpoint that quietly
+     * rewrote an out-of-range request instead of rejecting it was advertising a limit it never
+     * applied. Every search endpoint now answers the same way — see @infrastructure/http/schemas.
+     */
     it.each(['pageSize=500', 'page=0', 'page=abc', 'page=1.5'])(
         'rejects out-of-range pagination (%s)',
         async (queryString) => {
@@ -115,8 +117,10 @@ describe('GET /products', () => {
         expect(response.body.meta.pageSize).toBe(10);
     });
 
-    // Tier A: `id` is a batch filter. `?id=` repeated validates against the widened array schema;
-    // over the declared cap it's a 422, matching `PageSize.maximum`.
+    /**
+     * Tier A: `id` is a batch filter. `?id=` repeated validates against the widened array schema;
+     * over the declared cap it's a 422, matching `PageSize.maximum`.
+     */
     it('accepts a repeated ?id=, and rejects more than 100', async () => {
         const one = await createProduct();
         const other = await createProduct();
@@ -149,8 +153,10 @@ describe('GET /products', () => {
         expect(response.body.items).toHaveLength(1);
     });
 
-    // `$in` casts every element — one malformed id anywhere in the batch is a 422 about the
-    // request, not a page that silently drops it.
+    /**
+     * `$in` casts every element — one malformed id anywhere in the batch is a 422 about the
+     * request, not a page that silently drops it.
+     */
     it('rejects a batch with one malformed id, valid ids included', async () => {
         const one = await createProduct();
 
@@ -159,9 +165,11 @@ describe('GET /products', () => {
         expect(response.status).toBe(422);
     });
 
-    // The shared `Text` schema (`shared/contracts/openapi.root.yaml`) caps free-text search at
-    // 200 chars — an anonymous caller could otherwise hand Mongo an unbounded pattern. Every
-    // search endpoint inherits this through `$ref`.
+    /**
+     * The shared `Text` schema (`shared/contracts/openapi.root.yaml`) caps free-text search at
+     * 200 chars — an anonymous caller could otherwise hand Mongo an unbounded pattern. Every
+     * search endpoint inherits this through `$ref`.
+     */
     it('rejects a search text over 200 characters, instead of forwarding it to Mongo', async () => {
         const response = await api().get(`/products?text=${'a'.repeat(201)}`);
 
@@ -177,8 +185,10 @@ describe('POST /products/search', () => {
         expect(response.status).toBe(200);
     });
 
-    // `title`, `category` and `tag` build the response-cache key before the controller runs, so an
-    // unbounded one would let an anonymous caller mint a key as long as the body limit allows.
+    /**
+     * `title`, `category` and `tag` build the response-cache key before the controller runs, so an
+     * unbounded one would let an anonymous caller mint a key as long as the body limit allows.
+     */
     it.each(['title', 'category', 'tag'])('rejects a %s over 200 characters', async (field) => {
         const body = await api()
             .post('/products/search')
@@ -225,6 +235,7 @@ describe('promise dates on the list reads', () => {
     });
 });
 
+/** The titles of a list response, in the order the API returned them. */
 const titlesOf = (response: { body: { items: { title: string }[] } }) =>
     response.body.items.map((product) => product.title);
 
@@ -334,8 +345,10 @@ describe('GET /products/{id}', () => {
         expect(response.status).toBe(404);
     });
 
-    // Every money-carrying resource carries its own currency — never a hard-coded EUR on
-    // the frontend's side.
+    /**
+     * Every money-carrying resource carries its own currency — never a hard-coded EUR on
+     * the frontend's side.
+     */
     it('reads the live NODE_DEFAULT_CURRENCY, not a fixed default', () =>
         withEnvironmentOverrides({ NODE_DEFAULT_CURRENCY: 'GBP' }, async () => {
             const product = await createProduct();

@@ -75,7 +75,6 @@ const paymentOf = async (orderId: string) => {
 
 /**
  * One field of the stored payment.
- * @param orderId - the order
  * @param key - the payment field to read
  */
 const field = <TKey extends 'amountRefunded' | 'refunds' | 'handledCancelEvents' | 'status'>(
@@ -175,8 +174,10 @@ describe('a cancel event that found nothing to return', () => {
         await withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { orderId } = await paidCardOrder();
             const payment = await paymentOf(orderId);
-            // Staff already asked for everything back; the provider refused it, so the record
-            // holds the whole amount and the cancel event has nothing left to open.
+            /**
+             * Staff already asked for everything back; the provider refused it, so the record
+             * holds the whole amount and the cancel event has nothing left to open.
+             */
             setFakeRefundFailure(String(payment.providerRef), 'insufficient_funds');
             await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'));
             expect(await field(orderId, 'amountRefunded')).toBe('100.00');

@@ -4,7 +4,7 @@
  * products appear, one entry per language with its alternates, `lastmod`, the split at the file
  * limit, and the 404 for a file the index does not list.
  *
- * @see docs/modules/sitemap.md
+ * @see docs/modules/sitemap.md#the-files
  */
 
 import { Readable } from 'node:stream';

@@ -14,9 +14,12 @@ import {
     streamNotifications
 } from '@modules/notifications/services/stream';
 
+/** The stream's heartbeat period, copied here so a change to it is noticed. */
 const HEARTBEAT_INTERVAL_MS = 15_000;
+/** How often the stream re-checks the caller's permission, copied here so a change is noticed. */
 const REVERIFY_INTERVAL_MS = 30_000;
 
+/** The slice of an Express response the stream writes to, with every write recorded. */
 interface FakeResponse {
     response: Response;
     frames: string[];

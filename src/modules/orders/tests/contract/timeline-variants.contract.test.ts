@@ -25,6 +25,7 @@ interface Schema {
     discriminator?: { propertyName: string; mapping: Record<string, string> };
 }
 
+/** Every schema of the module contract, parsed from its own openapi.yaml. */
 const {
     components: { schemas }
 } = parse(readFileSync(path.resolve(__dirname, '../../openapi.yaml'), 'utf8')) as {

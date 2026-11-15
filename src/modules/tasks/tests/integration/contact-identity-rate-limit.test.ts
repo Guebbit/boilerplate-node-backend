@@ -48,7 +48,7 @@ describe('contactLimiters', () => {
 describe('mounted on the real routes', () => {
     setupTestDb();
 
-    /*
+    /**
      * `ratelimit` (draft-7) headers are the limiter's fingerprint, same as
      * `auth-hardening.test.ts`'s login case — present means the array actually reached the route,
      * not just that the module compiles.

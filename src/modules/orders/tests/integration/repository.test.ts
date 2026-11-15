@@ -45,8 +45,10 @@ describe('orderRepository', () => {
             });
             const order = await createOrder(user, [toOrderItem(product, 1)]);
 
-            // The product object is embedded, not referenced by ObjectId — already typed as the
-            // frozen snapshot, so no cast is needed to read its plain fields.
+            /**
+             * The product object is embedded, not referenced by ObjectId — already typed as the
+             * frozen snapshot, so no cast is needed to read its plain fields.
+             */
             const snapshot = order.items[0].product;
             expect(snapshot.title).toBe('Snapshot Test');
             expect(snapshot.price).toBe('29.99');
@@ -71,9 +73,11 @@ describe('orderRepository', () => {
             await createOrder(user, [toOrderItem(product, 1)]);
             await createOrder(user, [toOrderItem(product, 2)]);
 
-            // An empty $match stage matches every document.
-            // MongoDB (and Mongoose) require at least one stage; passing an
-            // empty array throws MongooseError: Aggregate has empty pipeline.
+            /**
+             * An empty $match stage matches every document.
+             * MongoDB (and Mongoose) require at least one stage; passing an
+             * empty array throws MongooseError: Aggregate has empty pipeline.
+             */
             const results = await orderRepository.aggregate([{ $match: {} }]);
 
             expect(results).toHaveLength(2);
@@ -144,8 +148,10 @@ describe('orderRepository', () => {
             }
 
             const page2 = await orderRepository.aggregate([
-                // The tiebreaker rides along here too: a page is only well-defined when the sort
-                // preceding its `$skip` is total. See `DEFAULT_SORT`.
+                /**
+                 * The tiebreaker rides along here too: a page is only well-defined when the sort
+                 * preceding its `$skip` is total. See `DEFAULT_SORT`.
+                 */
                 { $sort: DEFAULT_SORT },
                 { $skip: 3 },
                 { $limit: 10 }
@@ -175,12 +181,16 @@ describe('orderRepository', () => {
                 orderRepository.ownerScope(String(user._id))
             );
 
-            // `_id` present on both, not just `id` — the property only a hydrated document
-            // carries, and the one a wire-shaped row would have already dropped.
+            /**
+             * `_id` present on both, not just `id` — the property only a hydrated document
+             * carries, and the one a wire-shaped row would have already dropped.
+             */
             expect(asAdmin?._id.toString()).toBe(expected);
             expect(scopedToOwner?._id.toString()).toBe(expected);
-            // `.toJSON` is a Mongoose document method — proof this is a real document, not a
-            // plain object shaped like one.
+            /**
+             * `.toJSON` is a Mongoose document method — proof this is a real document, not a
+             * plain object shaped like one.
+             */
             expect(typeof asAdmin?.toJSON).toBe('function');
             expect(typeof scopedToOwner?.toJSON).toBe('function');
         });

@@ -18,7 +18,7 @@ import { OrderStatus } from '@types';
 import { ordersAuditActions } from '../../audit';
 import { orderService } from '../../services';
 
-/*
+/**
  * The audit port is REPLACED, not spied on — see `cancel.test.ts` for the full reasoning
  * (`jest.spyOn` cannot redefine the non-configurable getter a CommonJS namespace import exposes).
  */
@@ -66,8 +66,10 @@ describe('the file', () => {
         );
 
         const [header, ...lines] = file.trim().split('\n');
-        // The contract's own order (`orders/openapi.yaml`), written out: a column swapped in the
-        // code's constant would otherwise move the file and this check together.
+        /**
+         * The contract's own order (`orders/openapi.yaml`), written out: a column swapped in the
+         * code's constant would otherwise move the file and this check together.
+         */
         expect(header).toBe(
             'createdAt,orderNumber,status,paymentStatus,fulfillmentStatus,returnStatus,email,lines,units,total,currency,paymentMethod,paidAt'
         );

@@ -28,11 +28,13 @@ describe('userSchema — what a user must carry', () => {
     });
 
     it('constrains the email to something that can be delivered to', () => {
-        // The schema's own `match`, exercised through the compiled pattern rather than restated:
-        // this is the last line of defence for accounts created outside the Zod-validated route
-        // (OAuth signup — see `account/services/oauth.ts`), and every account-recovery flow
-        // depends on the address being reachable. Loose by design: a plus-tag and a long TLD are
-        // real shapes an inbox can hold, so the pattern only refuses what could never be one.
+        /**
+         * The schema's own `match`, exercised through the compiled pattern rather than restated:
+         * this is the last line of defence for accounts created outside the Zod-validated route
+         * (OAuth signup — see `account/services/oauth.ts`), and every account-recovery flow
+         * depends on the address being reachable. Loose by design: a plus-tag and a long TLD are
+         * real shapes an inbox can hold, so the pattern only refuses what could never be one.
+         */
         const pattern = pathOptions(userSchema, 'email').match as RegExp;
 
         expect(pattern.test('ada@example.com')).toBe(true);
@@ -44,9 +46,11 @@ describe('userSchema — what a user must carry', () => {
     });
 
     it('anchors the address, so nothing may be smuggled around it', () => {
-        // `^` and `$`. Unanchored, the pattern matches a valid address ANYWHERE in the string, so
-        // `"Ada" <ada@example.com> evil@attacker.test` is accepted and stored whole — a display
-        // name and a second address riding along in a field every recovery email is sent to.
+        /**
+         * `^` and `$`. Unanchored, the pattern matches a valid address ANYWHERE in the string, so
+         * `"Ada" <ada@example.com> evil@attacker.test` is accepted and stored whole — a display
+         * name and a second address riding along in a field every recovery email is sent to.
+         */
         const pattern = pathOptions(userSchema, 'email').match as RegExp;
 
         expect(pattern.test('  ada@example.com')).toBe(false);
@@ -57,11 +61,13 @@ describe('userSchema — what a user must carry', () => {
     });
 
     it('creates a user as active, with verification unproven', () => {
-        // `verifiedAt: null` matters: a default that backdates it makes the whole email
-        // verification flow decorative, since every new account would already satisfy it. The
-        // role itself has no schema default — see `@modules/access`'s
-        // `assignDefaultRole`, the one place `unverified` (the same fail-safe direction) can be
-        // granted, as a membership rather than a document field.
+        /**
+         * `verifiedAt: null` matters: a default that backdates it makes the whole email
+         * verification flow decorative, since every new account would already satisfy it. The
+         * role itself has no schema default — see `@modules/access`'s
+         * `assignDefaultRole`, the one place `unverified` (the same fail-safe direction) can be
+         * granted, as a membership rather than a document field.
+         */
         expect(defaultOf(userSchema, 'active')).toBe(true);
         expect(defaultOf(userSchema, 'verifiedAt')).toBeNull();
     });
@@ -74,7 +80,7 @@ describe('userSchema — what a user must carry', () => {
         expect(defaultOf(userSchema, 'imageUrl')).toBeUndefined();
     });
 
-    /*
+    /**
      * The case above can't tell a working `??` from a broken one: this checkout's env vars equal
      * the hardcoded fallbacks, so a wrong expression would still pass. Defaults are captured at
      * module load, so telling them apart means reloading the module with a different environment.
@@ -93,9 +99,11 @@ describe('userSchema — what a user must carry', () => {
     );
 
     it('leaves the soft-delete marker unset, and typed as a Date', () => {
-        // The type is load-bearing: every visibility scope tests `deletedAt` with `$exists`, and
-        // a Mixed path would accept the ISO string the contract uses on the wire — after which
-        // the two representations sort and compare differently.
+        /**
+         * The type is load-bearing: every visibility scope tests `deletedAt` with `$exists`, and
+         * a Mixed path would accept the ISO string the contract uses on the wire — after which
+         * the two representations sort and compare differently.
+         */
         expect(defaultOf(userSchema, 'deletedAt')).toBeUndefined();
         expect(typeOf(userSchema, 'deletedAt')).toBe('Date');
     });
@@ -107,14 +115,18 @@ describe('userSchema — what a user must carry', () => {
 
 describe('userSchema — the credentials never load by accident', () => {
     it('withholds the password hash from every query that does not ask for it', () => {
-        // The first of the two layers. Without it, `.lean()` reads — which skip the transform
-        // entirely — return the hash, and so does anything that spreads a document.
+        /**
+         * The first of the two layers. Without it, `.lean()` reads — which skip the transform
+         * entirely — return the hash, and so does anything that spreads a document.
+         */
         expect(pathOptions(userSchema, 'password').select).toBe(false);
     });
 
     it('strips the secrets again at serialization, independently of the projection', () => {
-        // The second layer. `omit` runs on the way out, so a query that DID ask for the password
-        // — the login path must — still cannot serialize it by accident.
+        /**
+         * The second layer. `omit` runs on the way out, so a query that DID ask for the password
+         * — the login path must — still cannot serialize it by accident.
+         */
         const serialized = applyUserTransform({
             _id: 'abc',
             email: 'ada@example.com',
@@ -133,8 +145,10 @@ describe('userSchema — the credentials never load by accident', () => {
     });
 
     it('leaks nothing through a JSON round trip of the serialized user', () => {
-        // The assertion that survives a future field being added beside `password`: search the
-        // rendered output for the secret itself rather than for the key it lived under.
+        /**
+         * The assertion that survives a future field being added beside `password`: search the
+         * rendered output for the secret itself rather than for the key it lived under.
+         */
         const rendered = JSON.stringify(
             applyUserTransform({
                 _id: 'abc',
@@ -148,8 +162,10 @@ describe('userSchema — the credentials never load by accident', () => {
 
 describe('userSchema — a linked OAuth identity', () => {
     it('requires the provider, its subject id, and when it was linked', () => {
-        // An entry missing any of these can't be matched back by `users_oauth_identity`
-        // (provider+providerId) or shown on a future "connected accounts" list (connectedAt).
+        /**
+         * An entry missing any of these can't be matched back by `users_oauth_identity`
+         * (provider+providerId) or shown on a future "connected accounts" list (connectedAt).
+         */
         expect(requiredPaths(subSchema(userSchema, 'oauthAccounts'))).toEqual([
             'connectedAt',
             'provider',
@@ -168,9 +184,11 @@ describe('userSchema — a linked OAuth identity', () => {
 
 describe('userSchema — indexes', () => {
     it('declares exactly the four documented indexes', () => {
-        // `users_oauth_identity` is the OAuth callback's equivalent, keyed on (provider, providerId).
-        // `users_pending_email` is the swap-time half of the `PUT /account` collision check — see
-        // its own comment on the schema. `users_purge_at` serves the purge job's due read.
+        /**
+         * `users_oauth_identity` is the OAuth callback's equivalent, keyed on (provider, providerId).
+         * `users_pending_email` is the swap-time half of the `PUT /account` collision check — see
+         * its own comment on the schema. `users_purge_at` serves the purge job's due read.
+         */
         expect(indexSpecs(userSchema)).toEqual([
             'users_email: email+1',
             'users_oauth_identity: oauthAccounts.provider+1, oauthAccounts.providerId+1',
@@ -180,10 +198,12 @@ describe('userSchema — indexes', () => {
     });
 
     it('makes one account per email address, one per linked identity, and one per pending change, a database fact', () => {
-        // Uniqueness here is an authentication invariant, not hygiene: two rows for one address
-        // (or two accounts claiming the same provider identity, or two racing to claim the same
-        // pending address) make "the user this credential names" ambiguous at exactly the moment
-        // it is checked.
+        /**
+         * Uniqueness here is an authentication invariant, not hygiene: two rows for one address
+         * (or two accounts claiming the same provider identity, or two racing to claim the same
+         * pending address) make "the user this credential names" ambiguous at exactly the moment
+         * it is checked.
+         */
         expect(indexOptionSpecs(userSchema)).toEqual([
             'users_email: unique=true',
             'users_oauth_identity: partialFilterExpression={"oauthAccounts.0":{"$exists":true}}, unique=true',
@@ -208,9 +228,11 @@ const preSaveHook = (): ((this: unknown) => Promise<void> | undefined) => {
         };
     }>(userSchema).s.hooks._pres;
 
-    // Mongoose registers its OWN pre-save hooks first, so selecting `[0]` would grab an internal
-    // one that throws `this.$getAllSubdocs is not a function` on a plain object — a broken test,
-    // not "wrong hook". Selecting by what the hook does avoids that.
+    /**
+     * Mongoose registers its OWN pre-save hooks first, so selecting `[0]` would grab an internal
+     * one that throws `this.$getAllSubdocs is not a function` on a plain object — a broken test,
+     * not "wrong hook". Selecting by what the hook does avoids that.
+     */
     const ours = (pres.get('save') ?? []).filter(({ fn }) =>
         fn.toString().includes("isModified('password')")
     );
@@ -241,8 +263,10 @@ describe('userSchema — the pre-save password hook', () => {
     });
 
     it('leaves an untouched password alone', async () => {
-        // The guard that matters: without it, every profile update re-hashes the stored HASH,
-        // and the account becomes unloggable-into with no error anywhere.
+        /**
+         * The guard that matters: without it, every profile update re-hashes the stored HASH,
+         * and the account becomes unloggable-into with no error anywhere.
+         */
         const stored = await hashPassword(PLAIN_PASSWORD);
         const document = { password: stored, isModified: jest.fn().mockReturnValue(false) };
 

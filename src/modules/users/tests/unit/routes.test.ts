@@ -54,10 +54,12 @@ describe('user routes — authorization', () => {
     it.each(ALL)('%s carries an identity guard, then a permission guard', (signature) => {
         const guards = guardsOn(router, signature);
 
-        // All three, in order. `getAuth` populates the context, the identity guard demands one,
-        // `requirePermission` reads the role off it — `requirePermission` first would read a role
-        // from nothing. This module's identity guard is `isAuthOrCredential`: the directory is a
-        // tenant surface an api key may sync against.
+        /**
+         * All three, in order. `getAuth` populates the context, the identity guard demands one,
+         * `requirePermission` reads the role off it — `requirePermission` first would read a role
+         * from nothing. This module's identity guard is `isAuthOrCredential`: the directory is a
+         * tenant surface an api key may sync against.
+         */
         const identity = identityGuardIndex(guards);
 
         expect(guards).toContain('getAuth');
@@ -68,8 +70,10 @@ describe('user routes — authorization', () => {
     });
 
     it('has no public endpoint at all', () => {
-        // The directory is admin-only in full. This is the assertion that fails if someone mounts
-        // a "harmless" public read above the gate.
+        /**
+         * The directory is admin-only in full. This is the assertion that fails if someone mounts
+         * a "harmless" public read above the gate.
+         */
         const unguarded = routeSignatures(router).filter(
             (signature) => !guardsOn(router, signature).includes('requirePermissionGuard')
         );
@@ -79,8 +83,10 @@ describe('user routes — authorization', () => {
 });
 
 describe('user routes — caching and uploads', () => {
-    // An admin-only answer, so none of the reads may go through the shared Redis cache — RFC 9111
-    // §3.5. `privateNoCache` lets the BROWSER keep its own copy of a GET, revalidated every time.
+    /**
+     * An admin-only answer, so none of the reads may go through the shared Redis cache — RFC 9111
+     * §3.5. `privateNoCache` lets the BROWSER keep its own copy of a GET, revalidated every time.
+     */
     it.each(['GET /', 'GET /:id'])('%s is never Redis-cached, only privateNoCache', (signature) => {
         const chain = chainOf(router, signature);
 

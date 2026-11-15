@@ -22,6 +22,7 @@ const expectNoCredentials = (payload: unknown) => {
 };
 
 // A user, as a credential-exposure test seeds one.
+/** A user created with a password, the shape the email-uniqueness cases start from. */
 const withCredentials = () => createUser();
 
 describe('email is case-insensitive', () => {
@@ -104,8 +105,10 @@ describe('user credential exposure', () => {
             'createdAt',
             'email',
             'id',
-            // The user's preferred language. Public rather than stripped: the client shows
-            // it in the profile and writes it back, and it is in the `User` contract.
+            /**
+             * The user's preferred language. Public rather than stripped: the client shows
+             * it in the profile and writes it back, and it is in the `User` contract.
+             */
             'locale',
             'updatedAt',
             'username'
@@ -114,8 +117,10 @@ describe('user credential exposure', () => {
         it.each([
             // absent until it is: the wire leaves out a stored null
             { state: 'unverified', overrides: {}, expected: BASE_PROPERTIES },
-            // `verifiedAt` is WHEN the address was confirmed: in the `User` contract, informational
-            // only (the membership role is what `checkout:Cart` actually reads).
+            /**
+             * `verifiedAt` is WHEN the address was confirmed: in the `User` contract, informational
+             * only (the membership role is what `checkout:Cart` actually reads).
+             */
             {
                 state: 'verified',
                 overrides: { verifiedAt: new Date() },
@@ -124,14 +129,18 @@ describe('user credential exposure', () => {
         ])('emits only the OpenAPI User properties ($state)', async ({ overrides, expected }) => {
             const user = await createUser(overrides);
 
-            // No `role` here: it is a membership fact now, never a column on this document —
-            // `@modules/access` is the sole authority, and `presentUser` (`../../presenter`) takes
-            // the caller's current role as an explicit parameter instead of reading one off the schema.
+            /**
+             * No `role` here: it is a membership fact now, never a column on this document —
+             * `@modules/access` is the sole authority, and `presentUser` (`../../presenter`) takes
+             * the caller's current role as an explicit parameter instead of reading one off the schema.
+             */
             expect(Object.keys(user.toJSON() as object).toSorted()).toEqual(expected);
         });
 
-        // `active` and `deletedAt` are independent: a deleted-but-active account and a
-        // live-but-deactivated one are states a derived `active` cannot express.
+        /**
+         * `active` and `deletedAt` are independent: a deleted-but-active account and a
+         * live-but-deactivated one are states a derived `active` cannot express.
+         */
         it('keeps active independent of deletedAt', async () => {
             const cases = [
                 { email: 'live-active@example.com', active: true, deletedAt: undefined },
@@ -153,8 +162,10 @@ describe('user credential exposure', () => {
             expect((user.toJSON() as { active: boolean }).active).toBe(true);
         });
 
-        // `deletedAt` is exposed, as `Product` exposes it: stripping it would leave deletion with
-        // no representation, and a staff list couldn't tell a deleted account from a live one.
+        /**
+         * `deletedAt` is exposed, as `Product` exposes it: stripping it would leave deletion with
+         * no representation, and a staff list couldn't tell a deleted account from a live one.
+         */
         it('exposes deletedAt on a soft-deleted account', async () => {
             const deletedAt = new Date('2026-03-04T05:06:07.000Z');
             const user = await createUser({ email: 'gone@example.com', deletedAt });
@@ -166,8 +177,10 @@ describe('user credential exposure', () => {
             const user = await createUser({ email: 'gone-too@example.com', deletedAt: new Date() });
             const serialized = user.toJSON() as Record<string, unknown>;
 
-            // Exposing `deletedAt` must not loosen the other: the password is stripped because it
-            // must never leave the server, which was never true of `deletedAt`.
+            /**
+             * Exposing `deletedAt` must not loosen the other: the password is stripped because it
+             * must never leave the server, which was never true of `deletedAt`.
+             */
             expect(serialized.password).toBeUndefined();
         });
 

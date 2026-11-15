@@ -28,6 +28,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 setupTestDb();
@@ -48,6 +49,7 @@ const storedUser = (id: string) => userRepository.findById(id);
 /** The stored hold, read past the service. */
 const storedHold = (id: string) => storedUser(id).then((user) => user?.purchaseHold);
 
+/** One day in milliseconds. */
 const DAY = 24 * 60 * 60 * 1000;
 
 /** The rule behind an automatic hold, as the buyer's mail states it. */
@@ -534,8 +536,10 @@ describe('takeAutomaticPurchaseHold', () => {
             reason: 'staff',
             note: 'staff review'
         });
-        // The conditional write lost, so it must not have flagged the account either (placing a
-        // manual hold clears the flag first, so none is left over).
+        /**
+         * The conditional write lost, so it must not have flagged the account either (placing a
+         * manual hold clears the flag first, so none is left over).
+         */
         const stored = await userRepository.findById(buyer.id);
         expect(stored?.purchaseHoldFlaggedAt).toBeUndefined();
     });
@@ -595,8 +599,10 @@ describe('what the wire shows', () => {
 const exportedProfile = (id: string): Promise<{ purchaseHold?: object }> =>
     accountUserService
         .findByIdWithCredentials(id)
-        // The export writes `JSON.stringify(section)`: this is that, read back, because the
-        // `toJSON` transform runs only in the stringify (`structuredClone` would skip it).
+        /**
+         * The export writes `JSON.stringify(section)`: this is that, read back, because the
+         * `toJSON` transform runs only in the stringify (`structuredClone` would skip it).
+         */
         // eslint-disable-next-line unicorn/prefer-structured-clone -- structuredClone bypasses toJSON, which is the thing under test
         .then((profile) => JSON.parse(JSON.stringify(profile)) as { purchaseHold?: object });
 

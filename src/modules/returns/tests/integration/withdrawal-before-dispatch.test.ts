@@ -33,6 +33,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 setupTestDb();
@@ -89,8 +90,10 @@ describe('a withdrawal before dispatch on a paid order', () => {
 
         // Both listeners of the one event run inside the relay pass; the drain waits for both.
         await settleOutboxNudges();
-        // The refund is the order's own, not the return's: it carries no `returnId`, and the
-        // return — closed already — is not closed a second time by it.
+        /**
+         * The refund is the order's own, not the return's: it carries no `returnId`, and the
+         * return — closed already — is not closed a second time by it.
+         */
         expect(refunds).toEqual([expect.objectContaining({ amount: '40.00', full: true })]);
         expect(refunds[0].returnId).toBeUndefined();
         const notes = await invoicingService.findCreditNotesForOrder(orderId);
@@ -150,8 +153,10 @@ describe('a withdrawal before dispatch on a paid order', () => {
         const named = (template: string) =>
             mockEnqueueEmail.mock.calls.filter(([, name]) => name === template);
         await settleOutboxNudges();
-        // The refund mail starts inside `announceRefund` with `void`, so `settleOutboxNudges`
-        // returns before it is sent.
+        /**
+         * The refund mail starts inside `announceRefund` with `void`, so `settleOutboxNudges`
+         * returns before it is sent.
+         */
         await eventually(() => named('payments.refund-issued').length > 0);
 
         expect(named('payments.refund-issued')).toHaveLength(1);

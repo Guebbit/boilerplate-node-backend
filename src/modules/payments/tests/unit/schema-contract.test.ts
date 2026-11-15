@@ -21,11 +21,13 @@ import {
 
 describe('paymentSchema', () => {
     it('requires everything needed to say what was paid, for which order', () => {
-        // `cardLast4` is absent: not every provider has a card, and the fake one has no digits to
-        // report. `status` carries a default instead, which is why it is not required either.
-        // `userId` is deliberately absent too — account erasure unsets it, the same treatment
-        // as `orders`'. `method` IS required: every path that creates a payment (the intent, and
-        // recording one by hand) sets it, so there is never a row that does not say how.
+        /**
+         * `cardLast4` is absent: not every provider has a card, and the fake one has no digits to
+         * report. `status` carries a default instead, which is why it is not required either.
+         * `userId` is deliberately absent too — account erasure unsets it, the same treatment
+         * as `orders`'. `method` IS required: every path that creates a payment (the intent, and
+         * recording one by hand) sets it, so there is never a row that does not say how.
+         */
         expect(requiredPaths(paymentSchema)).toEqual([
             'amount',
             'amountRefunded',
@@ -48,8 +50,10 @@ describe('paymentSchema', () => {
     });
 
     it('refuses a negative amount', () => {
-        // A negative charge is a refund issued through the wrong door — one that no refund path
-        // audits, reconciles or reports.
+        /**
+         * A negative charge is a refund issued through the wrong door — one that no refund path
+         * audits, reconciles or reports.
+         */
         expect(refuses(paymentSchema, 'amount', -0.01)).toBe(true);
         expect(refuses(paymentSchema, 'amount', 0)).toBe(false);
     });
@@ -61,8 +65,10 @@ describe('paymentSchema', () => {
     });
 
     it('restricts status to the contract enum and starts unconfirmed', () => {
-        // The default is the safe end: a freshly created payment has taken no money. Defaulting
-        // to anything else would mark an unpaid order paid the moment its intent was created.
+        /**
+         * The default is the safe end: a freshly created payment has taken no money. Defaulting
+         * to anything else would mark an unpaid order paid the moment its intent was created.
+         */
         expect(enumOf(paymentSchema, 'status')).toEqual(Object.values(PaymentStatus));
         expect(defaultOf(paymentSchema, 'status')).toBe(PaymentStatus.requires_confirmation);
     });

@@ -31,6 +31,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 setupTestDb();
@@ -46,7 +47,6 @@ afterEach(() => {
 
 /**
  * A product's counters once the outbox has delivered the cache refresh a late payment announces.
- * @param productId - the product
  */
 const levelOf = (productId: string) =>
     settleOutboxNudges()
@@ -167,8 +167,10 @@ describe('a card payment that lands on a released hold', () => {
 
         expect(await orderStatusOf(orderId)).toBe('canceled');
         expect(await levelOf(productId)).toEqual({ onHand: 5, reserved: 0 });
-        // The canceled order never reached the retake: the ledger holds the hold and its
-        // expiry, with no reserve-then-release pair added by the late money.
+        /**
+         * The canceled order never reached the retake: the ledger holds the hold and its
+         * expiry, with no reserve-then-release pair added by the late money.
+         */
         const ledger = await inventoryService.listMovements({ productId });
         expect(ledger.items.map(({ reason }) => reason).toSorted()).toEqual(['expire', 'reserve']);
     });
@@ -238,8 +240,10 @@ describe('an order handed money it could not take', () => {
         await heldOrderFor(await createUser({ email: 'stranger3@example.com' }), product);
         await fakePaymentProvider.confirm(providerRef, 'pm_card_visa');
         await paymentService.applyWebhookSettlement(providerRef);
-        // The late cancellation ends the order: canceled, never paid, a succeeded payment and a
-        // refund pointing at it.
+        /**
+         * The late cancellation ends the order: canceled, never paid, a succeeded payment and a
+         * refund pointing at it.
+         */
         await orderService.expireReservationById(orderId);
         await settleOutboxNudges();
         const canceled = await orderService.getById(orderId);

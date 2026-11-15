@@ -11,6 +11,7 @@ import { REPO_ROOT, MODULES_ROOT } from '@tests/paths';
 import { orderConfirmEmail, withdrawalNotice, type OrderLines } from '../../emails';
 import { orderFrontendLink } from '../../config';
 
+/** The order the notice refers to. */
 const ORDER_ID = 'order-1';
 
 /** A line of the given kind; `requiresShipping` and `noWithdrawal` are the two flags that decide. */
@@ -19,7 +20,9 @@ const line = (
     flags: { requiresShipping?: boolean; noWithdrawal?: boolean } = {}
 ): OrderLines['items'][number] => ({ quantity: 1, product: { title, price: '10.00', ...flags } });
 
+/** A delivery of physical goods: the notice offers the withdrawal right. */
 const GOODS: OrderLines = { items: [line('Dog Bed')], currency: 'EUR' };
+/** A digital-only order, to which the physical-goods wording does not apply. */
 const DIGITAL: OrderLines = {
     items: [line('E-book', { requiresShipping: false })],
     currency: 'EUR'

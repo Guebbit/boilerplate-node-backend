@@ -9,8 +9,10 @@ import { addRawFigures, emptyRawFigures, figuresOf, rateOf } from '../../domain/
 const eur = (amount: number) => toMinorUnits(amount, 'EUR');
 
 describe('figuresOf', () => {
-    // Two orders: 100.00 + 40.00 goods net, 10.00 + 0.00 shipping net, VAT 24.20 + 8.80, and one
-    // credit note that gives back 40.00 goods net, 8.80 VAT (48.80 gross).
+    /**
+     * Two orders: 100.00 + 40.00 goods net, 10.00 + 0.00 shipping net, VAT 24.20 + 8.80, and one
+     * credit note that gives back 40.00 goods net, 8.80 VAT (48.80 gross).
+     */
     const raw = {
         ...emptyRawFigures(),
         orders: 2,

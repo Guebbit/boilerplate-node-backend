@@ -32,8 +32,10 @@ const TAG = 'products';
 
 describe('product routes — what is mounted', () => {
     it('mounts exactly the documented endpoints, in the documented order', () => {
-        // Stated in full rather than asserted one at a time: the point is that nothing ELSE is
-        // mounted, which a per-route check cannot say.
+        /**
+         * Stated in full rather than asserted one at a time: the point is that nothing ELSE is
+         * mounted, which a per-route check cannot say.
+         */
         expect(routeSignatures(router)).toEqual([
             'POST /search',
             'GET /',
@@ -57,16 +59,20 @@ describe('product routes — what is mounted', () => {
     });
 
     it('runs getAuth for every route, so admins get the wider scope', () => {
-        // Router-level, not per-route: an admin reading `GET /:id` sees a soft-deleted product
-        // only because this ran. Mounted per-route instead, one omission un-scopes one endpoint.
+        /**
+         * Router-level, not per-route: an admin reading `GET /:id` sees a soft-deleted product
+         * only because this ran. Mounted per-route instead, one omission un-scopes one endpoint.
+         */
         expect(routerMiddleware(router)).toContain('getAuth');
     });
 });
 
 describe('product routes — the product page and its stock count', () => {
     it('GET /:id makes the browser revalidate, so a stock change is not hidden for an hour', () => {
-        // The page shows `available`, which a stock write changes. A server-side clear cannot
-        // reach a copy already in a browser, so the browser must check first (a 304 when equal).
+        /**
+         * The page shows `available`, which a stock write changes. A server-side clear cannot
+         * reach a copy already in a browser, so the browser must check first (a 304 when equal).
+         */
         expect(optionsOf(chainOf(router, 'GET /:id'), 'setCache')).toMatchObject({
             tags: [TAG],
             browserRevalidate: true
@@ -123,8 +129,10 @@ describe('product routes — authorization', () => {
 
 describe('product routes — caching', () => {
     it('caches the two catalogue listings under one key, keyed by the search parameters', () => {
-        // `GET /` and `POST /search` are the same query behind two verbs, so they must share
-        // `keyAs` — otherwise the same page is stored twice and invalidated once.
+        /**
+         * `GET /` and `POST /search` are the same query behind two verbs, so they must share
+         * `keyAs` — otherwise the same page is stored twice and invalidated once.
+         */
         const listing = chainOf(router, 'GET /').find((entry) => entry.startsWith('setCache'));
         const search = chainOf(router, 'POST /search').find((entry) =>
             entry.startsWith('setCache')
@@ -140,8 +148,10 @@ describe('product routes — caching', () => {
         expect(optionsOf(chainOf(router, 'GET /'), 'setCache').keyParameters).not.toHaveLength(0);
     });
 
-    // The cache key is built from `request.locale`: a preview mounted after `setCache` would
-    // store a draft answer under a live language's key.
+    /**
+     * The cache key is built from `request.locale`: a preview mounted after `setCache` would
+     * store a draft answer under a live language's key.
+     */
     it.each(['GET /', 'POST /search', 'GET /:id'])(
         '%s mounts the draft preview before the cache',
         (signature) => {
@@ -165,8 +175,10 @@ describe('product routes — caching', () => {
     it.each(['POST /', 'PUT /:id', 'PATCH /:id', 'DELETE /:id', 'DELETE /:id/hard'])(
         '%s invalidates the catalogue tag it just changed',
         (signature) => {
-            // The tag has to be the one the readers above set. Asserting the literal rather than
-            // a shared constant is deliberate: a rename must fail here, not follow along.
+            /**
+             * The tag has to be the one the readers above set. Asserting the literal rather than
+             * a shared constant is deliberate: a rename must fail here, not follow along.
+             */
             expect(chainOf(router, signature)).toContain(`invalidateCache([${TAG}])`);
         }
     );
@@ -178,19 +190,25 @@ describe('product routes — uploads and flags', () => {
         (signature) => {
             const chain = chainOf(router, signature);
 
-            // The field name is a contract with the client: a rename here is a silently ignored
-            // upload, since multer drops fields it was not told about.
+            /**
+             * The field name is a contract with the client: a rename here is a silently ignored
+             * upload, since multer drops fields it was not told about.
+             */
             expect(chain).toContain('upload.image');
-            // Behind the label, the real chain — a route that accepts a file and never checks it
-            // is how a disguised payload reaches storage.
+            /**
+             * Behind the label, the real chain — a route that accepts a file and never checks it
+             * is how a disguised payload reaches storage.
+             */
             expect(chain).toContain('validateUploadedImages');
             expect(chain).toContain('quarantineUploadedImages');
         }
     );
 
     it('reaches the hard delete only through the flag route', () => {
-        // `DELETE /:id` soft-deletes; the same handler hard-deletes only with the flag set. If the
-        // flag moved onto the plain route, a normal delete would become unrecoverable.
+        /**
+         * `DELETE /:id` soft-deletes; the same handler hard-deletes only with the flag set. If the
+         * flag moved onto the plain route, a normal delete would become unrecoverable.
+         */
         expect(chainOf(router, 'DELETE /:id/hard')).toContain('routeFlag(hardDelete)');
         expect(chainOf(router, 'DELETE /:id')).not.toContain('routeFlag(hardDelete)');
     });

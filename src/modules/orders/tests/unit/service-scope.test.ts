@@ -21,6 +21,7 @@ import { Types } from 'mongoose';
 import { orderService } from '../../services';
 import { asCustomer, asAdmin, asModerator } from '@tests/callers';
 
+/** Id of the user the scoped reads are made for. */
 const USER_ID = '507f1f77bcf86cd799439011';
 
 /** What CASL compiles a caller with no matching rule to. */
@@ -39,8 +40,10 @@ describe('orderService.callerScope', () => {
     });
 
     it('hides soft-deleted orders from their own owner', () => {
-        // Two axes in one rule: `userId` answers "whose", `deletedAt` answers "still there". The
-        // wide key carries neither, which is how staff read a soft-deleted order to restore it.
+        /**
+         * Two axes in one rule: `userId` answers "whose", `deletedAt` answers "still there". The
+         * wide key carries neither, which is how staff read a soft-deleted order to restore it.
+         */
         expect(orderService.callerScope(asCustomer(USER_ID))).toHaveProperty('deletedAt', null);
     });
 
@@ -49,14 +52,18 @@ describe('orderService.callerScope', () => {
     });
 
     it('matches nothing when there is no auth context at all', () => {
-        // The load-bearing case. Returning `{}` here — or omitting the owner clause — would widen
-        // an anonymous request to every user's orders without failing anything.
+        /**
+         * The load-bearing case. Returning `{}` here — or omitting the owner clause — would widen
+         * an anonymous request to every user's orders without failing anything.
+         */
         expect(orderService.callerScope(undefined)).toEqual(MATCHES_NOTHING);
     });
 
     it('matches nothing for a caller whose identity is missing', () => {
-        // A condition whose placeholder cannot be resolved drops its whole rule rather than
-        // resolving to `{ userId: null }`, which is a perfectly good filter over unowned rows.
+        /**
+         * A condition whose placeholder cannot be resolved drops its whole rule rather than
+         * resolving to `{ userId: null }`, which is a perfectly good filter over unowned rows.
+         */
         expect(orderService.callerScope(asCustomer(''))).toEqual(MATCHES_NOTHING);
     });
 });
@@ -71,9 +78,11 @@ describe('actorOf', () => {
     });
 
     it('reads a moderator off the admin lifecycle column, not the customer one', () => {
-        // The bug this pins: `update:Order` is held by name, not through the scope
-        // wildcard, so asking for the wildcard alone silently treated a moderator as a
-        // customer here.
+        /**
+         * The bug this pins: `update:Order` is held by name, not through the scope
+         * wildcard, so asking for the wildcard alone silently treated a moderator as a
+         * customer here.
+         */
         expect(orderService.actorOf(asModerator(USER_ID))).toBe('admin');
     });
 

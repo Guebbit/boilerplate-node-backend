@@ -32,8 +32,10 @@ import type { UserDocument } from '../../model';
 import { logger } from '@infrastructure/adapters/logger';
 import { seedMembership } from '@modules/access/tests/factories';
 
-// See `tests/support/ports.ts`: the namespace import above must resolve a plain `jest.fn()`,
-// not the real (non-configurable) export, for `observePort` to be able to clear and hand it out.
+/**
+ * See `tests/support/ports.ts`: the namespace import above must resolve a plain `jest.fn()`,
+ * not the real (non-configurable) export, for `observePort` to be able to clear and hand it out.
+ */
 jest.mock('@infrastructure/observability/audit', () =>
     jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
 );
@@ -50,12 +52,15 @@ jest.mock('@infrastructure/observability/analytics', () => ({
     emitAnalyticsEvent: jest.fn()
 }));
 jest.mock('@infrastructure/adapters/image-store', () => ({
-    // `applyImageWriteback` is a pure mutation the tests below rely on for real — only the
-    // filesystem-touching `remove` half needs stubbing.
+    /**
+     * `applyImageWriteback` is a pure mutation the tests below rely on for real — only the
+     * filesystem-touching `remove` half needs stubbing.
+     */
     ...jest.requireActual('@infrastructure/adapters/image-store'),
     imageStore: { remove: jest.fn().mockResolvedValue(true) }
 }));
 
+/** The mocked image store, so a case can assert what was removed. */
 const { imageStore } = jest.requireMock<{ imageStore: { remove: jest.Mock } }>(
     '@infrastructure/adapters/image-store'
 );
@@ -75,8 +80,10 @@ const expectCreated = async (
     return (result as ResponseSuccess<UserDocument>).data;
 };
 
-// Backs the three `active` filter cases below, built so the two facts DISAGREE: the deactivated
-// account is not deleted, and the deleted account is still active.
+/**
+ * Backs the three `active` filter cases below, built so the two facts DISAGREE: the deactivated
+ * account is not deleted, and the deleted account is still active.
+ */
 const seedActiveAndDeleted = () =>
     Promise.all([
         createUser({ email: 'enabled@example.com', username: 'enabled', active: true }),
@@ -135,8 +142,10 @@ describe('userService.search', () => {
             callerContextAs('admin')
         );
 
-        // `search()` is the `.lean()` path (`create-repository.ts#findAll`) — unlike every other
-        // read in this suite, `presentAccount` receives a plain object here, not a hydrated document.
+        /**
+         * `search()` is the `.lean()` path (`create-repository.ts#findAll`) — unlike every other
+         * read in this suite, `presentAccount` receives a plain object here, not a hydrated document.
+         */
         const result = await userService.search({ username: 'phoned' });
         expect(presentAccount(result.items[0], null).phone).toBe('+1 555 0100');
     });
@@ -146,8 +155,10 @@ describe('userService.search', () => {
 
         const active = await userService.search({ active: true });
 
-        // The deleted-but-active account is included: deletion is a separate fact, and this
-        // filter does not ask about it.
+        /**
+         * The deleted-but-active account is included: deletion is a separate fact, and this
+         * filter does not ask about it.
+         */
         expect(active.items.map((item) => asStub<{ username: string }>(item).username)).toEqual(
             expect.arrayContaining(['enabled', 'deleted'])
         );
@@ -218,8 +229,10 @@ describe('userService.getById', () => {
 
 describe('userService.create', () => {
     it('creates a user and returns the Mongoose document', async () => {
-        // `callerContextAs('admin')`, not `testCallerContext`: a real route guard would already
-        // have enforced `create:User`, which an anonymous caller does not hold.
+        /**
+         * `callerContextAs('admin')`, not `testCallerContext`: a real route guard would already
+         * have enforced `create:User`, which an anonymous caller does not hold.
+         */
         const user = await expectCreated(
             {
                 email: 'created@example.com',
@@ -281,8 +294,10 @@ describe('userService.create', () => {
     });
 
     it('lets a moderator create a plain customer, who holds no role at all', async () => {
-        // A customer is computed from `verifiedAt` (set on every admin create), never granted, so
-        // naming no role writes no membership and needs no key beyond `create:User`.
+        /**
+         * A customer is computed from `verifiedAt` (set on every admin create), never granted, so
+         * naming no role writes no membership and needs no key beyond `create:User`.
+         */
         const user = await expectCreated(
             {
                 email: 'moderator-made@example.com',
@@ -297,8 +312,10 @@ describe('userService.create', () => {
     });
 
     it('creates no row when the requested role is an escalation the caller cannot grant', async () => {
-        // `moderator` can create accounts but cannot grant `admin`: the grant is refused before the
-        // user row is written, so no row holds the email without a membership.
+        /**
+         * `moderator` can create accounts but cannot grant `admin`: the grant is refused before the
+         * user row is written, so no row holds the email without a membership.
+         */
         const result = await userService.create(
             {
                 email: 'never-created@example.com',
@@ -319,8 +336,10 @@ describe('userService.create', () => {
         });
 
         it('fills the field with something the caller was never told, rather than leaving it empty', async () => {
-            // `password` is `required: true` at the Mongoose layer (see `./model`), so a create
-            // still has to write SOMETHING; nobody is told what.
+            /**
+             * `password` is `required: true` at the Mongoose layer (see `./model`), so a create
+             * still has to write SOMETHING; nobody is told what.
+             */
             const user = await expectCreated(
                 { email: 'no-password@example.com', username: 'nopassworduser' },
                 callerContextAs('admin')
@@ -463,8 +482,10 @@ describe('userService.updateById', () => {
 
         await userService.updateById(id, { phone: '+1 555 0100' }, callerContextAs('admin'));
 
-        // Bypasses `presentAccount` on purpose — this is what a raw DB read, or a stolen disk/backup,
-        // would actually see.
+        /**
+         * Bypasses `presentAccount` on purpose — this is what a raw DB read, or a stolen disk/backup,
+         * would actually see.
+         */
         const stored = await userRepository.findById(id);
         expect(stored!.phone).not.toBe('+1 555 0100');
         // Versioned-secret's own wire format — see infrastructure/security/versioned-secret.ts.
@@ -529,7 +550,7 @@ describe('userService.updateById', () => {
         expect((result as { data: UserDocument }).data.imageUrl).toBe('/images/keep-avatar.jpg');
     });
 
-    /*
+    /**
      * `data.imageUrl !== undefined` is never a safe "was a new image uploaded" check — an
      * empty string reaching the service must keep the stored avatar, the same as an absent one.
      */
@@ -740,9 +761,11 @@ describe('userService.removeById', () => {
         expect((result as ResponseReject).status).toBe(409);
     });
 
-    // The admin-facing audit relocated from `createDeleteController`/
-    // `createRestoreController` into this service, matching every other module's write path.
-    // These three pin that the same rows still land, from the new layer.
+    /**
+     * The admin-facing audit relocated from `createDeleteController`/
+     * `createRestoreController` into this service, matching every other module's write path.
+     * These three pin that the same rows still land, from the new layer.
+     */
     it('audits ADMIN_USER_SOFT_DELETED for an admin-context soft delete', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser();
@@ -813,15 +836,21 @@ describe('userService.removeById', () => {
         it('erases a platform membership too, not only the tenant one', async () => {
             const user = await createUser();
             const id = user._id.toString();
-            // A second platform operator, so the platform row below is not itself the last one
-            // administering the installation — this test is about the erasure gap, not that invariant.
+            /**
+             * A second platform operator, so the platform row below is not itself the last one
+             * administering the installation — this test is about the erasure gap, not that invariant.
+             */
             await seedMembership('another-operator', null, 'platform', 'operator');
-            // A tenant seat AND a platform seat — the erasure gap a single tenant-scoped revoke leaves
-            // behind if the platform row is not swept too, surviving the user it points at.
+            /**
+             * A tenant seat AND a platform seat — the erasure gap a single tenant-scoped revoke leaves
+             * behind if the platform row is not swept too, surviving the user it points at.
+             */
             await seedMembership(id, DEPLOYMENT_TENANT_ID, 'tenant', 'support');
             await seedMembership(id, null, 'platform', 'operator');
-            // This suite builds no app, so the erase hooks a deployment registers are not there:
-            // install `access`'s own, the one under test.
+            /**
+             * This suite builds no app, so the erase hooks a deployment registers are not there:
+             * install `access`'s own, the one under test.
+             */
             setPersonalDataErasers([
                 ({ userId }, session) => accessService.eraseMemberships(userId, session)
             ]);
@@ -888,11 +917,13 @@ describe('userService.remove', () => {
         expect(await userRepository.findById(id)).toBeNull();
     });
 
-    // A hard delete with no audit context (every HTTP-driven caller) must NOT record a
-    // system row — `createDeleteController`'s own spec already records one, and a second row
-    // here would double the audit trail for the exact same delete.
-    // The inactivity reaper is the one caller with no request behind it, and passes its own
-    // system context — this is the row that closes the "reaper writes no audit row" gap.
+    /**
+     * A hard delete with no audit context (every HTTP-driven caller) must NOT record a
+     * system row — `createDeleteController`'s own spec already records one, and a second row
+     * here would double the audit trail for the exact same delete.
+     * The inactivity reaper is the one caller with no request behind it, and passes its own
+     * system context — this is the row that closes the "reaper writes no audit row" gap.
+     */
     it('records SYSTEM_USER_ERASED when hard-deleted with a system audit context', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser();
@@ -927,9 +958,11 @@ describe('userService.remove', () => {
         );
     });
 
-    // The erasure cascade and the document delete run in one transaction — a failure
-    // ANYWHERE in it must roll back the whole thing, not leave the user gone with some of the
-    // cascade already committed, or the user still there with part of the cascade already run.
+    /**
+     * The erasure cascade and the document delete run in one transaction — a failure
+     * ANYWHERE in it must roll back the whole thing, not leave the user gone with some of the
+     * cascade already committed, or the user still there with part of the cascade already run.
+     */
     describe('atomicity of the erasure cascade', () => {
         const originalErasers = personalDataErasers();
 
@@ -953,8 +986,10 @@ describe('userService.remove', () => {
 
             expect(firstEraser).toHaveBeenCalledTimes(1);
             expect(failingEraser).toHaveBeenCalledTimes(1);
-            // The document delete never ran either — it comes after every eraser in the same
-            // transaction — and the stand-in "eraser" above got rolled back with it.
+            /**
+             * The document delete never ran either — it comes after every eraser in the same
+             * transaction — and the stand-in "eraser" above got rolled back with it.
+             */
             expect(await userRepository.findById(id)).not.toBeNull();
         });
 

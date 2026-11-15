@@ -60,8 +60,10 @@ describe('GET /products — actions', () => {
         });
     });
 
-    // The guest's response is shared through the cache: warming it with staff's answer first
-    // must never put a `true` in front of the next guest.
+    /**
+     * The guest's response is shared through the cache: warming it with staff's answer first
+     * must never put a `true` in front of the next guest.
+     */
     it('keeps staff’s flags out of the guest’s cached answer', async () => {
         await createProduct();
         const { bearer } = await authenticateAsRole('admin');

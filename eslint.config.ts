@@ -738,11 +738,7 @@ export default defineConfig(
             'src/*.ts',
             'src/modules/*/**/*.ts'
         ],
-        ignores: [
-            'src/types/asyncapi.generated.ts',
-            // Module tests join in two halves; n-z are still outside.
-            'src/modules/{notifications,observability,orders,payments,products,returns,shop,shop-tasks,sitemap,stats,stock-alerts,tasks,users,webhooks,wishlist}/tests/**'
-        ],
+        ignores: ['src/types/asyncapi.generated.ts'],
 
         plugins: {
             jsdoc: pluginJsdoc
@@ -768,7 +764,8 @@ export default defineConfig(
                     contexts: [
                         'Program > FunctionDeclaration',
                         'Program > ClassDeclaration',
-                        'Program > VariableDeclaration',
+                        // `const x = require(…)` is an import, not a declaration of ours.
+                        'Program > VariableDeclaration:not(:has(CallExpression[callee.name="require"]))',
                         'Program > TSInterfaceDeclaration',
                         'Program > TSTypeAliasDeclaration',
                         'Program > TSEnumDeclaration',

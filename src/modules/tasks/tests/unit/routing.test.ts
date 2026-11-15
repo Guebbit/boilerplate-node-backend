@@ -11,6 +11,7 @@ import { TaskSource } from '@types';
 import { heldRouteSets, inJurisdiction } from '../../access';
 import { CONTACT_ROUTE_SET, accountReviewOpening, exportFailedOpening } from '../../domain';
 
+/** The instant task state is judged at. */
 const NOW = new Date('2030-05-01T10:00:00Z');
 
 describe('routing', () => {

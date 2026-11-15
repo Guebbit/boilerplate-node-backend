@@ -49,6 +49,7 @@ const refundRecord = (overrides: Record<string, unknown> = {}) => ({
 /** Keeps every seeded customer's email unique. */
 let sequence = 0;
 
+/** A stored payment; a case overrides only the field it reads on. */
 const seedPayment = async (overrides: Record<string, unknown> = {}) => {
     sequence += 1;
     const user = await createUser({ email: `payer${String(sequence)}@example.com` });
@@ -472,8 +473,10 @@ describe('listAttention', () => {
         });
         const orderId = String(order._id);
 
-        // The cancel's own refund listener: nobody can say the cash went back, so it only
-        // opens the record. A redelivery of the same event writes nothing more.
+        /**
+         * The cancel's own refund listener: nobody can say the cash went back, so it only
+         * opens the record. A redelivery of the same event writes nothing more.
+         */
         await refundForOrder(orderId);
         await refundForOrder(orderId);
 

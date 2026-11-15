@@ -37,6 +37,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 setupTestDb();
@@ -95,6 +96,7 @@ const digestMails = () =>
 
 /** A paid order the warehouse has not shipped for `days` days. */
 let buyers = 0;
+/** A paid order that has waited the given number of days, optionally soft-deleted. */
 const paidAndWaiting = async (days: number, extras: { deletedAt?: Date } = {}) => {
     buyers += 1;
     const user = await createUser({

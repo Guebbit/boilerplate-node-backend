@@ -25,6 +25,7 @@ jest.mock('@infrastructure/observability/audit', () =>
 
 setupTestDb();
 
+/** The address the order is placed with. */
 const BEFORE = {
     fullName: 'Ada Lovelace',
     street: '12 Analytical Engine Rd',
@@ -32,6 +33,7 @@ const BEFORE = {
     zip: 'SW1A',
     country: 'IT'
 };
+/** The address the order is placed with. */
 const AFTER = { ...BEFORE, street: '14 Analytical Engine Rd', zip: 'SW1B' };
 
 /** A paid order shipping to {@link BEFORE}. */

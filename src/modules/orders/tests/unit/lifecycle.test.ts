@@ -30,6 +30,7 @@ import {
 
 /** Every status in the contract enum, so a new one is covered without touching this file. */
 const EVERY_STATUS = Object.values(OrderStatus);
+/** Every actor the order lifecycle knows, so a new actor is covered without editing the cases. */
 const EVERY_ACTOR: readonly OrderActor[] = ['customer', 'admin', 'system', 'withdrawal'];
 
 /** The two an HTTP caller can be. `system` names moves that follow a fact from outside the app. */
@@ -123,9 +124,11 @@ describe('who may write `paid`', () => {
 
 describe('who may write `processing`', () => {
     it('lets nothing but a recorded fulfillment-start fact reach it', () => {
-        // Neither a request a human makes directly, same as `shipped`/`delivered` below —
-        // `delivery`'s own door records the fact first, then reports it here. See
-        // `src/modules/orders/services/status.ts`'s `markProcessing`.
+        /**
+         * Neither a request a human makes directly, same as `shipped`/`delivered` below —
+         * `delivery`'s own door records the fact first, then reports it here. See
+         * `src/modules/orders/services/status.ts`'s `markProcessing`.
+         */
         for (const actor of EVERY_ACTOR)
             expect(statusesLeadingTo(OrderStatus.processing, actor)).toEqual(
                 actor === 'system'
@@ -135,17 +138,21 @@ describe('who may write `processing`', () => {
     });
 
     it('refuses an admin writing it by hand', () => {
-        // `PUT /orders/:id` never carries `status` at all; the admin override
-        // (`override:Order`, step-up) is the only reachable path onto this status today.
+        /**
+         * `PUT /orders/:id` never carries `status` at all; the admin override
+         * (`override:Order`, step-up) is the only reachable path onto this status today.
+         */
         expect(canTransition(OrderStatus.paid, OrderStatus.processing, 'admin')).toBe(false);
     });
 });
 
 describe('who may write `shipped` and `delivered`', () => {
     it('lets nothing but a recorded parcel fact reach either', () => {
-        // Neither is a request a human makes directly — `delivery`'s own doors record the
-        // handover/arrival first, then report it here. See
-        // `src/modules/orders/services/status.ts`.
+        /**
+         * Neither is a request a human makes directly — `delivery`'s own doors record the
+         * handover/arrival first, then report it here. See
+         * `src/modules/orders/services/status.ts`.
+         */
         for (const actor of EVERY_ACTOR) {
             expect(statusesLeadingTo(OrderStatus.shipped, actor)).toEqual(
                 actor === 'system' ? [OrderStatus.processing] : []
@@ -157,8 +164,10 @@ describe('who may write `shipped` and `delivered`', () => {
     });
 
     it('refuses an admin writing either by hand', () => {
-        // The generic `PUT /orders/:id` never allows this; only `src/modules/orders/services/status.ts`'s
-        // doors, reached exclusively through `delivery`, may move an order here.
+        /**
+         * The generic `PUT /orders/:id` never allows this; only `src/modules/orders/services/status.ts`'s
+         * doors, reached exclusively through `delivery`, may move an order here.
+         */
         expect(canTransition(OrderStatus.processing, OrderStatus.shipped, 'admin')).toBe(false);
         expect(canTransition(OrderStatus.shipped, OrderStatus.delivered, 'admin')).toBe(false);
     });
@@ -198,8 +207,10 @@ describe('who may cancel', () => {
     });
 
     it("stops the system actor at `pending` — B21's race", () => {
-        // The reservation-sweep expiry must never cancel an order a payment already reached,
-        // unlike `admin`'s own wider set two tests up.
+        /**
+         * The reservation-sweep expiry must never cancel an order a payment already reached,
+         * unlike `admin`'s own wider set two tests up.
+         */
         expect(statusesLeadingTo(OrderStatus.canceled, 'system')).toEqual([OrderStatus.pending]);
     });
 });
@@ -231,8 +242,10 @@ describe('terminal states', () => {
 
 describe('direction', () => {
     it('never moves backwards along the fulfillment sequence', () => {
-        // A property over the whole table, so a future edge in the wrong direction is caught
-        // whether or not anyone writes a case for it.
+        /**
+         * A property over the whole table, so a future edge in the wrong direction is caught
+         * whether or not anyone writes a case for it.
+         */
         const backwards = FULFILLMENT_SEQUENCE.flatMap((from, index) =>
             FULFILLMENT_SEQUENCE.slice(0, index).flatMap((to) =>
                 EVERY_ACTOR.filter((actor) => canTransition(from, to, actor)).map(
@@ -241,8 +254,10 @@ describe('direction', () => {
             )
         );
 
-        // The backward edges are the lost parcel's `reopen` and a replacement's `reship`, and
-        // only the system makes either.
+        /**
+         * The backward edges are the lost parcel's `reopen` and a replacement's `reship`, and
+         * only the system makes either.
+         */
         expect(backwards).toEqual([
             'system: shipped → processing',
             'system: delivered → processing'
@@ -290,20 +305,26 @@ describe('canTransition', () => {
     });
 
     it('reads a literal forward direction off the table, not just its own reverse', () => {
-        // The check above only proves the two wrappers agree WITH EACH OTHER — both route through
-        // the same `canTransition`, so it cannot catch a wrong edge in `ORDER_LIFECYCLE`.
-        // `statusesLeadingTo` already has literal anchors above (`paid`, `canceled` sections);
-        // `statusesReachableFrom` had none outside the terminal (empty) case.
+        /**
+         * The check above only proves the two wrappers agree WITH EACH OTHER — both route through
+         * the same `canTransition`, so it cannot catch a wrong edge in `ORDER_LIFECYCLE`.
+         * `statusesLeadingTo` already has literal anchors above (`paid`, `canceled` sections);
+         * `statusesReachableFrom` had none outside the terminal (empty) case.
+         */
         expect(statusesReachableFrom(OrderStatus.pending, 'admin')).toEqual([OrderStatus.canceled]);
-        // The system actor also reaches `canceled` from `pending` — the reservation-sweep
-        // expiry, narrower than `admin`'s own reach since it stops there (see the `who may cancel`
-        // describe block below).
+        /**
+         * The system actor also reaches `canceled` from `pending` — the reservation-sweep
+         * expiry, narrower than `admin`'s own reach since it stops there (see the `who may cancel`
+         * describe block below).
+         */
         expect(statusesReachableFrom(OrderStatus.pending, 'system')).toEqual([
             OrderStatus.paid,
             OrderStatus.canceled
         ]);
-        // `processing` left `admin`'s reach with SH1 — a paid order's only admin-reachable move
-        // through the ordinary lifecycle is now `canceled`, same as a customer's.
+        /**
+         * `processing` left `admin`'s reach with SH1 — a paid order's only admin-reachable move
+         * through the ordinary lifecycle is now `canceled`, same as a customer's.
+         */
         expect(statusesReachableFrom(OrderStatus.paid, 'admin')).toEqual([OrderStatus.canceled]);
         expect(statusesReachableFrom(OrderStatus.paid, 'customer')).toEqual([OrderStatus.canceled]);
     });
@@ -328,8 +349,10 @@ describe('canProcessOrder', () => {
     });
 
     it('agrees with the statuses that lead to processing as the system', () => {
-        // `reopen` (from `shipped`) and `reship` (from `delivered`) also lead to `processing`, but
-        // they are steps back, not the start of fulfillment.
+        /**
+         * `reopen` (from `shipped`) and `reship` (from `delivered`) also lead to `processing`, but
+         * they are steps back, not the start of fulfillment.
+         */
         const stepsBack = new Set<OrderStatus>([OrderStatus.shipped, OrderStatus.delivered]);
         const leadingTo: ReadonlySet<OrderStatus> = new Set(
             statusesLeadingTo(OrderStatus.processing, 'system').filter(
@@ -395,10 +418,12 @@ describe('orderActionsFor', () => {
     });
 
     it('reports literal actions for known statuses, not just an echo of its own inputs', () => {
-        // The check above can only catch a wiring bug (wrong args, dropped spread) in
-        // `orderActionsFor` itself — both sides route through the same `statusesReachableFrom`
-        // call, so a wrong entry in `ORDER_LIFECYCLE` would pass it just as easily. These pin
-        // actual values, independent of that function.
+        /**
+         * The check above can only catch a wiring bug (wrong args, dropped spread) in
+         * `orderActionsFor` itself — both sides route through the same `statusesReachableFrom`
+         * call, so a wrong entry in `ORDER_LIFECYCLE` would pass it just as easily. These pin
+         * actual values, independent of that function.
+         */
         expect(orderActionsFor(OrderStatus.pending, 'customer')).toEqual({
             cancel: true,
             pay: true
@@ -410,15 +435,19 @@ describe('orderActionsFor', () => {
     });
 
     it('never advertises a cancel on an order already canceled', () => {
-        // `canTransition` allows a write that changes nothing, which is right for an edit
-        // repeating the current status and wrong for "may I cancel this".
+        /**
+         * `canTransition` allows a write that changes nothing, which is right for an edit
+         * repeating the current status and wrong for "may I cancel this".
+         */
         for (const actor of EVERY_ACTOR)
             expect(orderActionsFor(OrderStatus.canceled, actor).cancel).toBe(false);
     });
 
     it('offers `pay` on a pending order to both actors that reach the HTTP surface', () => {
-        // Paying is a move no request makes: the answer is published so a client can offer the
-        // card form, not so it can write the status. `system` owns the move.
+        /**
+         * Paying is a move no request makes: the answer is published so a client can offer the
+         * card form, not so it can write the status. `system` owns the move.
+         */
         for (const actor of REQUEST_ACTORS)
             expect(orderActionsFor(OrderStatus.pending, actor).pay).toBe(true);
     });

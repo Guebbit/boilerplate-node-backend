@@ -19,7 +19,7 @@ describe('the wishlist analytics vocabulary', () => {
         });
     });
 
-    /*
+    /**
      * The `declare module` augmentation in `analytics.ts` is what puts these into
      * `AnalyticsEventMap`. Drop it and the module still compiles on its own — but
      * `emitAnalyticsEvent` then rejects every event this module fires, at the call sites rather

@@ -6,7 +6,9 @@
  */
 import { returnNoticeEmail } from '../../emails';
 
+/** The instant the mail reports. */
 const AT = new Date('2026-07-01T14:05:00Z');
+/** The fields every return mail is rendered from. */
 const INPUT = { orderRef: '2026-000041', returnPostage: 'consumer', at: AT } as const;
 
 describe('returnNoticeEmail — withdrawal-acknowledged', () => {

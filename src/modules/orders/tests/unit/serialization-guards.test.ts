@@ -27,16 +27,20 @@ describe('order serialization guards', () => {
     });
 
     it('survives a projection that never selected items', () => {
-        // `.select('email createdAt')` produces exactly this shape. Without the Array.isArray
-        // guard the transform throws, and every projected order read becomes a 500.
+        /**
+         * `.select('email createdAt')` produces exactly this shape. Without the Array.isArray
+         * guard the transform throws, and every projected order read becomes a 500.
+         */
         const serialized: Record<string, unknown> = { email: 'buyer@example.com' };
 
         expect(() => applyOrderTransform(serialized)).not.toThrow();
     });
 
     it('reports zero totals rather than omitting them when items are absent', () => {
-        // `openapi.yaml` marks the three fields required, so "absent" is a contract violation
-        // while "zero" is merely an empty order. The fallback to `[]` is what makes that true.
+        /**
+         * `openapi.yaml` marks the three fields required, so "absent" is a contract violation
+         * while "zero" is merely an empty order. The fallback to `[]` is what makes that true.
+         */
         const serialized: Record<string, unknown> = { email: 'buyer@example.com' };
 
         applyOrderTransform(serialized);
@@ -47,9 +51,11 @@ describe('order serialization guards', () => {
     });
 
     it('leaves a line item with no product snapshot alone', () => {
-        // The schema does not require `product` on a line, so a stored line may carry none;
-        // `item.product && typeof item.product === 'object'` is what stops the transform
-        // recursing into nothing.
+        /**
+         * The schema does not require `product` on a line, so a stored line may carry none;
+         * `item.product && typeof item.product === 'object'` is what stops the transform
+         * recursing into nothing.
+         */
         const serialized: Record<string, unknown> = {
             items: [{ product: undefined, quantity: 1 }, { quantity: 2 }]
         };

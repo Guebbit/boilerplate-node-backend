@@ -37,8 +37,10 @@ describe('observability metrics overview — the shop block', () => {
     });
 
     it('reports zero for a counter no enabled module registered', async () => {
-        // What a deleted module leaves behind. `metricsRegistry.getSingleMetric` returns undefined
-        // and the row has to degrade to 0 while the rest of the shop block is still reported.
+        /**
+         * What a deleted module leaves behind. `metricsRegistry.getSingleMetric` returns undefined
+         * and the row has to degrade to 0 while the rest of the shop block is still reported.
+         */
         const removed = metricsRegistry.getSingleMetric('cart_checkout_total');
         metricsRegistry.removeSingleMetric('cart_checkout_total');
 

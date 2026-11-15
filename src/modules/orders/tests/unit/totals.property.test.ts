@@ -53,8 +53,10 @@ const hostileLineItem = () =>
 
 describe('sumLineItems — totality', () => {
     it('never produces NaN, for any input at all', () => {
-        // The single most important property here. A NaN total renders as a blank price, and it
-        // propagates: one unpopulated product poisons the whole order.
+        /**
+         * The single most important property here. A NaN total renders as a blank price, and it
+         * propagates: one unpopulated product poisons the whole order.
+         */
         fc.assert(
             fc.property(fc.array(hostileLineItem()), (items) => {
                 const { count, quantity, price } = sumLineItems(items, EUR);
@@ -77,8 +79,10 @@ describe('sumLineItems — totality', () => {
     });
 
     it('counts every line, whatever is in it', () => {
-        // `count` is the array length and nothing else — a line that contributes 0 to the money
-        // still exists. `CartSummary.itemsCount` depends on that distinction.
+        /**
+         * `count` is the array length and nothing else — a line that contributes 0 to the money
+         * still exists. `CartSummary.itemsCount` depends on that distinction.
+         */
         fc.assert(
             fc.property(fc.array(hostileLineItem()), (items) => {
                 expect(sumLineItems(items, EUR).count).toBe(items.length);
@@ -94,8 +98,10 @@ describe('sumLineItems — arithmetic invariants', () => {
     });
 
     it('is order-independent', () => {
-        // Two clients holding the same cart in a different order must be charged the same. This
-        // is the property that would catch an accumulator whose rounding depended on sequence.
+        /**
+         * Two clients holding the same cart in a different order must be charged the same. This
+         * is the property that would catch an accumulator whose rounding depended on sequence.
+         */
         fc.assert(
             fc.property(fc.array(lineItem()), (items) => {
                 const forwards = sumLineItems(items, EUR);
@@ -120,8 +126,10 @@ describe('sumLineItems — arithmetic invariants', () => {
     });
 
     it('is additive over concatenation, to the cent', () => {
-        // Compared in cents because the only imprecision left is the single division on the way
-        // out: `0.1 + 0.2` is not `0.3`, however exact the cents behind them were.
+        /**
+         * Compared in cents because the only imprecision left is the single division on the way
+         * out: `0.1 + 0.2` is not `0.3`, however exact the cents behind them were.
+         */
         fc.assert(
             fc.property(fc.array(lineItem()), fc.array(lineItem()), (left, right) => {
                 const combined = sumLineItems([...left, ...right], EUR);
@@ -139,8 +147,10 @@ describe('sumLineItems — arithmetic invariants', () => {
     });
 
     it('scales the price with the quantity', () => {
-        // Doubling every quantity doubles the money. Catches a `+` where a `*` belongs, which
-        // an example with quantity 1 cannot distinguish.
+        /**
+         * Doubling every quantity doubles the money. Catches a `+` where a `*` belongs, which
+         * an example with quantity 1 cannot distinguish.
+         */
         fc.assert(
             fc.property(fc.array(lineItem(), { maxLength: 20 }), (items) => {
                 const single = sumLineItems(items, EUR);
@@ -185,8 +195,10 @@ describe('sumLineItems — arithmetic invariants', () => {
  */
 describe('orderTotal', () => {
     it('is the line total when nothing was charged for shipping', () => {
-        // Covers both spellings of absence. An order placed before delivery existed carries no
-        // `shippingCost` at all, and `pickup` is a real method priced at zero.
+        /**
+         * Covers both spellings of absence. An order placed before delivery existed carries no
+         * `shippingCost` at all, and `pickup` is a real method priced at zero.
+         */
         fc.assert(
             fc.property(
                 fc.array(lineItem(), { maxLength: 20 }),
@@ -202,8 +214,10 @@ describe('orderTotal', () => {
     });
 
     it('adds the shipping exactly, in cents', () => {
-        // Exact, not within a tolerance: 100 + 15 must be 115 and 0.1 + 0.2 must be 0.3. A float
-        // `+` here is the reason the composition rule has a home at all.
+        /**
+         * Exact, not within a tolerance: 100 + 15 must be 115 and 0.1 + 0.2 must be 0.3. A float
+         * `+` here is the reason the composition rule has a home at all.
+         */
         fc.assert(
             fc.property(
                 fc.array(lineItem(), { maxLength: 20 }),
@@ -234,8 +248,10 @@ describe('orderTotal', () => {
     });
 
     it("rounds to the currency's OWN minor unit, not always the cent", () => {
-        // The same basket, in EUR (2dp), JPY (0dp) and KWD (3dp) — `orderTotal` must round each
-        // to its own scale rather than the EUR one every earlier case in this file assumes.
+        /**
+         * The same basket, in EUR (2dp), JPY (0dp) and KWD (3dp) — `orderTotal` must round each
+         * to its own scale rather than the EUR one every earlier case in this file assumes.
+         */
         const items = [{ quantity: 1, product: { price: '19.90' } }];
 
         expect(orderTotal({ items, shippingCost: '5.00', currency: 'EUR' })).toBe('24.90');

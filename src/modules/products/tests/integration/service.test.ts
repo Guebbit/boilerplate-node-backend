@@ -46,12 +46,15 @@ const fakeTranslationPort = (overrides: Partial<TranslationPort> = {}): Translat
  * silently covering the wrong thing once images move to a bucket.
  */
 jest.mock('@infrastructure/adapters/image-store', () => ({
-    // `applyImageWriteback` is a pure mutation the tests below rely on for real — only the
-    // filesystem-touching `remove` half needs stubbing.
+    /**
+     * `applyImageWriteback` is a pure mutation the tests below rely on for real — only the
+     * filesystem-touching `remove` half needs stubbing.
+     */
     ...jest.requireActual('@infrastructure/adapters/image-store'),
     imageStore: { remove: jest.fn().mockResolvedValue(true) }
 }));
 
+/** The mocked image store, so a case can assert what was removed. */
 const { imageStore } = jest.requireMock<{ imageStore: { remove: jest.Mock } }>(
     '@infrastructure/adapters/image-store'
 );
@@ -63,16 +66,21 @@ afterEach(() => {
     resetDomainEvents();
 });
 
-/* The three callers every visibility rule answers for. `guest` and `logged` differ by identity
- * alone, so a rule that starts distinguishing them fails a case rather than passing silently. */
+/**
+ * The three callers every visibility rule answers for. `guest` and `logged` differ by identity
+ * alone, so a rule that starts distinguishing them fails a case rather than passing silently.
+ */
 const GUEST: Caller | undefined = undefined;
+/** A signed-in customer caller. */
 const LOGGED = callerAs('customer', '507f1f77bcf86cd799439011');
+/** An admin caller. */
 const ADMIN = callerAs('admin', '507f1f77bcf86cd799439012');
 
+/** The titles of a result list, in order. */
 const titlesOf = (items: { title: string }[]): string[] => items.map(({ title }) => title);
 
 describe('productService.search', () => {
-    /*
+    /**
      * One case per role, asserting on titles rather than counts: a mixed assertion cannot say
      * WHICH rule moved, and `guest` vs `logged` are only distinguishable because the scope takes
      * a caller rather than a boolean.
@@ -197,8 +205,10 @@ describe('productService.search', () => {
         expect(titlesOf(result.items)).toEqual(['Visible']);
     });
 
-    // Tier A batch read: a missing/invisible id is silently absent from the page, never a 404 —
-    // three ids in, one soft-deleted, two rows out.
+    /**
+     * Tier A batch read: a missing/invisible id is silently absent from the page, never a 404 —
+     * three ids in, one soft-deleted, two rows out.
+     */
     it('filters by a batch of ids, one soft-deleted', async () => {
         const kept = await createProduct({ title: 'Kept', active: true });
         const alsoKept = await createProduct({ title: 'Also kept', active: true });
@@ -226,8 +236,10 @@ describe('productService.getById', () => {
 
         expect(found).not.toBeNull();
         expect(found!.title).toBe('Test Product');
-        // Already the wire shape: `getById` runs the document's own `toJSON` transform itself,
-        // before resolving a translation over the result, so what comes back is a plain object.
+        /**
+         * Already the wire shape: `getById` runs the document's own `toJSON` transform itself,
+         * before resolving a translation over the result, so what comes back is a plain object.
+         */
         expect(typeof asStub<{ save: unknown }>(found).save).toBe('undefined');
     });
 
@@ -307,8 +319,10 @@ describe('productService.updateById', () => {
             imageUrl: '/images/new.jpg'
         });
 
-        // The OLD image goes, and it goes by its stored url — the service must not construct a
-        // path, because under a bucket backend there is none to construct.
+        /**
+         * The OLD image goes, and it goes by its stored url — the service must not construct a
+         * path, because under a bucket backend there is none to construct.
+         */
         expect(imageStore.remove).toHaveBeenCalledWith('/images/old.jpg');
         expect(imageStore.remove).not.toHaveBeenCalledWith('/images/new.jpg');
     });
@@ -341,7 +355,7 @@ describe('productService.updateById', () => {
     });
 
     it('reports a missing product as a 404 envelope, not as a rejection', async () => {
-        /*
+        /**
          * Returned, never thrown. Throwing made the one caller recognise the case by string-matching
          * `error.message === '404'` in a `.catch()`, conflating a genuine database failure with a
          * missing row. The user and order services already reported it this way; now all three agree.
@@ -410,7 +424,7 @@ describe('productService.removeById', () => {
         expect(result.success).toBe(true);
         // Product must be gone from DB
         expect(await productRepository.findById(pid)).toBeNull();
-        /*
+        /**
          * The cart must no longer contain the product — asked through the service, which is the
          * only surface `cart` publishes. `readCartLines` keeps `productId` on a line whose product
          * has been deleted (it captures the id before `populate` nulls the reference), so a line
@@ -521,12 +535,14 @@ describe('productService.remove', () => {
     describe('the translation cascade', () => {
         afterEach(() => registerTranslationPort(undefined));
 
-        // A hard delete destroys the row nothing else can point `_id` at again, so its
-        // translations must go with it IN THIS OPERATION — see `../../services/remove.ts`'s own comment
-        // on `remove`. `locales/tests/integration/repository.test.ts` proves the STORAGE side of
-        // this cascade (a real `removeEntityTranslations` call actually deletes rows); this proves
-        // the WIRING side — that a hard delete makes the call at all, a soft delete does not —
-        // without needing a real translations collection to do it.
+        /**
+         * A hard delete destroys the row nothing else can point `_id` at again, so its
+         * translations must go with it IN THIS OPERATION — see `../../services/remove.ts`'s own comment
+         * on `remove`. `locales/tests/integration/repository.test.ts` proves the STORAGE side of
+         * this cascade (a real `removeEntityTranslations` call actually deletes rows); this proves
+         * the WIRING side — that a hard delete makes the call at all, a soft delete does not —
+         * without needing a real translations collection to do it.
+         */
         it('calls the port to remove translations on a hard delete', async () => {
             const removeAll = jest.fn().mockResolvedValue(0);
             registerTranslationPort(fakeTranslationPort({ removeAll }));
@@ -571,8 +587,10 @@ describe('productService.findManyByIds', () => {
      * `Promise`-returning, and a synchronous throw out of it is uncatchable by their own `.catch()`.
      */
     it('rejects rather than throws for a malformed id', async () => {
-        // One call, captured — a second call's promise would go unhandled and crash the suite,
-        // the same failure mode a caller's own unguarded call would hit in production.
+        /**
+         * One call, captured — a second call's promise would go unhandled and crash the suite,
+         * the same failure mode a caller's own unguarded call would hit in production.
+         */
         let result: Promise<unknown> | undefined;
         expect(() => {
             result = findManyByIds(['not-an-id']);

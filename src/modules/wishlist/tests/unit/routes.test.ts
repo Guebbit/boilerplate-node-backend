@@ -28,8 +28,10 @@ describe('wishlist routes', () => {
     });
 
     it('is admin-free by design, and asks no key anywhere', () => {
-        // There is no operator view of someone else's wishlist. If one appears, this fails and
-        // the addition gets looked at. The move into a basket asks nothing either: every account shops.
+        /**
+         * There is no operator view of someone else's wishlist. If one appears, this fails and
+         * the addition gets looked at. The move into a basket asks nothing either: every account shops.
+         */
         const keyGuarded = routeSignatures(router).filter((signature) =>
             guardsOn(router, signature).includes('requirePermissionGuard')
         );

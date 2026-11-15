@@ -16,6 +16,7 @@ import {
     WEAK_PASSWORD
 } from '@modules/users/tests/factories';
 
+/** A fixed valid ObjectId string, so an expectation can name it. */
 const HEX = '65dc8a99604c307b702b5ccc';
 
 /** What every password-setting endpoint enforces, reduced to a yes/no. */
@@ -52,10 +53,12 @@ describe('makeUser', () => {
     });
 
     it('keeps an explicit false rather than dropping it', () => {
-        // `active: false` is the fixture the deactivation branch needs, and it is falsy — which
-        // is exactly what a `stripUndefined` that tested truthiness instead of `undefined` would
-        // drop. `verifiedAt` has no analogous case: its only "explicit" value, `null`, is also
-        // the schema's own default, so there is nothing a truthiness check could wrongly strip.
+        /**
+         * `active: false` is the fixture the deactivation branch needs, and it is falsy — which
+         * is exactly what a `stripUndefined` that tested truthiness instead of `undefined` would
+         * drop. `verifiedAt` has no analogous case: its only "explicit" value, `null`, is also
+         * the schema's own default, so there is nothing a truthiness check could wrongly strip.
+         */
         const user = makeUser({ active: false });
 
         expect(user.active).toBe(false);
@@ -97,8 +100,10 @@ describe('the password vocabulary', () => {
     });
 
     it('keeps MINIMAL_PASSWORD exactly at the length floor', () => {
-        // Its whole job is to be the shortest legal value. A longer one silently stops testing
-        // the boundary.
+        /**
+         * Its whole job is to be the shortest legal value. A longer one silently stops testing
+         * the boundary.
+         */
         expect(MINIMAL_PASSWORD).toHaveLength(signupBodyPasswordMin);
     });
 
@@ -107,9 +112,11 @@ describe('the password vocabulary', () => {
         ['REPLACEMENT_PASSWORD', REPLACEMENT_PASSWORD],
         ['MINIMAL_PASSWORD', MINIMAL_PASSWORD]
     ])('keeps %s off the bundled breach list', (_name, password) => {
-        // The signup/change/reset paths call `assertPasswordNotBreached` ahead of anything else —
-        // a fixture that collides with the list fails every test that signs up with it, and reads
-        // as an unrelated 422 rather than as this constant needing a new value.
+        /**
+         * The signup/change/reset paths call `assertPasswordNotBreached` ahead of anything else —
+         * a fixture that collides with the list fails every test that signs up with it, and reads
+         * as an unrelated 422 rather than as this constant needing a new value.
+         */
         expect(isInBundledBreachList(password)).toBe(false);
     });
 

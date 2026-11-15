@@ -44,9 +44,11 @@ describe('GET /observability/events', () => {
     it('refuses a validly-signed token that has been revoked', async () => {
         const { user, cookie } = await signIn('admin');
 
-        // Revoked at the source rather than through `DELETE /account/sessions`, which needs a
-        // bearer token this test does not have. The point is that a still-signed token whose
-        // record is gone must not open the stream.
+        /**
+         * Revoked at the source rather than through `DELETE /account/sessions`, which needs a
+         * bearer token this test does not have. The point is that a still-signed token whose
+         * record is gone must not open the stream.
+         */
         await dropAllSessions(String(user._id));
 
         const response = await api().get('/observability/events').set('Cookie', cookie);

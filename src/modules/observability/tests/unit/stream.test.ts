@@ -21,6 +21,7 @@ import { ObservabilityMetricsPayloadSchema } from '@types';
 import { asStub } from '@tests/stub';
 import type { Response } from 'express';
 
+/** Fixed request counters, so a frame has known numbers to carry. */
 const getHttpRequestCounters = jest.fn(() =>
     Promise.resolve({ totalRequests: 10, totalErrors: 2 })
 );
@@ -33,9 +34,12 @@ import { buildObservabilityPayload, streamObservabilityMetrics } from '../../ser
 
 /** The intervals the module schedules, as documented in its own constants. */
 const UPDATE_INTERVAL_MS = 5000;
+/** The stream's heartbeat period, copied here so a change to it is noticed. */
 const HEARTBEAT_INTERVAL_MS = 15_000;
+/** How often the stream re-checks the caller's permission, copied here so a change is noticed. */
 const REVERIFY_INTERVAL_MS = 30_000;
 
+/** The slice of an Express response the stream writes to, with every write recorded. */
 interface FakeResponse {
     response: Response;
     /** Every string handed to `write`, in order. */
@@ -167,7 +171,7 @@ describe('the SSE metrics stream', () => {
         });
 
         it('floors uptime to whole seconds, like every other payload that publishes it', async () => {
-            /*
+            /**
              * Floor rather than round, and that is the whole point of the shared reader in
              * `modules/observability/services/process-snapshot.ts`. A dashboard shows this frame
              * beside `GET /observability/health`; while this one rounded and that one floored, the
@@ -325,8 +329,10 @@ describe('the SSE metrics stream', () => {
 
             await jest.advanceTimersByTimeAsync(UPDATE_INTERVAL_MS * 5);
 
-            // A revoked caller closes the stream — teardown must run even though `response.end()`
-            // on this stub never fires the 'close' handler a real socket would.
+            /**
+             * A revoked caller closes the stream — teardown must run even though `response.end()`
+             * on this stub never fires the 'close' handler a real socket would.
+             */
             expect(fake.frames).toHaveLength(writtenAtFailure);
             await expect(reportedClients()).resolves.toBe(0);
         });

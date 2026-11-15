@@ -10,14 +10,17 @@
 import { Types } from 'mongoose';
 import { makeProduct } from '@modules/products/factories';
 
+/** A fixed valid ObjectId string, so an expectation can name it. */
 const HEX = '65dc8a99604c307b702b5ccc';
 
 describe('makeProduct', () => {
     it('builds a complete, insertable product with no overrides at all', () => {
         const product = makeProduct();
 
-        // Title and price are the schema's two required fields, so the bare fixture has to carry
-        // both or every `makeProduct()` in the suite is an invalid document.
+        /**
+         * Title and price are the schema's two required fields, so the bare fixture has to carry
+         * both or every `makeProduct()` in the suite is an invalid document.
+         */
         expect(product._id).toBeInstanceOf(Types.ObjectId);
         expect(product.title).toBe('Test Product');
         expect(product.price).toBe('9.99');
@@ -35,9 +38,11 @@ describe('makeProduct', () => {
     });
 
     it('omits unspecified fields entirely, leaving them to the schema', () => {
-        // The whole point of `stripUndefined`. `active: undefined` present as a key would store nothing
-        // and bypass the schema's `default: true`, producing an unpublished product no test asked
-        // for — and, through the seed export, a demo catalogue nobody can see.
+        /**
+         * The whole point of `stripUndefined`. `active: undefined` present as a key would store nothing
+         * and bypass the schema's `default: true`, producing an unpublished product no test asked
+         * for — and, through the seed export, a demo catalogue nobody can see.
+         */
         const product = makeProduct();
 
         for (const field of ['active', 'onHand', 'reserved', 'categories', 'tags', 'description'])
@@ -45,9 +50,11 @@ describe('makeProduct', () => {
     });
 
     it('keeps a false or zero override rather than treating it as unspecified', () => {
-        // `active: false` and `onHand: 0` are the two fixtures the visibility and out-of-stock
-        // branches need. Compacting on falsiness rather than on `undefined` would silently drop
-        // exactly those.
+        /**
+         * `active: false` and `onHand: 0` are the two fixtures the visibility and out-of-stock
+         * branches need. Compacting on falsiness rather than on `undefined` would silently drop
+         * exactly those.
+         */
         const product = makeProduct({ active: false, onHand: 0 });
 
         expect(product.active).toBe(false);
@@ -55,9 +62,11 @@ describe('makeProduct', () => {
     });
 
     it('converts a soft-delete timestamp from the ISO string a seed file writes', () => {
-        // The schema stores a `Date`; the seed files state strings. Without `toDate` the fixture
-        // stores a string in a `Date` path and the soft-delete branch it exists to cover is
-        // never exercised.
+        /**
+         * The schema stores a `Date`; the seed files state strings. Without `toDate` the fixture
+         * stores a string in a `Date` path and the soft-delete branch it exists to cover is
+         * never exercised.
+         */
         const product = makeProduct({ deletedAt: '2026-08-27T10:00:00.000Z' });
 
         expect(product.deletedAt).toBeInstanceOf(Date);

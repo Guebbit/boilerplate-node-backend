@@ -5,7 +5,7 @@
  * and deletes it. The real modules are registered so the wiring in `module.ts` is part of what is
  * tested.
  *
- * @see docs/modules/stock-alerts.md
+ * @see docs/modules/stock-alerts.md#the-signal
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -30,6 +30,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = jest.mocked(enqueueEmail);
 
 /** One day, in milliseconds. */

@@ -7,6 +7,7 @@
 import { DAY_MS } from '@domain-primitives/time';
 import { purchaseHoldUntil } from '../../domain';
 
+/** The instant the hold is judged at. */
 const NOW = new Date('2026-10-19T12:00:00.000Z');
 
 /** An instant `days` before {@link NOW}. */
@@ -24,8 +25,10 @@ describe('purchaseHoldUntil', () => {
     });
 
     it('waits for enough to age out when more than the limit were counted', () => {
-        // Four inside the window with a limit of three: the hold lasts until the SECOND oldest
-        // ages out, which is when the count falls back to two.
+        /**
+         * Four inside the window with a limit of three: the hold lasts until the SECOND oldest
+         * ages out, which is when the count falls back to two.
+         */
         const until = purchaseHoldUntil(
             [daysAgo(6), daysAgo(4), daysAgo(2), daysAgo(1)],
             3,

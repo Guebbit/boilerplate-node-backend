@@ -45,7 +45,6 @@ const paidOrderHolding = async (status: OrderStatus, digital = false) => {
  * Whether the order's units are still claimed — true while the hold is held or committed, false
  * once it has shipped or been released.
  *
- * @param orderId - the order
  */
 const stillClaimed = (orderId: string) => inventoryService.isStockBoundToOrder(orderId);
 

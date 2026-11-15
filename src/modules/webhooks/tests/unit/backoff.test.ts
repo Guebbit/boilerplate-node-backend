@@ -54,8 +54,10 @@ describe('nextAttemptAt', () => {
         const after = Date.now();
 
         expect(at).toBeDefined();
-        // A window rather than an exact value: `Date.now()` inside `nextAttemptAt` runs a moment
-        // after `before` was captured here.
+        /**
+         * A window rather than an exact value: `Date.now()` inside `nextAttemptAt` runs a moment
+         * after `before` was captured here.
+         */
         expect(at!.getTime()).toBeGreaterThanOrEqual(before + WEBHOOK_RETRY_DELAYS_MS[0]);
         expect(at!.getTime()).toBeLessThanOrEqual(after + WEBHOOK_RETRY_DELAYS_MS[0]);
     });

@@ -39,8 +39,10 @@ import {
     webhookSubscriptionsAutoDisabledTotal
 } from '@modules/webhooks/metrics';
 
-// The real `node:https`, with this suite's own throwaway CA injected into every request — see
-// `https-test-server.ts`'s own doc for why `NODE_TLS_REJECT_UNAUTHORIZED` does NOT work here.
+/**
+ * The real `node:https`, with this suite's own throwaway CA injected into every request — see
+ * `https-test-server.ts`'s own doc for why `NODE_TLS_REJECT_UNAUTHORIZED` does NOT work here.
+ */
 jest.mock('node:https', () => {
     const actual = jest.requireActual('node:https');
     return {
@@ -50,9 +52,11 @@ jest.mock('node:https', () => {
     };
 });
 
-// The other mock this suite needs: a local test server is on 127.0.0.1, which the real guard
-// refuses (correctly — see the module docblock). Everything else about the guard's contract
-// (HTTPS-only, the pinned `lookup`) is preserved so the real TLS connection still goes through it.
+/**
+ * The other mock this suite needs: a local test server is on 127.0.0.1, which the real guard
+ * refuses (correctly — see the module docblock). Everything else about the guard's contract
+ * (HTTPS-only, the pinned `lookup`) is preserved so the real TLS connection still goes through it.
+ */
 jest.mock('@infrastructure/adapters/ssrf-guard', () => {
     const actual = jest.requireActual('@infrastructure/adapters/ssrf-guard');
     return {
@@ -83,8 +87,10 @@ jest.mock('@infrastructure/adapters/ssrf-guard', () => {
     };
 });
 
-// Replaced, not spied on — `jest.spyOn` cannot redefine the non-configurable getter a CommonJS
-// namespace import exposes. Same pattern `account`'s own integration suites use.
+/**
+ * Replaced, not spied on — `jest.spyOn` cannot redefine the non-configurable getter a CommonJS
+ * namespace import exposes. Same pattern `account`'s own integration suites use.
+ */
 jest.mock('@infrastructure/observability/audit', () =>
     jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
 );
@@ -103,6 +109,7 @@ beforeEach(() => {
 
 afterEach(() => resetDomainEvents());
 
+/** A manager caller, without analytics consent. */
 const context = { caller: callerAs('manager'), analyticsConsent: false };
 
 /** A subscription document with one ring secret, saved for real. */
@@ -249,8 +256,10 @@ describe('a successful delivery', () => {
             })
         ).toBe(true);
 
-        // The Standard Webhooks envelope — `type` names the event, `data` is the bare payload the
-        // job carried. See `../../asyncapi.yaml`'s own header for the full shape.
+        /**
+         * The Standard Webhooks envelope — `type` names the event, `data` is the bare payload the
+         * job carried. See `../../asyncapi.yaml`'s own header for the full shape.
+         */
         expect(JSON.parse(received.body) as unknown).toEqual({
             type: job.eventType,
             timestamp: job.occurredAt,
@@ -565,9 +574,11 @@ describe('replay', () => {
         const server = await startHttpsTestServer((response) => response.writeHead(500).end());
         const subscription = await createSubscription(`${server.url}/hook`);
 
-        // Two identical chains, each driven through one real failure so both sit `pending` at the
-        // same starting attempt (2) — one continues through the normal queue path, the other is
-        // replayed instead, so their outcomes can be compared directly.
+        /**
+         * Two identical chains, each driven through one real failure so both sit `pending` at the
+         * same starting attempt (2) — one continues through the normal queue path, the other is
+         * replayed instead, so their outcomes can be compared directly.
+         */
         const queuedJob = await createPendingDelivery(subscription, 'order.paid.queued');
         await webhooksService.processDeliveryJob({ deliveryId: queuedJob.deliveryId });
         const replayedJob = await createPendingDelivery(subscription, 'order.paid.replayed');
@@ -587,8 +598,10 @@ describe('replay', () => {
         expect(result.success).toBe(true);
         if (!result.success || !result.data) throw new Error('unreachable — asserted above');
 
-        // Exactly one increment for the one real HTTP attempt the replay made, and the same
-        // backoff tier a non-replayed failure at the same starting attempt would have used.
+        /**
+         * Exactly one increment for the one real HTTP attempt the replay made, and the same
+         * backoff tier a non-replayed failure at the same starting attempt would have used.
+         */
         expect(result.data.attempt).toBe(beforeReplay.attempt + 1);
         expect(result.data.attempt).toBe(queuedAfter?.attempt);
         expect(result.data.status).toBe(queuedAfter?.status);
@@ -601,8 +614,10 @@ describe('the delivery lease', () => {
         const subscription = await createSubscription(`${server.url}/hook`);
         const job = await createPendingDelivery(subscription);
 
-        // A worker that claimed the row and then crashed mid-attempt: `in_flight`, a lease already
-        // in the past, and a token nothing still holds.
+        /**
+         * A worker that claimed the row and then crashed mid-attempt: `in_flight`, a lease already
+         * in the past, and a token nothing still holds.
+         */
         const stranded = await webhookDeliveryRepository.findById(job.deliveryId);
         if (!stranded) throw new Error('unreachable — asserted above');
         stranded.status = 'in_flight';
@@ -642,9 +657,11 @@ describe('the delivery lease', () => {
         if (result.success) throw new Error('unreachable — asserted above');
         expect(result.status).toBe(404);
 
-        // The claim never happened: still `pending`, no lease taken — a claim-then-404 would have
-        // left it `in_flight` under a lease nobody is left to finish, stranded until the sweep's
-        // stranded-lease read reclaims it as `exhausted` 60s later.
+        /**
+         * The claim never happened: still `pending`, no lease taken — a claim-then-404 would have
+         * left it `in_flight` under a lease nobody is left to finish, stranded until the sweep's
+         * stranded-lease read reclaims it as `exhausted` 60s later.
+         */
         const untouched = await webhookDeliveryRepository.findById(job.deliveryId);
         expect(untouched?.status).toBe('pending');
         expect(untouched?.leaseToken).toBeUndefined();
@@ -654,8 +671,10 @@ describe('the delivery lease', () => {
         const subscription = await createSubscription('https://example.invalid/hook');
         const job = await createPendingDelivery(subscription);
 
-        // A live worker's claim, never completed — the row is still `in_flight` under a fresh
-        // lease when the replay below runs.
+        /**
+         * A live worker's claim, never completed — the row is still `in_flight` under a fresh
+         * lease when the replay below runs.
+         */
         const claimed = await webhookDeliveryRepository.claimPending(job.deliveryId);
         expect(claimed).not.toBeNull();
 
@@ -675,8 +694,10 @@ describe('the delivery lease', () => {
         if (!claimed?.leaseToken) throw new Error('unreachable — asserted above');
         const staleToken = claimed.leaseToken;
 
-        // Something else re-claims the row before this (simulated) slow attempt writes its
-        // outcome — the same shape a real lease expiry followed by a reclaim would produce.
+        /**
+         * Something else re-claims the row before this (simulated) slow attempt writes its
+         * outcome — the same shape a real lease expiry followed by a reclaim would produce.
+         */
         claimed.leaseToken = 'a-newer-claims-token';
         await webhookDeliveryRepository.save(claimed);
 

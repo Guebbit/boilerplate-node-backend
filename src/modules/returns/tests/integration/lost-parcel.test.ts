@@ -108,6 +108,7 @@ const shippedParcel = async () => {
     };
 };
 
+/** What the arranging helper hands each case. */
 type Parcel = Awaited<ReturnType<typeof shippedParcel>>;
 
 /** Staff report the parcel lost. */

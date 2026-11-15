@@ -131,7 +131,6 @@ export const refundOrderPayment = (
  * The provider's own id for an order's payment intent, which the wire never publishes: what a test
  * needs to steer the fake provider's behaviour for that order.
  *
- * @param orderId - the order
  * @throws {Error} when the order has no payment with an intent
  */
 export const providerRefOf = (orderId: string): Promise<string> =>
@@ -143,7 +142,6 @@ export const providerRefOf = (orderId: string): Promise<string> =>
 /**
  * An order's refund records as stored, with the staff-only deadline stamp the wire never carries.
  *
- * @param orderId - the order
  * @returns each record's `reason`, `returnId`, `dueBy` and `dueRule`; empty when it has no payment
  */
 export const storedRefundStamps = (orderId: string) =>

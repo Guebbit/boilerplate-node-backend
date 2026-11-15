@@ -22,6 +22,7 @@ jest.mock('@kernel/middlewares/authorizations', () => ({
 const cookieRequest = () =>
     asStub<Request>({ sessionRecheck: jest.fn(), authContext: { id: 'staff-1' } });
 
+/** Spy on the metrics stream the events handler opens; no real stream starts. */
 const streamObservabilityMetrics = jest.spyOn(observabilityService, 'streamObservabilityMetrics');
 
 beforeEach(() => {
@@ -36,8 +37,10 @@ describe('GET /observability/events', () => {
 
         getObservabilityEvents(cookieRequest(), response);
 
-        // SSE owns the response for its lifetime: headers, keep-alives and the close. Anything
-        // this handler sent first would end the stream before it began.
+        /**
+         * SSE owns the response for its lifetime: headers, keep-alives and the close. Anything
+         * this handler sent first would end the stream before it began.
+         */
         expect(streamObservabilityMetrics).toHaveBeenCalledWith(
             response,
             'staff-1',

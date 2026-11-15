@@ -73,8 +73,10 @@ export const giveLife = (id: string, dueInDays: number, lifeDays: number): Promi
         .updateOne(
             { _id: id },
             { $set: { dueAt: new Date(dueAt), createdAt: new Date(dueAt - lifeDays * DAY_MS) } },
-            // Mongoose: `createdAt` is immutable by default; this lets a test move it.
-            // https://mongoosejs.com/docs/timestamps.html
+            /**
+             * Mongoose: `createdAt` is immutable by default; this lets a test move it.
+             * https://mongoosejs.com/docs/timestamps.html
+             */
             { overwriteImmutable: true }
         )
         .exec();

@@ -15,8 +15,10 @@ import { setEnvironment } from '@tests/environment';
 
 setupTestDb();
 
+/** A manager caller, without analytics consent. */
 const context = { caller: callerAs('manager'), analyticsConsent: false };
 
+/** A valid create body for the given url that subscribes to every event. */
 const subscriptionBody = (url: string): CreateWebhookSubscriptionRequest => ({
     url,
     eventTypes: ['*']
@@ -37,8 +39,10 @@ describe('create — the subscription cap boundary', () => {
         const succeeded = outcomes.filter((outcome) => outcome.success);
         const rejected = outcomes.filter((outcome) => !outcome.success);
 
-        // Exactly one of the two racing calls gets the single slot the cap of 1 allows — the
-        // count-then-insert pre-check alone would let both through, since both read the same `0`.
+        /**
+         * Exactly one of the two racing calls gets the single slot the cap of 1 allows — the
+         * count-then-insert pre-check alone would let both through, since both read the same `0`.
+         */
         expect(succeeded).toHaveLength(1);
         expect(rejected).toHaveLength(1);
         expect(rejected[0]?.success).toBe(false);
@@ -83,10 +87,12 @@ describe('create — captures the owner id', () => {
     });
 
     it('stores whatever id the caller carries, unresolved — no lookup happens at creation', async () => {
-        // `callerAs('manager')`'s default id ('test-user') is not a real ObjectId — the shape a
-        // stub/anonymous caller would have, never a real authenticated one in production. Under the
-        // pointer design this is harmless either way: creation never resolves it, only
-        // `services/attempt.ts`'s auto-disable notice does, lazily, at send time.
+        /**
+         * `callerAs('manager')`'s default id ('test-user') is not a real ObjectId — the shape a
+         * stub/anonymous caller would have, never a real authenticated one in production. Under the
+         * pointer design this is harmless either way: creation never resolves it, only
+         * `services/attempt.ts`'s auto-disable notice does, lazily, at send time.
+         */
         const asStubCaller = { caller: callerAs('manager'), analyticsConsent: false };
 
         const result = await create(

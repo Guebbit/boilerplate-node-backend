@@ -60,8 +60,10 @@ const paidOrder = async () => {
     const product = await createProduct({ price: '50.00' });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     await payByCard(order, user);
-    // Delivery is after the response: let the relay publish the settlement's rows before a test
-    // cancels, as a real cancel arrives a request later (a row waits behind its aggregate's earlier ones).
+    /**
+     * Delivery is after the response: let the relay publish the settlement's rows before a test
+     * cancels, as a real cancel arrives a request later (a row waits behind its aggregate's earlier ones).
+     */
     await settleOutboxNudges();
     return { user, order, orderId: String(order._id) };
 };
@@ -248,8 +250,10 @@ describe('a refund that asks for too much', () => {
         expect(payment.refunds).toHaveLength(1);
     });
 
-    // The sweep finishing the record while its opener is still at the provider: the opener lost the
-    // conditional settle, and the money did go back, so it must not be told there was nothing.
+    /**
+     * The sweep finishing the record while its opener is still at the provider: the opener lost the
+     * conditional settle, and the money did go back, so it must not be told there was nothing.
+     */
     it('reports success to the caller whose open refund the sweep settled first', () =>
         withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { orderId } = await paidOrder();
@@ -500,8 +504,10 @@ describe('the refund sweep', () => {
                 success: true,
                 status: 201
             });
-            // 201 hand-paid payments with an open refund, all older than the card one.
-            // `providerRef` is unique and a hand-paid payment has none.
+            /**
+             * 201 hand-paid payments with an open refund, all older than the card one.
+             * `providerRef` is unique and a hand-paid payment has none.
+             */
             const stored = await paymentOf(orderId);
             const { providerRef: _providerRef, ...card } = stored.toObject();
             const handPaid = Array.from({ length: 201 }, () => ({
@@ -633,8 +639,10 @@ describe('the payment.refunded announcement', () => {
 
         await expect(refund(orderId)).rejects.toThrow('disk full');
 
-        // The provider was asked, but the record never settled, so the payment does not read `refunded`
-        // and the sweep finishes the refund under the same idempotency key.
+        /**
+         * The provider was asked, but the record never settled, so the payment does not read `refunded`
+         * and the sweep finishes the refund under the same idempotency key.
+         */
         const payment = await paymentOf(orderId);
         expect(payment.status).toBe('succeeded');
         expect(payment.refunds[0].status).not.toBe('succeeded');
@@ -695,7 +703,7 @@ const requestRows = (auditSpy: jest.SpyInstance) =>
         .map(([event]: [{ action: string; metadata?: Record<string, unknown> }]) => event)
         .filter(({ action }) => action === paymentsAuditActions.ADMIN_PAYMENT_REFUND_REQUESTED);
 
-/*
+/**
  * The decision is on file when the record opens, not when the money lands: a refusal leaves the
  * record to the sweep, which has no caller and audits nothing, so without this row the only
  * evidence that someone asked would be a settlement row that never comes.

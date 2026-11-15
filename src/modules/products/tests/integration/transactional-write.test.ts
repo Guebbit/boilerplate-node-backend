@@ -103,8 +103,10 @@ describe('productService.create after its commit', () => {
             callerContextAs('admin')
         )) as ResponseSuccess<ProductDocument>;
 
-        // The row is durable; only the nicety of re-reading it back failed, and is not the buyer's
-        // (or the admin's) problem: the document the transaction wrote is the answer.
+        /**
+         * The row is durable; only the nicety of re-reading it back failed, and is not the buyer's
+         * (or the admin's) problem: the document the transaction wrote is the answer.
+         */
         expect(result.success).toBe(true);
         expect(await productRepository.count({})).toBe(1);
         jest.restoreAllMocks();

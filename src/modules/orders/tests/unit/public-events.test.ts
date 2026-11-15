@@ -36,8 +36,10 @@ describe('the orders module’s public events', () => {
         ).toBeUndefined();
     });
 
-    // Whether a cancel owes money back is a policy for `payments`: "owed" is not "paid back", and
-    // a subscriber hears `payment.refunded` when money actually moved.
+    /**
+     * Whether a cancel owes money back is a policy for `payments`: "owed" is not "paid back", and
+     * a subscriber hears `payment.refunded` when money actually moved.
+     */
     it.each([true, false])(
         'tells subscribers an order was canceled without the refund policy (refund: %s)',
         (refund) => {

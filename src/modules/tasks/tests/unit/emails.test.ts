@@ -12,6 +12,7 @@ import {
     type ContactRequest
 } from '@modules/tasks/emails';
 
+/** A contact request, the input the mail is rendered from. */
 const REQUEST: ContactRequest = {
     id: '6ad69a48f753b902e5b98dfe',
     name: 'Ada Lovelace',
@@ -29,8 +30,10 @@ describe('contactRequestEmail', () => {
     it('puts the task"s own subject in the mail subject, after the prefix', () => {
         const { subject } = contactRequestEmail('en', REQUEST);
 
-        // Both halves: the prefix marks it as a contact request among an operator's other mail,
-        // and the task subject is what makes one distinguishable from the next.
+        /**
+         * Both halves: the prefix marks it as a contact request among an operator's other mail,
+         * and the task subject is what makes one distinguishable from the next.
+         */
         expect(subject).toContain(REQUEST.subject);
         expect(subject.endsWith(`: ${REQUEST.subject}`)).toBe(true);
         expect(subject).not.toBe(REQUEST.subject);
@@ -56,8 +59,10 @@ describe('contactRequestEmail', () => {
     });
 
     it('passes the sender"s details through unchanged', () => {
-        // These are the reply-to details. Translating or reformatting any of them would be a
-        // reply sent to the wrong address.
+        /**
+         * These are the reply-to details. Translating or reformatting any of them would be a
+         * reply sent to the wrong address.
+         */
         const { data } = contactRequestEmail('en', REQUEST);
 
         expect(data.name).toBe(REQUEST.name);
@@ -110,8 +115,10 @@ describe('contactRequestEmail', () => {
     });
 
     it('falls back to translated copy when the sender left no name', () => {
-        // `||`, not `??`: an empty string is as nameless as an absent field, and the form allows
-        // one. The fallback must be the translated placeholder, never a blank line.
+        /**
+         * `||`, not `??`: an empty string is as nameless as an absent field, and the form allows
+         * one. The fallback must be the translated placeholder, never a blank line.
+         */
         const anonymous = contactRequestEmail('en', { ...REQUEST, name: undefined });
         const blank = contactRequestEmail('en', { ...REQUEST, name: '' });
 

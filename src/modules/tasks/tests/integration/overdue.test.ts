@@ -32,6 +32,7 @@ beforeEach(() => {
 
 afterEach(() => resetDomainEvents());
 
+/** One hour in milliseconds. */
 const HOUR_MS = 3_600_000;
 
 /** An open system task whose deadline passed `hoursAgo` hours ago (negative: still ahead). */
@@ -107,8 +108,10 @@ describe('remindOverdue', () => {
         await expect(taskService.remindOverdue()).resolves.toBe(2);
         await settleOutboxNudges();
 
-        // Each task is its own aggregate: the relay delivers them in parallel, so only the claim
-        // order (the rows' write order) is promised.
+        /**
+         * Each task is its own aggregate: the relay delivers them in parallel, so only the claim
+         * order (the rows' write order) is promised.
+         */
         expect(heard.map((fact) => fact.taskId)).toEqual(expect.arrayContaining([older, newer]));
         const rows = await outboxEventModel
             .find({ name: 'task.overdue' })

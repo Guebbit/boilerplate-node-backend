@@ -18,8 +18,10 @@ const budget = (namespace: string) => budgetIn(tasksRateLimits, namespace);
 
 describe('contactLimiters', () => {
     it('keeps every dimension a small fraction of the browsing budget', () => {
-        // Same reasoning as the credential budget: a contact form filed once by a person must not
-        // share a bucket with ordinary browsing.
+        /**
+         * Same reasoning as the credential budget: a contact form filed once by a person must not
+         * share a bucket with ordinary browsing.
+         */
         expect(budget('submissions').defaultMax).toBeLessThan(DEFAULT_RATE_LIMIT_MAX / 5);
         expect(budget('submission-identity').defaultMax).toBeLessThan(DEFAULT_RATE_LIMIT_MAX / 5);
     });

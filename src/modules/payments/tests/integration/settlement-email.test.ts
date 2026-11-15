@@ -24,6 +24,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 setupTestDb();
@@ -63,8 +64,10 @@ describe('payment succeeded — the customer gets an email', () => {
             asCustomer(user.id),
             testCallerContext
         );
-        // The mail send is fire-and-forget and its first step is a real Mongo read, so it does not
-        // settle within one tick of `confirmPayment` resolving.
+        /**
+         * The mail send is fire-and-forget and its first step is a real Mongo read, so it does not
+         * settle within one tick of `confirmPayment` resolving.
+         */
         await eventually(paidMailSent);
 
         const [envelope] = mockEnqueueEmail.mock.calls.find(
@@ -83,8 +86,10 @@ describe('payment succeeded — the customer gets an email', () => {
             asCustomer(user.id),
             testCallerContext
         );
-        // Nothing to wait ON here — a decline never reaches the mail send at all — so this proves
-        // absence by giving any straggler every chance to show up before asserting it did not.
+        /**
+         * Nothing to wait ON here — a decline never reaches the mail send at all — so this proves
+         * absence by giving any straggler every chance to show up before asserting it did not.
+         */
         await settleOutboxNudges();
 
         expect(paidMailSent()).toBe(false);
@@ -101,11 +106,15 @@ describe('payment succeeded — the customer gets an email', () => {
             asCustomer(user.id),
             testCallerContext
         );
-        // The mail send is fire-and-forget and its first step is a real Mongo read, so it does not
-        // settle within one tick of `confirmPayment` resolving.
+        /**
+         * The mail send is fire-and-forget and its first step is a real Mongo read, so it does not
+         * settle within one tick of `confirmPayment` resolving.
+         */
         await eventually(paidMailSent);
-        // Already `succeeded` — `SETTLEABLE_PAYMENT_STATUSES` excludes it, so this retry settles
-        // nothing new; it must not re-mail the customer a second "payment received".
+        /**
+         * Already `succeeded` — `SETTLEABLE_PAYMENT_STATUSES` excludes it, so this retry settles
+         * nothing new; it must not re-mail the customer a second "payment received".
+         */
         await paymentService.confirmPayment(
             paymentId,
             GOOD_METHOD,

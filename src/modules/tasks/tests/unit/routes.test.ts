@@ -42,15 +42,19 @@ describe('tasks routes — the positional guard', () => {
     it('leaves POST / public, above the gate', () => {
         const guards = guardsOn(router, 'POST /');
 
-        // The whole reason the module exists for a visitor. A guard reaching this route is an
-        // outage of the contact form, not a hardening.
+        /**
+         * The whole reason the module exists for a visitor. A guard reaching this route is an
+         * outage of the contact form, not a hardening.
+         */
         expect(identityGuardIndex(guards)).toBe(-1);
         expect(guards).not.toContain('requirePermissionGuard');
     });
 
     it('recognises a signed-in sender on POST / without requiring one', () => {
-        // `getAuth` resolves the session when there is one; it is not an identity guard, so an
-        // anonymous or expired-token post still goes through as anonymous.
+        /**
+         * `getAuth` resolves the session when there is one; it is not an identity guard, so an
+         * anonymous or expired-token post still goes through as anonymous.
+         */
         const chain = chainOf(router, 'POST /');
 
         expect(chain).toContain('getAuth');
@@ -78,14 +82,18 @@ describe('tasks routes — the positional guard', () => {
     });
 
     it('keeps the contact route first, so the gate cannot be moved above it', () => {
-        // If `router.use` were mounted at the top instead, this ordering assertion would still
-        // pass — but the guard assertion above would fail, which is the pair that pins it.
+        /**
+         * If `router.use` were mounted at the top instead, this ordering assertion would still
+         * pass — but the guard assertion above would fail, which is the pair that pins it.
+         */
         expect(routeSignatures(router)[0]).toBe('POST /');
     });
 
     it('guards every route that reads what visitors submitted', () => {
-        // Stated as a sweep rather than a list: a route added below the gate is covered
-        // automatically, and one added above it fails here.
+        /**
+         * Stated as a sweep rather than a list: a route added below the gate is covered
+         * automatically, and one added above it fails here.
+         */
         const readsSubmissions = routeSignatures(router).filter(
             (signature) => signature !== 'POST /'
         );
@@ -96,8 +104,10 @@ describe('tasks routes — the positional guard', () => {
 });
 
 describe('tasks routes — caching', () => {
-    // One admin's queue, never a shared Redis answer — RFC 9111 §3.5. `privateNoCache` lets the
-    // BROWSER keep its own copy of the GET, revalidated every time.
+    /**
+     * One admin's queue, never a shared Redis answer — RFC 9111 §3.5. `privateNoCache` lets the
+     * BROWSER keep its own copy of the GET, revalidated every time.
+     */
     it('GET / is never Redis-cached, only privateNoCache', () => {
         const chain = chainOf(router, 'GET /');
 
@@ -115,9 +125,11 @@ describe('tasks routes — caching', () => {
 
 describe('tasks routes — submission rate limiting', () => {
     it('rate-limits the contact form before it can write anything', () => {
-        // The whole point is that a spent budget costs no database write — see
-        // `contactLimiters`' own docs for why this is a DIFFERENT set of limiters from
-        // `credentialLimiters`. All THREE dimensions — address, identity, address-block.
+        /**
+         * The whole point is that a spent budget costs no database write — see
+         * `contactLimiters`' own docs for why this is a DIFFERENT set of limiters from
+         * `credentialLimiters`. All THREE dimensions — address, identity, address-block.
+         */
         const chain = chainOf(router, 'POST /');
         const limiters = chain.filter((entry) => entry.startsWith('submission'));
 

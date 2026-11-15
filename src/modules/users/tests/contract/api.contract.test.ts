@@ -23,7 +23,7 @@ import { phoneAad } from '../../model';
 
 setupTestDb();
 
-/*
+/**
  * The audit port is REPLACED, not spied on — `jest.spyOn` cannot redefine the non-configurable
  * getter a CommonJS namespace import exposes under swc. See `tests/support/ports.ts`.
  */
@@ -39,6 +39,7 @@ const roleOf = (id: string) =>
     accessService.rolesOf(id, DEPLOYMENT_TENANT_ID).then(({ tenant }) => tenant);
 
 // Serializes the payload and checks for credential fields/values that must never leave the API.
+/** Fails when a response body carries a password, hash or token field. */
 const assertNoCredentials = (payload: unknown) => {
     const serialized = JSON.stringify(payload);
     expect(serialized).not.toContain('password');
@@ -54,9 +55,11 @@ describe('GET /users', () => {
         assertNoCredentials(response.body);
     });
 
-    // `GET /users/:id` resolves `role` from the membership store; the list endpoint's own
-    // serialization went through the document's `toJSON` transform instead, which has no role
-    // to offer — every item in a page answered with `role` silently missing.
+    /**
+     * `GET /users/:id` resolves `role` from the membership store; the list endpoint's own
+     * serialization went through the document's `toJSON` transform instead, which has no role
+     * to offer — every item in a page answered with `role` silently missing.
+     */
     it('carries each item’s role, the same as GET /users/:id does', async () => {
         const { bearer, user } = await authenticateAs('admin');
         const response = await api().get('/users').set('Authorization', bearer);
@@ -114,9 +117,11 @@ describe('GET /users', () => {
     });
 });
 
-// The `?role=` filter itself is gone — `role` is a membership fact now, not a searchable document
-// column, and filtering by it needs a two-step resolve `createRepository`'s generic `exact` spec
-// can't express. Deliberately not rebuilt here: no caller of `GET /users` needs it today.
+/**
+ * The `?role=` filter itself is gone — `role` is a membership fact now, not a searchable document
+ * column, and filtering by it needs a two-step resolve `createRepository`'s generic `exact` spec
+ * can't express. Deliberately not rebuilt here: no caller of `GET /users` needs it today.
+ */
 
 describe('GET /users/{id}', () => {
     it('matches the contract and exposes no credentials', async () => {
@@ -138,8 +143,10 @@ describe('GET /account', () => {
         expect(response.status).toBe(200);
         assertNoCredentials(response.body);
 
-        // A profile is the caller's identity: a browser must never be told to keep a copy. See
-        // `noStore` in `infrastructure/http/middlewares/cache.ts`.
+        /**
+         * A profile is the caller's identity: a browser must never be told to keep a copy. See
+         * `noStore` in `infrastructure/http/middlewares/cache.ts`.
+         */
         expect(response.headers['cache-control']).toBe('no-store');
     });
 });
@@ -247,7 +254,7 @@ describe('POST /users', () => {
         expect(await userRepository.findOne({ email })).toBeNull();
     });
 
-    /*
+    /**
      * Every one of these is a real column the create path would have written from a raw body:
      * unverifying the account, consenting on the user's behalf, or a plaintext phone the
      * presenter cannot decrypt — a 500 on this response and on every later read of the user.
@@ -269,8 +276,10 @@ describe('POST /users', () => {
         expect(await userRepository.findOne({ email })).toBeNull();
     });
 
-    // The paths that can set a password are listed, with their breach checks, in
-    // `tests/contract/password-set-paths.test.ts`: `POST /users` is not one of them.
+    /**
+     * The paths that can set a password are listed, with their breach checks, in
+     * `tests/contract/password-set-paths.test.ts`: `POST /users` is not one of them.
+     */
 });
 
 /**
@@ -287,9 +296,11 @@ const storePhone = (userId: string, phone: string) =>
     );
 
 describe('PUT /users/{id}', () => {
-    // A PUT body IS the new resource (RFC 9110 §9.3.4) — every omitted optional field is
-    // cleared, not left alone. `imageUrl` is the exception: it belongs to an upload, so it is
-    // left out of this body and survives it.
+    /**
+     * A PUT body IS the new resource (RFC 9110 §9.3.4) — every omitted optional field is
+     * cleared, not left alone. `imageUrl` is the exception: it belongs to an upload, so it is
+     * left out of this body and survives it.
+     */
     it('replaces every writable field, clearing every omitted optional one', async () => {
         const { bearer } = await authenticateAs('admin');
         const target = await createUser(
@@ -312,8 +323,10 @@ describe('PUT /users/{id}', () => {
         expect(response.body.phone).toBeUndefined();
     });
 
-    // `username` is the Replace schema's `required` set — an omitted one is a malformed PUT, not a
-    // value to fill in.
+    /**
+     * `username` is the Replace schema's `required` set — an omitted one is a malformed PUT, not a
+     * value to fill in.
+     */
     it('refuses a body missing the required identity field', async () => {
         const { bearer } = await authenticateAs('admin');
         const target = await createUser(
@@ -345,8 +358,10 @@ describe('PUT /users/{id}', () => {
         assertNoCredentials(response.body);
     });
 
-    // A credential is its owner's alone: neither is a declared field, so the strict schema
-    // refuses it and the stored values stay as they were.
+    /**
+     * A credential is its owner's alone: neither is a declared field, so the strict schema
+     * refuses it and the stored values stay as they were.
+     */
     it.each([
         ['email', { email: 'taken-over@example.com' }],
         ['password', { password: PLAIN_PASSWORD }]
@@ -743,6 +758,7 @@ describe('an id nobody holds', () => {
     );
 });
 
+/** The emails of a list response, in the order the API returned them. */
 const emailsOf = (response: { body: { items: { email: string }[] } }) =>
     response.body.items.map((user) => user.email).filter((email) => email.endsWith('@sort.test'));
 

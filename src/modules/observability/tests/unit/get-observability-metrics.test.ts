@@ -15,7 +15,7 @@ import {
 import { logger } from '@infrastructure/adapters/logger';
 import { recordErrorOnActiveSpan } from '@infrastructure/observability/tracer';
 
-/*
+/**
  * Only `getPrometheusMetrics` is replaced. `metricsRegistry` is the REAL one: every module
  * registers its counters against it at import time, so a stub registry makes `new Counter({
  * registers: [metricsRegistry] })` throw before this suite reaches its first assertion. Keeping
@@ -73,8 +73,10 @@ describe('GET /observability/metrics', () => {
         await Promise.resolve();
         await Promise.resolve();
 
-        // The content type comes off the registry rather than being written out here: Prometheus
-        // negotiates it, and a hardcoded one drifts the moment the client library changes format.
+        /**
+         * The content type comes off the registry rather than being written out here: Prometheus
+         * negotiates it, and a hardcoded one drifts the moment the client library changes format.
+         */
         expect(recorded.headers['Content-Type']).toBe(metricsRegistry.contentType);
         expect(recorded.body).toBe('# HELP up\nup 1\n');
         expect(recorded.status).toBeUndefined();
@@ -106,9 +108,11 @@ describe('GET /observability/metrics', () => {
         await Promise.resolve();
         await Promise.resolve();
 
-        // The Error itself, not its message: `redactFormat` hands anything under `error` to
-        // `serializeError`, which is what keeps the name — and, outside production, the stack.
-        // Flattening it to a string here would be asserting that we throw both away.
+        /**
+         * The Error itself, not its message: `redactFormat` hands anything under `error` to
+         * `serializeError`, which is what keeps the name — and, outside production, the stack.
+         * Flattening it to a string here would be asserting that we throw both away.
+         */
         expect(logger.error).toHaveBeenCalledWith('Failed to collect Prometheus metrics', {
             error: failure
         });

@@ -7,6 +7,7 @@
 import { withdrawalRefundDueBy } from '@modules/orders';
 import { proofOpenedRefund, proofOpensRefund, refundDueByOf } from '../../domain';
 
+/** The zone the refund deadline is read in. */
 const ROME = 'Europe/Rome';
 
 /** The day after `day`'s 14th, minus a millisecond, in Rome in winter (UTC+1). */

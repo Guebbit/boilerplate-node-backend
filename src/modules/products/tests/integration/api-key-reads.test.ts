@@ -67,8 +67,10 @@ describe('GET /products/:id: translations follow read:Translation', () => {
         expect(guest.body).not.toHaveProperty('translations');
     });
 
-    // The key reads the same rows a guest does, so only the field-level check keeps its wider
-    // answer out of the guest's cached entry.
+    /**
+     * The key reads the same rows a guest does, so only the field-level check keeps its wider
+     * answer out of the guest's cached entry.
+     */
     it('never lets that key seed the guest’s cached answer', async () => {
         const product = await createProduct({ title: 'On sale', active: true });
         const secret = await credentialHolding(['read:Translation']);
@@ -121,7 +123,7 @@ describe('GET /products with an api key', () => {
 });
 
 describe('the cache scope of a key caller', () => {
-    /*
+    /**
      * The cache middleware shares the guest's entry only when this is true, so a key that reads
      * more than a guest must make it false, or its wider answer would be stored under the guest's key.
      */

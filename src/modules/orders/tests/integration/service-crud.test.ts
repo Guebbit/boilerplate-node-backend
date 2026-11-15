@@ -125,8 +125,10 @@ describe('create', () => {
         expect(asSuccess(result).data.email).toBe(user.email);
     });
 
-    // No rank on the buyer in the body: an operator raises orders for a customer, an equal and
-    // themselves alike.
+    /**
+     * No rank on the buyer in the body: an operator raises orders for a customer, an equal and
+     * themselves alike.
+     */
     it('raises an order for a customer, an equal and oneself', async () => {
         const peer = await createUser({ email: 'peer@example.com' }, 'admin');
         const me = await createUser({ email: 'me@example.com' }, 'admin');
@@ -150,8 +152,10 @@ describe('create', () => {
         expect(await countOrders()).toBe(2);
     });
 
-    // Staff may sell a hidden or off-sale product by hand (Solidus, Shopify draft orders); the
-    // order is a normal one, stock held, and the product is the shelf's.
+    /**
+     * Staff may sell a hidden or off-sale product by hand (Solidus, Shopify draft orders); the
+     * order is a normal one, stock held, and the product is the shelf's.
+     */
     it.each([
         ['hidden', { active: false }],
         ['off sale', { purchasable: false }]
@@ -207,8 +211,10 @@ describe('create', () => {
         expect(await countersOf(fine._id)).toMatchObject({ reserved: 0 });
     });
 
-    // A caller who cannot read a hidden or removed product sees the same 404 as for an unknown id:
-    // the order would otherwise copy the product's title and price, and the 409 would confirm it exists.
+    /**
+     * A caller who cannot read a hidden or removed product sees the same 404 as for an unknown id:
+     * the order would otherwise copy the product's title and price, and the 409 would confirm it exists.
+     */
     it.each([
         ['hidden', { active: false }],
         ['soft-deleted', { deletedAt: new Date() }]
@@ -252,8 +258,10 @@ describe('create', () => {
         expect(result.success).toBe(true);
     });
 
-    // The open-order cap is a checkout rule (`cart/services/checkout.ts`): an operator raising an
-    // order for a customer is not the shopper the cap exists to stop.
+    /**
+     * The open-order cap is a checkout rule (`cart/services/checkout.ts`): an operator raising an
+     * order for a customer is not the shopper the cap exists to stop.
+     */
     it('skips the open-order cap that guards checkout', () =>
         withEnvironmentOverrides({ NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT: '1' }, async () => {
             const user = await createUser();
@@ -278,8 +286,10 @@ describe('create', () => {
         }));
 
     it('assigns each new order its own sequential order number', async () => {
-        // Mid-year and frozen: two orders straddling a real UTC New Year would get numbers from
-        // two different yearly sequences, both correctly, and fail the "one apart" check below.
+        /**
+         * Mid-year and frozen: two orders straddling a real UTC New Year would get numbers from
+         * two different yearly sequences, both correctly, and fail the "one apart" check below.
+         */
         freezeDate(Date.UTC(2026, 5, 15, 12));
 
         const user = await createUser();
@@ -310,8 +320,10 @@ describe('create', () => {
         expect(secondSeq).toBe(firstSeq + 1);
     });
 
-    // `currency` is frozen the same way `orderNumber` is — read once, at creation, never
-    // recomputed against whatever the deployment's config says later.
+    /**
+     * `currency` is frozen the same way `orderNumber` is — read once, at creation, never
+     * recomputed against whatever the deployment's config says later.
+     */
     it('freezes the shop currency at creation, unaffected by a later config change', () =>
         withEnvironmentOverrides({ NODE_DEFAULT_CURRENCY: 'GBP' }, async () => {
             const user = await createUser();
@@ -377,8 +389,10 @@ describe('create', () => {
     });
 
     it('keeps the snapshot frozen when the product is later repriced', async () => {
-        // The whole reason for embedding rather than referencing. If this regresses, historical
-        // orders silently restate themselves at today's prices.
+        /**
+         * The whole reason for embedding rather than referencing. If this regresses, historical
+         * orders silently restate themselves at today's prices.
+         */
         const { order, keyboard } = await seedOrder();
 
         keyboard.price = '999.00';
@@ -556,7 +570,7 @@ describe('create', () => {
         });
     });
 
-    /*
+    /**
      * The hold is taken BEFORE the order is written (`services/place.ts`), so once it IS taken, a
      * write that fails must give it back rather than leave it standing on a row never created.
      */
@@ -643,8 +657,10 @@ describe('getById', () => {
     });
 
     it('returns undefined when the scope does NOT match', async () => {
-        // The authorization boundary: a correct id plus the wrong owner must behave exactly like
-        // "no such order", with no hint that it exists.
+        /**
+         * The authorization boundary: a correct id plus the wrong owner must behave exactly like
+         * "no such order", with no hint that it exists.
+         */
         const { order } = await seedOrder();
         const stranger = await createUser({ email: 'stranger@example.com' });
 
@@ -654,10 +670,12 @@ describe('getById', () => {
     });
 
     it('serializes the same computed totals whether or not the read was scoped', async () => {
-        // `totalItems`/`totalQuantity`/`totalPrice` are derived at `toJSON()` time (never
-        // stored) — a scoped read must serialize to the identical totals an unscoped one does,
-        // now that both resolve the same hydrated document rather than one going through a
-        // separate aggregate-and-normalize path.
+        /**
+         * `totalItems`/`totalQuantity`/`totalPrice` are derived at `toJSON()` time (never
+         * stored) — a scoped read must serialize to the identical totals an unscoped one does,
+         * now that both resolve the same hydrated document rather than one going through a
+         * separate aggregate-and-normalize path.
+         */
         const { order, user } = await seedOrder();
 
         const scoped = await orderService.getById(String(order._id), { userId: user._id });
@@ -678,9 +696,11 @@ describe('getById', () => {
 });
 
 describe('update', () => {
-    // `status` is not a field `UpdateOrderByIdRequest` declares any more — see
-    // `docs/understand/tactical-ddd.md#who-writes-the-status` for where each move goes instead.
-    // `email` is the one field left, so that is the whole of what this suite has to prove.
+    /**
+     * `status` is not a field `UpdateOrderByIdRequest` declares any more — see
+     * `docs/understand/tactical-ddd.md#who-writes-the-status` for where each move goes instead.
+     * `email` is the one field left, so that is the whole of what this suite has to prove.
+     */
     it('changes the email', async () => {
         const { order } = await seedOrder();
 
@@ -702,8 +722,10 @@ describe('update', () => {
     });
 
     it('leaves untouched fields alone on an empty update', async () => {
-        // Each assignment is guarded by `!== undefined`, so a request that changes nothing must
-        // change nothing.
+        /**
+         * Each assignment is guarded by `!== undefined`, so a request that changes nothing must
+         * change nothing.
+         */
         const { order } = await seedOrder();
         const originalEmail = order.email;
 
@@ -804,8 +826,10 @@ describe('remove', () => {
         const result = await remove(order);
 
         expect(result.success).toBe(true);
-        // The record survives — an order is a financial record, and the default must not destroy
-        // one. This is the assertion that fails if the default flips back to a hard delete.
+        /**
+         * The record survives — an order is a financial record, and the default must not destroy
+         * one. This is the assertion that fails if the default flips back to a hard delete.
+         */
         await expect(orderRepository.count({})).resolves.toBe(1);
         const stored = await orderRepository.findById(String(order._id));
         expect(stored!.deletedAt).toBeInstanceOf(Date);
@@ -847,8 +871,10 @@ describe('restoreById', () => {
 
         expect(result.success).toBe(true);
         const stored = await orderRepository.findById(String(order._id));
-        // `undefined`, not null: the field is unset, which is what `callerScope`'s compiled
-        // `deletedAt: null` matches (Mongo's `{ field: null }` matches missing OR null).
+        /**
+         * `undefined`, not null: the field is unset, which is what `callerScope`'s compiled
+         * `deletedAt: null` matches (Mongo's `{ field: null }` matches missing OR null).
+         */
         expect(stored!.deletedAt).toBeUndefined();
     });
 
@@ -955,8 +981,10 @@ const twoBuyers = async () => {
 };
 
 describe('a client filter never widens the caller’s scope', () => {
-    // The scope is the authorization boundary. Merged with a spread, a `userId` filter naming
-    // someone else overwrote the scope's own `userId`, and the customer read that person's orders.
+    /**
+     * The scope is the authorization boundary. Merged with a spread, a `userId` filter naming
+     * someone else overwrote the scope's own `userId`, and the customer read that person's orders.
+     */
     it('answers nothing for a customer filtering on another buyer’s id', async () => {
         const { first, second } = await twoBuyers();
 

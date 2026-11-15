@@ -54,9 +54,11 @@ describe('order schema', () => {
     });
 
     it('drops onHand/reserved even though the live product document carries both', async () => {
-        // `product.toObject()` in `makeOrderPayload` above is the FULL live product, `onHand`/
-        // `reserved` included — this is what proves `orderLineProductSchema` has no path for
-        // either, rather than merely relying on nobody setting them.
+        /**
+         * `product.toObject()` in `makeOrderPayload` above is the FULL live product, `onHand`/
+         * `reserved` included — this is what proves `orderLineProductSchema` has no path for
+         * either, rather than merely relying on nobody setting them.
+         */
         const order = await orderRepository.create(await makeOrderPayload());
 
         const serialized = order.toJSON() as { items: Record<string, unknown>[] };

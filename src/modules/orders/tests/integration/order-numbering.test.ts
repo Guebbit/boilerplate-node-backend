@@ -51,8 +51,10 @@ describe('allocateOrderNumber', () => {
     it('gives every concurrent caller a unique number, with no gap in the sequence', async () => {
         const CONCURRENT_CALLS = 50;
 
-        // The whole point of the atomic `$inc`: fired together, not awaited one at a time, so a
-        // read-then-increment race would show up here as a duplicate or a skipped sequence value.
+        /**
+         * The whole point of the atomic `$inc`: fired together, not awaited one at a time, so a
+         * read-then-increment race would show up here as a duplicate or a skipped sequence value.
+         */
         const orderNumbers = await Promise.all(
             Array.from({ length: CONCURRENT_CALLS }, () => allocateOrderNumber())
         );
@@ -78,8 +80,10 @@ describe('allocateOrderNumber', () => {
             jest.useRealTimers();
         }
 
-        // Back in the original year, the sequence resumes where it left off — the new year's
-        // counter is a separate document, not a reset of this one.
+        /**
+         * Back in the original year, the sequence resumes where it left off — the new year's
+         * counter is a separate document, not a reset of this one.
+         */
         const backInFirstYear = await allocateOrderNumber();
         expect(parse(backInFirstYear)).toEqual([firstYear, 2]);
     });

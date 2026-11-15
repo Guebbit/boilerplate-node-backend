@@ -34,6 +34,7 @@ jest.mock('@infrastructure/observability/analytics', () => ({
 
 setupTestDb();
 
+/** The product ids saved on the user's wishlist. */
 const savedIds = async (userId: string) => {
     const view = await wishlistService.get(userId);
     return view.items.map(({ productId }) => productId);
@@ -212,7 +213,7 @@ const saveProducts = async (userId: string, count: number) => {
     return ids;
 };
 
-/*
+/**
  * `GET /wishlist` is never paginated, so the list is bounded where a product is saved. The cap is
  * in the write's own update, so it holds under concurrency too.
  */
@@ -358,7 +359,7 @@ describe('moveToCart', () => {
         expect(cart.items).toEqual([]);
     });
 
-    /*
+    /**
      * The catalogue gate, reached THROUGH the cart. `addItemById` refuses a product the
      * storefront would not show, and this module turns that refusal into its own 404 rather than
      * asking the catalogue a second time — so these two cases fail if either half breaks: the
@@ -385,8 +386,10 @@ describe('moveToCart', () => {
         expect(result.status).toBe(404);
         const cart = await cartService.getForBadge(user.id);
         expect(cart.items).toEqual([]);
-        // Still saved. The refusal is about buying it now, not about forgetting it — a product
-        // can come back, and dropping the line would take the shopper's list with it.
+        /**
+         * Still saved. The refusal is about buying it now, not about forgetting it — a product
+         * can come back, and dropping the line would take the shopper's list with it.
+         */
         expect(await savedIds(user.id)).toEqual([String(product._id)]);
     });
 
@@ -411,7 +414,7 @@ describe('moveToCart', () => {
         expect(cart.items).toEqual([]);
     });
 
-    /*
+    /**
      * The one cart refusal that is NOT "not found": unlike the two cases above, the cart's own
      * 422 says something the shopper needs to hear, so it passes through rather than becoming
      * this module's 404 — the product is fine, the existing cart line is just already full.

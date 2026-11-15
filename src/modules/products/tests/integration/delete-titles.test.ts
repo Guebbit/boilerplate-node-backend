@@ -15,7 +15,7 @@ import { PRODUCT_DELETED } from '../../events';
 
 setupTestDb();
 
-/*
+/**
  * The translation port's two calls are recording wrappers around the real ones, not spies:
  * `jest.spyOn` cannot redefine the non-configurable property a CommonJS namespace import exposes
  * under the swc transform the mutation runs use.

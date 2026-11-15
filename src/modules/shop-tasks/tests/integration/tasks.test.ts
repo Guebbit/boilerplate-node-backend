@@ -32,6 +32,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 setupTestDb();
@@ -42,6 +43,7 @@ const PAYMENT = new Types.ObjectId().toString();
 /** An order that exists as an id: the system reads it back as an ObjectId to mail its buyer. */
 const ORDER = new Types.ObjectId().toString();
 
+/** Counter behind the outbox row ids the cases hand out. */
 let eventCounter = 0;
 
 /** A fresh outbox row id, as the relay would stamp one. */
@@ -70,6 +72,7 @@ const onlyTask = () =>
         return tasks[0];
     });
 
+/** The refund event payload the cases publish. */
 const REFUND = {
     paymentId: PAYMENT,
     orderId: ORDER,
@@ -77,10 +80,12 @@ const REFUND = {
     amount: '10.00',
     currency: 'EUR'
 };
+/** The refund-reversed event payload the cases publish. */
 const REVERSAL: DomainEventMap['payment.refund_reversed'] = {
     ...REFUND,
     failureReason: RefundFailureReason.declined
 };
+/** The dispute-opened event payload the cases publish. */
 const DISPUTE: DomainEventMap['payment.dispute_opened'] = {
     paymentId: PAYMENT,
     orderId: ORDER,
@@ -93,6 +98,7 @@ const DISPUTE: DomainEventMap['payment.dispute_opened'] = {
     fundsWithdrawn: true,
     evidenceDueBy: '2031-01-10T00:00:00.000Z'
 };
+/** The fulfillment-delayed event payload the cases publish. */
 const DELAY: DomainEventMap['fulfillment_order.delayed'] = {
     orderId: ORDER,
     orderNumber: '2026-000041',

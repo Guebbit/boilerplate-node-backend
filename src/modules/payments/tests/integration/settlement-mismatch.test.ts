@@ -33,7 +33,7 @@ import { observePort } from '@tests/ports';
 import { generateReject } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
 
-/*
+/**
  * The audit port is REPLACED, not spied on — see `orders/tests/integration/create-audit.test.ts`:
  * `jest.spyOn` cannot redefine the non-configurable getter a CommonJS namespace import exposes.
  */
@@ -290,8 +290,10 @@ describe('a crash after the mismatch was recorded', () => {
         expect((await orderService.getById(orderId))!.status).toBe('pending');
         const recorded = await paymentRepository.findByOrderId(orderId);
         expect(recorded!.status).toBe('succeeded');
-        // The way back was opened with the `succeeded` mark, so the money is never durable
-        // without a record that returns it, whatever happens to the cancel.
+        /**
+         * The way back was opened with the `succeeded` mark, so the money is never durable
+         * without a record that returns it, whatever happens to the cancel.
+         */
         expect(recorded!.refunds).toHaveLength(1);
 
         // The expiry sweep cancels the still-pending order exactly as it does for any hold.

@@ -9,8 +9,11 @@
 import { Types } from 'mongoose';
 import { makeWishlist } from '@modules/wishlist/factories';
 
+/** Owner id the factory is asked to build for. */
 const USER = '65dc8a99604c307b702b5ccc';
+/** Id of one product the factory-built entries point at. */
 const DOG_FOOD = '65dcdec2b18ad5e4bd597f0f';
+/** Id of another product the factory-built entries point at. */
 const DOG_BED = '65dc9be92f2794d1c16741e1';
 
 describe('makeWishlist', () => {
@@ -34,8 +37,10 @@ describe('makeWishlist', () => {
     });
 
     it('gives a line nothing but a product id', () => {
-        // No quantity, deliberately — that is the whole difference from a cart line, and a
-        // fixture that added one would seed documents the schema strips and the contract forbids.
+        /**
+         * No quantity, deliberately — that is the whole difference from a cart line, and a
+         * fixture that added one would seed documents the schema strips and the contract forbids.
+         */
         const wishlist = makeWishlist({ userId: USER, productIds: [DOG_FOOD] });
 
         expect(Object.keys(wishlist.items![0])).toEqual(['productId']);

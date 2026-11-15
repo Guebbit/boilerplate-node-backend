@@ -51,12 +51,14 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 /* Replaced, not spied on — `recordAudit` closes over its own module's `emitAuditEvent`. */
 jest.mock('@infrastructure/observability/audit', () =>
     jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
 );
+/** The audit port's emitter, typed so the cases can read its calls. */
 const mockEmitAuditEvent = auditPort.emitAuditEvent as jest.MockedFunction<
     typeof auditPort.emitAuditEvent
 >;
@@ -90,8 +92,10 @@ const orderIn = async (status: OrderStatus) => {
     // Goods that left or arrived get there through the real doors, so the shipments exist.
     if (carried) {
         await carryOrderTo(String(order._id), status);
-        // The shipped and delivered mails belong to the setup, not to what the test is about: let
-        // their events land before clearing.
+        /**
+         * The shipped and delivered mails belong to the setup, not to what the test is about: let
+         * their events land before clearing.
+         */
         await settleOutboxNudges();
         mockEnqueueEmail.mockClear();
     }
@@ -318,8 +322,10 @@ describe('goods excluded from the right of withdrawal (Art. 16)', () => {
         ]);
     });
 
-    // Only a defect brings an excluded line back (the guarantee covers it); any other reason names
-    // goods the withdrawal right never reached.
+    /**
+     * Only a defect brings an excluded line back (the guarantee covers it); any other reason names
+     * goods the withdrawal right never reached.
+     */
     it.each(['withdrawal', 'other'] as const)(
         'refuses a %s return that names an excluded line',
         async (reason) => {
@@ -597,8 +603,10 @@ describe('a return on goods that have shipped', () => {
 
     it('still takes a withdrawal on the silent grace day after the announced last day', async () => {
         const { user, shirt, orderId } = await deliveredOrder();
-        // The announced last day ended an hour ago: the buyer was told "until the end of
-        // yesterday", the shop still accepts it for one more UTC day.
+        /**
+         * The announced last day ended an hour ago: the buyer was told "until the end of
+         * yesterday", the shop still accepts it for one more UTC day.
+         */
         await setWithdrawUntil(orderId, new Date(Date.now() - 3_600_000));
 
         const outcome = await returnService.createReturn(
@@ -659,8 +667,10 @@ describe('a return on goods that have shipped', () => {
             )
         );
 
-        // The two withdrawal-period reasons are shut; the two guarantee reasons got past the
-        // deadline check (their made-up line is then refused for what it is, not for the date).
+        /**
+         * The two withdrawal-period reasons are shut; the two guarantee reasons got past the
+         * deadline check (their made-up line is then refused for what it is, not for the date).
+         */
         expect(outcomes.map((o) => !o.success && o.errors[0].code)).toEqual([
             'RETURN_WINDOW_CLOSED',
             'RETURN_WINDOW_CLOSED',
@@ -817,8 +827,10 @@ describe('deciding a request', () => {
         expect(asReject(result).status).toBe(409);
     });
 
-    // Holding the key is the whole rule: a buyer promoted to staff decides their own return like
-    // anyone's, and the refund step that follows is the one the audit row flags.
+    /**
+     * Holding the key is the whole rule: a buyer promoted to staff decides their own return like
+     * anyone's, and the refund step that follows is the one the audit row flags.
+     */
     it('lets a promoted buyer approve their own return', async () => {
         const { user, returnId } = await requestedReturn();
         await seedMembership(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'manager');
@@ -961,8 +973,10 @@ describe('who sees which return', () => {
         });
     });
 
-    // Holding the key is enough: a staff member who is also the buyer is a customer first, so the
-    // permission decides, and the money step is recorded rather than refused.
+    /**
+     * Holding the key is enough: a staff member who is also the buyer is a customer first, so the
+     * permission decides, and the money step is recorded rather than refused.
+     */
     it('offers a staff buyer the same decisions on their own return as any other staff member', async () => {
         const { user, returnId } = await requestedReturn();
         await seedMembership(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'manager');
@@ -1157,8 +1171,10 @@ describe('what a new return leaves behind', () => {
         ]);
     });
 
-    // The postage rule in force on the day the return opens is the one it keeps: a config change
-    // later must not move who pays for an open return.
+    /**
+     * The postage rule in force on the day the return opens is the one it keeps: a config change
+     * later must not move who pays for an open return.
+     */
     it('freezes who pays the return postage when the return opens', async () => {
         const { user, orderId } = await deliveredOrder();
 
@@ -1177,8 +1193,10 @@ describe('what a new return leaves behind', () => {
         expect(stored.returnPostage).toBe('shop');
     });
 
-    // The order's return status is a report of a fact already decided: failing to write it never
-    // takes the return back, and the next move stamps it.
+    /**
+     * The order's return status is a report of a fact already decided: failing to write it never
+     * takes the return back, and the next move stamps it.
+     */
     it('keeps the return when the report to the order fails', async () => {
         const { user, orderId } = await deliveredOrder();
         jest.spyOn(orderService, 'markReturnStatus').mockRejectedValueOnce(
@@ -1302,8 +1320,10 @@ describe('what a decision leaves behind', () => {
         ]);
     });
 
-    // Own money is trusted and recorded: a manager approving the return of their own order is
-    // flagged, an approval of someone else's is not.
+    /**
+     * Own money is trusted and recorded: a manager approving the return of their own order is
+     * flagged, an approval of someone else's is not.
+     */
     it('flags an approval of the staff member’s own return ownOrder', async () => {
         const own = await requestedReturn();
 

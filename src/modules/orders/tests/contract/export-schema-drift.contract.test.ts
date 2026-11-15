@@ -19,10 +19,12 @@ interface ObjectSchema {
     additionalProperties?: boolean;
 }
 
+/** The module contract, parsed from its own openapi.yaml. */
 const spec = parse(readFileSync(path.resolve(__dirname, '../../openapi.yaml'), 'utf8')) as {
     components: { schemas: Record<string, ObjectSchema> };
 };
 
+/** The order and export schemas the drift checks compare, picked out of the contract. */
 const {
     Order: order,
     ExportOrder: exportOrder,

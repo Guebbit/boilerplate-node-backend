@@ -35,8 +35,10 @@ describe('orderTaxBreakdown — an order with no lines', () => {
 
 describe('orderTaxBreakdown — a fully-VAT order', () => {
     it('extracts VAT from the gross line total, not from the unit price alone', () => {
-        // 19.90 × 1 at 22%: gross 1990 cents, tax = round(1990 × 0.22/1.22) = 359, net = 1631.
-        // The exact figures a known float-imprecise multiply must still land on — see money.ts.
+        /**
+         * 19.90 × 1 at 22%: gross 1990 cents, tax = round(1990 × 0.22/1.22) = 359, net = 1631.
+         * The exact figures a known float-imprecise multiply must still land on — see money.ts.
+         */
         const breakdown = orderTaxBreakdown({ items: [line(19.9, 1, 0.22)], currency: 'EUR' });
 
         expect(breakdown.lines).toEqual([
@@ -45,9 +47,11 @@ describe('orderTaxBreakdown — a fully-VAT order', () => {
     });
 
     it('taxes the LINE total (price × quantity), not the unit price alone', () => {
-        // 10 × 2 units at 20%: gross 2000 cents, tax = round(2000 × 0.2/1.2) = 333 → 3.33. Per-line
-        // rounding is not exactly linear in quantity (that's the point of rounding once per line,
-        // not per unit), so this is a hand-checked value rather than "double the single-unit tax".
+        /**
+         * 10 × 2 units at 20%: gross 2000 cents, tax = round(2000 × 0.2/1.2) = 333 → 3.33. Per-line
+         * rounding is not exactly linear in quantity (that's the point of rounding once per line,
+         * not per unit), so this is a hand-checked value rather than "double the single-unit tax".
+         */
         const breakdown = orderTaxBreakdown({ items: [line(10, 2, 0.2)], currency: 'EUR' });
 
         expect(breakdown.lines[0]).toEqual({
@@ -106,8 +110,10 @@ describe('orderTaxBreakdown — a fully-VAT order', () => {
 
 describe('orderTaxBreakdown — shipping, apportioned pro-rata by line value', () => {
     it("folds shipping's own tax into taxTotal, on top of the lines' own", () => {
-        // One line, so shipping's whole value is apportioned onto it: 5.00 shipping taxed at the
-        // line's own 22% is round(500 × 0.22/1.22) = 90 → 0.90, on top of the line's own 2.18.
+        /**
+         * One line, so shipping's whole value is apportioned onto it: 5.00 shipping taxed at the
+         * line's own 22% is round(500 × 0.22/1.22) = 90 → 0.90, on top of the line's own 2.18.
+         */
         const withoutShipping = orderTaxBreakdown({
             items: [line(19.9, 1, 0.22)],
             currency: 'EUR'
@@ -137,8 +143,10 @@ describe('orderTaxBreakdown — shipping, apportioned pro-rata by line value', (
     });
 
     it("splits shipping's tax across lines by their own gross value, each at its own rate", () => {
-        // Two equal-value lines at different rates: shipping's 10.00 splits 50/50, each half
-        // (5.00) taxed at ITS line's own rate — not the same rate applied to the whole shipping fee.
+        /**
+         * Two equal-value lines at different rates: shipping's 10.00 splits 50/50, each half
+         * (5.00) taxed at ITS line's own rate — not the same rate applied to the whole shipping fee.
+         */
         const breakdown = orderTaxBreakdown({
             items: [line(10, 1, 0.22), line(10, 1, 0)],
             shippingCost: '10.00',
@@ -149,8 +157,10 @@ describe('orderTaxBreakdown — shipping, apportioned pro-rata by line value', (
             currency: 'EUR'
         });
 
-        // The zero-rated line contributes nothing extra; the standard-rated line's half of
-        // shipping (5.00) adds round(500 × 0.22/1.22) = 90 → 0.90.
+        /**
+         * The zero-rated line contributes nothing extra; the standard-rated line's half of
+         * shipping (5.00) adds round(500 × 0.22/1.22) = 90 → 0.90.
+         */
         expect(Number(breakdown.taxTotal)).toBeCloseTo(Number(withoutShipping.taxTotal) + 0.9, 6);
     });
 
@@ -168,15 +178,17 @@ describe('orderTaxBreakdown — shipping, apportioned pro-rata by line value', (
         expect(withUndefined).toEqual(withZero);
     });
 
-    /*
+    /**
      * Shipping is ancillary to the goods it delivers — a digital line never carries any of
      * it, so a physical line on the same order absorbs the WHOLE shipping cost rather than only
      * its own pro-rata share.
      */
     it('spreads shipping over the physical lines only, never onto a digital one', () => {
-        // Equal-value lines, one physical one digital: without the fix, shipping would split
-        // 50/50; with it, the physical line alone carries all of it, taxed as if it were the
-        // order's only line, while the digital line is taxed on its own goods alone.
+        /**
+         * Equal-value lines, one physical one digital: without the fix, shipping would split
+         * 50/50; with it, the physical line alone carries all of it, taxed as if it were the
+         * order's only line, while the digital line is taxed on its own goods alone.
+         */
         const breakdown = orderTaxBreakdown({
             items: [line(10, 1, 0.22), digitalLine(10, 1, 0.22)],
             shippingCost: '10.00',
@@ -367,9 +379,11 @@ describe('orderTaxBreakdown — taxSummary, one row per distinct rate', () => {
 });
 
 describe("orderTaxBreakdown — each currency's own minor-unit exponent", () => {
-    // The SAME basket (one line at 19.90, taxed at 22%, plus 5.00 shipping), priced in three
-    // currencies with three different exponents — 2 decimals (EUR), 0 (JPY), 3 (KWD, minor unit
-    // is the fils). Every figure must exact-round to ITS OWN minor unit, never to the cent.
+    /**
+     * The SAME basket (one line at 19.90, taxed at 22%, plus 5.00 shipping), priced in three
+     * currencies with three different exponents — 2 decimals (EUR), 0 (JPY), 3 (KWD, minor unit
+     * is the fils). Every figure must exact-round to ITS OWN minor unit, never to the cent.
+     */
     const basket = { items: [line(19.9, 1, 0.22)], shippingCost: '5.00' };
 
     it('rounds to the cent for a 2-decimal currency (EUR)', () => {
@@ -386,8 +400,10 @@ describe("orderTaxBreakdown — each currency's own minor-unit exponent", () => 
     it('rounds to the whole unit for a 0-decimal currency (JPY) — no fractional yen', () => {
         const breakdown = orderTaxBreakdown({ ...basket, currency: 'JPY' });
 
-        // Same 19.9 gross, but a JPY minor unit IS the yen: toMinorUnits(19.9, 'JPY') rounds to
-        // 20 (whole yen), not 1990 hundredths of one. Tax = round(20 × 0.22/1.22) = 4 yen.
+        /**
+         * Same 19.9 gross, but a JPY minor unit IS the yen: toMinorUnits(19.9, 'JPY') rounds to
+         * 20 (whole yen), not 1990 hundredths of one. Tax = round(20 × 0.22/1.22) = 4 yen.
+         */
         expect(breakdown.lines[0]).toEqual({ taxAmount: '4', netAmount: '16', grossAmount: '20' });
         // Every figure is already a whole number — no third decimal a JPY price could never have.
         expect(breakdown.lines[0].grossAmount).toMatch(/^\d+$/);
@@ -396,22 +412,28 @@ describe("orderTaxBreakdown — each currency's own minor-unit exponent", () => 
     it('rounds to the fils (3 decimals) for a 3-decimal currency (KWD)', () => {
         const breakdown = orderTaxBreakdown({ ...basket, currency: 'KWD' });
 
-        // 19900 gross fils; tax = round(19900 × 0.22/1.22) = round(3588.5245...) = 3589 fils →
-        // 3.589 KWD, NOT the 3.590 a EUR-then-×10 shortcut would give — the fils rounds the exact
-        // fractional value directly, while EUR's cents already discarded that third digit first.
+        /**
+         * 19900 gross fils; tax = round(19900 × 0.22/1.22) = round(3588.5245...) = 3589 fils →
+         * 3.589 KWD, NOT the 3.590 a EUR-then-×10 shortcut would give — the fils rounds the exact
+         * fractional value directly, while EUR's cents already discarded that third digit first.
+         */
         expect(breakdown.lines[0]).toEqual({
             taxAmount: '3.589',
             netAmount: '16.311',
             grossAmount: '19.900'
         });
-        // The gross reconstructs to the fils, not just the cent — this is what a 3-decimal
-        // currency needs and a 2-decimal one cannot distinguish from the EUR case above.
+        /**
+         * The gross reconstructs to the fils, not just the cent — this is what a 3-decimal
+         * currency needs and a 2-decimal one cannot distinguish from the EUR case above.
+         */
         expect(Math.round(Number(breakdown.lines[0].grossAmount) * 1000)).toBe(19_900);
     });
 
     it('apportions shipping to the same minor unit the currency actually uses', () => {
-        // 5.00 shipping, one line, taxed at 22% either way — but the JPY figure must be a whole
-        // yen (round(5 × 0.22/1.22) = 1), not the 0.90 a EUR-shaped rounding would produce.
+        /**
+         * 5.00 shipping, one line, taxed at 22% either way — but the JPY figure must be a whole
+         * yen (round(5 × 0.22/1.22) = 1), not the 0.90 a EUR-shaped rounding would produce.
+         */
         const eur = orderTaxBreakdown({ ...basket, currency: 'EUR' });
         const jpy = orderTaxBreakdown({ ...basket, currency: 'JPY' });
 
@@ -423,8 +445,10 @@ describe("orderTaxBreakdown — each currency's own minor-unit exponent", () => 
 
 describe('orderTaxBreakdown — VAT rounded once per rate (EN 16931 BR-CO-17), worked examples', () => {
     it('three 0.10 lines at 22%: 0.05 of VAT, not the 0.06 that per-line rounding gives', () => {
-        // Per line: round(10 x 0.22/1.22) = round(1.803) = 2, so 3 lines would sum to 6 cents.
-        // Per rate: gross 30 -> round(30 x 0.22/1.22) = round(5.409) = 5 cents, once.
+        /**
+         * Per line: round(10 x 0.22/1.22) = round(1.803) = 2, so 3 lines would sum to 6 cents.
+         * Per rate: gross 30 -> round(30 x 0.22/1.22) = round(5.409) = 5 cents, once.
+         */
         const breakdown = orderTaxBreakdown({
             items: [line(0.1, 1, 0.22), line(0.1, 1, 0.22), line(0.1, 1, 0.22)],
             currency: 'EUR'
@@ -438,8 +462,10 @@ describe('orderTaxBreakdown — VAT rounded once per rate (EN 16931 BR-CO-17), w
     });
 
     it("spreads the rate's one figure over its lines, so the lines still add up to it exactly", () => {
-        // 5 cents over three equal 10-cent lines: floor gives 1 each, the 2 left over go to the
-        // first of the equal weights -> [3, 1, 1]. Nets follow: 10 - tax.
+        /**
+         * 5 cents over three equal 10-cent lines: floor gives 1 each, the 2 left over go to the
+         * first of the equal weights -> [3, 1, 1]. Nets follow: 10 - tax.
+         */
         const breakdown = orderTaxBreakdown({
             items: [line(0.1, 1, 0.22), line(0.1, 1, 0.22), line(0.1, 1, 0.22)],
             currency: 'EUR'
@@ -450,13 +476,15 @@ describe('orderTaxBreakdown — VAT rounded once per rate (EN 16931 BR-CO-17), w
     });
 
     it('mixed rates with shipping: each rate rounds once, on its goods AND its shipping share', () => {
-        // Goods: 19.90 x 2 at 22% (3980 cents), 5.50 x 3 at 10% (1650). Shipping 6.00 = 600.
-        // Shipping by gross weight: floor(600 x 3980/5630) = 424, floor(600 x 1650/5630) = 175,
-        // the 1 cent left over goes to the heavier line -> 425 and 175.
-        // 22%: taxable 3980 + 425 = 4405 -> round(4405 x 0.22/1.22) = round(794.36) = 794.
-        //   Split goods/shipping by weight: 718 / 76 (the odd cent to the heavier, goods).
-        // 10%: taxable 1650 + 175 = 1825 -> round(1825 x 0.1/1.1) = round(165.91) = 166.
-        //   Split: 151 / 15.
+        /**
+         * Goods: 19.90 x 2 at 22% (3980 cents), 5.50 x 3 at 10% (1650). Shipping 6.00 = 600.
+         * Shipping by gross weight: floor(600 x 3980/5630) = 424, floor(600 x 1650/5630) = 175,
+         * the 1 cent left over goes to the heavier line -> 425 and 175.
+         * 22%: taxable 3980 + 425 = 4405 -> round(4405 x 0.22/1.22) = round(794.36) = 794.
+         *   Split goods/shipping by weight: 718 / 76 (the odd cent to the heavier, goods).
+         * 10%: taxable 1650 + 175 = 1825 -> round(1825 x 0.1/1.1) = round(165.91) = 166.
+         *   Split: 151 / 15.
+         */
         const breakdown = orderTaxBreakdown({
             items: [line(19.9, 2, 0.22), line(5.5, 3, 0.1)],
             shippingCost: '6.00',
@@ -500,8 +528,10 @@ describe('orderTaxBreakdown — VAT rounded once per rate (EN 16931 BR-CO-17), w
     });
 
     it('JPY, no minor unit: three 105-yen lines at 8% owe 23 yen, not the 24 per-line rounding gives', () => {
-        // Per line round(105 x 0.08/1.08) = round(7.78) = 8, x3 = 24. Per rate: gross 315 ->
-        // round(23.33) = 23.
+        /**
+         * Per line round(105 x 0.08/1.08) = round(7.78) = 8, x3 = 24. Per rate: gross 315 ->
+         * round(23.33) = 23.
+         */
         const breakdown = orderTaxBreakdown({
             items: [line(105, 1, 0.08), line(105, 1, 0.08), line(105, 1, 0.08)],
             currency: 'JPY'
@@ -512,8 +542,10 @@ describe('orderTaxBreakdown — VAT rounded once per rate (EN 16931 BR-CO-17), w
     });
 
     it('KWD, thousandths: three 0.101 lines at 22% owe 0.055, not the 0.054 per-line rounding gives', () => {
-        // Per line round(101 x 0.22/1.22) = round(18.21) = 18, x3 = 54 fils. Per rate: gross 303
-        // -> round(54.64) = 55 fils.
+        /**
+         * Per line round(101 x 0.22/1.22) = round(18.21) = 18, x3 = 54 fils. Per rate: gross 303
+         * -> round(54.64) = 55 fils.
+         */
         const breakdown = orderTaxBreakdown({
             items: [line(0.101, 1, 0.22), line(0.101, 1, 0.22), line(0.101, 1, 0.22)],
             currency: 'KWD'

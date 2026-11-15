@@ -11,7 +11,9 @@ import {
     transferInstructionsEmail
 } from '@modules/payments/emails';
 
+/** The recipient name the templates are rendered with. */
 const NAME = 'Ada Lovelace';
+/** The order the mail refers to. */
 const ORDER_ID = 'order-1';
 
 /** Two lines with different titles, quantities and prices, so no field can stand in for another. */
