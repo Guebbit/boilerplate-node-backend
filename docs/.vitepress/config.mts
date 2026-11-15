@@ -59,17 +59,89 @@ export default withMermaid(
                         items: [
                             { text: 'Reading Path', link: '/understand/reading-path' },
                             { text: 'Architecture', link: '/understand/architecture' },
-                            { text: 'Layers', link: '/understand/layers' },
-                            { text: 'Modules', link: '/understand/modules' },
-                            { text: 'Domain layer & DDD', link: '/understand/domain-layer' },
-                            { text: 'Strategic DDD', link: '/understand/strategic-ddd' },
-                            { text: 'Tactical DDD', link: '/understand/tactical-ddd' },
-                            { text: 'Request Flow', link: '/understand/request-flow' },
+                            {
+                                text: 'Layers',
+                                link: '/understand/layers',
+                                collapsed: true,
+                                items: [{ text: 'Quick map', link: '/understand/layers-quick-map' }]
+                            },
+                            {
+                                text: 'Modules',
+                                link: '/understand/modules',
+                                collapsed: true,
+                                items: [
+                                    {
+                                        text: 'The dependency graph and boot order',
+                                        link: '/understand/modules-graph'
+                                    },
+                                    {
+                                        text: 'The template and the manifest',
+                                        link: '/understand/modules-template'
+                                    },
+                                    { text: 'The four tiers', link: '/understand/modules-tiers' }
+                                ]
+                            },
+                            {
+                                text: 'Domain layer & DDD',
+                                link: '/understand/domain-layer',
+                                collapsed: true,
+                                items: [
+                                    { text: 'The folder', link: '/understand/domain-layer-folder' }
+                                ]
+                            },
+                            {
+                                text: 'Strategic DDD',
+                                link: '/understand/strategic-ddd',
+                                collapsed: true,
+                                items: [
+                                    {
+                                        text: 'The barrel',
+                                        link: '/understand/strategic-ddd-barrel'
+                                    },
+                                    {
+                                        text: 'Subdomains',
+                                        link: '/understand/strategic-ddd-subdomains'
+                                    }
+                                ]
+                            },
+                            {
+                                text: 'Tactical DDD',
+                                link: '/understand/tactical-ddd',
+                                collapsed: true,
+                                items: [
+                                    { text: 'Money', link: '/understand/tactical-ddd-money' },
+                                    {
+                                        text: 'The order lifecycle',
+                                        link: '/understand/tactical-ddd-order-lifecycle'
+                                    }
+                                ]
+                            },
+                            {
+                                text: 'Request Flow',
+                                link: '/understand/request-flow',
+                                collapsed: true,
+                                items: [
+                                    { text: 'Errors', link: '/understand/request-flow-errors' },
+                                    {
+                                        text: 'Cross-cutting strategies',
+                                        link: '/understand/request-flow-strategies'
+                                    }
+                                ]
+                            },
                             { text: 'Request Input', link: '/understand/request-input' },
                             { text: 'API Standards', link: '/understand/api-standards' },
                             {
                                 text: 'Write Methods: POST, PUT, PATCH',
-                                link: '/understand/write-methods'
+                                link: '/understand/write-methods',
+                                collapsed: true,
+                                items: [
+                                    {
+                                        text: 'Conditional writes',
+                                        link: '/understand/write-methods-conditional'
+                                    },
+                                    { text: 'Refusals', link: '/understand/write-methods-errors' },
+                                    { text: 'POST', link: '/understand/write-methods-post' }
+                                ]
                             },
                             {
                                 text: 'Clustering & Graceful Shutdown',
@@ -81,10 +153,44 @@ export default withMermaid(
                     {
                         text: 'Access',
                         items: [
-                            { text: 'Authorization', link: '/understand/authorization' },
+                            {
+                                text: 'Authorization',
+                                link: '/understand/authorization',
+                                collapsed: true,
+                                items: [
+                                    { text: 'The model', link: '/understand/authorization-model' },
+                                    {
+                                        text: 'Protecting people',
+                                        link: '/understand/authorization-people'
+                                    }
+                                ]
+                            },
                             { text: 'Two ways to stay signed in', link: '/understand/sessions' },
                             { text: 'Tenancy', link: '/understand/tenancy' },
-                            { text: 'Security', link: '/understand/security' }
+                            {
+                                text: 'Security',
+                                link: '/understand/security',
+                                collapsed: true,
+                                items: [
+                                    { text: 'Authentication', link: '/understand/security-auth' },
+                                    {
+                                        text: 'Smaller decisions',
+                                        link: '/understand/security-decisions'
+                                    },
+                                    {
+                                        text: 'Machine-to-machine credentials',
+                                        link: '/understand/security-m2m'
+                                    },
+                                    {
+                                        text: 'Key and credential rotation',
+                                        link: '/understand/security-rotation'
+                                    },
+                                    {
+                                        text: 'Two-factor authentication',
+                                        link: '/understand/security-two-factor'
+                                    }
+                                ]
+                            }
                         ]
                     },
                     {
@@ -92,9 +198,29 @@ export default withMermaid(
                         items: [
                             { text: 'Transactional Outbox', link: '/understand/outbox' },
                             { text: 'Idempotency', link: '/understand/idempotency' },
-                            { text: 'Redis Cache', link: '/understand/redis-cache' },
+                            {
+                                text: 'Redis Cache',
+                                link: '/understand/redis-cache',
+                                collapsed: true,
+                                items: [
+                                    {
+                                        text: 'Keys, size and headers',
+                                        link: '/understand/redis-cache-keys'
+                                    },
+                                    {
+                                        text: 'Refresh-ahead',
+                                        link: '/understand/redis-cache-refresh'
+                                    },
+                                    { text: 'The workers', link: '/understand/redis-cache-workers' }
+                                ]
+                            },
                             { text: 'Internationalisation', link: '/understand/i18n' },
-                            { text: 'RabbitMQ', link: '/understand/rabbitmq' },
+                            {
+                                text: 'RabbitMQ',
+                                link: '/understand/rabbitmq',
+                                collapsed: true,
+                                items: [{ text: 'Usage', link: '/understand/rabbitmq-usage' }]
+                            },
                             { text: 'MongoDB & Mongoose', link: '/understand/mongodb-mongoose' },
                             {
                                 text: 'Email & PDF Rendering',
@@ -109,7 +235,21 @@ export default withMermaid(
                             },
                             { text: 'External Services', link: '/understand/external-services' },
                             { text: 'Runtime', link: '/understand/runtime' },
-                            { text: 'Tools Explained', link: '/understand/tools-explained' },
+                            {
+                                text: 'Tools Explained',
+                                link: '/understand/tools-explained',
+                                collapsed: true,
+                                items: [
+                                    {
+                                        text: 'Core and data',
+                                        link: '/understand/tools-explained-core'
+                                    },
+                                    {
+                                        text: 'Observability',
+                                        link: '/understand/tools-explained-observability'
+                                    }
+                                ]
+                            },
                             { text: 'Tools', link: '/understand/tool-map' }
                         ]
                     },
@@ -117,7 +257,25 @@ export default withMermaid(
                         text: 'Data & privacy',
                         items: [
                             { text: 'Data Protection', link: '/understand/data-protection' },
-                            { text: 'Data Retention', link: '/understand/data-retention' }
+                            {
+                                text: 'Data Retention',
+                                link: '/understand/data-retention',
+                                collapsed: true,
+                                items: [
+                                    {
+                                        text: 'Accounts',
+                                        link: '/understand/data-retention-accounts'
+                                    },
+                                    {
+                                        text: 'Free text and holds',
+                                        link: '/understand/data-retention-holds'
+                                    },
+                                    {
+                                        text: 'Orders and invoices',
+                                        link: '/understand/data-retention-orders'
+                                    }
+                                ]
+                            }
                         ]
                     },
                     {
