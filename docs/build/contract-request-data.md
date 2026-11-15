@@ -5,6 +5,8 @@ audience: [developer]
 
 # Contract-Derived Request Data
 
+Does the API accept every payload its contract allows, and reject what it forbids? Data is generated from the contract itself.
+
 [Contract Testing](./contract-testing.md) answers "does the _response_ match `openapi.yaml`?" This page is the mirror image, and structurally different rather than just "the same idea applied to requests": for every write endpoint, does the API accept every payload its own contract declares legal, and reject exactly what it declares illegal? Neither question can be answered by hand-written factories (`tests/support/factories/*`) — they encode one known-good scenario each. This layer generates data **from the contract itself**, so it can ask "for _any_ legal input", not "for this one".
 
 ## Tools
@@ -183,7 +185,7 @@ Runs as part of the contract suite — no separate script:
 | `npm run test:contract`                      | `jest tests/contract --runInBand`, includes this file |
 | `RANDOM_DATA_SEED=<n> npm run test:contract` | Reproduce a specific run's generated data             |
 
-Excluded from [Mutation Testing](./mutation-testing.md) the same way the rest of `tests/contract/` is — Stryker's `testPathIgnorePatterns` already covers the whole directory, so this file needed no extra configuration to stay out of the (unit-only) mutation run.
+Excluded from [Mutation Testing](./mutation-testing.md) the same way the rest of `tests/contract/` is — Stryker's `testPathIgnorePatterns` already covers the whole directory, so this file needed no extra configuration to stay out of the mutation run.
 
 ## Read next
 

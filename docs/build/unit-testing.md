@@ -5,6 +5,8 @@ audience: [developer]
 
 # Unit Testing
 
+Is one piece of logic correct on its own, with no database and no HTTP?
+
 The layer that answers: **is this one piece of logic — a service, a repository, a model's validation rule, a middleware — correct on its own?** It's also the layer [Mutation Testing](./mutation-testing.md) mutates, so it's the one place a "test that asserts nothing" gets caught structurally rather than by review.
 
 ## Tools

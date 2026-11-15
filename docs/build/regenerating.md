@@ -12,7 +12,7 @@ this shape. This page is the short version you keep open while working.
 
 ## The bundles, `api/` and the generated TypeScript are not committed
 
-`postinstall` runs the scenario registries, the authorization bundle, the shared-rules step and then
+`postinstall` runs the scenario registries, the authorization bundle, the permission vocabulary, the shared-rules step and then
 `contracts:bundle` + `gen:api` + `gen:asyncapi` automatically after `npm install`/`npm ci`, so a
 fresh clone has all of it without anyone doing anything. The rest of this page still matters the
 moment you're actively editing a fragment mid-session — `postinstall` only fires on install, not on
@@ -40,6 +40,11 @@ first one was not run.
 
 Over in the paired frontend the mirror command is `npm run regenerate` as well — run it after every
 pull, or the app ships a client for the previous contract.
+
+| Flag        | Effect                                                                          |
+| ----------- | ------------------------------------------------------------------------------- |
+| `--check`   | verify every step that can, write nothing (`npm run check` runs it)             |
+| `--no-sync` | regenerate without touching the paired frontend (what the pre-commit hook runs) |
 
 The steps are still individually runnable (`contracts:bundle`, `gen:api`, `gen:asyncapi`,
 `sync:frontend`) and worth reaching for when you know exactly what changed. The

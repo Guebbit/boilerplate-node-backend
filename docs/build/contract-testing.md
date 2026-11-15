@@ -5,6 +5,8 @@ audience: [developer]
 
 # Contract Testing (Response Shape)
 
+Does the serialized JSON response match `openapi.yaml` exactly, including the fields that must not be there?
+
 The layer that answers: **does the wire response match `openapi.yaml`, exactly?** Not "does the business logic look right" (that's [Unit Testing](./unit-testing.md)) and not "is the right middleware mounted" (that's [Integration Testing](./integration-testing.md)) — specifically, does the _serialized JSON_ match the contract other services and the paired frontend are written against, including the fields that must **not** be there.
 
 This is one half of "contract testing" in this codebase. The other half — does a _request_ the contract declares legal actually get accepted — is [Contract-Derived Request Data](./contract-request-data.md), a structurally different layer. This page is about responses.

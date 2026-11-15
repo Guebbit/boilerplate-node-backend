@@ -46,7 +46,7 @@ script rather than something you type: the contract and integration suites share
 must not run concurrently.
 
 ```bash
-npx jest --runInBand -- src/modules/products      # every suite the module owns (28 test files)
+npx jest --runInBand -- src/modules/products      # every suite the module owns (31 test files)
 npx jest --runInBand -- src/modules/orders/tests/unit
 ```
 

@@ -5,7 +5,9 @@ audience: [developer]
 
 # Testing & Docs
 
-This page is the map. Each layer has its own detail page — code, tools, patterns, file map and a diagram — linked from the table below and from "Related pages" at the bottom of every one of them, so you can start anywhere and always find your way back here.
+The map of every test layer: what each one answers and where its page is.
+
+This page is the map. Each layer has its own detail page — code, tools, patterns, file map and a diagram — linked from the table below and from "Read next" at the bottom of every one of them, so you can start anywhere and always find your way back here.
 
 ## The layers, end to end
 
@@ -59,7 +61,7 @@ Each layer answers a question no other layer answers — a layer that duplicates
 - **Integration** covers two different needs under one budget: a module's own repository/service tests that need a real (in-memory) Mongo, and driving the real `src/app.ts` over real HTTP to check that the right thing ran (status codes, auth gates) — not that the response body matches what's promised.
 - **Contract — Response Shape** is the only layer that sees over-serialization: `openapi.yaml` declares `additionalProperties: false` on every object schema, so a field appearing on a response without being declared fails _here_, specifically — the class of bug that leaks `password`/`tokens`, exposes `_id`/`__v`, or lets a populated `product` object ride along on a cart line. The generated Zod schemas don't cover this; they validate request bodies, never responses.
 - **Contract — Request Data** is the mirror gap: does the validator actually enforce what the spec promises, and does it accept everything the spec allows? Different mechanism (generation from the schema, not comparison against it), different bug class (validator drift, not over-serialization).
-- **Mutation** doesn't test the app at all — it tests the _tests_, and only for the unit layer.
+- **Mutation** doesn't test the app at all — it tests the _tests_: the unit, cross-cutting and integration suites ([one ruler](./mutation-testing-ruler.md#one-ruler)).
 
 ## Reading a run
 
