@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/tests/factories.ts
-sha256: 767bebc823890599485768ec9f0cfd5a97e68ed8592260a93f951668c3bf91c1
-generated_at: 2026-11-08T05:41:26.661795+00:00
+sha256: 667d8121c82b2f92627006df6b1f42945c30a162003795a6025980a91fb94816
+generated_at: 2026-11-14T19:52:04.884751+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Test factories that drive an order through the delivery module's public service doors (`deliveryService`) so integration and contract tests get a fully consistent set of fulfillment orders, shipments, summaries, and status transitions — without manually assembling each document. Also provides a few targeted "backdate" helpers that mutate dates or quantities directly via the model, since no service door exposes that kind of time-travel.
+Test factories for the delivery module that drive an order through shipping and delivery using the module's own service API (the "doors"), so test fixtures carry the same fulfillment orders, shipments, summaries, and status transitions a real order would. A few helpers bypass the service to set clock-dependent state (dates, shipped quantities) that no public action can reach.
 
 ## Key elements
 
-- **`fulfillmentOrdersOf(orderId)`** — Calls `deliveryService.ensureFulfillmentOrders` then returns the documents from the repository. Idempotent: safe to call when orders already exist.
-- **`setFulfillmentOrderState(id, fields)`** — Raw model update for `agreedAt`, `expectedAt`, `lastNoticeAt`, `dueNoticeFor`. Use when a test needs a promise date in the past or a notice already sent.
-- **`setFirstLineShipped(id, qty)`** — Sets `lines.0.shippedQuantity` on a fulfillment order to simulate a partial ship.
-- **`shipmentsOf(orderId)`** — Returns all shipments for the order via `shipmentRepository`.
-- **`shipEverything(orderId, options?)`** — Iterates every `physical` / `open` fulfillment order and calls `deliveryService.shipFulfillmentOrder` as admin. Throws on the first failure.
-- **`deliverEverything(orderId)`** — Iterates every `shipped` shipment and calls `deliveryService.deliverShipment` as admin.
-- **`carryOrderTo(orderId, 'shipped' | 'delivered')`** — Composite: forces order to `processing`, ships everything (tracking `TRK-CARRIED01`), optionally delivers everything. The standard "get me to this state" helper.
-- **`paidPreorderOrder(wanted, buyer?, shippingAddress?)`** — Creates a PAID order whose lines are all backorder-preorder (product `onHand: 0`, `releaseDate` set). Reserves and commits inventory. Returns `{ user, orderId, productIds }`.
-- **`paidBackorderOrder(wanted, buyer?)`** — Creates a PAID order for one backorder-enabled product with partial shelf stock; the owed portion is frozen with a promise date. Returns `{ user, orderId, productId }`.
-- **`backdateShipments(daysAgo)`** — `updateMany({})` on `shipmentModel` setting `shippedAt` to N days ago. **Unscoped** — hits every shipment in the collection.
+- **`ShipEverythingOptions`** — options bag for `shipEverything` (tracking code, forced flag, reason).
+- **`fulfillmentOrdersOf(orderId)`** — ensures fulfillment orders exist (via `deliveryService.ensureFulfillmentOrders`) then returns them from the repository.
+- **`setFulfillmentOrderState(id, fields)`** — direct `fulfillmentOrderModel.updateOne` to set `agreedAt`, `expectedAt`, `lastNoticeAt`, or `dueNoticeFor`.
+- **`setFirstLineShipped(id, qty)`** — direct model write to set `lines.0.shippedQuantity` for re-send-refusal tests.
+- **`shipmentsOf(orderId)`** — returns the order's shipments via `shipmentRepository`.
+- **`shipEverything(orderId, options?)`** — ships every open physical fulfillment order in full as admin; returns the array of `Shipment` results.
+- **`deliverEverything(orderId)`** — delivers every shipment still in `shipped` status as admin.
+- **`carryOrderTo(orderId, 'shipped' | 'delivered')`** — composite: forces `processing`, ships everything (tracking `TRK-CARRIED01`), optionally delivers.
+- **`WantedPreorder`** / **`paidPreorderOrder(wanted, buyer?, shippingAddress?)`** — creates a PAID order of preorder lines: zero-stock products with a future `releaseDate`, backorder limits set, inventory reserved and committed. Returns `{ user, orderId, productIds }`.
+- **`WantedBackorder`** / **`paidBackorderOrder(wanted, buyer?)`** — creates a PAID order of one released product with partial shelf stock and an owed (backorder) line with a promise date. Returns `{ user, orderId, productId }`.
+- **`backdateShipments(daysAgo)`** — `shipmentModel.updateMany` to rewrite every shipment's `shippedAt` to N days ago.
 
 ## Relationships
 
-- **`src/modules/delivery/services/index.ts`** — Primary door: `deliveryService` is called by `shipEverything`, `deliverEverything`, and `fulfillmentOrdersOf`.
-- **`src/modules/delivery/repository.ts`** — `fulfillmentOrderRepository` and `shipmentRepository` are used for read-back after service calls.
-- **`src/modules/delivery/model.ts`** — `fulfillmentOrderModel` and `shipmentModel` are used by the backdate/state helpers (`setFulfillmentOrderState`, `setFirstLineShipped`, `backdateShipments`); types `FulfillmentOrderDocument` / `ShipmentDocument` shape return values.
-- **`src/domain-primitives/time.ts`** — `DAY_MS` constant used to compute the backdated timestamp in `backdateShipments`.
-- **Integration tests** (`backorder.test.ts`, `destination.test.ts`, `lost-parcel.test.ts`, `order-status-races.test.ts`, `override-sync.test.ts`, `preorder-board.test.ts`, `preorder-late.test.ts`, `preorder.test.ts`, `release-date-impact.test.ts`) and **`api.contract.test.ts`** — downstream consumers that import these factories to set up preconditions.
-- **`src/modules/account/tests/contract/shop.contract.test.ts`** — consumer; likely calls `paidBackorderOrder` / `paidPreorderOrder` for shop-level contract scenarios.
+- **`src/modules/delivery/services/index.ts`** — this file calls the delivery service for `ensureFulfillmentOrders`, `shipFulfillmentOrder`, and `deliverShipment`; it is the primary consumer of that service in tests.
+- **`src/modules/delivery/repository.ts`** — reads fulfillment orders and shipments via `fulfillmentOrderRepository` and `shipmentRepository`.
+- **`src/modules/delivery/model.ts`** — direct writes through `fulfillmentOrderModel` and `shipmentModel` for clock/quantity state unreachable via the service; also supplies the `FulfillmentOrderDocument` and `ShipmentDocument` type imports.
+- **`src/domain-primitives/time.ts`** — imports `DAY_MS` for the `backdateShipments` calculation.
+- **`src/modules/delivery/tests/contract/api.contract.test.ts`** — contract test that consumes these factories to set up delivery state.
+- **`src/modules/account/tests/contract/shop.contract.test.ts`** — cross-module contract test that uses these factories.
+- **`src/modules/delivery/tests/integration/backorder.test.ts`**, **`destination.test.ts`**, **`lost-parcel.test.ts`**, **`order-status-races.test.ts`**, **`override-sync.test.ts`**, **`preorder-board.test.ts`**, **`preorder-late.test.ts`**, **`preorder.test.ts`**, **`release-date-impact.test.ts`** — integration tests that call `carryOrderTo`, `paidPreorderOrder`, `paidBackorderOrder`, `shipEverything`, `deliverEverything`, `backdateShipments`, and the direct-set helpers to arrange pre-conditions.
 
 ## Notes
 
-- `backdateShipments` is **not scoped to an order** — it rewrites `shippedAt` on every shipment document in the collection. Run it in a test suite that has cleaned or isolated its DB, or the shared timestamps will leak.
-- `shipEverything` silently skips non-`physical` or non-`open` fulfillment orders; it will not throw if there are none to ship (returns `[]`).
-- `carryOrderTo` hard-codes the tracking code `TRK-CARRIED01`; tests that assert on a specific tracking value should call `shipEverything` directly with their own code.
-- `paidPreorderOrder` and `paidBackorderOrder` do **not** create fulfillment orders — they only exist in the ledger. A subsequent call to `fulfillmentOrdersOf` (or any service read) materialises them.
-- The `buyer` parameter in both paid-order helpers accepts either an email string (a new user is created) or an existing `UserDocument`; pass a distinct email when a test creates multiple orders to avoid address collisions.
+- The file's stated convention is "writes past nothing: each helper is the staff action, repeated." The three direct model writes (`setFulfillmentOrderState`, `setFirstLineShipped`, `backdateShipments`) are the acknowledged exceptions — they exist because the clock-dependent state they set has no service door.
+- `shipEverything` skips non-physical or non-`open` fulfillment orders silently; it does not throw for them.
+- `carryOrderTo` always uses the hardcoded tracking code `TRK-CARRIED01`; call `shipEverything` directly if a test needs a different code.
+- `paidPreorderOrder` and `paidBackorderOrder` leave no fulfillment order in the database; one is created lazily the first time `fulfillmentOrdersOf` is called.
+- All service calls authenticate as admin via `asAdmin()` / `callerContextAs('admin')`; no buyer-scoped delivery actions are exercised here.

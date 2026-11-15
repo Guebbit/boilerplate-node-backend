@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/tests/integration/order-status-races.test.ts
-sha256: d74180914268163f0bbc8ad02b1c65714107a27ed99261b44d0b4a320aa0eb90
-generated_at: 2026-11-08T05:42:38.275989+00:00
+sha256: 2aa5e1dbe7d308161b4ab21fecfb24223b52e44f1380bb6a6ce40f011af34e95
+generated_at: 2026-11-14T19:52:58.708104+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that verify concurrent status-change requests on the same order cannot both succeed. Two race scenarios are covered against real HTTP contention: (1) N admins simultaneously hitting the ship endpoint on one fulfillment order, and (2) a ship racing a full-order cancel. The file exists to guard the optimistic-revision claim that only one writer lands, and that the shipment email fires exactly once per real commit.
+Integration tests that verify the delivery ship-door and the order cancel endpoint are mutually exclusive under real concurrent HTTP contention. They assert that N simultaneous ship requests produce exactly one 201 (and one email), that a ship racing a cancel leaves a single coherent outcome, and that a lost-update on `markProcessing` is surfaced as a 409 rather than a silent half-ship.
 
 ## Key elements
 
-- **`jest.mock('@infrastructure/adapters/mailer')`** — replaces `enqueueEmail` with a `jest.fn()` so the test can assert call count without a real mail relay.
-- **`describe('two admins racing the same ship door')`**
-  - *"ships once…"* — fires `RACE_SIZE` concurrent POSTs to `/delivery/fulfillment-orders/:id/shipments`; asserts exactly **1 × 201**, the rest **409**, **1** email, **1** stored shipment, order status `shipped`.
-  - *"never ships more than remains…"* — same endpoint, order holds 3 units, each racer requests 1; asserts exactly **3 × 201**, total shipped units = 3, order status `shipped`.
-- **`describe('a ship racing a cancel of the whole order')`**
-  - *"lets exactly one win…"* — fires ship and `POST /orders/:id/cancel` via `Promise.all`; branches on which got 201 and asserts the other got 409, order status is consistent (`shipped` or `canceled`), and fulfillment-order status is `closed` or `canceled` respectively.
+- **`SHIPMENT_WON` / `CANCEL_WON`** — frozen expected-state objects (status codes, order status, shipment count, fulfillment-order status) used to assert the ship-vs-cancel test matches exactly one whole outcome.
+- **`describe('two admins racing the same ship door')`** — fires `RACE_SIZE` concurrent POSTs to `/delivery/…/shipments`; asserts one 201, the rest 409, one `enqueueEmail` call, one stored shipment. A second test races partial-quantity lines and expects exactly 3 winners (one per unit).
+- **`describe('a ship racing a cancel of the whole order')`** — issues ship and cancel via `Promise.all`; after outbox settlement, asserts the combined observation equals `SHIPMENT_WON` or `CANCEL_WON` (never a hybrid).
+- **`describe('a first shipment from a paid order that moved away meanwhile')`** — spies on `orderService.markProcessing` to return `null` (simulating the order moved to another status between read and write); asserts 409 with `ORDER_NOT_PAID`, zero shipments, order unchanged.
+- **Mailer mock** — `jest.mock('@infrastructure/adapters/mailer')` replaces `enqueueEmail` with a jest function so call-count is the assertion surface.
+- **`setupTestDb()`** — top-level call provisions the test database before any test runs.
 
 ## Relationships
 
-- **`tests/support/race.ts`** — provides `raceN`, `RACE_SIZE`, `countStatus`, `expectNoServerErrors`; the concurrency harness every assertion in this file depends on.
-- **`tests/support/http.ts`** — `api()` and `authenticateAs('admin')` build the Supertest calls and bearer token.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` runs once at module scope to seed a clean database.
-- **`tests/support/eventually.ts`** — `eventually()` retries the outbox-settlement check until the async email relay fires.
-- **`src/kernel/outbox.ts`** — `settleOutboxNudges()` must be awaited before asserting on `mockEnqueueEmail` calls; it drains the async outbox that gates email dispatch.
-- **`src/infrastructure/adapters/mailer.ts`** — `enqueueEmail` is the mocked unit under observation (call-count assertions).
-- **`src/modules/delivery/tests/factories.ts`** — `fulfillmentOrdersOf`, `shipmentsOf` query the delivery domain to verify post-race state.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `readOrder`, `toOrderItem` build and inspect the order fixture.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` supplies the product referenced by order lines.
-- **`src/types/index.ts`** — `OrderStatus` enum (`processing`, `shipped`, `canceled`) used in assertions.
+- **`tests/support/race.ts`** — provides `RACE_SIZE`, `raceN`, `countStatus`, `expectNoServerErrors`; the concurrency primitive behind every test here.
+- **`tests/support/http.ts`** — `api()` and `authenticateAs('admin')` build the authenticated Supertest requests.
+- **`tests/support/eventually.ts`** — `eventually` polls until the outbox relay has delivered the email, bridging async relay timing.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb` initialises the database fixture for the whole file.
+- **`src/infrastructure/adapters/mailer.ts`** — `enqueueEmail` is the mocked unit under count; the test never sends real mail.
+- **`src/kernel/outbox.ts`** — `settleOutboxNudges` flushes the outbox so the mailer mock (and cancel-listener side-effects) are observable.
+- **`src/modules/delivery/tests/factories.ts`** — `fulfillmentOrdersOf`, `shipmentsOf` read the persisted state the tests assert against.
+- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `readOrder`, `toOrderItem` build and read the order fixture.
+- **`src/modules/products/tests/factories.ts`** — `createProduct` supplies the product referenced by order items.
+- **`src/modules/orders/index.ts`** — exports `orderService`, whose `markProcessing` is spied on in the lost-update test.
+- **`src/types/index.ts`** — `OrderStatus` enum values (`processing`, `shipped`, `canceled`, `paid`) used in setup and assertions.
 
 ## Notes
 
-- **Outbox gating:** The email is not sent synchronously with the ship write. The test must `await settleOutboxNudges()` (possibly inside `eventually`) before checking `mockEnqueueEmail` call count. Skipping this step causes flaky "0 calls" failures.
-- **Partial-ship arithmetic:** The second test in the first `describe` hardcodes 3 units / 1-unit-per-racer. If `RACE_SIZE` changes, the expected 201 count (3) stays fixed because it is bounded by remaining quantity, not by racer count.
-- **Ship-vs-cancel branching:** The test does not know a priori which side wins; it inspects `ship.status === 201` and asserts the symmetric outcome. Both 201/409 paths are required to pass.
-- **`afterEach(jest.restoreAllMocks)`** ensures the mailer mock resets between tests even though it is declared at module level.
+- Every racer carries a unique `Idempotency-Key` (`randomUUID()`); without this the server would deduplicate and the test would not exercise real contention.
+- The last test ("paid order that moved away") **cannot** be triggered by genuine race timing. It explicitly mocks `orderService.markProcessing` to return `null`, simulating the condition where the order was cancelled between the read and the conditional write.
+- Email verification requires two `settleOutboxNudges` calls (one inside `eventually`, one after) because the mail rides `shipment.shipped` through the relay; a single settle may miss a straggler.
+- `afterEach(jest.restoreAllMocks)` ensures the `markProcessing` spy and mailer mock reset between tests; the mailer mock's call counter is not reset by this, so tests that assert call-count must be the only ones in the file relying on it.

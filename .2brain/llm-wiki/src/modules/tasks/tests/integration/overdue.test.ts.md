@@ -1,7 +1,7 @@
 ---
 source: src/modules/tasks/tests/integration/overdue.test.ts
-sha256: ee8a0aa0d4d2bc421f93bfde38dea2e05ebf9aefb5c398f9258b61bd1d3fb5c9
-generated_at: 2026-11-08T08:39:35.930595+00:00
+sha256: b52769972e192dc217082720cf607dae5ff120fc3c6b593076d8a81df7c36e84
+generated_at: 2026-11-14T22:15:43.217015+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the `remindOverdue` sweep, run against a real database. Verifies that an open task past its due date is announced exactly once as a `task.overdue` domain event, is stamped (`overdueNotifiedAt`) to prevent re-announcement, and that closed, not-yet-due, or already-notified tasks are correctly skipped. Also covers outbox redelivery on handler failure and ordering of a multi-task backlog.
+Integration test for the overdue sweep, run against a real database. Verifies that an open task past its due date is announced exactly once as a `task.overdue` domain event (with correct payload), stamped to prevent re-announcement, and that closed, not-yet-due, or reopened tasks are left untouched.
 
 ## Key elements
 
-- **`dueAgo(hoursAgo)`** — helper that creates a system task via `createSystemTask` and backdates its `dueAt` field; negative values put the deadline in the future.
-- **`heard`** — module-level array collecting `task.overdue` domain events fired during a test; reset in `beforeEach`.
-- **`beforeEach` / `afterEach`** — wire a manual listener for `TASK_OVERDUE`, call `markDomainEventsWired()` so the outbox relay delivers, and tear down the bus in `afterEach`.
-- **`describe('remindOverdue')`** — seven test cases:
-  - Announces an overdue task with correct payload fields (`taskId`, `kind`, `routeSet`, `work`).
-  - Second sweep returns 0 and the task carries `overdueNotifiedAt`.
-  - A task closed before the sweep is untouched (no event, no stamp).
-  - A not-yet-due task is skipped until its deadline passes.
-  - A task with no `dueAt` is ignored.
-  - A two-task backlog: both announced; outbox rows written oldest-deadline-first.
-  - A handler that throws once → outbox row stays `pending` → after resetting `nextAttemptAt`, `relayOutbox()` redelivers and the row becomes `published`.
-  - A reopened task (status reset to `TaskStatus.new`, `resolution` unset) is not re-announced.
+- **`dueAgo(hoursAgo)`** – local helper that creates a system task and backdates its due field; a negative argument means the task is *not* yet due.
+- **`heard: DomainEventMap['task.overdue'][]`** – module-level array that accumulates every `task.overdue` fact emitted during a test; reset in `beforeEach`.
+- **`describe('remindOverdue')`** – seven cases covering:
+  - Payload correctness (`kind`, `routeSet`, `work`).
+  - One-shot announcement + `overdueNotifiedAt` stamp on the task document.
+  - Closed-before-sweep and not-yet-due tasks are skipped (no event, no stamp).
+  - Task with no due date is ignored.
+  - Backlog sweep: oldest deadline claimed first (asserted via outbox row write order, not delivery order).
+  - Outbox redelivery: a handler that throws on first attempt succeeds on the next `relayOutbox()` pass.
+  - Reopened task is not re-announced (both deadline and stamp persist).
 
 ## Relationships
 
-- **`taskService.remindOverdue()`** (`service.ts`) — the SUT under test.
-- **`TASK_OVERDUE`** (`events.ts`) — the event-name constant used to subscribe and to filter outbox rows.
-- **`onDomainEvent`, `resetDomainEvents`, `markDomainEventsWired`** (`kernel/events.ts`) — manual event-bus wiring for the test harness.
-- **`outboxEventModel`, `relayOutbox`, `settleOutboxNudges`** (`kernel/outbox.ts`) — inspect outbox row state, trigger redelivery, and flush microtask queues.
-- **`taskModel`** (`model.ts`) — direct Mongoose reads to assert `overdueNotifiedAt` stamp and status.
-- **`createSystemTask`, `backdateDue`, `closeDirectly`** (`factories.ts`) — fixture helpers that build and mutate tasks in the test DB.
-- **`TaskStatus`** (`types/index.ts`) — used in the reopened-task test to reset status.
-- **`setupTestDb`** (`setup-test-db.ts`) — spins up a real (in-memory) database for the suite.
+| Neighbor | Interaction |
+|---|---|
+| `src/kernel/events.ts` | Subscribes to `TASK_OVERDUE` via `onDomainEvent`; calls `markDomainEventsWired()` so the outbox relay can deliver; resets state between tests. |
+| `src/kernel/outbox.ts` | Uses `settleOutboxNudges()` to flush pending relay work; in the redelivery test inspects/rewrites `outboxEventModel` rows and calls `relayOutbox()` directly. |
+| `src/modules/tasks/events.ts` | Imports the `TASK_OVERDUE` constant used as the event name. |
+| `src/modules/tasks/model.ts` | Reads back task documents (`taskModel.findById`, `taskModel.updateOne`) to assert the `overdueNotifiedAt` stamp and to simulate a reopen. |
+| `src/modules/tasks/services/index.ts` | SUT: imports the task service and calls its `remindOverdue` sweep method (optionally with a custom "now" date). |
+| `src/modules/tasks/tests/factories.ts` | `createSystemTask`, `backdateDue`, `closeDirectly` – the test fixtures this suite builds on. |
+| `src/types/index.ts` | Imports the `TaskStatus` enum; uses its `new` value to simulate reopening a task. |
+| `tests/support/setup-test-db.ts` | `setupTestDb()` provisions the real (in-memory or temp) database before the suite runs. |
 
 ## Notes
 
-- The suite does **not** rely on application-level wiring; it calls `markDomainEventsWired()` and subscribes by hand. The outbox relay only delivers to a bus that has been explicitly wired, so omitting that call would silently drop events.
-- The "oldest deadline first" test asserts **write order** in the outbox (`createdAt`, `_id` sort), not delivery order, because `relayOutbox` delivers rows in parallel.
-- The redelivery test manually resets `nextAttemptAt` to epoch (`new Date(0)`) to bypass the backoff window and force an immediate retry.
-- `HOUR_MS = 3_600_000` is a local constant, not imported from a shared time utility.
+- **Real DB, not mocks.** The suite exercises Mongoose queries and the outbox table directly; CI must provide (or the helper must spin up) a database instance.
+- **Manual bus wiring.** `markDomainEventsWired()` is called in `beforeEach` because the production bootstrap does this automatically; without it the outbox relay would drop events silently.
+- **Parallel relay, ordered writes.** The "whole backlog" test asserts only the *write* order in the outbox table (`createdAt` + `_id` sort), not the order listeners receive events, because `relayOutbox` dispatches aggregates concurrently.
+- **`dueAgo` negative ≠ error.** Passing a negative number means "due date is in the future"; the sweep must skip it. This is the primary mechanism for the "not yet due" scenario.
+- **Redelivery test resets `nextAttemptAt` to epoch** (`new Date(0)`) to bypass backoff and force an immediate retry on the next `relayOutbox()` call.

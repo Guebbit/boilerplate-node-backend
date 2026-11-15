@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/services/subscriptions.ts
-sha256: bca5bd97a2b9e4e8df58f7979db1099c9921b97d0cbd26dbede69e101bf2fee3
-generated_at: 2026-11-08T09:07:20.517758+00:00
+sha256: b7d64a833187d4010a2c6e7396936ea8f770435d93b3b93f218be9033a6baea1
+generated_at: 2026-11-14T22:48:26.345506+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,44 +9,42 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-CRUD service layer for webhook subscriptions: list, get, create, update, enable/disable, secret-ring management, and remove. All operations are tenant-scoped via `context.caller.tenantId`. The file also enforces a per-tenant subscription cap (with a race-safe post-insert check), validates outbound URLs against SSRF at input time, and rejects unknown event types before they become dead subscriptions.
+Implements the tenant-scoped CRUD service for webhook subscriptions: list, get-by-id, create (minting the secret ring's first secret), and the validation/authorization pipeline that guards each write (SSRF check, event-type catalogue check, caller read-permission check, subscription cap enforcement with race-safe rollback).
 
 ## Key elements
 
-- **`SubscriptionWithMintedSecrets`** – Response envelope pairing a subscription document with a one-time plaintext secret (`secret` on create, `newSecret` on `createSecret`).
-- **`refuseUnsafeUrl(url)`** – Calls the SSRF guard with a 5 s timeout; returns a 422 `fieldError('url', …)` on refusal. Logs the real reason server-side but exposes only "refused" to the caller.
-- **`refuseUnknownEvents(eventTypes?)`** – Cross-checks names against the catalogue (`unknownEventTypes`); returns a 422 listing unknown names, or `undefined` when valid.
-- **`SubscriptionListFilters`** – Query-parameter shape for `GET /webhooks/subscriptions` (enabled, autoDisabled, sort, page, pageSize).
-- **`list(context, filters)`** – Paginated search; inverts `enabled` → `disabled` for the repository; decorates each row with caller-specific `actions`.
-- **`getById(id, context)`** – Fetches one subscription within the tenant; returns `undefined` (not 404) for foreign ids.
-- **`insertionRank(subId, tenant)`** – Counts rows with `_id ≤ subId` to derive a stable insertion rank (ObjectId ordering).
-- **`rollbackOverCap(subscription)`** – Deletes a just-inserted row and returns the 409.
-- **`finalizeCreate(sub, plaintext, tenant, ctx)`** – Post-insert cap check via rank; audits on success; returns 201 + secret or 409.
-- **`create(body, ctx)`** – Validates events → pre-count cap → SSRF URL check → mints first ring secret → inserts → `finalizeCreate`.
-- **`AUDITED_FIELDS`** – Declares which update fields are recorded by value (`eventTypes`) vs. by name only (`url`, `description`).
-- **`update`, `enable`, `disable`, `createSecret`, `removeSecret`, `remove`** – Remaining CRUD and action endpoints (truncated in source but referenced throughout).
+- **`SubscriptionWithMintedSecrets`** (interface) — response envelope carrying the subscription document plus the one-time plaintext secret (`secret` on create, `newSecret` on `createSecret`).
+- **`SubscriptionListFilters`** (interface) — query-parameter shape accepted by `list` (enabled, autoDisabled, sort, page, pageSize).
+- **`list`** — paginated search narrowed to the caller's tenant; maps each row through `withSubscriptionActions` to attach caller-specific action hints; remaps `enabled` to the repository's `disabled` presence filter.
+- **`getById`** — fetches a single subscription within the tenant; returns `undefined` for both unknown IDs and other-tenant IDs (indistinguishable by design).
+- **`create`** — validates event types (catalogue + read-permission), checks the subscription cap, runs the SSRF guard on the URL, mints the first ring secret, inserts the row, then calls `finalizeCreate`.
+- **`refuseUnsafeUrl`** (internal) — resolves the outbound target via `resolveSafeOutboundTarget` with a 5 s timeout; on any failure returns a 422 on the `url` field and logs the reason server-side only.
+- **`refuseUnknownEvents`** (internal) — rejects event names not present in the catalogue (422 on `eventTypes`).
+- **`refuseUnreadableEvents`** (internal) — rejects event names the caller lacks read permission for (403 `WEBHOOK_EVENT_READ_REQUIRED`).
+- **`insertionRank` / `rollbackOverCap` / `finalizeCreate`** (internal) — post-insert race guard: counts rows at-or-before the new `_id` within the tenant; if the rank exceeds the cap, deletes the row and returns 409; otherwise records an audit event and returns 201 with the plaintext secret.
+- **`rejectLimitReached`** (internal) — builds the shared 409 `WEBHOOK_SUBSCRIPTION_LIMIT_REACHED` response.
 
 ## Relationships
 
-- **`../repository.ts`** – Primary data access: `search`, `findByIdInTenant`, `count`, `create`, `deleteOne`.
-- **`../secrets.ts`** – `mintRingSecret`, `removeRingSecret`, `liveRingEntries` for secret-ring lifecycle.
-- **`../config.ts`** – `getWebhookSubscriptionCap()` for the per-tenant limit.
-- **`../audit.ts`** – `webhooksAuditActions` enum used in `recordAudit` calls.
-- **`@infrastructure/observability/audit.ts` / `audit-changes.ts`** – `recordAudit` (create) and `auditChanges` (update field diffs).
-- **`@infrastructure/adapters/ssrf-guard.ts`** – `resolveSafeOutboundTarget`, `SsrfRefusedError` for input-time URL validation.
-- **`@infrastructure/http/response.ts`** – `generateSuccess`, `generateReject`, `fieldError` for response envelopes.
-- **`@infrastructure/i18n/index.ts`** – `t()` for translated error/success messages.
-- **`@infrastructure/adapters/logger.ts`** – Structured warning on SSRF refusal (reason + detail stay server-side).
-- **`@infrastructure/persistence/create-repository.ts`** – `PaginatedResult` return type.
-- **`@infrastructure/persistence/changes.ts`** – `clearedOrValue` helper for diffing updated fields.
-- **`./actions.ts`** – `standingOn`, `viewSubscription`, `withSubscriptionActions` for caller-specific action decoration.
+- **src/modules/webhooks/secrets.ts** — `mintRingSecret` mints the first secret entry on create; `liveRingEntries` and `removeRingSecret` support the secret-ring actions (used in the truncated update/remove path).
+- **src/modules/webhooks/config.ts** — `getWebhookSubscriptionCap` supplies the per-tenant subscription limit checked both pre-insert and post-insert.
+- **src/modules/webhooks/repository.ts** — `webhookSubscriptionRepository` provides `search`, `findByIdInTenant`, `count`, `deleteOne`, and the insert path used by `create`.
+- **src/modules/webhooks/model.ts** — `WebhookSubscriptionDocument` is the Mongoose document type threaded through all functions.
+- **src/modules/webhooks/audit.ts** — `webhooksAuditActions` names the audit action recorded on successful create.
+- **src/modules/webhooks/services/actions.ts** — `standingOn`, `viewSubscription`, `withSubscriptionActions` decorate responses with caller-specific action metadata.
+- **src/infrastructure/adapters/ssrf-guard.ts** — `resolveSafeOutboundTarget` performs the input-time DNS/SSRF check; `SsrfRefusedError` is matched to extract a reason for logging.
+- **src/infrastructure/http/response.ts** — `generateSuccess`, `generateReject`, `fieldError`, `ResponseSuccess`, `ResponseReject` build every return value.
+- **src/infrastructure/i18n/index.ts** — `t` produces localized field and error messages (e.g. the `url-refused` and `subscription-cap-reached` keys).
+- **src/infrastructure/observability/audit.ts** — `recordAudit` writes the audit trail on successful create.
+- **src/infrastructure/observability/audit-changes.ts** — `auditChanges` imported (used in the truncated update/remove path).
+- **src/infrastructure/persistence/create-repository.ts** — `PaginatedResult` type for `list`'s return.
+- **src/infrastructure/persistence/changes.ts** — `clearedOrValue` helper (used in the truncated update path).
+- **src/infrastructure/adapters/logger.ts** — `warn` method records the SSRF refusal reason server-side.
 
 ## Notes
 
-- **Cap is enforced twice.** A pre-insert `count` rejects the common case without writing; `insertionRank` after insert closes the TOCTOU race (two concurrent creates both pass the pre-count, but only `cap` rows can rank within the limit). The losing row is deleted via `rollbackOverCap`.
-- **`finalizeCreate` uses `async/await` deliberately.** A `.then` callback would let TypeScript's contextual typing silently narrow the union return to one branch; `await` checks each `return` against the full declared type.
-- **`enabled` → `disabled` inversion.** The stored field is `disabledAt`; the list filter `enabled: true` is mapped to `disabled: false` before reaching the repository.
-- **SSRF input check is advisory.** The authoritative check happens at delivery time (DNS can change). The input check exists to fail fast and give the operator immediate feedback.
-- **Caller sees only "URL refused" (422).** The specific reason (internal IP, blocked range, timeout) is logged server-side but never returned—preventing network topology enumeration.
-- **`ownerUserId` is a pointer, not an email.** Stores `context.caller.id` if present; never free-text PII.
-- **Update never touches the secret ring or enabled state.** Those are separate actions (`createSecret`/`removeSecret`, `enable`/`disable`).
+- **Race-safe cap:** the cap is enforced twice — a `count` pre-insert rejects the common already-over case, and `insertionRank` (count of `_id ≤ newId`) post-insert catches concurrent creates. Only rows ranking within the cap survive; excess rows are deleted and the caller gets 409.
+- **`async`/`await` in `finalizeCreate`:** deliberate deviation from the repo's usual promise-chain style. TypeScript's contextual typing of a `.then` callback narrows the union return incorrectly; `await` checks each `return` against the declared signature directly.
+- **SSRF is checked twice:** at input time here (fail-fast for the operator) and again at delivery time (DNS can change between the two passes). The input-time check never exposes the resolved address to the caller.
+- **Tenant scoping is structural:** every repository call passes `context.caller.tenantId`; the module never operates cross-tenant. `Caller.tenantId` is null only in platform scope, which `webhooks.*` keys never grant.
+- **Event-filter validation is layered:** unknown-event check (catalogue) → unreadable-event check (caller's read rules). A filter naming an event the caller cannot read gets 403, not 422, because the caller *could* read it if they had the right.

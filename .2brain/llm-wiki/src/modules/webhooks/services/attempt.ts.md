@@ -1,45 +1,47 @@
 ---
 source: src/modules/webhooks/services/attempt.ts
-sha256: e86f9acce62613e3a9d9e3dfc17ad2d61ba9f2481a123f3593757466311edae6
-generated_at: 2026-11-08T09:05:49.484911+00:00
+sha256: 192dde4194872a9541faafd4fef43453866783dbf7cbb770e0cdbf34c305bc76
+generated_at: 2026-11-14T22:45:43.390300+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/webhooks/services/attempt.ts
 
 ## Purpose
-
-The core delivery-attempt pipeline for webhooks: sign the payload, perform the HTTP POST (via `transport/webhook-delivery`), and record the outcome on both the delivery row and the subscription's failure streak. It exists as a single shared code path so that the queued worker (`processDeliveryJob`) and the synchronous admin `replay` (in `deliveries.ts`) cannot drift on what "recording an outcome" means.
+Core delivery-attempt logic for webhooks: signs the payload, performs the HTTP POST, and records the outcome (success, retry-scheduled failure, or exhausted chain) on the delivery row and the parent subscription's failure streak. Shared by the queued worker path (`processDeliveryJob`) and the admin synchronous replay path (`deliveries.ts`) so that "what recording an outcome means" cannot drift between the two.
 
 ## Key elements
-
-- **`attemptDelivery`** (exported) — Signs and POSTs against the subscription's current URL/ring, then routes the result to `recordSuccess` or `recordFailure`. Requires an already-claimed delivery row (`leaseToken` set) and a non-null subscription.
-- **`processDeliveryJob`** (exported) — Queue-job handler for `worker.webhook.deliver`. Claims the delivery row via `claimPending`, loads the subscription, and delegates to `deliverIfPossible`. Returns `true` (ack) when the row is settled or was already claimed by a sibling.
-- **`recordSuccess`** (internal) — Marks the delivery `succeeded`, increments the success metric, and resets the subscription's failure streak via `recordOutcome(id, true)`.
-- **`recordFailure`** (internal) — Increments the failure metric, computes `nextAttemptAt` from the backoff ladder. If a retry slot remains, the row stays `pending` with `attempt + 1`; otherwise delegates to `recordExhaustion`.
-- **`recordExhaustion`** (internal) — Marks the delivery `exhausted`, increments the subscription's consecutive-failure counter, and auto-disables the subscription once `shouldAutoDisable` fires. Triggers `announceAutoDisable`.
-- **`finalizeUndeliverable`** (internal) — Terminal write for deliveries whose subscription was deleted or disabled after the job was queued; no attempt is made.
-- **`announceAutoDisable`** (internal) — Writes an audit entry (as the system actor) and emits the `WEBHOOK_SUBSCRIPTION_AUTO_DISABLED` domain event so the notifications module can page staff.
-- **`requireLeaseToken`** (internal) — Narrows the optional `leaseToken` on `WebhookDeliveryDocument` to a required `string`; throws if the row was never claimed (unreachable in production).
+- **`attemptDelivery`** *(exported)* — Takes an already-claimed `WebhookDeliveryDocument` and its subscription. Validates the subscription is still enabled, the event still matches the filter, and an active signing secret exists. Calls `deliverWebhook` (transport layer) and routes the result to `recordSuccess` or `recordFailure`. Returns the settled row or `null` if the lease was lost mid-attempt.
+- **`processDeliveryJob`** *(exported, truncated in source)* — Queue-consumer handler registered via the module's `consumers` manifest. Claims the named delivery row, loads the subscription, and delegates to `deliverIfPossible` → `attemptDelivery`.
+- **`deliverIfPossible`** — Thin wrapper that tolerates a `null` subscription (deleted since queueing) by calling `finalizeUndeliverable`.
+- **`recordFailure`** — Increments the failure metric. If `nextAttemptAt` yields a retry slot, writes the row back as `pending` with an incremented attempt counter. Otherwise delegates to `recordExhaustion`. Deliberately does **not** touch the subscription's streak for a non-terminal failure.
+- **`recordExhaustion`** — Writes the row as `exhausted`, then calls `webhookSubscriptionRepository.recordOutcome(id, false)` to increment the consecutive-failure streak. If `shouldAutoDisable` is satisfied, disables the subscription, bumps the auto-disable metric, and calls `announceAutoDisable`.
+- **`recordSuccess`** — Increments the success metric, writes the row as `succeeded`, and resets the subscription's failure streak via `recordOutcome(id, true)`.
+- **`finalizeUndeliverable`** — Terminal write for deliveries that cannot be attempted (subscription deleted, disabled, filter mismatch, no active secret). Sets status `exhausted` with no response code or duration.
+- **`announceAutoDisable`** — Writes an audit entry (as the system actor) and emits the `WEBHOOK_SUBSCRIPTION_AUTO_DISABLED` domain event so the notifications module can notify staff. No-op when the subscription was already gone.
+- **`requireLeaseToken`** — Narrows `delivery.leaseToken` from `string | undefined` to `string`, throwing if absent. Lets `applyOutcome` demand a real token rather than silently matching an unclaimed row.
 
 ## Relationships
-
-- **`../repository.ts`** — Source of `webhookDeliveryRepository` (claim, `applyOutcome`) and `webhookSubscriptionRepository` (`findById`, `recordOutcome`, `disable`). All state writes in this file flow through these two objects.
-- **`../secrets.ts`** — `activeRingSecrets` resolves which signing key(s) are currently valid for the subscription.
-- **`../domain/` (`backoff.ts`)** — `nextAttemptAt` drives retry scheduling; `shouldAutoDisable` decides when the failure streak warrants auto-disabling.
-- **`../events.ts`** — Provides the `WEBHOOK_SUBSCRIPTION_AUTO_DISABLED` event constant emitted to downstream listeners.
-- **`../audit.ts`** — Provides `webhooksAuditActions` constants used in the audit record.
-- **`../metrics.ts`** — `webhookDeliveryAttemptsTotal` and `webhookSubscriptionsAutoDisabledTotal` counters incremented on each outcome.
-- **`@kernel/events` / `@kernel/permissions` / `@kernel/access/tenant`** — `emitDomainEvent` broadcasts the auto-disable event; `systemCallerContext` labels the audit entry as a background actor; `DEPLOYMENT_TENANT_ID` scopes the event's tenant.
-- **`@infrastructure/observability/audit`** — `recordAudit` persists the auto-disable audit trail.
-- **`./deliveries.ts`** — Contains `replay`, which also calls `attemptDelivery` with a synchronously-loaded subscription.
-- **`../services/index.ts`** — Re-exports this module's public surface for the module manifest.
-- **`notifications` (integration tests)** — `staff.test.ts` exercises the event → work-notice path triggered by `announceAutoDisable`.
+- **`src/modules/webhooks/repository.ts`** — All row and subscription state writes go through `webhookDeliveryRepository.applyOutcome` and `webhookSubscriptionRepository.recordOutcome` / `.disable`. The lease-token CAS in `applyOutcome` is the concurrency guard.
+- **`src/modules/webhooks/domain/backoff.ts`** — Provides `nextAttemptAt` for retry scheduling.
+- **`src/modules/webhooks/domain/event-filter.ts`** — Provides `matchesEventFilter` for the post-queue filter re-check.
+- **`src/modules/webhooks/domain/index.ts`** — Barrel export through which `nextAttemptAt`, `matchesEventFilter`, and `shouldAutoDisable` are imported.
+- **`src/modules/webhooks/secrets.ts`** — `activeRingSecrets` selects the valid signing keys before the HTTP call.
+- **`src/modules/webhooks/events.ts`** — Exports the `WEBHOOK_SUBSCRIPTION_AUTO_DISABLED` constant consumed by `announceAutoDisable`.
+- **`src/modules/webhooks/metrics.ts`** — `webhookDeliveryAttemptsTotal` (per-attempt gauge) and `webhookSubscriptionsAutoDisabledTotal` (auto-disable counter) are incremented inline.
+- **`src/modules/webhooks/audit.ts`** — Supplies `webhooksAuditActions.SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED` for the audit entry.
+- **`src/modules/webhooks/model.ts`** — Defines `WebhookDeliveryDocument` and `WebhookSubscriptionDocument`; documents the `leaseToken` contract.
+- **`src/infrastructure/observability/audit.ts`** — `recordAudit` is the actual audit-write call.
+- **`src/kernel/access/tenant.ts`** — `DEPLOYMENT_TENANT_ID` scopes the domain event.
+- **`src/kernel/events.ts`** — `emitDomainEvent` publishes the auto-disable event downstream (notifications).
+- **`src/kernel/permissions.ts`** — `systemCallerContext` builds the actor context for the audit entry (background job, not a user).
+- **`src/modules/webhooks/services/deliveries.ts`** — The replay path calls `attemptDelivery` directly, making this the single source of truth for outcome recording.
+- **`src/modules/notifications/tests/integration/staff.test.ts`** — Integration-tests the staff-notification flow triggered by the `WEBHOOK_SUBSCRIPTION_AUTO_DISABLED` event emitted here.
 
 ## Notes
-
-- **Lease-token discipline:** Every outcome write goes through `applyOutcome(id, leaseToken, …)`. If the token no longer matches (another worker re-claimed the row), `applyOutcome` returns `null` and the write is **dropped, never retried** — the new owner is responsible for its own outcome.
-- **Failure-streak semantics:** A single failed attempt does **not** increment the subscription's consecutive-failure counter. Only an entirely exhausted retry chain (no backoff slots left) counts as one failure.
-- **Payload `timestamp` is event time, not send time:** `delivery.createdAt` is used so the value is identical across every retry of the same delivery, letting subscribers deduplicate.
-- **Auto-disable ≠ operator alert:** The domain event feeds the internal notifications module (staff work notice). Operator-facing paging is Alertmanager's responsibility via the queue-parked alert; this file deliberately does not emit that.
-- **Caller-supplied subscription:** `attemptDelivery` accepts the subscription as a parameter rather than re-fetching it, so `replay` and `processDeliveryJob` can load it differently (synchronous lookup vs. already-fetched during claim) while sharing the same delivery logic.
+- **Already-claimed invariant.** Every code path that reaches `applyOutcome` must hold a row with `leaseToken` set (from `claimPending` or `claimForReplay`). `requireLeaseToken` enforces this at the type level; a missing token is treated as a programming bug, not a recoverable state.
+- **Lost-lease semantics.** If `applyOutcome` returns `null` (a sibling re-claimed the row), the outcome is silently dropped. There is no retry of the write itself — the other claimant owns the row now.
+- **Streak counting is chain-granular.** A single failed HTTP attempt (with retries remaining) does **not** increment `consecutiveFailures`. Only an exhausted retry chain (via `recordExhaustion`) does. This is an intentional reading of "sustained failure."
+- **Payload timestamp is stable across retries.** `timestamp` in the Standard Webhooks envelope is `delivery.createdAt` (when the event originally occurred), not `Date.now()`, so every retry of the same delivery carries an identical timestamp.
+- **Auto-disable audit is unconditional; the notification is best-effort.** The audit entry is written synchronously before the domain event is emitted. A notification failure does not roll back or suppress the audit trail.
+- **Not an operator alert.** `announceAutoDisable` is explicitly *not* the Alertmanager-facing `QueueJobsParked` alert; it targets staff via the notifications module for a different audience.

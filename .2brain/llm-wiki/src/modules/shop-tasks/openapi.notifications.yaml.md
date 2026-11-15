@@ -1,7 +1,7 @@
 ---
 source: src/modules/shop-tasks/openapi.notifications.yaml
-sha256: 29a271a7e08391ec603ee54298d8c174684316a6278b8c29dc0161480ffe266b
-generated_at: 2026-11-08T08:15:40.357750+00:00
+sha256: 4672a9742ed6bc66695dd094ea3b7b9b3579ce2eda5cab16cdc916198e13de8a
+generated_at: 2026-11-14T21:51:34.061147+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-An OpenAPI 3.1.0 contract fragment that extends the core `Notification` schema with shop-specific notification variants (buyer-facing order/stock events and staff work-queue notices). It exists so that a project *with* a shop gets these additional `oneOf` members, while a project *without* one carries only the five base notices and never sees them.
+OpenAPI 3.1.0 contract fragment that extends the base `Notification` schema with 20 shop-specific notification variants (7 buyer-facing, 13 staff-facing). It uses the `x-extends` mechanism to append each variant to the base `oneOf` / `discriminator.mapping`, so a project without a shop module simply never sees these types.
 
 ## Key elements
 
-- **`x-extends: Notification`** — Custom keyword that appends 19 notification schemas to the base `Notification` (`oneOf` + `discriminator.mapping`). Buyer codes: `shop-tasks.fulfillment-held`, `.shipment-lost`, `.stock-alert`, `.fulfillment-delayed`, `.cart-line-removed`, `.wishlist-item-removed`, `.cart-merge-refused`. Staff codes: `shop-tasks.staff.purchase-hold-placed`, `.return-requested`, `.transfers-due`, `.preorders-late`, `.delivery-holds-open`, `.withdrawals-awaiting-goods`, `.returns-undecided`, `.low-stock`, `.unshipped`, `.awaiting-tracking`, `.undelivered`, `.stale-refunds`.
-- **`ProductTitles`** — `Record<locale, string>`; denormalised product names embedded in notifications so the reader still sees a localised title if the product is later deleted.
-- **Param schemas** (`FulfillmentHeldParams`, `ShipmentLostParams`, `FulfillmentDelayedParams`, `CartLineRemovedParams`, `CartMergeRefusedParams`) — the `params` payload each notification carries; all use `additionalProperties: false` and reference `Id` from the shared root contract.
-- **Notification schemas** (`NotificationFulfillmentHeld`, `NotificationShipmentLost`, `NotificationStockAlert`, `NotificationFulfillmentDelayed`, `NotificationCartLineRemoved`, …) — each is a flat object with `id`, `audience`, `code` (single-value enum), `params`, `severity`, optional `readAt`, and `createdAt`. They reference `NotificationAudience` and `NotificationSeverity` from `../notifications/openapi.yaml`.
+- **`x-extends.Notification`** — ordered list of the 20 notification schema names appended to the base `Notification` union.
+- **`ProductTitles`** — locale → product-name map. Copied into notifications because the product row may be deleted before the notification is read.
+- **Param schemas** (payload objects attached to each notification):
+  - `CartLineRemovedParams` — product ID + titles.
+  - `CartMergeRefusedParams` — array of lines `POST /cart/merge` could not add, with requested qty and titles.
+  - `FulfillmentDelayedParams` — order/fulfillment IDs, order number, titles, `agreedAt` / `expectedAt` dates.
+  - `ShipmentLostParams` — order/shipment IDs, order number, `reason` (`lost`|`damaged`), optional `message`, `owed` titles, `expectedAt`.
+  - `FulfillmentHeldParams` — order/fulfillment IDs, order number, `notice` (`check_address`|`delayed`), optional `message`.
+- **Buyer notification schemas** (`shop-tasks.*` codes): `NotificationFulfillmentHeld`, `NotificationShipmentLost`, `NotificationStockAlert`, `NotificationFulfillmentDelayed`, `NotificationCartLineRemoved`, `NotificationWishlistItemRemoved`, `NotificationCartMergeRefused`.
+- **Staff notification schemas** (`shop-tasks.staff.*` codes): `NotificationStaffPurchaseHoldPlaced`, `NotificationStaffReturnRequested`, `NotificationStaffOutcomeUnknown`, `NotificationStaffTransfersDue`, `NotificationStaffPreordersLate`, `NotificationStaffDeliveryHoldsOpen`, `NotificationStaffReturnsAwaitingGoods`, `NotificationStaffReturnsUndecided`, `NotificationStaffLowStock`, `NotificationStaffUnshipped`, `NotificationStaffAwaitingTracking`, `NotificationStaffUndelivered`, `NotificationStaffStaleRefunds`.
+- Each notification schema carries the common envelope fields: `id`, `audience`, `code`, `params`, `severity`, `readAt`, `createdAt`.
 
 ## Relationships
 
-- **`../notifications/openapi.yaml`** (core contract, not a listed neighbor but referenced) — Provides the base `Notification` type, `NotificationAudience`, and `NotificationSeverity` that this fragment extends.
-- **`../../../shared/contracts/openapi.root.yaml`** — Source of the shared `Id` schema referenced by every param/notification schema.
-- **`src/modules/shop-tasks/asyncapi.notifications.yaml`** — The AsyncAPI counterpart describing the *event* (message) side of the same notifications; this file defines the *schema* (shape) side.
-- **`src/modules/shop-tasks/module.ts`** — Module entry point that registers/wires this OpenAPI fragment into the shop-tasks module's contract bundle.
+- **`src/modules/shop-tasks/asyncapi.notifications.yaml`** — async/event-side counterpart; this file defines the synchronous OpenAPI contract for the same notification payloads.
+- **`src/modules/shop-tasks/module.ts`** — module entry point that registers/exposes this contract fragment to the broader service.
 
 ## Notes
 
-- `x-extends` is a **custom** keyword (not standard OpenAPI). Consumers must implement merge logic that appends the listed schemas to `Notification`'s `oneOf` and `discriminator.mapping`. See `docs/api/contract-fragmentation.md#extending-another-modules-contract`.
-- The `notifications` module **never names** these schemas directly; it only ships its own five. If a project omits the shop-tasks module, these variants simply don't exist.
-- Date fields (`agreedAt`, `expectedAt`) are "a day on the shop's calendar (`Shop.timeZone`)" — **not** UTC; don't parse them as timestamps.
-- `message` fields (max 500 chars) are **staff-authored** buyer-facing text. `FulfillmentHeldParams.notice` is a closed enum (`check_address` | `delayed`) and deliberately **excludes** the staff's internal reason.
-- All schemas are `additionalProperties: false`; adding fields is a breaking change to the contract.
-- The file content provided here is truncated; the full set of staff notification schemas (e.g. `NotificationStaffLowStock`) is present in the real file but not visible in the excerpt.
+- `x-extends` only *appends* variants; the base `notifications` module never names them, so a project without a shop has exactly five notices and none of the 20 defined here.
+- Notification codes double as dictionary keys in both repos — `shop-tasks.<name>` for buyer, `shop-tasks.staff.<name>` for staff.
+- All date fields (`agreedAt`, `expectedAt`, etc.) are calendar days on the shop's timezone (`Shop.timeZone`), not UTC timestamps.
+- `message` fields (in `ShipmentLostParams`, `FulfillmentHeldParams`) are staff-authored sentences for the recipient; they never expose staff's internal reason.
+- `ProductTitles` is embedded in the payload (not a live lookup) specifically to survive product deletion.
+- `readAt` is absent while unread; the unread badge is the count of notifications lacking it.

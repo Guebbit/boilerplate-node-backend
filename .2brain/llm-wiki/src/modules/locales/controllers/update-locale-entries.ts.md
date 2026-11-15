@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/controllers/update-locale-entries.ts
-sha256: 2380e887bc2550efda939ad4863d0150bbd307d778f7f9ed551ee5baa637dc26
-generated_at: 2026-11-08T06:22:31.065030+00:00
+sha256: afbcf977b8238ed534e46bf98b082b0de9404ad9401d6c6b97114db8a6502c94
+generated_at: 2026-11-14T20:19:10.385675+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the two admin HTTP controllers for bulk-importing an app's locale entries. They are implemented as two distinct routes (PUT / PATCH) rather than a single route with a mode flag, so a mis-set boolean can't silently empty a dictionary.
+Implements the two bulk-entry endpoints for a locale's app dictionary: **PUT** (replace everything not sent) and **PATCH** (merge patch; `null` deletes, omitted keys are kept). The operations are split into two separate routes rather than one route with a boolean flag so a mis-set flag cannot silently empty a dictionary.
 
 ## Key elements
 
-- **`importEntries`** (internal) — Curried builder that takes a mode (`'replace' | 'merge'`) and a Zod body schema, and returns an Express handler. It parses the body via `parseBody`, delegates to `localeService.importEntries`, then dispatches a success or refused response.
-- **`replaceLocaleEntries`** (exported) — Handler for `PUT /locales/:locale/apps/:app/entries`. Anything stored but not in the request body is deleted.
-- **`updateLocaleEntries`** (exported) — Handler for `PATCH /locales/:locale/apps/:app/entries`. JSON merge-patch semantics: a string upserts, `null` deletes, omitted keys are untouched.
+- **`importEntries(mode, schema)`** (internal builder) — Returns an Express handler. Parses the body with the given Zod schema, normalizes the locale tag via `localeService.normalizeTag`, enforces `If-Match` concurrency, delegates to `localeService.importEntries`, calls `setEtag` (keyed by `EDIT_REVISION`) on success, and routes errors through `catchAs` with a mode-specific label.
+- **`replaceLocaleEntries`** (export) — PUT handler; built as `importEntries('replace', ReplaceLocaleEntriesBody)`.
+- **`updateLocaleEntries`** (export) — PATCH handler; built as `importEntries('merge', UpdateLocaleEntriesBody)`.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — Provides the `parseBody`, `refused`, and `catchAs` utilities used by both handlers.
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf`, called to attach caller identity to the service call.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse` for the 200 reply.
-- **`src/modules/locales/services/index.ts`** — Exports `localeService`; its `importEntries(locale, app, entries, mode, ctx)` method performs the actual persistence.
-- **`src/modules/locales/routes.ts`** — Registers `replaceLocaleEntries` and `updateLocaleEntries` on their respective route paths.
-- **`src/types/index.ts`** — Source of `LocaleImportResult`, `ReplaceLocaleEntriesRequest`, and `UpdateLocaleEntriesRequest` types.
+- **`src/infrastructure/http/controller.ts`** — Provides `parseBody`, `refused`, and `catchAs`, the three helpers that form the request-validation / response / error pipeline inside the handler.
+- **`src/infrastructure/http/preconditions.ts`** — Provides `withIfMatch` (optimistic-concurrency guard around the service call) and `setEtag` (stamps the new revision on the response).
+- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf` to extract the authenticated caller's context and pass it to the service.
+- **`src/infrastructure/http/response.ts`** — Provides `successResponse` to format the 200/201 JSON payload.
+- **`src/infrastructure/persistence/revision-plugin.ts`** — Exports the `EDIT_REVISION` constant used as the ETag key so the tag encodes the dictionary's revision counter.
+- **`src/modules/locales/services/index.ts`** — Source of `localeService` (`normalizeTag`, `importEntries`); the single domain call this controller delegates to.
+- **`src/modules/locales/routes.ts`** — Wires the two exported handlers to their `PUT` / `PATCH` route definitions.
+- **`src/types/index.ts`** — Declares `LocaleImportResult`, `UpdateLocaleEntriesRequest`, `ReplaceLocaleEntriesRequest` used for handler typing.
 
 ## Notes
 
-- Both routes are admin-scoped (per doc comments).
-- The error label passed to `catchAs` differs by mode (`'updateLocaleEntries'` vs `'replaceLocaleEntries'`), which affects logged error identity.
-- The body schema enforces `Record<string, string | null>`; the distinction between the two schemas (`ReplaceLocaleEntriesBody` vs `UpdateLocaleEntriesBody`) comes from `@api/schemas.zod` and governs which mode is valid.
+- The two exported handlers differ only in the `mode` string and the Zod schema; all logic is shared through `importEntries`. When modifying behaviour, edit the builder, not the exports.
+- `catchAs` is given a different error label per mode (`'replaceLocaleEntries'` vs `'updateLocaleEntries'`) so logs can distinguish which bulk operation failed.
+- The ETag is set on **both** PUT and PATCH responses using the `EDIT_REVISION` key; the comment references RFC 9110 §9.3.4 regarding how the revision counter appears in the tag.
+- Body parsing is delegated to `parseBody` (from the controller infra); if the schema rejects the body, the handler returns early with no further work.

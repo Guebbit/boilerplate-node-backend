@@ -1,7 +1,7 @@
 ---
 source: tests/contract/request-sources.test.ts
-sha256: 4a9d28aa6e4fd17d5f419c4169c25124864f8c20e7a3caaf30ee0779b4aeea9e
-generated_at: 2026-11-08T09:21:12.456193+00:00
+sha256: cf47c5ea3fe08f10cdd3910f80427c5c9f240c43bbfacb4a0daf8c534cc83f8d
+generated_at: 2026-11-14T22:59:27.205023+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract test that statically compares the input sources each controller declares via `readInput` / `requireId` against the `in:` / `requestBody` declarations in `openapi.yaml`. It asserts that a controller's declared sources are a **subset** of what the spec allows, catching undocumented input (e.g. a path-form delete reading an undeclared body). No server is booted; everything is recovered by reading source files and the spec with regex/`yaml.parse`.
+Static contract test that compares, per mounted route, the request-input sources a controller declares (via `surface:` / `readInput`) against the sources the OpenAPI spec permits (`in: path` / `in: query` / `requestBody`). It catches the bug class "controller reads a source the contract never declares" without booting a server.
 
 ## Key elements
 
-- **`MountedRoute`** — interface carrying method, Express path, OpenAPI-spelled path, and the terminating controller name + file (or `undefined` for inline one-line responders like `GET /`).
-- **`readMountPrefixes()`** — walks `src/modules.ts` (only enabled modules), each `src/modules/<name>/module.ts`, and `src/app/routes.ts` to build a `Map<routeFile, prefix>`. Resolves router imports through aliases.
-- **`readControllerImports(source, routeFile)`** — maps each `./controllers/<name>` import in a router file to its absolute path, so the terminating controller can be identified.
-- **`readMountedRoutes()`** — iterates every router file from `readMountPrefixes`, extracts `router.<method>(…)` calls, picks the last imported identifier in the argument list as the controller, and returns the full `MountedRoute[]`.
-- **`readSurfaceSources()`** — reads the `SURFACE_SOURCES` literal from `src/infrastructure/http/request.ts` via regex (not imported, to avoid pulling express/mongoose). Returns `Record<surface, RequestInputSource[]>`. A deliberate `expect` guards against a regex that silently matches nothing.
-- **`SHARED_DECLARATION_FILES`** — maps factory-call markers (e.g. `createDeleteController(`) to the file that actually declares the sources, so `readDeclaredSources` can follow the indirection.
-- **`readDeclaredSources(controllerFile, seen?)`** — recursively scans a controller file for `surface: '<name>'` literals, `requireId(…)` calls (defaulting to `'path'`), and shared-factory markers, returning the union of declared `RequestInputSource` values. Cycle-guarded via `seen`.
-- **`SpecParameter` / `SpecOperation`** — narrow structural types for the three OpenAPI fields the test reads (`in`, `$ref`, `requestBody`), avoiding a full spec dependency.
-- **The `test` blocks** (truncated in view) — read `openapi.yaml`, index operations by method+path, and assert `declaredSources ⊆ specAllowedSources` per route.
+- **`MountedRoute`** — record of a mounted route: HTTP method, Express path, OpenAPI-spec path, and the terminating controller (or `undefined` for inline one-liners like `GET /`).
+- **`readMountPrefixes()`** — regex-scans `src/modules.ts`, each `src/modules/<name>/module.ts`, and `src/app/routes.ts` to build a map of router file → mount prefix. Only *enabled* modules are included.
+- **`readControllerImports()`** — resolves a router file's `./controllers/…` imports to concrete file paths.
+- **`readMountedRoutes()`** — walks every router file, extracts `router.<method>('…', …)` calls, and pairs each with its controller (last import-matched identifier in the argument list).
+- **`readSurfaceSources()` / `SURFACE_SOURCES`** — parses the `SURFACE_SOURCES` literal out of `request.ts` source text (not imported) to get the surface → source list mapping. A deliberate `expect` assertion guards against the regex silently producing an empty table.
+- **`SHARED_DECLARATION_FILES`** — maps factory markers (`createDeleteController(`, `statsHandler(`) to the file where the shared `surface:` declaration actually lives, so `readDeclaredSources` can follow the chain.
+- **`readDeclaredSources(controllerFile)`** — recursively collects the set of `RequestInputSource`s a controller reads, following shared-factory references (cycle-guarded) and accounting for `requireId()` calls that default to `'path'`.
+- **`SpecParameter` / `SpecOperation`** — minimal OpenAPI shapes; the test reads only `in` and `$ref` fields from the spec.
 
 ## Relationships
 
-- **`src/infrastructure/http/request.ts`** — the file whose `SURFACE_SOURCES` literal and `RequestInputSource` type this test reads statically; the source of truth for which sources exist.
-- **`tests/support/paths.ts`** — provides `REPO_ROOT`, the base path all `read()` calls resolve against.
-- **`scripts/contracts/asyncapi-bundles.ts`** — produces the AsyncAPI/OpenAPI bundle that `openapi.yaml` (the spec this test parses) is generated from; upstream of the spec artifact under test.
-- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — CI mutation-wave scheduling; ensures this contract test runs in the correct wave relative to other suites that may mutate spec files.
+- **`src/infrastructure/http/request.ts`** — the `RequestInputSource` type is imported; `SURFACE_SOURCES` is read as text from this file so the comparison target always matches the live definition.
+- **`tests/support/paths.ts`** — provides `REPO_ROOT`, the base for every `readFileSync` call.
 
 ## Notes
 
-- **Direction matters.** Only `declared ⊆ spec` is asserted. The reverse (spec declares a source no controller reads) is explicitly *not* checked because `readInput` merges every key it finds, so an undeclared-but-present body is legitimate.
-- **Regex fragility is acknowledged.** The file's own comments note that a regex stopping matching makes the check pass vacuously. The `expect` on `SURFACE_SOURCES` and the tripwire pattern in `readDeclaredSources` exist specifically to fail loudly if the source format drifts.
-- **Enabled-modules filter.** A module folder that exists on disk but is absent from the `enabledModules` array is excluded. This is intentional: its routes are not in the build, so they must not count as mounted.
-- **Inline controllers are skipped, not failed.** `GET /`, `GET /observability/events`, `GET /observability/metrics` have no `readInput` call; they appear in `MountedRoute[]` with `controller: undefined` and are excluded from the subset assertion.
-- **`requireId` is treated as `readInput`.** A controller calling `requireId(…)` reads the same sources; omitting `surface:` defaults to `'path'`.
+- **One-directional assertion.** Only "controller reads ⊆ spec allows" is checked. The converse (spec declares a source no controller reads) is intentionally *not* asserted because `readInput` merges every key it finds.
+- **Fully static.** No server, no Express, no Mongoose. The test compares two written artifacts (source text + YAML) via regex and `yaml.parse`. `SURFACE_SOURCES` is read from source rather than imported specifically to avoid pulling in Express/Mongoose/i18next.
+- **Regex fragility is the known risk.** If a spelling changes and a regex stops matching, the check passes vacuously. Mitigations: the `SURFACE_SOURCES` parse is guarded with an `expect` that would fail on an empty table, and `SHARED_DECLARATION_FILES` makes the factory chain explicit rather than relying on a single pattern.
+- **Inline handlers are skipped.** Routes whose handler is a one-liner with no `readInput` call (e.g. `GET /`, `GET /observability/*`) appear in `MountedRoute` with `controller: undefined` and are excluded from the sources comparison.
+- **Disabled modules are invisible.** A module folder present on disk but absent from `enabledModules` is never scanned, matching what actually ships.

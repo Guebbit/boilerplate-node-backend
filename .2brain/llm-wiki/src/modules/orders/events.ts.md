@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/events.ts
-sha256: b4b9f9be3c698d535a545ad7f9ca904a1f151da4380b4c9e95d248bfda8f3341
-generated_at: 2026-11-08T06:51:50.781237+00:00
+sha256: 5665dd8448eabc7378d857f05f4a0d6ec38d9647d360f50822e3f92a39ed6c35
+generated_at: 2026-11-14T20:37:40.423497+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,41 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the six domain events the orders module emits and exports their name constants. It augments the kernel's `DomainEventMap` (via `declare module '@kernel/events'`) so the event catalogue grows per-module without a central registry. Because `orders` sits low in the dependency graph (payments and delivery depend on it, never the reverse), emitting events is its only channel outward.
+Declares every domain event the orders module emits by augmenting the kernel's `DomainEventMap` interface (via `declare module '@kernel/events'`), so the app-wide event catalogue grows with the module that owns each event rather than being edited centrally. Also exports one string constant per event name so emitters and listeners share a single spelling instead of duplicated literals.
 
 ## Key elements
 
-- **`declare module '@kernel/events'` block** — extends `DomainEventMap` with six event payload types:
-  - `order.canceled` — `{ orderId, refund, cause }`; emitted when a cancel commits. `refund` is a policy flag, not a fact; `cause` drives mail and downstream compensation.
-  - `order.status_changed` — `{ orderId, from, to }`; emitted on every status move (including the one backward move: lost shipment reopens `shipped` → `processing`). Listeners filter on `to`.
-  - `order.created` — `{ orderId }`; emitted once by `placeOrder`, the single writer of new orders.
-  - `order.status_overridden` — `{ orderId, from, to, at, mode: 'status' }`; admin manual forward override; internal only (no AsyncAPI/webhook).
-  - `order.redacted` — `{ orderId }`; GDPR Art. 19 webhook trigger after personal-data scrub.
-  - `order.purchase_hold_placed` — `{ tenantId, userId, until }`; internal-only notice to staff; no webhook.
-- **Six exported string constants** (`ORDER_CANCELED`, `ORDER_STATUS_CHANGED`, `ORDER_CREATED`, `ORDER_STATUS_OVERRIDDEN`, `ORDER_REDACTED`, `ORDER_PURCHASE_HOLD_PLACED`) — single source of truth for the event name so emitters and listeners share one spelling.
+- **`declare module '@kernel/events'`** — augments `DomainEventMap` with six payload types:
+  - `order.canceled` — fired when a cancel completes (stock restored); carries `refund`, `cause`, and optional `informedAt`.
+  - `order.status_changed` — fired on any status transition, forward *or* backward; carries `from`/`to`.
+  - `order.created` — fired once per new order, regardless of caller path.
+  - `order.status_overridden` — fired when an admin hand-overrides a status forward; internal only.
+  - `order.redacted` — fired when personal data is scrubbed; internal only (GDPR webhook).
+  - `order.purchase_hold_placed` — fired when a shop rule pauses a buyer's checkout; internal only.
+- **`ORDER_CANCELED`, `ORDER_STATUS_CHANGED`, `ORDER_CREATED`, `ORDER_STATUS_OVERRIDDEN`, `ORDER_REDACTED`, `ORDER_PURCHASE_HOLD_PLACED`** — exported string constants mirroring the keys above.
+- **`CancelCause`** (imported from `./services/cancel`) — the union type used as the `cause` field in `order.canceled`.
 
 ## Relationships
 
-- **`services/cancel.ts`** — defines `CancelCause` (imported here); writes `order.canceled` to the outbox in its own transaction.
-- **`services/announce.ts`** — writes `order.status_changed` to the outbox in the status-write transaction.
-- **`services/purchase-hold.ts`** — emits `order.purchase_hold_placed`; idempotent (a redelivered cancel finds the hold already present and skips).
-- **`repository.ts`** — the order rows whose mutations trigger the events; events are committed in the same transaction as the row write.
-- **`module.ts` / `index.ts`** — wire the module into the kernel and re-export the constants for downstream import.
-- **Integration tests** (`cancel`, `outbox`, `purchase-hold`, `service-status`, `service-override`, `mail-listeners`, `hierarchy`) — assert that each event is written to the outbox exactly when and only when its service commits.
-- **`tests/unit/public-events.test.ts`** — verifies the shape and completeness of the exported event map.
+- **src/modules/orders/index.ts** — barrel file that re-exports this module's constants to the wider app.
+- **src/modules/orders/module.ts** — module registration surface; wires the orders module (and its events) into the kernel.
+- **src/modules/orders/services/cancel.ts** — source of the `CancelCause` type imported here; writes the canceled event to the transactional outbox in the cancel's own transaction.
+- **src/modules/orders/services/announce.ts** — writes the status-changed event to the outbox in the same transaction as the status write.
+- **src/modules/orders/services/purchase-hold.ts** — emits the purchase-hold-placed event once per hold actually taken.
+- **src/modules/orders/services/status.ts** — the status transition logic whose outcome is announced via the status-changed event.
+- **src/modules/orders/tests/unit/public-events.test.ts** — unit-tests the shape and constants defined in this file.
+- **src/modules/orders/tests/integration/cancel.test.ts** — asserts the canceled event is written to the outbox alongside the cancel.
+- **src/modules/orders/tests/integration/outbox.test.ts** — asserts events are written to and relayed from the transactional outbox.
+- **src/modules/orders/tests/integration/service-override.test.ts** — asserts the status-overridden event is emitted on admin override.
+- **src/modules/orders/tests/integration/service-status.test.ts** — asserts the status-changed event is emitted on status transitions.
+- **src/modules/orders/tests/integration/purchase-hold.test.ts** — asserts the purchase-hold-placed event fires once per hold.
+- **src/modules/orders/tests/integration/mail-listeners.test.ts** — asserts event-driven mail sending (e.g. cancel mail from the canceled event).
+- **src/modules/orders/tests/integration/hierarchy.test.ts** — asserts dependency direction: payments and delivery depend on orders, never the reverse.
 
 ## Notes
 
-- Every event is delivered **at-least-once** (transactional outbox → relay); listeners must dedupe on `meta.eventId`. The `$in` guard at write time makes the *write* at-most-once.
-- `order.status_changed` includes the **only backward transition** in the lifecycle (lost shipment: `shipped` → `processing`). Listeners that assume monotonic status progression will break.
-- `order.status_overridden` and `order.purchase_hold_placed` are **internal-only** — no AsyncAPI channel, no webhook.
-- The `refund` flag on `order.canceled` is a policy decision carried with the event (customer cancel ⇒ refund; operator cancel ⇒ maybe not). `payments` treats it as the sole durable refund promise and retries until its record exists.
-- `order.created` fires exactly once per order regardless of entry point (admin create, storefront checkout) because `placeOrder` is the single write path.
+- `order.status_changed` is **not** monotonically forward: `shipped → processing` (lost shipment) and `delivered → reship` (replacement) are valid backward moves. Listeners must not assume strict ordering.
+- Delivery is **at-least-once** (transactional outbox + relay). Listeners are expected to deduplicate on `meta.eventId`.
+- `order.redacted` and `order.purchase_hold_placed` are **internal-only**: no AsyncAPI channel, no external webhook.
+- `informedAt` on `order.canceled` is explicitly **never published** externally; it exists for the 14-day refund-deadline computation.
+- The module sits low in the dependency graph (payments and delivery depend on orders, never the reverse), so event emission is the *only* way orders communicates outward.

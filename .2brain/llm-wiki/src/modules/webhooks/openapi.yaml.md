@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/openapi.yaml
-sha256: 3d1a031a67d8595c92b3b8516e5a8f4b2d0499dcdd2175673d2b41cbdc0a6f19
-generated_at: 2026-11-08T09:04:05.144145+00:00
+sha256: f408809200816401f5c98e0c38441a2eeae6fde403c4a743152aaac7c70423ab
+generated_at: 2026-11-14T22:43:43.321082+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.1.0 module contract for the webhooks domain. It defines the complete public API surface for outbound webhook subscriptions—creation, read, update, delete, enable/disable, secret management, delivery log, replay, and the event catalogue—along with the module's custom error-code vocabulary. Consumers (SDKs, gateway validators, docs generators) treat this file as the single source of truth for request/response shapes and state-machine transitions.
+OpenAPI 3.1.0 contract for the **Webhooks** module. It defines the public REST surface for managing webhook subscriptions (CRUD, enable/disable, secret rotation), the delivery log, replay, and the event catalogue. It is the single source of truth for endpoint shapes, auth scopes, and error semantics that API clients and the bundler consume.
 
 ## Key elements
 
-- **`tags` / `x-family: Core`** — All operations are filed under the `Webhooks` tag; the `x-family` extension groups them for cross-module discovery.
-- **`x-error-codes`** (top-level) — Five module-specific 409 codes: `WEBHOOK_DELIVERY_IN_PROGRESS`, `WEBHOOK_SUBSCRIPTION_LIMIT_REACHED`, `WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED`, `WEBHOOK_SUBSCRIPTION_ALREADY_DISABLED`, `WEBHOOK_SUBSCRIPTION_DISABLED`. Individual operations narrow the set via their own `x-error-codes`.
-- **`/webhooks/subscriptions`** — `GET` (list with pagination, sort, `enabled`/`autoDisabled` filters) and `POST` (create; returns one-time plaintext secret; enforces SSRF check on `url`).
-- **`/webhooks/subscriptions/{id}`** — `GET`, `PUT` (full replace of url/description/eventTypes), `PATCH` (partial; also accepts `application/merge-patch+json`), `DELETE` (removes subscription, preserves delivery log).
-- **`/webhooks/subscriptions/{id}/enable`** — `POST`; clears `disabledAt`/`autoDisabledAt`, resets failure streak; 409 if already enabled.
-- **Schemas** (referenced, defined elsewhere in this file or shared): `WebhookSubscription`, `WebhookSubscriptionsResponse`, `CreateWebhookSubscriptionRequest`, `WebhookSubscriptionCreated`, `ReplaceWebhookSubscriptionRequest`, `UpdateWebhookSubscriptionRequest`, `WebhookSubscriptionSort`.
-- **Security** — Every operation accepts `bearerAuth` **or** `apiKeyAuth` (alternative scheme).
+- **`x-error-codes`** (module-level): six webhook-specific error codes (`WEBHOOK_DELIVERY_IN_PROGRESS`, `WEBHOOK_SUBSCRIPTION_LIMIT_REACHED`, `WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED/DISABLED`, `WEBHOOK_EVENT_READ_REQUIRED`, `WEBHOOK_SUBSCRIPTION_DISABLED`) with their HTTP status and human-readable description.
+- **`tags`** — a single `Webhooks` tag (`x-family: Core`) that all operations are filed under.
+- **`/webhooks/subscriptions` (GET / POST)** — list (with `sort`, `enabled`, `autoDisabled` filters and shared pagination params) and create. Create mints a one-time secret, enforces an SSRF check on `url`, and requires the caller to hold the read rule for every event in the filter.
+- **`/webhooks/subscriptions/{id}` (GET / PUT / PATCH / DELETE)** — read, full-replace, partial-update, and delete. PUT and url/eventTypes-carrying PATCH re-check event read rules. PATCH also accepts `application/merge-patch+json`.
+- **`x-versioned`** hints on both paths — consumed by the bundler to inject `ETag`, `If-Match`, `Content-Location`, and 412 responses.
+- **Security** — every operation requires either `bearerAuth` or `apiKeyAuth` with a per-verb scope (`read:`, `create:`, `update:WebhookSubscription`).
+- **Shared `$ref`s** — parameters (`PageParam`, `PageSizeParam`, `IdPathParam`), standard responses (401/403/404/409/422), and the `Location` header all resolve into `openapi.root.yaml`.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — Referenced for shared parameters (`PageParam`, `PageSizeParam`, `IdPathParam`), standard error responses (`Unauthorized`, `Forbidden`, `ValidationError`, `Conflict`, `NotFound`, `NoContent`), and the `Location` response header. Changing any of those shared definitions propagates into every webhook endpoint here.
-- **`src/modules/webhooks/rules.yaml`** — Supplies the business/validation rules that the operations above enforce (subscription limits, SSRF guard, enable/disable state machine, failure-streak auto-disable). The spec documents *what* the API returns; the rules file documents *why* a given 409/422 fires.
+- **`shared/contracts/openapi.root.yaml`** — hard `$ref` dependency: this spec pulls common parameters, error responses, and the `Location` header from the root file. Changes to shared parameter names or response shapes in the root will break this module's spec.
+- **`src/modules/webhooks/rules.yaml`** — sibling in the same module; the per-operation security scopes (`read:WebhookSubscription`, `create:WebhookSubscription`, `update:WebhookSubscription`) and the `x-read-rule` enforcement described in the operation notes are the authorization model that `rules.yaml` implements. The spec is the "what"; `rules.yaml` is the "who may" that the runtime enforces.
 
 ## Notes
 
-- **Secret is ephemeral**: the plaintext ring is returned exactly once—on `POST /subscriptions` or on a secret-rotation call. No subsequent `GET`/`PUT`/`PATCH` ever includes it.
-- **SSRF guard runs twice**: at write time (422 with `errors[].details { field: url }`, deliberately no internal-address detail) and again on every delivery, since DNS can change post-creation.
-- **PUT vs. PATCH semantics**: `PUT` is a full replace—omitted `description` is cleared. `PATCH` is additive. Neither touches the secret ring or enable/disable state; those live on dedicated action routes.
-- **Enable is idempotent-safe but streak-preserving**: a repeated `enable` on an already-on subscription returns 409 and does *not* reset the failure streak.
-- **Delete is soft with respect to logs**: the subscription row is removed, but its delivery log entries remain for audit.
-- **Sort grammar** follows JSON:API: comma-separated fields, `-` prefix for descending (e.g. `?sort=-createdAt,url`).
+- **Secret is shown exactly once.** The plaintext ring secret appears only in the `201` of `POST /subscriptions` (or the dedicated rotate/drop action). No read or list endpoint ever returns it.
+- **SSRF check is at write-time *and* delivery-time.** `url` is resolved and rejected at creation/update *and* re-checked on every delivery because DNS can change post-creation. The 422 body names the `url` field but deliberately omits which internal address was hit.
+- **`x-versioned` is a bundler directive, not a runtime feature.** The spec author does not manually add `ETag`/`If-Match`; the build tooling reads this hint and injects them. Adding a method to the array is the way to opt it in.
+- **`autoDisabled` filter semantics:** `true` = disabled by the failure guard (`autoDisabledAt` set); `false` = everything else (enabled *or* manually paused). Combine with `enabled=false` to isolate manual pauses.
+- **PUT clears omitted fields.** An omitted `description` in a `PUT` body is set to null (full-replace semantics), unlike `PATCH`.
+- The file is truncated in the snapshot; the remaining operations (delete, secrets rotation, enable/disable, event catalogue, delivery log, replay) follow the same conventions and `$ref` pattern.

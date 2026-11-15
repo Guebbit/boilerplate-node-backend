@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/openapi.yaml
-sha256: 789d735b3f5cf1706012e1421e8599a967fbf97a6c1d1ecc0a3f3a76c98741f5
-generated_at: 2026-11-08T06:40:22.407971+00:00
+sha256: 95decd1d752361e090f2154b3836016dfee8c25c5d4c3219b6a51735bf21c342
+generated_at: 2026-11-14T20:29:20.815780+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.1.0 module contract for the observability endpoints: a live SSE event stream, an authenticated health snapshot, Prometheus metrics (raw + JSON overview), and an incident-only audit log. It defines the request/response shapes, security requirements, and error semantics so that clients, scrapers, and dashboard consumers have a single source of truth.
+OpenAPI 3.1.0 module contract for the observability module. Defines the HTTP surface (SSE events, health, Prometheus metrics, JSON metrics overview, and incident audit) along with the schemas those endpoints produce, so consumers and tooling can discover and validate the API without reading implementation code.
 
 ## Key elements
 
-- **Tag `Observability`** (`x-family: Core`) — groups all five operations; signals that protected routes require the admin role.
-- **`GET /observability/events`** (`getObservabilityEvents`) — SSE stream (`text/event-stream`); emits `metrics.snapshot` on connect, then periodic `metrics.updated` / `heartbeat`. Authenticated via `cookieAuth` (HttpOnly refresh cookie) because `EventSource` cannot set an `Authorization` header.
-- **`GET /observability/health`** (`getObservabilityHealth`) — Readiness detail for dashboards (uptime, memory, per-dependency status, telemetry wiring). Distinct from `/livez` and `/readyz`. Requires `bearerAuth` (admin).
-- **`GET /observability/metrics`** (`getObservabilityMetrics`) — Prometheus exposition format 0.0.4 (`text/plain`). Authenticated via `metricsBearer` (static scraper credential). Returns `503` when no token is configured (fail-closed). `500` returns plain text, not `problem+json` (`x-not-problem: true`), because scrapers only parse exposition format.
-- **`GET /observability/metrics/overview`** (`getObservabilityMetricsOverview`) — JSON KPI summary derived from the same counters/histograms; for dashboard cards. Requires `bearerAuth`.
-- **`GET /observability/audit`** (`listObservabilityAuditEntries`) — Newest-first incident log (security refusals, failed sign-ins, replayed refresh tokens, disabled webhooks). IP fields are HMAC digests. Paginated via shared `PageParam`/`PageSizeParam`. Requires `bearerAuth`.
-- **Schemas (components):**
-  - `ObservabilityHealthTelemetry` — which telemetry sinks (loki, otel, umami, faro, analytics) are wired; deliberately separate from `status` because losing a sink costs visibility, not capability.
-  - `DependencyStatus` — enum `ready | connecting | unavailable | disabled`; `disabled` is a supported state, not a failure.
-  - `ObservabilityDependency` — per-backing-service status wrapper.
-  - `ObservabilityHealth`, `ObservabilityMetricsSummary`, `AuditLogsResponse` — top-level response bodies (defined further in the file).
+- **`paths`** — Five read-only endpoints under `/observability/*`:
+  - `GET /observability/events` — SSE stream (`text/event-stream`); authenticates via `cookieAuth` (HttpOnly refresh cookie, since `EventSource` cannot set headers).
+  - `GET /observability/health` — Authenticated readiness/dependency snapshot; requires `bearerAuth` with scope `read:ObservabilitySnapshot`.
+  - `GET /observability/metrics` — Raw Prometheus exposition (0.0.4) text; authenticates via a static `metricsBearer` credential (not a JWT). Returns `503` if no metrics token is configured.
+  - `GET /observability/metrics/overview` — Derived JSON summary of key counters/histograms for dashboards; same bearer scope as health.
+  - `GET /observability/audit` — Paginated incident log (security refusals, failed sign-ins, replayed tokens, disabled webhooks); supports `actor`, `action`, `outcome`, `since` filters plus shared `PageParam`/`PageSizeParam`.
+
+- **`tags`** — Single tag `Observability` (x-family: Core) covering all operations.
+
+- **`components.schemas`** — Module-local schemas: `ObservabilityHealthTelemetry`, `DependencyStatus` (enum: ready/connecting/unavailable/disabled), `ObservabilityDependency`, `ObservabilityHealth`, `ObservabilityMetricsSummary`, `AuditLogsResponse`.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — All shared `$ref` targets live here: `Unauthorized`, `Forbidden`, `ValidationError`, `Problem`, `CacheControlNoStore`, `PageParam`, `PageSizeParam`. This file never redefines them.
-- **`src/modules/observability/module.yaml`** — Module manifest that lists this OpenAPI spec (alongside `asyncapi.yaml`, `authorization.yaml`) as the module's contract set.
-- **`src/modules/observability/authorization.yaml`** — Defines or re-exports the security schemes consumed by this file (`cookieAuth`, `bearerAuth`, `metricsBearer`).
+- **`shared/contracts/openapi.root.yaml`** — All shared building blocks (error responses `Unauthorized`, `Forbidden`, `ValidationError`; header `Cache-Control: no-store`; schema `Problem`; query parameters `PageParam`, `PageSizeParam`) are pulled in via relative `$ref`s into this file.
+- **`src/modules/observability/authorization.yaml`** — Defines the roles/scopes (`read:ObservabilitySnapshot`, `metricsBearer`, `cookieAuth`) that this spec's `security` blocks reference at runtime.
+- **`src/modules/observability/asyncapi.yaml`** — Covers the async/event-channel side (webhooks, message-bus events) for the same module; this file covers only the synchronous HTTP surface.
+- **`src/modules/observability/module.yaml`** — Module manifest that ties together this OpenAPI spec, the AsyncAPI spec, and the authorization config.
+- **`src/modules/notifications/openapi.yaml`** — Sibling module contract with the same structural conventions (shared-root refs, per-module schemas); useful as a reference for cross-module patterns.
 
 ## Notes
 
-- **SSE auth is cookie-only by design.** `EventSource` (the browser API that consumes this stream) cannot set custom headers; the HttpOnly refresh cookie is the sole credential. Any tool that needs header-based auth must read the stream differently.
-- **Prometheus auth is a static bearer token**, not a JWT. The `503` response is intentional: the endpoint denies by default when the token is unset rather than falling back to open access.
-- **`500` on `/observability/metrics` returns `text/plain`, not `application/problem+json`.** The `x-not-problem: true` extension marks this; a Prometheus scraper will choke on a JSON body.
-- **Health ≠ liveness/readiness.** `GET /observability/health` is the rich, authenticated dashboard view. It does no I/O — all values come from adapter-held connection state.
-- **Telemetry wiring is reported, not probed.** The `analytics` sub-object distinguishes "provider selected but unconfigured" from "deliberately collecting nothing" (`provider: none, configured: true`).
+- **Auth is endpoint-specific, not uniform.** SSE uses a cookie (browser `EventSource` constraint), Prometheus uses a static bearer (scraper cannot log in), and the remaining endpoints use a JWT bearer with the `read:ObservabilitySnapshot` scope. Do not assume one `security` scheme covers the module.
+- **`/observability/metrics` returns Prometheus text, not JSON, even on error.** The `500` response is explicitly marked `x-not-problem: true` and carries `text/plain` so a scraper's parser never chokes on a problem+json body.
+- **`DependencyStatus.disabled` is a valid, non-failure state.** It never degrades the overall `status` field, unlike `unavailable`.
+- **Telemetry wiring is informational only.** `ObservabilityHealthTelemetry` reports which sinks are configured from environment; it is deliberately excluded from the `status` verdict because losing a sink costs visibility, not capability.
+- **Audit log IPs are HMAC-digested** (`hmac:` + 12 hex chars) — comparable but not human-readable. Retention is deployment-configured (180 days default).
+- **The file is truncated in the working copy** (`ObservabilityDependency` is cut mid-definition); the full schema list continues beyond what is visible here.

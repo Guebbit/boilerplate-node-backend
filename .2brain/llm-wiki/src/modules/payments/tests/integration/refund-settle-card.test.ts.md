@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/tests/integration/refund-settle-card.test.ts
-sha256: 22d75db567e2815f2c6098d97f090371ca21594bc3c64b6447bf785bde18350f
-generated_at: 2026-11-08T07:35:54.719591+00:00
+sha256: 1a4d7d1e75b0bb41852fa9f66e5a6e318d9ac86ec85b61dca41610ac6a906796
+generated_at: 2026-11-14T21:17:34.842944+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test for the operator's "settle by hand" action on a refused card refund. Verifies the full decision matrix: definitive refusals may be settled (one-time, not re-sent to the provider), unclear or in-flight refusals are rejected with 409, and the attention list surfaces refused refunds correctly. Runs against real Mongo through the services' public API.
+Integration test (real MongoDB) that verifies the operator's "settle refused refund by hand" workflow for card payments. It asserts the core domain rule: only a refund whose refusal proves the money did not move (final reasons) may be settled; an unclear or in-flight attempt returns 409; and once settled, the refund is never re-sent to the provider.
 
 ## Key elements
 
-- **`refusedRefund(reason)`** – Scenario builder: creates user → product → order (2 × 50.00) → pays by card → settles outbox → sets the fake provider to fail with the given `RefundFailureReason` → triggers a 30.00 refund. Returns `{ orderId, payment, refundId }`.
-- **`settle(paymentId, refundId)`** – Thin wrapper around `paymentService.settleRefundByHand` with admin caller context.
-- **`describe.each` (definitive refusals)** – For `declined`, `insufficient_funds`, `expired_or_canceled_card`, `lost_or_stolen_card`: asserts the refund is offered in `actions.settleByHand`, settle succeeds once, status becomes `succeeded` + `settledByHand`, exactly one `PAYMENT_REFUNDED` outbox event is emitted, and `retryOpenRefunds` does not call the provider again.
-- **`describe.each` (unclear refusals)** – For `provider_unavailable`, `unknown`: asserts nothing is offered in actions, settle returns 409 `PAYMENT_REFUND_IN_FLIGHT`, and the refund stays `failed` (no write).
-- **`describe` (in-flight / pending)** – Two sub-tests: (1) a refund already in `pending` status rejects settle with 409; (2) a race-condition simulation where `claimRefund` fires between the service's read and its `settleRefund` write also yields 409 and leaves the refund `pending`.
-- **`describe` ("what needs attention")** – Exercises `paymentService.listAttention()`: definitive refusals appear immediately as `refused_refund`; retryable refusals stay hidden until 3 h old, then appear as `stale_refund`; an old definitive refusal is *not* double-listed; a `returnId`-bearing refusal carries a 14-day `refundDueBy` deadline; a no-return refusal has no deadline, only `since`.
+- **`refusedRefund(reason)`** — Scenario helper: creates user, product, 2-item order, pays by card (100.00), settles outbox, then triggers a 30.00 refund that the fake provider refuses with the given `RefundFailureReason`. Returns `{ orderId, payment, refundId }`.
+- **`settle(paymentId, refundId)`** — Thin wrapper around `paymentService.settleRefundByHand` with admin caller context.
+- **`describe.each` — final refusal reasons** (`declined`, `insufficient_funds`, `expired_or_canceled_card`, `lost_or_stolen_card`): verifies settle succeeds, the action is offered in `getForOrder`, exactly one `PAYMENT_REFUNDED` outbox event fires, and `retryOpenRefunds` does not call the provider again.
+- **`describe.each` — unclear reasons** (`provider_unavailable`, `unknown`): verifies 409 / `PAYMENT_REFUND_IN_FLIGHT`, no action offered, refund status stays `failed`.
+- **"attempt is running" block**: verifies 409 when refund is `pending`; also simulates a race where a concurrent `claimRefund` lands between the service's read and write (by mocking `settleRefund` to inject a claim mid-call).
+- **"what needs attention" block**: verifies `listAttention` classifies final refusals as `refused_refund`, keeps retryable refusals out until the stale threshold (then `stale_refund`), avoids double-listing, and carries `refundDueBy`/`refundDueRule` when a return is attached.
 
 ## Relationships
 
-- **`scenarios/support/doubles/payments/fake.ts`** – Provides `fakePaymentProvider` and `setFakeRefundFailure`; the test spies on `fakePaymentProvider.refund` to assert no re-send after settlement.
-- **`src/modules/payments/services/index.ts`** – Calls `paymentService.settleRefundByHand`, `.getForOrder`, `.retryOpenRefunds`, `.listAttention` (the system under test).
-- **`src/modules/payments/repository.ts`** – Reads payment state (`findByOrderId`), simulates claims (`claimRefund`), and is spied on in the race test (`settleRefund`).
-- **`src/modules/payments/model.ts`** – Direct Mongo collection writes (`paymentModel.collection.updateOne`) to age refunds or attach a `returnId`.
-- **`src/modules/payments/events.ts`** – Asserts outbox event count for `PAYMENT_REFUNDED`.
-- **`src/kernel/outbox.ts`** – `settleOutboxNudges()` flushes pending outbox work; `outboxEventModel` is queried for event counts.
-- **`src/kernel/events.ts`** – `resetDomainEvents()` in `afterEach`.
-- **`src/modules/payments/tests/factories.ts`** – `payByCard` and `refundOrderPayment` drive the initial payment and refund.
-- **`src/modules/users/tests/factories.ts`**, **`src/modules/products/tests/factories.ts`**, **`src/modules/orders/tests/factories.ts`** – Seed the prerequisite user, product, and order.
-- **`tests/support/checkout-modules.ts`** – `registerCheckoutModules([paymentsModule])` in `beforeEach` wires the module into the test app.
-- **`tests/support/callers.ts`** – `asAdmin()` and `callerContextAs('admin')` supply the operator identity.
-- **`src/types/index.ts`** – `RefundFailureReason` union type parameterises the test matrix.
+- **`scenarios/support/doubles/payments/fake.ts`** — `fakePaymentProvider` is spied on to assert no re-sent refund; `setFakeRefundFailure` drives the provider's refusal reason.
+- **`src/modules/payments/services/index.ts`** — `paymentService` is the sole public API under test (`settleRefundByHand`, `getForOrder`, `retryOpenRefunds`, `listAttention`).
+- **`src/modules/payments/repository.ts`** — `paymentRepository` used to read post-condition state and to call `claimRefund` directly in the race-condition test.
+- **`src/modules/payments/model.ts`** — `paymentModel.collection` is mutated directly to backdate `refunds[0].createdAt` and stamp `returnId`/`dueBy`/`dueRule` for the attention-list tests.
+- **`src/kernel/outbox.ts`** — `settleOutboxNudges` flushes pending outbox entries; `outboxEventModel` counts emitted events.
+- **`src/modules/payments/events.ts`** — `PAYMENT_REFUNDED` name used in the outbox assertion.
+- **`src/kernel/events.ts`** — `resetDomainEvents` clears the event store between tests.
+- **`src/modules/payments/tests/factories.ts`** — `payByCard` and `refundOrderPayment` build the initial payment and trigger the refund call.
+- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `toOrderItem` seed the 2-item order.
+- **`src/modules/products/tests/factories.ts`** — `createProduct` seeds the product.
+- **`src/modules/users/tests/factories.ts`** — `createUser` seeds the customer.
+- **`tests/support/callers.ts`** — `asAdmin` / `callerContextAs` supply the admin caller identity.
+- **`tests/support/checkout-modules.ts`** — `registerCheckoutModules([paymentsModule])` wires the module graph for each test.
+- **`src/modules/payments/module.ts`** — imported and passed to `registerCheckoutModules` so the service layer is fully wired against real Mongo.
+- **`src/types/index.ts`** — `RefundFailureReason` union constrains the parameterised refusal reasons.
 
 ## Notes
 
-- Uses **real Mongo** (`setupTestDb`), not an in-memory DB — state assertions go through the repository and raw model collection.
-- `NODE_PAYMENT_REFUND_RETRY_MINUTES: '0'` is overridden per-test via `withEnvironmentOverrides` to eliminate retry timing from the assertions.
-- The race-condition test (second sub-test under "in-flight") intercepts `paymentRepository.settleRefund` with `mockImplementationOnce` to inject a `claimRefund` between the service's read and write, simulating a concurrent operator claim.
-- `listAttention` age threshold is hard-coded as 3 hours (`3 * 3_600_000`); the 14-day deadline is also a literal, not a constant import.
+- This is a **true integration test**: `setupTestDb()` provisions real MongoDB; no in-memory stores.
+- `withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' })` disables the retry back-off so the suite runs without sleeps.
+- The race-condition test does **not** use real concurrency; it intercepts `settleRefund` via `mockImplementationOnce` to inject a `claimRefund` call mid-write, simulating the "lost the race" path.
+- The attention-list tests mutate the Mongo collection directly (`paymentModel.collection.updateOne`) to age or annotate a refund — bypassing the service layer on purpose.
+- Final vs. unclear refusal reasons are the **only** distinction that gates settlement; the test suite is parameterised over that boundary explicitly.

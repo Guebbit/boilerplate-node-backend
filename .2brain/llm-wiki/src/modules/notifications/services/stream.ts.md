@@ -1,7 +1,7 @@
 ---
 source: src/modules/notifications/services/stream.ts
-sha256: 5080489da646df4169292bd0418abf5dfe1d9dbb9e9692219c40ef8a529f4a0c
-generated_at: 2026-11-08T06:33:51.903402+00:00
+sha256: 7650159783c5f42341c7a7c27fa9bd5c3420b3be7a7f16f114997332abc072d4
+generated_at: 2026-11-14T20:26:02.736919+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Manages live Server-Sent Event delivery of notifications, one stream per open browser tab, scoped to a single user. It maintains an in-process `Map<string, Set<Response>>` of active connections so that a published event is written only to the sockets belonging to the affected user. It mirrors the pattern and rationale of the observability stream (plain HTTP SSE, no broker, single-host deployment).
+Live delivery of notifications over Server-Sent Events, one stream per open tab, routed by user so a frame reaches only that user's connections. Uses the same plain-HTTP, per-process pattern as the observability stream: no broker fan-out, single-host assumption.
 
 ## Key elements
 
-- **`connections`** (module-private) — `Map<string, Set<Response>>` keyed by user id; the `Set` gives O(1) disconnect removal and prevents duplicate registration.
-- **`HEARTBEAT_INTERVAL_MS`** — 15 000 ms; kept below the 30–60 s idle-timeout window of common proxies.
-- **`writeFrame`** (module-private) — serialises an SSE frame (`event:`, single-line `data:` JSON, trailing blank line) and writes it to one response.
-- **`publishToUser`** (exported) — pushes one frame to every open stream for a given user. A user with no open tab costs a single map lookup. Writes to already-dropped sockets are caught and ignored (the `close` handler removes them).
-- **`openStreamCount`** (exported) — total number of open streams across all users; intended for tests and metrics gauges.
-- **`streamNotifications`** (exported) — opens an SSE stream for a user on a given Express `Response`. Delegates header setup and the periodic `reverify` callback to `openSseStream`, then registers the response in `connections`, starts a 15 s heartbeat timer (comment-line `: keep-alive`), and tears down the timer + map entry on close.
+- **`connections`** (module-private `Map<string, Set<Response>>`) — tracks open SSE responses per user. A `Set` makes disconnect O(1) and prevents duplicate registration.
+- **`HEARTBEAT_INTERVAL_MS`** — 15 000 ms; idle proxies typically drop connections after 30–60 s of silence.
+- **`writeFrame`** (private) — writes one SSE frame (`event:` + single-line `data:` JSON + trailing blank line) to a response.
+- **`publishToUser`** (exported) — pushes a typed frame to every open stream for a given user. Swallows write errors on dropped sockets; the `close` handler handles cleanup.
+- **`openStreamCount`** (exported) — total open streams across all users; intended for tests and gauges.
+- **`streamNotifications`** (exported) — opens an SSE stream for a user via `openSseStream`, registers the response in `connections`, starts a 15 s heartbeat interval (written as an SSE comment so `EventSource` ignores it), and wires `onClose` to clear the interval, remove the response, and delete the Map key when the last stream for that user closes.
 
 ## Relationships
 
-- **`src/infrastructure/http/sse.ts`** — Provides `openSseStream`, which handles SSE-specific headers and polls the `reverify` callback on an interval. This file calls it and then layers the user-scoped connection bookkeeping on top.
-- **`src/types/index.ts`** — Supplies the `NotificationsChannel` union and `SseEventPayloadMap` type that parameterise `writeFrame`, `publishToUser`, and `streamNotifications`.
-- **`src/modules/notifications/services/index.ts`** — Barrel file that re-exports this module's public API (`publishToUser`, `openStreamCount`, `streamNotifications`) alongside the inbox service.
-- **`src/modules/notifications/services/inbox.ts`** — Sibling service in the same module; callers typically read from the inbox (pull) and receive pushes via this stream (push).
-- **`src/modules/notifications/tests/unit/stream.test.ts`** — Unit tests exercising `publishToUser`, `openStreamCount`, and `streamNotifications` in isolation.
-- **`src/modules/notifications/tests/integration/service.test.ts`** — Integration tests that exercise the notification service end-to-end, including stream lifecycle.
+- **`src/infrastructure/http/sse.ts`** — imports `openSseStream`, which sets SSE headers, enforces a concurrent-stream cap, and polls the `reverify` callback for permission rechecks.
+- **`src/types/index.ts`** — imports `NotificationsChannel` and `SseEventPayloadMap` to type channel names and payloads.
+- **`src/modules/notifications/services/inbox.ts`** — consumes `publishToUser` to fan a newly written notification out to the user's live streams.
+- **`src/modules/notifications/services/index.ts`** — barrel re-export of this module's public API.
+- **`src/modules/notifications/tests/unit/stream.test.ts`** — unit tests for frame writing, publish, and stream lifecycle.
+- **`src/modules/notifications/tests/integration/stream-cap.test.ts`** — integration tests verifying the concurrent-stream cap behavior.
+- **`src/modules/notifications/tests/integration/service.test.ts`** — end-to-end notification service tests that exercise live delivery.
 
 ## Notes
 
-- **Single-process assumption.** The `connections` map is per-process. A notification written in another worker will *not* fan out to this process's sockets; it will arrive on the next `GET /notifications` poll. There is no broker.
-- **Heartbeat is a comment line** (`: keep-alive`), not a named event. Browsers' `EventSource` ignores leading-colon lines, so clients never see a spurious event, but the wire stays active enough to defeat proxy idle timeouts.
-- **`reverify` is a plain `() => Promise<boolean>` callback.** This file is deliberately agnostic of the authentication mechanism; the controller is expected to wire it to a refresh-cookie or similar check. `openSseStream` calls it periodically and closes the stream if it resolves `false`.
-- **Swallowed write errors are intentional.** The `try/catch` in `publishToUser` exists because a client that just disconnected is still momentarily in the `Set`. Throwing here would corrupt the caller's write path; the `close` handler will remove the socket.
-- **Cleanup is two-part and must stay atomic.** On close, both the heartbeat `setInterval` *and* the `connections` entry must be removed. Leaving the timer running writes to a dead socket forever; leaving the map entry pins the entire Express `Response` (and its upstream socket) in memory.
+- **Per-process only.** A message written in another worker arrives at the next `GET /notifications`, not over the stream. The app is designed to run as a single host; there is no cross-process fan-out.
+- **Heartbeat is an SSE comment** (`: keep-alive\n\n`), not a named event, so the client's `EventSource` silently discards it and no application-level handler fires.
+- **`reverify` is a plain `() => Promise<boolean>` callback** so this file stays agnostic of the authentication mechanism; the controller wires it to the refresh cookie.
+- **Cleanup is two-part:** the interval must be cleared *and* the Map entry removed. A leaked interval writes to a dead socket forever; a leaked Map entry pins the response in memory.
+- **Write-error swallowing in `publishToUser` is intentional** (eslint suppression included). A dropped socket will have its `close` handler remove it; throwing here would fail the very write that triggered the broadcast.

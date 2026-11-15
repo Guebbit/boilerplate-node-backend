@@ -1,26 +1,31 @@
 ---
 source: src/modules/observability/controllers/get-observability-metrics.ts
-sha256: 348f2d742818c3a048df51e0d229bbc512ed56187e38093ba96f7224f467d220
-generated_at: 2026-11-08T06:39:02.300173+00:00
+sha256: b16cc8b3f82382aee508446d9522b8795affc2e9f53f1519f9b9b9eefeb8a0d1
+generated_at: 2026-11-14T20:29:06.969632+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/observability/controllers/get-observability-metrics.ts
 
 ## Purpose
-Express route handler for `GET /observability/metrics`, the Prometheus scrape endpoint. It returns metrics in Prometheus exposition format, or a valid empty body on collection failure — deliberately never an error page, so a scraper doesn't log a parse error on top of the outage.
+
+Express controller for the `GET /observability/metrics` endpoint — the Prometheus scrape target. It returns the Prometheus exposition text format, and on collection failure returns a 500 in the same content type so Prometheus can mark the target `up = 0` from the status code alone without parsing the body.
 
 ## Key elements
-- **`getObservabilityMetrics`** (exported) — Express `Request`/`Response` handler. Calls `getPrometheusMetrics()`, sets `Content-Type` from `metricsRegistry.contentType`, and sends the body. On rejection, logs the error and responds `500` with `# metrics unavailable\n` (a syntactically valid empty exposition).
-- **`_request`** — intentionally unused parameter (Express signature requirement).
+
+- **`getObservabilityMetrics`** (exported) — The route handler. Sets `Content-Type` (from `metricsRegistry.contentType`) before the async chain so both the 200 and 500 responses share one type. Calls `getPrometheusMetrics()`; on success sends the metrics text, on failure logs the error, records it on the active span, and responds `500` with the literal body `# metrics unavailable\n`.
 
 ## Relationships
-- **`@infrastructure/observability/metrics-registry`** — source of `getPrometheusMetrics()` (async collector) and `metricsRegistry.contentType` (MIME header value).
-- **`@infrastructure/adapters/logger`** — used in the catch path to record the collection failure.
-- **`src/modules/observability/routes.ts`** — registers this handler on the `/observability/metrics` route.
-- **`src/modules/observability/tests/unit/get-observability-metrics.test.ts`** — unit tests covering the success and failure paths of this handler.
+
+- **`src/modules/observability/routes.ts`** — Wires `getObservabilityMetrics` to the `GET /observability/metrics` route. The comment notes the route is "guarded by a static credential," a concern that lives outside this controller.
+- **`src/infrastructure/observability/metrics-registry.ts`** — Provides `getPrometheusMetrics()` (the collection function) and `metricsRegistry.contentType` (the `Content-Type` header value).
+- **`src/infrastructure/adapters/logger.ts`** — Used to log an error when metric collection throws.
+- **`src/infrastructure/observability/tracer.ts`** — `recordErrorOnActiveSpan(error)` attaches the failure to the current span.
+- **`src/modules/observability/tests/unit/get-observability-metrics.test.ts`** — Unit tests for this handler.
 
 ## Notes
-- The `void` on the promise chain means the handler is fire-and-forget; Express does not await the response. This is safe here because the route is a terminal scraper endpoint with no downstream middleware expecting a return value.
-- The failure response body (`# metrics unavailable\n`) is a valid Prometheus exposition document (a single comment line). This is intentional: an unparseable body would cause Prometheus to emit an additional "scrape parse error" alert, muddying the incident signal.
-- `Stryker disable next-line all` suppresses mutation testing on the `logger.error` call (logging side-effects are out of scope for mutation coverage).
+
+- The handler is synchronous in signature (`void`) but kicks off an async chain with `void … .then().catch()`. Express will not await the returned promise; the response is sent from within the `.then`/`.catch` callbacks.
+- `Content-Type` is deliberately set **before** the promise resolves so the 500 response carries the same header as the 200, keeping the contract uniform for the scraper.
+- A `// Stryker disable next-line all` comment suppresses mutation testing on the `logger.error` line.
+- The 500 body is the fixed string `# metrics unavailable\n`; it is not a JSON error envelope.

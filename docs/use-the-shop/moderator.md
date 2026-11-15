@@ -1,33 +1,37 @@
 ---
-type: task
+type: concept
 audience: [staff, owner]
 ---
 
 # The moderator
 
+<!-- IMG: a customer's account page with the purchase hold and the ban action · the account page showing the hold notice and the Deactivate user button -->
+
 Accounts that need action taken against them, orders that need sorting out, and money that needs
 to go back.
 
-Log in as `moderator@example.com` — a real, narrower account, not the owner's. The password is
+Sign in as the moderator, a real, narrower account, not the owner's. The password is
 on [Test it yourself](./test-me.md).
 
 ::: tip When something goes wrong
-Odd cases that land on you: [a return the buyer never sent](./when-something-goes-wrong.md#buyer-never-sent-it), [a decline made by mistake](./support.md#declined-by-mistake), [a refund owed by hand](./when-something-goes-wrong.md#refund-owed-by-hand), [a transfer for a cancelled order](./when-something-goes-wrong.md#late-transfer).
+Odd cases that land on you: [a return the buyer never sent](./when-something-goes-wrong-returns.md#buyer-never-sent-it), [a decline made by mistake](./support.md#declined-by-mistake), [a refund owed by hand](./when-something-goes-wrong-refunds.md#refund-owed-by-hand), [a transfer for a cancelled order](./when-something-goes-wrong-orders-and-delivery.md#late-transfer).
 :::
 
-## Key families, three jobs
+Every role's full rights are in [the role table](./start.md#what-that-actually-grants).
 
-| Key                                                         | Buys                                                                                                 |
-| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `read:User` / `.create` / `.update` / `.delete`, `ban:User` | Add, edit, erase an account — and ban one.                                                           |
-| `display:Order` / `.update`                                 | Read and update any order in the shop, not only your own.                                            |
-| `display:Payment` / `create:Payment` / `create:Refund`      | Read any payment, record one, and refund it.                                                         |
-| `read:Return` / `.update`                                   | Read any return request; approve, decline or cancel it; open one or record a withdrawal for a buyer. |
+## Permission families, three jobs
 
-## Banning is its own key
+| Permission                               | Buys                                                                                                 |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Users: read, create, update, delete, ban | Add, edit, erase an account — and ban one.                                                           |
+| Orders: display and update               | Read and update any order in the shop, not only your own.                                            |
+| Payments: display, record, refund        | Read any payment, record one, and refund it.                                                         |
+| Returns: read and update                 | Read any return request; approve, decline or cancel it; open one or record a withdrawal for a buyer. |
 
-Banning an account **is** deactivating it (`POST /users/{id}/deactivate`), and bringing it back is
-`activate`. Both need `ban:User`, a key [support](./support.md) does not hold. A role that fixes a
+## Banning is its own key {#banning-is-its-own-key}
+
+Banning an account **is** deactivating it (the **Deactivate user** button), and bringing it back is
+**Activate user**. Both need the ban permission, which [support](./support.md) does not hold. A role that fixes a
 customer's phone number should not, by that alone, be able to lock them out:
 
 ```mermaid
@@ -43,8 +47,8 @@ flowchart LR
     class B,C,E effect;
 ```
 
-The two moves are recorded under their own names in the action history: `admin.user.banned` and
-`admin.user.unbanned`. An ordinary edit never touches `active`. → [`users`](../modules/users.md)
+The two moves are recorded under their own names in the action history: "banned" and
+"unbanned". An ordinary edit never switches an account on or off. → [Users](../modules/users.md)
 
 ## "Needs review": checking an account the shop flagged
 
@@ -56,7 +60,7 @@ shop only flags the account for a person to look at. Either way you get an email
 shows a "Needs review" chip in the Users list (filter: Review → Needs review).
 
 The flag **stays until you act on it**, even after a pause has ended by itself. Setting or lifting a
-hold counts as acting. Both are `ban:User`, so this is your job and not [support's](./support.md).
+hold counts as acting. Both need the ban permission, so this is your job and not [support's](./support.md).
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
@@ -77,19 +81,19 @@ toast says what happened. Lifted by mistake? Pause checkout again: the buyer get
 again, and you write a new note.
 
 A **paid** cancellation is never a reason to pause on its own. Place a hold only for abuse, and write
-the note as if the buyer reads it, because they do. → [`orders`](../modules/orders.md#the-purchase-hold)
+the note as if the buyer reads it, because they do. → [Orders](../modules/orders.md#the-purchase-hold)
 
 ## Recording a transfer, and why a paid order refuses it
 
-`create:Payment` is also what lets this role record money that arrived outside the checkout
-flow — cash at the counter, a bank transfer once its reference is matched — through
-`POST /orders/{id}/payments`. It settles the order exactly as a card payment would: the
-order moves to `paid`, stock commits, the confirmation fires.
+The permission to record a payment is also what lets this role record money that arrived outside the checkout
+flow, such as cash at the counter or a bank transfer once its reference is matched.
+It settles the order exactly as a card payment would: the
+order moves to paid, stock commits, the confirmation fires.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
-    A["money arrives<br/><i>cash, or a transfer with its reference</i>"] --> B["you record it<br/><i>POST /orders/{id}/payments</i>"]
+    A["money arrives<br/><i>cash, or a transfer with its reference</i>"] --> B["you record it<br/><i>Record a payment by hand</i>"]
     B --> C["the order is paid<br/><i>stock commits, the confirmation fires</i>"]
 
     classDef you fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -98,30 +102,36 @@ flowchart LR
     class C done;
 ```
 
-An order already `paid` refuses a second recording, the same rule that refuses a second card
-intent — `orders` alone decides whether an order still awaits payment, and every door that could
-open a new one asks it before doing anything else. → [`payments`](../modules/payments.md)
+An order already paid refuses a second recording, the same rule that refuses a second card
+intent: the orders area alone decides whether an order still awaits payment, and every door that could
+open a new one asks it before doing anything else. → [Payments](../modules/payments.md)
 
 ## What a moderator protects
 
-An account that holds a staff role may be changed only by a holder of `assign:Role`
+An account that holds a staff role may be changed only by someone who can hand out roles
 ([the rule](../understand/authorization.md#protecting-people)). A moderator does not hold it: it
 can ban, edit and erase a customer, and it cannot touch another staff member or an administrator,
-whatever the other keys say; the refusal is `403 ROLE_MANAGEMENT_REQUIRED`. It cannot hand out a
+whatever the other keys say; the edit is refused. It cannot hand out a
 role either. A
-moderator holds no `delete:Order` or `create:Order`: sorting an order out is updating it,
+moderator cannot delete or create an order: sorting an order out is updating it,
 and removing or raising one on someone's behalf is [the manager's](./manager.md) job.
 
 ::: tip What this role cannot touch
-No `products.*` — a moderator cannot change what a thing costs or looks like; that is
-[the editor's](./editor.md) job. No `locales.*` — also [the editor's](./editor.md). No
-`inventory.*` — a moderator reads an order, never moves stock.
+No product permissions — a moderator cannot change what a thing costs or looks like; that is
+[the editor's](./editor.md) job. No language permissions — also [the editor's](./editor.md). No
+stock permissions — a moderator reads an order, never moves stock.
 :::
 
 ## The words we used
 
-| Word               | In plain terms                                                                                       |
-| ------------------ | ---------------------------------------------------------------------------------------------------- |
-| **Ban**            | Deactivating an account, recorded under its own name in the history.                                 |
-| **Refund**         | Money returned on a payment already taken. → [`payments`](../modules/payments.md)                    |
-| **Action history** | Who did what, when, to which row; only an admin reads it. → [`audit-logs`](../modules/audit-logs.md) |
+| Word               | In plain terms                                                                                     |
+| ------------------ | -------------------------------------------------------------------------------------------------- |
+| **Ban**            | Deactivating an account, recorded under its own name in the history.                               |
+| **Refund**         | Money returned on a payment already taken. → [Payments](../modules/payments.md)                    |
+| **Action history** | Who did what, when, to which row; only an admin reads it. → [Audit logs](../modules/audit-logs.md) |
+
+## Read next
+
+- [The support desk](./support.md): who sends a case on to you.
+- [The shop manager](./manager.md): who runs the orders you sort out.
+- [Test it yourself](./test-me.md#things-to-try): ban a customer, then refund an order.

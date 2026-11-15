@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/controllers/put-locale-entry.ts
-sha256: 1e9b73855cb0bb1afdd850e07527d4a1ea87157b31c2de805b9387ce4816f17f
-generated_at: 2026-11-08T06:22:08.932119+00:00
+sha256: 698e0319b68671ce7b1009231a236be3832fde26acf4fa465161e6dee9caea0d
+generated_at: 2026-11-14T20:18:34.531669+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express controller handler for `PUT /locales/:locale/apps/:app/entries/:entryId`. It validates the path parameter and request body, delegates to the locale service to update a single entry's value, and returns the updated entry as the HTTP response.
+Handles the admin `PUT /locales/:locale/apps/:app/entries/:entryId` endpoint. It validates the entry ID and request body, delegates to the locale service to update a single entry's value, and returns the updated entry in a standard success shape.
 
 ## Key elements
 
-- **`replaceLocaleEntry`** (exported) — The sole handler. Accepts a typed `Request`/`Response` pair, validates `entryId` via `requireId`, parses the body against the `ReplaceLocaleEntryBody` Zod schema, calls `localeService.updateEntry(locale, app, entryId, body, callerContext)`, and either returns a `successResponse` with `presentLocaleEntry` or propagates a refusal/error through `catchAs`.
+- **`replaceLocaleEntry`** (exported) – The sole controller function. Validates `entryId` via `requireId`, parses the body against the `ReplaceLocaleEntryBody` Zod schema, calls `localeService.updateEntry`, and responds with the presented `LocaleEntry` or an error.
+- **`requireId`** call – Resolves and validates the `entryId` path parameter; short-circuits with a 404 (`locales.error-entry-not-found`) if the ID is malformed or missing.
+- **`parseBody`** call – Validates `request.body` against the Zod schema before it reaches the service layer.
+- **`localeService.updateEntry`** – The service call that performs the actual update; receives locale, app, entryId, validated body, and caller context.
+- **`presentLocaleEntry`** – Transforms the service result into the wire-format `LocaleEntry` shape before sending the success response.
+- **`catchAs`** – Catches any thrown/rejected error and maps it to the appropriate HTTP error response under the `'replaceLocaleEntry'` label.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** — Imports the `catchAs`, `parseBody`, and `refused` helpers that handle body validation, error forwarding, and rejection responses.
-- **`@infrastructure/http/ids`** — Imports `requireId` to validate the `entryId` path segment (404 if missing).
-- **`@infrastructure/http/request`** — Imports `callerContextOf` to extract the authenticated caller's context for the service call.
-- **`@infrastructure/http/response`** — Imports `successResponse` to build the 200 JSON envelope.
-- **`../services`** — Imports `localeService` and calls its `updateEntry` method.
-- **`../presenters`** — Imports `presentLocaleEntry` to transform the service's `LocaleEntry` into the wire format.
-- **`@types`** — Imports the `LocaleEntry` and `ReplaceLocaleEntryRequest` type definitions.
-- **`../routes`** — The route file that registers this handler on the PUT path (referenced in the module doc-block).
+- **`src/modules/locales/routes.ts`** – Registers `replaceLocaleEntry` as the PUT handler for the entry URI.
+- **`src/modules/locales/services/index.ts`** – Exports `localeService`; this controller calls its `updateEntry` method.
+- **`src/modules/locales/presenters.ts`** – Exports `presentLocaleEntry`, used to shape the response payload.
+- **`src/infrastructure/http/controller.ts`** – Provides the shared helpers `catchAs`, `parseBody`, and `refused`.
+- **`src/infrastructure/http/ids.ts`** – Provides `requireId` for path-parameter ID validation.
+- **`src/infrastructure/http/request.ts`** – Provides `callerContextOf` to extract the authenticated caller's context for the service call.
+- **`src/infrastructure/http/response.ts`** – Provides `successResponse` for the 200 reply.
+- **`src/types/index.ts`** – Supplies the `LocaleEntry` and `ReplaceLocaleEntryRequest` type contracts.
 
 ## Notes
 
-- **The entry key is immutable by design.** The key is the lookup identity; changing it is a delete + create, not an update. The body schema (`ReplaceLocaleEntryBody`) therefore carries only the value.
-- **Admin endpoint.** The module doc marks this as admin-scoped; caller context is passed through to the service for authorization checks.
-- **PUT semantics tied to path.** Because `app` is a path segment, a PUT here replaces exactly the value listed by a GET on the same URI — it is not a partial/merge update.
+- The `entryId` (key) is **not** editable via this endpoint; it is the lookup identity. Changing a key is a delete + create, not a PUT.
+- No `If-Match` / ETag concurrency guard is applied — the value is a single string edited from a list, so optimistic locking is intentionally omitted.
+- The `app` is a path segment, so this PUT targets exactly the same scope as the corresponding GET.

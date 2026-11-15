@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/services/index.ts
-sha256: 158836318f0bca4f085e396f8590789969bf68b3dafd408efcb6afbbc7ec20fa
-generated_at: 2026-11-08T08:03:55.881457+00:00
+sha256: 5a262eda9c4c24537335c948f4cbb588f3f33c10763df8542d1620d8b3b194b8
+generated_at: 2026-11-14T21:39:02.333010+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Aggregate entry point for the returns domain. It re-imports every operation a controller might need (creating, deciding, receiving, closing, cancelling, listing, reading, notifying, stats, retention scrubbing, personal-data collection, digest) and bundles them into a single `returnService` object, so callers only depend on this one file rather than twelve siblings.
+Barrel/facade for the returns domain. It pulls in every operation a controller might need (create, decide, receive, cancel, close, notify, stats, retention, export) from its sibling modules and bundles them into a single `returnService` object, giving callers one import point instead of a dozen file paths.
 
 ## Key elements
 
-- **`returnService`** – the sole named export (a const object). Exposes 18 methods covering the full return lifecycle plus read/query helpers, notification emails, analytics buckets, retention scrubbing, personal-data collection, and the digest.
-- **Type re-exports** – `CreateReturnInput`, `CreateReturnOutcome`, `ReceiveReturnInput`, `ReturnFilters`, `ReturnedBucket` are surfaced for consumers who need the shapes without importing the leaf modules directly.
+- **`returnService`** — the sole value export. A plain object exposing 19 methods:
+  - *Lifecycle:* `createReturn`, `approveReturn`, `declineReturn`, `receiveReturn`, `closeReturnByHand`, `cancelReturn`
+  - *Read / filtering:* `listReturns`, `getReturn`, `getReturnOptions`, `withActions`
+  - *Proof / evidence:* `recordProofOfSending`
+  - *Retention & data:* `scrubReturnText`, `collectPersonalData`
+  - *Outbound mail:* `mailReturnRequested`, `mailReturnDecided`, `mailReturnClosed`
+  - *Analytics / export:* `returnedBuckets`, `returnedByProduct`, `returnedSeries`, `returnsDigest`
+- **Re-exported types** (no runtime cost): `CreateReturnInput`, `CreateReturnOutcome`, `ReceiveReturnInput`, `ReturnFilters`, `ReturnedBucket`
 
 ## Relationships
 
-- **Controllers** (`get-return-options`, `get-return`, `get-returns`, `post-return`, `post-return-decision`, `post-return-receive`, `post-return-close`, `post-return-cancel`) import `returnService` from this file to call the relevant method; they never reach into the leaf service modules directly.
-- **`src/modules/returns/module.ts` / `index.ts`** wire the module; this file is the service-layer surface they expose to the rest of the app.
-- **Leaf services** (`create.ts`, `decide.ts`, `receive.ts`, `close.ts`, `cancel.ts`, `personal-data.ts`, `read.ts`, `options.ts`, `retention.ts`, `notify.ts`, `stats.ts`, `digest.ts`) are the implementation modules whose named exports are pulled in and re-exposed through `returnService`.
+- **Controllers** (`post-return.ts`, `post-return-decision.ts`, `post-return-receive.ts`, `post-return-cancel.ts`, `post-return-close.ts`, `post-return-proof.ts`, `get-return.ts`, `get-returns.ts`, `get-return-options.ts`) — import `returnService` (and the re-exported types) from this file to perform their operations.
+- **`src/modules/returns/module.ts`** — registers/binds `returnService` for dependency injection.
+- **`src/modules/returns/index.ts`** — re-exports `returnService` upward so the module's public surface stays flat.
+- **Sibling service files** (`./create`, `./decide`, `./receive`, `./proof`, `./close`, `./cancel`, `./personal-data`, `./read`, `./options`, `./retention`, `./notify`, `./stats`, `./digest`) — the actual implementations that this file imports and re-surfaces.
 
 ## Notes
 
-- `withActions` (from `./read`) is exposed on `returnService` alongside the plain `getReturn`/`listReturns` reads; it presumably decorates a return record with the actions available to the caller, but its exact contract lives in `read.ts`.
-- The doc comment describes "one file each" for each concern, reinforcing that this index is intentionally a flat re-export with no logic of its own.
-- `scrubReturnText` (retention) and `collectPersonalData` are privacy/GDPR helpers co-located here for convenience; they are not part of the core return lifecycle.
+- The file is intentionally a pure re-export + object-assembly layer; it contains no logic of its own. If a function signature changes, update the owning sibling file — this file will pick it up automatically.
+- All methods on `returnService` are unbound (not `this`-aware), so they can be destructured or passed around freely.
+- The JSDoc comment describes each sibling's one-liner purpose; useful for quick orientation without opening every file.

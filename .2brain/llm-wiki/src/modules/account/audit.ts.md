@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/audit.ts
-sha256: 5a81567fecb6ffa708c857d751bbb7ad265535c5f2f1ee43789b9f5f557b70bc
-generated_at: 2026-11-08T03:59:51.131015+00:00
+sha256: 5bc7988f3c1b7e3c1b6d5a4ae9090d2dac71af537897cff2f1475dfb20c86b5e
+generated_at: 2026-11-14T18:29:47.407242+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the canonical set of audit action strings that the account domain emits, and registers them into the infrastructure audit map via a type-only module augmentation. This keeps the log-action vocabulary colocated with the domain that owns it without creating an import cycle, and lets log tooling and alert rules reference a stable, typed union.
+Declares the full set of audit action strings the account/auth domain emits and registers them into infrastructure's `AuditActionMap` via type-only declaration merging. This lets log tooling, alert rules, and downstream code reference the vocabulary by name while keeping the strings owned by the domain module rather than the infrastructure layer.
 
 ## Key elements
 
-- **`accountAuditActions`** — A `const` object mapping event keys (e.g. `AUTH_LOGIN`, `AUTH_2FA_CHALLENGE_FAILED`) to the wire-format strings that appear in audit logs (e.g. `'auth.login'`, `'auth.two_factor.challenge_failed'`). Covers the full lifecycle: signup, login/logout, password change/reset, email verify/change, account deletion scheduling/cancellation/completion, token refresh & reuse detection, reauth, data export, 2FA enrollment/challenge/backup-codes, OAuth link/unlink/failure, and erasure reapplication.
-- **`declare module '@infrastructure/observability/audit'`** — Augments the infrastructure `AuditActionMap` interface so the `account` key resolves to the union of all values in `accountAuditActions`. Type-only; no runtime import.
+- **`accountAuditActions`** (exported `const` object) — The single source of truth for every audit action string in this domain (e.g. `'auth.login'`, `'auth.refresh_token.reuse_detected'`). Keys are descriptive (`AUTH_TOKEN_REFRESHED`); values are the wire-format identifiers queried by log/alert tooling.
+- **`declare module '@infrastructure/observability/audit'`** — Augments the `AuditActionMap` interface so infrastructure's union type includes this module's values, without any runtime import in either direction.
 
 ## Relationships
 
-Every service file under `src/modules/account/services/` is a consumer of `accountAuditActions`. Each service emits the relevant action string(s) when logging an audit event:
+All listed neighbors **consume** `accountAuditActions`; none are imported by this file.
 
-- **signup.ts** → `AUTH_SIGNED_UP`, `AUTH_2FA_CODE_SENT`
-- **password.ts**, **password-reset.ts**, **password-reset-request.ts** → `AUTH_PASSWORD_CHANGED`, `AUTH_PASSWORD_RESET_REQUESTED`, `AUTH_PASSWORD_RESET_COMPLETED`, `AUTH_ONE_TIME_TOKEN_REJECTED`
-- **profile.ts** → `AUTH_PROFILE_UPDATED`
-- **email-change.ts** → `AUTH_EMAIL_VERIFY_REQUESTED`, `AUTH_EMAIL_VERIFY_COMPLETED`, `AUTH_EMAIL_CHANGE_REQUESTED` / `_COMPLETED` / `_CANCELED` / `_UNDONE` / `_RESENT`
-- **account-deletion.ts** → `AUTH_ACCOUNT_DELETE_SCHEDULED`, `AUTH_ACCOUNT_DELETE_CANCELED`
-- **purge-deletions.ts** → `AUTH_ACCOUNT_DELETE_COMPLETED`
-- **erasure-ledger.ts** → `AUTH_ERASURES_REAPPLIED`
-- **tokens.ts**, **refresh.ts** → `AUTH_TOKEN_REFRESHED`, `AUTH_REFRESH_TOKEN_REUSE_DETECTED`, `AUTH_SESSION_REVOKED`
-- **reauth.ts** → `AUTH_REAUTHENTICATED`, `AUTH_REAUTH_CODE_SENT`, `AUTH_ONE_TIME_TOKEN_REJECTED`
-- **logout.ts** → `AUTH_LOGGED_OUT`, `AUTH_LOGGED_OUT_EVERYWHERE`
-- **export.ts** → `AUTH_DATA_EXPORT_REQUESTED`, `AUTH_DATA_EXPORT_DOWNLOADED`
-- **oauth.ts** → `AUTH_OAUTH_LINKED`, `AUTH_OAUTH_UNLINKED`, `AUTH_OAUTH_FAILED`
-
-The direction is strictly one-way: services import `accountAuditActions`; nothing in this file imports a service.
+- **src/modules/account/services/signup.ts** – fires `AUTH_SIGNED_UP`.
+- **src/modules/account/services/profile.ts** – fires `AUTH_PROFILE_UPDATED`.
+- **src/modules/account/services/password.ts** – fires `AUTH_PASSWORD_CHANGED`.
+- **src/modules/account/services/password-reset-request.ts** – fires `AUTH_PASSWORD_RESET_REQUESTED`.
+- **src/modules/account/services/password-reset.ts** – fires `AUTH_PASSWORD_RESET_COMPLETED`, `AUTH_ONE_TIME_TOKEN_REJECTED`.
+- **src/modules/account/services/account-deletion.ts** – fires `AUTH_ACCOUNT_DELETE_SCHEDULED`, `AUTH_ACCOUNT_DELETE_CANCELED`.
+- **src/modules/account/services/erasure-ledger.ts** – fires `AUTH_ERASURES_REAPPLIED`.
+- **src/modules/account/services/purge-deletions.ts** – fires `AUTH_ACCOUNT_DELETE_COMPLETED`.
+- **src/modules/account/services/email-change.ts** – fires `AUTH_EMAIL_CHANGE_*` (requested, completed, canceled, undone, resent), `AUTH_EMAIL_VERIFY_*`.
+- **src/modules/account/services/tokens.ts / src/modules/account/services/refresh.ts** – fire `AUTH_TOKEN_REFRESHED`, `AUTH_REFRESH_TOKEN_REUSE_DETECTED`.
+- **src/modules/account/services/reauth.ts** – fires `AUTH_REAUTHENTICATED`, `AUTH_REAUTH_CODE_SENT`, `AUTH_ONE_TIME_TOKEN_REJECTED`.
+- **src/modules/account/services/logout.ts** – fires `AUTH_LOGGED_OUT`, `AUTH_LOGGED_OUT_EVERYWHERE`, `AUTH_SESSION_REVOKED`.
+- **src/modules/account/services/oauth.ts** – fires `AUTH_OAUTH_LINKED`, `AUTH_OAUTH_UNLINKED`, `AUTH_OAUTH_FAILED`.
+- **src/modules/account/services/export.ts** – fires `AUTH_DATA_EXPORT_REQUESTED`, `AUTH_DATA_EXPORT_DOWNLOADED`.
 
 ## Notes
 
-- **`auth.` prefix is intentional, not a typo.** The wire strings predate the current folder layout; log tooling and alert rules key off the `auth.` namespace, so the folder may be renamed freely but the strings must not change.
-- **`AUTH_ONE_TIME_TOKEN_REJECTED` deliberately conflates "unknown" and "expired"** to avoid leaking which case occurred to an attacker observing the log.
-- **`AUTH_REFRESH_TOKEN_REUSE_DETECTED`** fires *and* revokes the entire refresh-token set in the same operation (per the comment); treating it as a pure log event would miss the security action.
-- **`AUTH_2FA_CODE_SENT`** is the only 2FA action an *unauthenticated* caller can trigger an outbound message with — it is the primary signal for mail-bombing detection.
-- The augmentation uses `typeof accountAuditActions[keyof typeof accountAuditActions]` to produce the literal union, so adding a new key to the object automatically widens the type with no separate edit needed.
+- **`auth.` prefix, not `account.`** – Intentional. The strings are matched by log pipelines and alert rules written before the module was moved into the `account/` folder. Renaming the folder does not change the wire format.
+- **`AUTH_ONE_TIME_TOKEN_REJECTED` is deliberately ambiguous** – Unknown, expired, and already-used one-time links all emit the same action so an attacker cannot enumerate valid tokens by timing/response differences. The `metadata.flow` field distinguishes which flow (reset, verify, email-change, restore) was involved.
+- **`AUTH_2FA_CODE_SENT` is the unauthenticated outbound-signal** – It is the only 2FA action a caller without a valid session can trigger, making its failure-rate series the primary indicator of mail-bombing.
+- **Metadata conventions vary by action** – `metadata.via` (deletion cancel), `metadata.method` (reauth, 2FA, export), `metadata.flow` (one-time token), `metadata.reused` (export). Check the inline JSDoc on each key for the exact contract.

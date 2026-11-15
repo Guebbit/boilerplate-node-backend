@@ -1,7 +1,7 @@
 ---
 source: src/modules/tasks/tests/integration/submission-rate-limit.test.ts
-sha256: 7aa40a049c338b65c953db4a9d56ee18f28318743e8b9fe46ebb30c801120d30
-generated_at: 2026-11-08T08:40:29.521001+00:00
+sha256: c25c67328c480555859d0ea80a1cc7a3ba93777cd236a7ca17a76ca396698b1f
+generated_at: 2026-11-14T22:16:59.077440+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for `submissionLimiter`, the rate-limit budget applied to `POST /contact`. Verifies that the limiter spends its budget on both successful and failed responses (the opposite of `credentialLimiters`, which use `skipSuccessfulRequests`) and that every 429 refusal is logged with the real request path. Lives in the integration suite because it drives real requests through `express-rate-limit`'s middleware; the unit suite only checks pure configuration values.
+Integration test for `submissionLimiter`, the rate-limit middleware on `POST /tasks`. It verifies the limiter spends its budget on **every** request (not just successes, unlike `credentialLimiters`) and that each 429 refusal is logged, since no downstream middleware will record it. The file guards against the regression of accidentally mounting the credential limiter on this endpoint, where every abusive submission returns `201` and the credential limiter's `skipSuccessfulRequests` would silently let all of them through.
 
 ## Key elements
 
-- **`submissionLimiterWithBudget(limit)`** — local helper that dynamically re-imports `@modules/tasks/rate-limits` with `NODE_SUBMISSION_RATE_LIMIT_MAX` overridden, then returns `module.submissionLimiter`.
-- **`describe('submissionLimiter')`** block containing three tests:
-  - *Spends budget on a successful request* — 5 `POST /contact` calls against a 201 handler; expects `201, 201, 201, 429, 429`.
-  - *Spends budget on a failed request* — same shape but the handler returns 422; confirms every request counts, not just 2xx.
-  - *Logs every refusal* — budgets to 1, spied on `logger.warn`; asserts the first call logs nothing and the second calls `warn` with a message containing `POST /contact` and a context object `{ method: 'POST', route: '/contact', statusCode: 429 }`.
-- **`afterEach(() => jest.resetModules())`** — resets the module registry so each test's dynamic import picks up fresh env.
+- **`submissionLimiterWithBudget(limit)`** — helper that dynamically imports `@modules/tasks/rate-limits` with `NODE_SUBMISSION_RATE_LIMIT_MAX` set to `limit` via the harness, returning the configured `submissionLimiter` instance.
+- **`describe('submissionLimiter')`** — three cases:
+  - *Spends budget on successful requests* — sends 5 requests through a minimal Express app; expects `201 × 3` then `429 × 2`.
+  - *Spends budget on failed requests too* — same shape but the handler returns `422`; expects `422 × 3` then `429 × 2`.
+  - *Logs every refusal* — spies on `logger.warn`, asserts it is **not** called after a 200-range success, **is** called after a 429, and receives `POST /tasks`, `method: 'POST'`, `route: '/tasks'`, `statusCode: 429`.
+- **`afterEach` → `jest.resetModules()`** — isolates the dynamic `import()` calls between tests.
 
 ## Relationships
 
-- **`src/modules/tasks/rate-limits.ts`** — the module under test; `submissionLimiter` is the exported middleware being exercised.
-- **`tests/support/rate-limit-harness.ts`** — provides `withReloadedRateLimits`, used to inject a custom `NODE_SUBMISSION_RATE_LIMIT_MAX`. The harness's `appAnswering` helper is intentionally *not* used (see Notes).
+- **`src/modules/tasks/rate-limits.ts`** — source of the SUT (`submissionLimiter`). Imported dynamically inside `submissionLimiterWithBudget` so the env var is picked up at module-evaluation time.
+- **`tests/support/rate-limit-harness.ts`** — provides `withReloadedRateLimits`, the only piece of the harness this file uses. The test deliberately avoids the harness's `appAnswering` helper because the third case asserts the real path string `POST /tasks`, which `appAnswering`'s fixed `/route` would not produce.
 
 ## Notes
 
-- The third test hard-codes `POST /contact` in its log assertion, which is why the test cannot use the harness's `appAnswering` (that helper mounts a fixed `/route`). If the real path changes, this test must be updated in tandem.
-- The file's block comment documents a regression: mounting `credentialLimiters` (which skip 2xx) on a contact form would count zero of the abusive requests, since every submission returns 201. This test pins the opposite behavior for `submissionLimiter`.
-- The limiter is mounted *before* the request-context logger in the real app (`installSecurity` runs first), so 429s never reach the downstream logger. The `warn` call in the limiter is the only trace of a refusal; this test guards that invariant.
+- Deliberately **not** built on `appAnswering` (from the harness): the log-line assertion needs the literal `POST /tasks`, not a generic `/route`.
+- This is the **integration** counterpart to `src/modules/tasks/tests/unit/rate-limits.test.ts`, which covers only pure-configuration properties (default value, relationship to the global budget) without sending HTTP requests.
+- The third test's rationale: `installSecurity` mounts limiters **before** `installRequestContext` mounts the request logger, so a 429 never reaches the logger that records every other status code. The limiter itself must emit the only audit trace.

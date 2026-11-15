@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/controllers/put-cart-shipping-method.ts
-sha256: 980e1c1660bb62cc3c552d9a1e59fc0be0fbb34c764cfb52055f4819d1b7efe3
-generated_at: 2026-11-08T05:12:44.870580+00:00
+sha256: 5ef6a89491a0af93e5b24dbb2efcdbc16d6c87c9672661b21b0401cb799b65a2
+generated_at: 2026-11-14T19:28:15.211645+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter for the `PUT /cart/shipping-method` endpoint. It parses and validates the incoming request body, delegates the actual work to `cartService.setShippingMethod`, and formats the result into a standard success or error response. Exists to keep route registration and business logic separated from Express plumbing.
+Thin HTTP adapter for `PUT /cart/shipping-method`. Validates the incoming body, delegates to `cartService.setShippingMethod`, and serialises the updated (re-priced) cart back to the client. Exists so the Express route layer stays a single-line registration.
 
 ## Key elements
 
-- **`putCartShippingMethod(request, response)`** — The sole export. Reads `userId` from `request.authContext`, parses the body against the `SetCartShippingMethodBody` Zod schema, calls `cartService.setShippingMethod(userId, body.shippingMethodId)`, then either sends a `successResponse` (with the updated `CartResponse`) or short-circuits via `refused` / `catchAs`.
+- **`putCartShippingMethod`** (exported) — Express handler. Extracts `userId` from `request.authContext`, Zod-validates the body via `parseBody(SetCartShippingMethodBody, …)`, calls `cartService.setShippingMethod(userId, body.shippingMethodId)`, then either responds `200` with `CartResponse` (via `successResponse`) or propagates a refusal/error (`refused`, `catchAs`). A `null` `shippingMethodId` in the body clears the current method.
 
 ## Relationships
 
-- **`src/modules/cart/routes.ts`** — Registers `putCartShippingMethod` as the handler for the `PUT /cart/shipping-method` route.
-- **`src/modules/cart/services/index.ts`** — Supplies `cartService.setShippingMethod`, which performs the actual cart mutation and repricing.
-- **`src/infrastructure/http/controller.ts`** — Provides the `parseBody`, `refused`, and `catchAs` helpers used for validation, domain-refusal mapping, and error serialization.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse`, the canonical way to emit a 200 with a typed payload.
-- **`src/types/index.ts`** — Defines `CartResponse` (the shape returned on success) and `SetCartShippingMethodRequest` (the typed body for the Express generic).
+- **`src/infrastructure/http/controller.ts`** — supplies the three helpers used here: `parseBody` (Zod validation + early-return), `refused` (checks a domain `Refused` result and short-circuits the response), and `catchAs` (maps thrown errors to an error response).
+- **`src/infrastructure/http/response.ts`** — provides `successResponse`, the standard 200 JSON envelope writer.
+- **`src/modules/cart/routes.ts`** — registers this handler on the `PUT /cart/shipping-method` route.
+- **`src/modules/cart/services/index.ts`** — exports the `cartService` singleton whose `setShippingMethod` method contains the actual business logic.
+- **`src/types/index.ts`** — source of the `CartResponse` and `SetCartShippingMethodRequest` type aliases used in the handler signature and response payload.
 
 ## Notes
 
-- The shipping method can be set *or cleared*: the body carries a `shippingMethodId` that may be `null`, meaning "no shipping method."
-- `request.authContext!` uses a non-null assertion; the route is expected to sit behind an auth middleware that guarantees the context exists.
-- The controller is a fire-and-forget Promise chain (no `await`), consistent with the rest of the cart controllers in this project.
+- **No `If-Match` / optimistic concurrency handling.** The comment states this intentionally: there is no `GET` on this URL to fetch an ETag, and the cart enforces its own line-item rules server-side.
+- **Non-null assertion on `request.authContext!`** — assumes an upstream auth middleware has already populated it; the handler does not guard against a missing auth context.
+- **Zod schema lives in `@api/schemas.zod`**, not in the cart module; the controller imports it from the API-schema package.

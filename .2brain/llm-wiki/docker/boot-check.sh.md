@@ -1,33 +1,29 @@
 ---
 source: docker/boot-check.sh
-sha256: 3915b057edc4c2e6b13c852a2ef91f0ca90e00390396327eac682c91953937f5
-generated_at: 2026-11-08T02:19:36.241843+00:00
+sha256: 6786a13a3eb18b656f18cc44d1f59dc64f73ff3e0c3e02c7cf8b79a37f5d7561
+generated_at: 2026-11-14T17:10:53.576350+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # docker/boot-check.sh
 
 ## Purpose
-
-Integration smoke test that boots the production image alongside a real MongoDB container and verifies two properties a unit test cannot: the image starts successfully (fail-closed config, `/livez` responds) and the runtime `node` user cannot write to `/app/src/`. Run by both CI (`boot` job) and developers so the proof cannot drift between environments.
+Boots a production Docker image against a real (pinned) MongoDB container and proves two things unit tests cannot: the image starts fail-closed and `/livez` answers, and the runtime `node` user cannot write under `/app/src/`. Run identically by the CI `boot` job and by developers to keep the proof from drifting.
 
 ## Key elements
-
-- **`cleanup()`** (trapped on `EXIT`) — removes both containers, the Docker network, and the temp secrets directory regardless of where the script fails.
-- **Secret generation loop** — writes 48 random bytes (base64) into one file per `NODE_*_FILE` env var (`token_access`, `token_refresh`, `totp`, `pii`, `webhook`, `pseudonym`, `metrics`) under a `mktemp -d` directory, mounted read-only at `/run/secrets`.
-- **`mongo_image` extraction** — `sed`-parses the first pinned `mongo:` image line from `../docker-compose.production.yml` so the check uses the exact production image.
-- **App container launch** — runs the target image with production env vars, `NODE_ENABLE_CLUSTERING=0`, a local-only port bind, and the secrets mount. Deliberately omits `--read-only` so the write check tests ownership, not the mount flag.
-- **`/livez` polling loop** — 45 × 2 s (up to 90 s) `curl` retries; dumps `docker logs` and exits 1 on failure.
-- **Write-permission assertion** — `docker exec … touch /app/src/.boot-check-write`; fails if the `node` user can create a file, proving the code tree is root-owned.
+- **`cleanup()`** — removes the app/mongo containers, the ephemeral network, and the temp secrets directory. Registered via `trap … EXIT` so it fires on any exit path.
+- **Secrets generation loop** — creates 48-byte random base64 files for each `NODE_*_FILE` variable the app reads (`token_access`, `token_refresh`, `totp`, `pii`, `webhook`, `pseudonym`, `metrics`) under a `mktemp -d` directory, mounted read-only at `/run/secrets`.
+- **Mongo image extraction** — `sed` pulls the first pinned `mongo:<tag>@sha256:…` line from `../docker-compose.production.yml` so the check uses the exact same image as production compose.
+- **`/livez` poll** — up to 45 × 2 s (90 s total) `curl` retries; dumps container logs and exits 1 on failure.
+- **Write-permission check** — `docker exec … touch /app/src/.boot-check-write`; fails the run if the runtime user can create the file.
 
 ## Relationships
-
-- **`docker-compose.production.yml`** (sibling in `../`) — the script extracts the pinned Mongo image reference from this file at runtime, so a changed digest in compose is what the check validates.
+No graph neighbors.
 
 ## Notes
-
-- Queue and cache backends are intentionally absent: they degrade gracefully and `/livez` never exercises them.
-- Secret files are `chmod 644` / directory `755` on purpose — the container's `node` user has a different UID from the host runner, so "world-readable" is safe for throwaway values.
-- The `--read-only` flag is **not** passed to the app container (unlike production compose); adding it would make the write check trivially pass and defeat its purpose.
-- `BOOT_CHECK_PORT` env var (default `3999`) lets a developer override the port if 3999 is taken.
-- Suffixes (`$$`) on container/network names prevent collisions when two instances run concurrently.
+- `--read-only` is **deliberately omitted** on the app container (unlike production compose). Using it would make the write check trivially pass; the check is about code ownership, not mount flags.
+- Secret files are `chmod 644` on purpose: the container's `node` user has a different UID than the host runner, so "world-readable" on the host is fine for throwaway data.
+- Queue and cache services are intentionally absent — they degrade gracefully and `/livez` never touches them.
+- Network/container names use `$$` (PID) as a suffix to allow concurrent runs.
+- Port is `127.0.0.1:3999` by default; override with `BOOT_CHECK_PORT`.
+- `set -euo pipefail` is set, but individual `docker rm`/`network rm` calls in `cleanup` are guarded with `|| true` so cleanup itself never masks the original exit code.

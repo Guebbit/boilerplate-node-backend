@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/tests/contract/api.contract.test.ts
-sha256: 3e9c540163fd07c34b1f9e07e5f4f6aaba3a48e0c464413f29e55c1c56cc7f58
-generated_at: 2026-11-08T07:30:44.106970+00:00
+sha256: 04984ceacb344742f0703f395944d2a03275dd6f2c4869964754719636fef487
+generated_at: 2026-11-14T21:11:00.616029+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,42 +9,44 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP-level contract tests for every `/payments` route. Each test asserts the exact status code, response envelope shape, error-code `code`, and header behavior a client can observe over the wire. Business/money rules are delegated to the unit suite; this file only pins that each documented contract branch (201 intent, 200 confirm, the distinguishable 409s, 404s, 422) is actually reachable and shaped correctly through the real HTTP stack.
+Contract (integration) tests for the `/payments` HTTP surface. Every route's status code, response envelope shape, and error discriminator are pinned over real HTTP against a live app with a fake payment provider. The file explicitly defers money-rule logic to the unit suite; here the job is to prove that each contract branch — 201 intent, 200 confirm, the three distinguishable 409s, 404s, 422 — is actually reachable and shaped as the API contract specifies.
 
 ## Key elements
 
-- **`GOOD_METHOD` / `DECLINE_METHOD`** – Literal payment-method refs (`pm_card_visa`, `pm_card_declined`) used as HTTP request inputs. Intentionally *not* imported from the fake PSP (see Notes).
-- **`authenticateWithOrder`** – Logs in a customer and creates a pending order; returns bearer token and order.
-- **`authenticateWithIntent`** – Extends the above by POSTing `/payments` over HTTP to create an intent; returns `paymentId` for confirm tests.
-- **`transferOrderOf`** – Creates a `bank_transfer` order with its transfer payment opened (via `openTransferOrder` factory); returns the RF reference.
-- **`paidOrder`** – Drives intent → confirm over HTTP to produce a fully-succeeded payment; the starting fixture for refund/dispute tests.
-- **`disputeEvent`** – Builds a dispute webhook payload in the shape the contract specifies.
-- **`describe('GET /payments/methods')`** – Verifies the unauthenticated methods listing returns 200 with a non-empty array.
-- **`describe('with no card payment provider configured')`** – Unsets `NODE_PAYMENT_PROVIDER`; asserts card is absent from methods, `POST /payments` returns 409 `PAYMENT_CARD_NOT_AVAILABLE` with no row created, and the webhook route still dispatches to the registered adapter.
-- **`describe('POST /payments')`** – Pins 201 + `Location` on first call, 200 (no `Location`, same id) on repeat; asserts `clientSecret` present only in the 201 body and `providerRef` absent everywhere; 404 for missing order; 422 for empty body.
-- **`describe('POST /payments/{id}/confirm')`** – Pins 200 `succeeded` on success, 409 `PAYMENT_DECLINED` on a bad method, 404 for a nonexistent payment, 422 for an unknown method ref.
-- *(truncated section)* Dispute-delivery and refund contract tests continue below the visible portion.
+- **`authenticateWithOrder`** — helper: creates an authenticated user with one pending order; returns bearer + order.
+- **`authenticateWithIntent`** — builds on the above, then issues `POST /payments` to produce a confirmed intent (201); returns bearer, order, and paymentId.
+- **`transferOrderOf`** — creates a pending `bank_transfer` order with its transfer payment opened; used by dispute/refund delivery tests.
+- **`paidOrder`** — full HTTP round-trip to a `succeeded` payment; fixture for refund and dispute tests.
+- **`disputeEvent`** — builds a dispute delivery payload (chargeback shape) for webhook delivery tests.
+- **`describe('GET /payments/methods')`** — verifies the public method list includes `card` and requires no auth.
+- **`describe('with no card payment provider configured')`** — unsets `NODE_PAYMENT_PROVIDER`; asserts `card` is absent from methods, `POST /payments` returns 409 `PAYMENT_CARD_NOT_AVAILABLE` with no row created, and the webhook route still resolves via path (not env).
+- **`describe('POST /payments')`** — 201 intent shape, idempotent re-request (200, same id, no `Location`), `providerRef` never leaked, `clientSecret` only on intent creation, 404 / 422 error contracts.
+- **`describe('POST /payments/{id}/confirm')`** — 200 success, 409 `PAYMENT_DECLINED`, 404, and a parametrized rejection of raw card numbers as `paymentMethodRef`.
+- **`describe('POST /payments/webhook/...')`** — (in truncated portion) verifies webhook signature enforcement and dispute/refund event delivery via the fake provider.
+- **`GOOD_METHOD` / `DECLINE_METHOD`** — hard-coded provider method refs (`pm_card_visa`, `pm_card_declined`). Deliberately *not* imported from the fake PSP to keep the test independent of internal renames.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** – Imported as a side-effect; provides shared contract-test setup (likely supertest/agent configuration or assertion helpers).
-- **`scenarios/support/doubles/payments/fake.ts`** – Supplies `fakePaymentProvider`, `setFakeOutcome`, `setFakeRefundFailure`; the fake is registered via the registry so the real HTTP path exercises it.
-- **`src/modules/payments/providers/registry.ts`** – `registerPaymentProvider` is called to install the fake adapter before tests run.
-- **`src/modules/payments/providers/index.ts`** – Re-exports `signWebhookPayload` and `WEBHOOK_SIGNATURE_HEADER`, used to sign webhook request bodies.
-- **`src/modules/payments/repository.ts`** – `paymentRepository.findByOrderId` is queried after a 409 to assert no row was persisted.
-- **`src/modules/orders/tests/factories.ts`** – `createOrder` / `toOrderItem` build the pending-order fixture.
-- **`src/modules/products/tests/factories.ts`** – `createProduct` creates the line-item product.
-- **`src/modules/users/tests/factories.ts`** – `createUser` / `createAdminUser` provision the test accounts.
-- **`src/modules/inventory/index.ts` / `services/index.ts`** – `inventoryService` is imported; likely needed because order confirmation triggers inventory side-effects that the test must tolerate or assert.
-- **`src/kernel/events.ts`** – `onDomainEvent` registers listeners exercised indirectly through the payment lifecycle.
-- **`src/kernel/outbox.ts`** – `settleOutboxNudges` flushes outbox entries so async side-effects complete before assertions.
-- **`src/modules/orders/index.ts`** – Exports the `ORDER_STATUS_CHANGED` event constant used by the listener wiring.
-- **`src/modules/payments/tests/factories.ts`** – `transferOrder` (aliased `openTransferOrder`) creates the bank-transfer fixture.
+- **`scenarios/support/doubles/payments/fake.ts`** — provides `fakePaymentProvider`, `setFakeOutcome`, `setFakeRefundFailure`; the in-process PSP the app talks to instead of a real gateway.
+- **`src/modules/payments/providers/registry.ts`** — `registerPaymentProvider` is called in setup to install the fake so the app resolves it by name.
+- **`src/modules/payments/providers/index.ts`** — exports `signWebhookPayload` and `WEBHOOK_SIGNATURE_HEADER` used to craft valid (or invalid) webhook requests.
+- **`src/modules/payments/repository.ts`** — `paymentRepository.findByOrderId` is queried to assert no row was persisted after a 409.
+- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `toOrderItem` build the order fixtures the tests operate on.
+- **`src/modules/products/tests/factories.ts`** — `createProduct` supplies the line-item product.
+- **`src/modules/users/tests/factories.ts`** — `createUser` / `createAdminUser` for auth setup.
+- **`src/modules/payments/tests/factories.ts`** — `openTransferOrder` creates a `bank_transfer` order + payment pair for delivery tests.
+- **`src/kernel/events.ts`** — `onDomainEvent` subscribes to domain events to observe side-effects of payment-driven transitions.
+- **`src/kernel/outbox.ts`** — `settleOutboxNudges` flushes pending outbox entries so event-driven assertions can complete.
+- **`src/modules/orders/index.ts`** — source of the `ORDER_STATUS_CHANGED` event constant.
+- **`src/modules/inventory/index.ts`** — inventory service consumed as part of the payment→order status transition.
+- **`src/modules/inventory/services/index.ts`** — inventory service implementation invoked when a payment settles an order.
+- **`tests/support/contract.ts`** — `@tests/contract` import; provides shared contract-test assertions or setup the file relies on via side-effect.
 
 ## Notes
 
-- **Literals over imports for payment-method refs.** The file deliberately hard-codes `pm_card_visa` / `pm_card_declined` rather than importing the constants from `fake.ts`. The rationale (in a comment) is that a contract test's inputs should come from the provider's published documentation, not from the code under test; importing the double would let a silent rename pass while the test loses its meaning.
-- **Idempotency is a contract, not a convenience.** The first `POST /payments` must return 201 + `Location`; a repeat must return 200, the same `id`, and no `Location` header. This is RFC 9110 §15.3.2 behavior pinned explicitly.
-- **`clientSecret` visibility is one-shot.** The test asserts the secret appears in the 201 intent body but is absent from the read-back `GET /orders/:id/payments`. No other response in the suite may carry it.
-- **Webhook route is env-independent.** Even when `NODE_PAYMENT_PROVIDER` is unset, `POST /payments/webhook/fake` still reaches the registered adapter (204). The routing decision is made by the URL path, not the environment variable.
-- **Real database.** `setupTestDb()` is called at module level; these tests run against a real (test) database, not an in-memory stub.
+- **Literals over imports for provider refs.** `GOOD_METHOD` and `DECLINE_METHOD` are hard-coded strings, not imports from the fake PSP. The rationale (stated in a comment): a contract test's inputs should come from the provider's published documentation, not from the code under test. Importing would let a rename silently break the test's meaning.
+- **Idempotency is a contract here.** `POST /payments` on an existing intent returns 200 (same `id`, no `Location` header), while the first call returns 201 + `Location`. This is an explicit RFC 9110 §15.3.2 assertion, not an implementation detail.
+- **`providerRef` vs `clientSecret` secrecy.** The test asserts `providerRef` is absent from *all* client-facing responses, while `clientSecret` appears only on the 201 intent body and nowhere in read-back endpoints. Both rules are pinned in a single test to catch a regression in either direction.
+- **Environment mutation.** The "no card provider" suite calls `setEnvironment({ NODE_PAYMENT_PROVIDER: undefined })` in `beforeEach`, relying on the app reading env at request time. This is a deliberate simulation of a deployment without a card adapter.
+- **`setupTestDb()` at module scope.** The file is not a pure unit test; it boots a real (or emulated) database, so the repository-level assertions (no row after 409) are meaningful.
+- **File is truncated in the source provided.** The confirm, webhook, and dispute-delivery `describe` blocks continue past the cut point; the patterns and helpers above are sufficient to orient a reader without re-reading the full file.

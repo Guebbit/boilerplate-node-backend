@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/config.ts
-sha256: 2a557a7809489fd8d538a8f90610b0adf620b1c506d41735627f54a2240ff5ea
-generated_at: 2026-11-08T05:11:10.285043+00:00
+sha256: c7542ec53719ec1ae7cfe69f45de90c030a2a292d24fc459a3eaba823b9290f5
+generated_at: 2026-11-14T19:27:16.522170+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the three runtime-tunable knobs that govern cart lifetime, per-line quantity, and the per-account cap on open unpaid orders. Each value is validated at read time through the shared config infrastructure, keeping business limits in one auditable place rather than scattered across services.
+Defines the four operator-tunable numeric limits for the cart module (retention period, per-line quantity, per-cart line count, and open-unpaid-order cap) and exposes typed accessor functions that the rest of the module reads at call time.
 
 ## Key elements
 
-- **`cartConfig`** — The `defineConfig` instance (name `"cart"`) whose shape defines three integer fields: `NODE_CART_RETENTION_DAYS` (default 365, min 1), `NODE_CART_LINE_MAX` (default 10, min 1, max 999), and `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` (default 2, min 1).
-- **`cartLineMax()`** — Returns the current per-line unit ceiling. Read at write time, so a lower value takes effect on the *next* write; an already-filled line is re-checked (and possibly refused) at checkout rather than silently trimmed.
-- **`maxOpenUnpaidOrdersPerAccount()`** — Returns the cap on simultaneously `pending` (unpaid) orders per account. Prevents a single account from hoarding inventory across many incomplete orders (OWASP OAT-021, Denial of Inventory).
+- **`cartConfig`** – A `defineConfig` object (name: `"cart"`) with four `int` fields: `NODE_CART_RETENTION_DAYS`, `NODE_CART_LINE_MAX_QUANTITY`, `NODE_CART_MAX_LINES`, `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT`.
+- **`cartLineMax()`** – Returns the per-line quantity ceiling (1–999). Read at write time; a line filled before a lower value is refused at checkout rather than trimmed.
+- **`cartMaxLines()`** – Returns the per-cart line cap (1–500). Bounds the un-paginated `GET /cart` response. New lines beyond the cap are refused; existing lines are never pruned.
+- **`maxOpenUnpaidOrdersPerAccount()`** – Returns the cap on concurrent `pending` orders per account. Prevents a single account from holding stock across many uncompleted orders.
 
 ## Relationships
 
-- **`src/infrastructure/config/define.ts`** — Provides `defineConfig`, the function that constructs the validated config object.
-- **`src/infrastructure/config/fields.ts`** — Provides the `int` field descriptor used to declare each key's type, default, and bounds.
-- **`src/modules/cart/services/items.ts`** — Consumes `cartLineMax()` to enforce the per-line quantity cap on writes.
-- **`src/modules/cart/services/merge.ts`** — Consumes `cartLineMax()` when merging cart lines so the combined quantity does not exceed the ceiling.
-- **`src/modules/cart/services/checkout.ts`** — Consumes `maxOpenUnpaidOrdersPerAccount()` to reject a checkout when the account already holds the maximum number of unpaid orders.
-- **`src/modules/cart/tests/unit/config.test.ts`** — Unit-tests the default values, bounds, and accessor functions defined here.
+- **`src/infrastructure/config/define.ts` / `src/infrastructure/config/fields.ts`** – Supplies the `defineConfig` builder and the `int` field type used to declare each knob with its default, min, and max.
+- **`src/modules/cart/services/items.ts`** – Consumes `cartLineMax()` and `cartMaxLines()` to validate add/update operations.
+- **`src/modules/cart/services/checkout.ts`** – Consumes `maxOpenUnpaidOrdersPerAccount()` (and `cartLineMax()`) to gate order placement.
+- **`src/modules/cart/services/merge.ts` / `src/modules/cart/services/view.ts`** – Read `cartMaxLines()` when assembling or merging cart state.
+- **`src/modules/cart/model.ts` / `src/modules/cart/repository.ts`** – Enforce the same caps at the persistence layer so stored data stays within the configured bounds.
+- **`src/modules/cart/module.ts`** – Wires the config into the module lifecycle.
+- **`src/modules/cart/tests/unit/config.test.ts`** – Unit-tests the accessor functions and field constraints.
 
 ## Notes
 
-- The default for `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` is **2**, not 1, so that a failed card or expired 3-D Secure window (which leaves a `pending` order until its stock-hold expires) does not block an immediate retry.
-- `cartLineMax()` is one of three "denial-of-inventory" safeguards (alongside the open-order cap and the per-payment-method reservation window) that bound how much stock a single account can hold simultaneously.
-- All three values are read through accessor functions that call `cartConfig()` each time, meaning they pick up environment or runtime overrides on every call rather than being frozen at module load.
+- `NODE_CART_MAX_LINES` is hard-capped at **500** (Shopify's own ceiling) in the field definition; an operator cannot push it past that via environment config.
+- All accessors are **functions** (`cartLineMax()`), not plain values, so each call reads the current config snapshot. Changing an env var takes effect on the next call without a restart.
+- The `max: 500` on `NODE_CART_MAX_LINES` is intentional: because `GET /cart` is never paginated, the bound must be enforced structurally regardless of what an operator sets.
+- The default of `2` (not `1`) for `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` is deliberate: a failed 3-D Secure or declined card leaves a `pending` order until its hold expires, and a cap of `1` would block the legitimate retry.
+- The three inventory-denial knobs (`cartLineMax`, `maxOpenUnpaidOrdersPerAccount`, and the reservation window) are referenced collectively under OWASP OAT-021 (Denial of Inventory).

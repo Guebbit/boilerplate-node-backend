@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/domain/lifecycle.ts
-sha256: ce0e557fb70ed760cd6c65c0a9ef66610bcfe6bcb49b1c534635a92efd340512
-generated_at: 2026-11-08T07:20:20.626465+00:00
+sha256: 3395b6de2ef3acec003f922d8f6bbfe7aaa899903bd321fb57059dc66ca32b31
+generated_at: 2026-11-14T21:00:22.106899+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,43 +9,47 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the status sets and guard predicates that control which payment and refund transitions are legal. Every exported array is read both as a membership test and as the `$in` operand of the conditional writes in `repository.ts` (`updateStatusIfIn` / `upsertConfirmable`), so the sets *are* the concurrency guard. There is no explicit from→to graph: all transitions funnel through `settlePayment`, which decides the landing status; these sets only answer "may I still move this payment/refund."
+Defines the payment status guard-sets and refund-state rules that control which conditional writes (`updateStatusIfIn`, `upsertConfirmable`) the repository is allowed to perform. Every exported array is both a membership test *and* the MongoDB `$in` predicate for the write it guards, making the set itself the at-most-once enforcement mechanism rather than a surrounding check.
 
 ## Key elements
 
-- **`CONFIRMABLE_PAYMENT_STATUSES`** – statuses `confirmPayment` may run from (`requires_confirmation`, `declined`).
-- **`IN_FLIGHT_PAYMENT_STATUSES`** – statuses indicating the provider is still deciding (`requires_action`, `processing`).
-- **`SETTLEABLE_PAYMENT_STATUSES`** – every non-terminal status a settlement write may move a payment away from; what makes `settlePayment` at-most-once.
-- **`SUCCESS_SETTLEABLE_PAYMENT_STATUSES`** – settleable plus `canceled`; the success write (and amount-mismatch / provider re-read gate) uses this wider set.
-- **`REAPABLE_PAYMENT_STATUSES`** – allow-list of statuses the retention reaper may delete; new money statuses are never reaped by default.
-- **`MANUAL_PROVIDER` / `isHandRecorded`** – identifies operator-recorded payments with no PSP behind them.
-- **`isOpenTransfer`** – a hand-recorded `requires_action` payment carrying a `transferReference` (bank transfer still awaiting funds).
-- **`REFUNDABLE_PAYMENT_STATUS`** – the single status money can come back from (`succeeded`).
-- **`OPEN_REFUND_STATUSES` / `isOpenRefund`** – whether a refund record is still actionable (excludes staff-canceled).
-- **`FINAL_REFUND_FAILURES` / `isFinalFailure`** – refusals that end retrying (declined, card issues, provider removed, disputed).
-- **`UNCLEAR_REFUND_FAILURES`** – refusals where the provider never answered; the refund may have gone through.
-- **`MONEY_DID_NOT_MOVE_FAILURES`** – subset of final failures (minus `disputed`, plus `insufficient_funds`) after which an operator may report the money returned by hand.
-- **`owesBuyerAnotherWay`** – whether the buyer is owed the money via a different channel and must be contacted.
-- **`RefundFacts` / `RefundablePayment`** – the read-only slices of the refund and payment documents the rules below consume.
-- **`isReversed`** – provider reported the refund failed/settled-back (`reversedAt` is set).
-- **`mayHaveMoved`** – whether the provider likely holds the record's money (settled or has a `providerRefundRef`); excludes reversed and unclear-failure records.
-- **`exceedsBy` / `exceedsRemaining`** – compute whether an unsent open refund overshoots what the provider can still return.
-- **`mayBeSettledByHand`** – whether an operator may record the refund as returned outside the application (hand-paid, final non-disputed refusal, reversed, or over-limit).
+- **`CONFIRMABLE_PAYMENT_STATUSES`** – `['requires_confirmation', 'declined']`; the only statuses `confirmPayment` may depart from.
+- **`IN_FLIGHT_PAYMENT_STATUSES`** – `['requires_action', 'processing']`; statuses that are awaiting the provider; next step is `sync`, never a second `confirm`.
+- **`SETTLEABLE_PAYMENT_STATUSES`** – all four non-terminal statuses; the universal guard for any settlement write. Excludes `succeeded`/`canceled`, which is what makes `settlePayment` at-most-once.
+- **`SUCCESS_SETTLEABLE_PAYMENT_STATUSES`** – `SETTLEABLE_PAYMENT_STATUSES` + `canceled`; used only by the success write, amount-mismatch write, and provider re-read gate so that money landing on a canceled intent is still recorded.
+- **`REAPABLE_PAYMENT_STATUSES`** – same union; allow-list for the retention reaper so a future money-bearing status is never deleted by default.
+- **`MANUAL_PROVIDER`** / **`isHandRecorded`** – identifies operator-recorded payments with no PSP behind them.
+- **`isOpenTransfer`** – a hand-recorded, `requires_action` payment carrying a `transferReference`; still payable by the buyer via card.
+- **`OPEN_REFUND_STATUSES`** / **`isOpenRefund`** – `pending` + `failed` (excluding staff-canceled); the refund is still in play.
+- **`FINAL_REFUND_FAILURES`** – refusal codes that end retrying (declined, expired/stolen card, provider_removed, disputed).
+- **`UNCLEAR_REFUND_FAILURES`** – `provider_unavailable`, `unknown`; the refund *may* have gone through, so money is never assumed unmoved.
+- **`MONEY_DID_NOT_MOVE_FAILURES`** – a superset of final failures (minus `disputed`) plus `insufficient_funds`; safe to hand-settle.
+- **`owesBuyerAnotherWay`** – true when the refund is open, not a chargeback, and either reversed or finally refused; the buyer is owed the money outside this refund record.
+- **`RefundFacts`** / **`RefundablePayment`** – the read-only slices the rules below consume (extends `DisputablePayment`).
+- **`isReversed`** – provider reported the refund came back; `reversedAt` is set and never cleared.
+- **`mayHaveMoved`** – the provider holds the money (settled or has a `providerRefundRef`); reversed records are excluded.
+- **`exceedsBy`** / **`exceedsRemaining`** – compute and test whether an unsent open refund overshoots the payment's remaining refundable amount.
+- **`mayBeSettled`** – operator gate: may a human report this refund's money returned outside the application? (hand-paid pending, provably-not-moved card refund, reversed, or held-unsent; never an unclear failure; `disputed` only once a lost chargeback covers it.)
 
 ## Relationships
 
-- **`@domain-primitives/money`** – imports `addMoney`, `subtractMoney`, `toMinorUnits`, and the `Money` type used by `exceedsBy` and the overflow checks.
-- **`@domain-primitives/time`** – imports `DAY_MS`, `MINUTE_MS` (used for time-bound checks in the full file).
-- **`./disputes`** – imports `hasDecidedDispute`, `lostChargebackCovers`, and the `DisputablePayment` type (which `RefundablePayment` extends) for chargeback-aware settlement rules.
-- **`repository.ts`** – the direct consumer: the arrays are passed as the `$in` set to `updateStatusIfIn` / `upsertConfirmable`, making them the at-most-once guard under concurrent writes.
-- **`domain/index.ts`** – barrel re-export; downstream services and the presenter import from here.
-- **`services/refund-settlement.ts` / `services/refund-sync.ts`** – call the refund guard predicates (`isOpenRefund`, `isFinalFailure`, `mayBeSettledByHand`, `exceedsRemaining`, etc.) before issuing conditional writes.
-- **`scenarios/support/doubles/payments/fake.ts`** – test double that implements the `RefundFacts` / `RefundablePayment` shapes for unit tests of the rules in this file.
+- **`./disputes`** – imports `DisputablePayment` (base for `RefundablePayment`), `hasDecidedDispute`, and `lostChargebackCovers` used inside `mayBeSettled`.
+- **`@domain-primitives/money`** – `addMoney`, `subtractMoney`, `toMinorUnits`, `Money` type power the `exceedsBy` arithmetic.
+- **`@domain-primitives/time`** – imports `DAY_MS`, `MINUTE_MS` (likely consumed by `deadline.ts` or `refund-sync.ts` via re-export through `index.ts`).
+- **`src/modules/payments/repository.ts`** – the status arrays are the `$in` predicates for its `updateStatusIfIn` / `upsertConfirmable` conditional writes.
+- **`src/modules/payments/services/intent.ts`** – reads `CONFIRMABLE_PAYMENT_STATUSES` / `SETTLEABLE_PAYMENT_STATUSES` to guard confirm and settle paths.
+- **`src/modules/payments/services/refund-settlement.ts`** – consumes `isOpenRefund`, `MONEY_DID_NOT_MOVE_FAILURES`, `mayBeSettled`, `exceedsRemaining`.
+- **`src/modules/payments/services/refund-sync.ts`** – consumes `OPEN_REFUND_STATUSES`, `isFinalFailure`, `UNCLEAR_REFUND_FAILURES`, `isReversed`.
+- **`src/modules/payments/domain/index.ts`** – re-exports this module's public surface for the rest of the codebase.
+- **`src/modules/payments/domain/display-status.ts`** – maps these statuses to user-facing display strings.
+- **`src/modules/payments/presenter.ts`** – reads status sets to shape API responses.
+- **`scenarios/support/doubles/payments/fake.ts`** – test double that conforms to the same status vocabulary.
 
 ## Notes
 
-- The exported collections are **arrays, not `Set`s**, intentionally: they must serve as both a membership test and a spreadable `$in` operand without re-spreading.
-- `SETTLEABLE_PAYMENT_STATUSES` deliberately excludes `succeeded` and `canceled`; that exclusion is the at-most-once guarantee for `settlePayment`.
-- `SUCCESS_SETTLEABLE_PAYMENT_STATUSES` re-includes `canceled` because money that lands on a canceled intent is real and must be recorded.
-- `MONEY_DID_NOT_MOVE_FAILURES` is **not** identical to `FINAL_REFUND_FAILURES`: it adds `insufficient_funds` (retryable, but nothing went out) and removes `disputed` (the bank already returned the money; never settled by hand).
-- `isHandRecorded` / `isOpenTransfer` / `mayBeSettledByHand` encode the rule that a manual payment has no PSP to refund through; returning it is purely an operator action.
+- All status collections are **`readonly` arrays, not `Set`s**. This is deliberate: the same value is spread into a MongoDB `$in` clause *and* used with `.includes()` for in-process checks. Converting to a `Set` would require re-spreading for the query.
+- There is **no explicit from→to transition table** (unlike `orders/domain/lifecycle.ts`). Every write funnels through `settlePayment`, so only the *from* guard matters; the *to* is decided by that single function.
+- `SETTLEABLE_PAYMENT_STATUSES` excludes `succeeded` **and** `canceled`; `SUCCESS_SETTLEABLE_PAYMENT_STATUSES` adds back `canceled` specifically so a late webhook on a canceled intent still records the money in the same transaction.
+- `reversedAt` is a **write-once** field: set once by the provider report, never cleared. `isReversed` is therefore a simple undefined check.
+- `unclear` failures (`provider_unavailable`, `unknown`) are excluded from `MONEY_DID_NOT_MOVE_FAILURES` *on purpose*—settling one would risk paying the buyer twice.
+- `REFUNDABLE_PAYMENT_STATUS` is a single constant (`'succeeded'`), not an array, because refunds can only originate from a successfully landed payment.

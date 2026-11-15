@@ -1,7 +1,7 @@
 ---
 source: src/modules/tasks/domain/actions.ts
-sha256: 6d814b16928dae64448acf5d9ea16ad69ac589faa2c04d0a2066e2f56c9d0abd
-generated_at: 2026-11-08T08:32:56.134985+00:00
+sha256: e2ce56317136ecd3e920629cd52963e80f95c238f58cb8d5c56d63c53e7d270f
+generated_at: 2026-11-14T22:07:49.078602+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure, server-side mapping from a caller's standing on one task to the set of actions that are available. By computing flags in one place, no client re-implements the lifecycle rules. The function is synchronous and side-effect-free: the service resolves permissions upstream and hands the facts in.
+Pure, server-side logic that maps a caller's standing (permissions) and a task's current status to the set of actions they are allowed to perform on that task. It centralises the decision so no client re-implements the lifecycle rules.
 
 ## Key elements
 
-- **`ActionFacts`** (interface) – Input shape: `status`, `mayWork`, `mayDelete`, `assigned`. `mayWork` encodes both the `update:Task` permission and the system-task route check; `mayDelete` does the same for `delete:Task`.
-- **`TaskActionFlags`** (interface) – Output shape carried on the wire as `actions`: `resolve`, `markSpam`, `reopen`, `assign`, `unassign`, `note`, `delete`.
-- **`actionsOf`** (const, pure function) – Accepts `ActionFacts`, returns `TaskActionFlags`. Each flag is the conjunction of the relevant standing flag and a status precondition (e.g. `resolve` requires `mayWork` and status ≠ resolved; `reopen` requires `mayWork` and the task is *not* open).
+- **`ActionFacts`** (interface) — Input shape: `status`, `mayWork`, `mayDelete`, `assigned`. Represents the resolved standing the caller holds for one task.
+- **`TaskActionFlags`** (interface) — Output shape: seven boolean flags (`resolve`, `markSpam`, `reopen`, `assign`, `unassign`, `note`, `delete`). Described in a comment as "the flags the wire carries as `actions`."
+- **`actionsOf`** (function) — Accepts an `ActionFacts` object and returns a `TaskActionFlags` object. Each flag requires `mayWork` (or `mayDelete` for `delete`) **and** a status precondition (e.g. `reopen` requires the task to *not* be open; `assign` requires it *to be* open).
 
 ## Relationships
 
-- **`src/types/index.ts`** – Imports the `TaskStatus` enum used in status comparisons.
-- **`src/modules/tasks/domain/lifecycle.ts`** – Imports `isOpen` to gate `reopen`, `assign`, and `unassign`.
-- **`src/modules/tasks/domain/index.ts`** – Barrel module that re-exports this file's public API to the rest of the domain.
-- **`src/modules/tasks/presenter.ts`** – Consumes `TaskActionFlags` to decide which action commands to expose.
-- **`src/modules/tasks/views.ts`** – Renders the concrete action buttons/controls driven by those flags.
+- **`src/modules/tasks/domain/lifecycle.ts`** — Imports `isOpen(status)` to gate the `reopen` and `assign` flags.
+- **`src/types/index.ts`** — Imports `TaskStatus` enum for status comparisons.
+- **`src/modules/tasks/domain/index.ts`** — Barrel file; expected to re-export `ActionFacts`, `TaskActionFlags`, and `actionsOf` for downstream consumption.
+- **`src/modules/tasks/presenter.ts` / `src/modules/tasks/views.ts`** — Downstream consumers that receive the resolved `TaskActionFlags` (likely via the wire) to decide which UI actions to expose.
 
 ## Notes
 
-- `delete` is the only flag keyed to `mayDelete`; every other flag keys to `mayWork`. A caller who can delete a task may not be able to work it (or vice-versa).
-- `note` is the only flag with no status precondition beyond `mayWork` — it is always available when the caller has standing.
-- The file is intentionally free of I/O, async, and configuration; all policy is expressed in the boolean logic of `actionsOf`. Adding a new action means adding a flag to `TaskActionFlags` and one line of predicate here.
+- `mayWork` and `mayDelete` are described as carrying "the task's route set when it is a system task," implying route-level access checks are resolved *before* this function runs. This file never inspects routes itself.
+- The function is intentionally side-effect-free and dependency-free (beyond the two imports) so it is trivially testable and safe to call at any layer.
+- `delete` is the only flag gated by `mayDelete` rather than `mayWork`, reflecting a separate permission.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/session/auth-context.ts
-sha256: cd58edd77c5048397600c98e4d6bc10123d871b1140cbb775bf039a835f11772
-generated_at: 2026-11-08T04:26:26.924159+00:00
+sha256: 9ba8d0a0ec1cec0bcfb6f02cd1417de41fc2918197bfa20e927bacf307925646
+generated_at: 2026-11-14T18:55:50.675869+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Resolves a session's proof (`authTime` + `amr`) into the `AuthContext` object that downstream guards consume. It is the single shared step after a credential has been validated: regardless of whether the session came from a cookie or a JWT, this function decides whether the account may still act, reads current roles and factor state, and assembles the caller context (or returns `undefined` to deny).
+Resolves a session proof (`authTime` + `amr`) into the `AuthContext` object that authorization guards read. It is the strategy-agnostic half of request authentication: the cookie and JWT strategies each decide *how* a credential becomes a proof, and this file decides *what* that proof means — whether the account may still act, whether the epoch has invalidated it, and which roles apply right now.
 
 ## Key elements
 
-- **`SessionProof`** (interface) — the minimal shape a session strategy must produce: `authTime` (epoch-seconds of last real proof) and `amr` (RFC 8176 methods). Strategies copy `authTime` forward on refresh; only reauthentication renews it.
-- **`resolveProof(userId, proof)`** (exported async function) — the sole public entry point. Looks up the account via `userService.findAuthenticatableById`, checks the epoch, fetches roles via `accessService.rolesOf`, and returns a fully populated `AuthContext` or `undefined`.
+- **`SessionProof`** (interface) — the minimal proof a session must carry: `authTime` (epoch seconds of last real reauth) and `amr` (RFC 8176 methods).
+- **`resolveProof(userId, proof)`** (exported function) — the sole public function. Looks up the account via `accountUserService`, rejects the proof if the account is missing/deactivated or if `authTime` predates the account's `tokensValidAfter` epoch, then fetches current roles and assembles the `AuthContext`. Returns `undefined` (never throws) when nobody may act.
 
 ## Relationships
 
-- **`@kernel/access/tenant`** → imports `DEPLOYMENT_TENANT_ID`, the fixed tenant constant stamped onto every `AuthContext`.
-- **`@modules/users`** (index) → imports `userService`; calls `findAuthenticatableById` to get the user record with fresh factor/consent fields.
-- **`@modules/access`** (index) → imports `accessService`; calls `rolesOf(userId, tenantId)` to read current role memberships.
-- **`@types`** (index) → imports the `AuthContext` type (defined in `src/types/auth-context.ts`) used as the return type.
-- **`../domain/epoch`** → imports `predatesSessionEpoch` to reject proofs older than the account's `tokensValidAfter`.
-- **`cookie-strategy.ts` / `jwt-strategy.ts`** (siblings) — produce a `SessionProof` and hand it to `resolveProof`; they differ only in how the credential becomes that proof, not in what the proof means.
+- **`src/modules/users/friends/account.ts`** — provides `accountUserService`, used to load the live user document (status, email, 2FA flags, consent) at resolution time.
+- **`src/kernel/access/tenant.ts`** — imports the `DEPLOYMENT_TENANT_ID` constant, used as the fixed `tenantId` in every `AuthContext`.
+- **`src/modules/access/index.ts`** — provides `accessService`, used to resolve the account's current role memberships.
+- **`src/types/auth-context.ts` / `src/types/index.ts`** — provides the `AuthContext` return type.
+- **`src/modules/account/domain/epoch.ts`** — provides `predatesSessionEpoch`, used to compare `authTime` against the account's `tokensValidAfter` timestamp.
+- **`src/modules/account/session/cookie-strategy.ts` / `jwt-strategy.ts`** — upstream consumers that produce a `SessionProof` and then call `resolveProof` to obtain the `AuthContext`.
 
 ## Notes
 
-- `rolesOf` returns a scoped object with **no fallback**: a missing role in a scope is `null`, which `keysInScope` in `kernel/permissions.ts` maps to the audience's own keys (tenant) or an empty set (platform). There is no implicit "default" role.
-- `analyticsConsent` is **conditionally present** on the returned object (spread `...(… ? {} : {…})`). Consumers must treat its *absence* as "no answer yet," not as `false`.
-- `twoFactorArmed`, `authenticatorArmed`, and `verified` are read from the user document at call time, not cached in the session token — toggling a factor takes effect on the very next request.
-- A proof that `predatesSessionEpoch` is indistinguishable downstream from a missing/unknown account; nothing in the `AuthContext` shape records *why* it was denied.
+- Deactivated/soft-deleted accounts and epoch-violated proofs both yield `undefined`; nothing downstream can distinguish the two.
+- Roles are fetched fresh on every call (no cache on the user doc). A `null` entry in the roles map is meaningful — `keysInScope` in `kernel/permissions.ts` treats it as "no role in this scope," never as an error.
+- `tenantId` is always the deployment constant; it is never derived from the request.
+- `amr` is spread-copied (`[...proof.amr]`) so the context owns its own array.
+- `analyticsConsent` is conditionally present: omitted entirely when the user has not yet answered, so a pre-sign-in banner choice is not silently overridden.
+- `twoFactorArmed`, `authenticatorArmed`, and `verified` are all read from the live user document each call, so arming/removing a factor or verifying an email takes effect on the very next request without a re-login.

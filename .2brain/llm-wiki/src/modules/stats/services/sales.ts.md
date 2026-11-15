@@ -1,7 +1,7 @@
 ---
 source: src/modules/stats/services/sales.ts
-sha256: c23f246ffff46f6451c1a0bd8cc7f15b5628d805be866d45e53b38274488009c
-generated_at: 2026-11-08T08:26:08.624431+00:00
+sha256: 5828939d702a63e469d28717f3ef1158f8ea34be04d6f8c35a7b17d0f00c5b65
+generated_at: 2026-11-14T22:02:23.075219+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Computes sales statistics for a given period by merging three pre-grouped data streams—invoiced money, paid orders, and returned units—into a unified table keyed by currency and time bucket. It exists so the stats layer can present a single "sales over time" view without each domain service knowing about the others.
+Merges time-bucketed sales data from invoicing (money), orders (paid orders/units), and returns (reversed units) into a single per-currency, per-bucket `SalesStats` response for a given period and its preceding period. Each source arrives pre-aggregated (a few hundred rows at most), so the work here is a key-based merge, not a large join.
 
 ## Key elements
 
-- **`ByCurrency`** (type) — `Map<currency, Map<bucketISOInstant, RawFigures>>`; the in-memory shape used while merging.
-- **`cellOf`** — get-or-create a `RawFigures` cell for a (currency, bucket) pair; ensures the table is fully allocated before values are written.
-- **`rawFiguresFor`** — fetches `invoicingService.moneyBuckets`, `orderService.paidBuckets`, and `returnService.returnedBuckets` in parallel, then folds their rows into one `ByCurrency` table.
-- **`totalOf`** — sums every bucket in a currency row into a single `RawFigures` via `addRawFigures`.
-- **`getSalesStats`** *(exported)* — the public entry point. Resolves current + previous period figures, guarantees the shop's own currency appears even with zero sales, and returns a `WithoutLimits<SalesStats>` with per-currency totals, previous-period totals, and per-bucket figures.
+- **`getSalesStats(period: Period)`** *(exported)* — Fetches current- and previous-period raw figures in parallel, then assembles the `WithoutLimits<SalesStats>` object: sorted currency list, per-currency totals, previous-period totals, and the full bucket series.
+- **`rawFiguresFor(window)`** *(internal)* — Calls `invoicingService.moneyBuckets`, `orderService.paidBuckets`, and `returnService.returnedBuckets` concurrently; merges their rows into a `ByCurrency` table keyed by ISO instant.
+- **`cellOf(table, currency, bucket)`** *(internal)* — Get-or-create a `RawFigures` cell inside the nested `Map<string, Map<string, RawFigures>>`.
+- **`totalOf(row)`** *(internal)* — Sums every bucket in one currency's row into a single `RawFigures` via `addRawFigures`.
+- **`ByCurrency`** *(internal type)* — `Map<currency, Map<bucketISO, RawFigures>>`; the working table shape used during the merge.
 
 ## Relationships
 
-- **`src/modules/invoicing/index.ts`** — imports `invoicingService`; calls `moneyBuckets(window)` for invoiced/credited money.
-- **`src/modules/orders/index.ts`** — imports `orderService`; calls `paidBuckets(window)` for order counts and unit totals.
-- **`src/modules/returns/index.ts`** — imports `returnService`; calls `returnedBuckets(window)` for reversed units.
-- **`src/modules/stats/services/figures.ts`** — imports `addRawFigures`, `emptyRawFigures`, `figuresOf`, and the `RawFigures` type used throughout.
-- **`src/modules/stats/services/range.ts`** — imports `Period` and `WithoutLimits` types that shape the public API.
-- **`src/modules/shop/index.ts`** — imports `shopCurrency()` to ensure the shop's base currency is always represented in the output.
-- **`src/types/index.ts`** — imports the `SalesStats` return type.
-- **`src/modules/stats/services/index.ts`** — barrel that re-exports this module to the rest of the stats service layer.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/invoicing/index.ts` | Imports `invoicingService`; calls `moneyBuckets(window)` for invoiced/credited amounts. |
+| `src/modules/orders/index.ts` | Imports `orderService`; calls `paidBuckets(window)` for order and unit counts. |
+| `src/modules/returns/index.ts` | Imports `returnService`; calls `returnedBuckets(window)` for reversed-unit counts. |
+| `src/modules/shop/index.ts` | Imports `shopCurrency()` to guarantee the shop's own currency always appears in the result. |
+| `src/modules/stats/domain/figures.ts` | Imports `addRawFigures`, `emptyRawFigures`, `figuresOf`, and the `RawFigures` type. |
+| `src/modules/stats/services/range.ts` | Imports `Period` and `WithoutLimits` types that define the function signatures. |
+| `src/types/index.ts` | Imports the `SalesStats` return shape. |
+| `src/modules/stats/services/index.ts` | Re-exports this file's public API as part of the stats service barrel. |
 
 ## Notes
 
-- Each upstream service returns already-grouped rows (≤ a few hundred), so merging here is a simple key-based fold—there is no SQL join or large in-memory table.
-- Buckets are addressed by `Date.toISOString()` strings; `period.bucketStarts` (from `range.ts`) provides the expected bucket boundaries for the output.
-- `getSalesStats` always includes the shop currency in the result set, even when no sales occurred in that period, so consumers can rely on a deterministic set of currencies.
-- The function is intentionally stateless and pure with respect to its `period` argument; parallelism comes from `Promise.all` over the three service calls.
+- The merge uses `Object.assign` per source: invoicing fills money fields, orders fill `orders`/`unitsOrdered`, returns fill `unitsReversed`. Because the fields are disjoint, order of assignment does not matter, but adding a new source that writes the same key will silently overwrite.
+- The shop's own currency is **always** included in the output (even with zero activity), so an empty period yields zeros rather than an empty array. All other currencies appear only if at least one period had activity in them.
+- Currencies in the response are sorted alphabetically via `toSorted()`.
+- Bucket keys throughout are `Date#toISOString()` strings; callers that receive the result should treat `start` as an ISO-8601 instant, not a timestamp number.

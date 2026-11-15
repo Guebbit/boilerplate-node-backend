@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/generate-redirect-query.ts
-sha256: 20ecc676ba90bbf89574d9c1df378db31c4a91d03fe1d7dde11ffcbebdba6d03
-generated_at: 2026-11-08T02:41:51.227947+00:00
+sha256: 829b0b24e8a710791e1c2ed1f8e11553e9138642aabb5a8a3d554ef2e4505d96
+generated_at: 2026-11-14T17:25:18.802701+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Generates a TypeScript constant (`REDIRECT_QUERY_ENUMS`) that lists every query-parameter value a redirect may emit, extracted from the `x-redirect-query` vendor extension on `302` responses in `openapi.yaml`. This gives the frontend (and any other consumer) a typed, closed set of values—most notably the OAuth callback `?error=` codes—without duplicating the definition.
+Extracts the closed enum sets that a redirect encodes in its query string from `openapi.yaml` and emits a TypeScript constant (`REDIRECT_QUERY_ENUMS`). It walks every operation's responses for the `x-redirect-query` vendor extension and produces a lookup of `operationId → parameterName → string[]`. The primary use-case is the OAuth callback's `?error=` codes, where the redirect is the only channel a client learns why a round-trip failed.
 
 ## Key elements
 
-- **`RedirectQuery`** (type alias) — shape of the `x-redirect-query` value: a record of parameter name → `{ enum?: string[] }`.
-- **`enums`** (module-level `Record<string, Record<string, string[]>>`) — accumulates operation-id → parameter → allowed values across all responses.
-- **`collectEnums(operation)`** — iterates an operation's responses, reads the `x-redirect-query` key (cast past the OpenAPI types that don't declare vendor keys), and records each enum into `enums` keyed by `operationId`.
-- **Main loop** — parses `openapi.yaml` via `parseOpenApi` + `operationsOf`, then calls `collectEnums` on every operation.
-- **`output`** (string) — the full generated file text: a "DO NOT EDIT" banner followed by `export const REDIRECT_QUERY_ENUMS = … as const`.
-- **`writeOrCheck(OUTPUT, output, 'openapi.yaml')`** — writes the file, or (with `--check`) compares against disk and exits 1 on mismatch.
+- **`RedirectQuery`** — local type describing the shape of the `x-redirect-query` value: `Record<string, { enum?: string[] }>`.
+- **`INPUT` / `OUTPUT`** — resolved paths; input is `openapi.yaml` at repo root, output comes from the `--out` CLI flag.
+- **`enums`** — the accumulator object (`Record<operationId, Record<paramName, string[]>>`) populated while scanning.
+- **`collectEnums(operation)`** — iterates an operation's responses, reads `x-redirect-query`, and stores each parameter's `enum` array keyed by `operationId`. Skips operations lacking an `operationId` or parameters without an `enum`.
+- **Generated output string** — a self-contained `.ts` file exporting `REDIRECT_QUERY_ENUMS` as a `const` (the full JSON of `enums`, 4-space-indented).
+- **`writeOrCheck(…)` call** — writes the file normally or, under `--check`, diffs against disk and exits 1 on mismatch.
 
 ## Relationships
 
-- **`scripts/cli.ts`** — imports `requiredPath` to resolve the mandatory `--out` CLI argument relative to the repo root.
-- **`scripts/contracts/generated-file.ts`** — imports `writeOrCheck` for the standard write-or-diff behavior shared by all contract generators.
-- **`scripts/contracts/openapi-document.ts`** — imports `parseOpenApi`, `operationsOf`, and the `Operation` type to read and iterate the bundled OpenAPI document.
+- **`scripts/cli.ts`** — imports `requiredPath` to parse and validate the `--out` argument.
+- **`scripts/contracts/generated-file.ts`** — imports `writeOrCheck` for the write-or-verify pattern.
+- **`scripts/contracts/openapi-document.ts`** — imports `parseOpenApi`, `operationsOf`, and the `Operation` type to read and iterate the spec.
+- **`scripts/modules-on-disk.ts`** — imports `REPO_ROOT` to anchor path resolution for both the input and output locations.
 
 ## Notes
 
-- Enums are stored **inline** in the YAML fragment rather than as a component schema, because the bundler inlines `$ref` under an `x-` key and then prunes the component. Do not "fix" this into a shared schema.
-- The script runs as **ESM** (`import.meta.url`, not `__dirname`); keep it that way if adding imports.
-- The frontend's route-table generator writes the *same* enum table into its own routes file—both sides are generated from the same `openapi.yaml` source.
-- `--check` mode is used in CI; it produces no file write.
+- `x-redirect-query` is a vendor key absent from the OpenAPI TypeScript types; the code casts the response object to access it.
+- The enum is intentionally inlined in the fragment (not a `$ref` component) because the bundler inlines `$ref` under `x-` keys and would prune the referenced component.
+- The generated file lives under `api/` alongside the backend's other generated contracts. The frontend's route-table generator independently writes the same table into its own routes file.
+- The script is executed via `tsx` (see the shebang); no compile step is needed.
+- Only operations that have both an `operationId` **and** an `x-redirect-query` response are included; everything else is silently skipped.

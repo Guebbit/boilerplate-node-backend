@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/tests/integration/timeline.test.ts
-sha256: 667da893f426ed4548554ba94ffd87994094b2db6d50f746fabce7fd08f9df5d
-generated_at: 2026-11-08T07:38:40.928819+00:00
+sha256: 960c72426d9be04c1370eb978308b52fc52fd9ca1da4407d74c88fce2e11d1e7
+generated_at: 2026-11-14T21:20:52.448206+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test (real Mongo) that verifies which events the payments module writes onto an order's timeline and what data those events carry. Covers the `paid` row, a single `payment_declined` row, and the three refund moments (`refund_issued`, `refund_settled`, `refund_failed`), asserting ids, amounts, closed failure codes, actor attribution, and role-based visibility.
+Integration tests that verify the exact timeline entries the payments module writes onto an order: a `paid` row (card or offline), a single `payment_declined` row, and the three refund moments (`refund_issued`, `refund_settled`, `refund_failed`). Runs against real Mongo through the services' public API to confirm row shape, actor attribution, closed-code usage (never raw provider text), and role-based visibility.
 
 ## Key elements
 
-- **`paidOrder()`** (local helper) — Creates a user, a 50.00 product, a 2-unit order, a payment intent, and confirms with a card token. Returns `{ user, orderId }` for subsequent assertions.
-- **`refund(orderId, amount)`** (local helper) — Delegates to `refundOrderPayment` factory as admin `admin-1`.
-- **`describe('the payment')`** — Three specs: card payment writes `paid` with `method: 'card'` and no actor; offline cash payment names the cashier and method; `recordDecline` is idempotent (second call returns `null`, timeline has exactly one row).
-- **`describe('a refund')`** — Four specs:
-  - Issue + settlement carry the operator, amount, currency, reason code, and a shared `refundId`.
-  - A provider failure writes `refund_failed` with a closed code (`insufficient_funds`) and **never** the provider's raw wording.
-  - Retry sweep: repeated same-reason failures do not add rows; a new reason adds one; the repository's `attempts` counter keeps incrementing (reaches 4 after 4 failures).
-  - Role visibility: buyer sees `paid` + `refund_issued` only; admin sees all three including `refund_failed`.
+- **`paidOrder()`** — async helper that creates a user, a product (50.00 × 2), an order, and confirms a card payment via `paymentService`. Returns `{ user, orderId }`.
+- **`refund(orderId, amount)`** — wraps `refundOrderPayment` from the payments test factory, acting as `admin-1`.
+- **`describe('the payment')`** — three tests: card `paid` row has no actor; offline `paid` row names the cashier and method; `recordDecline` is idempotent (second call's result is asserted via `toBeNull()`, only one timeline row exists).
+- **`describe('a refund')`** — four tests:
+  - Issue + settlement both carry operator, amount, currency, reason, and a shared `refundId`.
+  - Failure stores a closed code (`insufficient_funds`), never the provider's raw wording.
+  - Retry sweep: repeated same-reason failures produce no new row; a *new* reason does. Stored `attempts` counter increments (verified via the repository).
+  - `refund_failed` is invisible to the buyer (`timelineAs` as customer) but visible to staff.
 
 ## Relationships
 
-- **`@modules/payments/services/index.ts`** — `paymentService` is the primary actor under test (`createIntent`, `confirmPayment`, `recordOfflinePayment`, `retryOpenRefunds`).
-- **`@modules/payments/services/announce.ts`** — `recordDecline` is called directly to exercise the decline path.
-- **`@modules/payments/repository.ts`** — `paymentRepository.findByOrderId` is read to assert the internal `attempts` counter.
-- **`@modules/payments/providers/index.ts` / `providers/errors.ts`** — `PaymentProviderError` is thrown by the fake provider to simulate closed-code failures.
-- **`scenarios/support/doubles/payments/fake.ts`** — `fakePaymentProvider.refund` is spied on and mocked to reject with specific errors.
-- **`@modules/payments/module.ts`** — Registered in `beforeEach` via `registerCheckoutModules`.
-- **`@modules/orders/index.ts`** — `orderService.create` and `orderService.readTimeline` are used to build preconditions and assert role-filtered output.
-- **`@modules/orders/tests/factories.ts`** — Provides `createOrder`, `toOrderItem`, `timelineOf`.
-- **`@modules/users/tests/factories.ts` / `@modules/products/tests/factories.ts`** — `createUser`, `createProduct` for fixture setup.
-- **`@modules/payments/tests/factories.ts`** — `refundOrderPayment` wraps the refund call with caller context.
-- **`@kernel/events.ts`** — `resetDomainEvents` in `afterEach` to avoid cross-test leakage.
-- **`@tests/callers.ts`** — `asCustomer`, `asAdmin`, `testCallerContext`, `callerContextAs` build the caller identities.
+- **`src/modules/payments/services/index.ts`** — primary SUT: the public payment service used for intent creation, confirmation, offline recording, and refund retry.
+- **`src/modules/payments/services/announce.ts`** — `recordDecline` called directly to test idempotency.
+- **`src/modules/payments/tests/factories.ts`** — `refundOrderPayment` drives every refund scenario.
+- **`src/modules/payments/module.ts`** — `paymentsModule` registered per-test via `registerCheckoutModules` so the DI container is available.
+- **`src/modules/payments/providers/index.ts`** — exports `PaymentProviderError`, used to construct deterministic provider failures.
+- **`scenarios/support/doubles/payments/fake.ts`** — `fakePaymentProvider` is spied on to inject refund rejections.
+- **`src/modules/payments/repository.ts`** — read back to assert the stored `attempts` count after retries.
+- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `toOrderItem`, `timelineOf`, `timelineAs` provide setup and the assertion surface.
+- **`src/modules/orders/index.ts`** — the order service used in the offline-payment and decline tests to create orders without the payment intent flow.
+- **`src/modules/users/tests/factories.ts`** / **`src/modules/products/tests/factories.ts`** — create fixture users and products.
+- **`tests/support/callers.ts`** — `asCustomer`, `asAdmin`, `callerContextAs`, `testCallerContext` supply the actor/role context for every service call.
+- **`src/kernel/events.ts`** — `resetDomainEvents` in `afterEach` to prevent cross-test event bleed.
 
 ## Notes
 
-- Runs against a **real** Mongo instance (`setupTestDb()`); no in-memory DB.
-- The "never the provider's wording" assertion is done by serializing the entire timeline with `JSON.stringify` and checking the raw text is absent — a deliberate guard against leaking free-text into persisted rows.
-- The `refundId` shared-across-variants check requires a `'refundId' in data` type narrowing because the timeline `data` field is a discriminated union.
-- `NODE_PAYMENT_REFUND_RETRY_MINUTES` is overridden to `'0'` via `withEnvironmentOverrides` so the sweep can pick up failures immediately without waiting.
-- Idempotency of `recordDecline` is part of the contract: the second call returns `null` rather than a new timeline row.
+- **Closed-code invariant is explicitly asserted**: `expect(JSON.stringify(rows)).not.toContain('raw provider text')` guards against leaking provider wording into timeline data.
+- **Role-based visibility**: `refund_failed` rows are filtered out for the buyer role but present for admin. This is a product rule encoded in the query layer, not in the write path.
+- **Retry-row semantics**: re-failing with the *same* `failureReason` overwrites in place (no new timeline row); a *different* reason appends a new `refund_failed` row. The test asserts both.
+- **`refundId` union check**: the `('refundId' in data ? data.refundId : '')` guard is a TypeScript narrowing workaround for the discriminated-union `data` type; it is not a runtime feature.
+- **`withEnvironmentOverrides`** sets `NODE_PAYMENT_REFUND_RETRY_MINUTES: '0'` so `retryOpenRefunds` can be called synchronously in-test without waiting.
+- All tests go through the services' public API (no direct repository writes), except the final assertion in the retry test which reads back via the repository to verify the `attempts` counter.

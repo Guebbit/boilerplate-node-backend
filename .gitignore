@@ -105,4 +105,7 @@ contract.bruno.yml
 .2brain/modules/.modules-cache.json
 .2brain/repo-index.json
 .codeboarding/
+.2brain/map/
+2BRAIN.html
+.2brain/view/
 # 2brain:end

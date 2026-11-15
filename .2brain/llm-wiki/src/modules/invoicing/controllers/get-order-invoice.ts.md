@@ -1,7 +1,7 @@
 ---
 source: src/modules/invoicing/controllers/get-order-invoice.ts
-sha256: dae72565766786ef27769cffcab6a7d630b2ad9106df39f29a90d2af8df9c4e8
-generated_at: 2026-11-08T06:10:00.816581+00:00
+sha256: 090c4f8babc5a3f3bfe33967d0196007d7aec62a5c1b7e6a615260ffa9fe73a9
+generated_at: 2026-11-14T20:11:46.896179+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP handler for `GET /orders/:id/invoice`. Resolves the caller's permission to view the invoice, renders the PDF (from stored bytes or on the request thread), and streams it back. Returns `200`, `404` (order missing or never invoiced), or `500` (render failure).
+HTTP handler for `GET /orders/:id/invoice`. Resolves the caller's invoice for an order, renders the PDF (served from storage or generated on the fly), and streams the bytes back. Enforces that non-admin callers only access their own order's invoice.
 
 ## Key elements
 
-- **`getOrderInvoice(request, response)`** — the sole export. Validates the `:id` param, calls `invoicingService.invoiceForCaller` (scope-checks admin vs. buyer), records a staff-read audit event, renders the PDF via `invoicingService.renderInvoicePdf`, and streams it with `sendPdf`. Filename is `invoice-<number>.pdf`.
+- **`getOrderInvoice(request, response)`** — The sole export. Validates the `:id` param, calls the invoicing service for the caller's invoice, logs a staff-read audit entry, renders the PDF, and sends it with a filename of `invoice-<number>.pdf`.
+- **Response codes** — `200` (invoice exists and rendered), `404` (order missing, never invoiced, or failed freeze that never rolled back the payment), `500` (PDF render failure, e.g. `INSTALL_CHROMIUM=false` deployment).
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/infrastructure/http/ids.ts` | `requireId` validates the `:id` route param and short-circuits with a 404 if absent/malformed. |
-| `src/infrastructure/http/controller.ts` | `refused` maps service-level denial to an HTTP 403; `catchAs` turns any thrown error into a 500 JSON response. |
-| `src/modules/invoicing/services/index.ts` | `invoicingService.invoiceForCaller` (permission + fetch) and `invoicingService.renderInvoicePdf` (PDF generation). |
-| `src/modules/orders/index.ts` | `buyerIdOf(order)` extracts the buyer id for the audit `ownerId` field. |
-| `src/kernel/staff-read.ts` | `recordStaffRead` writes the "invoice viewed" audit entry. |
-| `src/modules/invoicing/audit.ts` | `invoicingAuditActions.ADMIN_INVOICE_VIEWED` provides the action label for that audit entry. |
-| `src/modules/invoicing/controllers/send-pdf.ts` | `sendPdf` sets headers and pipes the PDF buffer to the response. |
-| `src/modules/invoicing/routes.ts` | Wires this handler to the `GET /orders/:id/invoice` route (registration lives there, not in this file). |
+- **`src/modules/invoicing/services/index.ts`** — Exports `invoicingService`; this file calls it to resolve the caller's invoice (with authorization) and to render the PDF bytes.
+- **`src/modules/invoicing/controllers/send-pdf.ts`** — Delegates the final byte-stream and `Content-Type`/`Content-Disposition` headers to `sendPdf`.
+- **`src/modules/invoicing/audit.ts`** — Exports `invoicingAuditActions`; this file uses its `ADMIN_INVOICE_VIEWED` member as the action label in the audit record.
+- **`src/kernel/staff-read.ts`** — Calls `recordStaffRead` to write the audit row (target `invoice`, subject = buyer).
+- **`src/infrastructure/http/ids.ts`** — `requireId` extracts and validates `:id` before any DB access; returns early with 404 on failure.
+- **`src/infrastructure/http/controller.ts`** — `refused` short-circuits the response on a 403/404 service result; `catchAs` maps unhandled rejects to a 500 JSON error.
+- **`src/modules/orders/index.ts`** — Re-exports `buyerIdOf` (originating from `src/modules/orders/domain/rules.ts`) used to resolve the buyer's identity for the audit subject.
+- **`src/modules/orders/domain/rules.ts`** — Source of `buyerIdOf`, imported via the `@modules/orders` barrel.
+- **`src/modules/invoicing/routes.ts`** — Wires this handler onto the `GET /orders/:id/invoice` route.
 
 ## Notes
 
-- **`targetId` is the Mongo row id, not the human-facing number.** Both invoice and credit-note series restart at 1 each year; `GET /audit?target=` filters on `targetId` alone, so the number would be ambiguous.
-- **404 is overloaded.** It covers "order does not exist" *and* "order exists but has no invoice yet" (never paid, or a failed freeze that never rolled back the payment). There is no distinct status for the latter.
-- **Render failure mode:** a deployment with `INSTALL_CHROMIUM=false` will produce a 500 every time the PDF is not already stored.
-- **Scope enforcement is in the service, not the controller.** `invoiceForCaller` decides whether a non-admin may see the order; the controller only translates the result into HTTP.
+- **`targetId` is the row `_id`, not the invoice number.** Both the invoice and credit-note series restart at 1 each year, and `GET /audit?target=` filters on `targetId` alone, so the number would be ambiguous.
+- **Failed freeze never rolls back the payment**, yet the invoice is absent — hence the 404. Don't treat 404 as "payment never occurred."
+- The handler runs PDF rendering synchronously on the request thread (no background job). In Chromium-less deployments this will 500.

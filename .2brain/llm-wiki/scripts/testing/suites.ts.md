@@ -1,7 +1,7 @@
 ---
 source: scripts/testing/suites.ts
-sha256: 14df00f3bc38c8a8986e282e8c5daf1b13c7f75ea3368d387e582a6358b7835e
-generated_at: 2026-11-08T03:03:57.660764+00:00
+sha256: c2e36be7b224a129b861a2fabb312b67734805bebc6809a1f8f308b9d62d58e2
+generated_at: 2026-11-14T17:43:39.057923+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single source of truth for the test-layer table: which jest path patterns each `npm run test:*` layer owns, whether its files must run serialized (shared in-memory mongod), and the peak worker memory for parallel layers. It exists as a standalone module so that both the layer runner and the staged-tests step can read one list without importing `run-suite.ts`, which executes on import.
+Single source of truth for the project's test layers: which jest path patterns belong to each layer and whether that layer must run files serially. Extracted into its own file so both the layer runner and the staged-tests step read the same table, because `run-suite.ts` executes on import and therefore cannot be imported for its data.
 
 ## Key elements
 
-- **`Suite`** (type) — Discriminated union. `serialized: true` means one file at a time per shard; `serialized: false` additionally carries `workerPeakMb` (measured peak MB per parallel worker).
-- **`SUITES`** (`Record<string, Suite>`) — The layer registry keyed by the name the npm script passes (`unit`, `cross-cutting`, `integration`, `contract`, `fuzz`). Exported so `package.json` scripts that need several layers unsharded can reference names instead of re-listing patterns.
-- **`LIGHT_SUITES`** (module-private) — `['unit', 'cross-cutting']`; the layers `complete:light` runs in full on every commit.
-- **`isOutsideLightGate(path: string): boolean`** — Returns `true` when `path` is a `.test.ts` file under any `tests/` folder that is **not** covered by a light-gate layer. Used by the pre-commit hook to decide whether to run a changed file in isolation.
+- **`Suite`** (type, exported) — discriminated union on `serialized`. Serialized variants carry only `patterns`; parallel variants additionally carry `workerPeakMb` (measured peak MB per jest worker).
+- **`SUITES`** (const, exported) — `Record<string, Suite>` keyed by the name each `npm run test:*` script passes. Defines five layers: `unit`, `cross-cutting` (parallel, 905 MB peak), and `integration`, `contract`, `fuzz` (all serialized).
+- **`LIGHT_SUITES`** (const, module-private) — the subset (`unit`, `cross-cutting`) that `complete:light` runs in full on every commit.
+- **`isOutsideLightGate(path)`** (function, exported) — returns `true` for a `.test.ts` file under a `tests/` directory that is *not* matched by any light-suite pattern. The pre-commit hook uses it to decide whether to run that file standalone.
 
 ## Relationships
 
-- **`scripts/testing/run-staged-tests.ts`** — Imports `SUITES` (and likely `isOutsideLightGate`) to build its staged-test plan.
-- **`scripts/testing/run-suite.ts`** — Imports `SUITES` to know patterns and serialization mode for the layer it is about to execute. Cannot be the source of truth itself because it runs on import.
-- **`tests/unit/scripts/testing/suites.test.ts`** — Unit-tests the definitions in this file (patterns, serialization flags, `isOutsideLightGate` behavior).
+- **`scripts/testing/run-suite.ts`** — reads `SUITES` to configure jest (path patterns, `--runInBand` for serialized layers, worker count for parallel layers). This module exists specifically so that file can import the table without triggering its own side effects.
+- **`scripts/testing/run-staged-tests.ts`** — reads `SUITES` and `isOutsideLightGate` to determine which staged test files to execute in isolation at commit time.
+- **`tests/unit/scripts/testing/suites.test.ts`** — unit tests for the shapes in `SUITES` and the logic of `isOutsideLightGate`.
 
 ## Notes
 
-- `serialized` is a **layer** property, not a machine property: integration/contract/fuzz share one in-memory mongod, so files cannot parallelise regardless of available RAM.
-- `workerPeakMb` is intentionally absent from the `serialized: true` variant (discriminated union enforces this at compile time).
-- The patterns stored in `SUITES` are in the **same form each npm script passes them** (e.g. `tests/unit`), not raw jest glob syntax.
-- `LIGHT_SUITES` is deliberately not exported; the public interface for the light gate is `isOutsideLightGate` only.
+- `serialized` is a property of the *suite*, not the machine: those layers share one in-memory mongod, so they must be serial even on high-memory hosts.
+- `workerPeakMb` is intentionally absent from serialized variants (enforced by the type), since a single in-band worker makes the number meaningless.
+- The pattern strings use the same glob form that the `package.json` npm scripts pass to jest; `isOutsideLightGate` compiles them to `RegExp` at call time.
+- `LIGHT_SUITES` is not exported; it is an implementation detail of the light-gate check.

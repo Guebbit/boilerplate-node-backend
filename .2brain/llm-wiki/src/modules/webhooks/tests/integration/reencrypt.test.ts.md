@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/tests/integration/reencrypt.test.ts
-sha256: 236b21cb1a175f77e43c9d41749d6ef2d3fb72baa9617b3a0ca5b54e49fbf2c9
-generated_at: 2026-11-08T09:08:58.074117+00:00
+sha256: 32f407d6b9d02697218dc42ffd5ed43d0929daeb0f9bd6f216234e3f6e3d0930
+generated_at: 2026-11-14T22:50:26.069107+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test for the `reencrypt` walk in the webhooks module. It verifies that after a webhook-secret key rotation (v1 → v2), a ring secret still stamped `v1` is re-stamped to `v2` and remains decryptable under its entry id. It inspects the raw ciphertext below the repository's own decryption layer to confirm the version bump actually happened.
+Integration test for the webhook ring-secret key-rotation flow. It verifies that after a `v1`→`v2` key rotation, the `reencrypt` walk rewrites the stored ciphertext to the new version while the secret still decrypts correctly under its entry id. The test reads the raw collection document (below the repository's own decrypt layer) to inspect the version stamp directly.
 
 ## Key elements
 
-- **`ROTATED_WEBHOOK_KEY`** — Constant holding a two-entry key manifest (`v2:…,v1:…`) that simulates a deployment mid-rotation: the new v2 key in front, the worker's original v1 test key behind.
-- **`describe('webhooks reencrypt')` / single `it`** — Creates a user and a webhook subscription (encrypted under v1), then calls `webhooksModule.reencrypt(false)` inside `withEnvironmentOverrides` with the rotated manifest. Asserts `report.rewritten === 1`, reads the raw document via `webhookSubscriptionModel.collection.findOne`, and checks `keyVersionOf(ciphertext) === 'v2'` and that `decryptRingSecret` still yields a `whsec_…` value.
+- **`ROTATED_WEBHOOK_KEY`** — A two-segment key string (`v2:…,v1:…`) simulating a deployment mid-rotation where the new key is front and the old test key is behind.
+- **`describe('webhooks reencrypt')`** — Single test case that:
+  - Creates a user, then an admin-owned `*`-stream subscription (the `*` wildcard requires admin read rules).
+  - Runs `webhooksModule.reencrypt(false)` inside `withEnvironmentOverrides` with the rotated key.
+  - Asserts `report.rewritten === 1`.
+  - Fetches the raw document via `webhookSubscriptionModel.collection.findOne` and checks `keyVersionOf(ciphertext) === 'v2'`.
+  - Confirms `decryptRingSecret` still yields a token matching `/^whsec_/`.
 
 ## Relationships
 
-- **`src/modules/webhooks/module.ts`** — The unit under test; its `reencrypt` method is invoked directly.
-- **`src/modules/webhooks/secrets.ts`** — `decryptRingSecret` is used to prove the re-stamped ciphertext is still functional.
-- **`src/modules/webhooks/model.ts`** — `webhookSubscriptionModel.collection` is used to read the raw stored document (bypassing the model's decrypt) so the version stamp is visible.
-- **`src/modules/webhooks/services/subscriptions.ts`** — `create` seeds a subscription whose ring secret the reencrypt walk will migrate.
-- **`src/infrastructure/security/versioned-secret.ts`** — `keyVersionOf` extracts the version prefix from a ciphertext for the assertion.
-- **`src/modules/users/tests/factories.ts`** — `createUser` provides the required parent user for the subscription.
-- **`tests/support/callers.ts`** — `callerAs('manager')` supplies the caller context for subscription creation.
-- **`tests/support/environment.ts`** — `withEnvironmentOverrides` scopes the rotated key manifest to the duration of the reencrypt call.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb` is invoked at module load to prepare a clean database.
+- **`src/modules/webhooks/module.ts`** — Imports the default `webhooksModule` export; the test invokes `reencrypt` on it.
+- **`src/modules/webhooks/model.ts`** — Imports `webhookSubscriptionModel` to read the raw (un-decrypted) collection document.
+- **`src/modules/webhooks/services/subscriptions.ts`** — Imports `create` to seed a subscription with a `*` event-type stream.
+- **`src/modules/webhooks/secrets.ts`** — Imports `decryptRingSecret` to prove the rotated ciphertext still round-trips.
+- **`src/infrastructure/security/versioned-secret.ts`** — Imports `keyVersionOf` to assert the stamped version is `v2`.
+- **`src/modules/users/tests/factories.ts`** — Imports `createUser` to seed the user that owns the subscription.
+- **`tests/support/setup-test-db.ts`** — Imports `setupTestDb` to initialise the in-memory DB for the test run.
+- **`tests/support/callers.ts`** — Imports `callerAs` to build the admin identity required for the `*` stream.
+- **`tests/support/response.ts`** — Imports `asSuccess` to unwrap the `Either` returned by `createSubscription`.
+- **`tests/support/environment.ts`** — Imports `withEnvironmentOverrides` to inject `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY` scoped to the reencrypt call.
 
 ## Notes
 
-- The subscription is created **before** the environment override, so it is encrypted under the original v1 key; the rotation manifest is only visible inside the `withEnvironmentOverrides` callback. This ordering is what makes the test meaningful.
-- The test reads the collection directly (`collection.findOne`) rather than through the model's `find`/`findOne`, deliberately bypassing the repository's built-in decryption to observe the raw version stamp.
-- `reencrypt(false)` — the `false` argument is passed positionally; it is not documented in this file, so consult `module.ts` for its meaning (likely a flag to skip a secondary action).
+- The test intentionally reads the **raw** collection document (`model.collection.findOne`) rather than going through the repository, because the repository would decrypt and hide the version stamp. `keyVersionOf` is applied to the stored ciphertext, not the decrypted value.
+- The `*` event-type stream is restricted to admin callers; a non-admin subscription would fail at creation, which is why `callerAs('admin')` is required.
+- The rotated key constant embeds both the new (`v2`) and the legacy test key (`v1:test-webhook-secret-encryption-key`) in a single comma-separated value, mimicking a production key ring during rotation.

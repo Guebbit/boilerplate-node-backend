@@ -5,20 +5,29 @@ audience: [staff, owner]
 
 # What this demo models
 
-**One place to check "does it do X", instead of guessing from a scattered comment or a missing
-page.** Three buckets: built today, coming later, and deliberately never.
+**One place to check "does it do X".** Three buckets: built today, coming later, and deliberately
+never.
 
-::: tip Who this section is for
-Same audience as the rest of this section — no code, just what the shop does and does not do. See
-the [overview](/use-the-shop/start) if you landed here first.
-:::
+```mermaid
+flowchart LR
+    A["Built today"] --> B["On the roadmap"] --> C["Out of scope"]
+
+    classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
+    classDef next fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef never fill:#fee2e2,stroke:#dc2626,color:#111827;
+    class A done;
+    class B next;
+    class C never;
+```
+
+New here? Start at [the overview](./start.md).
 
 ## Built today
 
 - **One shop, one organisation, one country's VAT.** This isn't a marketplace or a multi-tenant
   platform — it's the shop a single business runs.
 - **Three shipping methods** (standard, express and pickup), each at a flat rate. No live carrier rates. An order can ship in several shipments, so partial shipments exist.
-- **Guest checkout isn't offered yet** — every order belongs to a signed-in account.
+- **Every order belongs to a signed-in account.** Guest checkout is not offered.
 - **No coupons, no discounts.** A price is the price.
 - **A card dispute (chargeback) is shown, not fought.** The shop receives it from the payment
   provider, shows it with its deadline, alerts staff and stops refunds while it is open. You answer it
@@ -26,11 +35,11 @@ the [overview](/use-the-shop/start) if you landed here first.
 - **No partial payments.** An order is paid in full, in one attempt, or it isn't paid.
 - **Editing a placed order is its own separate action**, not a return trip through checkout — the
   shop and the customer see the same trail of what changed and when.
-- **A real invoice and credit-note lifecycle** (the `invoicing` module), minted only once an order
+- **A real invoice and credit-note lifecycle**, minted only once an order
   is paid and immutable from that moment, numbered in its own series — separate from the honest
   order-confirmation receipt every order gets at checkout.
 - **Ship-to addresses beyond the seller's own country**, restricted to a configured list
-  (`NODE_SHIP_TO_COUNTRIES`) rather than free text.
+  rather than free text.
 - **Digital goods that are never physically shipped**: shipping cost and the free-shipping
   threshold exclude them, and a digital-only order is completed through its own staff action
   instead of a fake parcel.
@@ -45,7 +54,7 @@ Decided, or partly built, but not the whole story yet:
   paid order does not yet hand the buyer a download (an access-controlled file, delivered once the
   payment settles).
 - **A consent step for digital content.** Returns, partial refunds, the EU withdrawal button and
-  the per-product exclusions are built (see [`returns`](../modules/returns.md)); what is left is the
+  the per-product exclusions are built (see [returns](../modules/returns.md)); what is left is the
   checkout acknowledgement that ends the withdrawal right once a download starts.
 - **Discounts and coupons**, once returns and the invoice lifecycle are settled — a discount has to
   net out of the same VAT breakdown both of those already touch.
@@ -63,11 +72,13 @@ Not "not yet" — these would change what kind of shop this is, and aren't plann
 - More than one warehouse.
 - Subscriptions or recurring billing.
 - Sending evidence for a chargeback from the shop itself: that is done in the provider's dashboard.
-- Country-specific e-invoicing formats (Italy's SdI, the EU's Peppol network) — the `invoicing`
-  module ships a PDF provider and a port for one of these to plug into, not the adapter itself.
+- Country-specific e-invoicing formats (Italy's SdI, the EU's Peppol network) — the
+  shop makes a PDF invoice and has a slot for one of these to plug into, not the plug itself.
 
 Every one of these is a real, well-understood shop feature — they're absent because this is a
 _demonstration_ of the patterns underneath a shop, not a bid to be every kind of shop at once.
 
-Opening a real shop on it also means the legal and tax work no software does for you: see
-[Before you sell for real](./before-you-sell.md).
+## Read next
+
+- [Before you sell for real](./before-you-sell.md): the legal and tax work no software does for you.
+- [The overview](./start.md): back to the whole shop on one picture.

@@ -1,46 +1,38 @@
 ---
 source: src/modules/addresses/tests/contract/api.contract.test.ts
-sha256: e1001310c937bbe67ddf3652db05b76dbd3b5905294642d7350fbab467beb121
-generated_at: 2026-11-08T04:57:00.015014+00:00
+sha256: 088fe94a5753f541cf4f3a12c99608614ee0417621eb00b89826e0f6b800eee9
+generated_at: 2026-11-14T19:19:49.981815+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/addresses/tests/contract/api.contract.test.ts
 
 ## Purpose
-
-Contract test suite for the address-book HTTP API (`/account/addresses`). It exercises the full CRUD lifecycle, the "default address" action, validation rules, and ownership/error semantics over real HTTP against a seeded test database, asserting status codes, response shapes, and cross-request invariants (e.g. single-default guarantee).
+Contract tests for the address-book REST API (`/account/addresses`), exercising every route over real HTTP against a test database. The suite lives in the `addresses` module (not `account`) because the routes are owned by the addresses module even though they are mounted under the `/account` prefix.
 
 ## Key elements
 
-- **`setupTestDb()`** – one-time DB reset invoked at module level before any test runs.
-- **`describe('the address book: /account/addresses')`** – main suite:
-  - Add → list → update → remove walkthrough verifying 201/200/204 codes, `Location` header, and the single-default invariant after deletion.
-  - `PUT /account/addresses/{id}/default` as an idempotent action (repeating returns identical body).
-  - 422 when `default` appears in a PATCH/PUT body (it is an action, not a field).
-  - 404 for `PUT /default` on a non-owned id.
-  - Validation: incomplete body → 422; `country` must be ISO 3166-1 alpha-2 (rejects `'Italy'`, `'it'`, `'ITA'`).
-  - 404 for PATCH/DELETE on a non-owned id (same code as "not found").
-  - PUT as full-replace (RFC 9110 §9.3.4): omitted `label` is cleared, not preserved.
-  - PATCH `null` clears optional `label`; PATCH `""` for `label` → 422.
-- **`describe('GET /account/addresses/{addressId}')`** – single-read suite:
-  - 200 with expected body for own entry.
-  - Uniform 404 for unknown id, malformed id, and another account's entry.
-  - 401 without an auth session.
+- **`describe('the address book: /account/addresses')`** — covers the full CRUD cycle, default-address pointer semantics, validation, ownership isolation, and method-specific contracts (PUT full-replacement vs. PATCH partial).
+- **`describe('GET /account/addresses/{addressId}')`** — covers reading a single entry and the 404 surface (unknown id, malformed id, another account's id).
+- **`setupTestDb()`** — called at module level to seed/prepare the test database before any test runs.
+- **`HOME` / `OFFICE` constants** — reusable address fixtures (five identity fields + optional `label`).
+- **`authenticateAs('user')` / `authenticateAs('admin')`** — produce a bearer token; two distinct identities are used to assert cross-account 404s.
+- **`MISSING_ID`** — a well-known id that no caller owns, used to assert the uniform 404 contract.
 
 ## Relationships
 
 | Neighbor | Interaction |
-|----------|-------------|
-| `tests/support/contract.ts` | Imported as a side-effect (`import '@tests/contract'`); likely registers global contract-test expectations or interceptors. |
-| `tests/support/http.ts` | Supplies `api()` (request builder) and `authenticateAs()` (bearer-token helper) used in every test. |
-| `tests/support/ids.ts` | Provides the `MISSING_ID` constant used to simulate "id the caller does not hold" for 404 assertions. |
-| `tests/support/setup-test-db.ts` | Provides `setupTestDb()` which resets/seeds the test database before the suite runs. |
+|---|---|
+| `tests/support/contract.ts` | Side-effect import (`import '@tests/contract'`); likely registers global contract-test helpers or matchers. |
+| `tests/support/http.ts` | Provides `api()` (request builder) and `authenticateAs()` (token helper) used in every test. |
+| `tests/support/ids.ts` | Exports `MISSING_ID`, a guaranteed-absent identifier for 404 assertions. |
+| `tests/support/setup-test-db.ts` | Exports `setupTestDb()`, called once at the top of the file to prepare the test database. |
 
 ## Notes
 
-- The routes are mounted under `/account` but owned by the **addresses** module (`../../module.ts`); the test intentionally lives in the addresses tree, not the account tree.
-- `default` is an **action** (`PUT …/default`), not a writable body field. Sending it in a PUT/PATCH body yields 422 — this is the central design decision the suite guards.
-- 404 is the **uniform** response for "not found", "malformed id", and "belongs to another account"; the suite asserts no distinction to prevent information leaks.
-- PUT semantics follow RFC 9110: the body is the **entire** new resource, so omitted optional fields are cleared (not left as-is).
-- `country` validation is strict ISO 3166-1 alpha-2 (exactly two uppercase letters); the test uses `it.each` to cover common wrong formats.
+- **`default` is a pointer, not a field.** It is set/moved only via `PUT /account/addresses/{id}/default`. Including `default` in a PATCH body returns **422**, not a silent ignore.
+- **PUT is full replacement (RFC 9110 §9.3.4).** All five identity fields (`fullName`, `street`, `city`, `zip`, `country`) are required; omitting one is **422**. Omitted optional fields (e.g. `label`) are cleared, not preserved.
+- **PATCH `label: null` clears; `label: ''` is rejected (422).** The two are deliberately not synonyms.
+- **`country` must be an ISO 3166-1 alpha-2 code** (two uppercase letters). Full names, lowercase, and three-letter codes all return **422** via a `CountryCode` pattern.
+- **Ownership is invisible.** Unknown id, malformed id, and another caller's id all yield the same **404** — never 403 — so a response does not confirm whether the id exists.
+- **Idempotency of `PUT .../default`.** Repeating the call returns an identical body; the test asserts deep equality between the first and second response.

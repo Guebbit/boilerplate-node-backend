@@ -1,7 +1,7 @@
 ---
 source: src/modules/tasks/tests/unit/schema-contract.test.ts
-sha256: fa8c49323863a1a53e183637df5dc30681c8d46038f006865da0801a2a9057de
-generated_at: 2026-11-08T08:42:15.006205+00:00
+sha256: dadbe8204f4e7ad5f49b25de3adab177b3b9ed82bdc197cf888bafee20736fb4
+generated_at: 2026-11-14T22:18:10.477145+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test that pins down the public contract of `taskSchema`: which fields are required vs. optional, what defaults exist, which indexes are declared, and how TTL/retention is wired. It encodes the design decision that a stranger submitting a task must provide email, subject, and message (so operators can reply and understand context), while name stays optional.
+Contract test that pins the publicly observable shape of `taskSchema`: which fields are required vs. optional, which defaults exist, the status enum, and the full set of MongoDB index specifications (including partial filters, uniqueness, and TTL expiry). It exists so that any change to the schema's public contract—fields, defaults, indexes—fails loudly in CI before reaching production.
 
 ## Key elements
 
-- **`RETENTION_SECONDS`** – Computed from `currentEnvironment().NODE_TASKS_RETENTION_DAYS` (fallback 730 days). Used so the TTL assertion tracks config changes instead of a hardcoded literal.
-- **Required-paths test** – Asserts `['message', 'routeSet', 'subject']` are the only required paths; `name` is explicitly *not* required.
-- **Operator-field defaults test** – Verifies `respondedAt` and `closedAt` have **no** schema default (a default on `respondedAt` would auto-mark every incoming task as answered).
-- **Status enum/default test** – `status` must accept exactly `Object.values(TaskStatus)` and default to `TaskStatus.new`.
-- **Index specs test** – Enumerates all 8 indexes on the schema (queue, retention, lookup, etc.).
-- **Timestamps test** – Confirms `timestamps: true` is set.
-- **TTL / index-options test** – Asserts per-index options: partial filters on `assigneeId`, `email`, `eventIds`, `openKey` (unique), `subjectId`; `expireAfterSeconds` on `closedAt_1` and `createdAt_1`; `createdAt_1` additionally filtered to `source: "visitor"`.
-- **`closedAt` ascending test** – Re-asserts the single-field `closedAt+1` index exists, because Mongo only honours `expireAfterSeconds` on a single-field ascending index (the compound `routeSet+1, status+1, dueAt+1` index contains `closedAt` descending and must not be confused with it).
+- **`RETENTION_SECONDS`** — Derived from `currentEnvironment().NODE_TASKS_RETENTION_DAYS` (default 730 days) converted to seconds. Used to assert TTL values without hardcoding a magic number.
+- **`describe('taskSchema', …)`** — Single test suite containing eight assertions grouped by concern:
+  - Required paths are exactly `['message', 'routeSet', 'subject']`; `name` is explicitly *not* required.
+  - `respondedAt` and `closedAt` carry no `default` (operator-filled, not submission-filled).
+  - `status` defaults to `TaskStatus.new` and is constrained to the full `TaskStatus` enum.
+  - `timestamps` option is `true`.
+  - Full index list (9 compound/single-field indexes) is asserted verbatim.
+  - Full index-option list (partial filters, uniqueness on `openKey`, TTL on `closedAt` and `createdAt`) is asserted verbatim.
+  - `closedAt_1` is confirmed as a single-field **ascending** index (the only shape Mongo will apply `expireAfterSeconds` to).
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/tasks/model.ts` | Imports `taskSchema` — the object under test. |
-| `src/types/index.ts` | Imports `TaskStatus` to assert the enum constraint. |
-| `tests/support/schema.ts` | Imports introspection helpers (`requiredPaths`, `defaultOf`, `enumOf`, `indexSpecs`, `indexOptionSpecs`, `optionsOf`) that read Mongoose schema metadata. |
-| `src/infrastructure/config/store.ts` | Imports `currentEnvironment` to read `NODE_TASKS_RETENTION_DAYS` at test time. |
+- **`src/modules/tasks/model.ts`** — Source of `taskSchema`, the value under test.
+- **`src/types/index.ts`** — Provides `TaskStatus`, used to validate the status enum and its default.
+- **`src/infrastructure/config/store.ts`** — Provides `currentEnvironment()`, which supplies `NODE_TASKS_RETENTION_DAYS` for the TTL assertion.
+- **`tests/support/schema.ts`** — Supplies the introspection helpers (`requiredPaths`, `defaultOf`, `enumOf`, `indexSpecs`, `indexOptionSpecs`, `optionsOf`) that extract schema metadata without instantiating a Mongoose connection.
 
 ## Notes
 
-- The file docblock frames the schema in "contact form" language (stranger → operator). This is design rationale, not a description of a separate contact module; the tests are about `taskSchema`.
-- `createdAt_1` TTL is **partial** (`source: "visitor"`); `closedAt_1` TTL is **unconditional**. Don't add a partial filter to `closedAt_1` without updating the test.
-- The last test exists as a guard against a subtle bug: if someone removes the standalone `closedAt_1` index and relies on the compound index (where `closedAt` is descending), Mongo silently ignores `expireAfterSeconds` and no tasks are ever deleted.
-- Changing `NODE_TASKS_RETENTION_DAYS` in any environment config will shift the expected `expireAfterSeconds` values automatically because the assertion is computed, not literal.
+- The file's module docblock describes a "contact form" and references `email` as a required field; however, the actual assertions show `email` is **not** in `requiredPaths`. The comment explains this is a service-level requirement for visitor tasks only, not a schema-level one. The docblock language is a historical artifact—read the assertions, not the prose.
+- TTL correctness depends on `closedAt_1` being a dedicated single-field ascending index. A compound or descending index on `closedAt` would silently disable document expiry in MongoDB. The last test guards against that regression.
+- The TTL assertion compares against `RETENTION_SECONDS` (config-derived) rather than a literal, so changing `NODE_TASKS_RETENTION_DAYS` moves both the policy and the expected value in lockstep.

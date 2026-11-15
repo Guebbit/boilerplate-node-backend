@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/token-types.ts
-sha256: 24fb84fa117c51bd02f4576c2241370f7e1e26b4a8822f825a950f46ccd1aa94
-generated_at: 2026-11-08T04:51:10.297378+00:00
+sha256: 4285784417436dffcf211a020aecd0f839b5f00236cf83cd018d9b3edde408ae
+generated_at: 2026-11-14T19:17:25.197219+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A leaf module that names every `type` value stored in the `verificationtokens` table. It exists so the schema, the token-issuing services, and `./services/revocation` can all reference token kinds by a shared constant without importing each other, and so TTLs and uniqueness policy live next to the type names they belong to.
+Defines the closed, named set of one-time token types stored in the `verificationtokens` table. Exists as a leaf module so that the schema, the services that issue tokens, and the service that purges them can all reference the same string constants and TTLs without importing each other.
 
 ## Key elements
 
-- **Token-type string constants** — `PASSWORD_RESET_TOKEN_TYPE`, `ACCOUNT_RESTORE_TOKEN_TYPE`, `EMAIL_VERIFY_TOKEN_TYPE`, `EMAIL_CHANGE_TOKEN_TYPE`, `EMAIL_CHANGE_UNDO_TOKEN_TYPE`, `MFA_CHALLENGE_TOKEN_TYPE`, `DELETION_RESTORE_TOKEN_TYPE`, `OAUTH_LINK_TOKEN_TYPE`. Each is the literal value written into `verificationtokens.type`.
-- **TTL constants** — `OAUTH_LINK_TTL_MS` (5 min) and `EMAIL_CHANGE_UNDO_TTL_MS` (7 days). Other tokens get their TTL at the call site.
-- **`VERIFICATION_TOKEN_TYPES`** — `as const` array listing every valid token type; serves as the closed enum the schema enforces.
-- **`VerificationTokenType`** — union-of-literals type derived from the array.
-- **`ONE_LIVE_TOKEN_TYPES`** — subset of types where the schema enforces a partial unique index (at most one live token per user). MFA challenge and deletion-restore are deliberately excluded (multiple may be in flight).
+- **`PASSWORD_RESET_TOKEN_TYPE`** (`'password'`) — type carried by password-reset or account-setup links.
+- **`ACCOUNT_RESTORE_TOKEN_TYPE`** (`'account-restore'`) — type of the link that cancels a scheduled self-deletion; lifetime equals time remaining until `purgeAt`.
+- **`EMAIL_VERIFY_TOKEN_TYPE`** (`'verify'`) — signup or re-send verification link; proves the address the account already has.
+- **`EMAIL_CHANGE_TOKEN_TYPE`** (`'email-change'`) — proves the address a pending email-change request asked for (`user.pendingEmail`).
+- **`EMAIL_CHANGE_UNDO_TOKEN_TYPE`** (`'email-change-undo'`) — link mailed to the old address to undo an email change.
+- **`MFA_CHALLENGE_TOKEN_TYPE`** (`'mfa-challenge'`) — second-factor challenge token at login.
+- **`DELETION_RESTORE_TOKEN_TYPE`** (`'deletion-restore'`) — claim check for a sign-in during the deletion grace period.
+- **`OAUTH_LINK_TOKEN_TYPE`** (`'oauth-link'`) — short-lived proof of *which* account is connecting to an OAuth provider.
+- **`OAUTH_LINK_TTL_MS`** — 5 × `MINUTE_MS`; how long a connect attempt may take at the provider.
+- **`EMAIL_CHANGE_UNDO_TTL_MS`** — 7 × `DAY_MS`; how long the undo link remains valid.
+- **`VERIFICATION_TOKEN_TYPES`** — `as const` array of all eight types; the schema's closed enum.
+- **`VerificationTokenType`** — union type derived from `VERIFICATION_TOKEN_TYPES`.
+- **`ONE_LIVE_TOKEN_TYPES`** — subset (all except `MFA_CHALLENGE_TOKEN_TYPE` and `DELETION_RESTORE_TOKEN_TYPE`) where at most one live token is allowed; backed by a partial unique index so issuing a new one atomically replaces the old.
 
 ## Relationships
 
 - **`src/domain-primitives/time.ts`** — imports `DAY_MS` and `MINUTE_MS` to define the two TTL constants.
-- **`src/modules/account/services/revocation.ts`** — the primary consumer that purges expired tokens; its `PENDING_TOKEN_TYPES` set is intentionally a subset of `ONE_LIVE_TOKEN_TYPES` (excludes `ACCOUNT_RESTORE_TOKEN_TYPE` and `EMAIL_CHANGE_UNDO_TOKEN_TYPE` so a password reset doesn't revoke a restore/undo link).
-- **`src/modules/account/services/two-factor-challenge.ts`** — issues and redeems `MFA_CHALLENGE_TOKEN_TYPE`.
-- **`src/modules/account/services/oauth.ts`** — issues `OAUTH_LINK_TOKEN_TYPE` at the start of a provider link flow.
-- **`src/modules/account/services/email-change.ts`** — issues `EMAIL_CHANGE_TOKEN_TYPE` and `EMAIL_CHANGE_UNDO_TOKEN_TYPE`.
-- **`src/modules/account/services/deletion-sign-in.ts`** — issues `DELETION_RESTORE_TOKEN_TYPE` during the deletion grace period.
-- **`src/modules/account/services/password-reset.ts` / `password-reset-request.ts`** — issue/redeem `PASSWORD_RESET_TOKEN_TYPE`.
-- **`src/modules/account/model.ts`** — defines the `verificationtokens` table whose `type` column is constrained by `VERIFICATION_TOKEN_TYPES`.
-- **`src/modules/account/repository.ts`** — performs the upserts governed by `ONE_LIVE_TOKEN_TYPES`.
+- **`src/modules/account/services/revocation.ts`** — explicitly referenced as the module that purges tokens; `ACCOUNT_RESTORE_TOKEN_TYPE` and `EMAIL_CHANGE_UNDO_TOKEN_TYPE` are intentionally *absent* from its pending set so a password reset cannot revoke them.
+- **`src/modules/account/services/two-factor-challenge.ts`** — referenced as the consumer of `MFA_CHALLENGE_TOKEN_TYPE`.
+- **`src/modules/account/model.ts`** — the schema's closed `type` enum is derived from `VERIFICATION_TOKEN_TYPES`; the partial unique index mirrors `ONE_LIVE_TOKEN_TYPES`.
+- **`src/modules/account/services/tokens.ts`** — the service that issues and redeems tokens uses these constants at every call site.
+- **`src/modules/account/services/oauth.ts`** — uses `OAUTH_LINK_TOKEN_TYPE` and `OAUTH_LINK_TTL_MS` when initiating a provider connect.
 
 ## Notes
 
-- The file imports **only** from `@domain-primitives/time`; it has zero dependencies on sibling service or model files. Any service that needs a type constant imports from here, never the reverse.
-- `EMAIL_VERIFY_TOKEN_TYPE` and `EMAIL_CHANGE_TOKEN_TYPE` are distinct on purpose: spending one must never satisfy the other, since a cross-use would be an account-takeover vector.
-- New token types must be added to **both** `VERIFICATION_TOKEN_TYPES` (for the schema enum) and, if single-live, `ONE_LIVE_TOKEN_TYPES`. Forgetting one silently breaks uniqueness or validation.
+- `EMAIL_VERIFY_TOKEN_TYPE` and `EMAIL_CHANGE_TOKEN_TYPE` are deliberately distinct strings. Reusing one for the other's purpose would be an account-takeover bug (a verify token swapping in a `pendingEmail`).
+- `MFA_CHALLENGE_TOKEN_TYPE` and `DELETION_RESTORE_TOKEN_TYPE` are excluded from `ONE_LIVE_TOKEN_TYPES` because multiple instances may be in flight simultaneously; all other types enforce one-live-at-a-time via the partial unique index.
+- Adding a new token kind requires a single edit: add the constant, append it to `VERIFICATION_TOKEN_TYPES`, and (if single-live) add it to `ONE_LIVE_TOKEN_TYPES`. The schema enum and the index update follow from that one file.

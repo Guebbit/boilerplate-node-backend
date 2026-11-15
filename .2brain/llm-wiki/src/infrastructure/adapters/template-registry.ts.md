@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/adapters/template-registry.ts
-sha256: 223274061909eeba2a4fef680468340350381e5e2c593a2a0e5c3c30833f4605
-generated_at: 2026-11-08T03:24:29.283219+00:00
+sha256: 19fab66680a841a91fdae7f7afe706f06b9dda65a8fe71f92cf02e57d18ae3bf
+generated_at: 2026-11-14T17:55:48.198032+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Resolves a bare EJS template name (the wire format that travels through RabbitMQ in `EmailJobPayload`) to an absolute file path on disk. It exists as a separate leaf module—deliberately free of any `ejs` or `nodemailer` import—so that Jest's `setupFiles` can call into it before test-file mocks are hoisted, without accidentally pulling in the real `nodemailer` and making it un-mockable.
+Leaf module that maps EJS template names to absolute file paths. It was deliberately split out of `mailer.ts` so that `tests/support/setup.ts` (run via jest `setupFiles`) can register template directories without pulling in a real `nodemailer` module that mock-based tests would then find already-evaluated and un-mockable.
 
 ## Key elements
 
-- **`collectedTemplates`** (module-level `Record<string, string>`) — the in-memory name → absolute-path map, rebuilt atomically on each call to `registerTemplateDirectories`.
-- **`registerTemplateDirectories(directories)`** — scans each directory for `*.ejs` files, builds the name → path map, and throws if two modules declare the same template name. Called once at boot.
-- **`templateFile(templateName)`** — validates the name against the `TEMPLATE_NAME` regex, then looks it up in `collectedTemplates`. The single point where `.ejs` is appended and the identifier becomes a filesystem path. Throws on invalid characters or unregistered names.
-- **`registeredTemplateNames()`** — returns the list of all collected names; used by tests to enumerate what the build ships without hand-maintaining a parallel list.
-- **`TEMPLATE_NAME`** (`/^[\da-z][\d.a-z-]*$/i`) — enforces that a name contains no path separators or other characters that could escape the lookup directory.
+- **`registerTemplateDirectories(directories)`** – Scans each supplied directory for `*.ejs` files and stores `name → absolute-path` in a module-level `Record`. Throws if two directories declare the same name. Called once at boot.
+- **`templateFile(templateName)`** – Validates the name against a strict character set (no path separators), then looks up the registered path. The single point where a name becomes a filesystem path. Throws on invalid or unregistered names.
+- **`registeredTemplateNames()`** – Returns all registered names, used by `mailer-templates.test.ts` to enumerate templates without maintaining a hardcoded list.
+- **`TEMPLATE_NAME`** (internal) – Regex `^[\da-z][\d.a-z-]*$/i`; ensures names cannot contain `/`, `\`, or other characters that would escape the template directory.
+- **`collectedTemplates`** (module-level `Record`) – The live name→path map, replaced wholesale by `registerTemplateDirectories`.
 
 ## Relationships
 
-- **`src/app.ts`** — calls `registerTemplateDirectories` at boot (alongside `bootI18n`), passing the collected `enabledModuleDirectories('templates')` values.
-- **`src/infrastructure/adapters/mailer.ts`** — the original home of this logic; after the split, `mailer.ts` imports `templateFile` (and likely `registeredTemplateNames`) to resolve names at render time, while keeping its own `ejs`/`nodemailer` imports isolated.
-- **`tests/support/setup.ts`** — imports `registerTemplateDirectories` via Jest's `setupFiles`, ensuring the template map is populated before any test body (and before any `jest.mock`) runs.
-- **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** — calls `registeredTemplateNames()` to drive its per-template render assertions, avoiding a hard-coded list that could drift from the actual modules.
+- **`src/app/boot-rendering.ts`** – Calls `registerTemplateDirectories` at boot (alongside `bootI18n`), passing the list of enabled module template directories.
+- **`src/infrastructure/adapters/mailer.ts`** – Consumes `templateFile` to resolve the path for rendering; the registry was extracted from this file to keep the import graph safe.
+- **`tests/support/setup.ts`** – Invokes `registerTemplateDirectories` from jest's `setupFiles` hook so every test file starts with a populated registry.
+- **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** – Iterates `registeredTemplateNames()` to render and assert on each template.
+- **`tests/integration/ops-outbox-sweep-job.test.ts`** – Exercises code paths that resolve template names through the registry during outbox processing.
 
 ## Notes
 
-- The name travels over the wire as a **bare filename** (no extension, no path); only the lookup here reintroduces `.ejs`. This keeps the RabbitMQ payload backend-agnostic.
-- `Object.hasOwn` is used instead of `in` or a bare index guard to prevent `constructor` / `__proto__` from resolving to `Object`'s own properties.
-- `collectedTemplates` is module-level mutable state with no reset helper; calling `registerTemplateDirectories` again replaces it wholesale. Tests rely on `setup.ts` running it exactly once per Jest module registry.
-- The regex allows a leading digit (`/^\d[\w-]*$/i`), so names like `2fa-otp` are valid, but a name starting with a dot or dash is rejected.
+- The module intentionally has **zero** imports of `ejs` or `nodemailer`. Adding one would break the `setupFiles` isolation described in the module docblock.
+- `Object.hasOwn` is used (not `in` or a bare index) to guard against prototype keys like `constructor` being mistaken for a registered template.
+- Template names are the **wire format** (sent over RabbitMQ as `EmailJobPayload`); only the on-disk location is resolved locally. Do not embed paths in names.
+- `registerTemplateDirectories` is idempotent in the sense that a second call fully replaces the map, but the intended contract is one call at boot.

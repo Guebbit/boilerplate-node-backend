@@ -1,7 +1,7 @@
 ---
 source: tests/integration/draft-language-preview.test.ts
-sha256: 6ec056a2d7b8672001c246765d54fe552508c839d648917583298b3df43ae397
-generated_at: 2026-11-08T09:38:13.253455+00:00
+sha256: 4cd1e90a6aa0a023e6533666f4de54dc78f7794a16996baf0c6ff44ddaaf9381
+generated_at: 2026-11-14T23:13:21.292684+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests proving that a staff credential holding only `display:Locale` (without `display:Product`) can preview a draft locale's product text, and that this preview **bypasses the shared Redis cache in both directions** — never reading from it, never writing to it — so visitors are never contaminated. The suite also guards against vacuous passage via an explicit canary test that confirms the cache double *would* have shared the entry.
+Integration suite that verifies a staff credential holding `display:Locale` (but **not** `display:Product`) can preview a draft language's product text while the shared visitor cache is never polluted in either direction (preview doesn't read the cached live entry, and the live entry is never overwritten with draft data). Every test drives real routes against an in-memory Redis double; a dedicated canary test proves that double *would* share entries, so the suite cannot pass vacuously.
 
 ## Key elements
 
-- **`jest.mock('@infrastructure/adapters/cache')`** — In-memory Redis double with tag-aware `getCacheValue`, `setCacheValue`, `invalidateCacheTags`, plus test-only handles `storedValues()` and `clearStored()`.
-- **`givenDraftGerman(fields?)`** — Creates an `en` live product, an inactive `de` locale, upserts a draft German translation row (default title `Hundekorb`), and refreshes locale overrides.
-- **`READS`** — Constant array of the three catalogue endpoints (`GET /products`, `POST /products/search`, `GET /products/:id`), each with a `read` thunk and a `titleOf` extractor; consumed by `it.each`.
-- **`asking(language, bearer?)`** — Builds the `Accept-Language` + optional `Authorization` header object.
-- **`describe('a staff credential…')`** — The main block: canary (cache *would* share), per-endpoint uncached read + visitor integrity, cold-cache first-read, field-by-field fallback, conditional-request 200 (never 304), draft-only text searchability, and live-language fallback when draft isn't first preference.
-- **`describe('everyone else…')`** — Anonymous visitors and `customer`-role callers receive the live title, `content-language: en`, and the shared cache.
-- **`describe('the oracle')`** — After activating the draft locale via `POST /locales/de/activate`, a visitor's response body is deep-equal to the preview body (correctness oracle).
+- **Cache mock factory** (`jest.mock('@infrastructure/adapters/cache', …)`) — in-memory double with `getCacheValue`, `setCacheValue` (tag-aware), `invalidateCacheTags`, plus test-only handles `storedValues()` and `clearStored()` that do not exist on the real adapter.
+- **`givenDraftGerman(fields?)`** — fixture helper: creates an `en` product with a live title, an inactive `de` locale, upserts a draft German row via the translation repository, and calls `refreshLocaleOverrides`. Returns the product id.
+- **`asking(language, bearer?)`** — builds the `Accept-Language` / `Authorization` header object for a request.
+- **`READS`** — constant array of three endpoint descriptors (`GET /products`, `POST /products/search`, `GET /products/:id`), each exposing `read` and a `titleOf` body-shape extractor; consumed by `it.each` to run the same assertions across all catalogue read paths.
+- **`describe('a staff credential…')`** — the core suite: canary (cache WOULD share), draft-uncached-both-directions, cold-cache ordering, field-by-field fallback, 304 with matching draft tag, 200 when visitor tag is sent to preview, draft-only search word, and live-language passthrough.
+- **`describe('everyone else…')`** — anonymous visitor and `customer` role both get the live pick with a shared cache hit.
+- **`describe('the oracle')`** — after admin activates the locale, a plain visitor's response is body-identical to the earlier preview.
 
 ## Relationships
 
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the in-memory DB before all tests.
-- **`tests/support/http.ts`** — `api()`, `authenticateAs`, `authenticateAsRole` provide the HTTP client and role-based bearer tokens used in every test.
-- **`tests/support/credentials.ts`** — `credentialHolding(['display:Locale'])` mints the minimal staff token under test.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` seeds the live English product row.
-- **`src/modules/locales/tests/factories.ts`** — `givenLocale` creates the `en` (active) and `de` (inactive) locale rows.
-- **`src/modules/locales/repository.ts`** — `translationRepository.upsertEntityLocale` writes the draft German translation.
-- **`src/modules/locales/services/index.ts`** — `localeService.readLocaleOverlay` is registered as the i18n override provider in `beforeAll`.
-- **`src/infrastructure/i18n/index.ts`** — Exports `refreshLocaleOverrides`, `registerLocaleOverrideProvider`, `resetLocaleOverrides` used in lifecycle hooks.
-- **`src/infrastructure/i18n/overrides.ts`** — Underlying store the i18n index delegates to; exercised indirectly via the overlay provider registration.
+| Neighbor | Interaction |
+|---|---|
+| `src/infrastructure/i18n/index.ts` | Imports `registerLocaleOverrideProvider`, `refreshLocaleOverrides`, `resetLocaleOverrides` to wire and tear down the locale-overlay provider around each test. |
+| `src/infrastructure/i18n/overrides.ts` | Backs the override mechanism the i18n index re-exports; exercised indirectly through `refreshLocaleOverrides` / `resetLocaleOverrides`. |
+| `src/modules/locales/repository.ts` | Provides `translationRepository`, used by the `givenDraftGerman` helper to persist the draft locale row. |
+| `src/modules/locales/services/index.ts` | Provides `localeService`, whose overlay-read method is registered as the override-provider callback in `beforeAll`. |
+| `src/modules/locales/tests/factories.ts` | `givenLocale` creates the `en` / `de` locale documents. |
+| `src/modules/products/tests/factories.ts` | `createProduct` seeds the product entity. |
+| `tests/support/credentials.ts` | `credentialHolding(['display:Locale'])` mints the minimally-scoped Bearer token under test. |
+| `tests/support/http.ts` | `api()` (supertest wrapper), `authenticateAs`, `authenticateAsRole` for admin / customer tokens. |
+| `tests/support/setup-test-db.ts` | `setupTestDb()` initialises the in-memory database at module scope. |
 
 ## Notes
 
-- The mock factory is defined **before** imports so that the module registry sees the double first; `jest.requireMock` retrieves the test-only handles after import.
-- `cacheDouble.clearStored()` runs in `beforeEach`; assertions on `storedValues()` are the only way to prove the draft text never entered the cache.
-- The canary test (first `it`) is not a production assertion — it exists solely to fail if the cache double is broken, preventing the suite from passing vacuously.
-- `credentialHolding(['display:Locale'])` deliberately omits `display:Product`, which is what pushes the request into the anonymous catalogue scope where `scopeKey` would otherwise share the Redis entry.
-- The oracle test (`describe('the oracle')`) mutates global state (activates `de`) after all other tests; it relies on `afterEach` clearing overrides and the DB being reset per test.
+- The canary test is **load-bearing**: it asserts that a staff request in a *live* language gets a cache `hit`. Without it, a broken cache mock could let the draft-uncached assertions pass trivially.
+- `setupTestDb()` runs at **module top level**, not inside `beforeAll`; Jest executes it once per test file.
+- The cache mock's `storedValues` / `clearStored` are **not** part of the real `@infrastructure/adapters/cache` interface — they exist solely so assertions can inspect what the double holds.
+- `READS` uses `as const` so each entry's `titleOf` signature is narrowed per endpoint; adding a fourth endpoint requires a matching `titleOf` shape.
+- The `en, de;q=0.5` test confirms that when the draft language is *not* the first preference, the response is served from the normal (cached) path and carries no `no-store` directive.

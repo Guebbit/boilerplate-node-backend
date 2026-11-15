@@ -1,7 +1,7 @@
 ---
 source: tests/integration/idempotency-server-fault.test.ts
-sha256: b63ea502535422c650fcb12dcdd5d7528acf9fef3725b3d4d0adb1407450bd13
-generated_at: 2026-11-08T09:38:53.370223+00:00
+sha256: 9d96133f9c11aec3dade11c502adfb6592dc4c99a37bae4571d8e87985156397
+generated_at: 2026-11-14T23:14:00.092221+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that verifies what happens to an `Idempotency-Key` after the handler faults (500). It asserts the Stripe v1 replay rule: a retry under the same key re-sends the stored failure without re-executing the handler, while a new key triggers a fresh run. Exercises this through the simplest opted-in route, `POST /tasks`.
+Integration test verifying what the idempotency middleware does when the route handler **faults** (returns 500). It asserts the Stripe v1 rule: a 500 response is stored and replayed for retries under the same `Idempotency-Key` without re-executing the handler, while a different key triggers a fresh execution. Driven through the simplest opted-in route, `POST /tasks`.
 
 ## Key elements
 
-- **`PAYLOAD`** – A valid contact-message body the `POST /tasks` route accepts from an unauthenticated visitor.
-- **`send(key)`** – Helper that issues `POST /tasks` with the given `Idempotency-Key` header and the shared payload.
-- **`"stores the 500 and replays it for the same key"`** – Mocks `taskRepository.create` to reject once, sends the same key twice, and asserts: second response is 500 with `idempotent-replay: true` header, `create` was called exactly once, and one idempotency record exists.
-- **`"runs the handler again under a NEW key"`** – Faults under one key, then sends a different key; asserts the second call succeeds (202) and exactly one document is written.
+- **`setupTestDb()`** — initialises an isolated MongoDB instance for the test process (called once at module level).
+- **`PAYLOAD`** — a valid contact-message body that `POST /tasks` accepts from an anonymous visitor.
+- **`send(key)`** — small helper that issues `POST /tasks` with the given `Idempotency-Key` header via the test HTTP client.
+- **`afterEach` → `jest.restoreAllMocks()`** — resets all spies between tests.
+- **Test 1: "stores the 500 and replays it…"** — mocks `taskRepository.create` to reject once; asserts the first call yields 500, the same-key retry yields 500 + `idempotent-replayed: true`, the repository is still called exactly once, and exactly one document exists in the idempotency store.
+- **Test 2: "runs the handler again under a NEW key…"** — same fault setup; asserts a second key gets a 202 and the tasks collection contains exactly one document (the failed attempt did **not** write).
 
 ## Relationships
 
-- **`tests/support/setup-test-db.ts`** – Calls `setupTestDb()` at module level to provision a clean database for the tests.
-- **`tests/support/http.ts`** – Provides the `api()` helper used to issue the HTTP requests.
-- **`src/modules/tasks/repository.ts`** – Imports `taskRepository` and spies on its `create` method to simulate a handler fault (`mockRejectedValueOnce`).
-- **`src/infrastructure/http/middlewares/idempotency-model.ts`** – Imports `idempotencyRecordModel` to assert the stored record count via `countDocuments`.
+- **`tests/support/setup-test-db.ts`** — provides `setupTestDb`, which spins up the MongoDB instance all other tests in the file depend on.
+- **`tests/support/http.ts`** — provides the `api` helper (a `supertest`-like client) used to issue requests against the running app.
+- **`src/modules/tasks/repository.ts`** — `taskRepository` is spied on to simulate the 500 fault (`mockRejectedValueOnce`) and to verify write counts.
+- **`src/infrastructure/http/middlewares/idempotency-model.ts`** — `idempotencyRecordModel` is queried (`countDocuments`) to confirm exactly one idempotency record was persisted.
 
 ## Notes
 
-- Each test uses `mockRejectedValueOnce` (singular) rather than `mockRejectedValue`; only the *first* call faults. This is intentional: it models a one-off server hiccup, not a persistent outage.
-- `afterEach` calls `jest.restoreAllMocks()`, so spies do not leak between tests.
-- The `idempotent-replay: true` response header is the client-facing signal that the response was replayed rather than freshly computed.
+- The fault is simulated with `mockRejectedValueOnce`, so only the **first** call rejects; any subsequent call through the same mock would resolve. This is deliberate: the middleware short-circuits the second call before the repository is reached.
+- The test relies on the `idempotent-replayed` response header being set to the string `'true'` (not boolean) on replayed responses.
+- A 202 (not 200/201) is the expected success status for `POST /tasks`, reflecting async task-creation semantics.
+- The file-header comment cross-references `docs/tools/idempotency.md#what-a-failure-stores` for the design rationale.

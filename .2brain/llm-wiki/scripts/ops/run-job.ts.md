@@ -1,7 +1,7 @@
 ---
 source: scripts/ops/run-job.ts
-sha256: 9dcafebee8b1593a63e691c4a0f0a941ccbb8e5af11ed4900f643321ba8df5d5
-generated_at: 2026-11-08T02:55:54.173276+00:00
+sha256: 3463a5e0d269808d1321c07ab2466166c4769e08111904465cddc90c68cac806
+generated_at: 2026-11-14T17:38:39.503500+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The single CLI entry point for every scheduled job (`npm run job <name>`). It resolves a job declaration from the module or app manifest, optionally connects to the database, prepares and runs the job (under a distributed lease when applicable), and delegates outcome recording and cleanup to `runScript`. Designed to be invoked from cron only; every job it runs is expected to be idempotent.
+Single entry point for every scheduled job (`npm run job <name>`). It resolves the named job from the declaration registry, connects to infrastructure, boots like the app, executes the work, and records the outcome — all without ever being invoked at boot. Designed to be triggered exclusively from cron.
 
 ## Key elements
 
-- **`allJobs()`** — Concatenates `appJobs` (module-less) with jobs resolved from `enabledModules` via `resolveJobs`, returning the full set of runnable job declarations.
-- **`work(job)`** — Executes `job.run()`. If the job declares a lease, wraps execution in `withLease`; logs an info message if the run was skipped (lease held by another process).
-- **`execute(job)`** — Orchestrates the connect → prepare → work sequence. When `job.connectFirst === false`, skips the DB connection before work and calls `startJob()` after; otherwise connects first.
-- **`requestedJob()`** — Parses positional CLI args with `parseArgs`, finds the job by name in `allJobs()`, and exits non-zero with a list of known names if not found.
-- **Entry point (bottom of file)** — Calls `runScript(job.lease ? undefined : job.name, () => execute(job), cleanup)` so the outcome is recorded under the job name (or via the lease document for leased jobs) and `stopDatabase` / `stopQueue` are always invoked.
+- **`allJobs()`** — Returns the combined set of job declarations: unowned app jobs (`appJobs`) followed by each enabled module's jobs (`resolveJobs(enabledModules)`).
+- **`execute(job)`** — Orders the connection/boots based on `job.connectFirst`. If `false`, the work runs *before* `startJob()` (for sweep jobs that don't need Mongo); otherwise it connects → `prepareJob()` → `runJobWork(job)`.
+- **`requestedJob()`** — Parses a single positional CLI argument via `parseArgs`, looks it up in `allJobs()`, or prints the known names and `process.exit(1)`.
+- **Entry-point block (bottom)** — Calls `boundQueueRetries()` to cap broker reconnects, then delegates to `runScript(job.name, () => execute(job), cleanup)` where cleanup stops database and queue connections.
 
 ## Relationships
 
-- **`src/infrastructure/config/dotenv.ts`** — Side-effect import (first), loads environment variables before any other module.
-- **`src/infrastructure/runtime/mongoose-boot.ts`** — Side-effect import (second), sets Mongoose connection defaults before schemas are built.
-- **`src/infrastructure/adapters/logger.ts`** — `logger.info` used to report a skipped lease run.
-- **`src/infrastructure/adapters/queue.ts`** — `stopQueue` called in the cleanup callback passed to `runScript`.
-- **`src/infrastructure/runtime/database.ts`** — `startJob` opens the DB connection (positioned before or after work per `connectFirst`); `stopDatabase` in cleanup.
-- **`src/infrastructure/persistence/lease.ts`** — `withLease` guards `job.run()` when a lease is declared.
-- **`src/kernel/registry.ts`** — `resolveJobs(enabledModules)` supplies module-owned job declarations; `JobDeclaration` is the shared type.
-- **`src/modules.ts`** — `enabledModules` is the input to `resolveJobs`.
-- **`src/app/jobs.ts`** — `appJobs` provides jobs that belong to no module.
-- **`scripts/ops/prepare-job.ts`** — `prepareJob(job)` runs immediately before `work(job)` in `execute`.
-- **`scripts/run-script.ts`** — `runScript` wraps the entire execution: records success/failure, manages `process.exitCode`, and invokes the cleanup function.
+- **`scripts/ops/prepare-job.ts`** — Provides `prepareJob` (app-style boot) and `runJobWork` (the actual job body). This file orchestrates *when* they are called.
+- **`scripts/run-script.ts`** — `runScript` wraps the execution, records success/failure (via lease document or by name), and manages the process exit code. This file supplies the work and cleanup callbacks.
+- **`src/app/jobs.ts`** — Source of `appJobs`, the jobs that don't belong to any specific module.
+- **`src/kernel/registry.ts`** — Source of `resolveJobs(enabledModules)` and the `JobDeclaration` type.
+- **`src/modules.ts`** — Source of `enabledModules`, which determines which module job lists are included.
+- **`src/infrastructure/runtime/database.ts`** — `startJob()` (connect) and `stopDatabase()` (cleanup).
+- **`src/infrastructure/adapters/queue.ts`** — `boundQueueRetries()` (prevents infinite reconnect) and `stopQueue()` (cleanup).
+- **`src/infrastructure/config/dotenv.ts`** — Side-effect import; loads env vars before anything else.
+- **`src/infrastructure/runtime/mongoose-boot.ts`** — Side-effect import; must load before any Mongoose schema is built.
 
 ## Notes
 
-- **Import order is load-bearing.** `dotenv` must load before any config is read; `mongoose-boot` must run before any Mongoose model is imported (defaults are captured at schema-build time).
-- **Leased vs. non-leased recording.** For leased jobs the name passed to `runScript` is `undefined`, so the outcome is written through the lease document itself. This ensures a *skipped* run (lease still held) is not indistinguishable from a successful one.
-- **`withLease` return-value convention.** `undefined` means "skipped, another holder has the lease"; `true` means "this process ran it." A job's own `run()` result is often `undefined`, so the sentinel `true` is used explicitly.
-- **`connectFirst === false`** indicates the job (e.g. a sweep) does not need Mongo before its work; the connection is deferred until after `work` completes.
-- The floating-promise eslint suppression is safe because `runScript` never rejects — it signals failure via `process.exitCode`.
+- **Import order is load-bearing.** `dotenv` and `mongoose-boot` are side-effect imports that must execute before any model or adapter module is evaluated; reordering them silently breaks Mongoose defaults.
+- **`connectFirst: false`** is an opt-out for sweep/cleanup jobs that must run even when Mongo is unreachable. The work executes, *then* `startJob()` is attempted.
+- **Lease-aware outcome recording.** When `job.lease` is set, `runScript` records through the lease document so a skipped run (held by another instance) is not misread as a success.
+- **No forced-exit deadline.** The process is expected to give up on a dead broker (via `boundQueueRetries`) rather than retry indefinitely; there is no external timeout wrapper.
+- **Floating promise is intentional.** `runScript` never rejects — it reports failure via the process exit code — hence the `// eslint-disable-next-line` for `no-floating-promises`.

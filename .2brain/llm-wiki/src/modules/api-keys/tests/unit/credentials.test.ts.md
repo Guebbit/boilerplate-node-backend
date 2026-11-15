@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/tests/unit/credentials.test.ts
-sha256: 23bd702707233dc9672a3db7a95d80b115bf3f869fe33fd2939777f821f45ee7
-generated_at: 2026-11-08T05:06:53.997955+00:00
+sha256: 77e5b800efbdfb60571fbc3002fcd187063b28c7a6171503dd68f50c529d2719
+generated_at: 2026-11-14T19:23:39.556482+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests covering the mint/parse/verify half of the API-key credential lifecycle. Exists to lock in the token format (`sk_{publicPrefix}_{secret}`), the one-way hash contract, and edge-case behavior (underscores in prefix/secret, foreign tokens, tampered values) for the functions exported by `credentials.ts`.
+Unit tests for the four credential functions exported from `credentials.ts` (`mintApiKey`, `parseApiKeyToken`, `verifyApiKey`, `displayIdOf`). Covers the one-way hashing half of the API-key lifecycle: generating a key, extracting its public prefix, verifying a token against its SHA-256 hash, and formatting a display identifier.
 
 ## Key elements
 
-- **`describe('mintApiKey')`** — asserts the `sk_` prefix, 8-char `publicPrefix`, uniqueness across calls, and round-trip compatibility with `verifyApiKey`.
-- **`describe('parseApiKeyToken')`** — verifies prefix recovery from a real token, `undefined` return for too-short / foreign / non-matching tokens, and correct slicing when the prefix or secret legitimately contains `_` (position-based, not `split`-based).
-- **`describe('verifyApiKey')`** — confirms rejection of a tampered plaintext and of a plaintext matched against an unrelated hash.
-- **`describe('displayIdOf')`** — confirms the bare prefix is re-prefixed with `sk_` for human-facing display, with no secret component.
+- **`describe('mintApiKey')`** — Verifies the returned `{ plaintext, publicPrefix, hash }` shape: `sk_` prefix, 8-char public prefix, hash ≠ plaintext, uniqueness across calls, round-trip with `verifyApiKey`, and an explicit NIST FIPS 180-2 SHA-256("abc") vector.
+- **`describe('parseApiKeyToken')`** — Checks prefix recovery from a real token; returns `undefined` for tokens that are too short, have a non-`_` byte after the 8-char prefix, or are unrelated (e.g. a JWT). Confirms that underscores *within* the prefix/secret are handled via position-based slicing rather than `split('_')`.
+- **`describe('verifyApiKey')`** — Negative cases: tampered plaintext and mismatched hash both return `false`.
+- **`describe('displayIdOf')`** — Confirms the `sk_` prefix is reattached to an 8-char ID for display.
 
 ## Relationships
 
-- **`src/modules/api-keys/credentials.ts`** — sole import target; provides `mintApiKey`, `parseApiKeyToken`, `verifyApiKey`, and `displayIdOf`. Every test in this file exercises one or more of those exports; no other module is touched.
+- **`src/modules/api-keys/credentials.ts`** — Sole dependency. All four functions under test (`mintApiKey`, `parseApiKeyToken`, `verifyApiKey`, `displayIdOf`) are imported from this module. No other files are imported or referenced.
 
 ## Notes
 
-- Token format is fixed: `sk_` + 8-char base64url prefix + `_` + secret. The 8-char prefix is chosen from base64url, whose alphabet includes `_` and `-`; `parseApiKeyToken` therefore relies on position-based slicing rather than `split('_')` to avoid misparses.
-- `parseApiKeyToken` returns `undefined` (not an empty object or throws) for any token that doesn't match the expected shape — callers must null-check.
-- Tests are self-contained (no mocks, no network, no DB); `mintApiKey` is the only source of fixtures, so changing its output format will surface failures across all four describe blocks.
+- The token grammar is `sk_` + **8 base64url chars** + `_` + secret. Because base64url's alphabet itself contains `_` and `-`, the parser must slice by fixed position (index 3 + 8) rather than splitting on underscores; one test explicitly guards against `split('_')` regressions.
+- The SHA-256 digest is asserted against a NIST FIPS 180-2 vector (see `docs/modules/api-keys.md` for the full table).
+- `verifyApiKey` is a pure plaintext-vs-hash comparison; there is no salt, IV, or HMAC involved in these tests.

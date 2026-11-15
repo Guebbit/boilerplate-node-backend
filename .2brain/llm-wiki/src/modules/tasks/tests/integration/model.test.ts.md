@@ -1,7 +1,7 @@
 ---
 source: src/modules/tasks/tests/integration/model.test.ts
-sha256: 7d89023f49b6e3ff204c834f3fde77e2acd0d44fa76947d245c331f4c4199288
-generated_at: 2026-11-08T08:39:21.797674+00:00
+sha256: 621d72169a577f6f7a50af7aab697bff2219b82230e1963c0e848d2af85dd02d
+generated_at: 2026-11-14T22:15:05.165281+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that enforce a single invariant: the Task document must never expose `_id` or `__v` to the client, on **both** serialization paths — a hydrated Mongoose document (`toJSON`) and a `.lean()` list result (mapped manually via `applyTaskTransform`). Also verifies the TTL index definitions that drive message retention clocks.
+Integration test verifying two invariants of the task domain: (1) TTL indexes are defined correctly so MongoDB purges stale documents on schedule, and (2) serialized task objects never expose internal Mongoose fields (`_id`, `__v`) on either the hydrated (`toJSON`) or `.lean()` response path.
 
 ## Key elements
 
-- **`createTask()`** – module-level helper; inserts a task through `taskRepository.create` with a fixed reporter identity (`reporter@example.com`).
-- **`describe('retention clocks')`** – asserts the live collection indexes contain a partial TTL on `createdAt` (only when `source: 'visitor'`) and a TTL on `closedAt`.
+- **`createTask()`** – local helper that inserts a task via `taskRepository.create` with fixed fixture data (`reporter@example.com`).
+- **`describe('retention clocks')`** – reads live index metadata from `taskModel.collection.indexes()` and asserts the TTL index shapes (a `createdAt` index scoped to `source: 'visitor'` and a `closedAt` index).
 - **`describe('task serialization')`** – two tests:
-  - *toJSON path*: creates a task, calls `task.toJSON()`, asserts `id` is present and `_id`/`__v` are absent from the JSON string.
-  - *lean-list path*: calls `taskService.search({}, callerContextAs('admin'))`, asserts each item has an `id` matching a 24-hex ObjectId and has no `_id` or `__v` keys.
+  - *toJSON path*: creates a task, calls `toJSON()`, asserts `id` is the hex string and the serialized JSON contains neither `_id` nor `__v`.
+  - *lean path*: calls `taskService.search` as admin, asserts the returned item has a 24-char hex `id` and that `_id`/`__v` are `undefined`.
 
 ## Relationships
 
-- **`src/modules/tasks/model.ts`** – provides `taskModel`; the test inspects its collection indexes and exercises its `toJSON` transform.
-- **`src/modules/tasks/repository.ts`** – provides `taskRepository`; used by `createTask()` to seed data.
-- **`src/modules/tasks/service.ts`** – provides `taskService`; its `search` method is the lean-list code path under test.
-- **`tests/support/setup-test-db.ts`** – provides `setupTestDb()`, called once at module load to provision a clean test database.
-- **`tests/support/callers.ts`** – provides `callerContextAs`, used to build an admin caller context for the service call.
-- **`tests/support/stub.ts`** – provides `asStub`, a type-cast helper used to treat `items[0]` as a plain `Record<string, unknown>` for assertion.
+- **`src/modules/tasks/model.ts`** – imports `taskModel`; tests its `toJSON` transform and its declared TTL indexes.
+- **`src/modules/tasks/repository.ts`** – imports `taskRepository`; uses `create` to seed fixture data.
+- **`src/modules/tasks/services/index.ts`** – imports `taskService`; exercises the `search` method to hit the `.lean()` serialization path.
+- **`tests/support/callers.ts`** – imports `callerContextAs('admin')` to provide an authenticated admin caller context.
+- **`tests/support/setup-test-db.ts`** – imports `setupTestDb` to provision a clean in-memory/ephemeral DB before the suite runs.
+- **`tests/support/stub.ts`** – imports `asStub` to cast the lean result to a plain `Record` so individual field assertions are type-safe.
 
 ## Notes
 
-- The file's own doc-comment names the invariant explicitly; if you add a new serialization path (e.g. a cache layer), add a third test here.
-- `setupTestDb()` runs at **module import time**, not inside `beforeAll` — the DB is ready before any `describe` block executes.
-- The retention-clocks test reads real index metadata from MongoDB rather than simulating expiry, so it requires a running Mongo instance (consistent with the "integration" tag in the path).
-- `createTask` is not parameterized; if a test needs a different `source` value, it must call `taskRepository.create` directly.
+- The file's module docstring is the source-of-truth statement of the invariant ("Tasks must never leak `_id`/`__v`"). If a future refactor breaks serialization, this file is the guard.
+- The retention-clock test inspects **actual MongoDB index metadata** rather than the index-definition code, so it catches both missing indexes and incorrect `partialFilterExpression` values.
+- The lean-path test relies on `asStub` to sidestep TypeScript; if `taskService.search` return type changes, this cast may need updating.

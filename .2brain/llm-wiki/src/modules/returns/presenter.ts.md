@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/presenter.ts
-sha256: cef15ded3e7319b1b9da97d55ab65935669d6d6104298d436c98df7ce74bb50b
-generated_at: 2026-11-08T08:00:48.143742+00:00
+sha256: affe9c53afac44b7ba4652f2ac5691149ad9163515e116c12ed369c767b42b69
+generated_at: 2026-11-14T21:35:35.440349+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single transformation point that converts a stored `ReturnDocument` into the wire-contract shape (`StoredReturn`). It isolates the `_id` → `id` and date-to-ISO-string serialization so the rest of the codebase deals only with the typed contract. The read service layers `actions` on top of this result.
+Transforms a stored `ReturnDocument` into the wire-contract shapes (`Return`, `ReturnListItem`). It sits between the model layer and the API types, handling the `toJSON()` id/date remap and selecting the field subset each endpoint exposes. The read service (`services/read.ts`) builds on this to append the caller-specific `actions`.
 
 ## Key elements
 
-- **`StoredReturn`** (type export) — `Omit<Return, 'actions'>`. The contract shape minus the caller-specific actions field.
-- **`presentReturn`** (function export) — Accepts a `ReturnDocument`, calls its `.toJSON()`, and casts the result to `StoredReturn`. This is the only place the raw document is widened into the public type.
+- **`StoredReturn`** (type) — `Omit<Return, 'actions'>`. The return in its stored-read-back shape before the read service attaches `actions`.
+- **`presentReturn(document)`** — Calls `document.toJSON()` and casts the result to `StoredReturn`. This is the single point where the model's `_id` → `id` / date → ISO-string transform is acknowledged to the type system.
+- **`presentReturnListItem(returned, actions)`** — Projects a `StoredReturn` + `ReturnActions` into a `ReturnListItem`, keeping only the columns a list table renders (id, order refs, status, reason, kind, timestamps, actions). Deliberately omits customer note, decline message, and line items.
 
 ## Relationships
 
-- **`./model`** — Imports `ReturnDocument`, the input type for `presentReturn`.
-- **`@types` (`src/types/index.ts`)** — Imports the `Return` contract type used to define `StoredReturn`.
-- **`services/read.ts`** — Consumes `StoredReturn` (the output of `presentReturn`) and augments it with `actions` to produce the full `Return` returned to callers.
+- **`src/types/index.ts`** — Imports the `Return`, `ReturnActions`, and `ReturnListItem` contract types that this file projects onto.
+- **`src/modules/returns/model.ts`** — Imports the `ReturnDocument` type; this file is the consumer of the model's document shape.
+- **`src/modules/returns/services/read.ts`** — Builds on `presentReturn` / `presentReturnListItem` to add the `actions` field before responding to callers.
 
 ## Notes
 
-- The `as StoredReturn` cast in `presentReturn` is deliberate and documented: the compiler cannot infer that `toJSON()` returns the exact shape of `StoredReturn`, so the cast is the one sanctioned narrowing. Do not replace it with a re-implementation of the field mapping.
-- `actions` is intentionally absent from `StoredReturn`. If you need actions, go through the read service; do not add them here.
+- The `as StoredReturn` cast in `presentReturn` is load-bearing: `toJSON()` returns a structurally different object (renamed `_id`, serialized dates) that TypeScript cannot verify against `StoredReturn` without the explicit assertion.
+- `presentReturnListItem` is intentionally narrow — if a new column is needed in the list view, add the field here; detail fields (note, decline message, lines) are scoped to the audited detail read and should not leak into this projection.

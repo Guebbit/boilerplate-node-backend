@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/unit/session-listing.test.ts
-sha256: c484bd5d6887fba45e20fcd2a6bf82202cb766d414a4e278bb53d7dd6e190d0a
-generated_at: 2026-11-08T04:50:10.184162+00:00
+sha256: 3043f40a8fa02da0b76264ed6d70a311cb6a0fafff02ca884ce0fa8ece91f737
+generated_at: 2026-11-14T19:16:58.493471+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the session-listing module (`listSessions` and `newestPerFamily`). They lock in the published contract: one entry per sign-in family regardless of rotation-race duplicates, the caller's own family marked `current`, optional fields omitted rather than defaulted, account-epoch filtering, and staff idle-timeout visibility.
+Unit tests for the two exports of `@modules/account/session/listing` (`newestPerFamily` and `listSessions`). They verify the public shape of the session list: one entry per family regardless of rotation-race duplicates, correct `current` marking, absence (not invention) of optional fields, account-epoch (ban) filtering, and the staff idle-timeout rule. The store is fully replaced; what `listLive` returns is controlled per-case.
 
 ## Key elements
 
-- **`newestPerFamily` (tested)** — Pure function; keeps exactly one row per `familyId` (the one with the later `_id`), preserving input order across families.
-- **`listSessions` (tested)** — Async function; returns a flat array of session entries. Under test for: marking the caller's family `current`, carrying `lastUsedAt`/`device` only when present, dropping rows whose `authTime` predates the account's `tokensValidAfter` epoch, and hiding sessions past a 24 h idle limit when the caller holds a staff role.
-- **`row` helper** — Builds a `SessionRow` with a fresh random `_id` and `tokenHash`; accepts `Partial<SessionRow>` overrides for targeted assertions.
-- **Partial mocks** — `jest.mock` + `jest.requireActual` pattern on `@modules/account/repository`, `@modules/users`, and `@modules/access` so only the specific methods (`listLive`, `findAuthenticatableById`, `rolesOf`) are replaced with `jest.fn()`.
-- **`asStub`** (from `tests/support/stub.ts`) — Extracts typed mock handles from already-mocked module objects.
+- **`row(familyId, overrides?)`** – local factory that builds a `SessionRow` fixture with a fresh `Types.ObjectId` for `_id` (so the last-created object is always "newer"), a fixed `USER_ID`, and a `hashToken`-generated `tokenHash`.
+- **`describe('newestPerFamily')`** – asserts that the function keeps exactly one row per `familyId` (the later-written one, regardless of input order) and preserves the caller's family ordering.
+- **`describe('listSessions')`** – asserts the mapped output (`id`, `createdAt`, `expiration`, `current`), that `lastUsedAt`/`device` are absent when the row lacks them, and that `current` is `false` when no credential is supplied.
+- **`describe('listSessions and the account epoch')`** – asserts rows whose `authTime` (Unix seconds) predates the account's `tokensValidAfter` are dropped, while rows with no stored `authTime` are kept.
+- **`describe('listSessions and the staff idle timeout')`** – asserts that a session whose `lastUsedAt` exceeds the idle window is hidden when the caller holds a staff role (`tenant: 'editor'`) but visible for a non-staff caller.
 
 ## Relationships
 
-- **`src/modules/account/session/listing.ts`** — The module under test; provides `listSessions` and `newestPerFamily`.
-- **`src/modules/account/repository.ts`** — Source of `sessionRepository.listLive`, which is the store the listing reads from; mocked to control returned rows.
-- **`src/modules/users/index.ts`** → **`src/modules/users/services/index.ts`** — Provides `userService.findAuthenticatableById`, used to fetch the account (including `tokensValidAfter` for epoch filtering); mocked.
-- **`src/modules/access/index.ts`** → **`src/modules/access/services/index.ts`** — Provides `accessService.rolesOf`, consulted to determine staff vs. shopper for the idle-timeout rule; mocked to return role shapes.
-- **`src/infrastructure/security/hash-token.ts`** — `hashToken` is called inside the `row` helper and in test assertions to produce realistic token-hash values without depending on a real credential.
-- **`tests/support/stub.ts`** — Supplies `asStub`, the typed-unwrap utility used throughout the file.
+- **`src/modules/account/session/listing.ts`** – the module under test; provides `listSessions` and `newestPerFamily`.
+- **`src/modules/account/repository.ts`** – the session store whose `listLive` method is mocked to return controlled `SessionRow` arrays.
+- **`src/modules/users/friends/account.ts`** – the account-read service whose `findAuthenticatableById` is mocked to supply the account record (id, `tokensValidAfter`).
+- **`src/modules/access/index.ts`** – the access service whose `rolesOf` is mocked to drive staff-vs-shopper role logic.
+- **`src/infrastructure/security/hash-token.ts`** – `hashToken` is called in fixtures to produce realistic `tokenHash` values.
+- **`tests/support/stub.ts`** – `asStub` is used to type-assert the jest mocks back into their real shapes.
 
 ## Notes
 
-- "Current" marking is **family-level**, not row-level: if the caller's token matches any row in a family (even the older, rotated-away one), the single published entry for that family is `current: true`.
-- Rows lacking an `authTime` field are **always kept**, even when the account has a `tokensValidAfter` epoch — there is no proof to judge.
-- The staff idle-timeout test uses a relative 24-hour window (`Date.now() − 24 h`), so the assertion is time-dependent but tolerant of drift within the test run.
-- The file's module-level doc comment is the authoritative restatement of the listing contract; treat it as the spec the tests enforce.
+- Mocks use the `jest.mock` + `requireActual` spread pattern so only the specific method is replaced while the rest of each module's exports remain intact.
+- "Newer" in `newestPerFamily` is determined by `Types.ObjectId` natural ordering (timestamp-embedded), not by an explicit `startedAt` comparison; the `row()` helper relies on creation order.
+- The staff idle-timeout test uses `Date.now() - 24 h`, making it wall-clock relative rather than fixed-time.
+- The `current`-marking test for the rotation race passes the *old* token (`'rotated-away'`) as the caller credential, verifying that family-level (not row-level) matching marks the entry.
+- `hashToken` is imported only for fixture realism; the `listSessions` signature takes the raw token string (e.g. `'mine'`), not a hash.

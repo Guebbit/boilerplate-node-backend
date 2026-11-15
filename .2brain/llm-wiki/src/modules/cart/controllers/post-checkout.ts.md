@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/controllers/post-checkout.ts
-sha256: 04e6f58aa85a9f277286d9e4250b63953651fe1464452e77b4ed088bdb065554
-generated_at: 2026-11-08T05:12:28.809084+00:00
+sha256: 094be7aa3c3bce355ab80653b659837ca51bf84e7a93a8c5077db2f2ffb8af7f
+generated_at: 2026-11-14T19:28:06.790173+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin Express handler for `POST /cart/checkout`. Validates the request body, delegates to `cartService.orderConfirm`, records the `cart_checkout_total` metric on every outcome, and responds with the newly created order. Exists to keep the cart route surface free of business logic and to isolate the metric-recording contract in one place.
+Thin HTTP adapter for `POST /cart/checkout`. It validates the request body, delegates to `cartService` to convert the cart into an order, records the `cart_checkout_total` metric on every outcome, and shapes the created order into a `201 Created` response.
 
 ## Key elements
 
-- **`postCheckout(request, response)`** (exported) — The sole export. Express handler that:
-  1. Extracts `userId` from `request.authContext`.
-  2. Validates the body against `CheckoutBody` (Zod) via `parseBody`; a missing/malformed body short-circuits with 422.
-  3. Calls `cartService.orderConfirm(userId, callerContextOf(request), body)`.
-  4. Increments `cart_checkout_total` with `status: 'success' | 'failure'` on the `.then` path.
-  5. On success, calls `orderService.withActions(result.data, …)` to obtain the full wire shape (including resolved line-item `current` snapshots), then replies `201` via `createdResponse` with `Location: /orders/:id`.
-  6. On rejection (`.catch`), increments the metric with `status: 'failure'` and delegates to `catchAs(response, 'postCheckout')`.
+- **`postCheckout(request, response)`** — sole export; the route handler for checkout.
+  - Validates the body with `parseBody(CheckoutBody, …)`; a missing/malformed body short-circuits to `422`.
+  - Calls `cartService.orderConfirm(userId, callerContextOf(request), body)`.
+  - Increments `cartCheckoutTotal` (`status: 'success' | 'failure'`) **before** the `refused()` check, so both outcomes are recorded.
+  - On success, pipes the `OrderDocument` through `orderService.withActions(…)` to obtain the wire-shape `Order` (resolves each line's live `current` picture).
+  - Responds with `answerAsResource` (ETag) + `createdResponse<Order>` (201, `Location: /orders/:id`).
+  - In `.catch`, increments the metric with `status: 'failure'` and delegates to `catchAs(response, 'postCheckout')`.
 
 ## Relationships
 
-- **`src/modules/cart/services/index.ts`** — Provides `cartService.orderConfirm`, the core business call.
-- **`src/modules/orders/index.ts`** — Provides `orderService.withActions`, which shapes the `OrderDocument` into the response wire format and resolves live line-item data.
-- **`src/modules/cart/metrics.ts`** — Source of the `cartCheckoutTotal` counter (Prometheus-style).
-- **`src/infrastructure/http/controller.ts`** — Supplies `parseBody`, `refused`, and `catchAs` (shared HTTP helper utilities).
-- **`src/infrastructure/http/request.ts`** — Supplies `callerContextOf`, which extracts a caller context object for downstream service calls.
-- **`src/infrastructure/http/response.ts`** — Supplies `createdResponse`, which sets the 201 status, serialises the body, and writes the `Location` header.
-- **`src/types/index.ts`** — Source of the `Order` type used as the generic on `createdResponse`.
-- **`src/modules/cart/routes.ts`** — The router that mounts this handler at `POST /checkout` (this file is the handler it references).
+- **`src/modules/cart/services/index.ts`** — this file imports `cartService` from it; the controller delegates the core checkout operation to that service.
+- **`src/modules/orders/index.ts`** — this file imports `orderService` from it; used to project the `OrderDocument` into its wire-shape `Order` before responding.
+- **`src/modules/orders/services/index.ts`** — underlying orders service module related to the `orderService` import path.
+- **`src/modules/cart/metrics.ts`** — source of the `cartCheckoutTotal` counter incremented on every checkout attempt.
+- **`src/infrastructure/http/controller.ts`** — supplies `parseBody`, `refused`, and `catchAs` for body validation, rejection envelopes, and error serialization.
+- **`src/infrastructure/http/response.ts`** — supplies `createdResponse` for the 201 + `Location` header.
+- **`src/infrastructure/http/preconditions.ts`** — supplies `answerAsResource` to set the `ETag` from the order document.
+- **`src/infrastructure/http/request.ts`** — supplies `callerContextOf` to extract the caller's context from the Express request.
+- **`src/types/index.ts`** — provides the `Order` type used as the generic parameter of `createdResponse`.
+- **`src/modules/cart/routes.ts`** — consumer; registers `postCheckout` on the `POST /cart/checkout` path.
 
 ## Notes
 
-- **Metric is incremented on *every* outcome**, including thrown errors. The code intentionally calls `cartCheckoutTotal.inc` in both the `.then` (before `refused`) and the `.catch` blocks. A failed checkout is still a business-relevant event.
-- **`orderService.withActions` is not optional sugar.** It is the step that resolves each line item's live `current` picture. A plain `.toJSON()` on the raw `OrderDocument` would omit that data from the response entirely.
-- **The response is 201, not 200.** The checkout *creates* an order; the `Location` header points to `/orders/:id`, mirroring the `POST /orders` contract.
-- **`request.authContext!`** uses a non-null assertion — the file assumes an auth middleware has already populated it. There is no guard in this function.
-- The handler uses a `.then()/.catch()` chain rather than `async/await`; this is a deliberate style choice consistent with the `@infrastructure/http/controller` helpers.
+- The metric increments **three** times in the source (success path, `refused` path, catch path) but semantically once per request: the success and refused branches are mutually exclusive, and the catch branch handles thrown errors. A failed checkout is intentionally still counted.
+- Do **not** replace the `orderService.withActions` call with a bare `result.data.toJSON()` — the comment in-file warns that `.toJSON()` would omit each line's `current` picture from the response.
+- The response carries **both** an `ETag` (from `answerAsResource`) and a `Location` header (from `createdResponse`); the `message` field in the envelope doubles as the confirmation copy.

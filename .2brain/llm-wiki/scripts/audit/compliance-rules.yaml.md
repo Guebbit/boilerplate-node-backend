@@ -1,39 +1,41 @@
 ---
 source: scripts/audit/compliance-rules.yaml
-sha256: 173a43aa41d27033c5325073c7bddbbd52080546db4e504b01bca41dfa2bc1e9
-generated_at: 2026-11-08T02:37:40.775128+00:00
+sha256: 21e43d6bdf199dc1c0ee2127b0162fa505adec8db6f856b458fe0e8ba972795e
+generated_at: 2026-11-14T17:21:25.024364+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # scripts/audit/compliance-rules.yaml
 
 ## Purpose
-Shared compliance rule registry consumed by the AI-driven audit prompts in `scripts/audit/compliance-backend/SKILL.md` and `scripts/audit/compliance-frontend/SKILL.md`. Each prompt filters rules by `responsibility` (backend / frontend / both) and evaluates only its own `evidence.<side>` hints. The file exists once so both audits share a single source of truth for what to check, rather than duplicating rule text across two prompt files.
+
+Shared compliance-rule registry consumed by the AI audit prompts that filter by `responsibility` and evaluate only the evidence hints for their own side. The file lives here once so both backend and frontend audits read the same single source of truth (see `docs/tools/ai-auditing.md`).
 
 ## Key elements
-- **`version`** — top-level integer (currently `1`); bump when the schema shape changes.
-- **`rules[]`** — the active rule set the audit prompts evaluate. Each entry carries:
-  - `id` — stable kebab-case identifier (e.g. `signup-mandatory-consent-checkbox`).
-  - `responsibility` — `"backend"`, `"frontend"`, or `"both"`; determines which prompt picks it up.
-  - `severity` — `critical` / `high` / `medium` (ordering for reporting, not enforcement).
-  - `rule` — the normative statement the model checks.
-  - `applies_when` — **prose** (not a boolean) the model evaluates against the app's current shape at run time.
-  - `evidence.backend` / `evidence.frontend` — file paths or patterns the model should inspect as supporting evidence.
-  - `references` — legal/regulatory citations (GDPR, ePrivacy, PCI-DSS, WCAG, DMCA, EU AI Act, etc.).
-  - `notes` — context, known-good baselines, or "NOT-APPLICABLE as of writing" markers.
-- **`suggested_rules[]`** — staging area for candidate rules pending human approval. **Neither prompt reads this section.** Promote by moving the entry under `rules:` and deleting `suggested_reason`.
-- **Categories** present in active rules: `consumer-protection`, `ip`, `data-security`, `ai-governance`, `e-privacy`, `accessibility`.
+
+- **`rules:`** — The active rule list each audit prompt evaluates. Each entry carries:
+  - `id`, `title`, `category`, `severity` — identification and prioritisation.
+  - `responsibility` — `backend`, `frontend`, or `both`; the prompt-side filter.
+  - `rule` — Prose statement of the requirement.
+  - `applies_when` — Prose context the auditing model evaluates at run time against the app's actual shape (not a boolean flag). A rule may be `NOT-APPLICABLE` today and fire later.
+  - `evidence.backend` / `evidence.frontend` — File-and-line hints pointing to the **authored** contract (module `openapi.yaml` fragments, `shared/contracts/openapi.root.yaml`), never the generated root `openapi.yaml`.
+  - `references` — Legal/regulatory citations (GDPR, ePrivacy, PCI-DSS, EU AI Act, DMCA, etc.).
+  - `notes` — Audit-specific guidance: what to flag, what is expected-satisfied, known-good baselines, and when a rule should re-trigger.
+- **`suggested_rules:`** — Staging area for candidate rules pending human approval. **Neither prompt may read this section.** Promotion is done by moving the entry under `rules:` and deleting the `suggested_reason` field.
+- **`version`** — Top-level integer (currently `1`) for schema/registry versioning.
 
 ## Relationships
-- **`docs/theory/data-protection.md`** — cited as evidence for the `sensitive-data-plaintext-storage` rule ("no full PAN ever stored" section).
-- **`openapi.yaml`** — cited as evidence for `legal-pages-published` (a `/legal` or `/policies` path) and `signup-mandatory-consent-checkbox` (signup request schema).
-- **`scripts/audit/api-standards.yaml`** — sibling rule file in the same audit pipeline; covers API-standards concerns separately from this compliance registry.
-- **`src/infrastructure/adapters/logger.ts`** — cited as evidence for `sensitive-data-plaintext-storage`; the `NODE_LOG_PERSONAL_FIELDS` env var here is the mechanism that keeps secrets out of logs.
-- **`src/modules/users/model.ts`** — cited as evidence for both `signup-mandatory-consent-checkbox` (`termsAcceptedAt` / `termsVersion` fields) and `sensitive-data-plaintext-storage` (password hashing call site).
+
+- **`src/modules/users/model.ts`** — Cited as evidence in `sensitive-data-plaintext-storage` (password hashing call site) and `signup-mandatory-consent-checkbox` (`termsAcceptedAt` / `termsVersion` fields).
+- **`src/infrastructure/adapters/logger.ts`** — Cited in `sensitive-data-plaintext-storage` evidence alongside `NODE_LOG_PERSONAL_FIELDS` to verify secrets are not logged in cleartext.
+- **`docs/theory/data-protection.md`** — Cited in `sensitive-data-plaintext-storage` evidence for the "no full PAN ever stored" policy statement.
+- **`openapi.yaml`** (root) — Explicitly **excluded** as an evidence source; the header comment warns to cite module fragments (`src/modules/<m>/openapi.yaml`) instead, because the root file is generated and may be absent in a worktree.
+- **`scripts/audit/api-standards.yaml`** — Sibling standards file in the same audit tooling directory; the two files together define the audit contract.
 
 ## Notes
-- `applies_when` is **not** a toggle. The auditing model reads it as natural language and decides applicability at run time based on what actually exists in the codebase. A rule with `applies_when: "NOT-APPLICABLE as of this registry's writing"` is still in `rules:` and will be re-evaluated every audit run.
-- Frontend evidence arrays can be empty (`frontend: []`); that simply means there is no frontend artifact to inspect for that rule.
-- The `notes` field on a rule may state a **known-good baseline** (e.g. argon2id hashing, cardLast4-only storage) and that the rule is expected to audit SATISFIED — it exists to catch regressions, not to flag the current state.
-- `suggested_rules:` is a hard boundary: prompts must not read or evaluate entries there. Human review is the gate.
-- The file is intentionally co-located under `scripts/audit/` (not `src/` or `docs/`) because it is consumed exclusively by the audit tooling, not by application code.
+
+- `applies_when` is **prose, not a flag**. The auditing model judges applicability at run time against the codebase's actual shape. A rule marked `NOT-APPLICABLE` (e.g. `dmca-agent-published`, `ai-usage-policy-disclosure`, `biometric-consent-required`) is intentionally present so it fires automatically when the relevant feature is added.
+- Evidence hints must point to **authored** files (module `openapi.yaml` fragments, `shared/contracts/openapi.root.yaml`), never the gitignored, generated root `openapi.yaml`. Cite the fragment's line number.
+- A shipped `<LegalPlaceholder>` component is the **designed default** for legal pages; the auditor must judge routes, footer links, and operator identity, not the absence of legal wording. The placeholder never decides the verdict.
+- The `notes` field on `signup-mandatory-consent-checkbox` distinguishes two separate faults: presenting a privacy notice as "consent" (Art. 13/14 vs. Art. 7) and bundling cookie consent into the Terms checkbox (Art. 7(4)).
+- Frontend evidence lists may be empty (`frontend: []`) when a rule is backend-only (e.g. `sensitive-data-plaintext-storage`).

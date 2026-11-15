@@ -1,7 +1,7 @@
 ---
 source: src/modules/access/services/index.ts
-sha256: f542e9de20b9c47a7533f83ce4ebf71175b3fcd9707e5294e5ada91ca1e82087
-generated_at: 2026-11-08T03:57:36.136900+00:00
+sha256: fa606e36887d98eb4c59c997267ffff74bf2a4b48ec02d621c0ad461b5456fe6
+generated_at: 2026-11-14T18:27:51.320747+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel module that defines the public surface of the access service. It re-exports the pure helpers, constants, and error class from the three sibling sub-modules (`grants`, `memberships`, `protection`) and bundles every database-reading/writing operation—plus the two audit hooks from `role-audit`—into a single `accessService` object. Callers import this file instead of reaching into individual sub-module paths.
+Barrel file that assembles the access module's public API. It re-exports pure constants and helper types (role checks, error types, refusal reasons) directly and bundles every database-reading or writing operation into a single `accessService` object, giving consumers one stable import surface for the three service files (`grants`, `memberships`, `protection`) plus the `role-audit` helpers.
 
 ## Key elements
 
-- **`accessService`** (const object) — the sole aggregated export for all stateful operations: `grantRefusalAudited`, `assignRole`, `revokeRole`, `bootstrapAccess`, `ensureTenant`, `eraseMemberships`, `membersHolding`, `membershipIn`, `membershipsOf`, `rolesOf`, `rolesOfMany`, `canChangeAccount`, `holdsStaffRole`, `roleProtectedRefusal`, `staffHoldersAmong`, `auditRoleAssigned`, `auditRoleRevoked`.
-- **Named re-exports from `./grants`** — `AccessInvariantError`, `assertCanGrant`, `grantableRoles`, type `GrantRefusal`.
-- **Named re-export from `./memberships`** — `DEPLOYMENT_TENANT_SLUG` (constant).
-- **Named re-exports from `./protection`** — `isOwnThing`, `mayChangeAccount`, `ownOrderFlag`, `roleManagementRequired`, `ROLE_PROTECTED_REASON`, `SHOP_REFUSAL_REASONS` (pure checks and reason constants).
-- **Imports from `./role-audit`** — `auditRoleAssigned`, `auditRoleRevoked` (included in `accessService` but *not* separately re-exported).
+- **`accessService`** (const object) — the sole aggregate export for all DB-touching operations: `grantRefusalAudited`, `assignRole`, `revokeRole`, `bootstrapAccess`, `ensureTenant`, `eraseMemberships`, `membersHolding`, `membershipIn`, `membershipsOf`, `rolesOf`, `rolesOfMany`, `canChangeAccount`, `holdsStaffRole`, `roleProtectedRefusal`, `staffHoldersAmong`, `auditRoleAssigned`, `auditRoleRevoked`.
+- **Re-exported named items** — `AccessInvariantError`, `assertCanGrant`, `grantableRoles`, `GrantRefusal` (type) from `./grants`; `DEPLOYMENT_TENANT_SLUG` from `./memberships`; `roleManagementRequired`, `ROLE_PROTECTED_REASON`, `SHOP_REFUSAL_REASONS` from `./protection`.
+- **Not exported** — `auditRoleChange` and other internal grant/membership helpers stay private to their source files.
 
 ## Relationships
 
-- **`./grants.ts`, `./memberships.ts`, `./protection.ts`** — this file's three data sources; it imports their operations and re-exports their pure/constants.
-- **`./role-audit.ts`** — supplies the two audit hooks embedded in `accessService`.
-- **`src/modules/access/index.ts`** — the module-level barrel that re-exports this services index to consumers outside the services directory.
-- **`src/modules/access/module.ts`** — wires the access module into the application; expects to consume `accessService` and the named exports defined here.
-- **`scripts/db/bootstrap-access.ts`** — calls `accessService.bootstrapAccess` (imported via this file or the module barrel).
-- **`src/modules/account/roles.ts`, `src/modules/account/services/two-factor-enrollment.ts`, `src/modules/account/session/auth-context.ts`, `src/modules/account/session/listing.ts`** — downstream consumers that rely on the named protection checks (`mayChangeAccount`, `holdsStaffRole`, etc.) or `accessService` methods re-exported through this file.
-- **Tests** (`access.test.ts`, `grantable-roles.test.ts`, `protection.test.ts`) — import the named exports and `accessService` to exercise the surface defined here.
+- **`src/modules/access/services/grants.ts`, `src/modules/access/services/memberships.ts`, `src/modules/access/services/protection.ts`, `src/modules/access/services/role-audit.ts`** — direct sources; this file is their outward-facing re-export point.
+- **`src/modules/access/index.ts`** — the module-level entry that re-exports `accessService` and the named constants from this file.
+- **`src/modules/access/module.ts`** — DI/module registration that injects `accessService` into consumers.
+- **`src/modules/account/roles.ts`** — defines role identifiers and types consumed by the grantable-roles and staff-role checks.
+- **`src/modules/account/session/auth-context.ts`** — provides the authenticated caller context relied upon by the grants and protection operations.
+- **`src/modules/account/session/listing.ts`** — consumes role/membership queries from this module for session-scoped account views.
+- **`src/modules/account/services/two-factor-enrollment.ts`** — consumes protection-related operations from this module to gate enrollment.
+- **`scripts/db/bootstrap-access.ts`** — invokes the bootstrap operation exposed by this module during initial seeding.
+- **`scenarios/accounts.ts`** — scenario-level fixture that exercises the access service surface.
+- **`src/modules/access/tests/integration/access.test.ts`, `src/modules/access/tests/unit/grantable-roles.test.ts`, `src/modules/access/tests/unit/protection.test.ts`** — test the `accessService` surface and the named exports directly.
 
 ## Notes
 
-- The split is intentional: **named exports** are pure functions, constants, or the error class (no I/O); **`accessService`** contains every operation that reads or writes the database. Callers should not mix the two categories.
-- `auditRoleChange` (mentioned in the file's own docstring) is **not** published; only `auditRoleAssigned` and `auditRoleRevoked` appear in `accessService`. Do not expect a generic `auditRoleChange` export.
-- This file contains no logic of its own—only imports, re-exports, and the object literal. Any behavior change belongs in the sub-modules.
+- The design intentionally splits the API in two: **named exports** are side-effect-free (constants, pure predicates, error types) and **`accessService`** is the single object that performs I/O. This keeps tree-shaking simple and makes it obvious which calls hit the database.
+- `auditRoleChange` (the general internal helper in `role-audit.ts`) is deliberately *not* re-exported; only the public `auditRoleAssigned` / `auditRoleRevoked` wrappers appear in `accessService`.
+- Consumers should import from `src/modules/access` (the module barrel) rather than reaching into this file directly, to keep the public surface stable.

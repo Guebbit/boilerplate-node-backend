@@ -1,7 +1,7 @@
 ---
 source: docker/observability/loki.config.yaml
-sha256: 724a8161e6ed5641c790ea484cafc7aa5eff4be2a7ddd08e3aea413e433d81dc
-generated_at: 2026-11-08T02:22:13.834622+00:00
+sha256: e6295d26e9f8381a67f7fbd8f876a1dccb6fe24f2849c8a398e28e5315bd7841
+generated_at: 2026-11-14T17:11:58.268705+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single-node Loki configuration for the local observability stack. It wires up Loki in a minimal, filesystem-backed mode so developers can query logs with Grafana without requiring object storage, a ring backend, or authentication.
+Loki configuration for a single-node, local Docker observability stack. It sets up filesystem-backed log storage, a one-week retention window, and an in-memory ring so Loki runs as a single process suitable for quick debugging without a distributed backend.
 
 ## Key elements
 
-- **`auth_enabled: false`** — disables all auth; intended exclusively for local/dev use.
-- **`server.http_listen_port: 3100` / `grpc_listen_port: 9096`** — the two ports Grafana (HTTP) and Promtail (gRPC) connect to.
-- **`common.storage.filesystem`** — chunks and rules are written under `/var/loki`; no S3 or other object store is used.
-- **`common.ring.kvstore.store: inmemory`** — single-instance ring; no Consul/etcd needed.
-- **`query_range.results_cache`** — 100 MB in-process cache to speed up repeated LogQL queries during development.
-- **`schema_config`** — single schema block (v13, TSDB index, 24 h index periods, filesystem object store) effective from 2020-10-24.
-- **`ruler.alertmanager_url`** — points to `http://alertmanager:9093` so that any Loki alerting rules fire into Alertmanager.
-- **`limits_config.retention_period: 168h`** — caps log retention at one week.
-- **`compactor`** — runs in `/var/loki/compactor` with retention deletion enabled, pruning expired blocks on the filesystem.
+- **`server`** — Exposes the HTTP API on port 3100 (consumed by Grafana and Alloy) and a gRPC internal API on port 9096.
+- **`common`** — Pins the instance to `127.0.0.1`, uses `/var/loki` as the data root, stores chunks and rules on the local filesystem, and uses an `inmemory` kvstore for the ring (no external coordinator).
+- **`query_range`** — Enables a 100 MB embedded in-process results cache to speed up repeated dev queries.
+- **`schema_config`** — Declares a single schema block (from 2020-10-24) using the TSDB index store, `v13` schema, and 24-hour index periods.
+- **`ruler`** — Sets `alertmanager_url` to `http://alertmanager:9093` as the forwarding target for any log-based alert rules.
+- **`limits_config`** — Caps log retention at 168 hours (one week).
+- **`compactor`** — Runs with `retention_enabled: true` and a filesystem-backed `delete_request_store` to actually drop expired chunks.
 
 ## Relationships
 
-- **`docker/observability/alertmanager.config.template.yaml`** — Loki's `ruler` section is configured to forward alerts to the Alertmanager instance that this template defines (expected at `alertmanager:9093`). Alert rules defined in Loki therefore depend on that service being reachable.
-- **`docker/observability/grafana.datasources.yaml`** — registers Loki as a Grafana datasource; Grafana sends LogQL queries to the HTTP port (3100) defined here.
+- **`docker/observability/alertmanager.config.template.yaml`** — This file's `ruler.alertmanager_url` references the `alertmanager` service on port 9093; that service is configured by the alertmanager config template.
+- **`docker/observability/grafana.datasources.yaml`** — Grafana reads logs from Loki's HTTP API (port 3100); the datasources file declares that endpoint so dashboards and the Explore page can query Loki.
 
 ## Notes
 
-- All storage paths assume a writable `/var/loki` volume; the container must mount a volume there or logs are lost on restart.
-- `replication_factor: 1` and the in-memory ring mean there is **no** fault tolerance or horizontal scaling — this config is not suitable for multi-node deployments.
-- The `ruler` block is present but inert unless a separate Loki rules file is mounted or supplied; without rules it is a no-op.
-- Retention is enforced only by the compactor. Until the compactor cycle runs, expired chunks remain on disk, so the effective on-disk size can briefly exceed 168 h worth.
+- `replication_factor: 1` and the `inmemory` ring store mean this is strictly a single-process setup; do not copy these values into a multi-node configuration.
+- The `alertmanager_url` uses the Docker-internal hostname `alertmanager`, not `localhost` — it will only resolve inside the compose network.
+- The schema `from` date (`2020-10-24`) is Loki's canonical default; it does not reflect the actual deploy date.
+- Auth is explicitly disabled (`auth_enabled: false`), appropriate for a local dev stack but must not be carried into any exposed deployment.

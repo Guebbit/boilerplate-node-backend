@@ -1,40 +1,41 @@
 ---
 source: src/modules/delivery/repository.ts
-sha256: cf74e21ab85e4d3b27e68992c5fb41e2f9b9dd497156952a46433f124f24aaa2
-generated_at: 2026-11-08T05:32:44.493724+00:00
+sha256: ba4cf10cfdcf0d24e987fb70508ce221d198341dd2bbeecba53c030d562294d0
+generated_at: 2026-11-14T19:42:41.657655+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/delivery/repository.ts
 
 ## Purpose
-Persistence layer for the delivery module. Defines the two Mongoose collections (fulfillment orders, shipments), the shared CRUD factory, and the domain-specific conditional reads and revision-guarded writes that every delivery act is driven through. Return types are written out explicitly because Mongoose's generics are too large for TypeScript to infer at an export boundary (TS7056).
+
+Persistence layer for the delivery module. It wires the two Mongoose collections (fulfillment orders, shipments) to the act/services above them, providing the reads, optimistic-concurrency writes (`claim`), idempotent inserts, board search, and product summarisation that every delivery act is driven through.
 
 ## Key elements
-- **`BoardFilters`** (interface) — the filter shape for the preorder board: cause, state, productId, late, dueWithin, orderIds.
-- **`ProductSummaryRow`** (interface) — one product's preorder unit counts as the aggregation returns them.
-- **`stateCondition`** (private fn) — maps a `PreorderFulfillmentState` to a Mongo `QueryFilter`; kept in lockstep with `boardStateOf` in `./domain`.
-- **`boardWhere`** (private fn) — ANDs every applicable clause from `BoardFilters` into a single filter, resolving `late` and `dueWithin` against a supplied `now`.
-- **`FulfillmentOrderPatch`** (type) — the writable subset of a fulfillment order plus an `unset` array for field removal (released holds, cleared dates).
-- **`fulfillmentOrderRepository`** (const, main export) — extends the `createRepository` base (CRUD) with:
-  - `findByOrderId`, `findByOrderIds`, `findInSession` — reads scoped to an order, a set of orders, or a transaction.
-  - `insertIfAbsent` — upsert guarded on `{ orderId, number }`; returns `true` only when this call created the document.
-  - `claim` — optimistic-concurrency write: matches on `_id` + `revision`, applies `$set`/`$unset`, increments revision; returns `null` on conflict.
-  - `scrubHoldNotesBefore`, `findWaitingForProduct`, `findDatePassed` — maintenance and digest queries (partially visible in truncated content).
-  - `searchBoard`, `summarizeProducts` — paginated board and product-aggregation reads.
+
+- **`BoardFilters`** (exported interface) — parameter shape for the preorder board query: cause, state, product, late flag, due-within window, and order scoping.
+- **`ProductSummaryRow`** (exported interface) — one row of the per-product aggregation returned by `summarizeProducts`.
+- **`stateCondition`** (private) — maps a `PreorderFulfillmentState` to the Mongo `QueryFilter` that represents it.
+- **`boardWhere`** (private) — assembles all filter clauses (cause, state, product, late, dueWithin, orderIds) into a single `$and`-wrapped query, evaluated against a supplied `now`.
+- **`FulfillmentOrderPatch`** (exported type) — the settable fields plus an `unset` array that an act may include in a `claim` write.
+- **`fulfillmentOrderRepository`** (exported const) — the primary repository object. Spreads the generic CRUD from `createRepository` and adds domain-specific operations: `findByOrderId`, `findByOrderIds`, `findInSession`, `insertIfAbsent`, `claim`, `scrubHoldNotesBefore`, `findWaitingForProduct`, `findDatePassed`, `searchBoard`, `summarizeProducts`.
+- **Shipment side** — imports `shipmentModel` and `applyShipmentTransform` from `./model`, indicating a parallel shipment repository (content truncated in the excerpt).
 
 ## Relationships
-- **`./model`** (`src/modules/delivery/model.ts`) — source of `fulfillmentOrderModel`, `shipmentModel`, and the apply-transforms passed to `createRepository`.
-- **`./domain`** (`src/modules/delivery/domain/index.ts` → `fulfillment.ts`) — provides `DUE_NOTICE_LEAD_MS`, `FulfillmentOrderDraft`, `WaitCause` used by the repository's query logic.
-- **`src/infrastructure/persistence/create-repository.ts`** — supplies the `createRepository` factory, `toObjectId` helper, and the `Repository` / `Wire` generic types that shape the export.
-- **`src/infrastructure/persistence/conditional-status.ts`** — `updateStatusIfIn` is imported as `conditionalStatus` for guarded status transitions.
-- **`src/infrastructure/security/reencrypt.ts`** — `reencryptOf`, `ReencryptSpec`, `ReencryptReport` for encrypted-field handling on reads.
-- **`src/domain-primitives/time.ts`** — `DAY_MS` used in `dueWithin` date arithmetic.
-- **`src/modules/delivery/services/*.ts`** (act, board, cancel-remainder, cut, deliver, digest, ensure) and **`src/modules/delivery/presenter.ts`** — consume `fulfillmentOrderRepository`, `FulfillmentOrderPatch`, `BoardFilters`, and `ProductSummaryRow` as their persistence interface.
+
+- **`./model`** — source of the Mongoose models, document types, and the transform functions (`applyFulfillmentOrderTransform`, `applyShipmentTransform`) passed to `createRepository`.
+- **`@infrastructure/persistence/create-repository`** — supplies the `createRepository` factory, the `Repository`/`Wire` type contract, and the `toObjectId` helper used throughout.
+- **`@infrastructure/persistence/conditional-status`** — exports `updateStatusIfIn`, imported as `conditionalStatus` for status-guarded writes.
+- **`@infrastructure/security/reencrypt`** — provides `reencryptOf`, `ReencryptSpec`, `ReencryptReport` (likely consumed by the shipment or act paths).
+- **`./domain` (barrel)** — re-exports `DUE_NOTICE_LEAD_MS`, `shipmentLifecycle`, `FulfillmentOrderDraft`, `WaitCause` used in query building and draft handling.
+- **`@domain-primitives/time`** — provides `DAY_MS` for the `dueWithin` window arithmetic.
+- **Services (`act`, `board`, `deliver`, `cut`, `cancel-remainder`, `digest`)** — upstream callers that read via `findInSession`/`findByOrderId` and write via `claim`; `board` consumes `BoardFilters`, `searchBoard`, and `summarizeProducts`.
+- **`./presenter`** — consumes the document shapes returned by this repository for display.
 
 ## Notes
-- `stateCondition` and the `boardStateOf` function in `./domain` must agree on which documents are "waiting"; the preorder board's integration suite enforces this. Keeping them in sync is manual.
-- `insertIfAbsent` uses `$setOnInsert` with `upsert: true`; a retried listener or a racing read will not overwrite an existing document. The boolean return lets a caller narrate "birth" exactly once.
-- `claim` is the sole write path for act mutations: two acts racing the same fulfillment order cannot both land — the loser's revision filter matches nothing and the method resolves `null`.
-- The `cause` filter for `'preorder'` uses `cause: { $ne: 'backorder' }` (not `$eq: 'preorder'`) because preorders created before backorder existed carry no `cause` field.
-- The file is the single persistence seam for the delivery module; services and the presenter should not import Mongoose models directly.
+
+- **Explicit return types are required at the export boundary.** Mongoose's inferred generics are too large for TS to serialise (TS7056), so `Repository<…>` and the method signatures are hand-written. This is the same reason the `Repository` type alias exists.
+- **`stateCondition` is kept in sync *by hand* with `boardStateOf` in `./domain`.** The integration suite enforces that the Mongo filter and the human-readable label agree on which documents count as "waiting."
+- **`insertIfAbsent` uses `$setOnInsert` + `upsert` on `{ orderId, number }`**, making "create on payment" idempotent: a retried listener returns `false` and leaves the existing document untouched.
+- **`claim` is an optimistic-lock write.** The `revision` field appears in the *filter*, not just the `$inc`; a concurrent act that incremented `revision` first will cause the loser's `findOneAndUpdate` to match zero documents and return `null`.
+- **Preorder cause filter uses `$ne: 'backorder'`** rather than `$exists: false` because documents created before the `cause` field was introduced simply lack it—both should match "preorder."

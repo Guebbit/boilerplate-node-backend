@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/place.ts
-sha256: 2a6874fd1ca0117e7ef224eb4aa3ebe207e31c09d926f53f4c4a3fd1fa30ba9d
-generated_at: 2026-11-08T06:59:05.641459+00:00
+sha256: 9c165b9590ad5e00eef2eb6bc3f3502db8b010e36bab6adf0518ecd1de88cb36
+generated_at: 2026-11-14T20:44:55.565231+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,42 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The single write path for creating a new order. Both `crud.ts`'s admin `create` and the cart module's `checkout` funnel through this one function so that the actual write (freeze → hold → allocate number → persist) exists in exactly one place. Callers own everything upstream (payment-method validation, cart pre-flight, address resolution); this file owns only the order row and its stock hold.
+The single write path for creating a new order. Both the admin `create` endpoint (`crud.ts`) and the cart checkout service funnel through `placeOrder`, so the "write an order" logic exists in exactly one place. It freezes line items, holds stock, allocates an order number, and persists the row — with the hold taken *before* the write so a refused hold burns neither a DB row nor an order number.
 
 ## Key elements
 
-- **`placeOrder(input: PlaceOrderInput): Promise<PlaceOrderOutcome>`** — The sole exported function. Validates lines via `checkOrderLines`, freezes them into `OrderDocumentItem[]`, reserves stock via `inventoryService.reserveForOrder` *before* writing (so a refused hold burns no row and no number), allocates an order number, then writes the row and its `order.created` outbox event inside a single Mongoose transaction. Returns a plain verdict union, never throws for a refusal.
-- **`PlaceOrderOutcome`** — Discriminated union: `{ ok: true; order }` or `{ ok: false; reason: 'no-lines' | 'product-missing' | 'insufficient-stock' | 'superseded' }`. Callers map this to their own wire shapes.
-- **`PlaceOrderInput`** — Everything the write needs: identity, lines, optional shipping/billing/notes, and an optional `commitWith(session)` callback (used by checkout to clear the cart atomically; a `false` return aborts the whole transaction).
-- **`PlaceOrderLine`** — A request line plus its resolved `ProductSnapshot | null | undefined` and optional `backorder` flag.
-- **`PlaceOrderShipping`** — Pre-resolved address, a `priceFor(frozenLines)` pricing function (priced off the *frozen* basket, not a precomputed number), and optional `holdMinutes`.
-- **`OrderSuperseded`** — Internal `Error` subclass thrown inside the transaction when `commitWith` reports a lost race; triggers full rollback.
-- **`withOwedLines`** (module-private) — Annotates frozen items with backorder `owed`/`promisedBy` data using `owedLineOf` from the domain layer.
+- **`placeOrder(input: PlaceOrderInput): Promise<PlaceOrderOutcome>`** — The sole public entry point. Validates lines via `checkOrderLines`, freezes them, reserves stock via `inventoryService.reserveForOrder`, allocates an order number, writes the `OrderDocument` through `orderRepository`, and fires the created-event outbox row via `announceInTransaction`. Never throws on a business refusal; returns a `PlaceOrderOutcome` verdict instead.
+- **`PlaceOrderOutcome`** — Discriminated union: `{ ok: true; order }` or `{ ok: false; reason: 'no-lines' | 'product-missing' | 'insufficient-stock' | 'superseded' }`. Callers map it to their own wire shapes.
+- **`PlaceOrderInput`** — Full input contract. Notable fields: `commitWith` (optional callback run inside the transaction for atomic cart-clear; returning `false` aborts the whole transaction as `superseded`), `termsAccepted`, `paymentMethod`, `shipping`, `billingAddress`, `notes`.
+- **`PlaceOrderLine`** — A line with its resolved `ProductSnapshot` (or `null`/`undefined` for missing) and optional `backorder` hint.
+- **`PlaceOrderShipping`** — Caller-resolved shipping; `method.priceFor` is a function of frozen lines rather than a precomputed number.
+- **`OrderSuperseded`** (internal) — Thrown inside the transaction to trigger rollback when `commitWith` reports a lost race.
+- **`withOwedLines`** (internal) — Annotates frozen items with backorder owed-quantity and promise date using `owedLineOf`.
 
 ## Relationships
 
-- **`src/modules/cart/services/checkout.ts`** and **`src/modules/orders/services/crud.ts`** — Upstream callers. They validate their own preconditions, then delegate to `placeOrder` and map its verdict to their response shapes.
-- **`src/modules/inventory/index.ts`** → **`services/index.ts`** / **`services/types.ts`** — Provides `inventoryService.reserveForOrder` (the stock hold) and the `StockShortfall` type returned on failure.
-- **`src/modules/orders/domain/rules.ts`** — `checkOrderLines` gates the write before any side-effects.
-- **`src/modules/orders/domain/backorder.ts`** — `owedLineOf` computes the per-line backorder promise fields.
-- **`src/modules/orders/model.ts`** — `OrderDocument` / `OrderDocumentItem` shapes that the frozen items and final row conform to.
-- **`src/modules/orders/repository.ts`** — `orderRepository.create(orderData, session)` is the actual persistence call inside the transaction.
-- **`src/modules/orders/services/announce.ts`** — `createdEvent` is the outbox payload announced in-transaction via `announceInTransaction`.
-- **`src/kernel/outbox.ts`** — `announceInTransaction` ensures the `order.created` event commits atomically with the order row.
-- **`src/infrastructure/persistence/create-repository.ts`** — `toObjectId` coerces the string `userId` to an Mongoose `ObjectId` for the write.
-- **`src/infrastructure/adapters/logger.ts`** — `logger` used for error/audit logging inside the transaction path.
-- **`src/modules/orders/services/index.ts`** — Re-exports `placeOrder` (and its types) for consumers outside the orders module.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/inventory/index.ts` | Imports `inventoryService` to call `reserveForOrder` (hold stock) and re-exports used types. |
+| `src/modules/inventory/services/index.ts` | Source of the `inventoryService` instance (re-exported through the barrel above). |
+| `src/modules/inventory/services/types.ts` | Provides the `StockShortfall` type consumed in the `insufficient-stock` verdict. |
+| `src/kernel/outbox.ts` | Calls `announceInTransaction` to write the created-event outbox row atomically with the order. |
+| `src/modules/orders/services/announce.ts` | Imports `createdEvent` (the event payload) for the outbox call. |
+| `src/infrastructure/adapters/logger.ts` | Imports `logger` for diagnostic logging. |
+| `src/infrastructure/persistence/create-repository.ts` | Imports `toObjectId` to coerce `userId` to an `ObjectId` before the write. |
+| `src/modules/account/index.ts` | Imports `termsVersion` to snapshot the active terms version when `termsAccepted` is set. |
+| `src/modules/orders/domain/rules.ts` | Calls `checkOrderLines` as the first validation gate; maps its failure into the verdict. |
+| `src/modules/orders/domain/backorder.ts` | Calls `owedLineOf` inside `withOwedLines` to derive backorder promise dates. |
+| `src/modules/orders/model.ts` | Types the draft as `Partial<OrderDocument>` / `OrderDocumentItem`. |
+| `src/modules/orders/repository.ts` | Writes the final row via `orderRepository`. |
+| `src/modules/cart/services/checkout.ts` | Upstream caller; maps `PlaceOrderOutcome` to its own wire shape and passes `commitWith` for cart clearing. |
+| `src/modules/delivery/tests/unit/fulfillment.test.ts` | Test consumer that exercises the order-placement flow end-to-end. |
 
 ## Notes
 
-- **Hold-before-write is deliberate.** The `ObjectId` is generated *before* `reserveForOrder` so the reservation and the eventual row share the same id. A refused hold therefore never creates a row or spends an order number. The only leak window is a hold that is taken but the subsequent write throws; the `try/catch` releases the hold in that case.
-- **`commitWith` is the checkout-specific atomicity hook.** If it resolves `false` (e.g., a conditional cart-clear matched nothing due to a race), `OrderSuperseded` is thrown, the transaction aborts, and the verdict is `superseded` — no order, no outbox row.
-- **Shipping is priced off the frozen lines**, not a caller-supplied total. `priceFor` receives the `OrderDocumentItem[]` *after* `freezeOrderLines`, so the free-above-threshold rule prices the exact basket being written.
-- **`paymentMethod` is stored as-is**; `undefined` behaves like `'card'` (no reference minted, no hold-length override). Payment-method *validation* is the caller's responsibility.
-- **The file is a module with a single export** (`placeOrder` + its type definitions). It does not export the helper `withOwedLines` or the `OrderSuperseded` class.
-- **`logger` is imported but the truncated content does not show a visible call site** — it is likely used in the `catch` block for the rollback path.
+- **Hold-before-write is deliberate.** The `ObjectId` is generated up front so `reserveForOrder` can use it without a row existing. A failed hold returns early with zero side effects. A hold that succeeds but whose subsequent write fails is the one case requiring manual unwind (release the hold); a crash between the two leaves only an expiring reservation.
+- **`commitWith` semantics.** When provided, the callback runs inside the order's Mongoose transaction *after* the order row is written. Returning `false` (e.g., a conditional cart-delete that matched 0 rows) throws `OrderSuperseded`, which rolls back the order, the outbox row, and the hold together — the verdict is `superseded`.
+- **`paymentMethod` default.** `undefined` behaves identically to `'card'`: no reference is minted, no hold-length override is applied. The hold expiry (`payBy`) comes from the inventory service regardless of payment method.
+- **`priceFor` receives frozen lines.** Shipping is priced off the post-freeze basket total, not a precomputed number, to avoid a TOCTOU gap between the caller's read and this write.
+- **`userId` coercion.** Stored as `ObjectId`; the caller passes a string and this module coerces it via `toObjectId` (same convention as `crud.ts`).
+- **Not responsible for:** payment-method validation, open-order cap, address/method resolution, cart pre-flight, or cart clearing — all stay with the caller.

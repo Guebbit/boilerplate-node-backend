@@ -1,30 +1,25 @@
 ---
 source: src/modules/account/services/reencrypt.ts
-sha256: 69cf4ca4c61e296ad5ed79ee3315092c278f1da33cda367056ab792136317dfb
-generated_at: 2026-11-08T04:22:15.672973+00:00
+sha256: 7e891e661e33ad5f367f7a91ab2cf7cc3e15b3ca5c15dd6dc1480c524f23d9ce
+generated_at: 2026-11-14T18:50:36.973875+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/account/services/reencrypt.ts
 
 ## Purpose
-
-Encapsulates the re-encryption of every enrolled TOTP device secret onto the newest key in the `NODE_TOTP_ENCRYPTION_KEY` ring. Because the secrets physically live on the `users` document, this module only owns the *ring* and *binding rule*, then delegates the actual row walk to the users service. It exists so the ops script `reencrypt` (see `@infrastructure/security/reencrypt`) has a single, account-domain entry point to call.
+Provides the account-module entry point for re-encrypting all enrolled TOTP device secrets onto the newest key in the TOTP encryption key ring. It exists so the ops script (`@infrastructure/security/reencrypt`) can invoke a single, dry-run-capable call that delegates the actual document walk to the users service while the account module supplies the ring and binding rule.
 
 ## Key elements
-
-- **`reencryptTotpSecrets(dryRun?: boolean)`** — The sole export. Passes the current encryption-key ring and the TOTP binding descriptor into `userService.reencryptTwoFactorSecrets`. When `dryRun` is `true`, the operation counts affected records without writing.
+- **`reencryptTotpSecrets(dryRun?)`** — the sole export. Calls `accountUserService.reencryptTwoFactorSecrets` with the TOTP key ring and the `totpBinding` binding rule. The `dryRun` parameter (defaults to `false`) controls whether the operation only counts what a real run would move and writes nothing.
 
 ## Relationships
-
-- **`src/modules/account/session/config.ts`** — Provides `getTotpEncryptionKeyRing()`, which resolves the ordered list of keys (newest first) used for re-encryption.
-- **`src/modules/account/two-factor/totp.ts`** — Provides `totpBinding`, the descriptor that tells the users service *which* field on the user document holds the TOTP secret and how it is bound.
-- **`src/modules/users/index.ts`** → **`src/modules/users/services/index.ts`** — Source of `userService.reencryptTwoFactorSecrets`, the function that actually iterates user documents and re-encrypts the secret in place.
-- **`src/modules/account/services/index.ts`** — Barrel re-exports `reencryptTotpSecrets` for consumption by the module layer.
-- **`src/modules/account/module.ts`** — Account-module registration; binds this service into the account module's DI/service graph.
+- **`src/modules/users/friends/account.ts`** — provides `accountUserService`, whose `reencryptTwoFactorSecrets` method performs the actual `users`-document walk and key rotation.
+- **`src/modules/account/session/config.ts`** — provides `getTotpEncryptionKeyRing()`, the ordered list of TOTP encryption keys.
+- **`src/modules/account/two-factor/totp.ts`** — provides `totpBinding`, the binding rule that identifies which field on the user document holds the TOTP secret.
+- **`src/modules/account/services/index.ts`** — barrel file that re-exports this module for consumers of the account services surface.
 
 ## Notes
-
-- This file performs **no** I/O itself. All persistence logic is delegated to the users service; keep it that way so the account module stays free of direct `users`-schema knowledge.
-- The `dryRun` flag defaults to `false` (a real write). Ops scripts should pass `true` during a dry pass before a production run.
-- The module doc comment references `@infrastructure/security/reencrypt` as the calling script — do not add a direct import there; the relationship is runtime/ops, not compile-time.
+- The TOTP secrets live on the **`users`** document, not an account-specific collection; the walk is therefore owned by `accountUserService`, not by any account-local repo.
+- This module is deliberately thin: it composes the ring + binding from the account domain and hands them to the users service. All encryption/decryption logic resides in the users module.
+- Intended to be called by an ops script, not from request-handling code. The `dryRun` flag exists specifically for safe preview in that context.

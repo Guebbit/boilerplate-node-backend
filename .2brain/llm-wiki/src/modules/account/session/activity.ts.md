@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/session/activity.ts
-sha256: ac6d6b0196698033b7fd7aa041eb991f7cf79fd68906f9c5ee75e1f253d13381
-generated_at: 2026-11-08T04:26:12.045616+00:00
+sha256: 968ab97524564a1ac91fc57d30da16356dacceb63c5ad274fa29dd45c2c54fd9
+generated_at: 2026-11-14T18:55:17.779555+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,20 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Stamps an account's `lastActiveAt` timestamp whenever a session is minted or renewed. This shared utility serves both session strategies (cookie and JWT) and provides the clock that the inactivity reaper reads to decide when to expire a session.
+Provides a single, fire-and-forget helper that stamps an account's `lastActiveAt` timestamp whenever a session is minted or refreshed. It exists so both session strategies can share one uniform "keep-alive" signal that the inactivity reaper reads, without either strategy owning that concern.
 
 ## Key elements
 
-- **`recordActivity(userId: string): Promise<void>`** — The sole export. Calls `userService.touchLastActive(userId)` to update the account's activity stamp. Never rejects: any failure is caught, logged as a warning, and silently swallowed so that a valid session is never invalidated by a bookkeeping write.
+- **`recordActivity(userId: string): Promise<void>`** — The sole export. Calls `accountUserService.touchLastActive(userId)` to write the stamp, then swallows any rejection and logs a warning. Designed to never throw or reject so that session minting/refresh cannot fail because of an activity bookkeeping write.
 
 ## Relationships
 
-- **`src/modules/users/index.ts`** — Imported as `@modules/users`; supplies the `userService` instance whose `touchLastActive` method performs the actual DB update.
-- **`src/modules/users/services/index.ts`** — Implements the service-layer `touchLastActive` call; also houses the once-a-day write throttle (noted in the JSDoc as living in the users repository).
-- **`src/infrastructure/adapters/logger.ts`** — Imported for the `logger.warn` call that fires when the stamp write fails.
-- **`src/modules/account/session/cookie-strategy.ts`** / **`src/modules/account/session/jwt.ts`** — Downstream consumers that invoke `recordActivity` at session-mint and keep-alive points.
+- **`src/modules/users/friends/account.ts`** — Imports `accountUserService` and calls its `touchLastActive` method to perform the actual write. The once-a-day write throttle is enforced inside the users repository layer, not here.
+- **`src/infrastructure/adapters/logger.ts`** — Imports `logger` solely to emit a `warn` entry if the stamp write fails.
+- **`src/modules/account/session/cookie-strategy.ts` / `src/modules/account/session/jwt.ts`** — Stated in the module doc comment as the two "session modes" that share this helper; expected callers of `recordActivity`.
 
 ## Notes
 
-- The function is fire-and-forget by design: it always resolves (never rejects), so callers do not need to `.catch` it. A lost stamp only costs a slightly stale `lastActiveAt` reading.
-- The once-a-day throttle is **not** in this file — it lives in the users repository layer. Do not add throttling logic here.
-- The `// Stryker disable next-line all` comment suppresses mutation-testing on the single `logger.warn` line, acknowledging that removing the catch would break the "never rejects" contract.
+- This function **never rejects**. A failed stamp is logged at `warn` level and discarded. The design intent (per the doc comment) is that a stale `lastActiveAt` reading is tolerable; a broken session is not.
+- The write-frequency throttle (once-per-day) is *not* implemented here; it lives in the users repository. Do not add a throttle in this file.
+- A Stryker mutation-testing suppression (`// Stryker disable next-line all`) sits on the `logger.warn` call, meaning the logger invocation is intentionally excluded from mutation coverage.

@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/bundle-registry.ts
-sha256: f5eaacbd50835aa33c170b8aade18e15febf29f51d189d2ed8c9a8854736bac0
-generated_at: 2026-11-08T02:39:56.053215+00:00
+sha256: b1527337363b637a08ab1c8a5b2a85f4030c3f37aed2598ff2ca28ff8860c7c5
+generated_at: 2026-11-14T17:23:14.806907+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single canonical list of every contract document this repo produces (7 bundles: 3 authored, 4 generated). The CLI, the staleness check, and the cross-cutting test all iterate this one array, so adding a new bundle is one entry here plus its spec file.
+Central registry of every contract bundle this repo produces (authored specs and generated client collections). It exists so the CLI, the staleness check, and the cross-cutting test can all iterate one list instead of hard-coding bundle names in three places. Adding a new bundle is a single entry here plus its spec file.
 
 ## Key elements
 
-- **`collectionBundle(tool, file)`** – Factory that builds a generated-bundle entry. Content is a lazy `() => import('./client-collections-bundle').then(...)` thunk so app code is never loaded at `postinstall` time.
-- **`brunoBundle` / `insomniaBundle` / `mockoonBundle` / `postmanBundle`** – The four collection entries produced by calling `collectionBundle` with the tool name and target file name (e.g. `contract.bruno.yml`).
-- **`CONTRACT_BUNDLES`** – Exported `readonly ContractBundle[]` containing all 7 bundles (`as const`).
-- **`findBundle(name)`** – Lookup by CLI handle (the `name` field); returns the bundle or `undefined`.
-- **`export * from './bundle-kinds'`** – Re-exports the `ContractBundle` type and any other constants from `bundle-kinds.ts` so consumers can import them from either file.
+- **`CONTRACT_BUNDLES`** (exported, `readonly ContractBundle[]`) — the ordered list of all bundles: `openapiBundle`, `asyncapiBundle`, `asyncapiPublicBundle`, `brunoBundle`. Every consumer iterates this array.
+- **`findBundle(name)`** (exported) — resolves a single bundle by its CLI handle string; returns `undefined` if not found.
+- **`collectionBundle(tool, file)`** (internal factory) — builds a `ContractBundle` entry for a generated client collection. Its `content` function uses a **dynamic** `import('./client-collections-bundle')` so app code is not loaded at bundle-definition time.
+- **`brunoBundle`** (internal) — the concrete Bruno collection entry (`contract.bruno.yml`).
+- **`export * from './bundle-kinds'`** — re-exports the `ContractBundle` type and any other kinds so consumers import from this file.
 
 ## Relationships
 
-- **`bundle-kinds.ts`** – Provides the `ContractBundle` type used to type every entry and the array itself.
-- **`openapi-bundle.ts`** – Supplies `openapiBundle` (the authored OpenAPI bundle).
-- **`asyncapi-bundles.ts`** – Supplies `asyncapiBundle` (full) and `asyncapiPublicBundle` (public subset).
-- **`client-collections-bundle.ts`** – Dynamically imported at build time inside each collection bundle's `content` thunk; never loaded at module-evaluation time.
-- **`modules-on-disk.ts`** – Provides `REPO_ROOT` for resolving output paths.
-- **`build-bundles.ts`** – Downstream consumer that reads `CONTRACT_BUNDLES` to drive the build/CLI.
-- **`tests/cross-cutting/contract-bundles.test.ts`** – Iterates `CONTRACT_BUNDLES` to assert invariants across all entries.
+- **`scripts/contracts/bundle-kinds.ts`** — source of the `ContractBundle` type; all exports are re-exported through this file.
+- **`scripts/contracts/openapi-bundle.ts`** — provides `openapiBundle`, the first entry in the registry.
+- **`scripts/contracts/asyncapi-bundles.ts`** — provides `asyncapiBundle` (full) and `asyncapiPublicBundle` (subset for the paired frontend).
+- **`scripts/contracts/client-collections-bundle.ts`** — dynamically imported inside `collectionBundle`'s `content` function; never imported statically.
+- **`scripts/modules-on-disk.ts`** — supplies `REPO_ROOT` so generated files are written to the repo root.
+- **`scripts/contracts/build-bundles.ts`** — the CLI build step that iterates `CONTRACT_BUNDLES` and calls each entry's `content()`.
+- **`tests/cross-cutting/contract-bundles.test.ts`** — cross-cutting test that iterates the same list to verify output shape and staleness.
 
 ## Notes
 
-- All generated (collection) bundles are `.gitignore`d and rebuilt on every install; an uncommitted file cannot be stale.
-- `asyncapi.yaml` publishes **every** channel (the repo's own types derive from it); `asyncapi.public.yaml` carries only the public half for the frontend.
-- The Insomnia entry is named `.json` per Insomnia's export convention but contains YAML — the importer keys on content, not extension.
-- A dependency-cruiser rule (`contracts-bundler-loads-no-generated-code`) enforces that the `content` import stays dynamic.
+- The dynamic import in `collectionBundle` is load-bearing: generated collections load app code that does not yet exist during `postinstall`. A dependency-cruiser rule (`contracts-bundler-loads-no-generated-code`) enforces that the import stays dynamic.
+- Authored bundles (`openapi.yaml`, `asyncapi.yaml`) are `.gitignore`d and rebuilt on every install — identical to the generated ones. The paired frontend holds byte-identical copies and never edits them.
+- `asyncapi.yaml` retains **every** channel (this repo's own types derive from it); `asyncapi.public.yaml` is the public subset delivered to the frontend.
+- Generated collection files are written to the repo root as `contract.<tool>.<ext>` and kept out of VCS via `.gitignore`.

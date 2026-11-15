@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-11-08T13:27:33.153963+00:00",
-  "head": "20ac75dd577ae2cf177b1daa0f81bdd44962c97f",
+  "generated_at": "2026-11-15T16:41:59.098546+00:00",
+  "head": "411d7d2f05bb1e4d78404ea10b0859c026d063e6",
   "threshold": 5,
   "layers": {
     "execution": {
@@ -15,10 +15,10 @@
     },
     "index": {
       "artifact": ".2brain/repo-index.json",
-      "revision": "6bb3f940666dbcec8760408212b2747f01f4395ecfea5a347e849da6df3ddbb0",
-      "chunk_count": 16848,
-      "artifact_count": 2552,
-      "artifact_digest": "714687a07c59e20ffc7e8f22cea288d96e87bae25a7b3a5bf555532747cebbc9"
+      "revision": "d21fa590261b1fd5bfc391d3467b810dd42f899674422f6ffe2b145b34a6a6c9",
+      "chunk_count": 17440,
+      "artifact_count": 2641,
+      "artifact_digest": "407e50d62addadb1f6c128657145a78e4f8d3c35ce828db9cf96297773a635cf"
     },
     "context": {
       "artifact": ".2brain/REPO_CONTEXT.md",
@@ -29,10 +29,10 @@
       "mode": "arch"
     },
     "arch": {
-      "file_count": 2477,
-      "elapsed_seconds": 9146.5,
-      "seconds_per_file": 3.693,
-      "recorded_at": "2026-11-08T13:27:30.370623+00:00"
+      "file_count": 2566,
+      "elapsed_seconds": 50.4,
+      "seconds_per_file": 0.02,
+      "recorded_at": "2026-11-15T16:41:56.407998+00:00"
     }
   }
 }

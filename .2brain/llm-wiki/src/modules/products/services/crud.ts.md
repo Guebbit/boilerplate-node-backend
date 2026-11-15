@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/services/crud.ts
-sha256: b6bc8d8fe9a6a5e13fd175e025d521a87b14b1f6c2e3577e50455d8ed11faed6
-generated_at: 2026-11-08T07:47:08.541622+00:00
+sha256: 7f43c79bf2792197a8aa7db5862656e33072e7af2fe22fbdfd07d6315566c092
+generated_at: 2026-11-14T21:27:27.717578+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,45 +9,43 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Transaction-level write steps for the product aggregate: it builds the document, enqueues domain events inside the caller's MongoDB session, and schedules post-commit side-effects (outbox nudge, audit, image queue). It is the "what gets written and what gets announced" half of product create/update; `./translated-write` composes these steps into the public create and update doors.
+Transactional write steps for product create and update: what the document holds, how dates are normalised, what gets audited, and which outbox events each write announces. Composed by `./translated-write` into the public create/update doors.
 
 ## Key elements
 
-- **`insertProduct(data, session)`** — Creates the product row inside the caller's transaction, enqueues `PRODUCT_CREATED` via the outbox, and returns the saved `ProductDocument`. Always writes `onHand: 0`; converts `releaseDate`/`restockDate` to shop-midnight via `startOfShopDay`.
-- **`finishCreate(product, context)`** — Post-commit orchestration: nudges the outbox relay, re-reads the product, records an audit entry (`ADMIN_PRODUCT_CREATED`), and enqueues a pending image. Each step isolates its own failure.
-- **`ProductCreateData`** — Input shape for create; omits server-computed fields and adds optional `releaseDate`, `restockDate`, `pendingImageKey`.
-- **`ProductUpdateData`** — Input shape for update; widens `imageUrl`, `weight`, `taxClass`, `rateType`, `sku`, `description`, `releaseDate`, `restockDate` to accept `null` (clear) in addition to the domain's "absent" semantics. Includes a `touch` flag to bump `updatedAt` when translation rows are also written.
-- **`ProductUpdateOutcome`** — Returned by the (truncated) `applyUpdate`; carries the saved doc, `oldImageUrl` for cleanup, computed `changes` map, and `changedFields` name list.
-- **`auditedChangesOf(product, data)`** — Runs the shared `auditChanges` diff over the configured field set before the write is applied.
-- **`applyDate(product, field, requested)`** — Mutates `releaseDate` or `restockDate` in place, returning a `DateChange` (`{from, to}`) or `undefined` when the value is unchanged.
-- **`announceDateChange(name, change, productId, session)`** — Enqueues `PRODUCT_RELEASE_DATE_CHANGED` or `PRODUCT_RESTOCK_DATE_CHANGED` through the outbox within the edit's transaction.
-- **`sanitizeStringArray(values)`** — Trims, drops blanks, de-duplicates; `null`/non-array → `[]`. Used for `categories` and `tags` on both create and audit diff.
-- **`enqueuePendingImage(product)`** — Post-commit hook that calls `enqueueIfImagePending` (from the image worker) with the product's writeback callback.
-- **`PRODUCT_AUDITED_FIELDS`** — Declares which fields are diffed as valued (scalars + lists), which as name-only (free text: `title`, `description`), so the audit trail never copies catalogue prose.
-- **`differs(before, after)`** — Equality check that treats `undefined`/`null` as identical.
+- **`insertProduct(data, session)`** (exported) – Inserts a `ProductDocument` via `productRepository.create` inside the caller's Mongoose transaction. Normalises `releaseDate`/`restockDate` to shop-midnight instants, sanitises `categories`/`tags`, writes `onHand: 0`, then enqueues `PRODUCT_CREATED` on the outbox.
+- **`finishCreate(product, context)`** (exported) – Post-commit chain: nudges the outbox relay, re-reads the document, records an audit entry, and hands a pending image to the worker queue. Each step isolates its own failure.
+- **`applyUpdate`** (exported, implementation truncated) – Applies a change-set to an already-fetched product and saves it inside the caller's transaction. Returns a `ProductUpdateOutcome`.
+- **`ProductUpdateOutcome`** (exported interface) – `updated`, `oldImageUrl`, `changes` (scalar/list diffs), `changedFields` (free-text + image names).
+- **`ProductCreateData` / `ProductUpdateData`** – Input types. Update widens `imageUrl`, `weight`, `taxClass`, `rateType`, `sku`, `releaseDate`, `restockDate`, `description` to accept `null` for explicit clearing.
+- **`AUDITED_SCALARS` / `AUDITED_LISTS` / `AUDITED_BY_NAME`** – Partition the fields into valued diffs, order-compared lists, and name-only free text.
+- **`auditedChangesOf(product, data)`** – Runs `auditChanges` over `PRODUCT_AUDITED_FIELDS` against the pre-change document.
+- **`applyDate(product, field, requested)`** – Mutates `releaseDate` or `restockDate` in place, returns a `DateChange` (`{from?, to?}`) only when the stored instant actually moved.
+- **`announceDateChange(name, change, productId, session)`** – Enqueues `PRODUCT_RELEASE_DATE_CHANGED` or `PRODUCT_RESTOCK_DATE_CHANGED` when a date moved.
+- **`sanitizeStringArray`** – Trims, drops blanks, de-duplicates; `null`/non-array → `[]`.
+- **`enqueuePendingImage(product)`** – Post-commit wrapper that calls `enqueueIfImagePending` with the product's writeback callback.
 
 ## Relationships
 
-- **`@infrastructure/persistence/changes`** — `clearedOrValue` is used by `applyDate` to write `null` (clear) vs. a `Date` value into the document.
-- **`@infrastructure/persistence/versioning`** — `rearmPrecondition` is imported (presumably used in the truncated `applyUpdate` to re-arm optimistic-concurrency guards).
-- **`@infrastructure/runtime/after-commit`** — `afterCommit` wraps every post-commit step (re-read, audit, image enqueue) so it runs only after the session commits.
-- **`@kernel/outbox`** — `enqueueOutboxEvent` writes domain events (`PRODUCT_CREATED`, date-change events) inside the transaction; `nudgeOutbox` wakes the relay after commit.
-- **`@infrastructure/observability/audit-changes`** — `auditChanges`, `fieldChange`, and the `AuditedFields` type drive the structured before/after diff.
-- **`@infrastructure/observability/audit`** — `recordAudit` writes the audit trail entry on create (and presumably update).
-- **`@infrastructure/adapters/image-store`** — `imageStore` and `applyImageWriteback` provide the image persistence and the writeback callback passed to the worker.
-- **`@infrastructure/adapters/image.worker`** — `enqueueIfImagePending` submits the saved product's pending image for asynchronous processing.
-- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` (and their types) are imported for use in the (truncated) response-building portion.
-- **`@infrastructure/i18n`** — `t` is available for translated messages in error/reject responses.
-- **`../model`** — `ProductDocument` is the Mongoose schema type all functions read/write.
-- **`../events`** — `PRODUCT_CREATED`, `PRODUCT_RELEASE_DATE_CHANGED`, `PRODUCT_RESTOCK_DATE_CHANGED`, `PRODUCT_BUYABLE_AGAIN` are the domain event names enqueued.
-- **`../audit`** — `productsAuditActions` supplies the action enum values for audit entries.
-- **`../domain/buyable`** — `isBuyable` is imported (used in the truncated update logic, likely to detect the buyable-state transition that triggers `PRODUCT_BUYABLE_AGAIN`).
+- **`src/kernel/outbox.ts`** – Every write enqueues domain events (`PRODUCT_CREATED`, `PRODUCT_RELEASE_DATE_CHANGED`, `PRODUCT_RESTOCK_DATE_CHANGED`, `PRODUCT_BUYABLE_AGAIN`) through `enqueueOutboxEvent`; `finishCreate` calls `nudgeOutbox` to wake the relay.
+- **`src/infrastructure/runtime/after-commit.ts`** – All post-transaction side-effects (re-read, audit, image enqueue) are sequenced through `afterCommit` so they run only after the session is durable.
+- **`src/infrastructure/observability/audit-changes.ts`** – Provides `auditChanges`, `differs`, `fieldChange`, and the `AuditedFields` shape used to compute `{from, to}` diffs for the audit trail.
+- **`src/infrastructure/observability/audit.ts`** – `recordAudit` writes the final audit log entry in `finishCreate`.
+- **`src/infrastructure/persistence/versioning.ts`** – `rearmPrecondition` is imported to move the document's ETag/version when an edit also touched translation rows (the `touch` flag on `ProductUpdateData`).
+- **`src/infrastructure/persistence/changes.ts`** – `clearedOrValue` converts a possibly-`undefined` date into a Mongoose `null` or `Date`.
+- **`src/infrastructure/adapters/image-store.ts`** – `imageStore` / `applyImageWriteback` are the writeback callback passed to the image worker.
+- **`src/infrastructure/adapters/image.worker.ts`** – `enqueueIfImagePending` queues the pending-image job after commit.
+- **`src/modules/products/events.ts`** – Source of the four product event names enqueued on the outbox.
+- **`src/modules/products/audit.ts`** – `productsAuditActions` supplies the audit-action constant (`ADMIN_PRODUCT_CREATED`).
+- **`src/modules/products/domain/buyable.ts`** – `isBuyable` is imported (used downstream in the truncated portion).
+- **`src/modules/products/model.ts`** – `ProductDocument` is the Mongoose document type throughout.
+- **`src/infrastructure/i18n/index.ts`** – `t` is available for translated error/success messages (paired with `src/infrastructure/http/response.ts` helpers).
 
 ## Notes
 
-- **`onHand` is owned elsewhere.** This module writes `0` at create but never increments/decrements it. Stock levels are opened by the `inventory` module via the `PRODUCT_CREATED` outbox event. The dependency is one-directional (inventory imports this module, not vice-versa).
-- **`currency` is not stored.** It is always resolved live at serialization time (`applyProductAvailability` in `./model`), so it is omitted from both `ProductCreateData` and the document.
-- **`null` vs `undefined` on update fields.** `null` means "clear this field"; `undefined` means "leave it untouched." The domain type `Product` uses absent-as-zero/standard, so the update type explicitly widens those fields.
-- **Dates are shop-local.** Input is a `YYYY-MM-DD` day string; storage is the shop's midnight of that day (`startOfShopDay`). Comparisons use `getTime()` equality, not string equality.
-- **Audit never copies free text.** `title` and `description` are recorded by field name only; the `changes` map holds their values, but the audit log entry references them by name.
-- **`finishCreate` is separate from `insertProduct`** because the former's steps (re-read, audit, image queue) must not run if the transaction rolls back. The caller is responsible for invoking it only after a successful commit.
+- **`onHand` is always 0 on write.** This module never increments it; the `inventory` module subscribes to `PRODUCT_CREATED` and opens the stock level at zero. The reverse import is deliberately avoided to keep the dependency acyclic.
+- **`currency` is never persisted.** It is read live at serialization time (`applyProductAvailability` in `./model`).
+- **Dates cross the boundary as `YYYY-MM-DD` strings** and are stored as shop-midnight `Date` instants via `startOfShopDay`. `applyUpdate`'s `releaseDate`/`restockDate` accept `null` to clear.
+- **Free-text fields (`title`, `description`) are audited by name only** so the audit trail never copies catalogue prose.
+- The file is a **module** (no default export); `./translated-write` is the composition root that calls `insertProduct` → `finishCreate` or `applyUpdate` → post-commit steps.
+- The `touch` flag on `ProductUpdateData` signals that the edit also wrote translation rows outside this document, triggering `rearmPrecondition` to bump the ETag.

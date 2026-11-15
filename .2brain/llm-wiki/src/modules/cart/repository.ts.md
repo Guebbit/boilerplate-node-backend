@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/repository.ts
-sha256: 33fcbdd6942141a599e8de82e423245d4b08e966b1a842c810da9f15b617f09e
-generated_at: 2026-11-08T05:16:00.547274+00:00
+sha256: 7f85e6e82b89e9e1ebb15f3da298d2e8359bea849ef495d133409c77b0f1003d
+generated_at: 2026-11-14T19:29:36.966217+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cart repository that provides standard CRUD (via the shared repository factory) plus the six domain-specific writes a cart actually takes: upsert a line, remove a line, clear all lines (plain and version-guarded), set shipping method, and the two cleanup writes for product/user deletion. All writes are keyed by `userId` alone, since the schema's `unique: true` index makes that a complete address.
+Provides the cart's data-access layer: a standard CRUD repository (via `createRepository`) plus the six domain-specific writes a cart actually performs — upsert/remove/clear lines and the two cleanup writes triggered by product or user deletion. All line mutations enforce per-line and per-cart quantity ceilings atomically inside the MongoDB filter, and bump `__v` so checkout's version-guarded clear can detect in-flight modifications.
 
 ## Key elements
 
-- **`CartLineMode`** (`'set' | 'add' | 'update'`) — controls how `upsertLine` treats an existing line's quantity.
-- **`LineWrite`** — `{ cart, created }` result shape returned by line writes.
-- **`QUANTITY_LIMIT`** / **`NO_LINE`** — sentinel strings returned when `'add'` hits the per-line ceiling or `'update'` finds no matching line.
-- **`upsertLine(userId, productId, quantity, mode, attemptsLeft?)`** — the core write. Builds a filter that embeds the quantity condition so mongod evaluates it under the document lock. On a filter miss, dispatches to a mode-specific resolver (`unchangedOrPushed`, `unchangedOrMissing`, `resolveAddMiss`) that either writes, returns a sentinel, or signals `RETRY` to re-run the whole call. Catches duplicate-key errors and retries up to 3 times.
-- **`pushNewLine`** — `findOneAndUpdate` with `$push` + `$inc: { __v: 1 }` + `upsert: true`; used when no existing line matches.
-- **`unchangedOrPushed`** / **`unchangedOrMissing`** / **`resolveAddMiss`** — miss-handlers for `'set'`, `'update'`, and `'add'` respectively; each settles the ambiguity of a concurrent write with one extra read.
-- **`cartRepository`** — the exported object. Spreads `createRepository(cartModel, { transform: applyCartTransform })` for standard CRUD, then adds `findByUserId`, `upsertLine`, `removeLine`, `clearLines`, `clearLinesIfUnchanged` (version-guarded, accepts a `ClientSession`), `setShippingMethod`, `deleteByUserId`, and `removeProductFromAll`.
+- **`CartLineMode`** (`'set' | 'add' | 'update'`) — controls how `upsertLine` treats a quantity: `'set'` replaces (never creates), `'add'` increments, `'update'` replaces only if the line already exists.
+- **`LineWrite`** — `{ cart, created }` shape returned on successful line writes.
+- **`QUANTITY_LIMIT` / `LINE_LIMIT` / `NO_LINE`** — sentinel strings (not exceptions) resolved when a write is refused by a ceiling or the line is absent.
+- **`upsertLine(userId, productId, quantity, mode, attemptsLeft?)`** — the primary line writer. Encodes concurrency guards in the filter (`$elemMatch` with quantity conditions), retries on duplicate-key collisions (up to 3 attempts), and dispatches to miss-resolvers per mode.
+- **`pushNewLine`** — atomic `$push` + `$inc __v` with a line-count filter; resolves `LINE_LIMIT` on duplicate-key + full-cart read-back.
+- **`unchangedOrPushed` / `unchangedOrMissing` / `resolveAddMiss`** — miss-path resolvers that disambiguate "no line yet" from "concurrent write moved it" and either push, return a sentinel, or signal `RETRY`.
+- **`RETRY`** — internal `Symbol` that tells `upsertLine` to re-execute the entire call with one fewer attempt.
 
 ## Relationships
 
-- **`./model`** — imports `cartModel` (Mongoose model), `applyCartTransform` (document→wire mapper), and the `CartDocument` type. All reads/writes go through `cartModel`.
-- **`./config`** — imports `cartLineMax()` for the per-line quantity ceiling used in the `'add'` filter and new-line guard.
-- **`@infrastructure/persistence/create-repository`** — provides `createRepository` (CRUD factory), `toObjectId`, and the `Repository` / `Wire` type helpers.
-- **`@infrastructure/persistence/mongo-errors`** — imports `isDuplicateKey` to identify contended-upsert rejections for the retry loop.
-- **Services** (`checkout`, `cleanup`, `items`, `merge`) — consume `cartRepository` for their respective reads and writes; `clearLinesIfUnchanged` is the version-guarded clear that `checkout` calls conditionally on its earlier read.
-- **Integration tests** (`backorder`, `checkout-interleavings`, `checkout-stock-divergence`, `checkout-version`, `line-availability`, `merge-effects`) — exercise the concurrency paths (duplicate-key retry, `__v` bump, version guard) through this repository.
+- **`./model`** — imports `cartModel` (the Mongoose model), `applyCartTransform`, and the `CartDocument` type; all reads/writes go through this model.
+- **`./config`** — reads `cartLineMax()` and `cartMaxLines()` at call time to build the filter conditions.
+- **`@infrastructure/persistence/create-repository`** — imports `createRepository` (factory for the standard CRUD half), `toObjectId` (string→ObjectId coercion), and the `Repository` / `Wire` types.
+- **`@infrastructure/persistence/mongo-errors`** — uses `isDuplicateKey` to detect and retry contended upserts rather than surfacing them.
+- **`./services/items`** — primary caller of `upsertLine` for add/set/update line operations.
+- **`./services/checkout`** — calls the version-guarded clear (`clearLinesIfUnchanged`) and reads `__v` to detect mid-checkout mutations.
+- **`./services/cleanup`** — issues the product-deletion and user-deletion writes.
+- **`./services/merge`** — calls the clear-all-then-repush sequence.
+- **Tests** (`tests/integration/*`) — exercise the retry, ceiling, and interleaving paths end-to-end against MongoDB.
 
 ## Notes
 
-- **`$elemMatch` is mandatory for the positional operator.** Two separate top-level `'items.x'` conditions can each match *different* array elements, causing `items.$` to update the wrong line. The code comments link the MongoDB docs page explaining this.
-- **`__v` is bumped in the same atomic update as the quantity write**, not in a separate `$inc`. Skipping it would make a concurrent write invisible to `clearLinesIfUnchanged`'s version guard, silently dropping a line mid-checkout.
-- **`'set'` with an identical quantity is a deliberate no-op** (no `__v` bump) so that repeating a PUT leaves state unchanged (RFC 9110 §9.2.2).
-- **`lineMax` is read once per `upsertLine` call** so the filter and the retry-resolver agree on the same ceiling within a single logical write.
-- **`RETRY` is a module-private `Symbol`**; it is never returned to callers. The retry is internal and bounded by `attemptsLeft` (default 3).
-- **The export's type is written out explicitly** rather than inferred — Mongoose's generics are too large for TS to resolve at the export boundary (TS7056).
-- **`findByUserId` returning `null`** means the user has never added anything; this is treated as equivalent to an empty cart (no placeholder document is created).
+- **Sentinels over exceptions.** `QUANTITY_LIMIT`, `LINE_LIMIT`, `NO_LINE`, and the internal `RETRY` symbol are resolved values, not thrown errors. Callers must narrow the union return type.
+- **`$elemMatch` is load-bearing.** Two separate top-level `items.x` conditions are *not* equivalent; MongoDB only guarantees positional `$` binding when both conditions are joined under one `$elemMatch`. The code uses `$elemMatch` deliberately to avoid updating the wrong array element.
+- **`__v` is bumped with the write, not separately.** A line added while checkout is in flight must be visible to checkout's version-guarded clear; a separate `$inc` could be lost to the ordering window.
+- **Duplicate-key retry is bounded** by `attemptsLeft` (default 3). Exhaustion throws a plain `Error`; this path is expected to be rare.
+- **`lineMax` is read once per call.** Both the filter condition and the miss-resolution must agree on the same ceiling; re-reading `cartLineMax()` mid-retry is intentionally avoided.
+- The file is the import target for all cart services; there is no other data-access path for cart documents.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/asyncapi.webhooks.yaml
-sha256: c365f24d8479c8b5851970941fe9de2f178ce7b8081baca3bf69cdf4277b9c49
-generated_at: 2026-11-08T08:42:56.927634+00:00
+sha256: 84837071cac16e09e041b8dbafd8b30901fc2fccd5380459481ef0f7e5ae42af
+generated_at: 2026-11-14T22:18:52.106459+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-AsyncAPI **fragment** (not a standalone document) that declares the two webhook events emitted by the users module — `user.erased` and `user.updated`. It exists so that a global AsyncAPI document can be assembled by merging module-level fragments, and so that the event contract (envelope shape, field enums, firing conditions) is documented alongside the code that fires it.
+Declares the two webhook events that the users module emits (`user.erased`, `user.updated`). It is a **fragment**—not a standalone AsyncAPI document—that gets merged into the `webhooks` section of `src/modules/webhooks/asyncapi.yaml` by the contract bundler. Its existence lets the users module describe its outgoing events without duplicating shared servers or schemas.
 
 ## Key elements
 
-- **Channels** — `user.erased` and `user.updated`; each binds to the shared `subscriberEndpoint` server and references its message component.
-- **Operations** — `webhookUserErased` and `webhookUserUpdated`; both are `send` actions. Their `description` fields document *when* each fires (transaction boundaries, what is excluded) and the GDPR rationale for the id-only payload.
-- **`components.messages`** — `UserErasedEvent` and `UserUpdatedEvent`; each carries `WebhookHeaders` (defined externally) plus a typed envelope payload.
-- **`components.schemas`**
-  - `UserIdPayload` — `{ userId }`, the entire `user.erased` data body.
-  - `UserErasedEnvelope` — Standard Webhooks envelope (`type`, `timestamp`, `data → UserIdPayload`).
-  - `UserUpdatedPayload` — `{ userId, changed: string[] }` where `changed` is an enum of mutable fields (`username`, `email`, `phone`, `website`, `imageUrl`); never carries values.
-  - `UserUpdatedEnvelope` — Standard Webhooks envelope wrapping `UserUpdatedPayload`.
+- **`channels.user.erased`** / **`channels.user.updated`** — Channel definitions with `x-read-rule: read:User`, bound to the shared `subscriberEndpoint` server.
+- **`operations.webhookUserErased`** / **`operations.webhookUserUpdated`** — `send` actions that pair each channel with its message.
+- **`components.schemas.UserErasedEnvelope`** — Standard Webhooks envelope (`type`, `timestamp`, `data`); `data` is `UserIdPayload` (a single `userId`, `additionalProperties: false`).
+- **`components.schemas.UserUpdatedEnvelope`** — Same envelope shape; `data` is `UserUpdatedPayload` carrying `userId` plus a `changed` array (field names only, min 1 item, enum of `username | email | phone | website | imageUrl`).
+- **`components.messages.UserErasedEvent`** / **`UserUpdatedEvent`** — Message wrappers that reference `#/components/schemas/WebhookHeaders` (declared in the parent document) and the respective envelope schema.
 
 ## Relationships
 
-- **`src/modules/webhooks/asyncapi.yaml`** — The parent document that declares `#/servers/subscriberEndpoint`, `#/components/schemas/WebhookHeaders`, and `#/components/schemas/Id`. This fragment's `$ref`s resolve only after merge.
-- **`scripts/contracts/asyncapi-section-fragments.ts`** — The build-time bundler that inlines this fragment into the `webhooks` section of the global AsyncAPI document, but only while the users module is present in the project.
-- **`src/modules/users/module.ts`** — The runtime source of the events; its `publicEvents` map is what actually dispatches `user.erased` / `user.updated` on the bus.
-- **`src/modules/users/openapi.yaml`** — Defines the REST endpoints recipients use to refetch account data after receiving a `user.updated` event (the event itself carries no values).
-- **`docs/theory/data-protection.md`** — Referenced in the file header as the GDPR Art. 19 justification for the id-only payload and the "no fresh copy in delivery log" constraint.
+- **`src/modules/webhooks/asyncapi.yaml`** — Parent document. This fragment `$ref`s its `#/servers/subscriberEndpoint` and `#/components/schemas/WebhookHeaders`. The bundler inlines this file's channels, operations, and components into that parent.
+- **`scripts/contracts/asyncapi-section-fragments.ts`** — The build-time script that discovers module fragments like this one and merges them into the parent AsyncAPI document only while the users module is present.
+- **`src/modules/users/module.ts`** — Its `publicEvents` export is the runtime surface that fires the events documented here; this YAML describes that contract.
+- **`src/modules/users/openapi.yaml`** — Sibling REST spec. Recipients use the API described there to refetch full account data after receiving an id-only webhook payload.
+- **`docs/theory/data-protection.md`** — Cited as the rationale (GDPR Art. 19) for why payloads carry only `userId` and never a copy of personal data.
 
 ## Notes
 
-- **Fragment, not document:** The `$ref` targets (`subscriberEndpoint`, `WebhookHeaders`, `Id`) do not live in this file. Reading it in isolation will show unresolved references.
-- **`additionalProperties: false`** on every schema — the payload is closed; adding a field requires a schema change here and in the firing code.
-- **`user.updated` excludes preferences:** locale, consent changes, address-book mutations, unconfirmed email-change requests, and resends of already-stored data do **not** fire the event. Only the five enumerated field changes do.
-- **`user.erased` fires inside the deletion transaction** (hard delete, post-grace purge, inactivity erase) — never at lock, grace start, or soft delete.
-- **`changed` array has `minItems: 1`** — the event is never sent with an empty list.
+- **Id-only payloads by design.** The erasure event carries nothing but `userId` so the delivery log never retains a fresh copy of an erased person's address. Recipients are expected to drop local copies on receipt.
+- **`changed` is a name list, not a value list.** `UserUpdatedPayload.changed` enumerates *which* fields moved; it never includes the new values. Recipients must refetch via the REST API.
+- **Not every mutation fires the update event.** Per the operation description, preference changes (locale, consent), the address book, and unconfirmed email-change requests do **not** trigger it.
+- **`additionalProperties: false`** on every payload schema. Do not add fields to the payload without updating this fragment and the parent spec.
+- **Fragment, not a document.** The `$ref` paths (`#/servers/…`, `#/components/schemas/WebhookHeaders`) resolve only after the bundler merges this file into `src/modules/webhooks/asyncapi.yaml`. Linting this file in isolation will report unresolved references.

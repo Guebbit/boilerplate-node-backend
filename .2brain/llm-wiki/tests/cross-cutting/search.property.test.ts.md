@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/search.property.test.ts
-sha256: 9b631bd90bbdc42471c407257ddf0119b893fc04d3489429c133e4ae8369609c
-generated_at: 2026-11-08T09:32:15.463877+00:00
+sha256: c704ec988e5abf959543c0d1e15f13ef4f3126335b69d7df752172f4c4c7f075
+generated_at: 2026-11-14T23:07:28.630763+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Property-based tests (fast-check) that verify security-critical invariants of `escapeRegex` and `normalizePagination` for **every** possible input, not just sampled examples. `escapeRegex` is a denial-of-service control against MongoDB `$regex` catastrophic backtracking on public endpoints; `normalizePagination` must never emit a `skip` value that would crash the Mongo driver. These tests exist because a fixed table of examples cannot prove "no input reaches the engine as a live pattern."
+Property-based tests (via `fast-check`) that verify security and correctness guarantees of the search persistence layer over **arbitrary** inputs. The two central claims are: (1) `escapeRegex` turns any user string into a literal-match `RegExp` with no catastrophic-backtracking or compile-error risk, and (2) `normalizePagination` never produces a `skip` value that would cause a Mongo driver error. The file exists to close the gap that example-based tests (in sibling files) cannot: totality over unbounded input space.
 
 ## Key elements
 
-- **`RUN`** — shared assertion config: fixed seed `20_260_809`, 300 runs, `endOnFailure: true`.
-- **`requestValue()`** — fast-check arbitrary that mirrors the `unknown` type of pagination fields (repeated query keys, arbitrary JSON bodies).
-- **`describe('escapeRegex')`** — five properties: compilability, literal round-trip match, metacharacter neutralisation (generated from the metacharacter alphabet), no over-escaping of alphanumerics, and non-idempotence (stated so callers don't double-wrap).
-- **`describe('addTextFilter / addRegexFilter')`** — three properties: no uncompilable `$regex` in produced filters, empty/whitespace input adds no filter clause, one `$or` clause per requested field.
-- **`describe('normalizePagination')`** — four properties: `skip` is never negative or NaN for any input, `skip === (page−1) * pageSize`, page 1 maps to skip 0, and `buildPaginatedMeta` reports zero pages for zero items.
+- **`RUN`** — shared `fast-check` config: fixed seed `20260809`, 300 runs, `endOnFailure: true`. All `fc.assert` calls in the file use this.
+- **`requestValue()`** — an `fc.Arbitrary<unknown>` combining `fc.anything()`, `fc.integer()`, `fc.string()`, `fc.constant(undefined)`. Models the full width of what a repeated query key or JSON body can deliver to pagination fields (typed `unknown` by design).
+- **`describe('escapeRegex')`** — five properties: compilability, self-match round-trip, metacharacter neutralisation (drawn from the metacharacter alphabet via `constantFrom` + `array`), no over-escaping of alphanumerics, and explicit non-idempotence.
+- **`describe('addTextFilter / addRegexFilter')`** — three properties: every generated filter clause compiles, blank/whitespace-only input writes no filter at all, and clause count equals field count.
+- **`describe('normalizePagination')`** — four properties: `skip` is always a non-negative integer for any `unknown` input; `skip === (page-1)*pageSize` identity; page 1 maps to skip 0; `buildPaginatedMeta` reports 0 pages for 0 items.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/search.ts`** — sole source under test. Imports `escapeRegex`, `normalizePagination`, `addTextFilter`, `addRegexFilter`, `buildPaginatedMeta`. Every property asserts on the *behaviour* of these functions (compilation, matching, computed `skip`), not on internal string shapes.
-- **`fast-check` (`fc`)** — property oracle; all `fc.assert(fc.property(...))` calls reference the shared `RUN` constant.
-- **`search-regex.test.ts` / `search-pagination.test.ts`** (sibling example-based suites, noted in header comment) — intentionally complementary. They own per-metacharacter named cases, timing assertions, and the `1.5 ≠ 1x5` negative case; this file owns totality over arbitrary strings, generated metacharacter *combinations*, and the non-idempotence property. The split is deliberate to avoid duplicate maintenance under the repo's static-mutant replays.
+- **`src/infrastructure/persistence/search.ts`** — the sole production import. Provides `escapeRegex`, `normalizePagination`, `addTextFilter`, `addRegexFilter`, and `buildPaginatedMeta`, all of which are the subjects under test. No other module is imported.
 
 ## Notes
 
-- **Seed is fixed.** Counterexamples are written back as examples with their seed (per the file header); the seed in `RUN` is therefore the canonical reproduction point.
-- **`escapeRegex` is applied exactly once.** The non-idempotence property is a *guard against a future refactor* that wraps it a second time, not a bug report.
-- **Metacharacter array is built via `fc.constantFrom(...String.raw`$()*+.?[\]^{|}`)`** rather than a character-alphabet helper, to stay stable across fast-check major versions.
-- **`requestValue()` is deliberately as wide as the type system allows** (`fc.anything()` included); narrowing it would weaken the "any input" claim.
-- The `skip` invariant (`skip === (page−1) * pageSize`) matters because `search` issues `count` and `find` as two separate queries; a mismatched `skip` would silently drop rows.
+- The metacharacter list is built with `fc.constantFrom(...metacharacters)` + `fc.array` rather than a character-alphabet helper, to stay agnostic across `fast-check` major versions (the helper's name has moved). An eslint-disable for `no-misused-spread` is required; it is safe because the alphabet is ASCII-only.
+- `fast-check`'s `stringMatching` rejects the `i` flag, so the alphanumeric "no over-escape" property needs an eslint-disable for `regexp/use-ignore-case`.
+- The non-idempotence test is a **deterministic** assertion (not `fc.assert`) intentionally placed inside the `escapeRegex` block to document that double-escaping breaks matching — a guard against a future "hardening" refactor.
+- `endOnFailure: true` means a single counterexample halts the run; the seeded config is meant to be replayable when a failure is reported.
+- The file is described in its own header as part of a **static-mutant-replayed** suite, so duplicated assertions across files multiply maintenance cost.

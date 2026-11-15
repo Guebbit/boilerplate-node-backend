@@ -1,7 +1,7 @@
 ---
 source: src/modules/invoicing/tests/contract/api.contract.test.ts
-sha256: fac3b0cfef7e5cd489db0fdfaa152ea0897c89955bfd60e6c8f27c76bd5b2481
-generated_at: 2026-11-08T06:16:21.984364+00:00
+sha256: 66e320d21459871abd386165a7cdc086d570bc1e0b27145d5ab2303fe1e2c1b5
+generated_at: 2026-11-14T20:14:10.996455+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the three invoicing endpoints under `/orders/{id}` (invoice PDF, credit-note list, credit-note PDF). They verify that each declared response branch — status code, error-code body, content-type — matches the spec over HTTP. Ownership scoping, the busy-queue (503), and number-series logic are explicitly delegated to `tests/integration/`.
+Contract tests for the three invoicing routes mounted under `/orders/{id}`: the invoice PDF, the credit-note list, and a single credit-note PDF. Each test drives one declared API branch over HTTP and asserts the response matches the documented spec (status code, error shape, content type). Ownership-scope, busy-queue (503), and number-series concerns are explicitly out of scope and belong to `tests/integration/`.
 
 ## Key elements
 
-- **`jest.mock('@infrastructure/adapters/pdf')`** — stubs `renderHtmlToPdf` to resolve a fixed `Buffer` so no real Chromium is needed.
-- **`setupTestDb()`** — initialises the in-memory / test database for the whole suite.
-- **`afterEach(emptyFileSandbox)`** — sweeps any PDF the case wrote into the sandbox so tests don't leak files.
-- **`customerWithOrder()`** — local helper that creates an authenticated user, a product, and a single unpaid order; returns `{ bearer, orderId }` for reuse across tests.
-- **`describe('GET /orders/{id}/invoice')`** — three cases: 404 with `ORDER_INVOICE_NOT_ISSUED` when not yet invoiced; 200 + `application/pdf` after `orderService.markPaid` (polled via `eventually` because the invoice is frozen by a fire-and-forget listener); 401 for unauthenticated callers.
-- **`describe('GET /orders/{id}/credit-notes')`** — 200 with `{ items: [] }` when no refund exists; 401 for unauthenticated.
-- **`describe('GET /orders/{id}/credit-notes/{creditNoteId}')`** — 404 for a non-existent credit-note id; 401 for unauthenticated.
+- **`customerWithOrder()`** – shared helper: authenticates a user, creates a product, and places a single-item order that is *not* yet paid. Returns the bearer token and the order ID as a string.
+- **`describe('GET /orders/{id}/invoice')`** – two cases: 404 + `ORDER_INVOICE_NOT_ISSUED` error when unpaid; 200 + `application/pdf` content-type after the order is marked paid.
+- **`describe('GET /orders/{id}/credit-notes')`** – one case: 200 with `{ items: [] }` for an order that was never refunded.
+- **`describe('GET /orders/{id}/credit-notes/{creditNoteId}')`** – one case: 404 when the credit-note ID does not exist (uses `MISSING_ID`).
+- **`jest.mock('@infrastructure/adapters/pdf')`** – replaces `renderHtmlToPdf` with a stub that resolves to a fixed `Buffer`, so no real browser is needed.
+- **`setupTestDb()`** – initialises the test database before the suite.
+- **`afterEach(emptyFileSandbox)`** – removes any PDF the render step wrote into the file sandbox.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — side-effect import (`import '@tests/contract'`) that wires up the contract-test harness (expectation matchers, spec loading).
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb`.
-- **`tests/support/http.ts`** — provides `api()` (supertest wrapper) and `authenticateAs()` for bearer-token fixtures.
-- **`tests/support/file-sandbox.ts`** — provides `emptyFileSandbox` used in `afterEach`.
-- **`tests/support/eventually.ts`** — polling helper awaited after `markPaid` because the invoice freeze is asynchronous.
-- **`tests/support/ids.ts`** — provides the `MISSING_ID` sentinel for "non-existent id" cases.
-- **`src/modules/orders/index.ts`** — source of `orderService` (called to transition an order to *paid* before the 200-invoice test).
-- **`src/modules/orders/tests/factories.ts`** — provides `createOrder` and `toOrderItem` for seeding a realistic order.
-- **`src/modules/products/tests/factories.ts`** — provides `createProduct` used to build the order line.
+- **`tests/support/contract.ts`** – side-effect import (`@tests/contract`) that wires up shared contract-test utilities/assertions.
+- **`tests/support/setup-test-db.ts`** – provides `setupTestDb` to prepare a clean schema per run.
+- **`tests/support/http.ts`** – provides `api()` (supertest-like client) and `authenticateAs` for bearer-token auth.
+- **`src/modules/orders/friends/payments.ts`** – `markPaid` transitions an order to paid, triggering the invoice-freeze side effect the tests rely on.
+- **`src/modules/products/tests/factories.ts`** – `createProduct` supplies the line-item product.
+- **`src/modules/orders/tests/factories.ts`** – `createOrder` and `toOrderItem` build the order fixture.
+- **`tests/support/file-sandbox.ts`** – `emptyFileSandbox` cleans up rendered PDF artefacts between tests.
+- **`tests/support/eventually.ts`** – `eventually` polls until the async invoice-freeze listener has completed (200 on the invoice endpoint).
+- **`tests/support/ids.ts`** – `MISSING_ID` is a sentinel ID guaranteed to not exist, used for the 404 case.
 
 ## Notes
 
-- The invoice is frozen by a **fire-and-forget** listener after `markPaid`; the test must poll with `eventually` before asserting 200. A plain `await orderService.markPaid(...)` is not sufficient.
-- `afterEach(emptyFileSandbox)` is mandatory: without it, a PDF written by one test case will be served (cached) to the next, masking a 404 as a 200.
-- The file does **not** test the 503 busy-queue path, ownership (403) scope, or invoice number-series sequencing — those are covered in `tests/integration/` per the module doc-comment.
+- The paid-invoice test uses `eventually` because the invoice is frozen by a **fire-and-forget event listener** after `markPaid`; the 200 response is not synchronous with the payment call.
+- PDF rendering is fully mocked at the adapter level, so these tests verify HTTP contract (status, headers, error shape) but **not** the visual content of the PDF.
+- The file deliberately does **not** cover 503 (busy queue), number-series allocation, or cross-tenant ownership checks—those live in `tests/integration/`.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/tasks/tests/integration/erasure-notice.test.ts
-sha256: b9d3b7dee9d4b04bf77a53b21bd986e7d04654a3be10cc4b50141e0c9f56b6e8
-generated_at: 2026-11-08T08:38:56.951580+00:00
+sha256: f2f5dbaac8267219903ac634e27eaedb2c0de72e6d524f69dc5cb79d37212077
+generated_at: 2026-11-14T22:14:24.242176+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test proving that, when a user account is erased, exactly one `tasks.erasure-notice` email is queued to the support mailbox containing **only** the `[#ref]` identifiers of that user's deleted contact messages. It asserts that no personal data (email address, subject, body text, username) leaks into the notice. The test drives all four erasure paths through the `users` module's real service calls so the notice is proven to survive the transaction and any deferred step.
+Integration test that verifies, across all four user-erasure paths, that a single support-mailbox notice is enqueued containing only the deleted messages' `[#ref]` identifiers—and that no sensitive fields (sender email, subject, body, username) leak into the envelope or payload. It confirms the notice survives the erasure transaction and any deferred event flush.
 
 ## Key elements
 
-- **`doors`** — array of four `[label, eraserFn]` tuples covering every erasure path: admin hard-delete (`userService.removeById`), scheduled purge (`eraseAsScheduled`), inactivity reaper (`eraseAsInactive`), and ledger replay (`userService.eraseAgain`).
-- **`messageFrom(userId, email, subject)`** — helper that creates a task (contact message) via `taskService.create`.
-- **`notices()`** — filters the mocked `enqueueEmail` call log for the `tasks.erasure-notice` template.
-- **`describe.each(doors)`** — parameterized block so both assertions run against all four erasure paths.
-- **Test 1** — asserts tasks are gone, exactly one notice is queued, the subject contains each `[#<taskRef>]`, and the serialized envelope+data contain none of the user's PII.
-- **Test 2** — asserts zero notices are queued when the erased account has no messages.
-- **Jest mock** — `@infrastructure/adapters/mailer` is replaced with a `jest.fn()` for `enqueueEmail`; no real mail is sent.
+- **`doors`** — Array of four `[label, fn]` tuples, each a distinct way to erase an account: admin hard-delete, scheduled purge, inactivity reaper, and erasure-ledger replay.
+- **`messageFrom(userId, email, subject)`** — Helper that creates a task/message bound to the user via `taskService.create`.
+- **`notices()`** — Filters `mockEnqueueEmail` calls to only those using the `'tasks.erasure-notice'` template.
+- **`describe.each(doors)`** — Parametrized block running both assertions against every erasure door.
+- **Test 1** ("mails the support mailbox…"): asserts tasks are gone, exactly one notice is sent, the subject contains both `taskRef`-formatted IDs, and no secret string appears anywhere in the serialized envelope+data.
+- **Test 2** ("sends nothing…"): asserts zero notices when the erased account owned no messages.
+- **Mailer mock** — `enqueueEmail` is replaced at module level; the real adapter is never invoked.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/mailer.ts`** — `enqueueEmail` is the sole mock target; the test inspects its call arguments (envelope, template, data).
-- **`src/kernel/events.ts`** — `resetDomainEvents` clears the event bus between tests.
-- **`src/kernel/permissions.ts`** — `systemCallerContext('User')` supplies the caller for the ledger-replay door.
-- **`src/kernel/registry.ts`** — `registerModules(enabledModules)` re-registers domain modules each test.
-- **`src/modules.ts`** — exports `enabledModules` used in registration.
-- **`src/modules/tasks/emails.ts`** — `taskRef(_id)` computes the `[#…]` string the test expects in the subject.
-- **`src/modules/tasks/service.ts`** — `taskService.create` is how the fixture messages are made.
-- **`src/modules/tasks/tests/factories.ts`** — `findAllTasks` verifies the user's tasks are actually deleted.
-- **`src/modules/users/index.ts`** / **`src/modules/users/services/index.ts`** — `userService.removeById` and `userService.eraseAgain` are the real erasure doors under test.
-- **`src/modules/users/model.ts`** — `UserDocument` type for the parameter in `doors`.
-- **`src/modules/users/tests/factories.ts`** — `createUser`, `eraseAsScheduled`, `eraseAsInactive` build fixtures and drive two of the four doors.
-- **`tests/support/callers.ts`** — `callerContextAs('admin')` for the admin door.
-- **`tests/support/environment.ts`** — `setEnvironment` sets `NODE_SUPPORT_EMAIL` (the recipient asserted in the test).
-- **`tests/support/setup-test-db.ts`** — `setupTestDb` initialises the in-memory/SQLite test database.
+- **`src/infrastructure/adapters/mailer.ts`** — `enqueueEmail` is the mocked dependency; all assertions read from its call log.
+- **`src/modules/tasks/emails.ts`** — Provides `taskRef`, the function used to build the expected `[#…]` identifier in assertions.
+- **`src/modules/tasks/services/index.ts`** — Source of the `taskService` import used to seed test messages before erasure.
+- **`src/modules/tasks/tests/factories.ts`** — `findAllTasks` confirms the messages were actually removed.
+- **`src/modules/users/tests/factories.ts`** — Supplies `createUser`, `eraseAsScheduled`, `eraseAsInactive`.
+- **`src/modules/users/index.ts`** — Exports `userService` (admin hard-delete door) and the `UserDocument` type.
+- **`src/modules/users/friends/account.ts`** — Source of the `accountUserService` import used as the ledger-replay erasure door.
+- **`src/kernel/permissions.ts`** — `callerContextAs('admin')` and `systemCallerContext('User')` provide the auth context for each door.
+- **`src/kernel/events.ts`** — `resetDomainEvents` isolates the in-memory event bus between tests.
+- **`src/kernel/registry.ts`** + **`src/modules.ts`** — `registerModules(enabledModules)` wires the full module graph so cross-module events fire.
+- **`tests/support/environment.ts`** — `setEnvironment` sets `NODE_SUPPORT_EMAIL`, the recipient the test asserts on.
+- **`tests/support/callers.ts`** — `callerContextAs` builds the admin caller identity.
 
 ## Notes
 
-- The mock resets and re-registers modules in `beforeEach`; forgetting either would cause cross-test leakage of queued emails or stale module registrations.
-- The PII check serialises **both** the envelope and the data payload via `JSON.stringify` and scans for known sensitive strings — adding a new field to the email template without scrubbing will be caught here.
-- `notices()` matches on the exact template string `tasks.erasure-notice`; renaming that template in `src/modules/tasks/emails.ts` will silently break this filter (the test would then assert zero notices and pass vacuously on the "no messages" case, but fail the "has messages" case).
+- The test intentionally does **not** mock the users or tasks modules—only the mailer adapter—so the full event/transaction lifecycle is exercised.
+- The single-notice invariant (exactly one email for N messages) is the core contract under test; a second call would indicate a duplicate side-effect.
+- `NODE_SUPPORT_EMAIL` must be set before any erasure runs; the recipient assertion (`desk@example.com`) would silently pass against `undefined` if the env step were removed.
+- `resetDomainEvents` in both `beforeEach` and `afterEach` is deliberate: it guards against event bleed from a failing test into the next one.

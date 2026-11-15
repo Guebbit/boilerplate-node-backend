@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/tests/unit/get-observability-events.test.ts
-sha256: e2a37500281829c490091a3517667a7f9cbd0257d4001073f8af59d7af5ff463
-generated_at: 2026-11-08T06:42:44.841600+00:00
+sha256: afb337f2c77e51a6ba0239b4e0ccf607d8c7b147c725c1a127d802c27130cc0a
+generated_at: 2026-11-14T20:30:33.957661+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test for the `GET /observability/events` controller handler. It verifies that the handler delegates entirely to the SSE streamer (passing the raw `Response` and a permission-recheck callback) and does not write to the response itself. The recheck path is the focus: it is the only mechanism that can revoke a caller mid-stream, since an SSE connection has no "next request" to trigger a fresh authorization check.
+Unit tests for the `getObservabilityEvents` controller (the `GET /observability/events` endpoint). Verifies that the handler delegates entirely to the SSE streamer and wires a permission-recheck callback correctly, without writing anything to the response itself.
 
 ## Key elements
 
-- **`cookieRequest()`** – builds a minimal stub `Request` carrying a `sessionRecheck` mock, simulating the state left behind by `requirePermissionViaCookie`.
-- **`streamObservabilityMetrics`** (spy on `observabilityService`) – the service method the handler must call; its arguments are the assertion surface.
-- **`jest.mock('@kernel/middlewares/authorizations', …)`** – replaces only `stillHoldsRuleViaCookie` with a `jest.fn()` while preserving the rest of the module.
-- **`describe('GET /observability/events')`** – two test cases:
-  - *Hands the raw response and a recheck to the streamer* – asserts the handler calls `streamObservabilityMetrics(response, someFunction)` and writes nothing itself.
-  - *Wires the recheck to the key and the request the stream connected with* – invokes the recheck callback and asserts it calls `stillHoldsRuleViaCookie(request, 'read', 'ObservabilitySnapshot')`.
+- **`cookieRequest()`** – Factory returning a typed stub `Request` carrying `sessionRecheck` and `authContext: { id: 'staff-1' }`, simulating what `requirePermissionViaCookie` leaves behind.
+- **`streamObservabilityMetrics` spy** – `jest.spyOn(observabilityService, 'streamObservabilityMetrics')`, stubbed to return `undefined` so the test only inspects arguments.
+- **Partial mock of `authorizations`** – Spreads `jest.requireActual` and replaces only `stillHoldsRuleViaCookie` with a `jest.fn()`, leaving all other guards in that module untouched.
+- **Test 1** – Asserts the handler calls `streamObservabilityMetrics(response, 'staff-1', expect.any(Function))` and writes nothing to the response before the streamer takes over.
+- **Test 2** – Extracts the third argument (the recheck callback) from the spy's call record, awaits it, and asserts it invokes `stillHoldsRuleViaCookie(request, 'read', 'ObservabilitySnapshot')`.
 
 ## Relationships
 
-- **`src/modules/observability/controllers/get-observability-events.ts`** – system under test; the handler under verification.
-- **`src/modules/observability/services/index.ts`** – provides `observabilityService`, whose `streamObservabilityMetrics` is spied on.
-- **`src/kernel/middlewares/authorizations.ts`** – partially mocked to isolate `stillHoldsRuleViaCookie`; all other guards in that module are left intact.
-- **`tests/support/stub.ts`** – supplies the `asStub` helper used to construct lightweight `Request`/`Response` objects.
+- **`src/modules/observability/controllers/get-observability-events.ts`** – The function under test (`getObservabilityEvents`).
+- **`src/modules/observability/services/index.ts`** – Provides `observabilityService`, whose `streamObservabilityMetrics` method is spied on.
+- **`src/kernel/middlewares/authorizations.ts`** – Source of `stillHoldsRuleViaCookie`, the only exported symbol mocked in this file.
+- **`tests/support/stub.ts`** – Supplies the `asStub<T>()` helper used to create minimally-typed request/response stand-ins.
 
 ## Notes
 
-- Only `stillHoldsRuleViaCookie` is mocked from the authorizations module; other guards (`requirePermissionViaCookie`, etc.) remain real. This keeps the mock surface minimal.
-- The test does **not** assert HTTP status codes or headers—the SSE streamer owns the response for its lifetime, so the handler must not touch it.
-- The recheck callback is invoked *after* the handler returns, meaning the test exercises the closure the handler captures (the original `request` object and the fixed rule key `'read'` / resource `'ObservabilitySnapshot'`).
+- The module doc comment explains *why* the recheck is critical: an SSE stream has no "next request" to re-authorize, so the only enforcement point is the in-stream callback.
+- The streamer mock returns `undefined` (not a fake stream) because the test only cares about call arguments; the real streamer would take ownership of the response object for its entire lifetime.
+- Only `stillHoldsRuleViaCookie` is replaced; the remaining exports of the authorizations module are loaded via `requireActual` so other guards still run if the controller invokes them.

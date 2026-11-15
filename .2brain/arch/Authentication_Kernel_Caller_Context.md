@@ -32,7 +32,7 @@ The application-level security policy and the consumer-facing surface of the cal
 **Source Files:**
 
 - `src/app/security.ts`
-  - `src.app.security.installSecurity.origin` (L147-L166) - Method
+  - `src.app.security.installSecurity.origin` (L157-L176) - Method
 - `src/app/system-routes.ts`
   - `src.app.system-routes.router.get('/') callback` (L21-L23) - Function
   - `src.app.system-routes.router.get('/livez') callback` (L31-L33) - Function
@@ -42,24 +42,21 @@ The application-level security policy and the consumer-facing surface of the cal
 - `src/kernel/authentication.ts`
   - `src.kernel.authentication.StreamWatch` (L23-L31) - Interface
 - `src/kernel/staff-read.ts`
-  - `src.kernel.staff-read.StaffReadTarget` (L18-L29) - Interface
+  - `src.kernel.staff-read.StaffReadTarget` (L20-L36) - Interface
 - `src/modules/account/oauth/config.ts`
   - `src.modules.account.oauth.config.OAuthCredentials` (L40-L43) - Interface
 - `src/modules/account/presenter.ts`
   - `src.modules.account.presenter.presentOAuthLinks.links.links.map() callback` (L82-L85) - Function
-- `src/modules/account/services/email-change.ts`
-  - `src.modules.account.services.email-change.applyEmailChangeRequest` (L62-L79) - Class
-  - `src.modules.account.services.email-change.applyEmailChangeRequest.then() callback` (L74-L78) - Function
 - `src/modules/account/services/logout.ts`
-  - `src.modules.account.services.logout.isOwnFamily` (L35-L47) - Class
-  - `src.modules.account.services.logout.isOwnFamily.then() callback` (L44-L45) - Function
-  - `src.modules.account.services.logout.sessionRevoke` (L58-L74) - Class
-  - `src.modules.account.services.logout.sessionRevoke.then() callback` (L65-L73) - Function
-  - `src.modules.account.services.logout.sessionRevoke.then() callback.then() callback` (L66-L73) - Function
+  - `src.modules.account.services.logout.isOwnFamily` (L36-L48) - Class
+  - `src.modules.account.services.logout.isOwnFamily.then() callback` (L45-L46) - Function
+  - `src.modules.account.services.logout.sessionRevoke` (L59-L75) - Class
+  - `src.modules.account.services.logout.sessionRevoke.then() callback` (L66-L74) - Function
+  - `src.modules.account.services.logout.sessionRevoke.then() callback.then() callback` (L67-L74) - Function
 - `src/modules/account/services/oauth.ts`
-  - `src.modules.account.services.oauth.listOAuthLinks` (L398-L407) - Class
-  - `src.modules.account.services.oauth.listOAuthLinks.then() callback` (L402-L406) - Function
-  - `src.modules.account.services.oauth.listOAuthLinks.then() callback.map() callback` (L403-L406) - Function
+  - `src.modules.account.services.oauth.listOAuthLinks` (L414-L423) - Class
+  - `src.modules.account.services.oauth.listOAuthLinks.then() callback` (L418-L422) - Function
+  - `src.modules.account.services.oauth.listOAuthLinks.then() callback.map() callback` (L419-L422) - Function
 - `src/modules/account/services/refresh.ts`
   - `src.modules.account.services.refresh.MissingRefreshTokenError` (L22-L28) - Class
   - `src.modules.account.services.refresh.MissingRefreshTokenError.constructor` (L24-L27) - Constructor
@@ -71,14 +68,14 @@ The application-level security policy and the consumer-facing surface of the cal
   - `src.modules.account.services.sessions.sessionGet.then() callback` (L43-L43) - Function
   - `src.modules.account.services.sessions.sessionGet.then() callback.rows.find() callback` (L43-L43) - Function
 - `src/modules/account/services/two-factor-challenge.ts`
-  - `src.modules.account.services.two-factor-challenge.buildLoginChallenge.ttlMs.armed.some() callback` (L67-L67) - Function
-  - `src.modules.account.services.two-factor-challenge.buildLoginChallenge.ttlMs` (L67-L69) - Class
+  - `src.modules.account.services.two-factor-challenge.buildLoginChallenge.ttlMs.armed.some() callback` (L69-L69) - Function
+  - `src.modules.account.services.two-factor-challenge.buildLoginChallenge.ttlMs` (L69-L71) - Class
 - `src/modules/account/services/two-factor-enrollment.ts`
-  - `src.modules.account.services.two-factor-enrollment.entryFor.existing` (L54-L54) - Class
-  - `src.modules.account.services.two-factor-enrollment.entryFor.existing.user.twoFactorMethods.find() callback` (L54-L54) - Function
+  - `src.modules.account.services.two-factor-enrollment.entryFor.existing` (L55-L55) - Class
+  - `src.modules.account.services.two-factor-enrollment.entryFor.existing.user.twoFactorMethods.find() callback` (L55-L55) - Function
 - `src/modules/account/session/account-view.ts`
-  - `src.modules.account.session.account-view.abilitiesOfUser` (L120-L124) - Class
-  - `src.modules.account.session.account-view.abilitiesOfUser.then() callback` (L122-L123) - Function
+  - `src.modules.account.session.account-view.abilitiesOfUser` (L123-L127) - Class
+  - `src.modules.account.session.account-view.abilitiesOfUser.then() callback` (L125-L126) - Function
 - `src/modules/account/session/activity.ts`
   - `src.modules.account.session.activity.recordActivity` (L16-L20) - Class
   - `src.modules.account.session.activity.recordActivity.catch() callback` (L17-L20) - Function
@@ -171,17 +168,17 @@ The application-level security policy and the consumer-facing surface of the cal
 - `src/modules/delivery/services/notice.ts`
   - `src.modules.delivery.services.notice.NoticeInput` (L22-L27) - Interface
   - `src.modules.delivery.services.notice.SentNotice` (L30-L32) - Interface
-  - `src.modules.delivery.services.notice.payloadOf.titles.fulfillmentOrder.lines.map() callback` (L52-L52) - Function
+  - `src.modules.delivery.services.notice.payloadOf.titles.fulfillmentOrder.lines.map() callback` (L53-L53) - Function
 - `src/modules/observability/services/process-snapshot.ts`
   - `src.modules.observability.services.process-snapshot.ProcessMemorySnapshot` (L11-L23) - Interface
   - `src.modules.observability.services.process-snapshot.ProcessSnapshot` (L26-L33) - Interface
 - `src/modules/payments/services/intent.ts`
-  - `src.modules.payments.services.intent.then() callback.then() callback` (L194-L195) - Function
-  - `src.modules.payments.services.intent.then() callback.catch() callback` (L200-L207) - Function
+  - `src.modules.payments.services.intent.then() callback.then() callback` (L201-L202) - Function
+  - `src.modules.payments.services.intent.then() callback.catch() callback` (L207-L214) - Function
 - `src/modules/stats/services/range.ts`
   - `src.modules.stats.services.range.Period` (L22-L31) - Interface
 - `src/modules/webhooks/services/attempt.ts`
-  - `src.modules.webhooks.services.attempt.then() callback.then() callback` (L258-L258) - Function
+  - `src.modules.webhooks.services.attempt.then() callback.then() callback` (L263-L263) - Function
 - `src/modules/wishlist/factories.ts`
   - `src.modules.wishlist.factories.WishlistOverrides` (L14-L22) - Interface
 
@@ -199,8 +196,8 @@ The architectural heart of the subsystem. This component defines the kernel's au
   - `src.kernel.authentication.AuthResolver` (L38-L61) - Interface
   - `src.kernel.authentication.ResolvedCredential` (L83-L86) - Interface
   - `src.kernel.authentication.CredentialResolver` (L89-L91) - Interface
-  - `src.kernel.authentication.watchCookie` (L145-L146) - Class
-  - `src.kernel.authentication.watchCookie.then() callback` (L146-L146) - Function
+  - `src.kernel.authentication.watchCookie` (L132-L133) - Class
+  - `src.kernel.authentication.watchCookie.then() callback` (L133-L133) - Function
 - `src/modules/account/session/cookie-strategy.ts`
   - `src.modules.account.session.cookie-strategy.rememberOf` (L51-L52) - Class
   - `src.modules.account.session.cookie-strategy.rememberOf.find() callback` (L52-L52) - Function
@@ -276,34 +273,35 @@ The architectural heart of the subsystem. This component defines the kernel's au
   - `src.modules.cart.controllers.post-cart-merge.postCartMerge` (L19-L32) - Class
   - `src.modules.cart.controllers.post-cart-merge.postCartMerge.then() callback` (L28-L30) - Function
 - `src/modules/cart/controllers/put-cart-shipping-method.ts`
-  - `src.modules.cart.controllers.put-cart-shipping-method.putCartShippingMethod` (L19-L36) - Class
-  - `src.modules.cart.controllers.put-cart-shipping-method.putCartShippingMethod.then() callback` (L30-L34) - Function
+  - `src.modules.cart.controllers.put-cart-shipping-method.putCartShippingMethod` (L20-L37) - Class
+  - `src.modules.cart.controllers.put-cart-shipping-method.putCartShippingMethod.then() callback` (L31-L35) - Function
 - `src/modules/locales/controllers/get-entity-translations.ts`
-  - `src.modules.locales.controllers.get-entity-translations.getEntityTranslations` (L18-L36) - Class
-  - `src.modules.locales.controllers.get-entity-translations.getEntityTranslations.then() callback` (L30-L34) - Function
+  - `src.modules.locales.controllers.get-entity-translations.getEntityTranslations` (L19-L39) - Class
+  - `src.modules.locales.controllers.get-entity-translations.getEntityTranslations.then() callback` (L31-L37) - Function
 - `src/modules/locales/controllers/get-locales.ts`
-  - `src.modules.locales.controllers.get-locales.getLocales` (L21-L29) - Class
-  - `src.modules.locales.controllers.get-locales.getLocales.then() callback` (L28-L28) - Function
+  - `src.modules.locales.controllers.get-locales.getLocales` (L22-L30) - Class
+  - `src.modules.locales.controllers.get-locales.getLocales.then() callback` (L29-L29) - Function
 - `src/modules/locales/repository.ts`
-  - `src.modules.locales.repository.importEntries.incoming` (L256-L260) - Class
-  - `src.modules.locales.repository.importEntries.incoming.inputs.flatMap() callback` (L257-L258) - Function
-  - `src.modules.locales.repository.importEntries.changedEntries` (L269-L269) - Class
-  - `src.modules.locales.repository.importEntries.changedEntries.filter() callback` (L269-L269) - Function
-  - `src.modules.locales.repository.removeEntityTranslations` (L580-L589) - Class
-  - `src.modules.locales.repository.removeEntityTranslations.then() callback` (L589-L589) - Function
+  - `src.modules.locales.repository.removeEntityTranslations` (L660-L669) - Class
+  - `src.modules.locales.repository.removeEntityTranslations.then() callback` (L669-L669) - Function
 - `src/modules/notifications/controllers/get-notifications.ts`
   - `src.modules.notifications.controllers.get-notifications.getNotifications` (L16-L23) - Class
   - `src.modules.notifications.controllers.get-notifications.getNotifications.then() callback` (L19-L21) - Function
 - `src/modules/shop-tasks/controllers/get-shop-work-summary.ts`
   - `src.modules.shop-tasks.controllers.get-shop-work-summary.getShopWorkSummary` (L14-L18) - Class
   - `src.modules.shop-tasks.controllers.get-shop-work-summary.getShopWorkSummary.then() callback` (L17-L17) - Function
+- `src/modules/shop-tasks/services/outcome-unknown.ts`
+  - `src.modules.shop-tasks.services.outcome-unknown.NamedSubject` (L27-L32) - Interface
+  - `src.modules.shop-tasks.services.outcome-unknown.orderNamed` (L49-L55) - Class
+  - `src.modules.shop-tasks.services.outcome-unknown.orderNamed.then() callback` (L52-L55) - Function
+  - `src.modules.shop-tasks.services.outcome-unknown.productNamed` (L62-L66) - Class
+  - `src.modules.shop-tasks.services.outcome-unknown.productNamed.then() callback` (L63-L66) - Function
 - `src/modules/shop-tasks/services/work-summary.ts`
-  - `src.modules.shop-tasks.services.work-summary.count.then() callback` (L57-L57) - Function
-  - `src.modules.shop-tasks.services.work-summary.workSummary` (L92-L98) - Class
-  - `src.modules.shop-tasks.services.work-summary.workSummary.BADGES.filter() callback` (L94-L94) - Function
-  - `src.modules.shop-tasks.services.work-summary.workSummary.map() callback` (L94-L95) - Function
-  - `src.modules.shop-tasks.services.work-summary.workSummary.map() callback.then() callback` (L95-L95) - Function
-  - `src.modules.shop-tasks.services.work-summary.workSummary.then() callback` (L98-L98) - Function
+  - `src.modules.shop-tasks.services.work-summary.workSummary` (L87-L93) - Class
+  - `src.modules.shop-tasks.services.work-summary.workSummary.BADGES.filter() callback` (L89-L89) - Function
+  - `src.modules.shop-tasks.services.work-summary.workSummary.map() callback` (L89-L90) - Function
+  - `src.modules.shop-tasks.services.work-summary.workSummary.map() callback.then() callback` (L90-L90) - Function
+  - `src.modules.shop-tasks.services.work-summary.workSummary.then() callback` (L93-L93) - Function
 - `src/modules/stock-alerts/controllers/get-stock-alerts.ts`
   - `src.modules.stock-alerts.controllers.get-stock-alerts.getStockAlerts` (L13-L19) - Class
   - `src.modules.stock-alerts.controllers.get-stock-alerts.getStockAlerts.then() callback` (L16-L18) - Function
@@ -397,28 +395,20 @@ The concrete implementation of session creation, rotation, and retirement behind
   - `src.modules.locales.controllers.get-locale-messages.getLocaleMessages` (L21-L45) - Class
   - `src.modules.locales.controllers.get-locale-messages.getLocaleMessages.then() callback` (L39-L42) - Function
 - `src/modules/locales/controllers/update-entity-translations.ts`
-  - `src.modules.locales.controllers.update-entity-translations.writeEntityTranslations` (L37-L72) - Class
-  - `src.modules.locales.controllers.update-entity-translations.writeEntityTranslations.<function>` (L48-L72) - Function
-  - `src.modules.locales.controllers.update-entity-translations.writeEntityTranslations.<function>.then() callback` (L66-L70) - Function
+  - `src.modules.locales.controllers.update-entity-translations.writeEntityTranslations` (L37-L74) - Class
+  - `src.modules.locales.controllers.update-entity-translations.writeEntityTranslations.<function>` (L48-L74) - Function
+  - `src.modules.locales.controllers.update-entity-translations.writeEntityTranslations.<function>.then() callback` (L66-L72) - Function
 - `src/modules/locales/repository.ts`
-  - `src.modules.locales.repository.listKeys` (L157-L163) - Class
-  - `src.modules.locales.repository.listKeys.then() callback` (L163-L163) - Function
-  - `src.modules.locales.repository.listKeys.then() callback.rows.map() callback` (L163-L163) - Function
-  - `src.modules.locales.repository.importEntries.nulled` (L261-L261) - Class
-  - `src.modules.locales.repository.importEntries.nulled.inputs.filter() callback` (L261-L261) - Function
-  - `src.modules.locales.repository.importEntries.nulled.map() callback` (L261-L261) - Function
-  - `src.modules.locales.repository.importEntries.removedKeys` (L263-L266) - Class
-  - `src.modules.locales.repository.importEntries.removedKeys.filter() callback` (L264-L264) - Function
-  - `src.modules.locales.repository.importEntries.removedKeys.nulled.filter() callback` (L265-L265) - Function
-  - `src.modules.locales.repository.importEntries.created` (L292-L292) - Class
-  - `src.modules.locales.repository.importEntries.created.changedEntries.filter() callback` (L292-L292) - Function
-  - `src.modules.locales.repository.deleteLocaleCascade` (L327-L333) - Class
-  - `src.modules.locales.repository.deleteLocaleCascade.then() callback` (L331-L332) - Function
-  - `src.modules.locales.repository.deleteLocaleCascade.then() callback.then() callback` (L332-L332) - Function
-  - `src.modules.locales.repository.forgetTranslator` (L550-L558) - Class
-  - `src.modules.locales.repository.forgetTranslator.then() callback` (L558-L558) - Function
-  - `src.modules.locales.repository.removeEntityLocale` (L561-L571) - Class
-  - `src.modules.locales.repository.removeEntityLocale.then() callback` (L571-L571) - Function
+  - `src.modules.locales.repository.listKeys` (L163-L169) - Class
+  - `src.modules.locales.repository.listKeys.then() callback` (L169-L169) - Function
+  - `src.modules.locales.repository.listKeys.then() callback.rows.map() callback` (L169-L169) - Function
+  - `src.modules.locales.repository.deleteLocaleCascade` (L397-L403) - Class
+  - `src.modules.locales.repository.deleteLocaleCascade.then() callback` (L401-L402) - Function
+  - `src.modules.locales.repository.deleteLocaleCascade.then() callback.then() callback` (L402-L402) - Function
+  - `src.modules.locales.repository.forgetTranslator` (L630-L638) - Class
+  - `src.modules.locales.repository.forgetTranslator.then() callback` (L638-L638) - Function
+  - `src.modules.locales.repository.removeEntityLocale` (L641-L651) - Class
+  - `src.modules.locales.repository.removeEntityLocale.then() callback` (L651-L651) - Function
 - `src/modules/notifications/repository.ts`
   - `src.modules.notifications.repository.notificationRepository.deleteByAudience.then() callback.ids` (L187-L187) - Class
   - `src.modules.notifications.repository.notificationRepository.deleteByAudience.then() callback.ids.rows.map() callback` (L187-L187) - Function
@@ -427,6 +417,9 @@ The concrete implementation of session creation, rotation, and retirement behind
 - `src/modules/shop/controllers/get-shop.ts`
   - `src.modules.shop.controllers.get-shop.getShop` (L18-L21) - Class
   - `src.modules.shop.controllers.get-shop.getShop.then() callback` (L20-L20) - Function
+- `src/modules/tasks/presenter.ts`
+  - `src.modules.tasks.presenter.previewOf.characters` (L69-L69) - Class
+  - `src.modules.tasks.presenter.previewOf.characters.Array.from() callback` (L69-L69) - Function
 - `src/modules/wishlist/controllers/get-wishlist.ts`
   - `src.modules.wishlist.controllers.get-wishlist.getWishlist` (L18-L25) - Class
   - `src.modules.wishlist.controllers.get-wishlist.getWishlist.then() callback` (L21-L23) - Function

@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/observability/audit-changes.ts
-sha256: 3bfcc9be1084f2864834c2c2399f7e0e3aef92232cb1c597a5e89dd30dbf89cb
-generated_at: 2026-11-08T03:38:52.221810+00:00
+sha256: 5043dab6cc525fc1483b1980f16a99bb69ac2920bae02229ed1e1a6a2c28e3ff
+generated_at: 2026-11-14T18:11:12.477193+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure helper that computes the field-level diff an `*.updated` audit row stores in its `metadata`. It compares a stored record against an incoming change-set and emits a two-tier summary (`changes` for non-personal values, `changedFields` for personal/named fields). It carries no identity, timestamp, or side-effect — callers supply the context.
+Pure, side-effect-free module that computes the field-level diff stored in an `*.updated` audit row's `metadata`. Because the audit collection is append-only and never scrubbed on erasure, the diff is split into two lists at write time: `valued` fields carry `{ from, to }`, while `named` fields (free text, personal data, secrets) are recorded by name only. The allowlist passed in is the privacy boundary — a field appears in audit only if someone explicitly placed it in one of the two lists.
 
 ## Key elements
 
-- **`FieldChange`** — `{ from?, to? }`; one side is omitted when the value was absent.
-- **`fieldChange(from, to)`** — factory for `FieldChange`; drops `null`/`undefined` sides so the payload never carries an empty value (per the API empty-null convention).
-- **`AuditChanges`** — the metadata shape: optional `changes` record and optional `changedFields` string array. Both keys are omitted entirely when empty.
-- **`AuditedFields<TKey>`** — caller-supplied allowlist splitting fields into `valued` (record old/new) and `named` (record name only).
-- **`differs(before, after)`** *(private)* — treats `undefined` and `null` as equivalent via `JSON.stringify(x ?? null)`; returns `true` when the two sides represent different values.
-- **`auditChanges(before, data, fields)`** — main export. Walks the allowlist, detects moved fields, and returns a populated `AuditChanges` (or `{}`).
+- **`FieldChange`** — interface for a single moved field: `{ from?: unknown; to?: unknown }`. An absent side means the key was not present.
+- **`fieldChange(from, to)`** — builds a `FieldChange`, omitting any side that is `null` or `undefined` (responses never carry `null`).
+- **`AuditChanges`** — the `metadata` shape written to the audit row: optional `changes` (valued map) and/or `changedFields` (named string array). Both keys are omitted entirely when empty.
+- **`AuditedFields<TKey>`** — the per-module allowlist: `valued: readonly TKey[]` and `named: readonly TKey[]`.
+- **`differs(before, after)`** — compares two values via `JSON.stringify(v ?? null)`; treats `undefined` and `null` as equivalent (both mean "absent").
+- **`auditChanges(before, data, fields)`** — the main entry point. Walks the allowlist, checks which fields the change-set actually moves, and returns the assembled `AuditChanges` object (or `{}` if nothing audited moved).
 
 ## Relationships
 
-- **Domain services** (`delivery/tracking`, `example/crud`, `inventory/admin`, `locales/entries`, `locales/languages`, `orders/crud`, `products/crud`, `webhooks/subscriptions`) each call `auditChanges` with their own `AuditedFields` allowlist to build the `metadata` payload for their `*.updated` audit rows.
-- **`src/modules/users/services/audit-changes.ts`** — module-level wrapper that likely selects the user-specific field allowlist before delegating to this infrastructure function.
-- **`tests/unit/infrastructure/observability/audit-changes.test.ts`** — unit tests covering the diff logic, null/undefined equivalence, and empty-result behavior.
+- **Module service files** (`tracking.ts`, `crud.ts` in orders/products/example, `admin.ts`, `entries.ts`, `languages.ts`, `subscriptions.ts`) — each defines its own `AuditedFields` constant and calls `auditChanges` immediately before applying the change-set to the document, then stores the result as `metadata` on the audit row.
+- **`src/modules/users/services/audit-changes.ts`** — a users-module-specific wrapper that supplies the users allowlist and delegates to this infrastructure function.
+- **`tests/unit/infrastructure/observability/audit-changes.test.ts`** — unit tests covering `fieldChange`, `differs`, and `auditChanges` edge cases (empty change-sets, null/undefined handling, allowlist exclusion).
 
 ## Notes
 
-- **Call before mutation.** The change-set is applied in place to the hydrated document; once `data` is written onto `before`, the original values are lost. Always invoke `auditChanges` first.
-- **Allowlist = privacy decision.** A field not present in either `valued` or `named` is silently un-audited. Adding a new persisted field does nothing until someone explicitly places it on one of the two lists.
-- **Comparison is `JSON.stringify`-based.** This means structurally equal objects compare as equal, but key-order differences in nested objects would not (unlikely in practice given the scalar fields typically audited).
-- **Append-only audit log.** The metadata is written once and never scrubbed on erasure — another reason `named` fields store only the field name, never the value.
+- **Call order matters:** invoke `auditChanges` *before* assigning the change-set onto the hydrated document. Mongoose (or equivalent) updates in place, so the "before" values are destroyed once the assignment happens.
+- **Allowlist is opt-in:** a field that is in neither `valued` nor `named` produces no audit entry. Adding a new persisted field is invisible to audit until a developer explicitly adds it to one list.
+- **`differs` is shallow-structural:** it serializes via `JSON.stringify`, so key order in objects matters and `undefined` inside nested objects will be dropped. This is acceptable for the flat/scalar fields these modules audit.
+- **`null` in the change-set is a deliberate clear**, not an absence — `moved()` treats `null` as a real value (it is not `undefined`), so clearing a field is audited.

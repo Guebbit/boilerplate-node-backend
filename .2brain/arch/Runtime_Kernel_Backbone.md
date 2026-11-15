@@ -14,13 +14,14 @@ graph LR
     Translation_Ability_Infrastructure_Adapters["Translation, Ability & Infrastructure Adapters"]
     Notifications_Domain_Module["Notifications Domain Module"]
     Module_Registry_Seeding_Substrate -- "Provides generic persistence factory and transactional session propagation" --> Outbox_Event_Relay_Inventory_Domain
-    Module_Registry_Seeding_Substrate -- "calls" --> Translation_Ability_Infrastructure_Adapters
+    Module_Registry_Seeding_Substrate -- "Invokes translation kernel on write path to resolve and persist multilingual content" --> Translation_Ability_Infrastructure_Adapters
+    Module_Registry_Seeding_Substrate -- "Seeds notification state for the flow runner and dev doubles" --> Notifications_Domain_Module
     Outbox_Event_Relay_Inventory_Domain -- "calls" --> Module_Registry_Seeding_Substrate
-    Outbox_Event_Relay_Inventory_Domain -- "Uses Redis adapter for stock cache sync and queue adapter for event publishing" --> Translation_Ability_Infrastructure_Adapters
-    Outbox_Event_Relay_Inventory_Domain -- "Relays domain events via message broker to notification fan-out" --> Notifications_Domain_Module
-    Translation_Ability_Infrastructure_Adapters -- "Adapter repositories (locales, product) built on the shared persistence factory" --> Module_Registry_Seeding_Substrate
+    Outbox_Event_Relay_Inventory_Domain -- "calls" --> Translation_Ability_Infrastructure_Adapters
+    Outbox_Event_Relay_Inventory_Domain -- "Relays published domain events as notification fan-out" --> Notifications_Domain_Module
+    Translation_Ability_Infrastructure_Adapters -- "Consumes persistence primitives for repository construction and object ID resolution" --> Module_Registry_Seeding_Substrate
+    Translation_Ability_Infrastructure_Adapters -- "Decorates read path with locale resolution and guards access with per-row permission filtering" --> Notifications_Domain_Module
     Notifications_Domain_Module -- "Built on the generic persistence factory for CRUD and audience-scoped queries" --> Module_Registry_Seeding_Substrate
-    Notifications_Domain_Module -- "Enriches responses via translation/ability ports; delivers via mailer and Redis SSE adapters" --> Translation_Ability_Infrastructure_Adapters
 ```
 
 ## Details
@@ -32,7 +33,7 @@ The broadest layer of the backbone — the module registry that turns the static
 
 **Related Classes/Methods**:
 
-- `src.infrastructure.persistence.create-repository.createRepository`:338-486
+- `src.infrastructure.persistence.create-repository.createRepository`:359-520
 - `src.infrastructure.persistence.serialize.applySerialization`:64-115
 
 **Source Files:**
@@ -46,7 +47,7 @@ The broadest layer of the backbone — the module registry that turns the static
 - `src/infrastructure/config/shared-rules/registry.ts`
   - `src.infrastructure.config.shared-rules.registry.SharedRuleEntry` (L26-L31) - Interface
 - `src/infrastructure/http/middlewares/rate-limit.ts`
-  - `src.infrastructure.http.middlewares.rate-limit.BudgetCharge` (L285-L290) - Interface
+  - `src.infrastructure.http.middlewares.rate-limit.BudgetCharge` (L292-L297) - Interface
 - `src/infrastructure/i18n/context.ts`
   - `src.infrastructure.i18n.context.LocaleContext` (L22-L32) - Interface
 - `src/infrastructure/persistence/changes.ts`
@@ -54,7 +55,7 @@ The broadest layer of the backbone — the module registry that turns the static
 - `src/infrastructure/persistence/conditional-status.ts`
   - `src.infrastructure.persistence.conditional-status.ConditionalStatusOptions` (L14-L19) - Interface
 - `src/infrastructure/persistence/create-repository.ts`
-  - `src.infrastructure.persistence.create-repository.createRepository` (L338-L486) - Function
+  - `src.infrastructure.persistence.create-repository.createRepository` (L359-L520) - Function
 - `src/infrastructure/persistence/serialize.ts`
   - `src.infrastructure.persistence.serialize.SerializeOptions` (L24-L44) - Interface
   - `src.infrastructure.persistence.serialize.SerializableSchema` (L53-L55) - Interface
@@ -62,19 +63,27 @@ The broadest layer of the backbone — the module registry that turns the static
   - `src.infrastructure.persistence.serialize.transform` (L70-L96) - Class
   - `src.infrastructure.persistence.serialize.applySerialization.transform.toString` (L74-L74) - Method
   - `src.infrastructure.persistence.serialize.applySerialization.transform` (L105-L111) - Method
+- `src/infrastructure/persistence/translatable-columns.ts`
+  - `src.infrastructure.persistence.translatable-columns.translatableColumnsOf.revisionOf` (L53-L64) - Method
+  - `src.infrastructure.persistence.translatable-columns.translatableColumnsOf.writeDerived.map() callback` (L74-L74) - Function
 - `src/infrastructure/persistence/versioning.ts`
-  - `src.infrastructure.persistence.versioning.Precondition` (L27-L32) - Interface
-  - `src.infrastructure.persistence.versioning.PreconditionFailedError` (L38-L40) - Class
-  - `src.infrastructure.persistence.versioning.armed` (L159-L164) - Class
-  - `src.infrastructure.persistence.versioning.armed.finally() callback` (L161-L163) - Function
-  - `src.infrastructure.persistence.versioning.fencedSave` (L180-L192) - Class
-  - `src.infrastructure.persistence.versioning.fencedSave.catch() callback` (L189-L191) - Function
-  - `src.infrastructure.persistence.versioning.DeleteOutcome` (L197-L200) - Interface
-  - `src.infrastructure.persistence.versioning.checkedDelete` (L211-L223) - Class
-  - `src.infrastructure.persistence.versioning.then() callback` (L216-L216) - Function
-  - `src.infrastructure.persistence.versioning.checkedDelete.then() callback` (L220-L222) - Function
+  - `src.infrastructure.persistence.versioning.Precondition` (L33-L38) - Interface
+  - `src.infrastructure.persistence.versioning.PreconditionFailedError` (L44-L46) - Class
+  - `src.infrastructure.persistence.versioning.accepts` (L165-L168) - Class
+  - `src.infrastructure.persistence.versioning.accepts.precondition.etags.some() callback` (L168-L168) - Function
+  - `src.infrastructure.persistence.versioning.armed` (L182-L187) - Class
+  - `src.infrastructure.persistence.versioning.armed.finally() callback` (L184-L186) - Function
+  - `src.infrastructure.persistence.versioning.fencedSave` (L205-L218) - Class
+  - `src.infrastructure.persistence.versioning.fencedSave.catch() callback` (L215-L217) - Function
+  - `src.infrastructure.persistence.versioning.preconditionFilter.versions` (L235-L237) - Class
+  - `src.infrastructure.persistence.versioning.preconditionFilter.versions.precondition.etags.map() callback` (L236-L236) - Function
+  - `src.infrastructure.persistence.versioning.preconditionFilter.versions.filter() callback` (L237-L237) - Function
+  - `src.infrastructure.persistence.versioning.DeleteOutcome` (L244-L247) - Interface
+  - `src.infrastructure.persistence.versioning.checkedDelete` (L258-L270) - Class
+  - `src.infrastructure.persistence.versioning.then() callback` (L263-L263) - Function
+  - `src.infrastructure.persistence.versioning.checkedDelete.then() callback` (L267-L269) - Function
 - `src/infrastructure/runtime/database.ts`
-  - `src.infrastructure.runtime.database.attemptConnect.then() callback` (L139-L139) - Function
+  - `src.infrastructure.runtime.database.attemptConnect.then() callback` (L135-L135) - Function
 - `src/kernel/translation.ts`
   - `src.kernel.translation.TranslationPort` (L60-L166) - Interface
 - `src/modules/access/audit.ts`
@@ -97,8 +106,8 @@ The broadest layer of the backbone — the module registry that turns the static
   - `src.modules.account.model.SessionDocument` (L75-L108) - Interface
   - `src.modules.account.model.VerificationTokenDocument` (L151-L163) - Interface
 - `src/modules/addresses/model.ts`
-  - `src.modules.addresses.model.AddressItem` (L14-L29) - Interface
-  - `src.modules.addresses.model.AddressBookDocument` (L32-L37) - Interface
+  - `src.modules.addresses.model.AddressItem` (L15-L30) - Interface
+  - `src.modules.addresses.model.AddressBookDocument` (L33-L38) - Interface
 - `src/modules/addresses/pii.ts`
   - `src.modules.addresses.pii.decryptAddressItem` (L105-L111) - Class
   - `src.modules.addresses.pii.decryptAddressItem.mapPiiFields() callback` (L108-L109) - Function
@@ -154,8 +163,8 @@ The broadest layer of the backbone — the module registry that turns the static
   - `src.modules.api-keys.services.api-keys.mint.then() callback` (L258-L274) - Function
 - `src/modules/audit-logs/model.ts`
   - `src.modules.audit-logs.model.AuditLogDocument` (L40-L42) - Interface
-  - `src.modules.audit-logs.model.applyAuditLogTransform` (L180-L187) - Class
-  - `src.modules.audit-logs.model.applyAuditLogTransform.after` (L183-L186) - Method
+  - `src.modules.audit-logs.model.applyAuditLogTransform` (L188-L195) - Class
+  - `src.modules.audit-logs.model.applyAuditLogTransform.after` (L191-L194) - Method
 - `src/modules/cart/analytics.ts`
   - `src.modules.cart.analytics.'@infrastructure/observability/analytics'.AnalyticsEventMap` (L34-L36) - Interface
 - `src/modules/cart/audit.ts`
@@ -164,8 +173,8 @@ The broadest layer of the backbone — the module registry that turns the static
   - `src.modules.cart.domain.availability.AvailabilityProduct` (L13-L24) - Interface
   - `src.modules.cart.domain.availability.AvailabilityFacts` (L27-L39) - Interface
 - `src/modules/cart/domain/merge.ts`
-  - `src.modules.cart.domain.merge.MergeLineFacts` (L11-L23) - Interface
-  - `src.modules.cart.domain.merge.MergePlan` (L26-L31) - Interface
+  - `src.modules.cart.domain.merge.MergeLineFacts` (L11-L27) - Interface
+  - `src.modules.cart.domain.merge.MergePlan` (L30-L35) - Interface
 - `src/modules/cart/domain/rules.ts`
   - `src.modules.cart.domain.rules.CartLineCandidate` (L17-L40) - Interface
   - `src.modules.cart.domain.rules.UnavailableCartLine` (L43-L47) - Interface
@@ -181,7 +190,7 @@ The broadest layer of the backbone — the module registry that turns the static
   - `src.modules.cart.domain.rules.evaluateCheckout.shortfalls.judged.flatMap() callback` (L183-L193) - Function
   - `src.modules.cart.domain.rules.shortfalls` (L183-L194) - Class
 - `src/modules/cart/events.ts`
-  - `src.modules.cart.events.'@kernel/events'.DomainEventMap` (L9-L43) - Interface
+  - `src.modules.cart.events.'@kernel/events'.DomainEventMap` (L9-L44) - Interface
 - `src/modules/cart/factories.ts`
   - `src.modules.cart.factories.CartOverrides` (L17-L22) - Interface
 - `src/modules/cart/model.ts`
@@ -193,46 +202,48 @@ The broadest layer of the backbone — the module registry that turns the static
   - `src.modules.cart.presenter.presentCart.checkoutable.lines.every() callback` (L69-L69) - Function
 - `src/modules/cart/repository.ts`
   - `src.modules.cart.repository.LineWrite` (L30-L33) - Interface
-  - `src.modules.cart.repository.pushNewLine` (L52-L64) - Class
-  - `src.modules.cart.repository.pushNewLine.then() callback` (L64-L64) - Function
-  - `src.modules.cart.repository.unchangedOrPushed` (L72-L82) - Class
-  - `src.modules.cart.repository.unchangedOrPushed.then() callback` (L80-L81) - Function
-  - `src.modules.cart.repository.unchangedOrMissing` (L92-L104) - Class
-  - `src.modules.cart.repository.unchangedOrMissing.then() callback` (L100-L104) - Function
-  - `src.modules.cart.repository.resolveAddMiss` (L117-L140) - Class
-  - `src.modules.cart.repository.resolveAddMiss.then() callback` (L126-L140) - Function
-  - `src.modules.cart.repository.upsertLine` (L160-L230) - Class
-  - `src.modules.cart.repository.upsertLine.then() callback` (L213-L224) - Function
-  - `src.modules.cart.repository.then() callback.then() callback` (L217-L218) - Function
-  - `src.modules.cart.repository.upsertLine.then() callback.then() callback` (L221-L222) - Function
-  - `src.modules.cart.repository.upsertLine.catch() callback` (L225-L228) - Function
-  - `src.modules.cart.repository.cartRepository` (L238-L397) - Class
-  - `src.modules.cart.repository.cartRepository.findByUserId` (L268-L268) - Method
-  - `src.modules.cart.repository.cartRepository.removeLine` (L281-L288) - Method
-  - `src.modules.cart.repository.cartRepository.clearLines` (L296-L303) - Method
-  - `src.modules.cart.repository.cartRepository.clearLinesIfUnchanged` (L322-L341) - Method
-  - `src.modules.cart.repository.cartRepository.setShippingMethod` (L350-L359) - Method
-  - `src.modules.cart.repository.cartRepository.deleteByUserId` (L368-L374) - Method
-  - `src.modules.cart.repository.cartRepository.deleteByUserId.then() callback` (L372-L374) - Function
-  - `src.modules.cart.repository.cartRepository.removeProductFromAll` (L386-L396) - Method
+  - `src.modules.cart.repository.pushNewLine` (L64-L95) - Class
+  - `src.modules.cart.repository.pushNewLine.then() callback` (L82-L82) - Function
+  - `src.modules.cart.repository.pushNewLine.catch() callback` (L83-L94) - Function
+  - `src.modules.cart.repository.pushNewLine.catch() callback.then() callback` (L88-L93) - Function
+  - `src.modules.cart.repository.unchangedOrPushed` (L103-L113) - Class
+  - `src.modules.cart.repository.unchangedOrPushed.then() callback` (L111-L112) - Function
+  - `src.modules.cart.repository.unchangedOrMissing` (L123-L135) - Class
+  - `src.modules.cart.repository.unchangedOrMissing.then() callback` (L131-L135) - Function
+  - `src.modules.cart.repository.resolveAddMiss` (L149-L172) - Class
+  - `src.modules.cart.repository.resolveAddMiss.then() callback` (L158-L172) - Function
+  - `src.modules.cart.repository.upsertLine` (L193-L265) - Class
+  - `src.modules.cart.repository.upsertLine.then() callback` (L247-L258) - Function
+  - `src.modules.cart.repository.then() callback.then() callback` (L251-L252) - Function
+  - `src.modules.cart.repository.upsertLine.then() callback.then() callback` (L255-L256) - Function
+  - `src.modules.cart.repository.upsertLine.catch() callback` (L260-L263) - Function
+  - `src.modules.cart.repository.cartRepository` (L273-L432) - Class
+  - `src.modules.cart.repository.cartRepository.findByUserId` (L303-L303) - Method
+  - `src.modules.cart.repository.cartRepository.removeLine` (L316-L323) - Method
+  - `src.modules.cart.repository.cartRepository.clearLines` (L331-L338) - Method
+  - `src.modules.cart.repository.cartRepository.clearLinesIfUnchanged` (L357-L376) - Method
+  - `src.modules.cart.repository.cartRepository.setShippingMethod` (L385-L394) - Method
+  - `src.modules.cart.repository.cartRepository.deleteByUserId` (L403-L409) - Method
+  - `src.modules.cart.repository.cartRepository.deleteByUserId.then() callback` (L407-L409) - Function
+  - `src.modules.cart.repository.cartRepository.removeProductFromAll` (L421-L431) - Method
 - `src/modules/cart/services/checkout.ts`
-  - `src.modules.cart.services.checkout.resolvePaymentMethod.methodInfo.find() callback` (L112-L112) - Function
-  - `src.modules.cart.services.checkout.buildStockRefusal.details.lines.refusal.shortfalls.map() callback` (L314-L319) - Function
-  - `src.modules.cart.services.checkout.refuseOverLimit.details.productIds.overLimit.map() callback` (L422-L422) - Function
-  - `src.modules.cart.services.checkout.placeLinesOf` (L459-L470) - Class
-  - `src.modules.cart.services.checkout.placeLinesOf.joined.map() callback` (L461-L469) - Function
-  - `src.modules.cart.services.checkout.CheckoutPlacement` (L473-L486) - Interface
-  - `src.modules.cart.services.checkout.placeOrderInputOf` (L496-L538) - Class
-  - `src.modules.cart.services.checkout.placeOrderInputOf.commitWith` (L534-L537) - Method
-  - `src.modules.cart.services.checkout.placeOrderInputOf.commitWith.then() callback` (L537-L537) - Function
-  - `src.modules.cart.services.checkout.refusalForPlaceOrder.shortfalls.outcome.shortfalls.map() callback` (L558-L563) - Function
-  - `src.modules.cart.services.checkout.runCheckout.positionByProduct` (L635-L639) - Class
-  - `src.modules.cart.services.checkout.runCheckout.positionByProduct.lines.map() callback` (L636-L636) - Function
-  - `src.modules.cart.services.checkout.runCheckout.verdict` (L640-L650) - Class
-  - `src.modules.cart.services.checkout.runCheckout.verdict.lines.map() callback` (L641-L649) - Function
-  - `src.modules.cart.services.checkout.orderConfirm` (L712-L741) - Class
-  - `src.modules.cart.services.checkout.orderConfirm.catch() callback` (L718-L718) - Function
-  - `src.modules.cart.services.checkout.orderConfirm.then() callback` (L719-L741) - Function
+  - `src.modules.cart.services.checkout.resolvePaymentMethod.methodInfo.find() callback` (L116-L116) - Function
+  - `src.modules.cart.services.checkout.buildStockRefusal.details.lines.refusal.shortfalls.map() callback` (L318-L323) - Function
+  - `src.modules.cart.services.checkout.refuseOverLimit.details.productIds.overLimit.map() callback` (L426-L426) - Function
+  - `src.modules.cart.services.checkout.placeLinesOf` (L463-L474) - Class
+  - `src.modules.cart.services.checkout.placeLinesOf.joined.map() callback` (L465-L473) - Function
+  - `src.modules.cart.services.checkout.CheckoutPlacement` (L477-L490) - Interface
+  - `src.modules.cart.services.checkout.placeOrderInputOf` (L500-L544) - Class
+  - `src.modules.cart.services.checkout.placeOrderInputOf.commitWith` (L540-L543) - Method
+  - `src.modules.cart.services.checkout.placeOrderInputOf.commitWith.then() callback` (L543-L543) - Function
+  - `src.modules.cart.services.checkout.refusalForPlaceOrder.shortfalls.outcome.shortfalls.map() callback` (L564-L569) - Function
+  - `src.modules.cart.services.checkout.runCheckout.positionByProduct` (L641-L645) - Class
+  - `src.modules.cart.services.checkout.runCheckout.positionByProduct.lines.map() callback` (L642-L642) - Function
+  - `src.modules.cart.services.checkout.runCheckout.verdict` (L646-L656) - Class
+  - `src.modules.cart.services.checkout.runCheckout.verdict.lines.map() callback` (L647-L655) - Function
+  - `src.modules.cart.services.checkout.orderConfirm` (L718-L747) - Class
+  - `src.modules.cart.services.checkout.orderConfirm.catch() callback` (L724-L724) - Function
+  - `src.modules.cart.services.checkout.orderConfirm.then() callback` (L725-L747) - Function
 - `src/modules/cart/services/items.ts`
   - `src.modules.cart.services.items.cartGet` (L36-L37) - Class
   - `src.modules.cart.services.items.cartGet.then() callback` (L37-L37) - Function
@@ -240,39 +251,39 @@ The broadest layer of the backbone — the module registry that turns the static
   - `src.modules.cart.services.items.cartViewOf.then() callback` (L46-L46) - Function
   - `src.modules.cart.services.items.cartGetForView` (L52-L59) - Class
   - `src.modules.cart.services.items.cartGetForView.then() callback` (L53-L59) - Function
-  - `src.modules.cart.services.items.upsertCartItem` (L87-L106) - Class
-  - `src.modules.cart.services.items.upsertCartItem.then() callback` (L93-L106) - Function
-  - `src.modules.cart.services.items.upsertCartItem.then() callback.then() callback` (L97-L105) - Function
-  - `src.modules.cart.services.items.upsertCartItem.then() callback.then() callback.then() callback` (L102-L103) - Function
-  - `src.modules.cart.services.items.cartItemAdd` (L172-L180) - Class
-  - `src.modules.cart.services.items.cartItemAdd.then() callback` (L178-L179) - Function
-  - `src.modules.cart.services.items.cartItemUpdateQuantity` (L186-L194) - Class
-  - `src.modules.cart.services.items.cartItemUpdateQuantity.then() callback` (L192-L193) - Function
-  - `src.modules.cart.services.items.cartItemRemoveById` (L213-L233) - Class
-  - `src.modules.cart.services.items.cartItemRemoveById.then() callback` (L218-L233) - Function
-  - `src.modules.cart.services.items.cartItemRemoveById.then() callback.then() callback` (L232-L232) - Function
-  - `src.modules.cart.services.items.cartRemove` (L241-L251) - Class
-  - `src.modules.cart.services.items.cartRemove.then() callback` (L242-L250) - Function
-  - `src.modules.cart.services.items.cartRemove.then() callback.then() callback` (L243-L250) - Function
-  - `src.modules.cart.services.items.cartShippingMethodSet` (L266-L306) - Class
-  - `src.modules.cart.services.items.cartShippingMethodSet.then() callback` (L282-L305) - Function
-  - `src.modules.cart.services.items.cartShippingMethodSet.then() callback.then() callback` (L304-L304) - Function
+  - `src.modules.cart.services.items.upsertCartItem` (L98-L118) - Class
+  - `src.modules.cart.services.items.upsertCartItem.then() callback` (L104-L118) - Function
+  - `src.modules.cart.services.items.upsertCartItem.then() callback.then() callback` (L108-L117) - Function
+  - `src.modules.cart.services.items.upsertCartItem.then() callback.then() callback.then() callback` (L114-L115) - Function
+  - `src.modules.cart.services.items.cartItemAdd` (L184-L192) - Class
+  - `src.modules.cart.services.items.cartItemAdd.then() callback` (L190-L191) - Function
+  - `src.modules.cart.services.items.cartItemUpdateQuantity` (L198-L206) - Class
+  - `src.modules.cart.services.items.cartItemUpdateQuantity.then() callback` (L204-L205) - Function
+  - `src.modules.cart.services.items.cartItemRemoveById` (L225-L245) - Class
+  - `src.modules.cart.services.items.cartItemRemoveById.then() callback` (L230-L245) - Function
+  - `src.modules.cart.services.items.cartItemRemoveById.then() callback.then() callback` (L244-L244) - Function
+  - `src.modules.cart.services.items.cartRemove` (L253-L263) - Class
+  - `src.modules.cart.services.items.cartRemove.then() callback` (L254-L262) - Function
+  - `src.modules.cart.services.items.cartRemove.then() callback.then() callback` (L255-L262) - Function
+  - `src.modules.cart.services.items.cartShippingMethodSet` (L278-L318) - Class
+  - `src.modules.cart.services.items.cartShippingMethodSet.then() callback` (L294-L317) - Function
+  - `src.modules.cart.services.items.cartShippingMethodSet.then() callback.then() callback` (L316-L316) - Function
 - `src/modules/cart/services/merge.ts`
   - `src.modules.cart.services.merge.MergeResult` (L27-L30) - Interface
   - `src.modules.cart.services.merge.MergeStep` (L33-L36) - Interface
   - `src.modules.cart.services.merge.heldIn` (L39-L40) - Class
   - `src.modules.cart.services.merge.heldIn.cart.items.find() callback` (L40-L40) - Function
-  - `src.modules.cart.services.merge.writeAdd` (L47-L59) - Class
-  - `src.modules.cart.services.merge.writeAdd.then() callback` (L53-L59) - Function
-  - `src.modules.cart.services.merge.writeAdd.then() callback.then() callback` (L56-L56) - Function
-  - `src.modules.cart.services.merge.mergeLine` (L67-L103) - Class
-  - `src.modules.cart.services.merge.mergeLine.written.then() callback` (L86-L102) - Function
-  - `src.modules.cart.services.merge.mergeLines.shelves` (L117-L117) - Class
-  - `src.modules.cart.services.merge.mergeLines.shelves.lines.map() callback` (L117-L117) - Function
-  - `src.modules.cart.services.merge.cartMerge` (L170-L179) - Class
-  - `src.modules.cart.services.merge.cartMerge.then() callback` (L175-L178) - Function
-  - `src.modules.cart.services.merge.then() callback.then() callback` (L177-L177) - Function
-  - `src.modules.cart.services.merge.cartMerge.then() callback.then() callback` (L178-L178) - Function
+  - `src.modules.cart.services.merge.writeAdd` (L50-L65) - Class
+  - `src.modules.cart.services.merge.writeAdd.then() callback` (L56-L65) - Function
+  - `src.modules.cart.services.merge.writeAdd.then() callback.then() callback` (L59-L62) - Function
+  - `src.modules.cart.services.merge.mergeLine` (L73-L111) - Class
+  - `src.modules.cart.services.merge.mergeLine.written.then() callback` (L94-L110) - Function
+  - `src.modules.cart.services.merge.mergeLines.shelves` (L125-L125) - Class
+  - `src.modules.cart.services.merge.mergeLines.shelves.lines.map() callback` (L125-L125) - Function
+  - `src.modules.cart.services.merge.cartMerge` (L179-L188) - Class
+  - `src.modules.cart.services.merge.cartMerge.then() callback` (L184-L187) - Function
+  - `src.modules.cart.services.merge.then() callback.then() callback` (L186-L186) - Function
+  - `src.modules.cart.services.merge.cartMerge.then() callback.then() callback` (L187-L187) - Function
 - `src/modules/cart/services/preorder.ts`
   - `src.modules.cart.services.preorder.preorderIdsOf` (L28-L35) - Class
   - `src.modules.cart.services.preorder.preorderIdsOf.lines.filter() callback` (L33-L33) - Function
@@ -281,13 +292,13 @@ The broadest layer of the backbone — the module registry that turns the static
   - `src.modules.cart.services.preorder.backorderIdsOf.lines.filter() callback` (L48-L48) - Function
   - `src.modules.cart.services.preorder.backorderIdsOf.map() callback` (L49-L49) - Function
 - `src/modules/cart/services/reorder.ts`
-  - `src.modules.cart.services.reorder.reorderIntoCart` (L45-L92) - Class
-  - `src.modules.cart.services.reorder.then() callback` (L54-L75) - Function
-  - `src.modules.cart.services.reorder.reorderIntoCart.then() callback.then() callback` (L62-L74) - Function
-  - `src.modules.cart.services.reorder.reorderIntoCart.then() callback.then() callback.lines.every() callback` (L63-L63) - Function
-  - `src.modules.cart.services.reorder.reorderIntoCart.then() callback.then() callback.then() callback` (L71-L72) - Function
-  - `src.modules.cart.services.reorder.reorderIntoCart.catch() callback` (L76-L76) - Function
-  - `src.modules.cart.services.reorder.reorderIntoCart.then() callback` (L77-L91) - Function
+  - `src.modules.cart.services.reorder.reorderIntoCart` (L46-L100) - Class
+  - `src.modules.cart.services.reorder.then() callback` (L55-L83) - Function
+  - `src.modules.cart.services.reorder.reorderIntoCart.then() callback.then() callback` (L63-L82) - Function
+  - `src.modules.cart.services.reorder.reorderIntoCart.then() callback.then() callback.lines.some() callback` (L69-L69) - Function
+  - `src.modules.cart.services.reorder.reorderIntoCart.then() callback.then() callback.then() callback` (L79-L80) - Function
+  - `src.modules.cart.services.reorder.reorderIntoCart.catch() callback` (L84-L84) - Function
+  - `src.modules.cart.services.reorder.reorderIntoCart.then() callback` (L85-L99) - Function
 - `src/modules/cart/services/shelf.ts`
   - `src.modules.cart.services.shelf.Shelf` (L18-L25) - Interface
   - `src.modules.cart.services.shelf.readShelf` (L34-L55) - Class
@@ -313,18 +324,18 @@ The broadest layer of the backbone — the module registry that turns the static
   - `src.modules.cart.services.view.toCartView.then() callback.lines.map() callback` (L187-L187) - Function
   - `src.modules.cart.services.view.toCartView.then() callback.then() callback` (L191-L191) - Function
 - `src/modules/delivery/audit.ts`
-  - `src.modules.delivery.audit.'@infrastructure/observability/audit'.AuditActionMap` (L33-L35) - Interface
+  - `src.modules.delivery.audit.'@infrastructure/observability/audit'.AuditActionMap` (L31-L33) - Interface
 - `src/modules/delivery/domain/rates.ts`
   - `src.modules.delivery.domain.rates.findShippingMethod` (L49-L50) - Class
   - `src.modules.delivery.domain.rates.findShippingMethod.SHIPPING_METHODS.find() callback` (L50-L50) - Function
 - `src/modules/delivery/domain/tracking.ts`
   - `src.modules.delivery.domain.tracking.TrackingFacts` (L11-L16) - Interface
 - `src/modules/delivery/model.ts`
-  - `src.modules.delivery.model.ShipmentLineDocument` (L34-L38) - Interface
-  - `src.modules.delivery.model.FulfillmentOrderDocument` (L41-L100) - Interface
-  - `src.modules.delivery.model.ShipmentDocument` (L103-L133) - Interface
+  - `src.modules.delivery.model.ShipmentLineDocument` (L35-L39) - Interface
+  - `src.modules.delivery.model.FulfillmentOrderDocument` (L42-L101) - Interface
+  - `src.modules.delivery.model.ShipmentDocument` (L104-L134) - Interface
 - `src/modules/delivery/services/actions.ts`
-  - `src.modules.delivery.services.actions.Standing` (L33-L38) - Interface
+  - `src.modules.delivery.services.actions.Standing` (L34-L39) - Interface
 - `src/modules/delivery/services/board.ts`
   - `src.modules.delivery.services.board.listPreorderFulfillmentOrders.items.items.map() callback.shipments.filter() callback` (L108-L108) - Function
 - `src/modules/example/analytics.ts`
@@ -336,9 +347,9 @@ The broadest layer of the backbone — the module registry that turns the static
 - `src/modules/example/factories.ts`
   - `src.modules.example.factories.ExampleOverrides` (L15-L28) - Interface
 - `src/modules/example/model.ts`
-  - `src.modules.example.model.ExampleDocument` (L25-L38) - Interface
-  - `src.modules.example.model.applyExampleTransform` (L77-L82) - Class
-  - `src.modules.example.model.applyExampleTransform.after` (L79-L81) - Method
+  - `src.modules.example.model.ExampleDocument` (L27-L40) - Interface
+  - `src.modules.example.model.applyExampleTransform` (L79-L84) - Class
+  - `src.modules.example.model.applyExampleTransform.after` (L81-L83) - Method
 - `src/modules/example/services/crud.ts`
   - `src.modules.example.services.crud.create` (L76-L104) - Class
   - `src.modules.example.services.crud.create.then() callback` (L103-L103) - Function
@@ -350,9 +361,9 @@ The broadest layer of the backbone — the module registry that turns the static
   - `src.modules.inventory.events.'@kernel/events'.DomainEventMap` (L16-L51) - Interface
 - `src/modules/inventory/model.ts`
   - `src.modules.inventory.model.StockMovementDocument` (L31-L36) - Interface
-  - `src.modules.inventory.model.StockLevelDocument` (L115-L142) - Interface
-  - `src.modules.inventory.model.ReservationItem` (L211-L216) - Interface
-  - `src.modules.inventory.model.ReservationDocument` (L233-L245) - Interface
+  - `src.modules.inventory.model.StockLevelDocument` (L115-L147) - Interface
+  - `src.modules.inventory.model.ReservationItem` (L221-L226) - Interface
+  - `src.modules.inventory.model.ReservationDocument` (L250-L262) - Interface
 - `src/modules/inventory/presenter.ts`
   - `src.modules.inventory.presenter.PreorderProductFacts` (L14-L20) - Interface
 - `src/modules/inventory/services/allocate.ts`
@@ -368,11 +379,11 @@ The broadest layer of the backbone — the module registry that turns the static
 - `src/modules/locales/audit.ts`
   - `src.modules.locales.audit.'@infrastructure/observability/audit'.AuditActionMap` (L35-L37) - Interface
 - `src/modules/locales/model.ts`
-  - `src.modules.locales.model.LocaleDocument` (L48-L54) - Interface
-  - `src.modules.locales.model.LocaleEntryDocument` (L57-L61) - Interface
-  - `src.modules.locales.model.TranslationDocument` (L64-L68) - Interface
-  - `src.modules.locales.model.derivesBaseLanguage` (L153-L155) - Function
-  - `src.modules.locales.model.translationSchema.fields.default` (L264-L264) - Method
+  - `src.modules.locales.model.LocaleDocument` (L50-L56) - Interface
+  - `src.modules.locales.model.LocaleEntryDocument` (L59-L63) - Interface
+  - `src.modules.locales.model.TranslationDocument` (L66-L70) - Interface
+  - `src.modules.locales.model.derivesBaseLanguage` (L162-L164) - Function
+  - `src.modules.locales.model.translationSchema.fields.default` (L273-L273) - Method
 - `src/modules/locales/module.ts`
   - `src.modules.locales.module.onRegistered` (L35-L68) - Class
   - `src.modules.locales.module.onRegistered.registerLocaleOverrideProvider() callback` (L40-L40) - Function
@@ -384,44 +395,51 @@ The broadest layer of the backbone — the module registry that turns the static
   - `src.modules.locales.module.onRegistered.readServed.then() callback` (L64-L64) - Function
   - `src.modules.locales.module.onRegistered.readServed.then() callback.rows.map() callback` (L64-L64) - Function
 - `src/modules/locales/repository.ts`
-  - `src.modules.locales.repository.EntryInput` (L37-L40) - Interface
-  - `src.modules.locales.repository.EntryChange` (L43-L46) - Interface
-  - `src.modules.locales.repository.ImportCounts` (L49-L53) - Interface
-  - `src.modules.locales.repository.bumpRevision` (L172-L176) - Class
-  - `src.modules.locales.repository.bumpRevision.then() callback` (L176-L176) - Function
-  - `src.modules.locales.repository.valuesByKey` (L182-L188) - Class
-  - `src.modules.locales.repository.valuesByKey.then() callback` (L188-L188) - Function
-  - `src.modules.locales.repository.valuesByKey.then() callback.rows.map() callback` (L188-L188) - Function
-  - `src.modules.locales.repository.currentRevision` (L194-L200) - Class
-  - `src.modules.locales.repository.currentRevision.then() callback` (L200-L200) - Function
-  - `src.modules.locales.repository.createEntry` (L203-L214) - Class
-  - `src.modules.locales.repository.createEntry.then() callback.then() callback` (L214-L214) - Function
-  - `src.modules.locales.repository.saveEntryValue` (L217-L229) - Class
-  - `src.modules.locales.repository.saveEntryValue.then() callback` (L226-L227) - Function
-  - `src.modules.locales.repository.saveEntryValue.then() callback.then() callback` (L227-L227) - Function
-  - `src.modules.locales.repository.removeEntry` (L232-L233) - Class
-  - `src.modules.locales.repository.removeEntry.then() callback` (L233-L233) - Function
-  - `src.modules.locales.repository.importEntries` (L249-L305) - Class
-  - `src.modules.locales.repository.importEntries.withTransaction() callback` (L271-L290) - Function
-  - `src.modules.locales.repository.importEntries.withTransaction() callback.changedEntries.map() callback` (L276-L282) - Function
-  - `src.modules.locales.repository.LocaleCascadeCounts` (L308-L313) - Interface
+  - `src.modules.locales.repository.EntryInput` (L43-L46) - Interface
+  - `src.modules.locales.repository.EntryChange` (L49-L52) - Interface
+  - `src.modules.locales.repository.ImportCounts` (L55-L59) - Interface
+  - `src.modules.locales.repository.bumpRevision` (L181-L191) - Class
+  - `src.modules.locales.repository.bumpRevision.then() callback` (L191-L191) - Function
+  - `src.modules.locales.repository.fenceRevision` (L203-L214) - Class
+  - `src.modules.locales.repository.fenceRevision.then() callback` (L211-L213) - Function
+  - `src.modules.locales.repository.valuesByKey` (L220-L231) - Class
+  - `src.modules.locales.repository.valuesByKey.then() callback` (L231-L231) - Function
+  - `src.modules.locales.repository.valuesByKey.then() callback.rows.map() callback` (L231-L231) - Function
+  - `src.modules.locales.repository.currentRevision` (L237-L244) - Class
+  - `src.modules.locales.repository.currentRevision.then() callback` (L244-L244) - Function
+  - `src.modules.locales.repository.createEntry` (L247-L258) - Class
+  - `src.modules.locales.repository.createEntry.withTransaction() callback` (L252-L257) - Function
+  - `src.modules.locales.repository.createEntry.withTransaction() callback.then() callback` (L255-L256) - Function
+  - `src.modules.locales.repository.createEntry.withTransaction() callback.then() callback.then() callback` (L256-L256) - Function
+  - `src.modules.locales.repository.saveEntryValue` (L266-L291) - Class
+  - `src.modules.locales.repository.saveEntryValue.then() callback` (L271-L271) - Function
+  - `src.modules.locales.repository.saveEntryValue.withTransaction() callback` (L273-L289) - Function
+  - `src.modules.locales.repository.saveEntryValue.withTransaction() callback.then() callback` (L283-L289) - Function
+  - `src.modules.locales.repository.saveEntryValue.withTransaction() callback.then() callback.then() callback` (L285-L288) - Function
+  - `src.modules.locales.repository.removeEntry` (L294-L297) - Class
+  - `src.modules.locales.repository.removeEntry.withTransaction() callback` (L295-L296) - Function
+  - `src.modules.locales.repository.removeEntry.withTransaction() callback.then() callback` (L296-L296) - Function
+  - `src.modules.locales.repository.importEntries` (L315-L375) - Class
+  - `src.modules.locales.repository.importEntries.withTransaction() callback` (L321-L375) - Function
+  - `src.modules.locales.repository.importEntries.withTransaction() callback.changedEntries.map() callback` (L347-L353) - Function
+  - `src.modules.locales.repository.LocaleCascadeCounts` (L378-L383) - Interface
 - `src/modules/locales/services/capabilities.ts`
-  - `src.modules.locales.services.capabilities.readLanguage` (L250-L259) - Class
-  - `src.modules.locales.services.capabilities.readLanguage.then() callback` (L255-L259) - Function
+  - `src.modules.locales.services.capabilities.readLanguage` (L258-L267) - Class
+  - `src.modules.locales.services.capabilities.readLanguage.then() callback` (L263-L267) - Function
 - `src/modules/locales/services/entries.ts`
-  - `src.modules.locales.services.entries.findEntryInLanguage` (L44-L51) - Class
-  - `src.modules.locales.services.entries.findEntryInLanguage.then() callback` (L51-L51) - Function
-  - `src.modules.locales.services.entries.searchEntries` (L59-L83) - Class
-  - `src.modules.locales.services.entries.searchEntries.then() callback` (L68-L83) - Function
-  - `src.modules.locales.services.entries.searchEntries.then() callback.then() callback` (L82-L82) - Function
-  - `src.modules.locales.services.entries.getEntry` (L149-L160) - Class
-  - `src.modules.locales.services.entries.getEntry.then() callback` (L157-L158) - Function
-  - `src.modules.locales.services.entries.updateEntry` (L166-L201) - Class
-  - `src.modules.locales.services.entries.updateEntry.then() callback` (L176-L200) - Function
-  - `src.modules.locales.services.entries.updateEntry.then() callback.then() callback` (L184-L199) - Function
-  - `src.modules.locales.services.entries.removeEntry` (L209-L236) - Class
-  - `src.modules.locales.services.entries.removeEntry.then() callback` (L218-L235) - Function
-  - `src.modules.locales.services.entries.removeEntry.then() callback.then() callback` (L222-L234) - Function
+  - `src.modules.locales.services.entries.findEntryInLanguage` (L46-L53) - Class
+  - `src.modules.locales.services.entries.findEntryInLanguage.then() callback` (L53-L53) - Function
+  - `src.modules.locales.services.entries.searchEntries` (L61-L91) - Class
+  - `src.modules.locales.services.entries.searchEntries.then() callback` (L70-L91) - Function
+  - `src.modules.locales.services.entries.searchEntries.then() callback.then() callback` (L87-L88) - Function
+  - `src.modules.locales.services.entries.getEntry` (L157-L168) - Class
+  - `src.modules.locales.services.entries.getEntry.then() callback` (L165-L166) - Function
+  - `src.modules.locales.services.entries.updateEntry` (L174-L209) - Class
+  - `src.modules.locales.services.entries.updateEntry.then() callback` (L184-L208) - Function
+  - `src.modules.locales.services.entries.updateEntry.then() callback.then() callback` (L192-L207) - Function
+  - `src.modules.locales.services.entries.removeEntry` (L217-L244) - Class
+  - `src.modules.locales.services.entries.removeEntry.then() callback` (L226-L243) - Function
+  - `src.modules.locales.services.entries.removeEntry.then() callback.then() callback` (L230-L242) - Function
 - `src/modules/locales/services/languages.ts`
   - `src.modules.locales.services.languages.createLanguage` (L77-L114) - Class
   - `src.modules.locales.services.languages.createLanguage.then() callback` (L85-L113) - Function
@@ -440,18 +458,18 @@ The broadest layer of the backbone — the module registry that turns the static
   - `src.modules.locales.services.languages.removeLanguage.then() callback.then() callback` (L258-L270) - Function
   - `src.modules.locales.services.languages.removeLanguage.then() callback.then() callback.then() callback` (L267-L268) - Function
 - `src/modules/locales/services/translations.ts`
-  - `src.modules.locales.services.translations.EntityTranslationsResult` (L38-L44) - Interface
-  - `src.modules.locales.services.translations.planSlot` (L99-L150) - Class
-  - `src.modules.locales.services.translations.planSlot.then() callback` (L142-L149) - Function
-  - `src.modules.locales.services.translations.clearOmittedInPayload` (L385-L396) - Class
-  - `src.modules.locales.services.translations.clearOmittedInPayload.map() callback` (L390-L395) - Function
+  - `src.modules.locales.services.translations.EntityTranslationsResult` (L40-L46) - Interface
+  - `src.modules.locales.services.translations.planSlot` (L112-L171) - Class
+  - `src.modules.locales.services.translations.planSlot.then() callback` (L163-L170) - Function
+  - `src.modules.locales.services.translations.clearOmittedInPayload` (L423-L434) - Class
+  - `src.modules.locales.services.translations.clearOmittedInPayload.map() callback` (L428-L433) - Function
 - `src/modules/notifications/factories.ts`
   - `src.modules.notifications.factories.NotificationOverrides` (L13-L29) - Interface
 - `src/modules/notifications/model.ts`
   - `src.modules.notifications.model.NotificationCommon` (L36-L51) - Interface
 - `src/modules/notifications/presenter.ts`
   - `src.modules.notifications.presenter.NotificationsView` (L11-L13) - Interface
-  - `src.modules.notifications.presenter.presentNotifications.items.notifications.map() callback` (L38-L38) - Function
+  - `src.modules.notifications.presenter.presentNotifications.items.notifications.map() callback` (L40-L40) - Function
 - `src/modules/notifications/repository.ts`
   - `src.modules.notifications.repository.notificationRepository.deleteByAudience` (L177-L193) - Method
   - `src.modules.notifications.repository.notificationRepository.deleteByAudience.then() callback` (L184-L192) - Function
@@ -474,66 +492,66 @@ The broadest layer of the backbone — the module registry that turns the static
 - `src/modules/orders/domain/deletion.ts`
   - `src.modules.orders.domain.deletion.DeletionCandidate` (L12-L19) - Interface
 - `src/modules/orders/domain/fulfillment.ts`
-  - `src.modules.orders.domain.fulfillment.FulfillmentSummary` (L20-L33) - Interface
+  - `src.modules.orders.domain.fulfillment.FulfillmentSummary` (L21-L34) - Interface
 - `src/modules/orders/events.ts`
-  - `src.modules.orders.events.'@kernel/events'.DomainEventMap` (L14-L101) - Interface
+  - `src.modules.orders.events.'@kernel/events'.DomainEventMap` (L14-L111) - Interface
 - `src/modules/orders/model.ts`
-  - `src.modules.orders.model.applyOrderTransform` (L635-L650) - Class
-  - `src.modules.orders.model.applyOrderTransform.after` (L639-L649) - Method
+  - `src.modules.orders.model.applyOrderTransform` (L642-L657) - Class
+  - `src.modules.orders.model.applyOrderTransform.after` (L646-L656) - Method
 - `src/modules/orders/presenter.ts`
-  - `src.modules.orders.presenter.presentTimeline` (L64-L70) - Class
-  - `src.modules.orders.presenter.presentTimeline.events.filter() callback` (L69-L69) - Function
-  - `src.modules.orders.presenter.presentTimeline.map() callback` (L70-L70) - Function
+  - `src.modules.orders.presenter.presentTimeline` (L88-L91) - Class
+  - `src.modules.orders.presenter.presentTimeline.events.map() callback` (L91-L91) - Function
 - `src/modules/orders/repository.ts`
-  - `src.modules.orders.repository.deleteCanceledUnpaid` (L804-L830) - Class
-  - `src.modules.orders.repository.deleteCanceledUnpaid.checkedDelete() callback` (L807-L829) - Function
-  - `src.modules.orders.repository.deleteCanceledUnpaid.checkedDelete() callback.then() callback` (L822-L825) - Function
-  - `src.modules.orders.repository.deleteCanceledUnpaid.checkedDelete() callback.finally() callback` (L826-L828) - Function
-  - `src.modules.orders.repository.deleteCanceledUnpaid.then() callback` (L829-L829) - Function
-  - `src.modules.orders.repository.orderEventRepository` (L945-L1082) - Class
-  - `src.modules.orders.repository.orderEventRepository.findByOrderId` (L975-L979) - Method
-  - `src.modules.orders.repository.orderEventRepository.findByOrderIds` (L986-L990) - Method
-  - `src.modules.orders.repository.orderEventRepository.findByOrderIds.orderId.$in.orderIds.map() callback` (L988-L988) - Function
-  - `src.modules.orders.repository.orderEventRepository.findBuyerCancelTimes` (L1004-L1017) - Method
-  - `src.modules.orders.repository.orderEventRepository.findBuyerCancelTimes.orderId.$in.orderIds.map() callback` (L1007-L1007) - Function
-  - `src.modules.orders.repository.orderEventRepository.findBuyerCancelTimes.then() callback` (L1017-L1017) - Function
-  - `src.modules.orders.repository.orderEventRepository.findBuyerCancelTimes.then() callback.rows.map() callback` (L1017-L1017) - Function
-  - `src.modules.orders.repository.orderEventRepository.clearActor` (L1026-L1030) - Method
-  - `src.modules.orders.repository.orderEventRepository.clearActor.then() callback` (L1030-L1030) - Function
-  - `src.modules.orders.repository.orderEventRepository.scrubTextBefore` (L1039-L1043) - Method
-  - `src.modules.orders.repository.orderEventRepository.scrubTextBefore.then() callback` (L1043-L1043) - Function
-  - `src.modules.orders.repository.orderEventRepository.deleteByOrderId` (L1075-L1079) - Method
-  - `src.modules.orders.repository.orderEventRepository.deleteByOrderId.then() callback` (L1079-L1079) - Function
+  - `src.modules.orders.repository.deleteCanceledUnpaid` (L815-L843) - Class
+  - `src.modules.orders.repository.deleteCanceledUnpaid.checkedDelete() callback` (L818-L842) - Function
+  - `src.modules.orders.repository.deleteCanceledUnpaid.checkedDelete() callback.then() callback` (L835-L838) - Function
+  - `src.modules.orders.repository.deleteCanceledUnpaid.checkedDelete() callback.finally() callback` (L839-L841) - Function
+  - `src.modules.orders.repository.deleteCanceledUnpaid.then() callback` (L842-L842) - Function
+  - `src.modules.orders.repository.orderEventRepository` (L958-L1111) - Class
+  - `src.modules.orders.repository.orderEventRepository.findPageByOrderId` (L994-L1008) - Method
+  - `src.modules.orders.repository.orderEventRepository.findPageByOrderId.then() callback` (L1007-L1007) - Function
+  - `src.modules.orders.repository.orderEventRepository.findByOrderIds` (L1015-L1019) - Method
+  - `src.modules.orders.repository.orderEventRepository.findByOrderIds.orderId.$in.orderIds.map() callback` (L1017-L1017) - Function
+  - `src.modules.orders.repository.orderEventRepository.findBuyerCancelTimes` (L1033-L1046) - Method
+  - `src.modules.orders.repository.orderEventRepository.findBuyerCancelTimes.orderId.$in.orderIds.map() callback` (L1036-L1036) - Function
+  - `src.modules.orders.repository.orderEventRepository.findBuyerCancelTimes.then() callback` (L1046-L1046) - Function
+  - `src.modules.orders.repository.orderEventRepository.findBuyerCancelTimes.then() callback.rows.map() callback` (L1046-L1046) - Function
+  - `src.modules.orders.repository.orderEventRepository.clearActor` (L1055-L1059) - Method
+  - `src.modules.orders.repository.orderEventRepository.clearActor.then() callback` (L1059-L1059) - Function
+  - `src.modules.orders.repository.orderEventRepository.scrubTextBefore` (L1068-L1072) - Method
+  - `src.modules.orders.repository.orderEventRepository.scrubTextBefore.then() callback` (L1072-L1072) - Function
+  - `src.modules.orders.repository.orderEventRepository.deleteByOrderId` (L1104-L1108) - Method
+  - `src.modules.orders.repository.orderEventRepository.deleteByOrderId.then() callback` (L1108-L1108) - Function
 - `src/modules/orders/services/place.ts`
-  - `src.modules.orders.services.place.PlaceOrderLine` (L39-L49) - Interface
-  - `src.modules.orders.services.place.PlaceOrderShipping` (L60-L65) - Interface
-  - `src.modules.orders.services.place.PlaceOrderInput` (L68-L87) - Interface
-  - `src.modules.orders.services.place.OrderSuperseded` (L98-L98) - Class
-  - `src.modules.orders.services.place.orderItems.input.lines.map() callback` (L153-L153) - Function
+  - `src.modules.orders.services.place.PlaceOrderLine` (L40-L50) - Interface
+  - `src.modules.orders.services.place.PlaceOrderShipping` (L61-L66) - Interface
+  - `src.modules.orders.services.place.PlaceOrderInput` (L69-L90) - Interface
+  - `src.modules.orders.services.place.OrderSuperseded` (L101-L101) - Class
+  - `src.modules.orders.services.place.orderItems.input.lines.map() callback` (L156-L156) - Function
 - `src/modules/orders/services/read.ts`
-  - `src.modules.orders.services.read.ownOrderIds` (L92-L99) - Class
-  - `src.modules.orders.services.read.ownOrderIds.readAll() callback` (L94-L97) - Function
-  - `src.modules.orders.services.read.ownOrderIds.readAll() callback.then() callback` (L97-L97) - Function
-  - `src.modules.orders.services.read.ownOrderIds.then() callback` (L99-L99) - Function
-  - `src.modules.orders.services.read.ownOrderIds.then() callback.orders.map() callback` (L99-L99) - Function
-  - `src.modules.orders.services.read.OrderBrief` (L102-L110) - Interface
+  - `src.modules.orders.services.read.ownOrderIds` (L91-L98) - Class
+  - `src.modules.orders.services.read.ownOrderIds.readAll() callback` (L93-L96) - Function
+  - `src.modules.orders.services.read.ownOrderIds.readAll() callback.then() callback` (L96-L96) - Function
+  - `src.modules.orders.services.read.ownOrderIds.then() callback` (L98-L98) - Function
+  - `src.modules.orders.services.read.ownOrderIds.then() callback.orders.map() callback` (L98-L98) - Function
+  - `src.modules.orders.services.read.OrderBrief` (L101-L109) - Interface
 - `src/modules/orders/services/remove.ts`
-  - `src.modules.orders.services.remove.then() callback.then() callback` (L72-L72) - Function
-  - `src.modules.orders.services.remove.remove` (L100-L142) - Class
-  - `src.modules.orders.services.remove.remove.then() callback` (L132-L141) - Function
-  - `src.modules.orders.services.remove.removeById` (L177-L186) - Class
-  - `src.modules.orders.services.remove.removeById.then() callback` (L182-L186) - Function
+  - `src.modules.orders.services.remove.then() callback.then() callback` (L64-L64) - Function
+  - `src.modules.orders.services.remove.remove` (L92-L134) - Class
+  - `src.modules.orders.services.remove.remove.then() callback` (L124-L133) - Function
+  - `src.modules.orders.services.remove.removeById` (L172-L181) - Class
+  - `src.modules.orders.services.remove.removeById.then() callback` (L177-L181) - Function
 - `src/modules/orders/services/timeline.ts`
-  - `src.modules.orders.services.timeline.appendTimeline` (L80-L84) - Class
-  - `src.modules.orders.services.timeline.appendTimeline.then() callback` (L84-L84) - Function
-  - `src.modules.orders.services.timeline.readTimeline` (L198-L206) - Class
-  - `src.modules.orders.services.timeline.readTimeline.then() callback` (L204-L205) - Function
-  - `src.modules.orders.services.timeline.collectTimelineOf` (L217-L229) - Class
-  - `src.modules.orders.services.timeline.collectTimelineOf.then() callback` (L220-L228) - Function
-  - `src.modules.orders.services.timeline.collectTimelineOf.then() callback.then() callback` (L221-L227) - Function
-  - `src.modules.orders.services.timeline.collectTimelineOf.then() callback.then() callback.events.map() callback` (L222-L227) - Function
-  - `src.modules.orders.services.timeline.deleteTimelineOf` (L262-L263) - Class
-  - `src.modules.orders.services.timeline.deleteTimelineOf.then() callback` (L263-L263) - Function
+  - `src.modules.orders.services.timeline.appendTimeline` (L86-L90) - Class
+  - `src.modules.orders.services.timeline.appendTimeline.then() callback` (L90-L90) - Function
+  - `src.modules.orders.services.timeline.readTimeline` (L206-L219) - Class
+  - `src.modules.orders.services.timeline.readTimeline.then() callback` (L215-L218) - Function
+  - `src.modules.orders.services.timeline.collectTimelineOf` (L230-L242) - Class
+  - `src.modules.orders.services.timeline.collectTimelineOf.then() callback` (L233-L241) - Function
+  - `src.modules.orders.services.timeline.collectTimelineOf.then() callback.then() callback` (L234-L240) - Function
+  - `src.modules.orders.services.timeline.collectTimelineOf.then() callback.then() callback.events.map() callback` (L235-L240) - Function
+  - `src.modules.orders.services.timeline.deleteTimelineOf` (L275-L276) - Class
+  - `src.modules.orders.services.timeline.deleteTimelineOf.then() callback` (L276-L276) - Function
 - `src/modules/payments/analytics.ts`
   - `src.modules.payments.analytics.'@infrastructure/observability/analytics'.AnalyticsEventMap` (L26-L28) - Interface
 - `src/modules/payments/audit.ts`
@@ -546,18 +564,18 @@ The broadest layer of the backbone — the module registry that turns the static
 - `src/modules/payments/globals.d.ts`
   - `src.modules.payments.globals.d.'express-serve-static-core'.Request` (L15-L24) - Interface
 - `src/modules/payments/model.ts`
-  - `src.modules.payments.model.applyPaymentTransform` (L416-L427) - Class
-  - `src.modules.payments.model.applyPaymentTransform.after` (L418-L426) - Method
-  - `src.modules.payments.model.applyPaymentTransform.after.serialized.refunds.map() callback` (L423-L424) - Function
+  - `src.modules.payments.model.applyPaymentTransform` (L439-L450) - Class
+  - `src.modules.payments.model.applyPaymentTransform.after` (L441-L449) - Method
+  - `src.modules.payments.model.applyPaymentTransform.after.serialized.refunds.map() callback` (L446-L447) - Function
 - `src/modules/payments/services/refunds.ts`
-  - `src.modules.payments.services.refunds.RefundRequest` (L84-L104) - Interface
-  - `src.modules.payments.services.refunds.OpenedRefund` (L116-L119) - Interface
-  - `src.modules.payments.services.refunds.RefundOutcome` (L122-L132) - Interface
-  - `src.modules.payments.services.refunds.write.then() callback.then() callback` (L329-L329) - Function
-  - `src.modules.payments.services.refunds.then() callback.then() callback.then() callback` (L676-L676) - Function
-  - `src.modules.payments.services.refunds.RefundRequested` (L768-L773) - Interface
-  - `src.modules.payments.services.refunds.then() callback.announceInTransaction() callback` (L1073-L1073) - Function
-  - `src.modules.payments.services.refunds.OpenedReturnRefund` (L1154-L1159) - Interface
+  - `src.modules.payments.services.refunds.RefundRequest` (L87-L114) - Interface
+  - `src.modules.payments.services.refunds.OpenedRefund` (L126-L129) - Interface
+  - `src.modules.payments.services.refunds.RefundOutcome` (L132-L142) - Interface
+  - `src.modules.payments.services.refunds.write.then() callback.then() callback` (L359-L359) - Function
+  - `src.modules.payments.services.refunds.then() callback.then() callback.then() callback` (L712-L712) - Function
+  - `src.modules.payments.services.refunds.RefundRequested` (L800-L805) - Interface
+  - `src.modules.payments.services.refunds.then() callback.announceInTransaction() callback` (L1115-L1115) - Function
+  - `src.modules.payments.services.refunds.OpenedReturnRefund` (L1247-L1252) - Interface
 - `src/modules/products/analytics.ts`
   - `src.modules.products.analytics.'@infrastructure/observability/analytics'.AnalyticsEventMap` (L19-L21) - Interface
 - `src/modules/products/audit.ts`
@@ -565,9 +583,9 @@ The broadest layer of the backbone — the module registry that turns the static
 - `src/modules/products/events.ts`
   - `src.modules.products.events.'@kernel/events'.DomainEventMap` (L10-L76) - Interface
 - `src/modules/products/model.ts`
-  - `src.modules.products.model.RefinableProduct` (L224-L229) - Interface
+  - `src.modules.products.model.RefinableProduct` (L201-L206) - Interface
 - `src/modules/returns/audit.ts`
-  - `src.modules.returns.audit.'@infrastructure/observability/audit'.AuditActionMap` (L23-L25) - Interface
+  - `src.modules.returns.audit.'@infrastructure/observability/audit'.AuditActionMap` (L25-L27) - Interface
 - `src/modules/returns/domain/reasons.ts`
   - `src.modules.returns.domain.reasons.FrozenDeadlines` (L32-L37) - Interface
 - `src/modules/returns/domain/refund-amount.ts`
@@ -577,13 +595,10 @@ The broadest layer of the backbone — the module registry that turns the static
 - `src/modules/returns/domain/statement.ts`
   - `src.modules.returns.domain.statement.StatementInput` (L17-L28) - Interface
 - `src/modules/returns/events.ts`
-  - `src.modules.returns.events.'@kernel/events'.DomainEventMap` (L12-L54) - Interface
+  - `src.modules.returns.events.'@kernel/events'.DomainEventMap` (L12-L56) - Interface
 - `src/modules/returns/services/outcome.ts`
   - `src.modules.returns.services.outcome.CreateReturnInput` (L31-L47) - Interface
   - `src.modules.returns.services.outcome.Opener` (L50-L55) - Interface
-- `src/modules/stats/services/figures.ts`
-  - `src.modules.stats.services.figures.RawFigures` (L20-L32) - Interface
-  - `src.modules.stats.services.figures.Figures` (L35-L49) - Interface
 - `src/modules/stock-alerts/events.ts`
   - `src.modules.stock-alerts.events.'@kernel/events'.DomainEventMap` (L9-L21) - Interface
 - `src/modules/stock-alerts/model.ts`
@@ -597,59 +612,61 @@ The broadest layer of the backbone — the module registry that turns the static
 - `src/modules/users/events.ts`
   - `src.modules.users.events.'@kernel/events'.DomainEventMap` (L16-L58) - Interface
 - `src/modules/users/model.ts`
-  - `src.modules.users.model.applyUserTransform` (L778-L796) - Class
-  - `src.modules.users.model.applyUserTransform.after` (L787-L795) - Method
+  - `src.modules.users.model.applyUserTransform` (L783-L801) - Class
+  - `src.modules.users.model.applyUserTransform.after` (L792-L800) - Method
+- `src/modules/users/repository.ts`
+  - `src.modules.users.repository.userRepository.saveWithoutEdit` (L778-L781) - Method
 - `src/modules/webhooks/audit.ts`
   - `src.modules.webhooks.audit.'@infrastructure/observability/audit'.AuditActionMap` (L27-L29) - Interface
 - `src/modules/webhooks/events.ts`
   - `src.modules.webhooks.events.'@kernel/events'.DomainEventMap` (L9-L23) - Interface
 - `src/modules/webhooks/model.ts`
-  - `src.modules.webhooks.model.WebhookSecretRingEntry` (L25-L29) - Interface
-  - `src.modules.webhooks.model.WebhookSubscriptionDocument` (L32-L64) - Interface
-  - `src.modules.webhooks.model.webhookSubscriptionSchema.eventTypes.validate.validator` (L96-L96) - Method
-  - `src.modules.webhooks.model.applyWebhookSubscriptionTransform` (L153-L163) - Class
-  - `src.modules.webhooks.model.applyWebhookSubscriptionTransform.after` (L155-L162) - Method
-  - `src.modules.webhooks.model.applyWebhookSubscriptionTransform.after.map() callback` (L158-L158) - Function
-  - `src.modules.webhooks.model.WebhookDeliveryDocument` (L186-L211) - Interface
+  - `src.modules.webhooks.model.WebhookSecretRingEntry` (L26-L30) - Interface
+  - `src.modules.webhooks.model.WebhookSubscriptionDocument` (L33-L65) - Interface
+  - `src.modules.webhooks.model.webhookSubscriptionSchema.eventTypes.validate.validator` (L97-L97) - Method
+  - `src.modules.webhooks.model.applyWebhookSubscriptionTransform` (L159-L169) - Class
+  - `src.modules.webhooks.model.applyWebhookSubscriptionTransform.after` (L161-L168) - Method
+  - `src.modules.webhooks.model.applyWebhookSubscriptionTransform.after.map() callback` (L164-L164) - Function
+  - `src.modules.webhooks.model.WebhookDeliveryDocument` (L192-L217) - Interface
 - `src/modules/webhooks/repository.ts`
   - `src.modules.webhooks.repository.findEnabledIdsAmong` (L70-L75) - Class
   - `src.modules.webhooks.repository.findEnabledIdsAmong._id.$in.ids.map() callback` (L72-L72) - Function
   - `src.modules.webhooks.repository.findEnabledIdsAmong.then() callback` (L75-L75) - Function
   - `src.modules.webhooks.repository.findEnabledIdsAmong.then() callback.rows.map() callback` (L75-L75) - Function
-  - `src.modules.webhooks.repository.recordFailure` (L96-L111) - Class
-  - `src.modules.webhooks.repository.recordFailure.then() callback` (L103-L110) - Function
+  - `src.modules.webhooks.repository.recordFailure` (L96-L114) - Class
+  - `src.modules.webhooks.repository.recordFailure.then() callback` (L106-L113) - Function
 - `src/modules/webhooks/secrets.ts`
-  - `src.modules.webhooks.secrets.liveRingEntries` (L86-L96) - Class
-  - `src.modules.webhooks.secrets.liveRingEntries.ring.filter() callback` (L92-L94) - Function
-  - `src.modules.webhooks.secrets.retiringRingSecrets` (L105-L119) - Class
-  - `src.modules.webhooks.secrets.retiringRingSecrets.map() callback` (L112-L118) - Function
-  - `src.modules.webhooks.secrets.retiringRingSecrets.map() callback.retiresAt.ring.findIndex() callback` (L115-L115) - Function
-  - `src.modules.webhooks.secrets.activeRingSecrets` (L130-L134) - Class
-  - `src.modules.webhooks.secrets.activeRingSecrets.map() callback` (L134-L134) - Function
-  - `src.modules.webhooks.secrets.removeRingSecret` (L137-L140) - Class
-  - `src.modules.webhooks.secrets.removeRingSecret.ring.filter() callback` (L140-L140) - Function
+  - `src.modules.webhooks.secrets.liveRingEntries` (L87-L97) - Class
+  - `src.modules.webhooks.secrets.liveRingEntries.ring.filter() callback` (L93-L95) - Function
+  - `src.modules.webhooks.secrets.retiringRingSecrets` (L106-L120) - Class
+  - `src.modules.webhooks.secrets.retiringRingSecrets.map() callback` (L113-L119) - Function
+  - `src.modules.webhooks.secrets.retiringRingSecrets.map() callback.retiresAt.ring.findIndex() callback` (L116-L116) - Function
+  - `src.modules.webhooks.secrets.activeRingSecrets` (L131-L135) - Class
+  - `src.modules.webhooks.secrets.activeRingSecrets.map() callback` (L135-L135) - Function
+  - `src.modules.webhooks.secrets.removeRingSecret` (L138-L141) - Class
+  - `src.modules.webhooks.secrets.removeRingSecret.ring.filter() callback` (L141-L141) - Function
 - `src/modules/webhooks/services/actions.ts`
-  - `src.modules.webhooks.services.actions.Standing` (L22-L27) - Interface
-  - `src.modules.webhooks.services.actions.SubscriptionState` (L39-L44) - Interface
+  - `src.modules.webhooks.services.actions.Standing` (L23-L30) - Interface
+  - `src.modules.webhooks.services.actions.SubscriptionState` (L43-L50) - Interface
 - `src/modules/webhooks/services/attempt.ts`
   - `src.modules.webhooks.services.attempt.recordSuccess` (L93-L115) - Class
   - `src.modules.webhooks.services.attempt.recordSuccess.then() callback` (L108-L113) - Function
   - `src.modules.webhooks.services.attempt.recordSuccess.then() callback.then() callback` (L112-L112) - Function
-  - `src.modules.webhooks.services.attempt.attemptDelivery` (L203-L231) - Class
-  - `src.modules.webhooks.services.attempt.attemptDelivery.then() callback` (L226-L229) - Function
-  - `src.modules.webhooks.services.attempt.processDeliveryJob` (L252-L260) - Class
-  - `src.modules.webhooks.services.attempt.processDeliveryJob.then() callback` (L253-L260) - Function
-  - `src.modules.webhooks.services.attempt.processDeliveryJob.then() callback.then() callback` (L259-L259) - Function
+  - `src.modules.webhooks.services.attempt.attemptDelivery` (L203-L236) - Class
+  - `src.modules.webhooks.services.attempt.attemptDelivery.then() callback` (L231-L234) - Function
+  - `src.modules.webhooks.services.attempt.processDeliveryJob` (L257-L265) - Class
+  - `src.modules.webhooks.services.attempt.processDeliveryJob.then() callback` (L258-L265) - Function
+  - `src.modules.webhooks.services.attempt.processDeliveryJob.then() callback.then() callback` (L264-L264) - Function
 - `src/modules/webhooks/services/deliveries.ts`
-  - `src.modules.webhooks.services.deliveries.DeliveryListFilters` (L30-L35) - Interface
-  - `src.modules.webhooks.services.deliveries.list` (L51-L78) - Class
-  - `src.modules.webhooks.services.deliveries.list.then() callback` (L66-L78) - Function
-  - `src.modules.webhooks.services.deliveries.list.then() callback.items.map() callback` (L70-L70) - Function
-  - `src.modules.webhooks.services.deliveries.list.then() callback.then() callback` (L71-L77) - Function
-  - `src.modules.webhooks.services.deliveries.list.then() callback.then() callback.items.items.map() callback` (L72-L75) - Function
-  - `src.modules.webhooks.services.deliveries.get` (L87-L107) - Class
-  - `src.modules.webhooks.services.deliveries.get.then() callback` (L91-L107) - Function
-  - `src.modules.webhooks.services.deliveries.get.then() callback.then() callback` (L96-L105) - Function
+  - `src.modules.webhooks.services.deliveries.DeliveryListFilters` (L32-L37) - Interface
+  - `src.modules.webhooks.services.deliveries.list` (L53-L84) - Class
+  - `src.modules.webhooks.services.deliveries.list.then() callback` (L68-L84) - Function
+  - `src.modules.webhooks.services.deliveries.list.then() callback.items.map() callback` (L72-L72) - Function
+  - `src.modules.webhooks.services.deliveries.list.then() callback.then() callback` (L73-L83) - Function
+  - `src.modules.webhooks.services.deliveries.list.then() callback.then() callback.items.items.map() callback` (L74-L81) - Function
+  - `src.modules.webhooks.services.deliveries.get` (L93-L114) - Class
+  - `src.modules.webhooks.services.deliveries.get.then() callback` (L97-L114) - Function
+  - `src.modules.webhooks.services.deliveries.get.then() callback.then() callback` (L102-L112) - Function
 - `src/modules/webhooks/services/publish.ts`
   - `src.modules.webhooks.services.publish.createDeliveryRow` (L36-L55) - Class
   - `src.modules.webhooks.services.publish.createDeliveryRow.catch() callback` (L52-L55) - Function
@@ -657,33 +674,33 @@ The broadest layer of the backbone — the module registry that turns the static
   - `src.modules.webhooks.services.reencrypt.fieldsOf` (L14-L20) - Class
   - `src.modules.webhooks.services.reencrypt.fieldsOf.subscription.secrets.map() callback` (L15-L20) - Function
 - `src/modules/webhooks/services/subscriptions.ts`
-  - `src.modules.webhooks.services.subscriptions.refuseUnsafeUrl` (L61-L75) - Class
-  - `src.modules.webhooks.services.subscriptions.refuseUnsafeUrl.then() callback` (L63-L63) - Function
-  - `src.modules.webhooks.services.subscriptions.refuseUnsafeUrl.catch() callback` (L64-L75) - Function
-  - `src.modules.webhooks.services.subscriptions.list` (L111-L133) - Class
-  - `src.modules.webhooks.services.subscriptions.list.then() callback` (L129-L132) - Function
-  - `src.modules.webhooks.services.subscriptions.list.then() callback.items.items.map() callback` (L130-L130) - Function
-  - `src.modules.webhooks.services.subscriptions.create` (L223-L252) - Class
-  - `src.modules.webhooks.services.subscriptions.create.then() callback` (L231-L251) - Function
-  - `src.modules.webhooks.services.subscriptions.create.then() callback.then() callback` (L250-L250) - Function
-  - `src.modules.webhooks.services.subscriptions.update` (L271-L310) - Class
-  - `src.modules.webhooks.services.subscriptions.update.then() callback` (L278-L310) - Function
-  - `src.modules.webhooks.services.subscriptions.update.then() callback.then() callback` (L300-L309) - Function
-  - `src.modules.webhooks.services.subscriptions.enable` (L327-L357) - Class
-  - `src.modules.webhooks.services.subscriptions.enable.then() callback` (L333-L357) - Function
-  - `src.modules.webhooks.services.subscriptions.enable.then() callback.then() callback` (L348-L356) - Function
-  - `src.modules.webhooks.services.subscriptions.disable` (L366-L391) - Class
-  - `src.modules.webhooks.services.subscriptions.disable.then() callback` (L372-L391) - Function
-  - `src.modules.webhooks.services.subscriptions.disable.then() callback.then() callback` (L382-L390) - Function
-  - `src.modules.webhooks.services.subscriptions.createSecret` (L400-L426) - Class
-  - `src.modules.webhooks.services.subscriptions.createSecret.then() callback` (L406-L426) - Function
-  - `src.modules.webhooks.services.subscriptions.createSecret.then() callback.then() callback` (L417-L425) - Function
-  - `src.modules.webhooks.services.subscriptions.removeSecret` (L435-L466) - Class
-  - `src.modules.webhooks.services.subscriptions.removeSecret.then() callback` (L442-L466) - Function
-  - `src.modules.webhooks.services.subscriptions.removeSecret.then() callback.then() callback` (L457-L465) - Function
-  - `src.modules.webhooks.services.subscriptions.remove` (L469-L487) - Class
-  - `src.modules.webhooks.services.subscriptions.remove.then() callback` (L475-L487) - Function
-  - `src.modules.webhooks.services.subscriptions.remove.then() callback.then() callback` (L478-L486) - Function
+  - `src.modules.webhooks.services.subscriptions.refuseUnsafeUrl` (L62-L76) - Class
+  - `src.modules.webhooks.services.subscriptions.refuseUnsafeUrl.then() callback` (L64-L64) - Function
+  - `src.modules.webhooks.services.subscriptions.refuseUnsafeUrl.catch() callback` (L65-L76) - Function
+  - `src.modules.webhooks.services.subscriptions.list` (L128-L150) - Class
+  - `src.modules.webhooks.services.subscriptions.list.then() callback` (L146-L149) - Function
+  - `src.modules.webhooks.services.subscriptions.list.then() callback.items.items.map() callback` (L147-L147) - Function
+  - `src.modules.webhooks.services.subscriptions.create` (L241-L272) - Class
+  - `src.modules.webhooks.services.subscriptions.create.then() callback` (L251-L271) - Function
+  - `src.modules.webhooks.services.subscriptions.create.then() callback.then() callback` (L270-L270) - Function
+  - `src.modules.webhooks.services.subscriptions.update` (L292-L342) - Class
+  - `src.modules.webhooks.services.subscriptions.update.then() callback` (L299-L342) - Function
+  - `src.modules.webhooks.services.subscriptions.update.then() callback.then() callback` (L332-L341) - Function
+  - `src.modules.webhooks.services.subscriptions.enable` (L359-L389) - Class
+  - `src.modules.webhooks.services.subscriptions.enable.then() callback` (L365-L389) - Function
+  - `src.modules.webhooks.services.subscriptions.enable.then() callback.then() callback` (L380-L388) - Function
+  - `src.modules.webhooks.services.subscriptions.disable` (L398-L423) - Class
+  - `src.modules.webhooks.services.subscriptions.disable.then() callback` (L404-L423) - Function
+  - `src.modules.webhooks.services.subscriptions.disable.then() callback.then() callback` (L414-L422) - Function
+  - `src.modules.webhooks.services.subscriptions.createSecret` (L433-L463) - Class
+  - `src.modules.webhooks.services.subscriptions.createSecret.then() callback` (L439-L463) - Function
+  - `src.modules.webhooks.services.subscriptions.createSecret.then() callback.then() callback` (L454-L462) - Function
+  - `src.modules.webhooks.services.subscriptions.removeSecret` (L472-L503) - Class
+  - `src.modules.webhooks.services.subscriptions.removeSecret.then() callback` (L479-L503) - Function
+  - `src.modules.webhooks.services.subscriptions.removeSecret.then() callback.then() callback` (L494-L502) - Function
+  - `src.modules.webhooks.services.subscriptions.remove` (L506-L524) - Class
+  - `src.modules.webhooks.services.subscriptions.remove.then() callback` (L512-L524) - Function
+  - `src.modules.webhooks.services.subscriptions.remove.then() callback.then() callback` (L515-L523) - Function
 - `src/modules/wishlist/analytics.ts`
   - `src.modules.wishlist.analytics.'@infrastructure/observability/analytics'.AnalyticsEventMap` (L19-L21) - Interface
 - `src/modules/wishlist/events.ts`
@@ -697,35 +714,36 @@ The broadest layer of the backbone — the module registry that turns the static
   - `src.modules.wishlist.presenter.savedProductIds.map() callback` (L18-L18) - Function
   - `src.modules.wishlist.presenter.presentWishlist.items.map() callback` (L30-L33) - Function
 - `src/modules/wishlist/repository.ts`
-  - `src.modules.wishlist.repository.wishlistRepository` (L32-L132) - Class
-  - `src.modules.wishlist.repository.wishlistRepository.findByUserId` (L50-L51) - Method
-  - `src.modules.wishlist.repository.wishlistRepository.addLine` (L70-L91) - Method
-  - `src.modules.wishlist.repository.wishlistRepository.addLine.added.before.items.some() callback` (L89-L89) - Function
-  - `src.modules.wishlist.repository.wishlistRepository.removeLine` (L98-L105) - Method
-  - `src.modules.wishlist.repository.wishlistRepository.deleteByUserId` (L111-L117) - Method
-  - `src.modules.wishlist.repository.wishlistRepository.deleteByUserId.then() callback` (L115-L117) - Function
-  - `src.modules.wishlist.repository.wishlistRepository.removeProductFromAll` (L124-L131) - Method
+  - `src.modules.wishlist.repository.wishlistRepository` (L36-L163) - Class
+  - `src.modules.wishlist.repository.wishlistRepository.findByUserId` (L54-L55) - Method
+  - `src.modules.wishlist.repository.wishlistRepository.addLine` (L77-L122) - Method
+  - `src.modules.wishlist.repository.wishlistRepository.addLine.held` (L115-L115) - Class
+  - `src.modules.wishlist.repository.wishlistRepository.addLine.held.before.items.some() callback` (L115-L115) - Function
+  - `src.modules.wishlist.repository.wishlistRepository.removeLine` (L129-L136) - Method
+  - `src.modules.wishlist.repository.wishlistRepository.deleteByUserId` (L142-L148) - Method
+  - `src.modules.wishlist.repository.wishlistRepository.deleteByUserId.then() callback` (L146-L148) - Function
+  - `src.modules.wishlist.repository.wishlistRepository.removeProductFromAll` (L155-L162) - Method
 - `src/modules/wishlist/service.ts`
-  - `src.modules.wishlist.service.present` (L33-L36) - Class
-  - `src.modules.wishlist.service.present.then() callback` (L36-L36) - Function
-  - `src.modules.wishlist.service.exportLines` (L48-L51) - Class
-  - `src.modules.wishlist.service.exportLines.then() callback` (L51-L51) - Function
-  - `src.modules.wishlist.service.exportLines.then() callback.map() callback` (L51-L51) - Function
-  - `src.modules.wishlist.service.add` (L61-L78) - Class
-  - `src.modules.wishlist.service.add.then() callback` (L66-L78) - Function
-  - `src.modules.wishlist.service.add.then() callback.then() callback` (L68-L77) - Function
-  - `src.modules.wishlist.service.add.then() callback.then() callback.then() callback` (L76-L76) - Function
-  - `src.modules.wishlist.service.remove` (L86-L99) - Class
-  - `src.modules.wishlist.service.remove.then() callback` (L91-L99) - Function
-  - `src.modules.wishlist.service.remove.then() callback.then() callback` (L98-L98) - Function
-  - `src.modules.wishlist.service.moveToCart` (L116-L144) - Class
-  - `src.modules.wishlist.service.moveToCart.then() callback` (L121-L144) - Function
-  - `src.modules.wishlist.service.moveToCart.then() callback.saved` (L122-L122) - Class
-  - `src.modules.wishlist.service.moveToCart.then() callback.saved.wishlist.items.some() callback` (L122-L122) - Function
-  - `src.modules.wishlist.service.moveToCart.then() callback.then() callback` (L125-L143) - Function
-  - `src.modules.wishlist.service.moveToCart.then() callback.then() callback.added.errors.some() callback` (L131-L131) - Function
-  - `src.modules.wishlist.service.moveToCart.then() callback.then() callback.then() callback` (L135-L142) - Function
-  - `src.modules.wishlist.service.moveToCart.then() callback.then() callback.then() callback.then() callback` (L141-L141) - Function
+  - `src.modules.wishlist.service.present` (L34-L37) - Class
+  - `src.modules.wishlist.service.present.then() callback` (L37-L37) - Function
+  - `src.modules.wishlist.service.exportLines` (L49-L52) - Class
+  - `src.modules.wishlist.service.exportLines.then() callback` (L52-L52) - Function
+  - `src.modules.wishlist.service.exportLines.then() callback.map() callback` (L52-L52) - Function
+  - `src.modules.wishlist.service.add` (L63-L85) - Class
+  - `src.modules.wishlist.service.add.then() callback` (L68-L85) - Function
+  - `src.modules.wishlist.service.add.then() callback.then() callback` (L70-L84) - Function
+  - `src.modules.wishlist.service.add.then() callback.then() callback.then() callback` (L83-L83) - Function
+  - `src.modules.wishlist.service.remove` (L93-L106) - Class
+  - `src.modules.wishlist.service.remove.then() callback` (L98-L106) - Function
+  - `src.modules.wishlist.service.remove.then() callback.then() callback` (L105-L105) - Function
+  - `src.modules.wishlist.service.moveToCart` (L123-L154) - Class
+  - `src.modules.wishlist.service.moveToCart.then() callback` (L128-L154) - Function
+  - `src.modules.wishlist.service.moveToCart.then() callback.saved` (L129-L129) - Class
+  - `src.modules.wishlist.service.moveToCart.then() callback.saved.wishlist.items.some() callback` (L129-L129) - Function
+  - `src.modules.wishlist.service.moveToCart.then() callback.then() callback` (L132-L153) - Function
+  - `src.modules.wishlist.service.moveToCart.then() callback.then() callback.added.errors.some() callback` (L139-L140) - Function
+  - `src.modules.wishlist.service.moveToCart.then() callback.then() callback.then() callback` (L145-L152) - Function
+  - `src.modules.wishlist.service.moveToCart.then() callback.then() callback.then() callback.then() callback` (L151-L151) - Function
 - `src/types/server-image.ts`
   - `src.types.server-image.ServerImageFields` (L10-L17) - Interface
 
@@ -734,38 +752,35 @@ The transactional outbox kernel that writes domain events atomically with the bu
 
 **Related Classes/Methods**:
 
-- `src.kernel.outbox.enqueueOutboxEvent`:153-163
+- `src.kernel.outbox.enqueueOutboxEvent`:160-170
 - `src.modules.inventory.metrics._inventoryReservedUnitsTotal`:38-45
 
 **Source Files:**
 
 - `src/kernel/outbox.ts`
-  - `src.kernel.outbox.'./events'.DomainEventMap` (L41-L48) - Interface
-  - `src.kernel.outbox.OutboxEventDocument` (L61-L79) - Interface
-  - `src.kernel.outbox.enqueueOutboxEvent` (L153-L163) - Class
-  - `src.kernel.outbox.enqueueOutboxEvent.then() callback` (L163-L163) - Function
-  - `src.kernel.outbox.OutboxRow` (L166-L173) - Interface
-  - `src.kernel.outbox.RelayResult` (L176-L180) - Interface
-  - `src.kernel.outbox.OutboxAnnouncement` (L370-L377) - Interface
-  - `src.kernel.outbox.setOutboxPendingReader() callback` (L457-L457) - Function
-- `src/modules/account/services/profile.ts`
-  - `src.modules.account.services.profile.saveProfile.budget.then() callback.announceWithdrawal` (L104-L112) - Class
-  - `src.modules.account.services.profile.saveProfile.budget.then() callback.announceWithdrawal.<function>` (L105-L111) - Function
+  - `src.kernel.outbox.'./events'.DomainEventMap` (L45-L52) - Interface
+  - `src.kernel.outbox.OutboxEventDocument` (L65-L85) - Interface
+  - `src.kernel.outbox.enqueueOutboxEvent` (L160-L170) - Class
+  - `src.kernel.outbox.enqueueOutboxEvent.then() callback` (L170-L170) - Function
+  - `src.kernel.outbox.OutboxRow` (L173-L180) - Interface
+  - `src.kernel.outbox.RelayResult` (L183-L187) - Interface
+  - `src.kernel.outbox.OutboxAnnouncement` (L428-L435) - Interface
+  - `src.kernel.outbox.setOutboxPendingReader() callback` (L515-L515) - Function
 - `src/modules/delivery/services/announce.ts`
   - `src.modules.delivery.services.announce.shipmentPayload.lines.shipment.lines.map() callback` (L36-L36) - Function
   - `src.modules.delivery.services.announce.announceShipped` (L47-L79) - Class
   - `src.modules.delivery.services.announce.announceShipped.then() callback` (L69-L78) - Function
   - `src.modules.delivery.services.announce.announceDelivered` (L88-L115) - Class
   - `src.modules.delivery.services.announce.announceDelivered.then() callback` (L108-L114) - Function
-  - `src.modules.delivery.services.announce.LossNotice` (L118-L127) - Interface
-  - `src.modules.delivery.services.announce.announceLost` (L138-L176) - Class
-  - `src.modules.delivery.services.announce.announceLost.then() callback` (L161-L174) - Function
-  - `src.modules.delivery.services.announce.announceHeld` (L217-L248) - Class
-  - `src.modules.delivery.services.announce.announceHeld.then() callback` (L248-L248) - Function
-  - `src.modules.delivery.services.announce.announceReleased` (L256-L281) - Class
-  - `src.modules.delivery.services.announce.announceReleased.then() callback` (L271-L280) - Function
-  - `src.modules.delivery.services.announce.announceDelayed` (L331-L353) - Class
-  - `src.modules.delivery.services.announce.announceDelayed.then() callback` (L351-L352) - Function
+  - `src.modules.delivery.services.announce.LossNotice` (L118-L129) - Interface
+  - `src.modules.delivery.services.announce.announceLost` (L140-L179) - Class
+  - `src.modules.delivery.services.announce.announceLost.then() callback` (L163-L177) - Function
+  - `src.modules.delivery.services.announce.announceHeld` (L221-L252) - Class
+  - `src.modules.delivery.services.announce.announceHeld.then() callback` (L252-L252) - Function
+  - `src.modules.delivery.services.announce.announceReleased` (L260-L285) - Class
+  - `src.modules.delivery.services.announce.announceReleased.then() callback` (L275-L284) - Function
+  - `src.modules.delivery.services.announce.announceDelayed` (L335-L357) - Class
+  - `src.modules.delivery.services.announce.announceDelayed.then() callback` (L355-L356) - Function
 - `src/modules/inventory/domain/hold-lines.ts`
   - `src.modules.inventory.domain.hold-lines.HoldLine` (L14-L18) - Interface
   - `src.modules.inventory.domain.hold-lines.HoldTake` (L21-L26) - Interface
@@ -778,59 +793,57 @@ The transactional outbox kernel that writes domain events atomically with the bu
   - `src.modules.inventory.metrics._inventoryReservedUnitsTotal` (L38-L45) - Class
   - `src.modules.inventory.metrics._inventoryReservedUnitsTotal.collect` (L42-L44) - Method
 - `src/modules/inventory/repository.ts`
-  - `src.modules.inventory.repository.StockLevelRow` (L114-L121) - Interface
-  - `src.modules.inventory.repository.PreorderLevelRow` (L124-L134) - Interface
-  - `src.modules.inventory.repository.toReservationItems` (L142-L149) - Class
-  - `src.modules.inventory.repository.toReservationItems.lines.map() callback` (L145-L149) - Function
-  - `src.modules.inventory.repository.orderedByProduct` (L158-L167) - Class
-  - `src.modules.inventory.repository.orderedByProduct.then() callback` (L167-L167) - Function
-  - `src.modules.inventory.repository.orderedByProduct.then() callback.rows.map() callback` (L167-L167) - Function
-  - `src.modules.inventory.repository.outstandingByProduct` (L176-L209) - Class
-  - `src.modules.inventory.repository.outstandingByProduct.then() callback` (L199-L209) - Function
-  - `src.modules.inventory.repository.stockLevelRepository` (L216-L488) - Class
-  - `src.modules.inventory.repository.stockLevelRepository.insertIfAbsent` (L260-L276) - Method
-  - `src.modules.inventory.repository.stockLevelRepository.insertIfAbsent.then() callback` (L276-L276) - Function
-  - `src.modules.inventory.repository.stockLevelRepository.findManyByProductIds` (L284-L285) - Method
-  - `src.modules.inventory.repository.stockLevelRepository.findManyByProductIds.productId.$in.productIds.map() callback` (L285-L285) - Function
-  - `src.modules.inventory.repository.stockLevelRepository.findByProductId` (L292-L296) - Method
-  - `src.modules.inventory.repository.stockLevelRepository.deleteByProductId` (L306-L310) - Method
-  - `src.modules.inventory.repository.stockLevelRepository.deleteByProductId.then() callback` (L310-L310) - Function
-  - `src.modules.inventory.repository.stockLevelRepository.applyDelta` (L327-L352) - Method
-  - `src.modules.inventory.repository.stockLevelRepository.applyDelta.then() callback` (L352-L352) - Function
-  - `src.modules.inventory.repository.stockLevelRepository.stockBoard` (L366-L390) - Method
-  - `src.modules.inventory.repository.stockLevelRepository.stockBoard.then() callback` (L379-L389) - Function
-  - `src.modules.inventory.repository.stockLevelRepository.stockBoard.then() callback.items.rows.map() callback` (L380-L387) - Function
-  - `src.modules.inventory.repository.stockLevelRepository.setBackorderLimit` (L401-L412) - Method
-  - `src.modules.inventory.repository.stockLevelRepository.setBackorderLimit.then() callback` (L412-L412) - Function
-  - `src.modules.inventory.repository.stockLevelRepository.preorderBoard` (L422-L460) - Method
-  - `src.modules.inventory.repository.stockLevelRepository.preorderBoard.then() callback` (L441-L459) - Function
-  - `src.modules.inventory.repository.stockLevelRepository.preorderBoard.then() callback.then() callback` (L444-L457) - Function
-  - `src.modules.inventory.repository.stockLevelRepository.preorderBoard.then() callback.then() callback.items.rows.map() callback` (L445-L455) - Function
-  - `src.modules.inventory.repository.stockLevelRepository.lowAvailabilityProductIds` (L472-L477) - Method
-  - `src.modules.inventory.repository.stockLevelRepository.lowAvailabilityProductIds.then() callback` (L477-L477) - Function
-  - `src.modules.inventory.repository.stockLevelRepository.lowAvailabilityProductIds.then() callback.rows.map() callback` (L477-L477) - Function
-  - `src.modules.inventory.repository.stockLevelRepository.sumReserved` (L484-L487) - Method
-  - `src.modules.inventory.repository.stockLevelRepository.sumReserved.then() callback` (L487-L487) - Function
-  - `src.modules.inventory.repository.reservationRepository` (L512-L789) - Class
-  - `src.modules.inventory.repository.reservationRepository.insertHold` (L564-L576) - Method
-  - `src.modules.inventory.repository.reservationRepository.insertHold.then() callback` (L572-L572) - Function
-  - `src.modules.inventory.repository.reservationRepository.insertHold.catch() callback` (L573-L576) - Function
-  - `src.modules.inventory.repository.reservationRepository.findByOrderId` (L584-L585) - Method
-  - `src.modules.inventory.repository.reservationRepository.claimStatus` (L597-L607) - Method
-  - `src.modules.inventory.repository.reservationRepository.findOpenByOrderId` (L617-L621) - Method
-  - `src.modules.inventory.repository.reservationRepository.replaceItems` (L634-L646) - Method
-  - `src.modules.inventory.repository.reservationRepository.topUpItems` (L660-L714) - Method
-  - `src.modules.inventory.repository.reservationRepository.topUpItems.then() callback` (L665-L714) - Function
-  - `src.modules.inventory.repository.topUpItems.then() callback.then() callback` (L680-L680) - Function
-  - `src.modules.inventory.repository.topUpItems.then() callback.items` (L682-L695) - Class
-  - `src.modules.inventory.repository.reservationRepository.topUpItems.then() callback.items.hold.items.map() callback` (L684-L688) - Function
-  - `src.modules.inventory.repository.reservationRepository.topUpItems.then() callback.items.added.map() callback` (L690-L694) - Function
-  - `src.modules.inventory.repository.reservationRepository.topUpItems.then() callback.then() callback` (L713-L713) - Function
-  - `src.modules.inventory.repository.reservationRepository.findPaidPreorderHolds` (L725-L733) - Method
-  - `src.modules.inventory.repository.reservationRepository.findExpired` (L743-L748) - Method
-  - `src.modules.inventory.repository.reservationRepository.narrowToTaken` (L760-L770) - Method
-  - `src.modules.inventory.repository.reservationRepository.narrowToTaken.then() callback` (L770-L770) - Function
-  - `src.modules.inventory.repository.reservationRepository.extendExpiry` (L781-L788) - Method
+  - `src.modules.inventory.repository.StockLevelRow` (L115-L122) - Interface
+  - `src.modules.inventory.repository.PreorderLevelRow` (L134-L144) - Interface
+  - `src.modules.inventory.repository.toReservationItems` (L152-L159) - Class
+  - `src.modules.inventory.repository.toReservationItems.lines.map() callback` (L155-L159) - Function
+  - `src.modules.inventory.repository.orderedByProduct` (L168-L177) - Class
+  - `src.modules.inventory.repository.orderedByProduct.then() callback` (L177-L177) - Function
+  - `src.modules.inventory.repository.orderedByProduct.then() callback.rows.map() callback` (L177-L177) - Function
+  - `src.modules.inventory.repository.outstandingByProduct` (L186-L219) - Class
+  - `src.modules.inventory.repository.outstandingByProduct.then() callback` (L209-L219) - Function
+  - `src.modules.inventory.repository.stockLevelRepository` (L226-L501) - Class
+  - `src.modules.inventory.repository.stockLevelRepository.insertIfAbsent` (L270-L287) - Method
+  - `src.modules.inventory.repository.stockLevelRepository.insertIfAbsent.then() callback` (L287-L287) - Function
+  - `src.modules.inventory.repository.stockLevelRepository.findManyByProductIds` (L295-L296) - Method
+  - `src.modules.inventory.repository.stockLevelRepository.findManyByProductIds.productId.$in.productIds.map() callback` (L296-L296) - Function
+  - `src.modules.inventory.repository.stockLevelRepository.findByProductId` (L303-L307) - Method
+  - `src.modules.inventory.repository.stockLevelRepository.deleteByProductId` (L317-L321) - Method
+  - `src.modules.inventory.repository.stockLevelRepository.deleteByProductId.then() callback` (L321-L321) - Function
+  - `src.modules.inventory.repository.stockLevelRepository.applyDelta` (L338-L364) - Method
+  - `src.modules.inventory.repository.stockLevelRepository.applyDelta.then() callback` (L364-L364) - Function
+  - `src.modules.inventory.repository.stockLevelRepository.stockBoard` (L378-L402) - Method
+  - `src.modules.inventory.repository.stockLevelRepository.stockBoard.then() callback` (L391-L401) - Function
+  - `src.modules.inventory.repository.stockLevelRepository.stockBoard.then() callback.items.rows.map() callback` (L392-L399) - Function
+  - `src.modules.inventory.repository.stockLevelRepository.setBackorderLimit` (L413-L425) - Method
+  - `src.modules.inventory.repository.stockLevelRepository.setBackorderLimit.then() callback` (L425-L425) - Function
+  - `src.modules.inventory.repository.stockLevelRepository.preorderBoard` (L435-L473) - Method
+  - `src.modules.inventory.repository.stockLevelRepository.preorderBoard.then() callback` (L454-L472) - Function
+  - `src.modules.inventory.repository.stockLevelRepository.preorderBoard.then() callback.then() callback` (L457-L470) - Function
+  - `src.modules.inventory.repository.stockLevelRepository.preorderBoard.then() callback.then() callback.items.rows.map() callback` (L458-L468) - Function
+  - `src.modules.inventory.repository.stockLevelRepository.lowAvailabilityProductIds` (L485-L490) - Method
+  - `src.modules.inventory.repository.stockLevelRepository.lowAvailabilityProductIds.then() callback` (L490-L490) - Function
+  - `src.modules.inventory.repository.stockLevelRepository.lowAvailabilityProductIds.then() callback.rows.map() callback` (L490-L490) - Function
+  - `src.modules.inventory.repository.stockLevelRepository.sumReserved` (L497-L500) - Method
+  - `src.modules.inventory.repository.stockLevelRepository.sumReserved.then() callback` (L500-L500) - Function
+  - `src.modules.inventory.repository.reservationRepository` (L525-L802) - Class
+  - `src.modules.inventory.repository.reservationRepository.insertHold` (L578-L590) - Method
+  - `src.modules.inventory.repository.reservationRepository.insertHold.then() callback` (L586-L586) - Function
+  - `src.modules.inventory.repository.reservationRepository.insertHold.catch() callback` (L587-L590) - Function
+  - `src.modules.inventory.repository.reservationRepository.findByOrderId` (L598-L599) - Method
+  - `src.modules.inventory.repository.reservationRepository.claimStatus` (L611-L621) - Method
+  - `src.modules.inventory.repository.reservationRepository.findOpenByOrderId` (L631-L635) - Method
+  - `src.modules.inventory.repository.reservationRepository.replaceItems` (L648-L660) - Method
+  - `src.modules.inventory.repository.reservationRepository.topUpItems` (L674-L728) - Method
+  - `src.modules.inventory.repository.reservationRepository.topUpItems.then() callback` (L679-L728) - Function
+  - `src.modules.inventory.repository.topUpItems.then() callback.then() callback` (L694-L694) - Function
+  - `src.modules.inventory.repository.topUpItems.then() callback.items` (L696-L709) - Class
+  - `src.modules.inventory.repository.reservationRepository.topUpItems.then() callback.items.hold.items.map() callback` (L698-L702) - Function
+  - `src.modules.inventory.repository.reservationRepository.topUpItems.then() callback.items.added.map() callback` (L704-L708) - Function
+  - `src.modules.inventory.repository.reservationRepository.topUpItems.then() callback.then() callback` (L727-L727) - Function
+  - `src.modules.inventory.repository.reservationRepository.findPaidPreorderHolds` (L739-L747) - Method
+  - `src.modules.inventory.repository.reservationRepository.findExpired` (L757-L762) - Method
+  - `src.modules.inventory.repository.reservationRepository.extendExpiry` (L794-L801) - Method
 - `src/modules/inventory/services/admin.ts`
   - `src.modules.inventory.services.admin.levelFor` (L33-L36) - Class
   - `src.modules.inventory.services.admin.levelFor.then() callback` (L36-L36) - Function
@@ -856,37 +869,37 @@ The transactional outbox kernel that writes domain events atomically with the bu
   - `src.modules.inventory.services.admin.setBackorderLimit.then() callback.then() callback.then() callback` (L254-L254) - Function
   - `src.modules.inventory.services.admin.setBackorderLimit.then() callback.then() callback` (L256-L268) - Function
 - `src/modules/inventory/services/holds.ts`
-  - `src.modules.inventory.services.holds.serveQueueAfter` (L34-L49) - Class
-  - `src.modules.inventory.services.holds.serveQueueAfter.then() callback` (L48-L48) - Function
-  - `src.modules.inventory.services.holds.claimAndApply` (L67-L89) - Class
-  - `src.modules.inventory.services.holds.claimAndApply.claimAndMove` (L74-L80) - Class
-  - `src.modules.inventory.services.holds.claimAndApply.claimAndMove.then() callback` (L75-L80) - Function
-  - `src.modules.inventory.services.holds.claimAndApply.claimAndMove.then() callback.then() callback` (L79-L79) - Function
-  - `src.modules.inventory.services.holds.claimAndApply.then() callback` (L84-L88) - Function
-  - `src.modules.inventory.services.holds.claimAndApply.then() callback.then() callback` (L87-L87) - Function
-  - `src.modules.inventory.services.holds.commitWithin` (L214-L249) - Class
-  - `src.modules.inventory.services.holds.commitWithin.then() callback` (L242-L242) - Function
-  - `src.modules.inventory.services.holds.commitForOrder` (L273-L283) - Class
-  - `src.modules.inventory.services.holds.commitForOrder.withTransaction() callback` (L276-L276) - Function
-  - `src.modules.inventory.services.holds.commitForOrder.then() callback` (L277-L281) - Function
-  - `src.modules.inventory.services.holds.commitForOrder.then() callback.then() callback` (L280-L280) - Function
-  - `src.modules.inventory.services.holds.takeLines` (L324-L350) - Class
-  - `src.modules.inventory.services.holds.takeLines.then() callback` (L331-L350) - Function
-  - `src.modules.inventory.services.holds.takeLines.then() callback.then() callback` (L344-L349) - Function
-  - `src.modules.inventory.services.holds.takeLines.then() callback.then() callback.then() callback` (L348-L348) - Function
-  - `src.modules.inventory.services.holds.shipLinesForOrder` (L366-L379) - Class
-  - `src.modules.inventory.services.holds.shipLinesForOrder.then() callback` (L371-L379) - Function
-  - `src.modules.inventory.services.holds.shipLinesForOrder.then() callback.then() callback` (L375-L378) - Function
-  - `src.modules.inventory.services.holds.refreshStockCacheForOrder` (L465-L480) - Class
-  - `src.modules.inventory.services.holds.refreshStockCacheForOrder.then() callback` (L468-L471) - Function
-  - `src.modules.inventory.services.holds.refreshStockCacheForOrder.then() callback.map() callback` (L470-L470) - Function
-  - `src.modules.inventory.services.holds.refreshStockCacheForOrder.catch() callback` (L473-L480) - Function
-  - `src.modules.inventory.services.holds.extendHoldForOrder` (L492-L495) - Class
-  - `src.modules.inventory.services.holds.extendHoldForOrder.then() callback` (L495-L495) - Function
-  - `src.modules.inventory.services.holds.isHoldReleased` (L507-L508) - Class
-  - `src.modules.inventory.services.holds.isHoldReleased.then() callback` (L508-L508) - Function
-  - `src.modules.inventory.services.holds.isStockBoundToOrder` (L520-L523) - Class
-  - `src.modules.inventory.services.holds.isStockBoundToOrder.then() callback` (L523-L523) - Function
+  - `src.modules.inventory.services.holds.serveQueueAfter` (L35-L50) - Class
+  - `src.modules.inventory.services.holds.serveQueueAfter.then() callback` (L49-L49) - Function
+  - `src.modules.inventory.services.holds.claimAndApply` (L68-L90) - Class
+  - `src.modules.inventory.services.holds.claimAndApply.claimAndMove` (L75-L81) - Class
+  - `src.modules.inventory.services.holds.claimAndApply.claimAndMove.then() callback` (L76-L81) - Function
+  - `src.modules.inventory.services.holds.claimAndApply.claimAndMove.then() callback.then() callback` (L80-L80) - Function
+  - `src.modules.inventory.services.holds.claimAndApply.then() callback` (L85-L89) - Function
+  - `src.modules.inventory.services.holds.claimAndApply.then() callback.then() callback` (L88-L88) - Function
+  - `src.modules.inventory.services.holds.commitWithin` (L215-L250) - Class
+  - `src.modules.inventory.services.holds.commitWithin.then() callback` (L243-L243) - Function
+  - `src.modules.inventory.services.holds.commitForOrder` (L274-L284) - Class
+  - `src.modules.inventory.services.holds.commitForOrder.withTransaction() callback` (L277-L277) - Function
+  - `src.modules.inventory.services.holds.commitForOrder.then() callback` (L278-L282) - Function
+  - `src.modules.inventory.services.holds.commitForOrder.then() callback.then() callback` (L281-L281) - Function
+  - `src.modules.inventory.services.holds.takeLines` (L325-L351) - Class
+  - `src.modules.inventory.services.holds.takeLines.then() callback` (L332-L351) - Function
+  - `src.modules.inventory.services.holds.takeLines.then() callback.then() callback` (L345-L350) - Function
+  - `src.modules.inventory.services.holds.takeLines.then() callback.then() callback.then() callback` (L349-L349) - Function
+  - `src.modules.inventory.services.holds.shipLinesForOrder` (L367-L380) - Class
+  - `src.modules.inventory.services.holds.shipLinesForOrder.then() callback` (L372-L380) - Function
+  - `src.modules.inventory.services.holds.shipLinesForOrder.then() callback.then() callback` (L376-L379) - Function
+  - `src.modules.inventory.services.holds.refreshStockCacheForOrder` (L466-L481) - Class
+  - `src.modules.inventory.services.holds.refreshStockCacheForOrder.then() callback` (L469-L472) - Function
+  - `src.modules.inventory.services.holds.refreshStockCacheForOrder.then() callback.map() callback` (L471-L471) - Function
+  - `src.modules.inventory.services.holds.refreshStockCacheForOrder.catch() callback` (L474-L481) - Function
+  - `src.modules.inventory.services.holds.extendHoldForOrder` (L493-L496) - Class
+  - `src.modules.inventory.services.holds.extendHoldForOrder.then() callback` (L496-L496) - Function
+  - `src.modules.inventory.services.holds.isHoldReleased` (L508-L509) - Class
+  - `src.modules.inventory.services.holds.isHoldReleased.then() callback` (L509-L509) - Function
+  - `src.modules.inventory.services.holds.isStockBoundToOrder` (L521-L524) - Class
+  - `src.modules.inventory.services.holds.isStockBoundToOrder.then() callback` (L524-L524) - Function
 - `src/modules/inventory/services/levels.ts`
   - `src.modules.inventory.services.levels.openLevel` (L38-L39) - Class
   - `src.modules.inventory.services.levels.openLevel.then() callback` (L39-L39) - Function
@@ -901,19 +914,18 @@ The transactional outbox kernel that writes domain events atomically with the bu
   - `src.modules.inventory.services.levels.lowStockCount` (L186-L190) - Class
   - `src.modules.inventory.services.levels.lowStockCount.then() callback` (L190-L190) - Function
 - `src/modules/inventory/services/reserve.ts`
-  - `src.modules.inventory.services.reserve.giveBackAndDeleteHold` (L33-L64) - Class
-  - `src.modules.inventory.services.reserve.giveBackAndDeleteHold.taken.map() callback` (L41-L53) - Function
-  - `src.modules.inventory.services.reserve.giveBackAndDeleteHold.taken.map() callback.catch() callback` (L46-L53) - Function
-  - `src.modules.inventory.services.reserve.giveBackAndDeleteHold.catch() callback` (L56-L63) - Function
-  - `src.modules.inventory.services.reserve.inLockOrder` (L77-L79) - Class
-  - `src.modules.inventory.services.reserve.inLockOrder.lines.toSorted() callback` (L79-L79) - Function
-  - `src.modules.inventory.services.reserve.OwedRefused` (L101-L101) - Class
-  - `src.modules.inventory.services.reserve.takeSpillLine.parts.withTransaction() callback` (L115-L170) - Function
-  - `src.modules.inventory.services.reserve.takeSpillLine.parts` (L115-L174) - Class
-  - `src.modules.inventory.services.reserve.takeSpillLine.parts.catch() callback` (L170-L174) - Function
-  - `src.modules.inventory.services.reserve.owedPartsOf` (L188-L196) - Class
-  - `src.modules.inventory.services.reserve.owedPartsOf.parts.filter() callback` (L195-L195) - Function
-  - `src.modules.inventory.services.reserve.owedPartsOf.map() callback` (L196-L196) - Function
+  - `src.modules.inventory.services.reserve.inLockOrder` (L55-L57) - Class
+  - `src.modules.inventory.services.reserve.inLockOrder.lines.toSorted() callback` (L57-L57) - Function
+  - `src.modules.inventory.services.reserve.OwedRefused` (L79-L79) - Class
+  - `src.modules.inventory.services.reserve.HoldClaimed` (L82-L82) - Class
+  - `src.modules.inventory.services.reserve.takeSpillLine.parts.withTransaction() callback` (L116-L157) - Function
+  - `src.modules.inventory.services.reserve.takeSpillLine.parts` (L116-L161) - Class
+  - `src.modules.inventory.services.reserve.takeSpillLine.parts.catch() callback` (L157-L161) - Function
+  - `src.modules.inventory.services.reserve.owedPartsOf` (L175-L183) - Class
+  - `src.modules.inventory.services.reserve.owedPartsOf.parts.filter() callback` (L182-L182) - Function
+  - `src.modules.inventory.services.reserve.owedPartsOf.map() callback` (L183-L183) - Function
+  - `src.modules.inventory.services.reserve.takeLine.taken` (L195-L204) - Class
+  - `src.modules.inventory.services.reserve.takeLine.taken.withTransaction() callback` (L195-L204) - Function
 - `src/modules/inventory/services/returns.ts`
   - `src.modules.inventory.services.returns.restockReturnedLines` (L26-L39) - Class
   - `src.modules.inventory.services.returns.then() callback` (L33-L37) - Function
@@ -932,29 +944,29 @@ The transactional outbox kernel that writes domain events atomically with the bu
   - `src.modules.inventory.services.top-up.reserveMoreForOrder` (L94-L110) - Class
   - `src.modules.inventory.services.top-up.reserveMoreForOrder.lines.toSorted() callback` (L101-L101) - Function
 - `src/modules/inventory/services/transition.ts`
-  - `src.modules.inventory.services.transition.refreshStockCache` (L28-L50) - Class
-  - `src.modules.inventory.services.transition.refreshStockCache.then() callback` (L31-L41) - Function
-  - `src.modules.inventory.services.transition.refreshStockCache.then() callback.then() callback` (L40-L40) - Function
-  - `src.modules.inventory.services.transition.refreshStockCache.catch() callback` (L43-L50) - Function
+  - `src.modules.inventory.services.transition.refreshStockCache` (L28-L51) - Class
+  - `src.modules.inventory.services.transition.refreshStockCache.then() callback` (L31-L42) - Function
+  - `src.modules.inventory.services.transition.refreshStockCache.then() callback.then() callback` (L41-L41) - Function
+  - `src.modules.inventory.services.transition.refreshStockCache.catch() callback` (L44-L51) - Function
 - `src/modules/products/services/crud.ts`
-  - `src.modules.products.services.crud.sanitizeStringArray` (L43-L46) - Class
-  - `src.modules.products.services.crud.sanitizeStringArray.values.map() callback` (L45-L45) - Function
-  - `src.modules.products.services.crud.insertProduct` (L152-L182) - Class
-  - `src.modules.products.services.crud.insertProduct.then() callback` (L175-L181) - Function
-  - `src.modules.products.services.crud.insertProduct.then() callback.then() callback` (L181-L181) - Function
-  - `src.modules.products.services.crud.ProductUpdateOutcome` (L256-L265) - Interface
-  - `src.modules.products.services.crud.DateChange` (L295-L298) - Interface
-  - `src.modules.products.services.crud.applyUpdate` (L352-L442) - Class
-  - `src.modules.products.services.crud.then() callback` (L414-L439) - Function
-  - `src.modules.products.services.crud.then() callback.then() callback` (L421-L427) - Function
-  - `src.modules.products.services.crud.applyUpdate.then() callback.then() callback` (L439-L439) - Function
-  - `src.modules.products.services.crud.applyUpdate.then() callback` (L441-L441) - Function
-  - `src.modules.products.services.crud.updateByIdInTransaction` (L468-L484) - Class
-  - `src.modules.products.services.crud.updateByIdInTransaction.then() callback` (L477-L483) - Function
+  - `src.modules.products.services.crud.sanitizeStringArray` (L44-L47) - Class
+  - `src.modules.products.services.crud.sanitizeStringArray.values.map() callback` (L46-L46) - Function
+  - `src.modules.products.services.crud.insertProduct` (L154-L184) - Class
+  - `src.modules.products.services.crud.insertProduct.then() callback` (L177-L183) - Function
+  - `src.modules.products.services.crud.insertProduct.then() callback.then() callback` (L183-L183) - Function
+  - `src.modules.products.services.crud.ProductUpdateOutcome` (L258-L267) - Interface
+  - `src.modules.products.services.crud.DateChange` (L288-L291) - Interface
+  - `src.modules.products.services.crud.applyUpdate` (L345-L435) - Class
+  - `src.modules.products.services.crud.then() callback` (L407-L432) - Function
+  - `src.modules.products.services.crud.then() callback.then() callback` (L414-L420) - Function
+  - `src.modules.products.services.crud.applyUpdate.then() callback.then() callback` (L432-L432) - Function
+  - `src.modules.products.services.crud.applyUpdate.then() callback` (L434-L434) - Function
+  - `src.modules.products.services.crud.updateByIdInTransaction` (L461-L477) - Class
+  - `src.modules.products.services.crud.updateByIdInTransaction.then() callback` (L470-L476) - Function
 - `src/modules/products/services/lookups.ts`
-  - `src.modules.products.services.lookups.syncStockCache` (L107-L119) - Class
-  - `src.modules.products.services.lookups.syncStockCache.withTransaction() callback` (L108-L117) - Function
-  - `src.modules.products.services.lookups.syncStockCache.then() callback` (L117-L119) - Function
+  - `src.modules.products.services.lookups.syncStockCache` (L100-L112) - Class
+  - `src.modules.products.services.lookups.syncStockCache.withTransaction() callback` (L101-L110) - Function
+  - `src.modules.products.services.lookups.syncStockCache.then() callback` (L110-L112) - Function
 - `src/modules/products/services/translated-write.ts`
   - `src.modules.products.services.translated-write.create.product.withTransaction() callback` (L99-L119) - Function
   - `src.modules.products.services.translated-write.create.product` (L99-L120) - Class
@@ -965,35 +977,25 @@ The transactional outbox kernel that writes domain events atomically with the bu
   - `src.modules.products.services.translated-write.updateById.result.withTransaction() callback.then() callback` (L168-L177) - Function
   - `src.modules.products.services.translated-write.updateById.result.withTransaction() callback.then() callback.then() callback` (L176-L176) - Function
 - `src/modules/users/repository.ts`
-  - `src.modules.users.repository.userRepository.setOwnerDeletionState` (L940-L962) - Method
+  - `src.modules.users.repository.userRepository.markInactivityWarned` (L761-L769) - Method
+  - `src.modules.users.repository.userRepository.markInactivityWarned.then() callback` (L769-L769) - Function
+  - `src.modules.users.repository.userRepository.saveWithoutEdit.fencedSave() callback` (L781-L781) - Function
+  - `src.modules.users.repository.userRepository.setOwnerDeletionState` (L980-L1002) - Method
 - `src/modules/users/services/own-account.ts`
-  - `src.modules.users.services.own-account.restoreDeletionState` (L240-L260) - Class
-  - `src.modules.users.services.own-account.restoreDeletionState.then() callback` (L246-L259) - Function
-  - `src.modules.users.services.own-account.restoreDeletionState.then() callback.then() callback` (L248-L258) - Function
+  - `src.modules.users.services.own-account.restoreDeletionState` (L218-L238) - Class
+  - `src.modules.users.services.own-account.restoreDeletionState.then() callback` (L224-L237) - Function
+  - `src.modules.users.services.own-account.restoreDeletionState.then() callback.then() callback` (L226-L236) - Function
 - `src/modules/users/services/update.ts`
-  - `src.modules.users.services.update.update` (L42-L104) - Class
-  - `src.modules.users.services.update.update.then() callback` (L99-L103) - Function
-  - `src.modules.users.services.update.rectifiedFields` (L116-L137) - Class
-  - `src.modules.users.services.update.rectifiedFields.filter() callback` (L135-L135) - Function
-  - `src.modules.users.services.update.announcing` (L147-L162) - Class
-  - `src.modules.users.services.update.announcing.<function>` (L154-L162) - Function
-  - `src.modules.users.services.update.announcing.<function>.then() callback` (L155-L161) - Function
-  - `src.modules.users.services.update.changedRole` (L198-L205) - Class
-  - `src.modules.users.services.update.changedRole.then() callback` (L201-L205) - Function
-  - `src.modules.users.services.update.saveAndGrant` (L271-L293) - Class
-  - `src.modules.users.services.update.saveAndGrant.then() callback` (L288-L291) - Function
-  - `src.modules.users.services.update.saveAndGrant.then() callback.then() callback` (L291-L291) - Function
-  - `src.modules.users.services.update.finishUpdate` (L303-L333) - Class
-  - `src.modules.users.services.update.imageCleanup.then() callback` (L311-L311) - Function
-  - `src.modules.users.services.update.saveWithRole` (L343-L371) - Class
-  - `src.modules.users.services.update.saveWithRole.then() callback.withTransaction() callback` (L368-L368) - Function
-  - `src.modules.users.services.update.saveWithRole.then() callback` (L370-L370) - Function
-  - `src.modules.users.services.update.applyUpdate` (L385-L405) - Class
-  - `src.modules.users.services.update.applyUpdate.then() callback` (L394-L404) - Function
-  - `src.modules.users.services.update.updateById` (L415-L433) - Class
-  - `src.modules.users.services.update.updateById.then() callback` (L422-L433) - Function
-  - `src.modules.users.services.update.updateById.then() callback.then() callback` (L428-L431) - Function
-  - `src.modules.users.services.update.updateById.then() callback.then() callback.then() callback` (L431-L431) - Function
+  - `src.modules.users.services.update.update` (L38-L84) - Class
+  - `src.modules.users.services.update.update.then() callback` (L78-L82) - Function
+  - `src.modules.users.services.update.rectifiedFields` (L96-L118) - Class
+  - `src.modules.users.services.update.rectifiedFields.filter() callback` (L116-L116) - Function
+  - `src.modules.users.services.update.announcing` (L128-L143) - Class
+  - `src.modules.users.services.update.announcing.<function>` (L135-L143) - Function
+  - `src.modules.users.services.update.announcing.<function>.then() callback` (L136-L142) - Function
+  - `src.modules.users.services.update.applyUpdate` (L200-L219) - Class
+  - `src.modules.users.services.update.applyUpdate.then() callback` (L208-L218) - Function
+  - `src.modules.users.services.update.updateById` (L229-L236) - Class
 
 ### Translation, Ability & Infrastructure Adapters
 The three kernel ports that resolve user-facing content and permissions at read time, plus the infrastructure adapters they depend on. The translation kernel resolves multilingual content into the caller's locale chain, the ability kernel answers per-row permission questions using CASL-compiled rules, and the infrastructure adapters provide concrete implementations for Redis, image processing, i18n catalog, and search.
@@ -1001,9 +1003,9 @@ The three kernel ports that resolve user-facing content and permissions at read 
 **Related Classes/Methods**:
 
 - `src.kernel.translation.applyTranslations`:371-391
-- `src.kernel.ability.permitsOnRows`:216-232
+- `src.kernel.ability.permitsOnRows`:218-236
 - `src.infrastructure.adapters.redis.isRedisConnectionError`:149-150
-- `src.infrastructure.persistence.image-writeback.imageWritebackFor`:26-51
+- `src.infrastructure.persistence.image-writeback.imageWritebackFor`:26-49
 
 **Source Files:**
 
@@ -1015,19 +1017,19 @@ The three kernel ports that resolve user-facing content and permissions at read 
   - `src.infrastructure.adapters.redis.isRedisConnectionError` (L149-L150) - Class
   - `src.infrastructure.adapters.redis.isRedisConnectionError.REDIS_CONNECTION_ERRORS.some() callback` (L150-L150) - Function
 - `src/infrastructure/i18n/catalog.ts`
-  - `src.infrastructure.i18n.catalog.localeCandidatesFor` (L40-L43) - Class
-  - `src.infrastructure.i18n.catalog.localeCandidatesFor.filter() callback` (L42-L42) - Function
+  - `src.infrastructure.i18n.catalog.localeCandidatesFor` (L79-L84) - Class
+  - `src.infrastructure.i18n.catalog.localeCandidatesFor.filter() callback` (L82-L82) - Function
 - `src/infrastructure/persistence/create-repository.ts`
-  - `src.infrastructure.persistence.create-repository.buildWhere.ids` (L155-L157) - Class
-  - `src.infrastructure.persistence.create-repository.buildWhere.ids.value.filter() callback` (L156-L156) - Function
-  - `src.infrastructure.persistence.create-repository.buildWhere.ids.map() callback` (L157-L157) - Function
-  - `src.infrastructure.persistence.create-repository.Repository` (L238-L301) - Interface
-  - `src.infrastructure.persistence.create-repository.createRepository.buildWhere` (L484-L484) - Method
+  - `src.infrastructure.persistence.create-repository.buildWhere.ids` (L169-L171) - Class
+  - `src.infrastructure.persistence.create-repository.buildWhere.ids.value.filter() callback` (L170-L170) - Function
+  - `src.infrastructure.persistence.create-repository.buildWhere.ids.map() callback` (L171-L171) - Function
+  - `src.infrastructure.persistence.create-repository.Repository` (L253-L322) - Interface
+  - `src.infrastructure.persistence.create-repository.createRepository.buildWhere` (L518-L518) - Method
 - `src/infrastructure/persistence/image-writeback.ts`
-  - `src.infrastructure.persistence.image-writeback.imageWritebackFor` (L26-L51) - Class
-  - `src.infrastructure.persistence.image-writeback.imageWritebackFor.<function>` (L28-L51) - Function
-  - `src.infrastructure.persistence.image-writeback.imageWritebackFor.<function>.then() callback` (L41-L50) - Function
-  - `src.infrastructure.persistence.image-writeback.imageWritebackFor.<function>.then() callback.then() callback` (L50-L50) - Function
+  - `src.infrastructure.persistence.image-writeback.imageWritebackFor` (L26-L49) - Class
+  - `src.infrastructure.persistence.image-writeback.imageWritebackFor.<function>` (L28-L49) - Function
+  - `src.infrastructure.persistence.image-writeback.imageWritebackFor.<function>.then() callback` (L39-L48) - Function
+  - `src.infrastructure.persistence.image-writeback.imageWritebackFor.<function>.then() callback.then() callback` (L48-L48) - Function
 - `src/infrastructure/persistence/money-field.ts`
   - `src.infrastructure.persistence.money-field.isWritableAmount` (L95-L101) - Class
   - `src.infrastructure.persistence.money-field.isWritableAmount.<function>` (L97-L101) - Function
@@ -1039,21 +1041,19 @@ The three kernel ports that resolve user-facing content and permissions at read 
   - `src.infrastructure.persistence.search.addTextFilter` (L150-L160) - Class
   - `src.infrastructure.persistence.search.addTextFilter.fields.map() callback` (L157-L159) - Function
 - `src/infrastructure/persistence/translatable-columns.ts`
-  - `src.infrastructure.persistence.translatable-columns.TranslatableColumns` (L17-L35) - Interface
-  - `src.infrastructure.persistence.translatable-columns.translatableColumnsOf` (L42-L76) - Class
-  - `src.infrastructure.persistence.translatable-columns.translatableColumnsOf.exists` (L46-L48) - Method
-  - `src.infrastructure.persistence.translatable-columns.translatableColumnsOf.writeDerived` (L50-L65) - Method
-  - `src.infrastructure.persistence.translatable-columns.translatableColumnsOf.writeDerived.$set.map() callback` (L58-L58) - Function
-  - `src.infrastructure.persistence.translatable-columns.translatableColumnsOf.writeDerived.then() callback` (L65-L65) - Function
-  - `src.infrastructure.persistence.translatable-columns.translatableColumnsOf.markEdited` (L67-L75) - Method
-  - `src.infrastructure.persistence.translatable-columns.translatableColumnsOf.markEdited.then() callback` (L75-L75) - Function
+  - `src.infrastructure.persistence.translatable-columns.TranslatableColumns` (L20-L42) - Interface
+  - `src.infrastructure.persistence.translatable-columns.translatableColumnsOf` (L49-L98) - Class
+  - `src.infrastructure.persistence.translatable-columns.translatableColumnsOf.writeDerived` (L66-L81) - Method
+  - `src.infrastructure.persistence.translatable-columns.translatableColumnsOf.writeDerived.then() callback` (L81-L81) - Function
+  - `src.infrastructure.persistence.translatable-columns.translatableColumnsOf.markEdited` (L83-L97) - Method
+  - `src.infrastructure.persistence.translatable-columns.translatableColumnsOf.markEdited.then() callback` (L93-L96) - Function
 - `src/infrastructure/runtime/after-commit.ts`
   - `src.infrastructure.runtime.after-commit.afterCommit` (L20-L31) - Class
   - `src.infrastructure.runtime.after-commit.afterCommit.catch() callback` (L28-L31) - Function
 - `src/kernel/ability.ts`
-  - `src.kernel.ability.permitsOnRows` (L216-L232) - Class
-  - `src.kernel.ability.permitsOnRows.<function>` (L225-L231) - Function
-  - `src.kernel.ability.permitsOnRows.<function>.actions.map() callback` (L227-L230) - Function
+  - `src.kernel.ability.permitsOnRows` (L218-L236) - Class
+  - `src.kernel.ability.permitsOnRows.<function>` (L227-L235) - Function
+  - `src.kernel.ability.permitsOnRows.<function>.actions.map() callback` (L229-L232) - Function
 - `src/kernel/translation.ts`
   - `src.kernel.translation.Translatable` (L352-L354) - Interface
   - `src.kernel.translation.applyTranslations` (L371-L391) - Class
@@ -1141,9 +1141,11 @@ The three kernel ports that resolve user-facing content and permissions at read 
   - `src.modules.example.services.transition.applyEvent.then() callback` (L146-L165) - Function
   - `src.modules.example.services.transition.applyEvent.then() callback.then() callback` (L152-L164) - Function
   - `src.modules.example.services.transition.applyEvent.then() callback.then() callback.then() callback` (L161-L162) - Function
+- `src/modules/orders/services/actions.ts`
+  - `src.modules.orders.services.actions.startAndOverrideActions.overrideStatus.filter() callback` (L70-L70) - Function
 - `src/modules/orders/services/place.ts`
-  - `src.modules.orders.services.place.placeOrder.orderItems` (L150-L155) - Class
-  - `src.modules.orders.services.place.placeOrder.orderItems.input.lines.map() callback` (L154-L154) - Function
+  - `src.modules.orders.services.place.placeOrder.orderItems` (L153-L158) - Class
+  - `src.modules.orders.services.place.placeOrder.orderItems.input.lines.map() callback` (L157-L157) - Function
 - `src/modules/orders/services/snapshot.ts`
   - `src.modules.orders.services.snapshot.resolveSnapshotProducts` (L37-L52) - Class
   - `src.modules.orders.services.snapshot.resolveSnapshotProducts.runWithLocale() callback` (L41-L51) - Function
@@ -1155,59 +1157,56 @@ The three kernel ports that resolve user-facing content and permissions at read 
   - `src.modules.orders.services.snapshot.freezeOrderLines.then() callback.resolvedProducts.map() callback` (L71-L98) - Function
 - `src/modules/products/repository.ts`
   - `src.modules.products.repository.ListedProduct` (L40-L45) - Interface
-  - `src.modules.products.repository.StockCounters` (L51-L60) - Interface
-  - `src.modules.products.repository.productRepository` (L63-L235) - Class
-  - `src.modules.products.repository.productRepository.publicScope` (L105-L105) - Method
-  - `src.modules.products.repository.productRepository.findByIdScoped` (L119-L120) - Method
-  - `src.modules.products.repository.productRepository.findByIdRawScoped` (L131-L135) - Method
-  - `src.modules.products.repository.productRepository.findPublicById` (L144-L145) - Method
-  - `src.modules.products.repository.productRepository.listedPage` (L156-L165) - Method
-  - `src.modules.products.repository.productRepository.listedPage.then() callback` (L165-L165) - Function
-  - `src.modules.products.repository.productRepository.listedPage.then() callback.rows.map() callback` (L165-L165) - Function
-  - `src.modules.products.repository.productRepository.facets` (L174-L202) - Method
-  - `src.modules.products.repository.productRepository.facets.then() callback` (L196-L202) - Function
-  - `src.modules.products.repository.productRepository.facets.then() callback.categories.map() callback` (L197-L200) - Function
-  - `src.modules.products.repository.productRepository.facets.then() callback.tags.map() callback` (L201-L201) - Function
-  - `src.modules.products.repository.productRepository.syncStockCache` (L214-L222) - Method
+  - `src.modules.products.repository.StockCounters` (L51-L62) - Interface
+  - `src.modules.products.repository.productRepository` (L65-L240) - Class
+  - `src.modules.products.repository.productRepository.publicScope` (L107-L107) - Method
+  - `src.modules.products.repository.productRepository.findByIdScoped` (L121-L122) - Method
+  - `src.modules.products.repository.productRepository.findByIdRawScoped` (L133-L137) - Method
+  - `src.modules.products.repository.productRepository.findPublicById` (L146-L147) - Method
+  - `src.modules.products.repository.productRepository.listedPage` (L158-L167) - Method
+  - `src.modules.products.repository.productRepository.listedPage.then() callback` (L167-L167) - Function
+  - `src.modules.products.repository.productRepository.listedPage.then() callback.rows.map() callback` (L167-L167) - Function
+  - `src.modules.products.repository.productRepository.facets` (L176-L204) - Method
+  - `src.modules.products.repository.productRepository.facets.then() callback` (L198-L204) - Function
+  - `src.modules.products.repository.productRepository.facets.then() callback.categories.map() callback` (L199-L202) - Function
+  - `src.modules.products.repository.productRepository.facets.then() callback.tags.map() callback` (L203-L203) - Function
+  - `src.modules.products.repository.productRepository.syncStockCache` (L219-L227) - Method
 - `src/modules/products/services/crud.ts`
-  - `src.modules.products.services.crud.enqueuePendingImage` (L123-L129) - Class
-  - `src.modules.products.services.crud.enqueuePendingImage.afterCommit('image enqueue') callback` (L126-L126) - Function
-  - `src.modules.products.services.crud.finishCreate` (L191-L217) - Class
-  - `src.modules.products.services.crud.finishCreate.afterCommit('re-read') callback` (L200-L200) - Function
-  - `src.modules.products.services.crud.finishCreate.afterCommit('re-read') callback.then() callback` (L200-L200) - Function
-  - `src.modules.products.services.crud.finishCreate.then() callback` (L203-L215) - Function
-  - `src.modules.products.services.crud.finishCreate.then() callback.afterCommit('audit') callback` (L206-L212) - Function
-  - `src.modules.products.services.crud.finishCreate.then() callback.then() callback` (L215-L215) - Function
-  - `src.modules.products.services.crud.finishUpdate` (L450-L458) - Class
-  - `src.modules.products.services.crud.finishUpdate.then() callback` (L455-L456) - Function
-  - `src.modules.products.services.crud.finishUpdateById` (L494-L524) - Class
-  - `src.modules.products.services.crud.finishUpdateById.afterCommit('audit') callback` (L501-L519) - Function
-  - `src.modules.products.services.crud.finishUpdateById.then() callback` (L524-L524) - Function
+  - `src.modules.products.services.crud.enqueuePendingImage` (L125-L131) - Class
+  - `src.modules.products.services.crud.enqueuePendingImage.afterCommit('image enqueue') callback` (L128-L128) - Function
+  - `src.modules.products.services.crud.finishCreate` (L193-L219) - Class
+  - `src.modules.products.services.crud.finishCreate.afterCommit('re-read') callback` (L202-L202) - Function
+  - `src.modules.products.services.crud.finishCreate.afterCommit('re-read') callback.then() callback` (L202-L202) - Function
+  - `src.modules.products.services.crud.finishCreate.then() callback` (L205-L217) - Function
+  - `src.modules.products.services.crud.finishCreate.then() callback.afterCommit('audit') callback` (L208-L214) - Function
+  - `src.modules.products.services.crud.finishCreate.then() callback.then() callback` (L217-L217) - Function
+  - `src.modules.products.services.crud.finishUpdate` (L443-L451) - Class
+  - `src.modules.products.services.crud.finishUpdate.then() callback` (L448-L449) - Function
+  - `src.modules.products.services.crud.finishUpdateById` (L487-L517) - Class
+  - `src.modules.products.services.crud.finishUpdateById.afterCommit('audit') callback` (L494-L512) - Function
+  - `src.modules.products.services.crud.finishUpdateById.then() callback` (L517-L517) - Function
 - `src/modules/products/services/lookups.ts`
-  - `src.modules.products.services.lookups.findManyByIds` (L59-L62) - Class
-  - `src.modules.products.services.lookups.findManyByIds.then() callback` (L60-L61) - Function
-  - `src.modules.products.services.lookups.findManyByIds.then() callback._id.$in.ids.map() callback` (L61-L61) - Function
-  - `src.modules.products.services.lookups.countPublic` (L76-L95) - Class
-  - `src.modules.products.services.lookups.countPublic.then() callback` (L82-L94) - Function
-  - `src.modules.products.services.lookups.countPublic.then() callback._id.$in.ids.map() callback` (L85-L85) - Function
-  - `src.modules.products.services.lookups.translationsWithFallback` (L162-L167) - Class
-  - `src.modules.products.services.lookups.translationsWithFallback.then() callback` (L165-L166) - Function
-  - `src.modules.products.services.lookups.titlesOf` (L177-L185) - Class
-  - `src.modules.products.services.lookups.titlesOf.then() callback` (L178-L184) - Function
-  - `src.modules.products.services.lookups.titlesOf.then() callback.map() callback` (L180-L183) - Function
-  - `src.modules.products.services.lookups.titlesById` (L193-L194) - Class
-  - `src.modules.products.services.lookups.titlesById.then() callback` (L194-L194) - Function
+  - `src.modules.products.services.lookups.countPublic` (L69-L88) - Class
+  - `src.modules.products.services.lookups.countPublic.then() callback` (L75-L87) - Function
+  - `src.modules.products.services.lookups.countPublic.then() callback._id.$in.ids.map() callback` (L78-L78) - Function
+  - `src.modules.products.services.lookups.translationsWithFallback` (L155-L160) - Class
+  - `src.modules.products.services.lookups.translationsWithFallback.then() callback` (L158-L159) - Function
+  - `src.modules.products.services.lookups.titlesOf` (L170-L178) - Class
+  - `src.modules.products.services.lookups.titlesOf.then() callback` (L171-L177) - Function
+  - `src.modules.products.services.lookups.titlesOf.then() callback.map() callback` (L173-L176) - Function
+  - `src.modules.products.services.lookups.titlesById` (L186-L187) - Class
+  - `src.modules.products.services.lookups.titlesById.then() callback` (L187-L187) - Function
 - `src/modules/products/services/read.ts`
-  - `src.modules.products.services.read.resolveToLocale` (L35-L36) - Class
-  - `src.modules.products.services.read.resolveToLocale.then() callback` (L36-L36) - Function
-  - `src.modules.products.services.read.getById` (L50-L60) - Class
-  - `src.modules.products.services.read.getById.then() callback` (L59-L59) - Function
-  - `src.modules.products.services.read.getByIdForCaller` (L74-L88) - Class
-  - `src.modules.products.services.read.getByIdForCaller.then() callback` (L81-L87) - Function
-  - `src.modules.products.services.read.then() callback.then() callback` (L85-L85) - Function
-  - `src.modules.products.services.read.getByIdForCaller.then() callback.then() callback` (L86-L86) - Function
-  - `src.modules.products.services.read.withTranslations` (L98-L108) - Class
-  - `src.modules.products.services.read.withTranslations.then() callback` (L105-L106) - Function
+  - `src.modules.products.services.read.resolveToLocale` (L37-L38) - Class
+  - `src.modules.products.services.read.resolveToLocale.then() callback` (L38-L38) - Function
+  - `src.modules.products.services.read.getById` (L52-L62) - Class
+  - `src.modules.products.services.read.getById.then() callback` (L61-L61) - Function
+  - `src.modules.products.services.read.getByIdForCaller` (L76-L94) - Class
+  - `src.modules.products.services.read.getByIdForCaller.then() callback` (L85-L92) - Function
+  - `src.modules.products.services.read.presentWithStanding` (L117-L125) - Class
+  - `src.modules.products.services.read.presentWithStanding.then() callback` (L125-L125) - Function
+  - `src.modules.products.services.read.withTranslations` (L135-L145) - Class
+  - `src.modules.products.services.read.withTranslations.then() callback` (L142-L143) - Function
 - `src/modules/products/services/remove.ts`
   - `src.modules.products.services.remove.removeById` (L114-L125) - Class
   - `src.modules.products.services.remove.removeById.then() callback` (L121-L124) - Function
@@ -1215,15 +1214,15 @@ The three kernel ports that resolve user-facing content and permissions at read 
   - `src.modules.products.services.remove.restoreById.then() callback` (L140-L156) - Function
   - `src.modules.products.services.remove.restoreById.then() callback.then() callback` (L147-L155) - Function
 - `src/modules/products/services/search.ts`
-  - `src.modules.products.services.search.search` (L35-L57) - Class
-  - `src.modules.products.services.search.search.resultPromise.then() callback` (L54-L55) - Function
-  - `src.modules.products.services.search.search.resultPromise.then() callback.then() callback` (L55-L55) - Function
-  - `src.modules.products.services.search.searchWithTranslatedText` (L66-L92) - Class
-  - `src.modules.products.services.search.searchWithTranslatedText.then() callback` (L81-L91) - Function
-  - `src.modules.products.services.search.searchWithTranslatedText.then() callback.union.$or._id.$in.translatedIds.map() callback` (L86-L86) - Function
-  - `src.modules.products.services.search.searchForCaller` (L102-L113) - Class
-  - `src.modules.products.services.search.searchForCaller.then() callback` (L107-L113) - Function
-  - `src.modules.products.services.search.searchForCaller.then() callback.items.result.items.map() callback` (L111-L111) - Function
+  - `src.modules.products.services.search.search` (L37-L59) - Class
+  - `src.modules.products.services.search.search.resultPromise.then() callback` (L56-L57) - Function
+  - `src.modules.products.services.search.search.resultPromise.then() callback.then() callback` (L57-L57) - Function
+  - `src.modules.products.services.search.searchWithTranslatedText` (L68-L94) - Class
+  - `src.modules.products.services.search.searchWithTranslatedText.then() callback` (L83-L93) - Function
+  - `src.modules.products.services.search.searchWithTranslatedText.then() callback.union.$or._id.$in.translatedIds.map() callback` (L88-L88) - Function
+  - `src.modules.products.services.search.searchForCaller` (L105-L119) - Class
+  - `src.modules.products.services.search.searchForCaller.then() callback` (L110-L119) - Function
+  - `src.modules.products.services.search.searchForCaller.then() callback.items.result.items.map() callback` (L115-L116) - Function
 - `src/modules/products/services/translated-write.ts`
   - `src.modules.products.services.translated-write.toUpsertTranslationsRequest` (L36-L53) - Class
   - `src.modules.products.services.translated-write.toUpsertTranslationsRequest.map() callback` (L40-L52) - Function
@@ -1233,7 +1232,7 @@ The three kernel ports that resolve user-facing content and permissions at read 
   - `src.modules.products.services.translated-write.then() callback.translations` (L203-L208) - Class
   - `src.modules.products.services.translated-write.clearOmittedLocales.then() callback.translations.map() callback` (L204-L207) - Function
 - `src/modules/users/repository.ts`
-  - `src.modules.users.repository.userRepository.setOwnerDeletionState.then() callback` (L962-L962) - Function
+  - `src.modules.users.repository.userRepository.setOwnerDeletionState.then() callback` (L1002-L1002) - Function
 - `src/modules/users/services/create.ts`
   - `src.modules.users.services.create.create` (L43-L138) - Class
   - `src.modules.users.services.create.then() callback` (L67-L106) - Function
@@ -1246,10 +1245,7 @@ The three kernel ports that resolve user-facing content and permissions at read 
   - `src.modules.users.services.image.enqueueIfPending` (L19-L25) - Class
   - `src.modules.users.services.image.enqueueIfPending.afterCommit('image enqueue') callback` (L22-L22) - Function
 - `src/modules/users/services/own-account.ts`
-  - `src.modules.users.services.own-account.restoreOwnAccount` (L155-L165) - Class
-  - `src.modules.users.services.own-account.restoreOwnAccount.withTransaction() callback` (L160-L164) - Function
-  - `src.modules.users.services.own-account.restoreOwnAccount.withTransaction() callback.then() callback` (L161-L164) - Function
-  - `src.modules.users.services.own-account.restoreOwnAccount.withTransaction() callback.then() callback.then() callback` (L163-L163) - Function
+  - `src.modules.users.services.own-account.restoreOwnAccount` (L137-L141) - Class
 
 ### Notifications Domain Module
 The notifications module — the fan-out target that most domain events ultimately reach. It provides a unified repository with distinct read paths for the user's inbox and the staff console, plus a digest aggregation and subscriber management. Seeding populates this module to give the flow runner realistic notification state to assert against; the outbox relay is the primary producer of its rows.
@@ -1318,4 +1314,4 @@ The notifications module — the fan-out target that most domain events ultimate
   - `src.modules.notifications.services.subscribers.onOutboxEventDead` (L33-L43) - Class
   - `src.modules.notifications.services.subscribers.onOutboxEventDead.then() callback` (L43-L43) - Function
 - `src/modules/orders/repository.ts`
-  - `src.modules.orders.repository.orderEventRepository.clearNoteText` (L1054-L1067) - Method
+  - `src.modules.orders.repository.orderEventRepository.clearNoteText` (L1083-L1096) - Method

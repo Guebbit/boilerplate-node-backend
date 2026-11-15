@@ -1,43 +1,41 @@
 ---
 source: src/modules/account/tests/integration/reset-request-timing.test.ts
-sha256: e7c8f67a10b2c3ce6e5f05d46e2317282e8b27ca89b6119b4dfe7a9233e55b2e
-generated_at: 2026-11-08T04:41:02.328466+00:00
+sha256: 4b4af5a590517c0db1694b52c879799dc52722a818822b3ba5b070be224676b4
+generated_at: 2026-11-14T19:07:59.808950+00:00
 model: ollama:qwen3.8:27b
 ---
 
-# src/modules/account/tests/integration/reset-request-timing.test.ts
+# src/modules/password/reset-request-timing.test.ts
 
 ## Purpose
 
-Integration tests that verify `POST /account/password/reset` responds **immediately** (204) regardless of how long the underlying repository lookup takes, and that any backend failure is logged rather than surfaced to the client. This protects against user-enumeration: the response must not wait for or leak the outcome of the token lookup.
+Verifies that `POST /account/password/reset` returns **204 immediately** — before the underlying email lookup, token write, and mail enqueue have completed — so response timing cannot be used to enumerate registered addresses. Also confirms that a repository failure is logged (not swallowed) while still producing a 204.
 
 ## Key elements
 
-- **`mockOutbox`** — module-level array that collects `{ template }` entries whenever the mailer's `enqueueEmail` is called (via the `jest.mock` of `@infrastructure/adapters/mailer`).
-- **`jest.mock('@infrastructure/adapters/mailer', …)`** — replaces `enqueueEmail` with a spy that pushes to `mockOutbox` and resolves, leaving the rest of the mailer intact.
-- **`setupTestDb()`** — initialises a throwaway database for the suite (called once at module scope).
-- **`beforeEach`** — sets `NODE_MAIL_TRANSPORT` to `'outbox'` (via `setEnvironment`) and clears `mockOutbox`.
-- **`afterEach`** — `jest.restoreAllMocks()` to undo any `spyOn` calls.
-- **Test: "answers before a slow repository does…"** — spies on `userService.findByEmail` with a 600 ms delay, asserts the 204 arrives while `released` is still `false`, then polls `mockOutbox` via `eventually` to confirm the mail was queued once the lookup finished.
-- **Test: "answers an unknown address in the same breath…"** — same slow-lookup mock but resolving `undefined`; asserts 204 + `released === false` and (implicitly) no mail is sent.
-- **Test: "logs a failure behind the answer…"** — `findByEmail` rejects; asserts 204 is still returned and `logger.error` was called with a message containing `'A password reset request failed.'`.
+- **`mockOutbox`** – module-level array that the mailer mock pushes into; used to assert that a reset-request email was eventually queued.
+- **`jest.mock('@infrastructure/adapters/mailer')`** – replaces `enqueueEmail` with a spy that records the template name; all other mailer exports are preserved via `jest.requireActual`.
+- **`beforeEach`** – sets `NODE_MAIL_TRANSPORT` to `'outbox'` and clears `mockOutbox`.
+- **`describe('POST /account/password/reset timing')`** – three integration tests:
+  - *Slow repo, known address* – mocks `findByEmail` with a 600 ms delay; asserts the HTTP response arrives while the promise is still pending (`released === false`), then uses `eventually` to confirm the mail is queued.
+  - *Slow repo, unknown address* – same 600 ms delay, `findByEmail` resolves `undefined`; asserts identical immediate 204 with no observable difference.
+  - *Rejected repo* – `findByEmail` rejects; asserts `logger.error` is called with the expected message and the response is still 204.
 
 ## Relationships
 
 | Neighbor | Interaction |
 |---|---|
-| `tests/support/http.ts` | `api()` builds the HTTP client used in every request. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` provisions the test database before any test runs. |
-| `tests/support/environment.ts` | `setEnvironment({ NODE_MAIL_TRANSPORT: 'outbox' })` ensures the app routes mail through the mocked outbox transport. |
-| `tests/support/eventually.ts` | `eventually()` polls an assertion until it passes or times out (used for async side-effects like mail enqueueing and log emission). |
-| `src/modules/users/tests/factories.ts` | `createUser()` creates a real user row for the "known address" scenario. |
-| `src/modules/users/index.ts` | Exports `userService`, whose `findByEmail` method is spied on in every test. |
-| `src/modules/users/services/index.ts` | Re-export layer that makes `userService` reachable from the `@modules/users` barrel. |
-| `src/infrastructure/adapters/logger.ts` | `logger.error` is spied on to assert that backend failures are logged (not swallowed) after the 204 is sent. |
+| `src/modules/users/friends/account.ts` | The test imports `accountUserService` from this file and spies on its `findByEmail` method to simulate slow or failing user lookups. |
+| `src/infrastructure/adapters/logger.ts` | The test imports `logger` from this file and spies on `error` to assert the failure path is logged. |
+| `src/modules/users/tests/factories.ts` | `createUser` provisions a registered user for the known-address test. |
+| `tests/support/http.ts` | `api()` provides the integration-test HTTP client. |
+| `tests/support/setup-test-db.ts` | `setupTestDb` initialises the in-memory database for the suite. |
+| `tests/support/environment.ts` | `setEnvironment` pins `NODE_MAIL_TRANSPORT` to `'outbox'`. |
+| `tests/support/eventually.ts` | `eventually` polls until a post-response side-effect (mail, log) is observable. |
 
 ## Notes
 
-- The mock for `@infrastructure/adapters/mailer` uses `jest.requireActual` to preserve the rest of the module; only `enqueueEmail` is replaced.
-- `setupTestDb()` is called at **module scope** (not in a `beforeAll`), so it runs once when the test file is loaded.
-- The "unknown address" test does **not** assert that no mail is queued — it only checks timing. The absence of a mail assertion is intentional: the contract under test is timing, not the mail-decision logic (covered elsewhere).
-- `afterEach` relies on `restoreAllMocks` rather than manual `mockRestore`, so any new spy added to a test is cleaned up automatically.
+- The 600 ms `setTimeout` in the mock is deliberately longer than the HTTP round-trip, ensuring the response assertion executes while the promise is still pending. Shorten it only if you also change the assertion strategy.
+- `eventually` is used **after** the response for assertions about background work (mail enqueue, error log); it is not a substitute for awaiting the promise directly.
+- The mailer mock spreads `jest.requireActual` so any future exports on the mailer module are not lost; adding a new export there won't silently break this test.
+- `afterEach` calls `jest.restoreAllMocks()`; the `findByEmail` spy and `logger.error` spy are both restored automatically, but the module-level `jest.mock` for the mailer persists across tests (it is not restored by `restoreAllMocks`).

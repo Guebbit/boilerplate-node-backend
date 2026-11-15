@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/tests/integration/order-actions-parity.test.ts
-sha256: 0effbb71bd12672e5a0f0353173b0eeb353574d05970dfb118a4cc0403c3ea02
-generated_at: 2026-11-08T08:08:54.719929+00:00
+sha256: 1da4d7bbfa0c1323dda17f2e3316382f90dc72f87a88951943deffc01854c1c2
+generated_at: 2026-11-14T21:43:54.062522+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,44 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that pins the `OrderActions` flags returned to clients against the actual server responses for every combination of role × order status × action. It guarantees that a button is offered (`flag === true`) **iff** the corresponding endpoint returns a 2xx, and that a button is withheld **iff** the endpoint rejects. This catches any drift between the read-model flags and the write-side authorization logic.
+Integration test that pins the `OrderActions` flags a client renders as buttons to the actual server endpoints behind them. For every role × order-status × action, it asserts the flag is `true` **if and only if** the corresponding API call returns a 2xx, so a button can never appear without a working door (or vice versa).
 
 ## Key elements
 
-- **`ROLES`** – The five swept roles: `customer` (owner), `admin`, `manager`, `warehouse`, `support`.
-- **`STATUSES`** – All six `OrderStatus` values the sweep iterates over.
-- **`OrderKind`** – `'ordinary' | 'mixed' | 'bespoke-only'`; used in the withdrawal sweep to vary line composition (made-to-order / no-withdrawal goods).
-- **`signedIn()`** – Authenticates all five roles; returns the owner credential, the buyer `Caller`, and the full caller list.
-- **`orderIn(owner, status, kind?)`** – Creates a realistic order in the given status via production paths (`createProduct`, `createOrder`, `carryOrderTo`, `fulfillmentOrdersOf`) and returns the order id.
-- **`actionsFor(caller, orderId)`** – `GET /orders/:id` and returns the `actions` payload (or `undefined` if the caller cannot read the order).
-- **`whyBlocked(caller, orderId)`** – Convenience wrapper that reads `actions.withdrawBlocked`.
-- **`ACTS: Act[]`** – Seven boolean-flag actions (`cancel`, `process`, `withdraw`, `pay`, `delete`, `hardDelete`, `recordPayment`), each mapping its flag getter to the corresponding mutating request.
-- **`accepted()`** – True for any 2xx status.
-- **`describe('the button and its door agree')`** – Four tests:
-  1. Boolean-flag parity across all roles × statuses for each `ACT` entry.
-  2. `override` parity: the flag is an array of target statuses; sweeps every (role, from, to) triple.
-  3. Withdrawal parity for the buyer across `OrderKind` × relevant statuses.
-  4. `withdrawBlocked` reason is present for the buyer on a bespoke-only order, absent on a canceled order, and absent for all staff roles.
+- **`ACTS`** — array of seven actions (cancel, process, withdraw, pay, delete, hardDelete, recordPayment). Each entry pairs a boolean flag getter on `OrderActions` with the HTTP "door" call that exercises it.
+- **`signedIn()`** — authenticates all five roles (customer, admin, manager, warehouse, support); the customer is the order owner, the rest are non-owning staff.
+- **`orderIn(owner, status, kind?)`** — creates an order in the target status using product factories, then drives it through delivery (`carryOrderTo`) or creates fulfillment orders (`fulfillmentOrdersOf`) so paid/processing/shipped/delivered states are realistic.
+- **`actionsFor(caller, orderId)`** — GETs the order detail and returns the `actions` object (or `undefined` if the caller lacks read access).
+- **`accepted(response)`** — true for any 2xx status.
+- **Test: "on \*name, for every role and every status"** — the main parity sweep over `ACTS` × `STATUSES` × `ROLES`.
+- **Test: "on override, …"** — sweeps `overrideStatus` (an array flag) as a from-status × to-status × role matrix.
+- **Test: "on withdraw, … over what the order is made of"** — buyer-only sweep across `ordinary` / `mixed` / `bespoke-only` order kinds at three pre-fulfillment statuses.
+- **Test: "says why the button is off …"** — asserts `withdrawBlocked` is `'all_excluded'` for a buyer with a bespoke-only order, `undefined` for a canceled order, and `undefined` for all staff roles.
 
 ## Relationships
 
 | Neighbor | Interaction |
 |---|---|
-| `src/modules/products/tests/factories.ts` | `createProduct` to seed ordinary and made-to-order (no-withdrawal) goods. |
-| `src/modules/orders/tests/factories.ts` | `createOrder`, `toOrderItem`, `forceOrderStatus` to build orders in arbitrary states. |
-| `src/modules/delivery/tests/factories.ts` | `carryOrderTo` to advance shipped/delivered orders; `fulfillmentOrdersOf` to create the fulfillment records a payment event would produce. |
-| `src/modules/payments/module.ts` | Registered in `beforeEach` so the `/payments` and `/orders/:id/payments` doors are live. |
-| `src/modules/returns/module.ts` | Registered in `beforeEach` so the `/returns` door (withdrawal) is live. |
-| `src/types/index.ts` | `OrderStatus` enum and `OrderActions` type shape the sweep dimensions and assertions. |
-| `tests/support/checkout-modules.ts` | `registerCheckoutModules` wires the payment and returns modules into the app under test. |
-| `tests/support/http.ts` | `api()` (supertest agent) and `authenticateAsRole` for all HTTP calls and auth. |
-| `tests/support/setup-test-db.ts` | `setupTestDb` initialises the in-memory database before the suite. |
+| `tests/support/setup-test-db.ts` | `setupTestDb()` initialises the in-memory DB at module load (top-level call). |
+| `tests/support/checkout-modules.ts` | `registerCheckoutModules` mounts `paymentsModule` and `returnsModule` into the test HTTP app in `beforeEach`. |
+| `tests/support/http.ts` | `api()` builds supertest requests; `authenticateAsRole` obtains bearer tokens per role. |
+| `src/modules/products/tests/factories.ts` | `createProduct` makes the ordinary and bespoke (`noWithdrawal: true`) products used to build order items. |
+| `src/modules/orders/tests/factories.ts` | `createOrder`, `toOrderItem`, `forceOrderStatus` create and manipulate orders. |
+| `src/modules/delivery/tests/factories.ts` | `carryOrderTo` advances an order to shipped/delivered; `fulfillmentOrdersOf` creates the fulfillment records a paid order would have. |
+| `src/modules/payments/module.ts` | Registered as a mounted module so payment-related doors (pay, recordPayment) are routable. |
+| `src/modules/returns/module.ts` | The module under test; registered so the `/returns` door exists. |
+| `src/types/index.ts` | `OrderStatus` enum and `OrderActions` interface drive the sweep dimensions and flag access. |
 
 ## Notes
 
-- Each cell in the sweep gets a **fresh order** because the door mutates state; reusing an order would make subsequent assertions unreliable.
-- The `bothOpen > 0` guard in every test prevents a vacuous pass where both the flag and the door always reject (a broken registration would look like a "correct" negative).
-- `override` is **not** in `ACTS` because its flag is a status array, not a boolean; it is swept in its own test against every destination status.
-- The withdrawal kind-sweep only covers `pending`, `paid`, and `processing` — statuses where a withdrawal is semantically possible.
-- `withdrawBlocked` is asserted to be `undefined` for all four staff roles on a bespoke-only order, confirming the reason is a buyer-only concern.
-- Documented known edge (not swept): a mixed `processing` order whose eligible groups are already canceled still shows the button but a second withdrawal returns `409 RETURN_NOTHING_TO_CANCEL`. See `docs/modules/returns.md#goods-with-no-right-of-withdrawal`.
+- **Each assertion cell gets a fresh order** because the "door" call mutates state; reusing an order would make the flag/door comparison meaningless.
+- **`overrideStatus` is swept separately** because it is an array of allowed destinations, not a single boolean; the parity check becomes `offered.includes(to) === doorOpen`.
+- **`bothOpen > 0` guard** — every test asserts at least one cell where both sides agree on *open*, preventing a vacuous pass where everything is uniformly denied.
+- **`setupTestDb()` is top-level**, not inside `beforeEach`; module registration is per-test. Don't move either without checking the test-runner lifecycle.
+- **Documented known edge (not swept):** a mixed `processing` order whose eligible groups are already canceled still shows the withdraw button (lines are frozen) but a second withdrawal returns 409 `RETURN_NOTHING_TO_CANCEL`. See `docs/modules/returns.md#goods-with-no-right-of-withdrawal`.
+- **`withdrawBlocked` is buyer-only** by design; staff roles are expected to always see `undefined` for that field.

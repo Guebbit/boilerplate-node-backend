@@ -1,40 +1,40 @@
 ---
 source: src/modules/delivery/domain/lost.ts
-sha256: 489064576743b676f7355766cc14930ed242a5a4601b9ac089e68ae3e346214f
-generated_at: 2026-11-08T05:28:54.327800+00:00
+sha256: 9ee3f9d329b46516ba4cb425e22880d2b63ac005aefd1ce6e1e6691930772e83
+generated_at: 2026-11-14T19:40:02.151043+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/delivery/domain/lost.ts
 
 ## Purpose
-
-Pure domain logic for the lost-in-transit lifecycle: it computes how a fulfillment order's lines change when a shipment is reported lost, decides whether the shipment may later be recorded as found (and what that restores), and derives the promised delivery date for the owed units. All functions are side-effect free so every branch is testable without a database.
+Pure domain logic for a delivery fulfillment order's lines when a shipment is reported lost and when that same parcel later turns up. Encodes the invariant that shipped + canceled never exceeds what was bought, and defines when restoration is allowed (all-or-nothing). No I/O or database access, so every case is unit-testable.
 
 ## Key elements
-
-- **`LostShipmentFacts`** – minimal shape of a lost shipment (id, origin fulfillment order id, product lines).
-- **`RestorableFulfillmentOrder`** – shape of a fulfillment order as the restoration plan needs it (id, optional `sourceShipmentId`, lines).
-- **`Restoration`** – the result of a valid restoration: units going back to `shippedQuantity`, units going back to `quantity`, and the owed fulfillment order ids to close.
-- **`withLoss(lines, lost, owed)`** – returns the origin's lines after a loss: subtracts lost units from `shippedQuantity`, subtracts owed units from `quantity`; drops any line whose quantity reaches 0.
-- **`planRestoration(shipment, orders)`** – validates that *every* unit the shipment carried is still open (owed units unshipped/uncanceled on linked orders; shelf-covered units still open on the origin). Returns a `Restoration` or `undefined` (all-or-nothing).
-- **`withRestoration(lines, shipment, restoration)`** – returns the origin's lines after the parcel turns up: adds `shippedQuantity` back, adds owed units back to `quantity`, and re-creates any line the loss had dropped.
-- **`OwedDate` / `owedDateOf(restockDates, now, defaultDays)`** – computes the promised date for owed units: the latest future restock date if *all* products have one, otherwise the shop's default (`now + defaultDays`). The `defaulted` flag records which path was taken.
-- **`plain`** *(internal)* – copies a stored subdocument line into a plain object, bypassing getters.
-- **`sumOf`** *(internal)* – sums a per-line measure across multiple fulfillment orders for one product.
+- **`LostShipmentFacts`** — minimal shape of a lost shipment (id, origin order id, lines) as the plan needs it.
+- **`RestorableFulfillmentOrder`** — fulfillment order shape including an optional `sourceShipmentId` linking it back to the loss that spawned it.
+- **`Restoration`** — result of a valid restoration: all shipped units to restore, the owed subset, and the owed fulfillment-order IDs to close.
+- **`withLoss(lines, lost, owed)`** — returns the origin's lines after a loss: decrements `shippedQuantity` by the full lost amount and `quantity` by the owed amount; drops lines that hit zero.
+- **`planRestoration(shipment, orders)`** — returns a `Restoration` or `undefined`. Allowed only when every owed unit is still unshipped/uncanceled on its linked order **and** the shelf-covered portion is still open on the origin. No partial restoration.
+- **`withRestoration(lines, shipment, restoration)`** — returns the origin's lines after the parcel turns up: re-adds shipped quantities, re-attaches owed quantities, and resurrects any line the loss had dropped (titled from the shipment).
+- **`OwedDate`** — promised date for owed units plus a `defaulted` flag.
+- **`owedDateOf(restockDates, now, defaultDays)`** — if *every* owed product has a future restock date, uses the latest one; otherwise falls back to `now + defaultDays` and marks it `defaulted`.
+- **`sumOf`** (private) — sums a per-line measure across orders for one product.
 
 ## Relationships
-
-- **`src/domain-primitives/time.ts`** – imports `DAY_MS` for the default-date arithmetic in `owedDateOf`.
-- **`src/modules/delivery/domain/fulfillment.ts`** – imports `remainingOfLine` (open-unit helper) and the `FulfillmentLine` / `ProductQuantity` types; `planRestoration` relies on `remainingOfLine` to check that owed/shelf units are still unshipped and uncanceled.
-- **`src/modules/delivery/domain/index.ts`** – barrel re-export surface for this module.
-- **`src/modules/delivery/services/lost.ts`**, **`services/found.ts`**, **`services/owed.ts`**, **`services/reship.ts`** – application services that call the pure functions here to perform the actual state transitions.
-- **`src/modules/delivery/tests/unit/lost.test.ts`** – unit tests for `withLoss`, `planRestoration`, `withRestoration`, `owedDateOf`.
-- **`src/modules/delivery/tests/unit/fulfillment.test.ts`**, **`tests/unit/reship.test.ts`** – exercise this module's logic indirectly through fulfillment and reship scenarios.
+- **`src/domain-primitives/time.ts`** — provides `DAY_MS`, used by `owedDateOf` for the default-date calculation.
+- **`src/modules/delivery/domain/fulfillment.ts`** — provides `plainLine`, `remainingOfLine`, and the `FulfillmentLine` / `ProductQuantity` types used throughout.
+- **`src/modules/delivery/domain/index.ts`** — barrel module that re-exports this file's public surface.
+- **`src/modules/delivery/services/lost.ts`** — service layer that calls `withLoss` (and likely `owedDateOf`) when recording a loss.
+- **`src/modules/delivery/services/found.ts`** — service layer that calls `planRestoration` and `withRestoration` when a lost parcel is found.
+- **`src/modules/delivery/services/owed.ts`** — service for the owed-unit side; consumes `OwedDate` / `owedDateOf`.
+- **`src/modules/delivery/services/reship.ts`** — handles re-shipping the shelf-covered portion "through the ordinary door."
+- **`src/modules/delivery/tests/unit/lost.test.ts`** — unit tests for every exported function.
+- **`src/modules/delivery/tests/unit/fulfillment.test.ts`**, **`src/modules/delivery/tests/unit/reship.test.ts`** — exercise the interplay between loss/restoration and adjacent flows.
 
 ## Notes
-
-- `withLoss` mutates nothing; it returns a new array. Callers replace the stored lines with the result.
-- `planRestoration` is strictly all-or-nothing: if *any* product has a shipped or canceled unit in the linked or origin orders, it returns `undefined` and no partial restoration occurs.
-- `owedDateOf` falls back to the default date when **any** product in the list lacks a future restock date—even if the others do. The `defaulted` flag lets downstream code distinguish a catalogue-backed date from a fallback so that later restock-date edits don't silently move a promise.
-- The `plain` helper exists because stored lines are Mongoose subdocuments with getter-backed fields; passing them through a plain-object spread normalises them for the pure arithmetic.
+- **All-or-nothing restoration**: `planRestoration` returns `undefined` the moment *any* single unit has been shipped or canceled. There is no partial-restore path.
+- **`owedDateOf` is all-or-nothing per product set**: if even one product lacks a future restock date, *all* owed units get the default date (`defaulted: true`), not just the missing ones.
+- **Dropped lines are revived on restoration**: `withRestoration` re-creates a line (with its title from the shipment) if `withLoss` had filtered it out.
+- **`plainLine` is used to reset derived fields**: both `withLoss` and `withRestoration` spread `plainLine(line)` first, so any transient/derived fields on `FulfillmentLine` are cleared before the new quantities are applied.
+- The module is intentionally side-effect-free; services (listed above) own persistence and orchestration.

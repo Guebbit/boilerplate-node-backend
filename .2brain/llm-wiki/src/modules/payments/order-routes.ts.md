@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/order-routes.ts
-sha256: ccb222b862a4f0182cf7350e2d4ceb28eb2e852a8920247ed1d092965c4a7409
-generated_at: 2026-11-08T07:22:47.229824+00:00
+sha256: 8d00915c982041d90ebfa0eec6ad2e5b294772f16c991fcd8104ca0ab3a2430d
+generated_at: 2026-11-14T21:02:24.350466+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express router that wires the two payment routes living under an order path (`GET /orders/:id/payments` and `POST /orders/:id/payments`). It exists so that payment operations scoped to a specific order can be mounted as a sub-router by the payments module, keeping URL hierarchy (Solidus-style nested resource) separate from the module's top-level payment routes.
+Defines the two payment routes that live under the `/orders` URL namespace (`GET /orders/:id/payments` and `POST /orders/:id/payments`). The URL nests payments as a child of the order (Solidus-style), but the routes remain owned by the payments module and use the payments domain's `create:Payment` permission key. Mounted at `/orders` by `./module.ts`.
 
 ## Key elements
 
-- **`orderRouter`** — the sole export; an Express `Router` instance carrying exactly two route definitions.
-- **GET `/:id/payments`** — reads the order's payment (if one was started). Middleware chain: `getAuth` → `isAuth` → `getOrderPayments` controller.
-- **POST `/:id/payments`** — an operator manually recording money the provider never saw. Middleware chain: `getAuth` → `isAuth` → `requirePermission('create', 'Payment')` → `idempotencyKey` → `postOrderPayment` controller.
+- **`orderRouter`** (exported) — the Express `Router` instance containing both routes; `module.ts` mounts it at `/orders`.
+- **`GET /:id/payments`** — chain: `getAuth` → `isAuth` → `getOrderPayments`. Returns the order's payment (if one was started).
+- **`POST /:id/payments`** — chain: `getAuth` → `isAuth` → `requirePermission('create', 'Payment')` → `idempotencyKey` → `postOrderPayment`. An operator records a payment the provider never saw.
 
 ## Relationships
 
-- **`src/modules/payments/module.ts`** — mounts `orderRouter` at the `/orders` path, making this file a sub-router of the payments module.
-- **`src/kernel/middlewares/authorizations.ts`** — supplies `getAuth`, `isAuth`, and `requirePermission` used as middleware on both routes.
-- **`src/infrastructure/http/middlewares/idempotency.ts`** — supplies the `idempotencyKey` middleware applied to the POST route to guard against duplicate payment records.
-- **`src/modules/payments/controllers/get-order-payments.ts`** — handler for the GET route; performs the actual read.
-- **`src/modules/payments/controllers/post-order-payment.ts`** — handler for the POST route; performs the manual payment creation.
-- **`src/modules/payments/tests/unit/routes.test.ts`** — unit-tests the route definitions and middleware ordering in this file.
+- **`src/modules/payments/module.ts`** — imports and mounts `orderRouter` at the `/orders` path.
+- **`src/modules/payments/controllers/get-order-payments.ts`** — terminal handler for the GET route.
+- **`src/modules/payments/controllers/post-order-payment.ts`** — terminal handler for the POST route.
+- **`src/kernel/middlewares/authorizations.ts`** — provides `getAuth`, `isAuth`, and `requirePermission` used on both routes.
+- **`src/infrastructure/http/middlewares/idempotency.ts`** — provides `idempotencyKey`, applied only to the POST route.
+- **`src/modules/payments/tests/unit/routes.test.ts`** — unit-tests the route definitions and middleware chains.
 
 ## Notes
 
-- The permission key is `'create:Payment'`, stored in `shared/authorization-keys.yaml`. The file's JSDoc flags that this mirrors the refund's `stepUp` arrangement — the authorization lives under the payments module even though the URL is nested under `/orders`.
-- The GET route has **no** `requirePermission` and **no** `idempotencyKey`; only the POST route carries those. Don't add them to GET.
-- The file intentionally does **not** import or reference the order module; the `:id` param is opaque here and scoped by the controller.
+- The URL hierarchy places payments under `/orders`, but the module ownership and the `create:Payment` authorization key both belong to the **payments** domain. Don't move the permission key to an orders-scoped one.
+- `idempotencyKey` is applied only to POST; the GET route has no idempotency protection (it is a read).
+- The permission check uses the generated key `create:Payment` (sourced from `shared/authorization-keys.generated.yaml`), matching the same `stepUp` arrangement used by the refund route.

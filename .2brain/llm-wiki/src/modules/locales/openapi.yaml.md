@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/openapi.yaml
-sha256: c6d7ca27f90b5336c42ce9e54f2bc56191cc6aed0bcb3554b9e8b4a63845a23a
-generated_at: 2026-11-08T06:23:42.885603+00:00
+sha256: 01c65d77aecca770ed0f428025578b5758728f74c4d268b280f667cb496cc313
+generated_at: 2026-11-14T20:20:01.718694+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.1.0 contract for the **locales** module. It defines the public and admin endpoints for managing supported languages, their apps, dictionaries, and translation entries, plus the module's custom error-code catalogue. It exists so clients, docs generators, and the `module.ts` implementation all agree on the wire format without a second source of truth.
+OpenAPI 3.1.0 contract for the **locales** module: supported languages, the API's own deployed dictionary, and client-editable translation entries. It exists so that both humans and AI assistants can understand the module's public surface, its two-tier translation model, and its error vocabulary without reading the implementation.
 
 ## Key elements
 
-- **`x-error-codes`** — module-scoped error catalogue (11 codes) covering 404 / 409 / 422 cases for languages, entry keys, apps, and entity types.
-- **`tags`** — single tag `Locales` (family: Core); all operations self-tag under it.
-- **`GET /locales`** (`listLocales`) — public + admin manifest of every language with `apps`, `active` flag, and per-language `actions`. Served `public, no-cache`; admin callers get `private, no-cache` plus hidden inactive rows.
-- **`POST /locales`** (`createLocale`) — registers a new language in the dynamic (Tier 2) tier; requires `bearerAuth` or `apiKeyAuth`.
-- **`GET /locales/apps`** (`listLocaleApps`) — lists configured translation apps (backend / frontend keyspaces). Unauthenticated, cacheable.
-- **`GET /locales/{locale}/dictionary`** (`getLocaleDictionary`) — returns the Tier 1 (deployed-file) dictionary for one language. Intended for offline client rendering.
-- *(file truncated — additional paths for `/locales/{locale}/messages`, entry CRUD, and entity-type lookups are implied by the error codes and comments)*
-- **`components/schemas`** — `LocaleCapabilities`, `CreateLocaleRequest`, `Language`, `LocaleApps`, and others (defined lower in the file, truncated here).
+- **`x-error-codes`** — Module-specific error registry (11 codes, e.g. `LOCALE_LANGUAGE_IS_FALLBACK`, `LOCALE_ENTRY_KEY_COLLISION`). Each maps a code to an HTTP status and a plain-English description. Referenced by individual operations' `x-error-codes` arrays.
+- **`tags`** — A single tag `Locales` (family: Core) that groups all operations in this file.
+- **`paths`**
+  - `GET /locales` — Lists every language the deployment offers, with per-language `apps` and `active` flags. Public, cacheable; admins see extra rows and actionable flags.
+  - `POST /locales` — Registers a language in the dynamic (Tier 2) tier. Requires `create:Locale`.
+  - `GET /locales/apps` — Lists configured translation apps (keyspaces). Public, unpaged, sourced from deployment config.
+  - `GET /locales/{locale}/dictionary` — Serves the API's own Tier 1 dictionary for one language.
+  - *(file truncated; additional paths for `/locales/{locale}/messages`, entry CRUD, and language toggling follow)*
+- **Schemas referenced** — `LocaleCapabilities`, `CreateLocaleRequest`, `Language`, `LocaleApps` (defined in the file's `components/schemas` section, not shown in the truncated excerpt).
+- **Design comments** — Large block comments inline document the two-tier model (deployed files vs. MongoDB rows), the `messages` vs. `entries` naming convention, the `{locale}`-in-path vs. `tag`-in-body distinction, and the app/keyscape model.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — `$ref` targets for shared response objects (`Unauthorized`, `Forbidden`, `Conflict`, `ValidationError`), the `Location` header, and the `Locale` schema used as the path parameter type.
-- **`src/modules/locales/authorization.yaml`** — defines the `bearerAuth` and `apiKeyAuth` security schemes referenced in the `security` blocks of the admin endpoints.
-- **`src/modules/locales/module.ts`** — the runtime implementation whose routes, validators, and i18next wiring must satisfy this contract.
-- **`src/modules/invoicing/openapi.yaml`** — sibling module spec; shares the same root-contract `$ref` patterns and tag conventions but defines no direct references to this file.
+- **`shared/contracts/openapi.root.yaml`** — `$ref`s shared response objects (`Unauthorized`, `Forbidden`, `Conflict`, `ValidationError`) and the `Location` header into every operation's response block. This file is the consumer; the root contract is the provider.
+- **`src/modules/locales/authorization.yaml`** — Defines the scope names (`create:Locale`, `display:Locale`, etc.) that appear in the `security` blocks here. The scopes are declared there and consumed here.
+- **`src/modules/locales/module.ts`** — The runtime module that mounts the routes described in this spec. The YAML is the contract; `module.ts` is the implementation entry point.
+- **`src/modules/invoicing/openapi.yaml`** — Sibling module spec. No direct `$ref` between the two, but both reference the same root contract and follow the same `x-error-codes` / `x-cache` / `x-versioned` conventions.
 
 ## Notes
 
-- **Two-tier model is load-bearing.** Tier 1 (deployed files → i18next) is never touched by the database; Tier 2 (MongoDB rows) is only read by `/messages`. Mixing them is the documented failure mode.
-- **`{locale}` vs `tag`.** Path parameters use `{locale}` (matching the shared scalar schema); the body field is `tag`. They carry the same value—don't rename one without the other.
-- **`messages` ≠ `entries`.** `messages` = built, nested, read-only dictionary. `entries` = flat, paginated, admin CRUD rows. Endpoints must not conflate them.
-- **`apps` are configuration, not data.** App ids come from the deployment environment; they are not enumerated in this spec and should never be hardcoded as a closed set.
-- **Cache headers are conditional.** `GET /locales` flips from `public, no-cache` to `private, no-cache` for callers holding `display:Locale`; the shared cache serves the public variant to everyone else.
+- **Two tiers never merge.** Tier 1 (deployed locale files) is read-only and in-process (i18next). Tier 2 (MongoDB rows) is runtime-editable. A language can exist in only one tier, both, or be registered but inactive. The spec enforces this distinction in endpoint naming: `dictionary` = Tier 1, `messages` = Tier 2.
+- **`messages` vs. `entries`.** `messages` is the built, nested, public dictionary object. `entries` are flat, paginated, admin-CRUD rows. Mixing them in one endpoint is called out in the file as the most common design mistake.
+- **`{locale}` in paths, `tag` in bodies.** The path parameter is always `locale` (matching the scalar other modules `$ref`). The stored field on a language row is `tag`. They carry the same value; the naming is intentional and should not be "fixed" to match.
+- **`x-error-codes` is per-operation, not global.** The top-level map is the registry; each operation lists which codes it can return via its own `x-error-codes` array (e.g. `POST /locales` returns only `LOCALE_LANGUAGE_EXISTS`).
+- **`active: false` gates selection only.** It does not remove a language from `GET /locales`; it merely prevents the API from picking it for a request. Clients are expected to hide it from their UI.
+- **Apps are configuration, not data.** The app list comes from the API's environment, not the database. A client cannot create an app; it can only target ones already listed by `GET /locales/apps`.

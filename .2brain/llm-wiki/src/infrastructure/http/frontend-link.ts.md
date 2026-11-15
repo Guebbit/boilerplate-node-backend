@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/http/frontend-link.ts
-sha256: f453f6cf179f684cd436de61a7bcd658a5c9ca90cd2a53ff0c36c023ce2776b0
-generated_at: 2026-11-08T03:29:24.710630+00:00
+sha256: 2c4144fed308f0d3ca663d093fa5dc06e898a34b04d07b2e30d6d591fb1dcf98
+generated_at: 2026-11-14T18:00:19.564376+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Turns a path template plus parameters into a full URL pointing at the paired frontend, prepending the deployment's origin and a validated locale. It is deliberately generic: it knows *how* to build a frontend URL but not *which* links exist—each module (`account`, `orders`, etc.) owns its own `NODE_FRONTEND_LINK_*` env vars and default templates and calls this with the template already resolved.
+Builds a full URL into the paired frontend from a path template, a locale, and key-value parameters. It is the single place where origin + locale segment + encoded path are assembled. Modules own *which* links exist (their `NODE_FRONTEND_LINK_*` env vars and default templates); this file only knows how to render a template into a URL, keeping infrastructure free of module-specific knowledge.
 
 ## Key elements
 
-- **`FRONTEND_LINK_RULES`** (const) — Loads the shared `frontend-links.yaml` (default templates + sitemap static pages) via the shared-rules loader. The paired frontend reads the same file, so an unknown path 404s on the frontend's router.
-- **`fillPath(template, parameters?)`** (exported) — Substitutes every `{name}` placeholder in `template` with the URL-encoded value from `parameters`. Parameters whose name the template does not contain are silently ignored.
-- **`frontendLink(template, locale, parameters?)`** (exported) — Composes the final URL: `origin / supportedLocale(locale) / fillPath(template, parameters)`. The locale segment is always prepended; it is never part of `template`.
-- **`frontendOrigin()`** (private) — Reads `siteConfig().NODE_FRONTEND_URL` lazily (function call, not a captured value).
-- **`supportedLocale(locale)`** (private) — Returns `locale` if `isServedLocale(locale)`, otherwise falls back to `getDefaultLocale()`.
+- **`FRONTEND_LINK_RULES`** – Default link templates and sitemap static pages, loaded from `shared/rules/frontend-links.yaml` via the shared-rules loader. The paired frontend reads the same file, so a missing route fails in the frontend router, not in a user's inbox.
+- **`fillPath(template, parameters)`** – Substitutes every `{name}` placeholder in the template with its URL-encoded value. Uses a function replacer so a literal `$&` in a value is treated as text, not a replacement pattern.
+- **`frontendLink(template, locale, parameters)`** – Main export. Returns `${NODE_FRONTEND_URL}/${servedLocale}/${filledPath}`. The locale segment is always first and is never part of the template.
+- **`supportedLocale(locale)`** *(internal)* – Walks the locale → base language → fallback chain and returns the first tag the shop serves. Guarantees the URL segment is a served tag, preventing a redirect that would drop a `#token` fragment.
 
 ## Relationships
 
-- **`@infrastructure/i18n`** (`index.ts` / `served.ts`) — Provides `isServedLocale` and `getDefaultLocale` for locale validation and fallback.
-- **`src/infrastructure/http/config.ts`** — Provides `siteConfig()` to read `NODE_FRONTEND_URL`.
-- **`src/infrastructure/config/shared-rules/load.ts`** — Provides `loadSharedRules` used to load `FRONTEND_LINK_RULES`.
-- **`src/infrastructure/config/shared-rules/frontend-links.ts`** — Provides `frontendLinksSchema` (Zod schema) for validating the YAML.
-- **`src/modules/account/config.ts`**, **`src/modules/orders/config.ts`** — Upstream callers that resolve their own link templates/env vars and pass them to `frontendLink`.
-- **`src/modules/notifications/emails.ts`**, **`src/modules/shop-tasks/emails.ts`**, **`src/modules/shop-tasks/services/notices.ts`**, **`src/modules/shop-tasks/services/tasks.ts`** — Downstream consumers that embed `frontendLink` output into email bodies or task payloads.
+- **`@infrastructure/http/config`** – `siteConfig()` supplies `NODE_FRONTEND_URL`; read lazily so tests can set the env var after import.
+- **`@infrastructure/i18n`** (`catalog`, `served`, `index`) – `getFallbackLocale`, `isServedLocale`, `localeCandidatesFor` power the locale-resolution step.
+- **`../config/shared-rules/load`** + **`../config/shared-rules/frontend-links`** – `loadSharedRules` + `frontendLinksSchema` produce `FRONTEND_LINK_RULES`.
+- **`src/modules/account/config.ts`**, **`src/modules/orders/config.ts`**, **`src/modules/products/config.ts`** – Each owns its own `NODE_FRONTEND_LINK_*` defaults and calls `frontendLink` / `fillPath` with an already-resolved template.
+- **`src/modules/notifications/emails.ts`**, **`src/modules/notifications/staff-routing.ts`**, **`src/modules/shop-tasks/emails.ts`**, **`src/modules/shop-tasks/services/notices.ts`**, **`src/modules/shop-tasks/services/outcome-unknown.ts`** – Downstream consumers that build mail links through this module.
+- **`src/modules/notifications/tests/unit/staff-routing.test.ts`** – Exercises `frontendLink` indirectly via staff-routing.
 
 ## Notes
 
-- `fillPath` uses a **function replacer** in `replaceAll` (`() => encodeURIComponent(value)`) so that a literal `$&` inside a parameter value is not interpreted as a JS replacement pattern.
-- `frontendOrigin()` is a function, not a top-level const, so `NODE_FRONTEND_URL` is read at call time—tests can set the env var after the module is already imported.
-- Extra entries in `parameters` that have no matching `{name}` placeholder are never substituted; the template is the source of truth for which slots exist.
-- The locale is **always** the first path segment after origin (`/:locale/...`). Templates must not include a locale segment themselves.
+- The origin is resolved via `siteConfig()` at call time (not at import), so a test that sets `NODE_FRONTEND_URL` after import still takes effect. Fallback is the frontend's local dev port, not the backend's.
+- `fillPath` ignores parameters whose name does not appear in the template; it never throws on extra keys.
+- The locale segment is injected here, not by the caller. Every route on the paired frontend lives under `/:locale`, so the segment is structural, not optional.

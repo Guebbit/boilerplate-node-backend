@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/cancel-mail.ts
-sha256: bd674a3506a26f899ec0c41a63e5039b7d65f67f4359352b3102c41eed10738f
-generated_at: 2026-11-08T06:56:04.174883+00:00
+sha256: 2bf883197644ad9397ff1cda01c7a77feba312653c2dd8ebe546e6abbf3a678a
+generated_at: 2026-11-14T20:42:12.630129+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Sends the buyer-facing email explaining why their order was canceled. Listens to the `order.canceled` domain event so that every cancellation path (manual, automatic, hold-expiry) produces the same buyer-visible explanation, and so the email is still dispatched even if a crash occurs between the DB commit and the send.
+Handles the buyer-facing email that explains why their order was canceled. It is invoked from the `order.canceled` domain-event listener so that every cancellation path (regardless of origin) produces the same explanation, and a crash between the DB commit and the send still results in the email going out.
 
 ## Key elements
 
-- **`mailOrderCanceled(payload)`** — Sole export. Accepts the `order.canceled` event payload (`orderId`, `refund`, `cause`). Looks up `CANCEL_CAUSES[cause].mail` to pick a template kind, then delegates to `mailBuyerOfOrder`. Three outcomes:
-  - `kind === 'none'` → resolves immediately, no email sent.
-  - `kind === 'reservation-expiry'` → skips bank-transfer orders (handled elsewhere); otherwise sends `cardHoldExpiredEmail`.
-  - any other kind → sends `orderCanceledEmail` including the refund amount.
+- **`mailOrderCanceled(payload)`** — Sole export. Accepts the `order.canceled` event payload (`orderId`, `refund`, `cause`). Resolves the mail kind via `CANCEL_CAUSES[cause].mail`, then:
+  - Returns immediately if kind is `'none'` (no acknowledgement owed, or no buyer to reach).
+  - For `'reservation-expiry'`: skips `bank_transfer` orders (see Notes) and sends `holdExpiredEmail`.
+  - Otherwise sends `orderCanceledEmail`, including the `refund` detail the buyer cannot see themselves.
+  - Delegates buyer/locale/name lookup to `mailBuyerOfOrder` and enqueues via `enqueueEmail`.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/orders/services/cancel.ts` | Reads `CANCEL_CAUSES` to map `cause` → mail kind. |
-| `src/modules/orders/emails.ts` | Imports `cardHoldExpiredEmail` and `orderCanceledEmail` template builders. |
-| `src/modules/orders/services/notify.ts` | Calls `mailBuyerOfOrder`, which fetches the order and invokes the callback with `(order, locale, name)`. |
-| `src/infrastructure/adapters/mailer.ts` | Calls `enqueueEmail` to queue the final email. |
-| `src/kernel/events.ts` | Imports `DomainEventMap` for the typed event payload. |
-| `src/modules/orders/services/index.ts` | Barrel export; re-exports `mailOrderCanceled` for consumers. |
+- **`src/modules/orders/services/cancel.ts`** — Provides `CANCEL_CAUSES`, the mapping from each cancellation cause to its mail kind and description.
+- **`src/modules/orders/emails.ts`** — Provides the two email templates: `orderCanceledEmail` and `holdExpiredEmail`.
+- **`src/modules/orders/services/notify.ts`** — Provides `mailBuyerOfOrder`, which resolves the buyer's order record, locale, and name, then invokes this file's callback.
+- **`src/infrastructure/adapters/mailer.ts`** — Provides `enqueueEmail`, the transport that actually dispatches the message.
+- **`src/kernel/events.ts`** — Supplies the `DomainEventMap` type so the event payload is typed against the canonical event schema.
+- **`src/modules/orders/services/index.ts`** — Re-exports `mailOrderCanceled` for external consumers of the orders services barrel.
 
 ## Notes
 
-- **Bank-transfer reservation expiry is *not* mailed here.** That deadline is owned by the `payments` module, which sends its own acknowledgement.
-- `enqueueEmail` never rejects (it logs failures internally), so the `void enqueueEmail(...)` calls intentionally float without a `.catch`.
-- The cause lives on the event, not on the cancel method, which is what guarantees uniform buyer messaging regardless of which code path triggered the cancellation.
+- **Bank-transfer expiry is deliberately not mailed here.** The `payments` module owns the transfer deadline and sends its own expiry notice; including it here would double-mail.
+- `enqueueEmail` never rejects — it logs its own failure internally. The `void` + eslint suppression for floating promises is intentional, not an oversight.
+- The `kind === 'none'` branch returns a resolved promise (not `undefined`) so callers can uniformly `await` or `.catch()` the result.

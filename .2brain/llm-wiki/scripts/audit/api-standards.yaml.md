@@ -1,7 +1,7 @@
 ---
 source: scripts/audit/api-standards.yaml
-sha256: 2016154c64d9f27c15426e735cda4d389eb7e78bd7e1355dd6a0bbba2e950ee9
-generated_at: 2026-11-08T02:37:03.912102+00:00
+sha256: d15acf05a2e7e2305aeb32bbb7bb34b24e409e8a5557e8986e191d7ce04ac77c
+generated_at: 2026-11-14T17:19:37.811787+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A rule registry that defines the set of testable API-conformance statements the audit suite evaluates. Each of the ten `scripts/audit/api-<standard>/SKILL.md` scripts reads this file and evaluates only the rules whose `standard` matches its own. It exists to keep audit criteria in one declarative place, separate from the mechanical linting (Spectral) and the compliance-rules registry.
+Registry of API-standards rules consumed by two audit skills (`api-http/SKILL.md` for eight HTTP web standards and `api-style/SKILL.md` for one style guide). It declares, per rule, what the standard mandates, any house promise that goes beyond the standard, where to find evidence in the repo, and how to classify a known deviation. It is a human-authored judgement list, not a machine-lint config.
 
 ## Key elements
 
-- **`version`** – registry version (currently `1`); same top-level shape as `compliance-rules.yaml` (`version` + `rules`) but with different per-rule fields.
-- **`rules[]`** – one entry per testable statement. Each rule carries:
-  - `id` – `<standard>-<what>`, unique within the file.
-  - `standard` – which RFC / AIP / Zalando / header-draft the rule belongs to.
-  - `section` – human-readable part of the standard (name, not number).
-  - `rule` – one sentence describing the expected behaviour of *this* API.
-  - `source` – canonical URL of the RFC/draft clause the rule summarises.
-  - `evidence` – list of contract JSONPaths (rooted at `openapi.yaml`), source-code globs, and docs pages where the auditor looks.
-  - `lint` – `possible` (a mechanical finding may be reported) or `no` (judgement only). Never produces a Spectral rule.
-  - `difference` – `null`, a single id, or a list of ids pointing to "Where we differ" rows in `docs/theory/api-standards.md`; matches are reported as `KNOWN-DIFFERENCE`, not violations.
+- **Top shape** — `version` (integer) + `rules` (list). Same envelope as `compliance-rules.yaml`, different per-rule schema.
+- **Per-rule fields** — `id` (unique slug), `standard` (rfc9110, rfc9111, rfc9457, rfc5789, rfc7396, rfc6585, ratelimit-headers, idempotency-key, google-aip, zalando), `section`, `rule` (BCP 14 keyword in caps; a keyword-less clause is judged as MUST), `house` (API-specific promise with a `docs/…#anchor` citation, or `null`), `source` (RFC/spec URL(s)), `evidence` (contract JSONPaths into `openapi.yaml`, code paths, doc pages), `lint` (`possible` = a mechanical finding is *reported* only, never auto-converted to a Spectral rule; `no` = judgement only), `difference` (`null`, a single id, or a list of ids pointing to "Where we differ" rows in `docs/theory/api-standards.md`; reported as KNOWN-DIFFERENCE, not a violation).
+- **Budget** — 3–6 rules per style guide, 2–4 per RFC, up to 7 for `idempotency-key`.
+- **Exclusion rule** — clauses already guarded by Spectral or a test are *not* listed here; the audit SKILL.md names those guards and skips them.
 
 ## Relationships
 
-- **`scripts/audit/api-<standard>/SKILL.md` (×10)** – the primary consumers; each reads this file and filters on `standard`.
-- **`scripts/audit/compliance-rules.yaml`** – sibling registry with the same top-level shape (`version`, `rules`); different per-rule fields and a different audience (compliance vs. standard-conformance).
-- **`openapi.yaml`** – the root for all `evidence` JSONPaths (`paths.*.get`, `paths.*.*.responses.429`, `x-error-codes`, etc.).
-- **`docs/theory/api-standards.md`** – target of the `difference` field; the canonical list of deliberate divergences.
-- **`docs/api/errors.md`**, **`docs/api/write-methods.md`**, **`docs/tools/security.md`**, **`docs/tools/idempotency.md`** – cited in `evidence` arrays as the documentation pages the auditor cross-references.
-- **`src/infrastructure/http/response.ts`**, **`src/infrastructure/http/errors.ts`**, **`src/infrastructure/http/preconditions.ts`**, **`src/infrastructure/http/middlewares/cache.ts`**, **`src/infrastructure/http/middlewares/rate-limit.ts`**, **`src/infrastructure/http/middlewares/idempotency.ts`** – named in `evidence` as the implementation files the auditor inspects for each rule.
+- **scripts/audit/compliance-rules.yaml** — shares the `version` / `rules` envelope; this file is the sibling for standards-based rules, that file for compliance rules.
+- **docs/theory/api-standards.md** — the `difference` ids resolve to "Where we differ" rows in this document; it is the authoritative list of accepted deviations.
+- **docs/api/errors.md** — cited in `house` clauses and `evidence` for every `rfc9457`-family rule.
+- **docs/api/write-methods.md** — cited in `house` clauses for `rfc9110` method/status-code rules.
+- **docs/tools/idempotency.md** — context for `idempotency-key` rules (up to 7 entries, the largest budget).
+- **openapi.yaml** — the root contract that `evidence` JSONPaths resolve against (e.g. `paths.*.get`, `paths.*.post.responses`, `x-error-codes`).
+- **src/infrastructure/http/response.ts** — appears in `evidence` for problem-details and cache-header rules; it is the code that `rejectResponse` and the response builder live in.
+- **src/infrastructure/http/errors.ts** — evidence target for `rfc9457` rules (error construction).
+- **src/infrastructure/http/preconditions.ts** — evidence for conditional-request / ETag rules.
+- **src/infrastructure/http/middlewares/cache.ts** — evidence for `rfc9111` caching rules.
+- **src/infrastructure/http/middlewares/idempotency.ts** — implementation behind `idempotency-key` rules.
+- **src/infrastructure/http/middlewares/rate-limit.ts** — implementation behind `ratelimit-headers` rules.
+- **scripts/contracts/response-headers.ts** — contract-level checks that overlap with `lint: possible` rules (reported, not enforced).
 
 ## Notes
 
-- Rules that Spectral or a test suite already guards are deliberately **absent**; the owning SKILL.md names those guards and skips them.
-- Rule budget per standard: 3–6 for Google AIP and Zalando, 2–4 for each RFC.
-- `lint: possible` means a mechanical finding may be *reported* by the audit; it is never auto-converted into a Spectral rule.
-- The `ratelimit-headers` standard references an IETF draft (draft-11 at time of writing); the comment in the file says to re-check the latest draft before relying on it.
-- `difference` entries are resolved against ids in the "Where we differ" table in `docs/theory/api-standards.md`; a match downgrades the finding from violation to `KNOWN-DIFFERENCE`.
+- A `MAY` clause in the `rule` field **cannot fail** the audit; it is informational. A clause stated without a BCP 14 keyword (e.g. RFC 7396's algorithm) is judged as a MUST.
+- `house` must end with a `docs/…#anchor` citation; if the page does not exist, the `house` clause is invalid. Exceptions are written *into* the sentence, not via `difference`.
+- `lint: possible` means the audit *may* surface a mechanical finding, but it is never auto-promoted to a Spectral rule — that is a separate, explicit decision.
+- `difference` entries are reported as **KNOWN-DIFFERENCE**, which is distinct from a violation; the audit still lists them so they are visible in the report.
+- The file is read by AI skills, not by a build step or test runner; a typo in an `evidence` path will not break CI, only the audit's ability to locate the code.

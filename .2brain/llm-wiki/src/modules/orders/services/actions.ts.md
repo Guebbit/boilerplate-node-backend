@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/actions.ts
-sha256: 0e588de5f9b55d60cf97cf0dc64cfa390e350f39601c8447c236b2468a298fb7
-generated_at: 2026-11-08T06:55:31.086487+00:00
+sha256: 5138ef6d68d12f9ad3eb73d193d388e9125397d019f92fec342d82b988383be6
+generated_at: 2026-11-14T20:41:30.495791+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,43 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Computes the full set of actions a caller may perform on an order by combining state-based rules (imported from `../domain`) with caller-specific checks (permission keys, buyer identity). It exposes two wire-level entry points — `withActions` for a single order response and `withListActions` for a paginated list — so that every order the API returns already carries its `actions` object and no client re-derives the rules.
+Computes the `actions` flag object attached to every order (single or list) that a caller may act upon. The state-derivation predicates live in `../domain` (shared with the write-path guard); this file layers caller identity (keys, ownership, buyer vs. operator) on top so no client re-derives the rules. The two exports — `withActions` and `withListActions` — are the only async surfaces: they resolve live images and (for lists) hydrate documents, then stamp the pure `orderActionsOf` result onto the wire shape.
 
 ## Key elements
 
-- **`OrderForActions`** — type alias for `Lean<OrderDocument>`; the flags read only plain fields, so both a hydrated single read and a lean list row satisfy it.
-- **`orderActionsOf(order, authContext)`** — pure, synchronous computation of the complete `OrderActions` object for one order. Assembles status-based actions, permission-gated actions, withdrawal, delete, payment, and invoice flags.
-- **`withActions(order, authContext?)`** — async; serialises a single order via `presentOrder` + `resolveCurrentImages`, then attaches `orderActionsOf` to the wire shape.
-- **`withListActions(page, authContext?)`** — async; reads back the full documents for a page of list rows in one `$in` query, then maps `orderActionsOf` over each. Drops rows whose document vanished between the two reads.
-- **`startAndOverrideActions`** — computes `process`, `override`, and `correctAddress` using `start:Shipment`, `override:Order`, and `update:Order` keys plus domain predicates.
-- **`withoutCancelOnceShipped`** — strips `cancel` from the action set once `fulfillment.shipped` is true.
-- **`canRecordPayment`** — the operator's manual-payment button; requires `create:Payment` key and payable status.
-- **`holdsCheckout`** — whether the caller holds `checkout:Cart`, gating the `pay` flag.
-- **`withdrawalActions`** — computes `withdraw` (buyer-only, domain `canWithdraw`) and `withdrawBlocked` (refusal reason for UI).
-- **`deleteActions`** — computes `delete`, `hardDelete`, and `restore` from the `delete:Order` key and domain predicates.
-- **`forStanding`** — final gate: restricts `cancel` and `pay` to the buyer (customer actor) vs. an operator.
+- **`withActions`** (exported) — Serializes a single `OrderDocument`, resolves its current images, stamps the version counter (`carryVersion`), and attaches `orderActionsOf`. Returns `Promise<Order>`.
+- **`withListActions`** (exported) — Takes a paginated page of `ExportOrder` rows, fetches the full documents in one `findByIds` call, and maps each row to an `OrderListItem` carrying its actions. Drops rows whose document vanished between the two reads.
+- **`orderActionsOf`** (private) — The pure core: composes status predicates, permission checks, buyer/actor standing, and the individual action sub-functions into one `OrderActions` object. No I/O.
+- **`startAndOverrideActions`** — Decides `process`, `correctAddress`, and `overrideStatus` (filtered by `shipsAwaitedStock`). Each requires a specific key (`start:Shipment`, `update:Order`, `override:Order`).
+- **`withoutCancelOnceShipped`** — Strips `cancel` to `false` once `fulfillment.shipped` is true.
+- **`canRecordPayment` / `holdsCheckout`** — Permission gates for the offline-payment button and the checkout flow.
+- **`withdrawalActions`** — Buyer-only; returns `withdraw` plus a `withdrawBlocked` reason string when a refusal applies.
+- **`deleteActions`** — `delete`, `hardDelete`, `restore` based on the `delete:Order` key and the order's deletion state.
+- **`forStanding`** — Final narrowing: `cancel` suppressed for non-buyer customers; `pay` suppressed for operators.
+- **`OrderForActions`** — Type alias (`Lean<OrderDocument>`) unifying the single-read and list-row document shapes the flags consume.
 
 ## Relationships
 
-- **`src/kernel/ability.ts`** — `holds()` is called for every permission check in this file.
-- **`src/kernel/permissions.ts`** — `callerForSubject(authContext, 'Order')` resolves the caller's key before each `holds` call.
-- **`src/modules/orders/domain/index.ts`** — barrel import of all state predicates and helpers (`orderActionsFor`, `canProcessOrder`, `isBuyer`, `canWithdraw`, `withdrawalRefusalOf`, `hardDeletable`, `softDeletable`, `overridableTargetsFrom`, `shipsAwaitedStock`, `isDigitalOnlyOrder`, `isPayable`, `canCorrectAddress`) and the `OrderActor` type.
-- **`src/modules/orders/domain/lifecycle.ts`** — source of `orderActionsFor` (status-derived action set).
-- **`src/modules/orders/domain/withdrawal.ts`** — source of `canWithdraw`, `withdrawalRefusalOf`.
-- **`src/modules/orders/domain/deletion.ts`** — source of `hardDeletable`, `softDeletable`.
-- **`src/modules/orders/domain/rules.ts`** — source of `canProcessOrder`, `overridableTargetsFrom`, `isDigitalOnlyOrder`, `isPayable`, `canCorrectAddress`, `shipsAwaitedStock`.
-- **`src/modules/orders/model.ts`** — provides `OrderDocument` (the document shape read back in `withListActions`).
-- **`src/modules/orders/presenter.ts`** — `presentOrder` serialises the document into wire shape before `withActions` attaches actions.
-- **`src/modules/orders/repository.ts`** — `orderRepository.findAll` fetches documents for `withListActions`.
-- **`src/modules/orders/services/current.ts`** — `resolveCurrentImages` performs the async `$in` lookup for line-item pictures inside `withActions`.
-- **`src/modules/orders/services/index.ts`** — barrel re-export of this module's public API.
-- **`src/infrastructure/persistence/create-repository.ts`** — provides `toObjectId` (used to build the `$in` filter) and `Lean<T>` (used in `OrderForActions`).
-- **`src/infrastructure/persistence/search.ts`** — provides `PaginatedMeta` for the list-page return shape.
+- **`../domain` (index + sub-modules: lifecycle, rules, withdrawal, deletion, fulfillment)** — Supplies every pure predicate (`orderActionsFor`, `canProcessOrder`, `canWithdraw`, `withdrawalRefusalOf`, `hardDeletable`, `softDeletable`, `isBuyer`, `isPayable`, `canCorrectAddress`, `overridableTargetsFrom`, `shipsAwaitedStock`, `isDigitalOnlyOrder`). This file is the *read-side* consumer of the same predicates the write-path guard uses, ensuring flag and guard cannot disagree.
+- **`@kernel/permissions` / `@kernel/ability`** — `callerForSubject` resolves the caller's subject at tenant scope; `holds` checks a specific `(verb, resource)` key.
+- **`../presenter`** — `presentOrder` / `presentOrderListItem` produce the wire shape onto which actions are attached.
+- **`./current`** — `resolveCurrentImages` performs the sole non-pure I/O (a `$in` lookup for live line-item pictures) before actions are stamped.
+- **`../repository`** — Provides the order repository used to hydrate lean list rows into full documents for `withListActions`.
+- **`@infrastructure/persistence/versioning`** — `carryVersion` copies the edit counter onto the serialized order so a subsequent write (a restore) can answer with the real `ETag`.
+- **`@infrastructure/persistence/create-repository`** — Provides the `Lean<T>` type used to type the document shape the flags read.
+- **`@infrastructure/persistence/search`** — `PaginatedMeta` is the pagination metadata passed through `withListActions` unchanged.
+- **`../model`** — `OrderDocument` is the full Mongoose document type.
+- **`./scope`** — `actorOf` classifies the caller as `customer` or `operator`, feeding `forStanding`.
 
 ## Notes
 
-- `withListActions` performs a **second database read** (a `findAll` with `$in`) because the list aggregation rows are already wire shape and lack the fields the flags need. If a document is missing on that second read the row is silently dropped, not error-raised.
-- The `invoice` flag is a **proxy** derived from `paidAt` being set; it does not query the invoicing module. The dedicated `GET /orders/{id}/invoice` endpoint still validates for real and can 404 in edge cases.
-- `pay` and `cancel` are **buyer-only** after `forStanding` runs; an operator reading another user's order will see both as `false` regardless of their keys.
-- `withdraw` is likewise buyer-only; an operator viewing the order will not see the button or the `withdrawBlocked` reason.
-- The `override` array is pre-filtered by `shipsAwaitedStock` so no target that would 409 is ever offered to the client.
+- **`authContext` is optional.** Every helper short-circuits to `false`/empty when it is `undefined` (e.g. background jobs, system reads). This is intentional, not a bug.
+- **`invoice` is a proxy, not a query.** It is `Boolean(order.paidAt)` — a same-module, zero-dependency stand-in for "an invoice exists." The real `GET /orders/{id}/invoice` endpoint (owned by the invoicing module) still 404s on the rare gap; the policy mirrors the existing `orderNumber` convention.
+- **List hydration is a second read.** `withListActions` issues `findByIds` after the aggregation has already produced rows. If a document is deleted between the two reads the row is silently dropped (the contract is that an `OrderListItem` always carries `actions`).
+- **`withdrawBlocked` is conditional.** The key is only present in the returned object when a refusal exists; clients should treat its absence as "no reason" rather than reading `undefined`.
+- **The `process` / `overrideStatus` / `correctAddress` keys are deliberately NOT derived from `actorOf`'s customer/admin split.** A warehouse operator can hold `start:Shipment` without `update:Order`; each door is checked independently against the caller's own keys at the same tenant scope.

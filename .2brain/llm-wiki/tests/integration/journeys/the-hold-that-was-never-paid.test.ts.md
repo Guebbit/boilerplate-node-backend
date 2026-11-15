@@ -1,7 +1,7 @@
 ---
 source: tests/integration/journeys/the-hold-that-was-never-paid.test.ts
-sha256: 121d7748990cf6a87f5cf3009ee071ab6ab1225f9b24f9ff5aac54e4f1752c63
-generated_at: 2026-11-08T09:41:03.605296+00:00
+sha256: 7e97537adc47132d5593cedbfe408088905c9a29fdd83a3b98607d16428e697c
+generated_at: 2026-11-14T23:16:13.395329+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test for the **reservation sweep** job: it verifies that when a payment hold lapses without payment, the system releases reserved stock, cancels the order, removes it from the staff "awaiting" list (for bank transfers), and sends the appropriate notification email to the shopper. Two scenarios are covered — an abandoned 3-D Secure card challenge and a bank transfer that was never funded.
+Integration journey test verifying that the reservation sweep correctly expires two kinds of unpaid holds — an abandoned 3-D Secure card challenge and a bank transfer that was never sent. In each case the sweep must release reserved stock, cancel the order, and send the shopper a notification email.
 
 ## Key elements
 
-- **`describe('an abandoned 3-D Secure challenge')`** — Places an order, opens an intent, confirms a card that returns `pm_card_authentication_required`, then advances the clock 16 min past the 15-min hold. Asserts stock is returned, order is `canceled`, ledger shows `['expire', 'reserve']`, and the shopper receives one `orders.order-card-expired` email.
-- **`describe('a bank transfer nobody sent')`** — Places a bank-transfer order, confirms it appears on the staff "awaiting" list, then advances the clock 169 h past the 168-h transfer hold. Asserts the order drops off the list, stock is released, and the shopper receives one `payments.transfer-expired` email.
-- **`awaiting(staff)`** — Local helper that calls `GET /payments?displayStatus=incomplete&method=bank_transfer` and returns the array of `orderId` values.
-- **`HOUR_MS`** — `3_600_000`, used to compute the transfer-hold advance.
-- **`setupTestDb()`** — Runs once per module to provision an isolated database.
-- **`beforeEach(useOutboxMail)`** — Resets the in-memory outbox so `mailsTo` assertions are clean per test.
-- **`afterEach(() => jest.useRealTimers())`** — Restores real timers after clock-manipulation.
+- **`HOUR_MS`** — local constant (3 600 000 ms) used to express the bank-transfer hold advance.
+- **`awaiting(staff)`** — helper that calls `GET /payments?displayStatus=incomplete&method=bank_transfer` and returns the list of order IDs staff still sees as pending.
+- **`describe('an abandoned 3-D Secure challenge')`** — places an order, opens a payment intent, confirms with a `pm_card_authentication_required` card, advances the clock 16 min past the 15-min hold, drains the `sweep:reservations` queue, then asserts stock restored, order canceled, ledger shows `['expire', 'reserve']`, and one `orders.order-hold-expired` email sent.
+- **`describe('a bank transfer nobody sent')`** — same pattern with `paymentMethod: 'bank_transfer'`; advances 169 h past the 168-h hold, asserts the order drops off the awaiting list, stock restored, and one `payments.transfer-expired` email sent.
+- **`setupTestDb()`** — ensures an isolated database per run.
+- **`beforeEach(useOutboxMail)` / `afterEach`** — captures outbound mail; restores real Jest timers.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `tests/support/setup-test-db.ts` | `setupTestDb()` initialises the per-module test database. |
-| `tests/support/contract.ts` | Imported for side-effects (API contract / schema validation setup). |
-| `tests/support/http.ts` | `api()` builds HTTP requests; `authenticateAs` / `loginBearer` obtain bearer tokens. |
-| `tests/support/clock.ts` | `freezeDate()` pins "now"; `advanceDate(ms)` moves it forward to simulate hold expiry. |
-| `tests/support/drain.ts` | `drain()` processes the full outbox of background jobs; `drain('sweep:reservations')` triggers only the reservation-sweep job. |
-| `tests/support/body-of.ts` | `bodyOf(response, schema)` validates and unwraps the JSON body against a Zod schema. |
-| `tests/support/journey-orders.ts` | Provides `newShopper`, `placeOrder`, `openIntent`, `confirmCard`, `orderOf`, `stockOf`, `ledgerOf` helpers. |
-| `tests/support/journey-mail.ts` | `useOutboxMail` clears the mail outbox; `mailsTo(email, template)` asserts delivered messages. |
-| `src/modules/products/tests/factories.ts` | `createProduct` seeds a product with a given price and `onHand` stock level. |
+- **`src/modules/products/tests/factories.ts`** — `createProduct` seeds a product with known `onHand` and `reserved` counts.
+- **`tests/support/clock.ts`** — `freezeDate` pins the clock; `advanceDate` jumps past the hold window.
+- **`tests/support/drain.ts`** — `drain('sweep:reservations')` enqueues and processes the reservation-sweep job.
+- **`tests/support/http.ts`** — `api`, `authenticateAs`, `loginBearer` for all HTTP calls and fresh token acquisition.
+- **`tests/support/journey-orders.ts`** — `newShopper`, `placeOrder`, `openIntent`, `confirmCard`, `orderOf`, `stockOf`, `ledgerOf` provide the order/payment lifecycle helpers.
+- **`tests/support/journey-mail.ts`** — `useOutboxMail` captures mail; `mailsTo` asserts delivery of specific template IDs.
+- **`tests/support/body-of.ts`** — `bodyOf` parses the typed response body from `api()` calls.
+- **`tests/support/contract.ts`** — imported at module level to activate API contract assertions.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb` initialises the test database.
 
 ## Notes
 
-- **Token invalidation on time travel.** Both tests advance the clock past the hold, which also expires all previously issued access tokens. Every assertion after the advance must re-authenticate via `loginBearer`. Forgetting this is the most common failure mode when editing these tests.
-- **Two different hold durations.** Card holds expire at **15 min**; bank-transfer holds expire at **168 h** (7 days). The tests advance just past each boundary (16 min / 169 h).
-- **Ledger order.** `ledgerOf` returns entries newest-first, so the expected array is `['expire', 'reserve']` — do not reorder.
-- **Different email templates.** Card expiry uses `orders.order-card-expired`; transfer expiry uses `payments.transfer-expired`. They are distinct templates and must not be swapped.
-- **`drain` vs `drain('sweep:reservations')`.** The transfer test calls a bare `drain()` *before* the time advance (to flush the order-creation job and populate the awaiting list) and a scoped `drain('sweep:reservations')` *after* (to run only the sweep). Using the wrong variant can cause flakiness.
+- Advancing the clock invalidates every previously issued bearer token. Both tests therefore re-acquire tokens via `loginBearer` *after* `advanceDate` — the `staffBefore` token obtained before the jump is not reused.
+- The sweep does nothing until `drain('sweep:reservations')` is called; the test relies on this explicit trigger rather than a timer.
+- Ledger assertions (`['expire', 'reserve']`) document the expected *order* of stock mutations (expire before the original reserve entry in the returned list), not merely the set of entries.

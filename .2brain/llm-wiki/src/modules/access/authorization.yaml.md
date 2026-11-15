@@ -1,32 +1,27 @@
 ---
 source: src/modules/access/authorization.yaml
-sha256: 699ed11bb25fbb5bf9849d7d32a68bf97177077823f888b98572cf73ba6961b4
-generated_at: 2026-11-08T03:56:10.577420+00:00
+sha256: 00541d996fb9875b9c1ee415963434138889e7b688d2ad63c9763de2de641ba4
+generated_at: 2026-11-14T18:25:08.157244+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/access/authorization.yaml
 
 ## Purpose
-
-Defines the authorization rules and permission sets that govern who may manage staff **roles** within a tenant. It exists to separate role administration (a privileged, administrator-only action) from the broader customer-facing user management that other `users` rules permit.
+Declarative authorization policy for the access module. It defines the single staff-role permission (`assign:Role`) and bundles it into the `RoleManagement` set, governing who may hand a staff role to an account, revoke it, or mutate an account that already holds one.
 
 ## Key elements
-
-- **`rules`** — A single rule:
-  - `assign` on subject `Role` (module `access`, scope `tenant`, `credential: false`). Grants the holder the ability to assign or revoke a staff role on an account, and to edit, ban, or erase an account that already holds a role.
-- **`sets`** — One permission set:
-  - **`RoleManagement`** (module `access`) — bundles the `assign:Role` rule. This is the unit that gets referenced by upstream role/permission assignments.
+- **`assign:Role` rule** — The one permission that protects staff accounts. Scope: `tenant`, no credential required. Enforces `stepUp: critical` (fresh login required, preventing a stolen session from quietly changing powers). Denied callers receive `ROLE_MANAGEMENT_REQUIRED` rather than a bare `FORBIDDEN`.
+- **`RoleManagement` set** — The only set in this file; wraps `assign:Role` so higher-level role definitions can reference the bundle by name.
 
 ## Relationships
-
-- **`src/modules/access/module.ts`** — The owning module file. It loads this YAML to register the `RoleManagement` permission set and the `assign:Role` rule into the access module's authorization registry.
-- **`src/modules/access/openapi.yaml`** — The OpenAPI spec for the access module. Endpoints for role assignment/removal are gated by the `assign:Role` rule defined here.
-- **`src/modules/account/module.ts`** — The account module exposes the edit/ban/erase operations on role-bearing accounts. This file's rule is the authorization gate that restricts those operations to holders of `RoleManagement`.
-- **`shared/scenarios/personas.yaml`** — Defines test personas (e.g., administrator, moderator) whose granted permission sets are validated against the rules and sets declared here.
+- **`src/modules/access/module.ts`** — Implements the enforcement logic that reads this policy at request time and emits the `deniedCode` when the caller lacks the rule.
+- **`src/modules/access/openapi.yaml`** — Documents the API endpoints (assign/revoke role, edit staff account) whose access control is governed by this file's rules.
+- **`src/modules/account/module.ts`** — The module whose account mutations (edit, ban, erase) are gated by this rule when the target account holds a staff role.
+- **`shared/scenarios/personas.yaml`** — Defines persona/role bundles that reference the `RoleManagement` set to grant the `assign:Role` permission to administrators in test and documentation scenarios.
 
 ## Notes
-
-- `credential: false` means the action does **not** require a credential (e.g., a one-time code or confirmation token); a normal authenticated request suffices.
-- The file intentionally does **not** define a hierarchy or "level" between roles. A role is described purely as a bundle of permission sets; any ranking is an application-level concern, not an authorization concern.
-- The `scope: tenant` restriction ensures the rule applies only within a single tenant boundary — cross-tenant role assignment is out of scope for this file.
+- The file intentionally contains **exactly one rule and one set**. A role is defined as "a bundle of permission sets and nothing else" — there is no numeric level or hierarchy.
+- `stepUp: critical` means the authorization check demands a fresh authentication at the tier that mints the API key, not merely a valid token.
+- The `deniedCode` (`ROLE_MANAGEMENT_REQUIRED`) is the canonical refusal string for every other staff-account mutation; keeping it consistent here avoids a second vocabulary.
+- `credential: false` does not mean "no auth required"; it means no *additional* credential (beyond the authenticated caller) is needed for this action.

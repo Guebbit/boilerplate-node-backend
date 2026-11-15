@@ -1,7 +1,7 @@
 ---
 source: src/modules/example/services/actions.ts
-sha256: 0fc6eb9311690965d661dccee7ccc1cd4ee8cbd761a7c311df519ba89d44bf7c
-generated_at: 2026-11-08T05:52:55.382996+00:00
+sha256: 6900bc68b67fcecc7de1a63e98548372caa8ea142997e1748a60d1049239507d
+generated_at: 2026-11-14T20:00:22.776515+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Centralizes the per-row authorization and lifecycle answer for the **example** module. Given a caller and a row, it determines which actions (`update`, `delete`, and status transitions) are available, so no client re-derives permissions. The ability check is built once per page, then applied row-by-row.
+Centralises the per-row answer to "what may this caller do?" for the Example module. It combines kernel-level ability checks (`update`, `delete`, own-rows) with the domain's lifecycle-derived moves so that clients receive a ready-made action set and never re-derive permissions themselves. The file exists to be deleted if the module has no per-row actions that need to be greyed out or enabled.
 
 ## Key elements
 
-- **`actionsForRows(context: CallerContext)`** — exported function. Builds a `permitsOnRows` ability for the caller against the `Example` resource (keys: `update`, `delete`) and returns a closure that maps an `ActionRow` to an `ExampleActions` object by delegating to `exampleActionsFor`.
-- **`ActionRow`** — local interface (`userId`, `status`) representing the minimal slice of a row the keys and lifecycle need to read.
-- **Module doc comment** — documents the "delete this file if" criterion and links to the tactical-DDD capabilities theory.
+- **`actionsForRows(context: CallerContext)`** — The sole export. Accepts the caller's context, builds a single ability via `permitsOnRows`, and returns a closure `(row: ActionRow) => ExampleActions`. Building the ability once means a page of N rows costs one ability lookup, not N.
+- **`ActionRow`** (local, not exported) — The minimal row shape the ability and lifecycle need: `userId` (for own-row comparisons) and `status` (the current lifecycle position).
 
 ## Relationships
 
-- **`src/kernel/ability.ts`** — imports `permitsOnRows`, which compiles the caller's ability for a given resource/key set into a row-scoped predicate.
-- **`src/modules/example/domain/index.ts`** — imports `exampleActionsFor`, which merges the permission flags with the lifecycle's allowed status transitions into the final `ExampleActions` shape.
-- **`src/modules/example/domain/lifecycle.ts`** — indirectly consumed through the domain's `exampleActionsFor`; supplies the status-transition moves that appear in the returned actions.
-- **`src/types/auth-context.ts`** / **`src/types/index.ts`** — source of the `CallerContext`, `ExampleActions`, and `ExampleStatus` type imports.
-- **`src/modules/example/services/crud.ts`** — graph neighbor; the most likely consumer that calls `actionsForRows` to annotate result rows before returning them to the API layer.
+- **`src/kernel/ability.ts`** — Calls `permitsOnRows(caller, 'Example', ['update', 'delete'])` to obtain a per-row predicate.
+- **`src/modules/example/domain/index.ts`** — Calls `exampleActionsFor(status, permitResult)` to fold the lifecycle's allowed transitions into the final action set.
+- **`src/types/index.ts`** — Imports `CallerContext`, `ExampleActions`, and `ExampleStatus` as type-only dependencies.
 
 ## Notes
 
-- The ability is constructed **once** per `actionsForRows` call, not once per row. Callers should invoke `actionsForRows` at the page/query level and pass the returned closure into each row mapping.
-- `ActionRow` is intentionally narrow: if the authorization keys or lifecycle need additional fields (e.g., a tenant id), the interface must be extended and every caller's row projection must supply it.
-- The file is deliberately small; the module doc states it should be deleted entirely if the module has no per-row UI greying-out needs.
+- The file is intentionally thin: it is a *wiring* layer between the kernel's ability engine and the domain's lifecycle logic, not a place for business rules.
+- If the module's `authorization.yaml` changes keys (e.g. adds `archive`), the `['update', 'delete']` array and the `ActionRow` shape must be updated in lockstep.
+- The returned closure is designed to be called once per row in a list-render loop; it is not memoised and will re-invoke `exampleActionsFor` on each call.

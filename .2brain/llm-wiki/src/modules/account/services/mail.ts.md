@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/mail.ts
-sha256: 29d8f4314ff63dda902d3ea2b9922178b890e280b884997b6809ae9bceffbbde
-generated_at: 2026-11-08T04:19:09.575762+00:00
+sha256: b5610648b33d829d6b817f09ff023141447ec94e3ba2d6f63999583630fb620c
+generated_at: 2026-11-14T18:45:57.435884+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A single-function service-layer wrapper around `enqueueEmail`. It exists solely to satisfy the architectural rule (enforced by `tests/cross-cutting/side-effects-have-one-layer.test.ts`) that every `enqueueEmail` call must originate from the service layer, rather than from the copy/template layer (`../emails.ts`) or from non-service modules like `two-factor/methods/email.ts`.
+Single-export shim that centralises every `enqueueEmail` call in the account service layer. It exists to satisfy the lint rule that bans `enqueueEmail` outside the service layer, and to give `two-factor/methods/email.ts` (not itself a service) a minimal import target without dragging in an entire service's unrelated API.
 
 ## Key elements
 
-- **`sendAccountMail(to, mail, priority?)`** — the module's only export. Delegates to `enqueueEmail` with the recipient, subject, template, and data from the provided `EmailContent`. Defaults `priority` to `'high'` (token-bearing links, codes awaiting a user); callers that send pure confirmations (`resetConfirmEmail`, `deleteConfirmEmail`) pass `'normal'` explicitly. Never rejects — `enqueueEmail` handles its own failure logging.
+- **`sendAccountMail(to, mail, priority?)`** — The only export. Accepts a recipient address, a finished `EmailContent` object (subject + template + data, built by `../emails.ts` builders), and an optional `JobPriority`. Delegates directly to `enqueueEmail`. Defaults `priority` to `'high'`; the two "confirmation" sends (`resetConfirmEmail`, `deleteConfirmEmail`) pass `'normal'` explicitly at their call sites.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/mailer.ts`** — imports `enqueueEmail` (the actual send) and the `EmailContent` type.
-- **`src/infrastructure/adapters/queue.ts`** — imports the `JobPriority` type used for the priority parameter.
-- **`src/modules/account/two-factor/methods/email.ts`** — caller; a non-service module that needs a service-layer door to queue email without importing an unrelated service's surface.
-- **Other account service modules** (`password-reset-request`, `password-reset`, `account-deletion`, `verification`, `oauth`, `email-change`, `export-job`, `purge-deletions`, `password`, `two-factor-outcomes`) — callers that pass a finished `EmailContent` (built by `../emails.ts` template builders) to `sendAccountMail`.
-- **`src/modules/account/services/index.ts`** — barrel file that re-exports this module.
+- **`src/infrastructure/adapters/mailer.ts`** — Imports `enqueueEmail` and the `EmailContent` type; this file is the sole call-site wrapper for that adapter within the account module.
+- **`src/infrastructure/adapters/queue.ts`** — Imports the `JobPriority` type to type the `priority` parameter.
+- **`src/modules/account/services/index.ts`** — Re-exports `sendAccountMail` so consumers can import from the barrel.
+- **Account services that call it** — `account-deletion.ts`, `email-change.ts`, `export-job.ts`, `oauth.ts`, `password-reset-request.ts`, `password-reset.ts`, `password.ts`, `purge-deletions.ts`, `two-factor-outcomes.ts`, and `verification.ts` each import `sendAccountMail` instead of calling the mailer adapter directly.
+- **`src/modules/account/two-factor/methods/email.ts`** — Imports `sendAccountMail` for 2FA-code emails; the file exists in part so this non-service method can reach the mailer without importing a full service.
 
 ## Notes
 
-- This is deliberately a one-function file. Do **not** fold it into an existing service (e.g. `verification.ts`): the isolation exists so non-service callers like `two-factor/methods/email.ts` can import only the email-sending surface without dragging in unrelated service logic.
-- Priority defaulting to `'high'` is intentional and opinionated: the assumption is that the vast majority of account-module emails are time-sensitive (OTP codes, verification/reset links). If you add a new send that is *not* time-sensitive, pass `'normal'` explicitly rather than changing the default.
-- The function never throws to the caller — error handling is entirely inside `enqueueEmail`. Callers can `void` the returned promise without a `.catch`.
+- `sendAccountMail` **never rejects**; `enqueueEmail` logs and swallows its own failures. Callers need no `try/catch`.
+- The `'high'` default is deliberate: most account mails carry a time-sensitive token or code. If you add a new send that is a non-urgent confirmation, pass `'normal'` explicitly rather than changing the default.
+- Template/subject/data construction lives in `../emails.ts` (the "copy layer"), **not** here. This file is purely the queue-handoff step.

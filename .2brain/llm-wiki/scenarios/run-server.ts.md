@@ -1,38 +1,41 @@
 ---
 source: scenarios/run-server.ts
-sha256: d9971eb57b1cfcceba2f911aade4e07e29d863aa189ed2b91d182a09002bd608
-generated_at: 2026-11-08T02:31:39.968165+00:00
+sha256: 27cffc9f0163a9b192f537189c7270f191cadce5fd4177f9fe5b71973bbadab7
+generated_at: 2026-11-14T17:16:31.222590+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # scenarios/run-server.ts
 
 ## Purpose
-Entry point for the demo profile (`npm run demo`). Boots the real application server against a disposable in-memory MongoDB (or an external Mongo via `NODE_TEST_MONGO_URI`), seeds the `shop` scenario, and listens on `NODE_PORT`. Exists so the paired frontend dev server and e2e suite can run against the actual API without Docker, Redis, or a message broker.
+
+Boots the real application as a self-contained, disposable demo server (`npm run demo`). It starts an in-memory (or externally supplied) MongoDB, seeds it from the `shop` scenario, installs a fixed environment, and serves the API on `NODE_PORT` with cache and queue disabled. No Docker, Redis, or broker required. Multiple instances can run side by side on different ports.
 
 ## Key elements
 
-- **`DOTENV`** — `.env` parsed in isolation via `node:util` `parseEnv` (no `process.env` write). Used to distinguish shell-set values from file-supplied ones.
-- **`shellValue(key)`** — Returns a key's value only if the shell set it to something *different* from the `.env` copy; prevents a stale `.env` from masquerading as a deliberate override.
-- **`REQUIRED_DEFAULTS`** — Fallback env values (host, token secrets, PII/TOTP keys, webhook secret, SMTP sender, legal/ VAT fields, CORS origins) so a bare checkout boots. Shell values always win.
-- **`FORCED_ABSENT`** — Redis and RabbitMQ keys blanked to `''` to defeat both the shell *and* the later `dotenv/config` load inside `src/app.ts`.
-- **`FORCED_MAIL_TRANSPORT`** — Hard-pins `NODE_MAIL_TRANSPORT` to `'outbox'` so the e2e suite's `GET /__test/emails` endpoint always works regardless of `.env`.
-- **`waitUntilListening(port)`** — Polls `GET /` (60 s timeout) as the readiness signal; valid because `createApp().start()` seeds before listening.
-- **Top-level boot sequence** — Calls `startEphemeralMongo` → registers SIGTERM/SIGINT handlers (calls `mongo.stop()` then exits) → `installEnvironment(...)` with the full merged config → overrides the database path to `/demo` → derives `NODE_URL` from the actual port → installs the demo clock → registers the `./support/demo` extension → starts the app.
+- **`DOTENV`** — Reads `.env` into a plain object via `node:util` `parseEnv` without touching `process.env`, so real secrets in the file are isolated from the demo profile's overrides.
+- **`shellValue(key)`** — Returns a variable only if the *shell* (not `.env`) set it to a value different from what `.env` itself declares. Used to let intentional overrides (e.g., a pinned rate limit) win while ignoring a plain `.env` copy.
+- **`REQUIRED_DEFAULTS`** — Fallback environment values (loopback host, throwaway secrets, legal/VAT fields, CORS origins) so a bare checkout with no `.env` can boot. Only fills keys the shell and `.env` did not already set.
+- **`FORCED_ABSENT`** — List of Redis/RabbitMQ env vars blanked to `''` (not deleted) to defeat `dotenv/config`'s "only fills absent keys" semantics later in `src/app.ts`.
+- **`FORCED_MAIL_TRANSPORT`** — Unconditionally set to `'outbox'` so the e2e suite can read sent mail via `GET /__test/emails` regardless of what `.env` says.
+- **`waitUntilListening(port)`** — Polls `GET /` every 100 ms (60 s timeout) to confirm the server is seeding-complete and accepting connections.
+- **Boot sequence (bottom of file)** — `startEphemeralMongo` → signal handlers for clean shutdown → `installEnvironment` (merging defaults, forced-absent, scripted rate limits, derived `NODE_DB_URI`/`NODE_URL`) → `installDemoClock` / `registerDemoClock` → app creation via `createApp` extension → `waitUntilListening`.
 
 ## Relationships
 
-- **`scenarios/rate-limits.ts`** — Imports `DEMO_BANK_TRANSFER` (merged into `REQUIRED_DEFAULTS`) and `SCRIPTED_RATE_LIMITS` (applied as env overrides unless the shell set a different value).
-- **`scenarios/support/demo-clock.ts`** — Imports `installDemoClock` / `registerDemoClock` to deterministically advance time for the demo scenario.
-- **`scenarios/support/ephemeral-mongo.ts`** — Imports `startEphemeralMongo`; drives the whole boot (its `.then()` callback is the rest of the sequence).
-- **`scenarios/support/ephemeral-mongod.ts`** — Imports `startInProcessMongod` as the in-process mongod factory passed to `startEphemeralMongo`.
-- **`src/infrastructure/config/store.ts`** — Imports `installEnvironment` (and `currentEnvironment`) to atomically write the merged config before any model or module reads it.
-- **`src/infrastructure/runtime/mongoose-boot.ts`** — Imported purely for side effects: sets Mongoose defaults before any schema is built.
+- **`scenarios/rate-limits.ts`** — Imports `DEMO_BANK_TRANSFER` (spread into `REQUIRED_DEFAULTS`) and `SCRIPTED_RATE_LIMITS` (applied as overrides in `installEnvironment`) to pin demo-friendly rate-limit budgets and a known bank-transfer config.
+- **`scenarios/support/demo-clock.ts`** — Imports `installDemoClock` and `registerDemoClock` to replace real-time clocks with a deterministic one before the app starts.
+- **`scenarios/support/ephemeral-mongo.ts`** — Imports `startEphemeralMongo` to launch (or connect to) a MongoDB instance and obtain a URI; the returned handle's `stop()` is wired into SIGTERM/SIGINT cleanup.
+- **`scenarios/support/ephemeral-mongod.ts`** — Imports `startInProcessMongod` and passes it as the `startInProcess` strategy to `startEphemeralMongo`, enabling the in-process mongod path.
+- **`src/infrastructure/config/store.ts`** — Imports `currentEnvironment` and `installEnvironment`; the latter is the single write path through which all env overrides, forced-absent values, and the derived `NODE_DB_URI`/`NODE_URL` reach the app.
+- **`src/infrastructure/runtime/mongoose-boot.ts`** — Side-effect import (first line after stdlib) to set Mongoose global defaults before any schema/model is built.
+- **`src/infrastructure/adapters/logger.ts`** — Consumed indirectly: the app this script boots (`createApp`) configures logging through the logger adapter; this file does not import it directly.
 
 ## Notes
 
-- **Do not `import 'dotenv/config'` here.** The file deliberately avoids it so `REQUIRED_DEFAULTS` and `SCRIPTED_RATE_LIMITS` can override `.env` secrets. The real `dotenv/config` load happens later inside `src/app.ts`; blanking a key to `''` (not deleting it) is the mechanism that survives that later load.
-- **Ephemeral Mongo cleanup is signal-driven.** Without the `SIGTERM`/`SIGINT` handler calling `mongo.stop()`, each boot leaves a ~200 MB data directory under the system temp dir. `start-server-and-test` and the frontend shard runner both rely on SIGTERM.
-- **Database name is always `/demo`.** The path is rewritten from whatever URI the ephemeral helper returns. This is what makes the external-Mongo path (`NODE_TEST_MONGO_URI`) persist data across restarts; several in-memory instances never shared a database.
-- **`NODE_URL` is derived, never defaulted.** A checked-in `.env` typically names port 3000 (single-instance dev); this profile supports multiple ports, so `NODE_URL` is computed from the actual `NODE_PORT` to keep OAuth redirect URIs and email links correct.
-- **CORS default includes port 8085.** Without it, the e2e browser on the preview build is blocked by CORS while Node-side calls pass.
+- **`.env` is deliberately not loaded via `dotenv/config` here.** The `FORCED_ABSENT` vars are set to `''` (present-but-empty) rather than deleted because `src/app.ts` later calls `dotenv/config`, which only fills keys that are *absent* from `process.env`. An empty string blocks the reload; a missing key would not.
+- **Database name is always `demo`**, regardless of whether the Mongo is in-memory or external (`NODE_TEST_MONGO_URI`). This gives the external path a stable, persistent name across restarts.
+- **`NODE_URL` is always derived** from the actual listening port, never defaulted from `.env`, because OAuth redirect URIs and password-reset links are built from it and must match the instance actually serving.
+- **Signal cleanup matters**: without the SIGTERM/SIGINT handlers, an in-process mongod leaves a ~200 MB data directory in the temp folder on every boot.
+- **`NODE_HOST` defaults to `127.0.0.1`** because the demo's token secrets are public and the control surface can wipe the database. Override explicitly to expose on LAN.
+- The paired frontend's dev server and e2e suite run against this profile instead of a hand-written mock; the e2e shard runner waits on `waitUntilListening`'s same `GET /` endpoint.

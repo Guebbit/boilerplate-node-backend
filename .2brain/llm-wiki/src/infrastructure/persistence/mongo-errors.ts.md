@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/persistence/mongo-errors.ts
-sha256: f35afd5fb58aca904caeb95318eb67cb2a6ee390080d932f05dffa0ed34026bc
-generated_at: 2026-11-08T03:43:40.794181+00:00
+sha256: fc649ae0ad37e7faaf685d8b978820a4a5f947b19f22a987fc7775d5e313e920
+generated_at: 2026-11-14T18:14:08.098631+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides two driver-level predicates—`isDuplicateKey` and `isConnectionError`—so that repositories and the HTTP error interpreter can classify Mongo write failures (duplicate key vs. server unreachable) without reaching into the response layer or depending on mutable error message text.
+Pure predicate functions that classify a caught Mongo/Mongoose rejection by its driver-level code or name. They exist so that repositories and the HTTP error interpreter can make driver-fact decisions (duplicate key, query timeout, server unreachable) without importing Mongo error classes or reaching into the response layer.
 
 ## Key elements
 
-- **`isDuplicateKey(error: unknown): boolean`** — Returns `true` when the error carries `code === 11_000` (Mongo E11000). Checks the numeric code, not the message, because the message embeds the index name and would break on rename.
-- **`isConnectionError(error: unknown): boolean`** — Returns `true` when the error's `.name` is one of the known connection-failure names *or* when it is a `MongooseError` whose message contains `"buffering timed out"`. Distinguishes "server unreachable" (→ 503) from "server understood and refused" (→ 500).
-- **`CONNECTION_ERROR_NAMES`** (module-private `Set`) — The five driver/Mongoose error names treated as connection failures: `MongoServerSelectionError`, `MongooseServerSelectionError`, `MongoNetworkError`, `MongoNotConnectedError`, `MongoNetworkTimeoutError`.
-- **`BUFFERING_TIMEOUT_MESSAGE`** (module-private) — The literal Mongoose buffering-timeout string, used because Mongoose does not emit a dedicated class for that condition.
+- **`isDuplicateKey(error: unknown): boolean`** — Returns `true` when the error carries `code === 11000` (E11000, unique-index violation). Used as a retry signal in upserts and as a "409 already-taken" trigger in the HTTP interpreter.
+- **`isQueryTimeout(error: unknown): boolean`** — Returns `true` when `code === 50` (`MaxTimeMSExpired`). Mapped to a 503 `QUERY_TIMEOUT` response by the HTTP layer.
+- **`isConnectionError(error: unknown): boolean`** — Returns `true` when the error's `.name` is one of the known server-selection / network / not-connected names, or when it is a bare `MongooseError` whose message contains `"buffering timed out"`. Mapped to a 503 by the HTTP layer.
+- **`CONNECTION_ERROR_NAMES`** (module-private) — `Set<string>` of the five driver/Mongoose error names that indicate no server was reachable.
+- **`MAX_TIME_MS_EXPIRED`** (module-private) — Constant `50`.
+- **`BUFFERING_TIMEOUT_MESSAGE`** (module-private) — The literal string Mongoose ships with its buffering-timeout error.
 
 ## Relationships
 
-- **`src/infrastructure/http/errors.ts`** — Consumes both exports: maps `isDuplicateKey` → 409 Conflict and `isConnectionError` → 503 (RFC 9110 §15.6.4).
-- **Repository modules** (`account`, `addresses`, `cart`, `inventory`, `notifications`, `payments`) — Use `isDuplicateKey` as a retry/idempotency signal when a racing upsert hits a unique index.
-- **`src/infrastructure/persistence/lease.ts`** — Same persistence layer; likely benefits from the same driver-level classification.
-- **`tests/unit/infrastructure/persistence/mongo-errors.test.ts`** — Unit tests for both predicates.
+- **`src/infrastructure/http/errors.ts`** — The HTTP error interpreter calls all three predicates to decide between 409, 503 (`QUERY_TIMEOUT`), and 503 (unavailable) responses. The `isConnectionError` doc comment explicitly points to `databaseErrorInterpreter` in that file.
+- **Repository modules** (`src/modules/account/repository.ts`, `src/modules/addresses/repository.ts`, `src/modules/cart/repository.ts`, `src/modules/inventory/repository.ts`, `src/modules/notifications/repository.ts`, `src/modules/payments/repository.ts`) — The module doc describes `isDuplicateKey` as the signal a repository checks to treat a racing upsert as a retry rather than a hard failure.
+- **Service modules** (`src/modules/account/services/export.ts`, `src/modules/account/services/oauth.ts`, `src/modules/invoicing/services/numbering.ts`, `src/modules/tasks/services/system.ts`, `src/modules/tasks/services/workflow.ts`) — Listed as graph neighbors; likely call the same predicates to classify failures at the service boundary before delegating to the HTTP interpreter.
 
 ## Notes
 
-- All checks use `.name` / `.code` property access on `unknown`, **never** `instanceof`. Rationale (stated in-file): `mongodb` appears as a transitive dependency in more than one package, so an `instanceof` against the wrong copy silently fails.
-- `isConnectionError` destructures with a nullish guard (`error ?? {}`) and type-narrows `name`/`message` to strings before use, so it safely handles non-object rejections (e.g. a thrown primitive).
-- The Mongoose buffering-timeout case is the *only* place a message string is matched, because Mongoose reuses its generic `MongooseError` class for that condition.
-- The file deliberately does **not** enumerate its callers in docs (the doc-comment notes the list "only goes stale").
+- **Never `instanceof`.** All three predicates check `.code` or `.name` on a plain object. The `mongodb` package is a transitive dependency of more than one workspace package; an `instanceof` against the wrong copy silently returns `false`.
+- **Code over message (for E11000).** The error message names the offending index; checking the code keeps the check stable across index renames.
+- **Mongoose buffering timeout has no dedicated class.** It surfaces as a generic `MongooseError`; the only distinguishing signal is the fixed `"buffering timed out"` substring, which is why `isConnectionError` falls through to a message check only in that one case.
+- All three functions accept `unknown` and are safe to call on any caught value (including `null`/`undefined` or non-object throws).

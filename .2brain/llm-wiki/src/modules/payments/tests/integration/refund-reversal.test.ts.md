@@ -1,45 +1,41 @@
 ---
 source: src/modules/payments/tests/integration/refund-reversal.test.ts
-sha256: 1c21bb5372046f20de5aa8a2df701777b856df76d9efb6f48e44cbd8df75f2f6
-generated_at: 2026-11-08T07:35:37.182676+00:00
+sha256: 296d3cf73bb6f8004e4844f34d70ac07ce8a90396860ccaef2997b239601920d
+generated_at: 2026-11-14T21:16:56.649425+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/payments/tests/integration/refund-reversal.test.ts
 
 ## Purpose
-
-Integration tests (against real MongoDB) that verify the full lifecycle when a payment provider reports a refund as failed: a settled refund that bounces is re-opened as owed exactly once, an open refund that never settled is failed for good, and neither case is ever re-sent to the provider or re-announced on redelivery. Also covers the race where the failure webhook arrives before the `refund()` call resolves.
+Integration tests (real Mongo) for the provider-reported refund failure path: a refund that had already settled and then bounces back (a *reversal*), and a refund that fails before it ever settles (a *refusal*). Verifies status transitions, the single `PAYMENT_REFUND_REVERSED` / `PAYMENT_REFUND_FAILED` event, idempotency of webhook redeliveries, exclusion from the retry sweep, and the manual "settle by hand" escape hatch.
 
 ## Key elements
-
-- **`settledRefund(amount?)`** – Full checkout fixture: creates user, product, order; pays by card; issues a refund; returns `orderId`, `payment`, `refundId`, `refundRef`, `providerRef`.
-- **`deliver(providerRef, refundRef)`** – Simulates one provider webhook hit through `paymentService.applyWebhookDelivery`.
-- **`stampOf(orderId)`** – Reads the order's `paymentStatus` via `orderService`.
-- **`events(name)`** – Counts outbox rows for a given event name (asserts exactly-once emission).
-- **`describe('a settled refund the provider takes back')`** – 5 tests: re-open as owed (status, stamp, timeline, single `PAYMENT_REFUND_REVERSED`, attention entry); partial stamp preserved when a second refund stands; idempotency under redelivery + late success; sweep never re-sends; hand-settle closes it and re-announces, subsequent redelivery is a no-op.
-- **`describe('a webhook that beats refund()')`** – 1 test: mocks `fakePaymentProvider.refund` to inject the failure webhook mid-flight; asserts `failed` status, `PAYMENT_REFUND_FAILED` (not `REVERSED`), `reversedAfterSettling` is undefined, attention kind is `refused_refund`, and redelivery is inert.
+- **`settledRefund(amount)`** – Creates user → product → order → card payment → settled refund in one shot; returns `orderId`, `payment`, `refundId`, `refundRef`, `providerRef`.
+- **`deliverRefund(providerRef, refundRef)`** – Thin wrapper around `deliver()` to fire one provider webhook event.
+- **`stampOf(orderId)`** – Reads `order.paymentStatus` via `orderService`.
+- **`events(name)`** – Counts outbox rows for a given event name.
+- **`describe('a settled refund the provider takes back')`** – Five tests covering: reversal state + single event + attention item; partial stamp preserved when another refund stands; redelivery and late-success no-ops; exclusion from `retryOpenRefunds` sweep; manual settle-by-hand followed by a no-op redelivery.
+- **`describe('a webhook that beats refund()')`** – Race-condition test where the provider webhook for the failure is delivered *inside* the `refund()` call before the provider's own success response returns; asserts the record is marked `failed` (not reversed), `PAYMENT_REFUND_FAILED` emitted once, `reversedAfterSettling` asserted via `toBeUndefined()`, and redelivery is a no-op.
 
 ## Relationships
-
-- **`scenarios/support/doubles/payments/fake.ts`** – Source of `fakePaymentProvider`, `refundRefOfRecord`, `setFakeLateRefundFailure`, `setFakeRefundOutcome`; the "late-failure lever" that drives every scenario here.
-- **`src/kernel/events.ts`** – `resetDomainEvents` in `afterEach`.
-- **`src/kernel/outbox.ts`** – `settleOutboxNudges` (processes pending outbox work) and `outboxEventModel` (counts emitted events).
-- **`src/modules/orders/index.ts` / `services/index.ts`** – `orderService.getById` to read the stamped `paymentStatus`.
-- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `toOrderItem`.
-- **`src/modules/payments/events.ts`** – `PAYMENT_REFUNDED`, `PAYMENT_REFUND_FAILED`, `PAYMENT_REFUND_REVERSED` constants for outbox assertions.
+- **`scenarios/support/doubles/payments/fake.ts`** – Source of `fakePaymentProvider`, `refundRefOfRecord`, `setFakeLateRefundFailure`, `setFakeRefundOutcome`; the "late-failure lever" and outcome override used throughout.
+- **`src/modules/payments/services/index.ts`** – `paymentService` provides `retryOpenRefunds`, `settleRefundByHand`, `getForOrder`, `listAttention`.
+- **`src/modules/payments/tests/deliver.ts`** – `deliver()` is the webhook-injection entry point.
+- **`src/modules/payments/tests/factories.ts`** – `payByCard` and `refundOrderPayment` build the initial payment/refund.
+- **`src/modules/payments/events.ts`** – Event name constants asserted in outbox counts.
+- **`src/modules/payments/repository.ts`** – Payment repository used for direct state assertions.
 - **`src/modules/payments/module.ts`** – Registered in `beforeEach` via `registerCheckoutModules`.
-- **`src/modules/payments/repository.ts`** – `paymentRepository.findByOrderId` for direct record assertions.
-- **`src/modules/payments/services/index.ts`** – `paymentService` for webhook delivery, `listAttention`, `settleRefundByHand`, `retryOpenRefunds`, `getForOrder`.
-- **`src/modules/payments/tests/factories.ts`** – `payByCard`, `refundOrderPayment`.
-- **`src/modules/products/tests/factories.ts`** / **`src/modules/users/tests/factories.ts`** – `createProduct`, `createUser`.
-- **`tests/support/callers.ts`** – `asAdmin`, `callerContextAs` for auth context.
-- **`tests/support/checkout-modules.ts`** – `registerCheckoutModules` wiring.
+- **`src/modules/orders/index.ts`** – `orderService` used to read the order's `paymentStatus`.
+- **`src/modules/orders/services/index.ts`** – Underlying order service implementation.
+- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `toOrderItem`.
+- **`src/modules/users/tests/factories.ts`**, **`src/modules/products/tests/factories.ts`** – Entity creation.
+- **`src/kernel/outbox.ts`** – `settleOutboxNudges` flushes outbox; `outboxEventModel` for event counts.
+- **`src/kernel/events.ts`** – `resetDomainEvents` in `afterEach`.
+- **`tests/support/callers.ts`** – `asAdmin`, `callerContextAs` for auth contexts.
 
 ## Notes
-
-- Uses **real MongoDB** (`setupTestDb`), not an in-memory stub; this is an integration test, not a unit test.
-- Event assertions rely on `outboxEventModel.countDocuments` after `settleOutboxNudges`—always flush the outbox before counting.
-- The sweep test uses `withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' })` to force the retry window to zero so `retryOpenRefunds` actually runs; without this the interval guard would skip the sweep.
-- In the race-condition test, `fakePaymentProvider.refund` is spied and its implementation is replaced to call `deliver` *before* resolving—this is the only place the provider double is monkey-patched mid-call.
-- `reversedAfterSettling` is the discriminator: `true` means the refund settled then bounced (reversal); `undefined` means it never settled (refusal). Tests assert this explicitly.
+- **Reversal vs. refusal distinction:** `reversedAfterSettling: true` means the refund had settled before the provider reported failure; the test asserts `toBeUndefined()` for this field when the refund never settled.
+- **Race test mocks the provider:** `fakePaymentProvider.refund` is spied on so the failure webhook fires *inside* the call, before the provider's success response resolves. This exercises the "webhook beats the API response" ordering.
+- **Retry-sweep test** uses `withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' })` to force the sweep window to zero, then asserts `refund` and `retrieveRefund` are never called on a reversed/refused record.
+- **Idempotency is a first-class concern:** every redelivery (failure or success) after the terminal state must produce zero additional outbox events and zero state change.

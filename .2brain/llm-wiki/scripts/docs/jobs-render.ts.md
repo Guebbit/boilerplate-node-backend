@@ -1,7 +1,7 @@
 ---
 source: scripts/docs/jobs-render.ts
-sha256: 49187278a555d0c550ac8cf05bb350f86dd0925ac23be5b0a2820c94d2cd2467
-generated_at: 2026-11-08T02:48:57.636165+00:00
+sha256: d2bc86448f1a587e8bb938880999c0bb8e7f2761d70d47dbb60dca917a02290a
+generated_at: 2026-11-14T17:33:53.976034+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure rendering helpers that turn an array of `JobDeclaration` objects into two text artifacts: the `docker/crontab` file and the Markdown table shown on the ops page. Kept free of I/O so tests can assert on the rendered string in isolation; the sibling `generate-jobs.ts` handles the actual file writes.
+Pure rendering functions that turn `JobDeclaration` objects into their two textual outputs: the `docker/crontab` entries consumed by supercronic and the Markdown jobs table on the ops page. Exists as a separate module from `generate-jobs.ts` so the string-shaping logic can be tested without disk I/O.
 
 ## Key elements
 
-- **`looksLikeCron(schedule)`** — shape-checks that a schedule has exactly 5 whitespace-separated fields. Not a cron parser; supercronic handles real validation at boot.
-- **`describeSchedule(schedule)`** — renders a human-readable label for the ops table ("every minute", "every N min", "02:05 nightly") or falls back to the raw expression in backticks.
-- **`renderCrontab(jobs)`** — returns the full `docker/crontab` text: a static explanatory header followed by one commented entry per job in declaration order.
-- **`renderJobsTable(jobs)`** — returns a 4-column Markdown table (Job, Schedule, Leased, What it does), one row per job.
-- **`RUNNER`** (`npm run job`) — the human-facing command shown in the table.
-- **`CRON_RUNNER`** (`node --import tsx scripts/ops/run-job.ts`) — the command cron actually executes; uses `node` directly because the production image has no npm.
-- **`CRONTAB_HEADER`** — the static multi-line comment block prepended to every generated crontab file.
+- **`looksLikeCron(schedule)`** — Shape check that a schedule string has exactly 5 whitespace-separated fields. Not a parser; supercronic enforces actual grammar at boot.
+- **`describeSchedule(schedule)`** — Translates a cron expression into a short human phrase for the ops table (`"02:05 nightly"`, `"every 5 min"`, `"every minute"`). Falls back to showing the raw expression in backticks.
+- **`renderCrontab(jobs)`** — Returns the complete `docker/crontab` file content: a fixed comment header followed by one two-line entry per job (a `# summary` comment line above the actual `schedule cd /app && node --import tsx scripts/ops/run-job.ts <name>` line).
+- **`renderJobsTable(jobs)`** — Returns a Markdown table (Job / Schedule / Leased / What it does) with one row per job, in declaration order.
+- **`RUNNER`** (`npm run job`) — Command shown in the ops table for manual execution.
+- **`CRON_RUNNER`** (`node --import tsx scripts/ops/run-job.ts`) — Command used inside the crontab; the production image has no npm, so it invokes Node directly with `--import tsx`.
+- **`CRONTAB_HEADER`** — The static comment block explaining provenance, safety, and log passthrough for the generated crontab.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — provides the `JobDeclaration` type imported by this module.
-- **`scripts/docs/generate-jobs.ts`** — the sole caller in production: imports the render functions, assembles the full output, and writes it to disk.
-- **`tests/unit/scripts/docs/jobs-render.test.ts`** — unit-tests the four exports against fixture declarations.
-- **`tests/cross-cutting/scheduled-jobs.test.ts`** — integration-level test that checks the rendered output is consistent with what the registry actually declares.
+- **`src/kernel/registry.ts`** — Provides the `JobDeclaration` type that all exported functions accept.
+- **`scripts/docs/generate-jobs.ts`** — The sole consumer in production; calls `renderCrontab` and `renderJobsTable` and writes the results to disk.
+- **`tests/unit/scripts/docs/jobs-render.test.ts`** — Unit-tests the pure output strings against fixture declarations.
+- **`tests/cross-cutting/scheduled-jobs.test.ts`** — Exercises the rendered crontab table together with the rest of the pipeline.
 
 ## Notes
 
-- This module is deliberately **pure** (no `fs`, no `process`). If a test needs to verify rendered text, it calls these functions directly rather than reading a file.
-- The crontab entries are prefixed with `#` (a comment line) containing the job summary, so supercronic's output stays readable; the actual cron line follows on the next line.
-- `describeSchedule` handles only three specific patterns; any other valid cron expression is displayed verbatim in backticks. It is not meant to be a general cron translator.
-- The 5-field cron constraint is enforced by `looksLikeCron` but is not used inside `renderCrontab` itself — it is a validation helper callers (or tests) can apply before rendering.
+- This module performs **no I/O** and has no side effects; all output is returned as strings.
+- `describeSchedule` handles only three specific patterns (all-star, step-in-minute, fixed hour+minute); every other expression is emitted verbatim in backticks.
+- The crontab entries use `cd /app &&` so the `--import tsx` specifier resolves relative to the project root regardless of the cron working directory.
+- Job order in both outputs mirrors declaration order — there is no sorting here.

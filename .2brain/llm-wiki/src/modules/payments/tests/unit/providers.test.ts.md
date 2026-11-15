@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/tests/unit/providers.test.ts
-sha256: 9fa230d86844cb40b2e5fbb7fc432521d91ab038b1b56587842722bfe0877821
-generated_at: 2026-11-08T07:40:16.709526+00:00
+sha256: 85eccb869b8613e88ddb572a1f121cba7f3d3d78c477ec27e8a82a415faef271
+generated_at: 2026-11-14T21:21:42.985554+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for two things the payment-provider port exposes: the shared webhook-signature discipline (`sign` / `verify` / `WebhookRejected`) and the `resolvePaymentProvider` selection function. No database, no external mocks — the file exercises pure logic and env-var-driven configuration in isolation.
+Unit tests for the payment-provider port layer: the webhook signature sign/verify contract and the `resolvePaymentProvider` selector. It exists to pin down the security invariants (replay tolerance, secret-ring rotation, malformed-input rejection) and the "no silent fallback" rule for provider selection, without touching a database or any provider SDK.
 
 ## Key elements
 
-- **`signedWith(secret, payload, timestamp?)`** — helper that sets `NODE_PAYMENT_WEBHOOK_SECRET` via the test environment helper and returns the produced signature header.
-- **`v1Of(header)`** — extracts the `v1=<hex>` fragment from a signature header (non-null-asserted regex).
-- **`describe('webhook signatures')`** — verifies round-trip sign→verify, tampered-body rejection, wrong-secret rejection, replay-window rejection, malformed/short headers, and the **secret-ring rotation** sub-suite (first-entry signing, any-entry verification, multi-`v1` headers, position-independence of the genuine `v1`, whitespace trimming, empty-`v1` rejection).
-- **`describe('…uppercase-hex…')`** — confirms the digest half of `v1=` is compared case-insensitively.
-- **`loadResolver()`** — resets Jest's module registry, dynamically re-imports `providers/index`, and returns `resolvePaymentProvider` so each test sees a fresh module scope.
-- **`describe('resolvePaymentProvider')`** — asserts: unset env → `undefined` (payments off); registered name → that provider; unregistered name → throws (no silent fallback).
+- **`signedWith(secret, payload, timestamp?)`** – sets `NODE_PAYMENT_WEBHOOK_SECRET` and delegates to `signWebhookPayload`, producing a ready-to-verify header string.
+- **`v1Of(header)`** – regex-extracts the first `v1=<hex>` token from a header for use in composite-header assertions.
+- **`loadResolver()`** – resets the Jest module registry then re-imports `providers/index` to obtain a fresh `resolvePaymentProvider` closure that reflects the current env vars.
+- **`describe('webhook signatures')`** – covers round-trip acceptance, tampered-body rejection, wrong-secret rejection, replay (outside 1-hour tolerance), malformed/undefined/short/over-long headers, the four-`v1` scan cap, and case-insensitive hex.
+- **`describe('a ring of secrets…')`** – covers comma-separated secret rings: first-entry signing, per-entry verification, two-`v1` headers, position-independence of the matching `v1`, trim behaviour, and empty-`v1` rejection.
+- **`describe('resolvePaymentProvider')`** – verifies that an unset env yields `undefined`, a registered name resolves, and an unregistered name **throws** rather than defaulting.
 
 ## Relationships
 
-- **`src/modules/payments/providers/webhook-signature.ts`** — the SUT for the first suite; imports `signWebhookPayload`, `verifyWebhookSignature`, and the `WebhookRejected` error class.
-- **`src/modules/payments/providers/index.ts`** — the SUT for the second suite; `loadResolver()` re-imports it under a clean module cache to isolate the env-var read.
-- **`tests/support/environment.ts`** — provides `setEnvironment` / `resetEnvironment` so tests can mutate and restore `NODE_PAYMENT_WEBHOOK_SECRET` and `NODE_PAYMENT_PROVIDER` without leaking state.
+- **`src/modules/payments/providers/webhook-signature.ts`** – the module under test; exports `signWebhookPayload`, `verifyWebhookSignature`, and the `WebhookRejected` error class.
+- **`src/modules/payments/providers/index.ts`** – exports `resolvePaymentProvider`; this file re-imports it per test (after clearing the module registry) so each call observes the latest environment variable.
+- **`tests/support/environment.ts`** – provides `setEnvironment` / `resetEnvironment` to mutate `NODE_PAYMENT_WEBHOOK_SECRET` and `NODE_PAYMENT_PROVIDER` between assertions.
 
 ## Notes
 
-- The resolver tests rely on `jest.resetModules()` + dynamic `import()`; any change to how `providers/index` reads its env var at import time (vs. call time) will break these tests.
-- The "ring of secrets" convention: the **first** comma-separated entry is the signing key; **all** entries are candidates during verification. Entries are trimmed of surrounding whitespace.
-- A comment in the multi-`v1` test references a prior bug where a `Map` kept only the **last** `v1`, causing a forged entry after the genuine one to reject the request. The current implementation must accept the genuine `v1` regardless of position.
-- The file's JSDoc header explicitly notes that `service.test.ts` (which persists a payment document) lives under `tests/integration/`, and that the `fake` provider's outcome logic is tested in `tests/unit/scenarios/` — don't expect broader provider behaviour here.
+- Tests that depend on a specific secret value call `setEnvironment` **before** signing and `resetEnvironment()` (or the next `setEnvironment`) afterwards; the `afterEach` in the `resolvePaymentProvider` block only resets the module registry, not the env — the secret block relies on sequential ordering.
+- The over-length and four-`v1`-cap tests use a deliberately short secret (`'cap-test-secret'`) so the genuine header fits within the 200-char contract before padding is added.
+- The "position-independence" test documents a past regression: an earlier `Map`-based implementation kept only the **last** `v1`, which a trailing forged token would have overridden.
+- `resolvePaymentProvider` tests require a module-registry reset before re-import because the function reads env at import time; calling it twice without a reset would observe stale values.

@@ -1,7 +1,7 @@
 ---
 source: tests/integration/concurrency/cart-races.test.ts
-sha256: 7e537d9d79b982d82d77488a0168324139cd829c78bd43efbf1ab35177a0366f
-generated_at: 2026-11-08T09:36:25.012337+00:00
+sha256: 71103af7e2c1e3b3a3a62e2bdc827f8c8c5ad4c63b9aac9b5b4768a10d7017c8
+generated_at: 2026-11-14T23:11:15.733466+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that fire concurrent HTTP requests at the cart and checkout endpoints to verify two race conditions stay closed: **R2** (parallel checkouts must produce exactly one order, not a double-charge) and **R3** (concurrent cart writes must not create duplicate lines, lost increments, or a second cart document). The file also documents *why* each test exists and which failure mode it isolates, serving as the reference the R2 fix was modelled on.
+Integration tests that exercise two cart/checkout race conditions under concurrent load. **R2** verifies that N parallel `POST /cart/checkout` calls produce exactly one order (the losers get 409) and that the conditional cart-clear (`clearLinesIfUnchanged`) is scoped to the order's transaction. **R3** verifies the cart upsert retry path in `cart/repository.ts` — the `$ne`-in-filter guard and the duplicate-key retry — by firing N concurrent adds or quantity writes and asserting the resulting cart shape.
 
 ## Key elements
 
-- **`R3 — concurrent writes of the SAME product`** — fires `RACE_SIZE` parallel `POST /cart/items` for one product; asserts one cart, one line, quantity equals `RACE_SIZE`, all responses 200. Sets `NODE_CART_LINE_MAX` to `RACE_SIZE` via `withEnvironmentOverrides` so the per-line ceiling doesn't interfere.
-- **`R3 — concurrent adds of DIFFERENT products`** — fires `RACE_SIZE` parallel adds, each for a *different* product. The only case that distinguishes a working `$ne`-in-filter design from a broken one (a single-product race cannot expose the "one product on two lines" failure).
-- **`R3 — concurrent quantity writes to the same line`** — fires parallel `PATCH /cart/items/:id` with distinct quantities in *set* mode; asserts the final quantity is one of the values sent (last-writer-wins), not a merge artefact, and no second cart appears.
-- **`R2 — concurrent checkouts of one cart`** — fires `RACE_SIZE` parallel `checkoutAs` calls. Sub-tests verify: exactly one order, one 2xx and `RACE_SIZE−1` 409s, cart emptied to zero items, no orphaned order for the loser, and the product's inventory hold is released for losing requests.
-- **`RACE_SIZE`** (from `@tests/race`) — the concurrency knob; every test's expected counts are expressed in terms of it.
-- **`raceN`, `countStatus`, `expectNoServerErrors`** (from `@tests/race`) — shared helpers for firing N concurrent requests and tallying status codes.
+- **`describe('R3 — concurrent writes of the SAME product')`** — fires `RACE_SIZE` parallel `POST /cart/items` for one product; asserts one cart, one line, quantity = `RACE_SIZE`, all 200.
+- **`describe('R3 — concurrent adds of DIFFERENT products')`** — same shape but N distinct products; asserts N unique lines (this is the case that actually discriminates a broken `$ne`-in-filter from a working one).
+- **`describe('R3 — concurrent quantity writes to the same line')`** — uses supertest's `.patch()` to set (not increment) quantities on an existing line; asserts the final quantity is one of the sent values, not a merge artefact, and no duplicate cart.
+- **`describe('R2 — concurrent checkouts of one cart')`** — five sub-tests: exactly one order; one 200/201 + N−1 409s; cart emptied to zero items; no phantom order for losers; product inventory holds are released for losers.
+- **`withEnvironmentOverrides`** — used to set `NODE_CART_LINE_MAX_QUANTITY` to `RACE_SIZE` so the per-line ceiling doesn't reject legitimate adds.
+- **`raceN`, `countStatus`, `expectNoServerErrors`, `RACE_SIZE`** — concurrency helpers imported from `@tests/race`.
+- **`checkoutAs`** — helper (from `@tests/checkout-as`) that performs the full checkout HTTP call.
 
 ## Relationships
 
-- **`src/modules/cart/model.ts`** — `cartModel` is queried directly (`countDocuments`, `findOne`) to assert cart/line invariants.
-- **`src/modules/cart/repository.ts`** — the code under test for R3; its `$ne`-in-filter + duplicate-key retry is what the same/different-product cases discriminate.
-- **`src/modules/cart/services/index.ts`** — `cartService` imported; exercises the add/update/checkout logic the HTTP calls reach.
-- **`src/modules/orders/model.ts`** — `orderModel` queried directly to assert order count and item contents after checkout races.
-- **`src/modules/orders/tests/factories.ts`** — `countOrders` / `readOrder` helpers for order assertions (used in the truncated portion).
-- **`src/modules/products/tests/factories.ts`** — `createProduct` seeds inventory for every test.
-- **`src/modules/products/index.ts`** / **`src/modules/products/services/index.ts`** — `productService` imported; likely used in the truncated hold-release assertion.
-- **`src/modules/addresses/tests/factories.ts`** — `giveAddress` satisfies the checkout precondition.
-- **`src/modules/users/tests/factories.ts`** — `createUser` imported for user setup.
-- **`src/modules/webhooks/module.ts`**, **`src/modules/webhooks/repository.ts`**, **`src/modules/webhooks/secrets.ts`** — imported for webhook subscription/delivery teardown in the (truncated) later cases.
-- **`src/kernel/outbox.ts`** — `relayOutbox`, `settleOutboxNudges`, `outboxEventModel` imported to drain or assert the outbox after checkout.
-- **`src/kernel/events.ts`** — `resetDomainEvents` imported for per-test event-bus cleanup.
+- **`src/modules/cart/repository.ts`** — the code under test for R3; its `$ne`-in-filter upsert and duplicate-key retry are the invariants these tests pin.
+- **`src/modules/cart/model.ts`** — `cartModel` is queried directly after each race to assert cart count, line count, and quantities.
+- **`src/modules/cart/services/index.ts`** — `cartService` imported; the checkout flow it hosts is what the R2 tests exercise via HTTP.
+- **`src/modules/orders/model.ts`** — `orderModel` is queried to count orders and verify the surviving order's line quantity.
+- **`src/modules/orders/tests/factories.ts`** — `countOrders`, `readOrder` available for order assertions.
+- **`src/modules/products/tests/factories.ts`** — `createProduct` seeds inventory (`onHand`) for each scenario.
+- **`src/modules/addresses/tests/factories.ts`** — `giveAddress` is required before checkout in R2 tests.
+- **`src/modules/users/tests/factories.ts`** — `createUser` seeds the authenticated user.
+- **`src/modules/webhooks/module.ts`**, **`repository.ts`**, **`secrets.ts`** — imported for outbox/webhook state reset and verification in the checkout flow.
+- **`src/kernel/outbox.ts`** — `relayOutbox`, `settleOutboxNudges` used to flush pending events so assertions aren't racy.
+- **`src/kernel/events.ts`** — `resetDomainEvents` clears the in-memory event bus between tests.
 
 ## Notes
 
-- **`RACE_SIZE` is a knob, not a constant.** The per-line ceiling (`NODE_CART_LINE_MAX`) is explicitly set to `RACE_SIZE` in the same-product test; a lower value would turn valid adds into 400 refusals and mask the real invariant.
-- **Cases 3 and 4 look identical at a glance but test different bugs.** Only the multi-product case (case 4) can expose the "same product on two lines" failure; a single-product race produces the same observable output whether the guard is present or not.
-- **The R2 fix is transactional.** `clearLinesIfUnchanged` runs *inside* the order's transaction using the cart's `__v` as the condition, so the loser's order and its `order.created` event are rolled back together. The "no orphaned order" sub-test exists specifically to catch a regression where the cart is emptied but the order is still committed.
-- **Assertions bypass the service layer.** The file reads `cartModel` / `orderModel` directly (Mongoose) rather than calling `cartService.get`, because it needs to verify database-level invariants (single document, single line) that a service response might hide.
+- The same-product (case 3) and different-product (case 4) R3 tests look similar but only case 4 can detect a broken `$ne`-in-filter design; a single-product race is indistinguishable from correct behaviour.
+- `NODE_CART_LINE_MAX_QUANTITY` must be ≥ `RACE_SIZE` or the last adds become 400s instead of 200s; the test sets it explicitly.
+- R2's fix (`clearLinesIfUnchanged`) ties the cart write to the `__v` read at order-creation time, *inside the order's transaction*; the "no phantom order" sub-test exists specifically to catch a regression where the conditional write is moved outside that transaction.
+- The file is truncated in the graph; the last R2 test (product hold release) is cut off mid-assertion.

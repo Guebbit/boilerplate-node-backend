@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/services/checkout.ts
-sha256: cceea37f1abd108bc48e056e8b953ae9f6b0d4c77ebf790a26d844413b148bb4
-generated_at: 2026-11-08T05:16:34.321049+00:00
+sha256: 0ac7d7766317a6ffe3dd5087b561512d8fef47e1e41d99d20f4843dc36dea273
+generated_at: 2026-11-14T19:30:44.865030+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Orchestrates the cart→order transition: the single cart operation that writes to another module's collection. It resolves payment, shipping, and billing choices, validates the cart against domain rules, and places the order atomically. It exists as a dedicated service because the checkout path is the only one where a race or partial write can cost a customer money, so every step is sequenced and pre-flight-validated before any stock or order state mutates.
+Orchestrates the checkout flow — the single cart operation that writes into another module's collection (orders) and the only one where a race can cost a customer money. It runs pre-flight validations (payment, address, shipping) that refuse the request *before* any stock is held, then delegates to the order, inventory, and payment services to complete the purchase.
 
 ## Key elements
 
-- **`toOrderAddress(address: AddressItem)`** — Maps an address-book entry to the flat object embedded in an order. Spelled field-by-field so `_id`/`default` can never leak into the order document.
-- **`CheckoutChoices`** (exported type) — `Partial<CheckoutRequest>`; the buyer's optional selections (address ids, payment method, notes, expected total).
-- **`PreflightOutcome<T>`** (internal type) — Discriminated union `{ ok: true } & T` | `{ ok: false; reject: ResponseReject }` used by every resolution step so callers can short-circuit without a thrown error.
-- **`resolvePaymentMethod(userId, paymentMethod?)`** — Validates the chosen method against `paymentService.listPaymentMethods()`, checks `userService.purchaseHoldOf`, and enforces `maxOpenUnpaidOrdersPerAccount()`. All three must pass before any stock moves.
-- **`resolveShipping(userId, addressId, shippingMethodId, basketShips)`** — Resolves the static shipping method and the shipping address. Handles digital baskets (no address), pickup methods (`requiresAddress: false`), and country allow-listing via `shipToCountries()`.
-- **`resolveBilling(userId, billingAddressId, shippingAddress)`** — Resolves the invoicing address. Priority: named entry → same-as-shipping → book default. Refuses (422) if none can be produced, per EU VAT Directive Art. 226.
-- **`runCheckout`** (referenced in JSDoc; body truncated) — The top-level orchestrator that calls the resolution steps above, runs `evaluateCheckout` / `evaluateShippingRequirement`, confirms availability, and delegates to `orderService.placeOrder`.
+- **`toOrderAddress`** — Copies only the fields listed in `POSTAL_ADDRESS_FIELDS` from an `AddressItem` into an `OrderAddress`, so book-specific fields (`_id`, `default`) never leak into the stored order.
+- **`CheckoutChoices`** — Type alias for `Partial<CheckoutRequest>`; the set of buyer-supplied fields (`addressId`, `billingAddressId`, `paymentMethod`, `notes`, `expectedTotal`).
+- **`PreflightOutcome<T>`** — Discriminated union (`{ ok: true } & T` / `{ ok: false; reject: ResponseReject }`) used by every pre-flight step so `runCheckout` can short-circuit uniformly.
+- **`resolvePaymentMethod`** — Validates the chosen method against `paymentService.listPaymentMethods()`, checks the user's purchase hold, and enforces the `maxOpenUnpaidOrdersPerAccount` cap. Defaults to `'card'` via a parameter default.
+- **`resolveShipping`** — Resolves the shipping method (via `findShippingMethod`) and the shipping address (via the addresses service). Returns 409 if an address is sent for a no-address method, 404 if the entry is missing, 422 if the country is outside `shipToCountries()`.
+- **`resolveBilling`** — Resolves the billing address with a three-way fallback: named → same-as-shipping → book default. Refuses with 422 `CART_BILLING_ADDRESS_REQUIRED` when none exists (mandatory per EU VAT Directive Art. 226).
+- **`runCheckout`** *(truncated in view)* — The exported entry point that sequences the pre-flight steps, calls `evaluateCheckout` / `evaluateShippingRequirement`, and commits the order.
 
 ## Relationships
 
-- **`src/domain-primitives/money.ts`** — Calls `fitsCurrency` and `toMinorUnits` to validate the buyer's `expectedTotal` against the shop currency before anything is held.
-- **`src/infrastructure/http/response.ts`** — Builds every success/reject envelope via `generateSuccess`, `generateReject`, and `fieldError`.
-- **`src/infrastructure/http/errors.ts`** — Wraps database-level failures with `rejectDatabaseEnvelope`.
-- **`src/infrastructure/i18n/index.ts`** — Calls `t()` for all user-facing error messages and `getDefaultLocale` where needed.
-- **`src/infrastructure/observability/analytics/index.ts`** — Emits checkout analytics events via `emitAnalyticsEvent` / `buildAnalyticsBase`.
-- **`src/modules/addresses/service.ts`** — Calls `addressService.forCheckout(userId, id)` to look up shipping and billing entries.
-- **`src/modules/addresses/model.ts`** — Consumes the `AddressItem` type.
-- **`src/modules/cart/analytics.ts`** — Reads event names from `cartAnalyticsEvents`.
+- **`src/domain-primitives/money.ts`** — Uses `fitsCurrency` and `toMinorUnits` for the `expectedTotal` guard and price arithmetic.
+- **`src/domain-primitives/postal-address.ts`** — Iterates `POSTAL_ADDRESS_FIELDS` in `toOrderAddress` to build the order snapshot.
+- **`src/infrastructure/http/response.ts`** — Builds every success/reject envelope (`generateSuccess`, `generateReject`, `fieldError`).
+- **`src/infrastructure/http/errors.ts`** — Uses `rejectDatabaseEnvelope` for unexpected DB failures during the write path.
+- **`src/infrastructure/i18n/index.ts`** / **`catalog.ts`** / **`context.ts`** — Calls `t()` for every user-facing message and `getDefaultLocale` for locale resolution.
+- **`src/infrastructure/observability/analytics/index.ts`** — Emits `cartAnalyticsEvents` via `emitAnalyticsEvent` / `buildAnalyticsBase` at key checkout milestones.
+- **`src/modules/addresses/service.ts`** — Resolves shipping and billing address entries from the caller's address book.
+- **`src/modules/addresses/model.ts`** — Consumes the `AddressItem` type for resolved entries.
+- **`src/modules/cart/analytics.ts`** — Imports the `cartAnalyticsEvents` constant that names the event payloads.
 - **`src/modules/cart/config.ts`** — Reads `cartLineMax` and `maxOpenUnpaidOrdersPerAccount` limits.
-- **`src/modules/cart/domain/index.ts`** — Calls `evaluateCheckout`, `evaluateShippingRequirement`, `needsShipping` and imports the `CheckoutVerdict`, `CheckoutShortfall`, `UnavailableCartLine` types.
+- **`src/modules/cart/domain/index.ts`** — Calls `evaluateCheckout`, `evaluateShippingRequirement`, `needsShipping`, and consumes `CheckoutVerdict`, `CheckoutShortfall`, `UnavailableCartLine` types.
+- **`src/modules/orders`**, **`src/modules/inventory`**, **`src/modules/users`**, **`src/modules/delivery`**, **`src/modules/payments`** — Downstream services called during the commit phase (order creation, stock hold, purchase-hold check, shipping-method lookup, payment-method listing).
 
 ## Notes
 
-- **Pre-flight invariant:** Every resolution and validation step (`resolvePaymentMethod`, `resolveShipping`, `resolveBilling`, `evaluateCheckout`) completes *before* any stock is held or an order row is written. A failure at any step leaves the system untouched.
-- **`resolvePaymentMethod` default parameter:** Uses `paymentMethod = 'card'` (not `?? 'card'`) deliberately so that a caller passing explicit `undefined`—the checkout route's "none chosen" spelling—still resolves to `card`.
-- **Open-order cap is method-agnostic:** The cap check runs inside `resolvePaymentMethod` for *every* method because each unpaid order holds stock; this is the guard against one account hoarding shelf across many uncompleted orders.
-- **Billing is mandatory:** Unlike shipping, there is no "no billing" path. An all-digital basket still produces a billing address (falls back to the book default), and the 422 refusal is a field-level error on `billingAddressId`.
-- **`toOrderAddress` is intentionally non-generic:** It lists each field explicitly (fullName, street, city, zip, country, phone?) rather than spreading the entry, so no book-level metadata (`_id`, `default`, timestamps) can ride into the order.
+- Every pre-flight step is designed to **refuse before any stock is held**; the file header explicitly calls out the money-cost of a race.
+- `resolveShipping` returns `address: undefined` (not an error) when a physical basket simply hasn't picked a method yet — that case is refused later by `evaluateShippingRequirement` as `CART_SHIPPING_METHOD_REQUIRED`.
+- The billing fallback order is **named → shipping → default**, but an *all-digital* basket with no default entry is a hard 422, not a silent skip.
+- `toOrderAddress` intentionally does **not** copy phone (it is absent from the address book model), and the single `as OrderAddress` cast relies on the book guaranteeing the five required fields.
+- The `paymentMethod = 'card'` default is a **parameter default** (not `?? 'card'`), so callers passing `undefined` explicitly still get `'card'` — this is load-bearing for the checkout route's "none chosen" spelling.

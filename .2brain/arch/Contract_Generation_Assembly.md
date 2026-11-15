@@ -12,9 +12,11 @@ graph LR
     Contract_Fragment_Assembly_Bundle_Engine["Contract Fragment Assembly & Bundle Engine"]
     Module_Documentation_Reference_Generation["Module Documentation & Reference Generation"]
     Cross_Cutting_Contract_Analysis_Validation["Cross-Cutting Contract Analysis & Validation"]
+    Contract_Fragment_Assembly_Bundle_Engine -- "Emits the committed contract bundles (openapi.yaml, asyncapi.public.yaml) that the spec-identity check reads to verify byte-identity with the paired frontend" --> Cross_Cutting_Contract_Analysis_Validation
     Module_Documentation_Reference_Generation -- "Reads authorization fragments to derive the effective role/permission matrix" --> Contract_Fragment_Assembly_Bundle_Engine
-    Cross_Cutting_Contract_Analysis_Validation -- "Validates the same contract surface the engine assembles by reading shared per-module YAML and kernel/infrastructure config" --> Contract_Fragment_Assembly_Bundle_Engine
-    Cross_Cutting_Contract_Analysis_Validation -- "Shares local documentation helpers and module discovery infrastructure within scripts/docs/" --> Module_Documentation_Reference_Generation
+    Module_Documentation_Reference_Generation -- "Shares reference-resolution and code-citation utilities for documentation integrity" --> Cross_Cutting_Contract_Analysis_Validation
+    Cross_Cutting_Contract_Analysis_Validation -- "Reads contract fragments and authorization rules for cross-cutting consistency validation" --> Contract_Fragment_Assembly_Bundle_Engine
+    Cross_Cutting_Contract_Analysis_Validation -- "Uses shared marker-block write protocol and module descriptor API for documentation output" --> Module_Documentation_Reference_Generation
 ```
 
 ## Details
@@ -26,7 +28,7 @@ The core generation engine that reads per-module contract fragments (OpenAPI pat
 
 **Related Classes/Methods**:
 
-- `scripts.contracts.analytics-browser-events.withBrowserEvents`:96-137
+- `scripts.contracts.analytics-browser-events.withBrowserEvents`:96-139
 - `scripts.contracts.asyncapi-webhook-events.webhookEventFragments`
 
 **Source Files:**
@@ -39,9 +41,9 @@ The core generation engine that reads per-module contract fragments (OpenAPI pat
   - `scripts.contracts.analytics-browser-events.localiseReferences` (L57-L68) - Class
   - `scripts.contracts.analytics-browser-events.localiseReferences.node.map() callback` (L58-L58) - Function
   - `scripts.contracts.analytics-browser-events.localiseReferences.map() callback` (L61-L66) - Function
-  - `scripts.contracts.analytics-browser-events.withBrowserEvents` (L96-L137) - Class
-  - `scripts.contracts.analytics-browser-events.withBrowserEvents.flatMap() callback` (L122-L134) - Function
-  - `scripts.contracts.analytics-browser-events.withBrowserEvents.flatMap() callback.oneOf.map() callback` (L128-L128) - Function
+  - `scripts.contracts.analytics-browser-events.withBrowserEvents` (L96-L139) - Class
+  - `scripts.contracts.analytics-browser-events.withBrowserEvents.flatMap() callback` (L124-L136) - Function
+  - `scripts.contracts.analytics-browser-events.withBrowserEvents.flatMap() callback.oneOf.map() callback` (L130-L130) - Function
 - `scripts/contracts/asyncapi-bundles.ts`
   - `scripts.contracts.asyncapi-bundles.internalSections` (L65-L68) - Class
   - `scripts.contracts.asyncapi-bundles.internalSections.map() callback` (L67-L67) - Function
@@ -55,29 +57,29 @@ The core generation engine that reads per-module contract fragments (OpenAPI pat
   - `scripts.contracts.fragments.AuthorizationSet` (L78-L82) - Interface
   - `scripts.contracts.fragments.AuthorizationFragment` (L85-L88) - Interface
 - `scripts/contracts/generate-shared-rule-schemas.ts`
-  - `scripts.contracts.generate-shared-rule-schemas.loadModuleSource` (L74-L81) - Class
-  - `scripts.contracts.generate-shared-rule-schemas.loadModuleSource.then() callback` (L76-L80) - Function
-  - `scripts.contracts.generate-shared-rule-schemas.camelCaseOf` (L84-L85) - Class
-  - `scripts.contracts.generate-shared-rule-schemas.camelCaseOf.name.replaceAll() callback` (L85-L85) - Function
-  - `scripts.contracts.generate-shared-rule-schemas.ModuleBlock` (L88-L99) - Interface
-  - `scripts.contracts.generate-shared-rule-schemas.MODULE_BLOCKS` (L105-L122) - Class
-  - `scripts.contracts.generate-shared-rule-schemas.MODULE_BLOCKS.exportName` (L118-L118) - Method
-  - `scripts.contracts.generate-shared-rule-schemas.MODULE_BLOCKS.description` (L119-L120) - Method
-  - `scripts.contracts.generate-shared-rule-schemas.collectBlockSources` (L130-L155) - Class
-  - `scripts.contracts.generate-shared-rule-schemas.collectBlockSources.flatMap() callback` (L131-L155) - Function
-  - `scripts.contracts.generate-shared-rule-schemas.collectSources` (L179-L197) - Class
-  - `scripts.contracts.generate-shared-rule-schemas.collectSources.map() callback` (L181-L181) - Function
-  - `scripts.contracts.generate-shared-rule-schemas.collectSources.then() callback` (L182-L197) - Function
-  - `scripts.contracts.generate-shared-rule-schemas.collectSources.then() callback.flatMap() callback` (L183-L192) - Function
-  - `scripts.contracts.generate-shared-rule-schemas.collectSources.then() callback.MODULE_BLOCKS.flatMap() callback` (L196-L196) - Function
+  - `scripts.contracts.generate-shared-rule-schemas.loadModuleSource` (L77-L84) - Class
+  - `scripts.contracts.generate-shared-rule-schemas.loadModuleSource.then() callback` (L79-L83) - Function
+  - `scripts.contracts.generate-shared-rule-schemas.camelCaseOf` (L87-L88) - Class
+  - `scripts.contracts.generate-shared-rule-schemas.camelCaseOf.name.replaceAll() callback` (L88-L88) - Function
+  - `scripts.contracts.generate-shared-rule-schemas.ModuleBlock` (L91-L102) - Interface
+  - `scripts.contracts.generate-shared-rule-schemas.MODULE_BLOCKS` (L108-L125) - Class
+  - `scripts.contracts.generate-shared-rule-schemas.MODULE_BLOCKS.exportName` (L121-L121) - Method
+  - `scripts.contracts.generate-shared-rule-schemas.MODULE_BLOCKS.description` (L122-L123) - Method
+  - `scripts.contracts.generate-shared-rule-schemas.collectBlockSources` (L133-L158) - Class
+  - `scripts.contracts.generate-shared-rule-schemas.collectBlockSources.flatMap() callback` (L134-L158) - Function
+  - `scripts.contracts.generate-shared-rule-schemas.collectSources` (L182-L200) - Class
+  - `scripts.contracts.generate-shared-rule-schemas.collectSources.map() callback` (L184-L184) - Function
+  - `scripts.contracts.generate-shared-rule-schemas.collectSources.then() callback` (L185-L200) - Function
+  - `scripts.contracts.generate-shared-rule-schemas.collectSources.then() callback.flatMap() callback` (L186-L195) - Function
+  - `scripts.contracts.generate-shared-rule-schemas.collectSources.then() callback.MODULE_BLOCKS.flatMap() callback` (L199-L199) - Function
 - `scripts/contracts/root-assembly.ts`
-  - `scripts.contracts.root-assembly.readModuleFragments` (L236-L254) - Class
-  - `scripts.contracts.root-assembly.readModuleFragments.map() callback` (L242-L253) - Function
-  - `scripts.contracts.root-assembly.readModuleFragments.map() callback.tags.operations.flatMap() callback` (L249-L249) - Function
+  - `scripts.contracts.root-assembly.readModuleFragments` (L237-L255) - Class
+  - `scripts.contracts.root-assembly.readModuleFragments.map() callback` (L243-L254) - Function
+  - `scripts.contracts.root-assembly.readModuleFragments.map() callback.tags.operations.flatMap() callback` (L250-L250) - Function
 - `scripts/docs/generate-audit-actions.ts`
-  - `scripts.docs.generate-audit-actions.collectDeclaredActions.moduleActions` (L98-L109) - Class
-  - `scripts.docs.generate-audit-actions.collectDeclaredActions.moduleActions.map() callback` (L99-L108) - Function
-  - `scripts.docs.generate-audit-actions.collectDeclaredActions.moduleActions.map() callback.map() callback` (L102-L107) - Function
+  - `scripts.docs.generate-audit-actions.collectDeclaredActions.moduleActions` (L100-L111) - Class
+  - `scripts.docs.generate-audit-actions.collectDeclaredActions.moduleActions.map() callback` (L101-L110) - Function
+  - `scripts.docs.generate-audit-actions.collectDeclaredActions.moduleActions.map() callback.map() callback` (L104-L109) - Function
 - `scripts/docs/generate-jobs.ts`
   - `scripts.docs.generate-jobs.then() callback` (L74-L76) - Function
 - `scripts/docs/generate-scenario-registries.ts`
@@ -119,8 +121,8 @@ The core generation engine that reads per-module contract fragments (OpenAPI pat
   - `scripts.scaffold.central-edits.addParityEntry.at` (L77-L77) - Class
   - `scripts.scaffold.central-edits.addParityEntry.at.rows.findIndex() callback` (L77-L77) - Function
   - `scripts.scaffold.central-edits.addParityEntry.sorted.map() callback` (L82-L82) - Function
-  - `scripts.scaffold.central-edits.centralEdits` (L92-L107) - Class
-  - `scripts.scaffold.central-edits.centralEdits.apply` (L105-L105) - Method
+  - `scripts.scaffold.central-edits.centralEdits` (L92-L102) - Class
+  - `scripts.scaffold.central-edits.centralEdits.apply` (L100-L100) - Method
 - `scripts/scaffold/demo-remove-alert-rules.ts`
   - `scripts.scaffold.demo-remove-alert-rules.sourceFiles` (L34-L39) - Class
   - `scripts.scaffold.demo-remove-alert-rules.sourceFiles.flatMap() callback` (L35-L39) - Function
@@ -183,11 +185,9 @@ The core generation engine that reads per-module contract fragments (OpenAPI pat
   - `scripts.scaffold.demo-remove-authorization.pruneCase.chunk.replaceAll() callback.kept` (L114-L117) - Class
   - `scripts.scaffold.demo-remove-authorization.pruneCase.chunk.replaceAll() callback.kept.map() callback` (L116-L116) - Function
   - `scripts.scaffold.demo-remove-authorization.pruneCase.chunk.replaceAll() callback.kept.filter() callback` (L117-L117) - Function
-  - `scripts.scaffold.demo-remove-authorization.stripConformanceCases.headKept` (L134-L137) - Class
-  - `scripts.scaffold.demo-remove-authorization.stripConformanceCases.headKept.filter() callback` (L136-L136) - Function
-  - `scripts.scaffold.demo-remove-authorization.stripConformanceCases.casesKept` (L138-L141) - Class
-  - `scripts.scaffold.demo-remove-authorization.stripConformanceCases.casesKept.map() callback` (L139-L139) - Function
-  - `scripts.scaffold.demo-remove-authorization.stripConformanceCases.casesKept.filter() callback` (L140-L140) - Function
+  - `scripts.scaffold.demo-remove-authorization.stripConformanceCases.casesKept` (L133-L136) - Class
+  - `scripts.scaffold.demo-remove-authorization.stripConformanceCases.casesKept.map() callback` (L134-L134) - Function
+  - `scripts.scaffold.demo-remove-authorization.stripConformanceCases.casesKept.filter() callback` (L135-L135) - Function
 - `scripts/scaffold/demo-remove-registry.ts`
   - `scripts.scaffold.demo-remove-registry.RemovalNote` (L19-L22) - Interface
   - `scripts.scaffold.demo-remove-registry.removeModuleFolders` (L25-L29) - Class
@@ -237,11 +237,11 @@ The core generation engine that reads per-module contract fragments (OpenAPI pat
   - `scripts.scaffold.demo-remove-validation-labels.readRemovedFields.survivors.filter() callback` (L126-L126) - Function
   - `scripts.scaffold.demo-remove-validation-labels.readRemovedFields.survivors.map() callback` (L127-L127) - Function
   - `scripts.scaffold.demo-remove-validation-labels.readRemovedFields.filter() callback` (L135-L135) - Function
-  - `scripts.scaffold.demo-remove-validation-labels.stripValidationLabels` (L144-L170) - Class
+  - `scripts.scaffold.demo-remove-validation-labels.stripValidationLabels` (L144-L172) - Class
   - `scripts.scaffold.demo-remove-validation-labels.stripValidationLabels.filter() callback` (L151-L151) - Function
-  - `scripts.scaffold.demo-remove-validation-labels.stripValidationLabels.flatMap() callback` (L152-L169) - Function
-  - `scripts.scaffold.demo-remove-validation-labels.stripValidationLabels.flatMap() callback.dropped` (L158-L158) - Class
-  - `scripts.scaffold.demo-remove-validation-labels.stripValidationLabels.flatMap() callback.dropped.filter() callback` (L158-L158) - Function
+  - `scripts.scaffold.demo-remove-validation-labels.stripValidationLabels.flatMap() callback` (L152-L171) - Function
+  - `scripts.scaffold.demo-remove-validation-labels.stripValidationLabels.flatMap() callback.dropped` (L160-L160) - Class
+  - `scripts.scaffold.demo-remove-validation-labels.stripValidationLabels.flatMap() callback.dropped.filter() callback` (L160-L160) - Function
 - `scripts/scaffold/demo-remove.ts`
   - `scripts.scaffold.demo-remove.then() callback` (L52-L66) - Function
   - `scripts.scaffold.demo-remove.then() callback.written.map() callback` (L54-L54) - Function
@@ -251,8 +251,6 @@ The core generation engine that reads per-module contract fragments (OpenAPI pat
   - `scripts.scaffold.names.pascal.map() callback` (L61-L61) - Function
   - `scripts.scaffold.names.snake` (L76-L77) - Class
   - `scripts.scaffold.names.snake.replaceAll() callback` (L77-L77) - Function
-  - `scripts.scaffold.names.permissionRules` (L143-L144) - Class
-  - `scripts.scaffold.names.permissionRules.RULE_ACTIONS.map() callback` (L144-L144) - Function
 - `scripts/scaffold/options.ts`
   - `scripts.scaffold.options.ScaffoldOptions` (L11-L24) - Interface
   - `scripts.scaffold.options.ParseRefusal` (L39-L41) - Interface
@@ -284,46 +282,45 @@ The core generation engine that reads per-module contract fragments (OpenAPI pat
   - `scripts.scaffold.scaffold-module.then() callback` (L66-L69) - Function
 - `scripts/scaffold/scenario-registry.ts`
   - `scripts.scaffold.scenario-registry.GeneratedFile` (L28-L31) - Interface
-  - `scripts.scaffold.scenario-registry.identifier` (L65-L66) - Class
-  - `scripts.scaffold.scenario-registry.identifier.name.replaceAll() callback` (L66-L66) - Function
-  - `scripts.scaffold.scenario-registry.namesIn` (L73-L78) - Class
-  - `scripts.scaffold.scenario-registry.namesIn.flatMap() callback` (L76-L76) - Function
-  - `scripts.scaffold.scenario-registry.renderCollection.imports.entries.map() callback` (L92-L93) - Function
-  - `scripts.scaffold.scenario-registry.renderCollection.declaration.entries.map() callback` (L96-L96) - Function
-  - `scripts.scaffold.scenario-registry.renderFixtureRegistry.modules` (L106-L108) - Class
-  - `scripts.scaffold.scenario-registry.renderFixtureRegistry.modules.filter() callback` (L107-L107) - Function
-  - `scripts.scaffold.scenario-registry.renderFixtureRegistry.modules.map() callback` (L108-L108) - Function
-  - `scripts.scaffold.scenario-registry.renderScenarioRegistry.named` (L124-L128) - Class
-  - `scripts.scaffold.scenario-registry.renderScenarioRegistry.named.map() callback` (L124-L128) - Function
-  - `scripts.scaffold.scenario-registry.renderDoublesRegistry` (L146-L175) - Class
-  - `scripts.scaffold.scenario-registry.renderDoublesRegistry.folders` (L148-L154) - Class
-  - `scripts.scaffold.scenario-registry.folders.filter() callback` (L150-L150) - Function
-  - `scripts.scaffold.scenario-registry.folders.map() callback` (L151-L151) - Function
-  - `scripts.scaffold.scenario-registry.renderDoublesRegistry.folders.filter() callback` (L152-L152) - Function
-  - `scripts.scaffold.scenario-registry.renderDoublesRegistry.folders.map() callback` (L164-L164) - Function
-  - `scripts.scaffold.scenario-registry.renderLeversRegistry` (L181-L211) - Class
-  - `scripts.scaffold.scenario-registry.renderLeversRegistry.folders` (L183-L189) - Class
-  - `scripts.scaffold.scenario-registry.renderLeversRegistry.folders.filter() callback` (L187-L187) - Function
-  - `scripts.scaffold.scenario-registry.renderLeversRegistry.folders.map() callback` (L199-L199) - Function
-  - `scripts.scaffold.scenario-registry.renderScenarioRegistries` (L220-L239) - Class
-  - `scripts.scaffold.scenario-registry.renderScenarioRegistries.then() callback` (L225-L238) - Function
-  - `scripts.scaffold.scenario-registry.renderScenarioRegistries.then() callback.map() callback` (L232-L236) - Function
-  - `scripts.scaffold.scenario-registry.renderScenarioRegistries.then() callback.map() callback.then() callback` (L233-L236) - Function
-  - `scripts.scaffold.scenario-registry.writeScenarioRegistries` (L247-L256) - Class
-  - `scripts.scaffold.scenario-registry.writeScenarioRegistries.then() callback` (L248-L255) - Function
-  - `scripts.scaffold.scenario-registry.writeScenarioRegistries.then() callback.files.flatMap() callback` (L249-L255) - Function
-  - `scripts.scaffold.scenario-registry.staleScenarioRegistries` (L264-L272) - Class
-  - `scripts.scaffold.scenario-registry.staleScenarioRegistries.then() callback` (L265-L271) - Function
-  - `scripts.scaffold.scenario-registry.staleScenarioRegistries.then() callback.files.filter() callback` (L267-L270) - Function
-  - `scripts.scaffold.scenario-registry.staleScenarioRegistries.then() callback.map() callback` (L271-L271) - Function
+  - `scripts.scaffold.scenario-registry.foldersDeclaring` (L69-L83) - Class
+  - `scripts.scaffold.scenario-registry.filter() callback` (L76-L76) - Function
+  - `scripts.scaffold.scenario-registry.foldersDeclaring.map() callback` (L77-L77) - Function
+  - `scripts.scaffold.scenario-registry.foldersDeclaring.filter() callback` (L78-L81) - Function
+  - `scripts.scaffold.scenario-registry.identifier` (L89-L90) - Class
+  - `scripts.scaffold.scenario-registry.identifier.name.replaceAll() callback` (L90-L90) - Function
+  - `scripts.scaffold.scenario-registry.namesIn` (L97-L102) - Class
+  - `scripts.scaffold.scenario-registry.namesIn.flatMap() callback` (L100-L100) - Function
+  - `scripts.scaffold.scenario-registry.renderCollection.imports.entries.map() callback` (L116-L117) - Function
+  - `scripts.scaffold.scenario-registry.renderCollection.declaration.entries.map() callback` (L120-L120) - Function
+  - `scripts.scaffold.scenario-registry.renderFixtureRegistry.modules` (L130-L132) - Class
+  - `scripts.scaffold.scenario-registry.renderFixtureRegistry.modules.filter() callback` (L131-L131) - Function
+  - `scripts.scaffold.scenario-registry.renderFixtureRegistry.modules.map() callback` (L132-L132) - Function
+  - `scripts.scaffold.scenario-registry.renderScenarioRegistry.named` (L148-L152) - Class
+  - `scripts.scaffold.scenario-registry.renderScenarioRegistry.named.map() callback` (L148-L152) - Function
+  - `scripts.scaffold.scenario-registry.renderDoublesRegistry` (L170-L196) - Class
+  - `scripts.scaffold.scenario-registry.folders.map() callback` (L180-L181) - Function
+  - `scripts.scaffold.scenario-registry.renderDoublesRegistry.folders.map() callback` (L185-L185) - Function
+  - `scripts.scaffold.scenario-registry.renderLeversRegistry` (L202-L229) - Class
+  - `scripts.scaffold.scenario-registry.renderLeversRegistry.folders.map() callback` (L217-L217) - Function
+  - `scripts.scaffold.scenario-registry.renderScenarioRegistries` (L238-L257) - Class
+  - `scripts.scaffold.scenario-registry.renderScenarioRegistries.then() callback` (L243-L256) - Function
+  - `scripts.scaffold.scenario-registry.renderScenarioRegistries.then() callback.map() callback` (L250-L254) - Function
+  - `scripts.scaffold.scenario-registry.renderScenarioRegistries.then() callback.map() callback.then() callback` (L251-L254) - Function
+  - `scripts.scaffold.scenario-registry.writeScenarioRegistries` (L265-L274) - Class
+  - `scripts.scaffold.scenario-registry.writeScenarioRegistries.then() callback` (L266-L273) - Function
+  - `scripts.scaffold.scenario-registry.writeScenarioRegistries.then() callback.files.flatMap() callback` (L267-L273) - Function
+  - `scripts.scaffold.scenario-registry.staleScenarioRegistries` (L282-L290) - Class
+  - `scripts.scaffold.scenario-registry.staleScenarioRegistries.then() callback` (L283-L289) - Function
+  - `scripts.scaffold.scenario-registry.staleScenarioRegistries.then() callback.files.filter() callback` (L285-L288) - Function
+  - `scripts.scaffold.scenario-registry.staleScenarioRegistries.then() callback.map() callback` (L289-L289) - Function
 - `scripts/scaffold/templates-code.ts`
-  - `scripts.scaffold.templates-code.auditEntries` (L74-L83) - Class
-  - `scripts.scaffold.templates-code.auditEntries.map() callback` (L80-L83) - Function
-  - `scripts.scaffold.templates-code.rulesYaml` (L86-L99) - Class
-  - `scripts.scaffold.templates-code.rulesYaml.flatMap() callback` (L94-L97) - Function
-  - `scripts.scaffold.templates-code.authorizationYaml` (L162-L180) - Class
-  - `scripts.scaffold.templates-code.authorizationYaml.RULE_ACTIONS.flatMap() callback` (L165-L171) - Function
-  - `scripts.scaffold.templates-code.authorizationYaml.RULE_ACTIONS.map() callback` (L178-L178) - Function
+  - `scripts.scaffold.templates-code.auditEntries` (L69-L78) - Class
+  - `scripts.scaffold.templates-code.auditEntries.map() callback` (L75-L78) - Function
+  - `scripts.scaffold.templates-code.rulesYaml` (L81-L94) - Class
+  - `scripts.scaffold.templates-code.rulesYaml.flatMap() callback` (L89-L92) - Function
+  - `scripts.scaffold.templates-code.authorizationYaml` (L157-L175) - Class
+  - `scripts.scaffold.templates-code.authorizationYaml.RULE_ACTIONS.flatMap() callback` (L160-L166) - Function
+  - `scripts.scaffold.templates-code.authorizationYaml.RULE_ACTIONS.map() callback` (L173-L173) - Function
 
 ### Module Documentation & Reference Generation
 The documentation generation layer that produces the human-readable architectural artifacts derived from module descriptors and the contract fragments: the module dependency graph (import edges + event subscription edges rendered as Mermaid), the effective role/permission matrix (which role holds which rule per module), the module catalogue (grouped listing feeding both the docs index page and the VitePress sidebar), and the jobs schedule rendering. It reads module descriptors (module.yaml), the kernel's permission model, and dependency-cruiser output to generate marker-bounded blocks in documentation pages. This sub-component makes the contract-first architecture self-documenting: the docs are generated from the same source of truth as the contracts, so they cannot drift.
@@ -332,22 +329,20 @@ The documentation generation layer that produces the human-readable architectura
 
 - `scripts.docs.generate-module-graph.readEdges`:83-116
 - `scripts.docs.generate-module-graph.render`:252-296
-- `scripts.docs.module-descriptor.readAllModuleDescriptors`:70-76
+- `scripts.docs.module-descriptor.readAllModuleDescriptors`:64-70
 
 **Source Files:**
 
 - `scripts/docs/check-references.ts`
-  - `scripts.docs.check-references.run.roots` (L216-L216) - Class
-  - `scripts.docs.check-references.run.roots.ALLOWED.map() callback` (L216-L216) - Function
+  - `scripts.docs.check-references.run.roots` (L244-L244) - Class
+  - `scripts.docs.check-references.run.roots.ALLOWED.map() callback` (L244-L244) - Function
 - `scripts/docs/generate-audit-actions.ts`
   - `scripts.docs.generate-audit-actions.walk` (L62-L67) - Class
   - `scripts.docs.generate-audit-actions.walk.flatMap() callback` (L63-L67) - Function
-  - `scripts.docs.generate-audit-actions.collectDeclaredActions.infrastructureActions` (L91-L96) - Class
-  - `scripts.docs.generate-audit-actions.collectDeclaredActions.infrastructureActions.map() callback` (L91-L96) - Function
-  - `scripts.docs.generate-audit-actions.main.sources` (L177-L177) - Class
-  - `scripts.docs.generate-audit-actions.main.sources.map() callback` (L177-L177) - Function
-- `scripts/docs/generate-cookie-table.ts`
-  - `scripts.docs.generate-cookie-table.then() callback` (L77-L79) - Function
+  - `scripts.docs.generate-audit-actions.collectDeclaredActions.infrastructureActions` (L93-L98) - Class
+  - `scripts.docs.generate-audit-actions.collectDeclaredActions.infrastructureActions.map() callback` (L93-L98) - Function
+  - `scripts.docs.generate-audit-actions.main.sources` (L179-L179) - Class
+  - `scripts.docs.generate-audit-actions.main.sources.map() callback` (L179-L179) - Function
 - `scripts/docs/generate-module-graph.ts`
   - `scripts.docs.generate-module-graph.EventEdge` (L56-L60) - Interface
   - `scripts.docs.generate-module-graph.Target` (L63-L68) - Interface
@@ -429,84 +424,84 @@ The documentation generation layer that produces the human-readable architectura
   - `scripts.docs.module-catalog.moduleSidebar.GROUPS.flatMap() callback` (L164-L188) - Function
   - `scripts.docs.module-catalog.moduleSidebar.GROUPS.flatMap() callback.items.members.map() callback` (L171-L185) - Function
 - `scripts/docs/module-descriptor.ts`
-  - `scripts.docs.module-descriptor.readAllModuleDescriptors` (L70-L76) - Class
-  - `scripts.docs.module-descriptor.readAllModuleDescriptors.map() callback` (L72-L75) - Function
+  - `scripts.docs.module-descriptor.readAllModuleDescriptors` (L64-L70) - Class
+  - `scripts.docs.module-descriptor.readAllModuleDescriptors.map() callback` (L66-L69) - Function
 - `scripts/docs/repo-references.ts`
-  - `scripts.docs.repo-references.readAliases` (L192-L204) - Class
-  - `scripts.docs.repo-references.readAliases.map() callback` (L200-L203) - Function
-  - `scripts.docs.repo-references.throughAliases.alias.aliases.find() callback` (L218-L219) - Function
-  - `scripts.docs.repo-references.throughAliases.alias` (L218-L220) - Class
+  - `scripts.docs.repo-references.readAliases` (L185-L199) - Class
+  - `scripts.docs.repo-references.readAliases.map() callback` (L195-L198) - Function
+  - `scripts.docs.repo-references.throughAliases.alias.aliases.find() callback` (L213-L214) - Function
+  - `scripts.docs.repo-references.throughAliases.alias` (L213-L215) - Class
 
 ### Cross-Cutting Contract Analysis & Validation
 The cross-cutting analysis and validation layer that derives secondary contract artifacts and enforces consistency across the contract surface: the dependency map (which packages/modules depend on which, grouped by dependency group), the persona tables (concrete example callers for each audience/role combination), the rate-limit budget tables (per-module rate-limit data rendered for documentation), the audit-action tables (declared audit actions per module), and the reference checker (validates that all $ref targets, module names, and cross-file references resolve correctly). This sub-component ensures the contract bundle is internally consistent and that the derived documentation tables match the actual module declarations.
 
 **Related Classes/Methods**:
 
-- `scripts.docs.dependency-groups.matchesGroup`:222-227
-- `scripts.docs.generate-dependency-map.groupRows`:194-205
+- `scripts.docs.dependency-groups.matchesGroup`:225-230
+- `scripts.docs.generate-dependency-map.groupRows`:195-206
 
 **Source Files:**
 
 - `scripts/docs/check-references.ts`
-  - `scripts.docs.check-references.Finding` (L44-L47) - Interface
-  - `scripts.docs.check-references.Scan` (L107-L110) - Interface
-  - `scripts.docs.check-references.Claim` (L144-L147) - Interface
-  - `scripts.docs.check-references.run.pages` (L223-L229) - Class
-  - `scripts.docs.check-references.run.pages.filter() callback` (L229-L229) - Function
+  - `scripts.docs.check-references.Finding` (L46-L49) - Interface
+  - `scripts.docs.check-references.Scan` (L78-L81) - Interface
+  - `scripts.docs.check-references.Claim` (L115-L118) - Interface
+  - `scripts.docs.check-references.run.pages` (L251-L257) - Class
+  - `scripts.docs.check-references.run.pages.filter() callback` (L257-L257) - Function
 - `scripts/docs/dependency-groups.ts`
   - `scripts.docs.dependency-groups.DependencyGroup` (L18-L23) - Interface
-  - `scripts.docs.dependency-groups.matchesGroup` (L222-L227) - Class
-  - `scripts.docs.dependency-groups.matchesGroup.patterns.some() callback` (L223-L226) - Function
+  - `scripts.docs.dependency-groups.matchesGroup` (L225-L230) - Class
+  - `scripts.docs.dependency-groups.matchesGroup.patterns.some() callback` (L226-L229) - Function
 - `scripts/docs/generate-audit-actions.ts`
   - `scripts.docs.generate-audit-actions.DeclaredAction` (L45-L54) - Interface
   - `scripts.docs.generate-audit-actions.AuditActionRow` (L57-L59) - Interface
   - `scripts.docs.generate-audit-actions.readModuleActions.entry` (L80-L85) - Class
   - `scripts.docs.generate-audit-actions.readModuleActions.entry.find() callback` (L81-L84) - Function
   - `scripts.docs.generate-audit-actions.readModuleActions.entry.find() callback.every() callback` (L84-L84) - Function
-  - `scripts.docs.generate-audit-actions.targetTypeCell` (L152-L159) - Class
-  - `scripts.docs.generate-audit-actions.targetTypeCell.map() callback` (L157-L157) - Function
-  - `scripts.docs.generate-audit-actions.actionTable` (L162-L172) - Class
-  - `scripts.docs.generate-audit-actions.actionTable.rows.toSorted() callback` (L167-L167) - Function
-  - `scripts.docs.generate-audit-actions.actionTable.map() callback` (L169-L170) - Function
-  - `scripts.docs.generate-audit-actions.main.rows` (L178-L181) - Class
-  - `scripts.docs.generate-audit-actions.main.rows.declared.map() callback` (L178-L181) - Function
+  - `scripts.docs.generate-audit-actions.targetTypeCell` (L154-L161) - Class
+  - `scripts.docs.generate-audit-actions.targetTypeCell.map() callback` (L159-L159) - Function
+  - `scripts.docs.generate-audit-actions.actionTable` (L164-L174) - Class
+  - `scripts.docs.generate-audit-actions.actionTable.rows.toSorted() callback` (L169-L169) - Function
+  - `scripts.docs.generate-audit-actions.actionTable.map() callback` (L171-L172) - Function
+  - `scripts.docs.generate-audit-actions.main.rows` (L180-L183) - Class
+  - `scripts.docs.generate-audit-actions.main.rows.declared.map() callback` (L180-L183) - Function
 - `scripts/docs/generate-dependency-map.ts`
   - `scripts.docs.generate-dependency-map.PackageManifest` (L72-L75) - Interface
-  - `scripts.docs.generate-dependency-map.walk` (L81-L88) - Class
-  - `scripts.docs.generate-dependency-map.walk.flatMap() callback` (L82-L88) - Function
-  - `scripts.docs.generate-dependency-map.importSpecifiers` (L110-L119) - Class
-  - `scripts.docs.generate-dependency-map.importSpecifiers.map() callback` (L112-L112) - Function
-  - `scripts.docs.generate-dependency-map.importSpecifiers.filter() callback` (L114-L118) - Function
-  - `scripts.docs.generate-dependency-map.importSpecifiers.filter() callback.ALIAS_PREFIXES.every() callback` (L117-L117) - Function
-  - `scripts.docs.generate-dependency-map.packageFor` (L122-L123) - Class
-  - `scripts.docs.generate-dependency-map.packageFor.packages.find() callback` (L123-L123) - Function
-  - `scripts.docs.generate-dependency-map.readOwnership.files` (L151-L154) - Class
-  - `scripts.docs.generate-dependency-map.readOwnership.files.SCAN_DIRECTORIES.flatMap() callback` (L152-L152) - Function
-  - `scripts.docs.generate-dependency-map.readOwnership.files.SCAN_FILES.map() callback` (L153-L153) - Function
-  - `scripts.docs.generate-dependency-map.Row` (L186-L191) - Interface
-  - `scripts.docs.generate-dependency-map.groupRows` (L194-L205) - Class
-  - `scripts.docs.generate-dependency-map.groupRows.groups.map() callback` (L196-L204) - Function
-  - `scripts.docs.generate-dependency-map.groupRows.groups.map() callback.packages.packages.filter() callback` (L199-L199) - Function
-  - `scripts.docs.generate-dependency-map.groupRows.groups.map() callback.packages.map() callback` (L200-L200) - Function
-  - `scripts.docs.generate-dependency-map.groupRows.filter() callback` (L205-L205) - Function
-  - `scripts.docs.generate-dependency-map.moduleOwnedRow.owned` (L213-L224) - Class
-  - `scripts.docs.generate-dependency-map.moduleOwnedRow.owned.packages.filter() callback` (L214-L214) - Function
-  - `scripts.docs.generate-dependency-map.moduleOwnedRow.owned.packages.filter() callback.groups.every() callback` (L214-L214) - Function
-  - `scripts.docs.generate-dependency-map.moduleOwnedRow.owned.map() callback` (L215-L218) - Function
-  - `scripts.docs.generate-dependency-map.moduleOwnedRow.owned.filter() callback` (L220-L220) - Function
-  - `scripts.docs.generate-dependency-map.moduleOwnedRow.owned.toSorted() callback` (L223-L223) - Function
-  - `scripts.docs.generate-dependency-map.moduleOwnedRow.packages.owned.map() callback` (L231-L231) - Function
-  - `scripts.docs.generate-dependency-map.moduleOwnedRow.readMore.owned.map() callback` (L235-L235) - Function
-  - `scripts.docs.generate-dependency-map.moduleOwnedRow.readMore.map() callback` (L236-L236) - Function
-  - `scripts.docs.generate-dependency-map.ungroupedTable` (L242-L270) - Class
-  - `scripts.docs.generate-dependency-map.ungroupedTable.leftover` (L247-L251) - Class
-  - `scripts.docs.generate-dependency-map.ungroupedTable.leftover.packages.filter() callback` (L248-L250) - Function
-  - `scripts.docs.generate-dependency-map.ungroupedTable.leftover.packages.filter() callback.groups.every() callback` (L249-L249) - Function
-  - `scripts.docs.generate-dependency-map.ungroupedTable.map() callback` (L266-L267) - Function
-  - `scripts.docs.generate-dependency-map.renderTable` (L273-L291) - Class
-  - `scripts.docs.generate-dependency-map.renderTable.map() callback` (L285-L285) - Function
-  - `scripts.docs.generate-dependency-map.renderTable.filter() callback` (L289-L289) - Function
-  - `scripts.docs.generate-dependency-map.then() callback` (L322-L324) - Function
+  - `scripts.docs.generate-dependency-map.walk` (L82-L89) - Class
+  - `scripts.docs.generate-dependency-map.walk.flatMap() callback` (L83-L89) - Function
+  - `scripts.docs.generate-dependency-map.importSpecifiers` (L111-L120) - Class
+  - `scripts.docs.generate-dependency-map.importSpecifiers.map() callback` (L113-L113) - Function
+  - `scripts.docs.generate-dependency-map.importSpecifiers.filter() callback` (L115-L119) - Function
+  - `scripts.docs.generate-dependency-map.importSpecifiers.filter() callback.ALIAS_PREFIXES.every() callback` (L118-L118) - Function
+  - `scripts.docs.generate-dependency-map.packageFor` (L123-L124) - Class
+  - `scripts.docs.generate-dependency-map.packageFor.packages.find() callback` (L124-L124) - Function
+  - `scripts.docs.generate-dependency-map.readOwnership.files` (L152-L155) - Class
+  - `scripts.docs.generate-dependency-map.readOwnership.files.SCAN_DIRECTORIES.flatMap() callback` (L153-L153) - Function
+  - `scripts.docs.generate-dependency-map.readOwnership.files.SCAN_FILES.map() callback` (L154-L154) - Function
+  - `scripts.docs.generate-dependency-map.Row` (L187-L192) - Interface
+  - `scripts.docs.generate-dependency-map.groupRows` (L195-L206) - Class
+  - `scripts.docs.generate-dependency-map.groupRows.groups.map() callback` (L197-L205) - Function
+  - `scripts.docs.generate-dependency-map.groupRows.groups.map() callback.packages.packages.filter() callback` (L200-L200) - Function
+  - `scripts.docs.generate-dependency-map.groupRows.groups.map() callback.packages.map() callback` (L201-L201) - Function
+  - `scripts.docs.generate-dependency-map.groupRows.filter() callback` (L206-L206) - Function
+  - `scripts.docs.generate-dependency-map.moduleOwnedRow.owned` (L214-L225) - Class
+  - `scripts.docs.generate-dependency-map.moduleOwnedRow.owned.packages.filter() callback` (L215-L215) - Function
+  - `scripts.docs.generate-dependency-map.moduleOwnedRow.owned.packages.filter() callback.groups.every() callback` (L215-L215) - Function
+  - `scripts.docs.generate-dependency-map.moduleOwnedRow.owned.map() callback` (L216-L219) - Function
+  - `scripts.docs.generate-dependency-map.moduleOwnedRow.owned.filter() callback` (L221-L221) - Function
+  - `scripts.docs.generate-dependency-map.moduleOwnedRow.owned.toSorted() callback` (L224-L224) - Function
+  - `scripts.docs.generate-dependency-map.moduleOwnedRow.packages.owned.map() callback` (L232-L232) - Function
+  - `scripts.docs.generate-dependency-map.moduleOwnedRow.readMore.owned.map() callback` (L236-L236) - Function
+  - `scripts.docs.generate-dependency-map.moduleOwnedRow.readMore.map() callback` (L237-L237) - Function
+  - `scripts.docs.generate-dependency-map.ungroupedTable` (L243-L271) - Class
+  - `scripts.docs.generate-dependency-map.ungroupedTable.leftover` (L248-L252) - Class
+  - `scripts.docs.generate-dependency-map.ungroupedTable.leftover.packages.filter() callback` (L249-L251) - Function
+  - `scripts.docs.generate-dependency-map.ungroupedTable.leftover.packages.filter() callback.groups.every() callback` (L250-L250) - Function
+  - `scripts.docs.generate-dependency-map.ungroupedTable.map() callback` (L267-L268) - Function
+  - `scripts.docs.generate-dependency-map.renderTable` (L274-L292) - Class
+  - `scripts.docs.generate-dependency-map.renderTable.map() callback` (L286-L286) - Function
+  - `scripts.docs.generate-dependency-map.renderTable.filter() callback` (L290-L290) - Function
+  - `scripts.docs.generate-dependency-map.then() callback` (L323-L325) - Function
 - `scripts/docs/generate-module-graph.ts`
   - `scripts.docs.generate-module-graph.renderNeighbourhood.reached` (L203-L203) - Class
   - `scripts.docs.generate-module-graph.renderNeighbourhood.reached.edges.filter() callback` (L203-L203) - Function
@@ -519,13 +514,6 @@ The cross-cutting analysis and validation layer that derives secondary contract 
   - `scripts.docs.generate-module-graph.render.isolated` (L258-L258) - Class
   - `scripts.docs.generate-module-graph.render.isolated.map() callback` (L258-L258) - Function
   - `scripts.docs.generate-module-graph.render.isolated.names.filter() callback` (L258-L258) - Function
-- `scripts/docs/generate-persona-tables.ts`
-  - `scripts.docs.generate-persona-tables.rolesOf` (L33-L36) - Class
-  - `scripts.docs.generate-persona-tables.rolesOf.memberships.map() callback` (L36-L36) - Function
-  - `scripts.docs.generate-persona-tables.table` (L57-L65) - Class
-  - `scripts.docs.generate-persona-tables.table.names.map() callback` (L61-L64) - Function
-  - `scripts.docs.generate-persona-tables.blocks.map() callback` (L70-L74) - Function
-  - `scripts.docs.generate-persona-tables.then() callback` (L79-L81) - Function
 - `scripts/docs/generate-rate-limit-budgets.ts`
   - `scripts.docs.generate-rate-limit-budgets.budgetTable` (L47-L57) - Class
   - `scripts.docs.generate-rate-limit-budgets.budgetTable.rows.map() callback` (L52-L55) - Function
@@ -549,11 +537,11 @@ The cross-cutting analysis and validation layer that derives secondary contract 
 - `scripts/docs/module-catalog.ts`
   - `scripts.docs.module-catalog.SidebarItem` (L144-L148) - Interface
 - `scripts/docs/repo-references.ts`
-  - `scripts.docs.repo-references.allowed` (L90-L92) - Class
-  - `scripts.docs.repo-references.allowed.GENERATED_SUFFIXES.some() callback` (L91-L91) - Function
-  - `scripts.docs.repo-references.allowed.ALLOWED.some() callback` (L92-L92) - Function
-  - `scripts.docs.repo-references.trackedTargets.files` (L116-L124) - Class
-  - `scripts.docs.repo-references.trackedTargets.files.filter() callback` (L124-L124) - Function
-  - `scripts.docs.repo-references.trackedTargets.roots.files.map() callback` (L128-L128) - Function
-  - `scripts.docs.repo-references.resolves` (L168-L169) - Class
-  - `scripts.docs.repo-references.resolves.SPELLINGS.some() callback` (L169-L169) - Function
+  - `scripts.docs.repo-references.allowed` (L78-L85) - Class
+  - `scripts.docs.repo-references.allowed.GENERATED_SUFFIXES.some() callback` (L79-L79) - Function
+  - `scripts.docs.repo-references.allowed.ALLOWED.some() callback` (L81-L84) - Function
+  - `scripts.docs.repo-references.trackedTargets.files` (L109-L117) - Class
+  - `scripts.docs.repo-references.trackedTargets.files.filter() callback` (L117-L117) - Function
+  - `scripts.docs.repo-references.trackedTargets.roots.files.map() callback` (L121-L121) - Function
+  - `scripts.docs.repo-references.resolves` (L161-L162) - Class
+  - `scripts.docs.repo-references.resolves.SPELLINGS.some() callback` (L162-L162) - Function

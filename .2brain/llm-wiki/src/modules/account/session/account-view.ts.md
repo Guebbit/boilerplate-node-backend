@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/session/account-view.ts
-sha256: 2e71cc56e2bc1748257ecb39ef25e9e6cd95fe8d8d09dec7f98a7e0c83d04ebf
-generated_at: 2026-11-08T04:26:00.890859+00:00
+sha256: a96693f5754926fbb36e6e86c71eac2b25d360b68cbe5d7840e39b318c308d9d
+generated_at: 2026-11-14T18:55:07.861758+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Builds the client-facing payload that accompanies a credential: the caller's abilities (in both tenant and platform scopes), the idle-clock state, and the account itself. By bundling all three into a single response, sign-in and refresh answers eliminate follow-up reads. Used by `GET /account`, the three sign-in controllers, and the refresh-token controller.
+Shapes the response body for session-related endpoints: it packages the caller's CASL abilities (in both tenant and platform scopes), the idle-clock snapshot, and—on sign-in—the account record itself—into a single payload so the client never needs a follow-up read. The shipped abilities are strictly a rendering hint; every request is still re-evaluated server-side.
 
 ## Key elements
 
-- **`modelVersion`** (module-private) — A fingerprint computed from `PERMISSION_RULES` IDs via `permissionModelVersion`. Changes only when the rule *set* changes (add, remove, rename), not when a role's permissions shift. Clients cache abilities and use this to detect a stale model.
-- **`rulesFor(caller)`** (module-private) — Builds a CASL `Ability` with `buildAbility` and serialises its rules with `packRules` into compact tuple form for the wire.
-- **`abilitiesOf(context)`** — Assembles the full `Abilities` object: tenant rules, platform rules, `grantableRoles`, `secondFactorRequired`, and `version`. Omitting `tenantId` entirely when the caller has no shop (no nullable field in the contract).
-- **`activityOf(context)`** — Returns `lastActiveAt` (current timestamp) and `idleTimeoutSeconds` only when the caller's roles carry an idle limit.
-- **`accountViewOf(user, context)`** — Combines `userService.toAccount`, `abilitiesOf`, and `activityOf` into the `AccountView` shape returned by `GET /account`.
-- **`abilitiesOfUser(userId)`** — Re-resolves the full context for a user ID (synthetic "now" `authTime`) and returns `abilitiesOf` or `undefined` if the account can no longer authenticate. Used on refresh so a mid-session grant is visible.
-- **`withAccountView(issued, userId, proof)`** — Wraps a freshly minted `IssuedSession` with the account view by resolving proof and fetching the user in parallel. Falls back to the bare credential if the user has vanished.
+- **`modelVersion`** (module-private const) — fingerprint of the declared permission-rule set via `permissionModelVersion`; bumped only when rules change, not when roles do. Tells the client its cached abilities are stale.
+- **`rulesFor(caller)`** (module-private) — builds a CASL `Ability` for one scope and packs its rules into the compact wire tuple format (`packRules`).
+- **`abilitiesOf(context)`** (module-private) — assembles the full `Abilities` object: tenant + platform rule lists, `grantableRoles`, `secondFactorRequired`, and `version`.
+- **`activityOf(context)`** (exported) — returns `{ lastActiveAt, idleTimeoutSeconds? }` from the resolved idle limit; omits the timeout field when no limit applies.
+- **`accountViewOf(user, context)`** (exported) — combines the users-module account projection, `abilitiesOf`, and `activityOf` into the `AccountView` shape returned by `GET /account`.
+- **`abilitiesOfUser(userId)`** (exported, async) — resolves a fresh `AuthContext` via `resolveProof` and returns the current abilities, or `undefined` if the account can no longer authenticate. Used by the refresh-token flow.
+- **`withAccountView(issued, userId, proof)`** (exported, async) — attaches the full `AccountView` to a minted `IssuedSession` so sign-in endpoints (login, 2FA, restore) return credential + account in one response.
 
 ## Relationships
 
-- **`src/kernel/ability.ts`** — Imports `buildAbility` to construct the CASL ability whose rules are then packed.
-- **`src/kernel/permissions.ts`** — Imports `callerInScope` (scope-specific caller projection), `permissionModelVersion`, `staffRoleWithheld`, and `PERMISSION_RULES`.
-- **`src/modules/access/index.ts`** / **`src/modules/access/services/grants.ts`** — Source of `grantableRoles`, which lists roles the caller may assign within the tenant scope.
-- **`src/modules/users/index.ts`** / **`src/modules/users/services/index.ts`** — `userService.toAccount` shapes the account field; `userService.findByIdWithPendingEmail` fetches the user record (with pending email) for sign-in/refresh.
-- **`src/modules/account/session/auth-context.ts`** — Imports `resolveProof`, which turns a userId + JWT-style proof into the `AuthContext` consumed by every export in this file.
-- **`src/modules/account/session/idle.ts`** — Imports `idleLimitMilliseconds` to determine whether and how long the caller's session can go idle.
-- **`src/modules/account/session/strategy.ts`** — Imports the `IssuedSession` type (the minted credential that `withAccountView` augments).
-- **Controllers** (`get-account`, `post-login`, `post-login-2fa`, `post-login-restore`, `get-refresh-token`, `post-session-touch`) — The sole consumers of the exported functions; they call `accountViewOf`, `abilitiesOfUser`, `withAccountView`, or `activityOf` to shape their HTTP responses.
+- **`src/kernel/ability.ts`** — calls `buildAbility` to construct the CASL ability from a caller context.
+- **`src/kernel/permissions.ts`** — imports `callerInScope`, `permissionModelVersion`, `staffRoleWithheld`, and `PERMISSION_RULES` for scope resolution, versioning, and the 2FA flag.
+- **`src/modules/access/index.ts`** → **`src/modules/access/services/grants.ts`** — imports `grantableRoles` to compute which roles the caller may grant in the tenant scope.
+- **`src/modules/account/session/auth-context.ts`** — imports `resolveProof` (re-resolves the caller for refresh / sign-in) and the `AuthContext` type.
+- **`src/modules/account/session/idle.ts`** — imports `idleLimitMilliseconds` for the idle-clock field.
+- **`src/modules/account/session/strategy.ts`** — imports the `IssuedSession` type consumed by `withAccountView`.
+- **`src/modules/users/friends/account.ts`** — imports `accountUserService` for `toAccount` (account projection) and `findByIdWithPendingEmail` (fresh read at sign-in).
+- **Controllers** — `get-account`, `post-login`, `post-login-2fa`, `post-login-restore`, `get-refresh-token`, `post-session-touch`, and `post-email-change` are the upstream callers that invoke the exported functions to build their responses.
 
 ## Notes
 
-- **Abilities are render-only.** The packed rules shipped to the client decide *what UI to show*, never *what is allowed*. Every request is re-evaluated server-side; the client copy carries no authority.
-- **`packRules` cast.** The wire type (`PackedRules`) is a manual cast because OpenAPI cannot express a CASL rule tuple with trailing `undefined`. JSON serialisation drops the trailing `undefined` naturally; the cast only names the sent shape.
-- **`modelVersion` semantics.** It is a fingerprint of the *rule set*, not a role fingerprint. Editing a role's permissions does not bump it; renaming or swapping a rule does. Clients should treat a version change as "rebuild the ability from scratch," not as "this user changed."
-- **`withAccountView` graceful degradation.** If the user record is missing at read time (race between mint and read), the function returns the bare `issued` credential with no `account` field rather than throwing.
-- **`abilitiesOfUser` synthetic time.** It passes `authTime: now` and `amr: []` because it only reads the rules — it never validates the proof. The real `auth_time` is irrelevant to the output.
+- The abilities in the response carry **no authority**. They exist solely so the client can decide what to render; the server re-evaluates permissions on every request.
+- `modelVersion` is a *fingerprint* of the rule-ID set, not a count or a manually typed integer. Renaming or swapping a rule changes it; merely reordering the same set does not.
+- `tenantId` in the `Abilities` object is **absent** (spread-omitted) rather than `null` when the caller has no shop, because the OpenAPI contract declares no nullable field.
+- The `as PackedRules` cast on `packRules` output is safe: CASL's type admits `undefined` in the conditions slot, but `packRules` writes `0` and pops trailing falsy members, so `undefined` is never produced at runtime.
+- `abilitiesOfUser` fabricates a "just now" `authTime` because ability evaluation reads no proof fields; the actual `auth_time` is irrelevant to the rules.
+- Tenant and platform rules are kept as **two separate lists** in the response; the permission model explicitly refuses to let one scope satisfy the other.

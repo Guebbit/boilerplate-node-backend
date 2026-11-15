@@ -1,7 +1,7 @@
 ---
 source: scripts/mutation/ci/cli.ts
-sha256: 8c76d943ec2b9e7383d72dfd9837603226fcec65b3873e456fe4270b62241c99
-generated_at: 2026-11-08T02:52:39.433331+00:00
+sha256: a4f5e3dcb713343793a2606b828332b2ca33583c02c640c554ad81812df16880
+generated_at: 2026-11-14T17:37:01.625103+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The command-line entry point for the CI mutation sweep. Each step in `mutation.yml` and `mutation-wave.yml` invokes one subcommand here; the actual planning, slicing, and reporting logic lives in the sibling modules (`waves.ts`, `merge.ts`). This file is CI-only — the local `npm run mutation:full` path does not use it.
+CLI entry point for the GitHub Actions mutation-testing sweep. Each step in `mutation.yml` and `mutation-wave.yml` invokes exactly one subcommand (`config`, `wave`, `shard`, `outcome`, `merge`); the planning, slicing, and merging logic lives in the sibling pure modules (`waves.ts`, `merge.ts`). This file handles argument parsing, file I/O, and GitHub Actions output plumbing only.
 
 ## Key elements
 
-- **`commands`** — dispatch table mapping subcommand names (`config`, `wave`, `shard`, `outcome`, `merge`) to handler functions.
-- **`writeConfig`** — reads the repo-root `stryker.json`, appends the slicing plugin and `ci-slice` ignorer, writes the result to `tmp/stryker.ci.json`.
-- **`scope`** — collects mutable files with both `lineCount` and raw physical line counts for the wave planner.
-- **`planWave`** — calls `firstWave` or `nextWave` depending on the `--wave` number; writes the plan JSON and emits shard names to stdout for the GitHub matrix.
-- **`showShard`** — looks up a shard by name in a plan and emits its `--mutate` list and line slice.
-- **`recordOutcome`** — writes a `{ name, status }` JSON for a shard so the next wave's planner can see it.
-- **`merge`** — reads all wave plans and shard reports, calls `mergeReports` + `renderHtml` + `formatSummary`, and writes the consolidated `mutation.json`, `index.html`, and `summary.md`.
-- **`option(name)`** — required-argument helper; throws immediately if the flag is absent.
-- **`output(key, value)`** — prints a `key=value` line to stdout (captured by `>> "$GITHUB_OUTPUT"`).
+- **`commands`** — dispatch table mapping subcommand name → handler; unknown/missing subcommand exits 2 with usage text.
+- **`writeConfig`** — reads `stryker.json`, appends the `SLICE_PLUGIN` and `ci-slice` ignorer, writes the result to `tmp/stryker.ci.json`.
+- **`scope()`** — returns the mutable file list (from `mutate-scope`) annotated with logical and physical line counts for the wave planner.
+- **`planWave`** — calls `firstWave` or `nextWave` (from `waves.ts`) and writes the `WavePlan` JSON; emits `shards` (name array) and `count` to stdout for the GitHub matrix.
+- **`showShard`** — looks up one shard in a plan file and prints its `--mutate` list and `MUTATION_SLICE` value to stdout.
+- **`recordOutcome`** — writes a `{ name, status }` JSON file for the shard so the next wave's planner can see which shards succeeded or failed.
+- **`merge`** — reads all wave plans and finished shard reports, calls `mergeReports` / `renderHtml` / `formatSummary` (from `merge.ts`), and writes the combined `mutation.json`, `index.html`, and `summary.md`.
+- **`option(name)`** — required `--name=value` extractor; throws if missing.
+- **`output(key, value)`** — prints a `key=value` line to stdout (consumed by `>> "$GITHUB_OUTPUT"`).
+- **`readJson` / `writeOut`** — thin JSON-file helpers; `writeOut` creates parent directories.
+- **`readOutcomes` / `readFinished`** — directory-scanning helpers that build maps of shard outcomes and paired shard+report entries.
+- Constants: `CI_CONFIG_PATH`, `SLICE_PLUGIN`, `WEAKEST_SHOWN` (15).
 
 ## Relationships
 
-- **`github/workflows/mutation.yml`, `github/workflows/mutation-wave.yml`** — invoke this script as the sole command for each CI step (`config`, `wave`, `shard`, `outcome`, `merge`).
-- **`scripts/mutation/ci/waves.ts`** — source of `firstWave`, `nextWave`, `outcomeOf`, `strykerArguments`, and the `WavePlan`/`ShardOutcome` types.
-- **`scripts/mutation/ci/merge.ts`** — source of `mergeReports`, `renderHtml`, `formatSummary`, and the `ShardReport`/`StrykerReport` types.
-- **`scripts/mutation/baseline.ts`** — provides `REPORT_PATH` (Stryker's default output) and `scoresFromReport` used in the merge summary.
-- **`scripts/mutation/mutate-scope.ts`** — provides `mutableFiles` and `lineCount` that build the planner's scope.
-- **`scripts/cli.ts`** — provides the shared `flagValue` argument-parsing helper.
+- **`github/workflows/mutation.yml` / `mutation-wave.yml`** — the callers; each workflow step runs one subcommand of this file.
+- **`scripts/cli.ts`** — provides `flagValue`, the shared `--key=value` argument parser.
+- **`scripts/mutation/ci/waves.ts`** — supplies `firstWave`, `nextWave`, `outcomeOf`, `strykerArguments`, and the `WavePlan` / `ShardOutcome` types.
+- **`scripts/mutation/ci/merge.ts`** — supplies `mergeReports`, `renderHtml`, `formatSummary`, and the `ShardReport` / `StrykerReport` types.
+- **`scripts/mutation/baseline.ts`** — supplies `REPORT_PATH` (where Stryker writes its report) and `scoresFromReport`.
+- **`scripts/mutation/mutate-scope.ts`** — supplies `mutableFiles` and `lineCount`.
 
 ## Notes
 
-- **stdout is reserved for `$GITHUB_OUTPUT`** (`key=value` lines). All human-readable logging goes to stderr via `console.error`.
-- The CI config is written to `tmp/stryker.ci.json` deliberately — it lives under a gitignored directory and outside Stryker's sandbox copy, so it never drifts from the committed `stryker.json`.
-- JSON files read at runtime are cast without re-validation; the pipeline trusts its own writers and Stryker's JSON reporter.
-- An unknown or missing subcommand exits with code **2** (usage error), distinguishing it from a runtime failure.
+- **stdout vs. stderr split:** every `console.log` call is a `key=value` line meant for `$GITHUB_OUTPUT`; all human-readable diagnostics go to `console.error`. Mixing them breaks the workflow.
+- **CI-only:** this file is not imported by `npm run mutation:full`, which keeps its own `stryker.json` run without the slicing plugin.
+- **Config is ephemeral:** `tmp/stryker.ci.json` is derived on every job and is gitignored; it never drifts from the committed `stryker.json`.
+- **Trust-based deserialization:** `readJson` returns `unknown` and callers cast immediately. Files are assumed to have been written by this same pipeline or Stryker's reporter—no runtime shape validation.
+- **`SLICE_PLUGIN` path** is relative to the repo root where Stryker executes, not relative to this script.

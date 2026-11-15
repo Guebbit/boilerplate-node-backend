@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/config/shared-rules/audit-actions.ts
-sha256: ab178c46c84a9d4ba799d8ddcbb40e8ba9b3722f9e404904f35f9cf922e94f21
-generated_at: 2026-11-08T03:25:44.898729+00:00
+sha256: d085b4be61d6ab5a6c8e363b3599c4e4d3fd6f2f8e2db107a102235e05f40fca
+generated_at: 2026-11-14T17:56:44.861468+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,19 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Zod schema (`auditActionsSchema`) that validates the structure of `shared/rules/audit-actions.yaml`—the set of audit actions that are global to the project rather than belonging to any specific module.
+Defines the Zod validation schema for `shared/rules/audit-actions.yaml`, which holds audit action identifiers that are not scoped to any specific module. It ensures the YAML file contains only well-formed `security.*` dotted strings.
 
 ## Key elements
 
-- **`auditActionsSchema`** (exported): A `z.strictObject` with a single field `actions`, typed via `keyedListSchema` constrained to the regex `/^security(\.[a-z_]+)+$/`. Keys must start with `security` followed by one or more dot-separated segments of lowercase letters/underscores (e.g. `security.audit.login`).
-- **`keyedListSchema`** (imported from `./generate-spec`): Helper that produces a Zod record schema whose keys must match a given pattern; the values are not further validated here.
+- **`auditActionsSchema`** — A `z.strictObject` (rejecting any unexpected top-level keys) with a single key `actions`, whose value is validated by `keyedListSchema` constrained by the regex `/^security(\.[a-z][\d_a-z]*){1,3}$/`.
+- **`keyedListSchema`** (imported) — Reused from `./generate-spec` to enforce the list-element format against the provided regex.
 
 ## Relationships
 
-- **`generate-spec.ts`** — Provides `keyedListSchema`, the sole non-Zod import in this file.
-- **`registry.ts`** — Sits in the same `shared-rules` directory; this schema is one of the shared rule definitions that the registry assembles for global (non-module) audit actions.
+- **`./generate-spec`** — Provides `keyedListSchema`, the shared helper that wraps a regex into a Zod list-element schema. This file is the consumer.
 
 ## Notes
 
-- The file explicitly states it uses **relative imports only**; see `shared-rules/load.ts` for the rationale.
-- The regex anchors on `security` as the mandatory prefix—this prefix is what appears in platform-operator alert names, so it must not be changed casually.
-- The schema is `strictObject`, meaning any extra top-level key in the YAML file will cause validation to fail.
+- The doc-comment mandates **relative imports only**, pointing to `load.ts` for the convention. Avoid adding bare or alias imports here.
+- The regex allows up to **three** additional dot-separated segments after the `security` prefix (e.g. `security.auth.login.fail`), each starting with a lowercase letter and containing only `[a-z0-9_]`.
+- The comment "actions that belong to no module" implies this file is the *fallback/global* bucket; module-scoped audit actions presumably live elsewhere.

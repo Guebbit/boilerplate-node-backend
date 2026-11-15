@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/services/process.ts
-sha256: 5040701908372dff0a02b8502404c44533eb0f81a92c0dd474ca1c899b4b71a3
-generated_at: 2026-11-08T05:38:00.690689+00:00
+sha256: 1534bba58cfa1aefc1d4f9cdd82d21db18e4d71e26d26808627ba92dd4591c78
+generated_at: 2026-11-14T19:48:25.378746+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides two delivery-service operations that sit outside the fulfillment/shipment domain: starting the `paid → processing` transition on an order, and exposing the shipping-methods catalogue for the checkout selector. It exists to keep "what the caller can do to an order from `paid`" and "what methods are available" as a single, act-free service layer.
+Service layer that (1) exposes the full shipping-methods catalogue for the checkout selector and (2) moves a paid order into `processing` (the `paid → processing` door). Neither operation concerns a fulfillment order or a shipment, which is why it lives here rather than in a fulfillment "act."
 
 ## Key elements
 
-- **`listMethods()`** — Returns the full, unfiltered shipping-methods list with a live currency applied via `quoteMethod`. Always a success response; validation against the caller's basket happens elsewhere (cart PUT / checkout).
-- **`processOrder(orderId, authContext, context)`** — The `paid → processing` door. Fetches the order, gates on `canProcessOrder`, calls `ensureFulfillmentOrders` (idempotent), then `orderService.markProcessing` with the caller's id on the timeline. Records an audit entry on success. Returns 404 if missing, 409 if not in a processable status.
-- **`notPaid()`** *(internal)* — Builds the 409 rejection envelope used by `processOrder` when the order is not `paid`.
+- **`listMethods()`** – Returns the complete `SHIPPING_METHODS` list with each method quoted against the caller's live shop currency. Always a success; no per-basket filtering (that happens in `PUT /cart/shipping-method` and checkout).
+- **`processOrder(orderId, authContext, context)`** – Fetches the order, verifies it is `paid`, ensures fulfillment orders exist, marks the order `processing`, records an audit entry, and returns the order decorated with the caller's available actions. Returns 404 or 409 (`ORDER_NOT_PAID`) on failure.
+- **`notPaid()`** *(internal)* – Builds the canonical 409 rejection payload used when the order is not in `paid` status.
 
 ## Relationships
 
-- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` shape every return value.
-- **`@infrastructure/i18n`** — `t()` localises user-facing error messages (`delivery.not-paid`, `delivery.order-not-found`).
-- **`@infrastructure/observability/audit`** — `recordAudit` writes the `ADMIN_ORDER_FULFILLMENT_STARTED` entry after a successful transition.
-- **`../audit`** (`deliveryAuditActions`) — Provides the action constant used in the audit record.
-- **`../domain`** — `SHIPPING_METHODS` (the static catalogue) and `quoteMethod` (applies the live currency to produce a per-method quote).
-- **`./ensure`** — `ensureFulfillmentOrders` is called before marking processing; it creates the fulfillment-order rows if the `paid` lifecycle listener has not already done so.
-- **`@modules/orders`** — `canProcessOrder` (lifecycle guard) and `orderService` (`getById`, `markProcessing`, `withActions`).
-- **`@modules/shop`** — `shopCurrency()` supplies the live deployment currency to `listMethods`.
-- **`@types`** — `AuthContext`, `CallerContext`, `Order`, `ShippingMethodsResponse` type the function signatures.
-- **`services/index.ts`** — Barrel re-export for consumers of the delivery service.
+- **`src/modules/orders/index.ts`**, **`src/modules/orders/services/index.ts`**, **`src/modules/orders/domain/lifecycle.ts`**: calls `orderService.getById`, `orderService.markProcessing`, `orderService.withActions`, and the `canProcessOrder` guard.
+- **`src/modules/delivery/services/ensure.ts`**: calls `ensureFulfillmentOrders(orderId)` before the status move, so the `paid` listener has had a chance to create fulfillment orders.
+- **`src/modules/delivery/domain/index.ts`**, **`src/modules/delivery/domain/rates.ts`**: reads `SHIPPING_METHODS` and `quoteMethod` to build the catalogue response.
+- **`src/modules/shop/index.ts`**, **`src/modules/shop/service.ts`**: reads `shopCurrency()` at call time (not import time) to get the live deployment currency.
+- **`src/infrastructure/http/response.ts`**: uses `generateSuccess` / `generateReject` and the `ResponseSuccess` / `ResponseReject` types for all return values.
+- **`src/infrastructure/i18n/index.ts`**, **`src/infrastructure/i18n/context.ts`**: calls `t()` for user-facing error messages.
+- **`src/infrastructure/observability/audit.ts`**: calls `recordAudit` after a successful `processing` transition.
+- **`src/modules/delivery/audit.ts`**: imports `deliveryAuditActions` for the audit-action constant.
+- **`src/types/auth-context.ts`**: consumes `AuthContext` and `CallerContext` parameter types.
 
 ## Notes
 
-- **Currency is read per call, not at import time.** `listMethods` calls `shopCurrency()` inside the function body so that a change to `NODE_DEFAULT_CURRENCY` (or any config source) is reflected without a restart. Baking it into the `SHIPPING_METHODS` constant would freeze the value at module-load.
-- **Fresh array each call.** `SHIPPING_METHODS` is `readonly`; `listMethods` maps it into a new mutable array to satisfy the `ShippingMethodsResponse` type.
-- **Two context parameters, deliberately.** `authContext` (possibly `undefined`) drives the response's own `actions` field; `context: CallerContext` is the narrower, already-resolved shape needed for the audit entry. They are passed separately rather than one being derived from the other.
-- **No `forced` / `override` variant here.** The admin status-override endpoint (`POST /orders/{id}/status-override`) is the only other path onto `processing`; adding a second forcing shape in `processOrder` would duplicate it.
-- **Module doc comment** explicitly states this file is *not* about fulfillment orders or shipments, which is why it lives in `services/` rather than in an "act" folder.
+- `currency` is resolved **per call** via `shopCurrency()` rather than being frozen into `SHIPPING_METHODS` at module load — it reflects live deployment config (`NODE_DEFAULT_CURRENCY`).
+- `processOrder` accepts **two** caller shapes: `authContext` (wider, for response `actions`) and `context` (narrower, for the audit entry). Neither is derived from the other at call time.
+- There is intentionally **no `forced` variant** here; the admin status-override endpoint (`POST /orders/{id}/override-status`) is the sole other path onto `processing`.
+- `SHIPPING_METHODS` is `readonly`; `listMethods` maps it to fresh mutable rows to satisfy the non-readonly response type.

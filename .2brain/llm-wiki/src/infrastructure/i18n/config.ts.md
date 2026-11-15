@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/i18n/config.ts
-sha256: 28767e443d806ebfc3902643c08345d77abbd7a38b81ecf971339cbda27e7f3d
-generated_at: 2026-11-08T03:36:26.242726+00:00
+sha256: 3ec5a277dce8aa75796526fa4a908f9461457110914426dee24841ee7e4ebe9f
+generated_at: 2026-11-14T18:07:56.030235+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the typed, validated configuration surface for the internationalization layer: which locale is default, which is fallback, the list of supported locales, and the refresh interval for the edited-copy override overlay. It centralises these knobs so the rest of the i18n subsystem reads them from a single, validated source.
+Declares the locale-related environment configuration (default locale, fallback locale, supported-locale list, and the refresh interval for edited-copy overrides) as a typed, validated config shape consumed by the rest of the i18n subsystem.
 
 ## Key elements
 
-- **`localeConfig`** (exported const) — The sole export. A `defineConfig` instance named `'locales'` containing four fields:
-  - `NODE_DEFAULT_LOCALE` — `text`, default `'en'`.
-  - `NODE_FALLBACK_LOCALE` — `text`, default `'en'`.
-  - `NODE_SUPPORTED_LOCALES` — `csv()` (comma-separated list of locale codes).
-  - `NODE_LOCALE_OVERRIDE_REFRESH_MS` — `int`, default `MINUTE_MS`, minimum `1`. Controls how often the override layer polls for edited copy.
+- **`localeConfig`** (exported const) — The single public export. A `defineConfig` object named `'locales'` whose `shape` maps four env-var keys to validated fields:
+  - `NODE_DEFAULT_LOCALE` — `locale` field, defaults to `'en'`.
+  - `NODE_FALLBACK_LOCALE` — `locale` field, defaults to `'en'`.
+  - `NODE_SUPPORTED_LOCALES` — `locales` field (list of allowed locale codes).
+  - `NODE_LOCALE_OVERRIDE_REFRESH_MS` — `int` field, defaults to `MINUTE_MS`, minimum `1`.
 
 ## Relationships
 
-- **`@infrastructure/config/define`** — Provides the `defineConfig` factory that gives `localeConfig` its validation and schema metadata.
-- **`@infrastructure/config/fields`** — Provides the `text`, `csv`, and `int` field-type constructors used to shape each config key.
-- **`@domain-primitives/time`** — Supplies the `MINUTE_MS` constant used as the default refresh interval.
-- **`src/app/config.ts`** — Top-level application config; expected to aggregate or re-export `localeConfig` so it is accessible app-wide.
-- **`src/infrastructure/i18n/catalog.ts`** — Consumes the supported-locales list to determine which translation catalogs to load.
-- **`src/infrastructure/i18n/overrides.ts`** — Reads `NODE_LOCALE_OVERRIDE_REFRESH_MS` to schedule its refresh cycle.
-- **`src/modules/users/model.ts`** — Likely references the locale config when persisting or validating a user's preferred language.
+- **`src/infrastructure/config/define.ts`** — Provides `defineConfig`, the wrapper that turns the shape object into a validated config instance.
+- **`src/infrastructure/config/fields.ts`** — Supplies the field constructors (`locale`, `locales`, `int`) used to declare each entry in the shape.
+- **`src/domain-primitives/time.ts`** — Source of `MINUTE_MS`, used as the default for the override-refresh interval.
+- **`src/infrastructure/i18n/overrides.ts`** — Consumes the `NODE_LOCALE_OVERRIDE_REFRESH_MS` value to control how often the edited-copy overlay is re-fetched.
+- **`src/infrastructure/i18n/catalog.ts`** — Sibling i18n module that reads `NODE_DEFAULT_LOCALE` / `NODE_SUPPORTED_LOCALES` when building the locale catalog.
+- **`src/app/config.ts`** — Top-level app config that aggregates (or re-exports) `localeConfig` for the rest of the application.
+- **`src/modules/users/model.ts`** — May reference the default/supported locales when modeling user language preferences.
 
 ## Notes
 
-- All four fields are prefixed `NODE_`, following the project convention that environment-driven config keys carry that prefix.
-- `NODE_SUPPORTED_LOCALES` uses `csv()` rather than an array type; callers must split/parse the value themselves.
-- The default and fallback locales are both `'en'` out of the box; they are independent fields and can be set to different values per deployment.
-- The refresh interval has a hard floor of `1` ms enforced by the schema (`min: 1`), so a zero value is rejected at config-validation time.
+- The file is purely declarative — no runtime logic beyond field defaults. All validation (type, min-value, allowed codes) is delegated to the `fields` constructors.
+- `NODE_SUPPORTED_LOCALES` has **no** `default` argument; it must be supplied by the deployment environment.
+- The module JSDoc points to `docs/tools/configuration.md` for operator-facing documentation of these variables.

@@ -1,7 +1,7 @@
 ---
 source: scripts/ops/prepare-job.ts
-sha256: c99a01b293e1e7e6b53a350e2e80140ba88fd04a589d26abc3a1d6e2c259f668
-generated_at: 2026-11-08T02:55:13.195167+00:00
+sha256: e5bdc9bc97c732c9566e1b01017328d00592f0baf8a9517c35d25fd45bc60ea8
+generated_at: 2026-11-14T17:38:16.988219+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Installs the runtime prerequisites a scheduled job declares it needs—event subscriptions and/or i18n translations—before the job executes. It exists as the single shared bootstrap step used by both `run-job.ts` and the integration tests that exercise a job through the runner's real path.
+Shared boot and execution helpers for scheduled jobs. It ensures every job installs the same module subscriptions, rendering assets, and outbox settlement that the web process gets, so a job's output (e.g. a mailed notification) is indistinguishable from one built in the app. `run-job.ts` and the integration tests both call into here to avoid duplicating that setup.
 
 ## Key elements
 
-- **`prepareJob(job: JobDeclaration): Promise<unknown>`** — The sole export. Conditionally performs two setup steps based on the job's `needs` field:
-  - If `job.needs.subscriptions` is truthy, calls `registerModules(enabledModules)` to wire up every enabled module's event subscriptions.
-  - If `job.needs.i18n` is truthy, calls `bootI18n(enabledModuleDirectories('locales'))` to load translations.
-  - If neither flag is set, resolves immediately with `undefined`.
+- **`prepareJob(): Promise<void>`** — Calls `registerModules(enabledModules)` to wire up every module's event subscriptions, then calls `bootRendering()` to load translations, mail templates, and the admin-copy overlay from the database. Returns once both are resolved.
+- **`runJobWork(job: JobDeclaration): Promise<void>`** — Executes the job's work and then `settleOutboxNudges()`. If `job.lease` is set, the whole sequence runs inside `withLease(name, ttlMs, …)` for mutual exclusion. Logs an info message when the lease was already held and the run was skipped.
 
 ## Relationships
 
-- **`scripts/ops/run-job.ts`** — Direct consumer; calls `prepareJob` before invoking the job's handler.
-- **`src/infrastructure/i18n/index.ts`** — Re-exports `bootI18n`, imported here via the `@infrastructure/i18n` alias.
-- **`src/infrastructure/i18n/boot.ts`** — Implements the `bootI18n` function actually invoked.
-- **`src/kernel/registry.ts`** — Provides `registerModules` and the `JobDeclaration` type used in the signature.
-- **`src/modules.ts`** — Supplies `enabledModules` (the module list passed to `registerModules`) and `enabledModuleDirectories` (used to resolve the locales path for i18n).
-- **`tests/integration/ops-task-overdue-job.test.ts`** and **`tests/integration/ops-webhook-retry-job.test.ts`** — Integration tests that call `prepareJob` to replicate the production bootstrap before driving a job through the runner.
+- **`scripts/ops/run-job.ts`** — Primary consumer; calls `prepareJob` then `runJobWork` for each declared job.
+- **`src/kernel/registry.ts`** — Source of `registerModules` and the `JobDeclaration` type.
+- **`src/modules.ts`** — Supplies the `enabledModules` array passed to `registerModules`.
+- **`src/app/boot-rendering.ts`** — Called by `prepareJob` to load DB-backed rendering assets.
+- **`src/infrastructure/persistence/lease.ts`** — Provides `withLease`, which gates concurrent job execution.
+- **`src/kernel/outbox.ts`** — Provides `settleOutboxNudges`, called after job work so pending outbox items are processed before connections close.
+- **`src/infrastructure/adapters/logger.ts`** — Used to log the "skipped: another holder already has the lease" info line.
+- **`tests/integration/ops-outbox-sweep-job.test.ts`**, **`tests/integration/ops-payment-effects-job.test.ts`**, **`tests/integration/ops-task-overdue-job.test.ts`**, **`tests/integration/ops-webhook-retry-job.test.ts`** — Integration tests that drive a job through `prepareJob` and `runJobWork` rather than exercising the runner internals directly.
 
 ## Notes
 
-- The two setup steps are **independent and conditional**: a job may need only subscriptions, only i18n, both, or neither. The function does not short-circuit; both branches are evaluated sequentially.
-- `registerModules` is fire-and-forget (its return value is discarded), while `bootI18n` returns a promise that gates the job's execution.
-- The module is deliberately placed under `scripts/ops/` rather than `src/` because it is an operational bootstrap concern, not application runtime code, yet it imports from `src/` via relative paths (`../../src/modules`).
+- **`connectFirst: false`** on a job declaration means `prepareJob` is skipped entirely (the job does not need the DB-backed overlay).
+- **Sentinel pattern:** `runJobWork` returns `true` from inside the lease callback because both a skipped lease run and a job whose own result is `undefined` would otherwise be indistinguishable. The `undefined` check is the only "was it skipped?" signal.
+- **No per-job opt-in:** every job receives the full module + rendering boot. The module comment notes that an opt-in list has been under-filled three times, so the design is deliberately all-or-nothing.
+- Outbox nudges are settled *inside* the lease (before connections close), guaranteeing listeners and any mail they build have completed.

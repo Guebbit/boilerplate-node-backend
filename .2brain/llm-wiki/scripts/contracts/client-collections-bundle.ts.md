@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/client-collections-bundle.ts
-sha256: 2198e268ecf53956b4670b10ec9dfbca4f22afcf31c8f7c8580c9f158fc3c219
-generated_at: 2026-11-08T02:40:25.218840+00:00
+sha256: 659cf09e90ce978877551ec2b2bbf678e8bf7843e943cbdd9fdff5effaa48093
+generated_at: 2026-11-14T17:23:44.875723+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Repo-specific configuration that feeds the `@guebbit/openapi-runnable-collections` generator to produce the four client collections (`contract.{bruno,insomnia,mockoon,postman}.*`). It answers the three questions only this codebase can: which module owns which path, which seeded values fill request bodies and path params, and which authored probes demonstrate rejections. The actual traversal, example synthesis, and tool emitters live in the external package.
+Configuration (not machinery) for generating an API client collection from the OpenAPI contract. The traversal, example synthesis, and emitters live in `@guebbit/openapi-runnable-collections`; this file supplies the three things only this repo can answer: which module owns which path, where realistic example values (credentials, IDs) come from, and which rejection probes each module declares. Output is generated on demand (`npm run contracts:bundle -- bruno`) and gitignored.
 
 ## Key elements
 
-- **`COLLECTION_TOOLS` / `COLLECTION_NAME`** — the four target tools in order and the shared display name ("Boilerplate API").
-- **`sections()`** — maps `SECTION_ORDER` (from `openapi-bundle`) to per-module paths; drops modules with zero paths (e.g. `access`).
-- **`baseValues`** (`ValueSources`) — foundation-level example data: `byProperty` (ids, credentials, pagination), `byOperation` (admin login, user signup), `byFormat`, `pathParam`, and `tokens` (seed credentials as `{{…}}` placeholders for probes).
-- **`readCollectionValues` / `loadModuleValues`** — discovers and memoised-imports every `scenarios/values/*.ts`, extracting its `collectionValues` export.
-- **`loadValues`** — merges `baseValues` with all module values; module `pathParam` is consulted first, falling back to the foundation's.
-- **`modulesDeclaringProbes`** *(exported)* — directory scan for modules that contain a `probes.ts`.
-- **`loadProbes`** — memoised dynamic import of every discovered `probes.ts`, validated via the `hasProbes` type guard.
-- **`generate`** — single call to `generateCollections` with spec, sections, probes, values, and targets. Deliberately **not** memoised (see Notes).
+- **`COLLECTION_TOOLS`** — `readonly ['bruno']`; the set of tools to emit. Extending it (plus a `bundle-registry.ts` entry and a `.gitignore` line) adds another tool.
+- **`sections()`** — Maps `SECTION_ORDER` × `sectionPaths` into the ordered folder structure of the collection, dropping modules with zero paths.
+- **`baseValues: ValueSources`** — Foundation credential/ID table: `byProperty`, `byOperation` (admin login, signup), `byFormat`, `pathParam`, and `tokens`. Only seeded credentials and IDs are real; everything else falls through to type-shaped defaults.
+- **`readCollectionValues(loaded)`** — Runtime check that a `scenarios/values/<module>.ts` file exports `collectionValues`.
+- **`loadModuleValues()`** — Memoised directory scan of `scenarios/values/` with dynamic `import()`; returns all module `CollectionValues`.
+- **`loadValues()`** — Merges `baseValues` with every module's values (module `pathParam` is consulted first; module `byProperty`/`tokens` override foundation entries).
+- **`modulesDeclaringProbes(modulesRoot?)`** *(exported)* — Returns module folder names containing a `probes.ts`, discovered via `modulesWith()`.
+- **`loadProbes()`** — Memoised dynamic import of every module's `probes.ts`; returns `Record<moduleName, Probe[]>`.
+- **`generate()`** — Single call into `generateCollections()`. Deliberately **not** memoised: the contract it reads is written in a prior build phase.
 
 ## Relationships
 
-- **`scripts/contracts/openapi-bundle.ts`** — imports `SECTION_ORDER` and `sectionPaths` to build the `sections()` list.
-- **`scenarios/subjects.ts`** — imports `SUBJECTS`; all seeded credentials and ids in `baseValues` come from here.
-- **`scenarios/collection-values.ts`** — provides the `CollectionValues` type used by `readCollectionValues`.
-- **`scripts/modules-on-disk.ts`** — imports `REPO_ROOT`, `MODULES_ROOT`, and `modulesWith` for filesystem discovery.
-- **`tests/cross-cutting/contract-bundles.test.ts`** — integration tests exercising the generated collections.
-- **`tests/unit/scripts/modules/new-module-needs-nothing.test.ts`** — verifies a new module adds nothing to the collections without its own `values/` or `probes.ts`.
+- **`scripts/contracts/openapi-bundle.ts`** — Imports `SECTION_ORDER` and `sectionPaths` to derive collection folder structure from the same module ordering used for the OpenAPI spec.
+- **`scripts/modules-on-disk.ts`** — Imports `REPO_ROOT`, `MODULES_ROOT`, and `modulesWith()` for filesystem discovery of probes and module layout.
+- **`scenarios/subjects.ts`** — Imports `SUBJECTS` to populate every credential and ID in `baseValues` and `tokens`.
+- **`scenarios/collection-values.ts`** — Supplies the `CollectionValues` type that each module's `scenarios/values/<module>.ts` must conform to.
+- **`scripts/contracts/bundle-registry.ts`** — Must register a bundle entry per tool in `COLLECTION_TOOLS` so the build pipeline knows where to write output.
+- **`tests/cross-cutting/contract-bundles.test.ts`** — Integration test exercising the full bundle generation path.
+- **`tests/unit/scripts/modules/new-module-needs-nothing.test.ts`** — Verifies that a freshly added module (with no values file or probes) does not break this configuration.
 
 ## Notes
 
-- **Generated output is not committed.** All four collection files are in `.gitignore`; they are produced on demand via `npm run contracts:bundle`.
-- **Circular-import guard.** This file must never import a module's own fixtures (`scenarios/products.ts`, etc.) because those pull in `@modules/*` code, which imports the generated `@api/` client — the same cycle that forced `openapi-bundle.ts` to drop its `enabledModules` import.
-- **Values are deliberately minimal.** Only ids and credentials are real; titles, prices, and descriptions fall through to type/format-shaped defaults. A full realistic shop requires `npm run demo`.
-- **`generate()` is intentionally un-memoised.** The build script writes `openapi.yaml` in phase 1 and reads it in phase 2; a cached result would predate the spec it claims to derive from. (`loadProbes` and `loadModuleValues` *are* memoised because they read source that cannot change mid-run.)
-- **Postman is a distinct emitter**, not a renamed Insoman: Collection Format v2.1 splits URLs into parts and reads those rather than the string, and the compatibility mapping is one-directional.
+- **Not memoised in `generate()`:** `scripts/contracts/build-bundles.ts` writes `openapi.yaml` in phase 1 and calls `generate()` in phase 2. A cached result would predate the contract it claims to derive from.
+- **Dynamic `import()` for probes and module values:** The set of modules is only known after a filesystem scan; tsx and ts-jest both resolve bare `.ts` paths, so a static import list is impossible.
+- **Credential discipline:** Only seeded credentials and IDs appear in generated requests. Invented IDs or passwords would produce a login that fails, which is the first thing anyone does with a collection.
+- **Adding a new tool:** Update `COLLECTION_TOOLS`, add a bundle in `bundle-registry.ts`, add a `.gitignore` line. The same probes and values feed the new emitter automatically.

@@ -1,47 +1,50 @@
 ---
 source: src/modules/account/services/two-factor-enrollment.ts
-sha256: 3e0c91c04e43e2ed12cd72b66f780188c66c7472ddede96321bddeb9bdf593a3
-generated_at: 2026-11-08T04:24:23.541982+00:00
+sha256: 7d6a0e4f2af11a4fd85f5598bdd491e7b4e89b26562c1530c5ce75ee4a87dc22
+generated_at: 2026-11-14T18:53:37.201577+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/account/services/two-factor-enrollment.ts
 
 ## Purpose
-Service layer for the account's two-factor authentication lifecycle: querying armed/available methods, starting (or restarting) enrollment for a method, delivering a code for an armed delivered method, confirming (arming) a pending method, and minting backup codes. Method-specific rules (TOTP, SMS, etc.) are delegated to the registry in `../two-factor`; this file owns the *account-level* state transitions and the "which entry, when" decisions.
+
+Account-level orchestration for the two-factor lifecycle: reporting status, starting (or restarting) a method's enrollment, delivering a code for an armed delivered method, and confirming/arming a pending method. It sits between the HTTP route layer and the per-method handlers (`../two-factor` registry), owning the account flag, backup-code minting, and the outbox announcement that triggers API-key revocation when a staff member's last authenticator is lost.
 
 ## Key elements
 
-- **`twoFactorStatus(userId)`** — `GET /account/2fa`. Returns the list of armed methods, the methods still available for enrollment (with per-user eligibility), and the remaining backup-code count.
-- **`setupTwoFactorMethod(userId, method, code?, context)`** — `POST …/setup`. Starts or restarts enrollment for one method. First factor requires only fresh-auth; subsequent factors require a verified code or backup code before proceeding.
-- **`sendMethodCode(userId, method, context)`** — `POST …/send`. Delivers a code for an already-armed delivered method so the holder can self-prove without spending a backup code. Audited via `accountAuditActions.AUTH_2FA_CODE_SENT`.
-- **`confirmTwoFactorMethod(userId, method, code, context)`** — `POST …/confirm`. Verifies the pending code and arms the entry. Mints backup codes if the account currently has none (not merely "first factor"). Audited via `AUTH_2FA_ENROLLED`.
-- **`entryFor(user, method)`** — Internal. Looks up or creates the method's entry on the user document; reads back from the array after push (Mongoose subdocument hydration).
-- **`beginSetup(user, handler, context)`** — Internal. Clears the prior armed state, honours delivery cooldown, delegates to `handler.setup`, persists.
-- **`armMethod(user, entry)`** — Internal. Sets `enrolledAt`, mints backup codes + salt if needed, marks sessions ended, persists.
-- **`announceAuthenticatorLoss(user, hadAuthenticator)`** — Internal. When the *last* armed TOTP authenticator of a staff-role account is removed, publishes `ACCOUNT_AUTHENTICATOR_REMOVED` via the outbox so downstream subscribers (e.g. API-key revocation) react.
-- **`isArmedAuthenticator(entry)`** — Internal. Narrow predicate: method is `totp` and `enrolledAt` is set.
+- **`twoFactorStatus`** — `GET /account/2fa`. Returns armed methods, still-available methods (with eligibility info), and the remaining backup-code count.
+- **`setupTwoFactorMethod`** — `POST /…/setup`. Starts or restarts enrollment. First factor needs only the fresh password the route guard demands; any subsequent change requires a verified factor or backup code.
+- **`sendMethodCode`** — `POST /…/send`. Delivers a one-time code for an already-armed delivered method (e.g. email/SMS) so the caller can prove identity without spending a backup code.
+- **`confirmTwoFactorMethod`** — `POST /…/confirm`. Verifies the caller's code against the pending entry, then arms it. Mints backup codes only if the account has none.
+- **`entryFor`** *(internal)* — Finds or creates the user's entry for a method; reads the entry back from the array after pushing (Mongoose subdocument hydration).
+- **`beginSetup`** *(internal)* — Honours the delivery cooldown, disarms the old entry, then delegates to the handler's `setup`.
+- **`armMethod`** *(internal)* — Stamps `enrolledAt`, generates + hashes backup codes if the list is empty, persists, and notifies.
+- **`announceAuthenticatorLoss`** *(internal)* — When the last armed TOTP entry is removed on an account that holds a tenant or platform staff role, publishes an `ACCOUNT_AUTHENTICATOR_REMOVED` outbox event (consumed by `api-keys` revocation).
+- **`isArmedAuthenticator`** *(internal)* — Predicate: `method === 'totp'` and `enrolledAt` is set.
 
 ## Relationships
 
-- **`@infrastructure/http/response`** / **`@infrastructure/http/errors`** — All public functions return `ResponseSuccess`/`ResponseReject` via `generateSuccess`/`generateReject`; DB-level failures are wrapped with `rejectDatabaseEnvelope('auth', …)`.
-- **`@infrastructure/i18n`** — User-facing error strings go through `t()`.
-- **`@kernel/access/tenant`** — `DEPLOYMENT_TENANT_ID` scopes the `accessService.rolesOf` call inside `announceAuthenticatorLoss`.
-- **`@kernel/outbox`** — `announceInTransaction` writes the outbox row for the authenticator-removed event.
-- **`@modules/access`** — `accessService.rolesOf` checks whether the account holds a tenant or platform staff role before publishing the loss event.
-- **`../audit`** — `accountAuditActions` supplies the action codes for the `audited()` wrapper.
-- **`../events`** — `ACCOUNT_AUTHENTICATOR_REMOVED` constant used as the outbox event name.
-- **`./caller`** — `withOwnAccount` guarantees the caller operates on their own user document and enforces session scoping.
-- **`./revocation`** — `revokeFor` is imported (used in the truncated removal path to revoke sessions/tokens when a factor is dropped).
-- **`./two-factor-outcomes`** / **`./two-factor-lockout`** — Shared helpers for cooldown checks, delivery, verdict settling, and audit wrapping that are reused across enrollment and removal.
-- **`../two-factor`** — Method registry (`twoFactorMethod`, `availableTwoFactorMethods`), backup-code utilities, and per-method handler contracts.
-- **`services/index.ts`** — Re-exports the public functions of this module for route-layer consumption.
+- **`src/modules/access/index.ts`** — Imports `accessService`; calls its role-query method with `DEPLOYMENT_TENANT_ID` to decide whether `announceAuthenticatorLoss` should fire (staff-role gate).
+- **`src/kernel/access/tenant.ts`** — Supplies `DEPLOYMENT_TENANT_ID` used in the staff-role query above.
+- **`src/kernel/outbox.ts`** — `announceInTransaction` writes the `ACCOUNT_AUTHENTICATOR_REMOVED` event as a transactional outbox row; the relay retries delivery.
+- **`src/modules/account/events.ts`** — `ACCOUNT_AUTHENTICATOR_REMOVED` event-name constant used in the outbox payload.
+- **`src/modules/account/services/two-factor/` (registry)** — Supplies `twoFactorMethod`, `availableTwoFactorMethods`, `deliveryCooldownRemaining`, `generateBackupCodes`, `generateBackupCodeSalt`, `hashBackupCodes`, and the `TwoFactorMethodHandler` interface.
+- **`src/modules/account/services/two-factor-outcomes`** — Shared outcome helpers: `armedEntries`, `audited`, `deliverArmedCode`, `notifyChange`, `tooSoon`, `rejectWrongCode`, `summarize`.
+- **`src/modules/account/services/two-factor-lockout`** — `verifyArmedFactor` / `settleVerdict` / `withVerifiedCode` for the "prove a factor before changing factors" gate.
+- **`src/modules/account/services/caller.ts`** — `withOwnAccount` loads the caller's user document with ownership verification before any mutation.
+- **`src/modules/users` / `accountUserService`** — `UserDocument`, `TwoFactorMethodRecord` types; `persistTwoFactorMethods` and `clearDeliveredCode` for writes.
+- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` for the API envelope.
+- **`src/infrastructure/http/errors.ts`** — `rejectDatabaseEnvelope` for error wrapping.
+- **`src/infrastructure/i18n/index.ts`** — `t()` for localized error messages.
+- **`src/modules/account/audit.ts`** — `accountAuditActions` constants used with `audited()` to record 2FA code-sent and enrollment events.
+- **`src/modules/account/services/revocation.ts`** — `revokeFor` imported for use in the (truncated) removal path.
 
 ## Notes
 
-- **Mongoose subdocument gotcha:** `entryFor` deliberately reads the entry back from `user.twoFactorMethods` after a push. Reusing the plain object literal would bypass Mongoose's subdocument hydration and lose middleware/setter behaviour on subsequent mutations.
-- **Restart disarms first:** `beginSetup` nulls `enrolledAt` *before* calling `handler.setup`, so a failed restart cannot leave both an old armed secret and a new pending one simultaneously.
-- **Backup-code minting is account-scoped, not method-scoped:** codes are generated only when `twoFactorBackupCodes.length === 0`, regardless of whether this is the "first factor" or a re-enrollment.
-- **Cooldown interaction:** a delivered code that was just verified to prove the caller is spent; `beginSetup` checks the cooldown *after* that verification, so the caller's own proof does not block the restart.
-- **`announceAuthenticatorLoss` is narrowly gated:** it fires only when (a) the account held an armed TOTP before, (b) *all* armed TOTP entries are now gone, and (c) the account still holds a staff role. Any other removal is silent here.
-- The file is truncated in the source; a removal endpoint (`DELETE …/method` or bulk) and its use of `revokeFor` / `hashBackupCodes` / `settleVerdict` / `withVerifiedCode` are expected below the cutoff.
+- **Mongoose subdocument quirk:** `entryFor` pushes a plain object into `user.twoFactorMethods` and then reads it back from the array. Reusing the original literal would bypass Mongoose's hydration into a subdocument, causing silent mutation failures downstream.
+- **Disarm-before-setup:** `beginSetup` clears `enrolledAt` and the delivered code *before* calling the handler. A handler that throws leaves the account in a disarmed state rather than leaving the old secret armed alongside a new pending one.
+- **Backup-code scope:** Backup codes are account-wide, not per-method. They are generated only when the list is empty, so re-enrolling a second method never invalidates codes the user already wrote down.
+- **`announceAuthenticatorLoss` is narrowly scoped:** it fires only when the *last* TOTP entry is gone *and* the account holds a tenant or platform staff role. Removing one of two authenticators, or removing a non-staff account's sole authenticator, emits no event.
+- **Cooldown interaction:** `beginSetup` checks `deliveryCooldownRemaining`, but a cooldown left by the very code the caller just verified (a delivered code, now spent) does not block setup because `clearDeliveredCode` is called before the handler runs.
+- The file is truncated in the provided content; `revokeFor` (from `./revocation`) and `withVerifiedCode` (from `./two-factor-lockout`) are imported and presumably used in the remaining lines.

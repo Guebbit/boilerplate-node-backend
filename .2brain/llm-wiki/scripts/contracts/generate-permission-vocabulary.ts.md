@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/generate-permission-vocabulary.ts
-sha256: 21bd502fb6a2e6d955a7d026d9e601c0ec750723eba23c47c70805b5536af047
-generated_at: 2026-11-08T02:41:40.943602+00:00
+sha256: 0b404c0a06a461a6e86ae62cece71882921daefeb8a324bcfa68ac40994f80d4
+generated_at: 2026-11-14T17:24:56.180097+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Generates a TypeScript `permission-vocabulary` module (runtime arrays + union types for actions, subjects, rule ids, set names, scopes, step-up tiers, and the subject-to-actions pair map) from an `authorization-keys.yaml` document. It exists so both the backend and frontend repos share identical, type-safe permission identifiers derived from a single source-of-truth YAML file.
+CLI script that generates a TypeScript `permission-vocabulary` module (runtime arrays + union types for actions, subjects, rule ids, set names, scopes, step-up tiers, and the subject-to-actions pair map) from an `authorization-keys.generated.yaml` file. It exists so both the backend and frontend repos can derive identical vocabulary types from the same YAML document.
 
 ## Key elements
 
-- **Main pipeline** (top-level, no exported functions): reads the YAML at `--in`, calls `readPermissionVocabulary` → `renderPermissionVocabulary`, then calls `writeOrCheck` with the result.
-- **CLI flags**: `--in <yaml>` (input YAML path), `--out <path>` (output TS file path), `--check` (dry-run; exit 1 on mismatch instead of writing).
-- **`ROOT`**: resolved via `import.meta.url` (ESM), not `__dirname`.
-- **Shebang**: `#!/usr/bin/env tsx` — run directly with `tsx`.
+- **`INPUT`** – Resolved from the `--in` CLI flag (relative to `REPO_ROOT`); the path to the source YAML.
+- **`OUTPUT`** – Resolved from the `--out` CLI flag; the path of the generated `.ts` file.
+- **`output`** – The full generated file text, produced by piping `readFileSync(INPUT)` → `readPermissionVocabulary` → `renderPermissionVocabulary`.
+- **Final `writeOrCheck` call** – Writes `output` to `OUTPUT`, or (under `--check`) compares and exits 1 on mismatch without writing.
+- **CLI contract** – Usage: `tsx scripts/contracts/generate-permission-vocabulary.ts --in <yaml> --out <path> [--check]`.
 
 ## Relationships
 
-- **`scripts/cli.ts`** — imports `requiredPath` for validating and resolving `--in` / `--out` arguments relative to `ROOT`.
-- **`scripts/contracts/generated-file.ts`** — imports `writeOrCheck`, which either writes the rendered text to disk or (under `--check`) diffs it against the existing file and sets the exit code.
-- **`scripts/contracts/permission-vocabulary-render.ts`** — imports `readPermissionVocabulary` (parses the YAML into a structured vocabulary object) and `renderPermissionVocabulary` (serialises that object into the generated TS source text).
+- **`scripts/cli.ts`** – Imports `requiredPath` to parse the `--in` / `--out` arguments and fail fast if either is missing.
+- **`scripts/contracts/generated-file.ts`** – Imports `writeOrCheck`, which handles the atomic write-or-diff logic and the `--check` exit-code contract shared by all generators in this directory.
+- **`scripts/contracts/permission-vocabulary-render.ts`** – Provides `readPermissionVocabulary` (parses the YAML string into a vocabulary object) and `renderPermissionVocabulary` (serializes that object into the final TypeScript source text).
+- **`scripts/modules-on-disk.ts`** – Exports `REPO_ROOT`, used as the base directory when resolving the `--in` and `--out` paths.
 
 ## Notes
 
-- The render module (`permission-vocabulary-render.ts`) is **hand-copied** into a second repo; it is not synced by any tool. Both repos must keep it in lockstep manually.
-- The input YAML is the same document in both repos but lives at different paths: backend `shared/authorization-keys.yaml`, frontend `contracts/authorization-keys.yaml` (delivered by a `sync:frontend` step).
-- `--check` is the contract every generator in this directory follows: write nothing, exit non-zero on drift.
-- Because this is ESM, `import.meta.url` is used for path resolution; `__dirname` is unavailable.
+- The render module (`permission-vocabulary-render.ts`) is **duplicated by hand** in the backend and frontend repos; it is not auto-synced. Both sides write a `permission-vocabulary` module alongside their other generated contract types.
+- The input YAML is the *same logical document* in both repos but lives at different paths: backend reads `shared/authorization-keys.generated.yaml`; the frontend reads `contracts/authorization-keys.yaml` (copied over by a `sync:frontend` step).
+- This file is a top-level script (no exports); it is invoked directly via `tsx` and is expected to be idempotent under `--check`.

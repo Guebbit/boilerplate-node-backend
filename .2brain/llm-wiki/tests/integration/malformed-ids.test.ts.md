@@ -1,7 +1,7 @@
 ---
 source: tests/integration/malformed-ids.test.ts
-sha256: 25930a942090d69fb714722dfc212f232c0bc755f6ce472fc00235614407343f
-generated_at: 2026-11-08T09:42:50.989256+00:00
+sha256: fa0522f706fc6fea5c45f760141bb8a7bfa47cba25dd50cfd8d7ad380ad7a0bf
+generated_at: 2026-11-14T23:18:02.192743+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Spec-driven integration test enforcing one rule: an ID that satisfies the OpenAPI `Id` schema but was never issued by this backend gets a deterministic, position-specific answer (path → 404 identical to an unknown ID; body or query → 422 `VALIDATION_ERROR` naming the field). Sites are discovered at runtime from `openapi.yaml` via the shared `Id` schema, so any new route is covered on its first run without editing this file.
+Property-driven integration test that verifies a single contract rule across every ID site the OpenAPI spec declares: a malformed ID (valid per the `Id` schema but never issued by this backend) must receive the **same** 404 as an unknown ID when in a URL path, or a 422 `VALIDATION_ERROR` naming the field when in a body or query. Rather than listing routes by hand, it enumerates sites from `openapi.yaml` at runtime, so a new route is covered on its first run.
 
 ## Key elements
 
-- **`MALFORMED` / `BAD_ID`** – Fixed array of spec-valid but backend-unknown ID values; `BAD_ID` is the first, reused for body/query sites.
-- **`PATH_SITES` / `BODY_SITES` / `QUERY_SITES`** – Flat `(label, operation, parameter-or-segments)` tuples derived from the spec. `BODY_SITES` excludes multipart operations.
-- **`validBodyFor`** – Produces one spec-valid JSON body (or `undefined`) via `fc.sample` on `bodyArbitraryFor`.
-- **`send`** – Dispatches a single request with the operation's method, auth, and required headers; reduces the response to `{ status, body }`.
-- **`fillParameter`** – Builds the URL with all world-seeded parameters filled except one, which is replaced by a test-supplied value (using `SENTINEL` as a placeholder).
-- **`documentedStatuses`** – Reads the response-code keys from the spec for an operation; used to assert the spec documents the expected status.
-- **`jest.mock('@infrastructure/adapters/pdf')`** – Replaces PDF rendering with a stub so no browser is needed.
-- **Meta-test ("are found, so the sweeps below cannot pass by sweeping nothing")** – Asserts minimum site counts (≥ 71 path, ≥ 19 body, ≥ 8 query) to catch a silent regression in the spec walker.
-- **Three `describe.each` blocks** – One per position (path, body, query), each with a "documents the status" check and a behavioral check.
+- **`MALFORMED`** — five string values the `Id` contract accepts but this backend never issues (wrong length, wrong charset, etc.).
+- **`PATH_SITES` / `BODY_SITES` / `QUERY_SITES`** — flat arrays of `(label, operation, parameter|segments)` tuples derived from the spec via `spec-ids` helpers.
+- **`validBodyFor(schema)`** — samples one spec-valid JSON body with `fast-check` (seed 7) for write operations.
+- **`send(operation, url, bearer, body)`** — issues the request as admin and reduces the response to `{ status, body }`.
+- **`fillParameter(operation, world, parameter, value)`** — builds the URL via `buildUrl` but substitutes one path parameter with a malformed value.
+- **`echoing(body, value)`** — deep-clones a response body and swaps `OBJECT_ID` for the malformed value, permitting the one allowed difference (echoed ID in copy).
+- **`BODY_THAT_REACHES_THE_404`** — hand-written bodies for the two translation routes whose random body would be 422'd before the ID lookup, preventing a false comparison.
+- **`COMPARED` / `MUST_COMPARE`** — canary set ensuring the translations `{id}` rows actually completed their comparison and were not silently skipped.
+- **Three `describe` blocks** — one each for path, body, and query ID sites; each asserts the documented status code, the correct status, and (for paths) body equivalence modulo the echoed ID.
+- **`jest.mock('@infrastructure/adapters/pdf', …)`** — stubs PDF rendering so the invoice route doesn't require a browser.
 
 ## Relationships
 
-- **`tests/support/spec-walk.ts`** – `listOperations`, `readSpec`, `Operation`, `SchemaNode` supply the operation inventory and spec nodes this file iterates over.
-- **`tests/support/spec-ids.ts`** – `idPathParameters`, `idBodyFields`, `idQueryFields`, `setPath`, `fieldName`, `Segment` identify which parameters/fields are IDs and how to address them.
-- **`tests/support/spec-world.ts`** – `seedWorld`, `buildUrl`, `requiredHeadersOf`, `OBJECT_ID`, `World` provide the seeded rows, URL construction, and a known-valid ID used as the "unknown" baseline.
-- **`tests/support/http.ts`** – `api`, `authenticateAs` perform the actual HTTP calls and produce bearer tokens.
-- **`tests/support/shopper-routes.ts`** – `roleReaching` maps each operation to the role (admin or customer) that should authenticate, so shopping-route tests get a customer basket.
-- **`tests/support/spec-arbitraries.ts`** – `bodyArbitraryFor` generates a valid request body from the operation's schema.
-- **`tests/support/problem.ts`** – `withoutInstance` strips the instance identifier from problem-detail bodies before deep-equal comparison.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb` configures the test database lifecycle.
+- **`tests/support/spec-ids.ts`** — source of `idPathParameters`, `idBodyFields`, `idQueryFields`, `fieldName`, `setPath`; the enumeration logic that turns the spec into test sites.
+- **`tests/support/spec-walk.ts`** — provides `listOperations`, `readSpec`, and the `Operation`/`SchemaNode` types used throughout.
+- **`tests/support/spec-world.ts`** — `seedWorld` creates the DB rows other parameters reference; `buildUrl` fills remaining path params; `requiredHeadersOf` supplies extra headers; `OBJECT_ID` is the known-valid ID used as the "unknown" baseline.
+- **`tests/support/http.ts`** — `api` (request client) and `authenticateAs` (token acquisition) for every request the suite sends.
+- **`tests/support/shopper-routes.ts`** — `roleReaching` determines whether a route is reached as admin or as a customer (the one exception noted in the file header).
+- **`tests/support/spec-arbitraries.ts`** — `bodyArbitraryFor` generates a spec-valid request body for the operation under test.
+- **`tests/support/problem.ts`** — `withoutInstance` strips the instance-specific URL so body comparisons ignore it.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb` initialises the in-memory DB before any test runs.
 
 ## Notes
 
-- **Path-position ordering is asserted, not assumed.** The test compares the malformed-ID 404 body against the unknown-ID 404 body (minus instance) *only* when the unknown answer is itself 404. If a body-level validation error (422/409) fires before the ID check, the two responses diverge in status and the test fails — this is the deliberate guard that ID validation must precede body parsing.
-- **Shopping routes are the auth exception.** The suite comment notes they are sent as a customer (not admin) because the basket the suite builds belongs to that customer; `roleReaching` handles this mapping.
-- **Per-test timeout is 60 s** to accommodate DB seeding and multiple sequential requests within a single test.
-- **`BODY_SITES` skips multipart operations** because `setPath` mutates a plain JSON object, which does not model a multipart boundary.
-- **The meta-test uses `toBeGreaterThanOrEqual`** rather than an exact count, so adding a route is safe but removing recognition of `Id` from the walker is caught.
+- **Spec-driven, not route-driven.** The site lists are computed at import time from `openapi.yaml`; there is no manual route list to keep in sync. The first test asserts minimum counts (≥ 71 path, ≥ 19 body, ≥ 8 query) so a silent regression in `spec-ids` or `spec-walk` fails loudly.
+- **The `echoing` allowance.** The rule says a malformed ID gets the *same* 404 as an unknown one, but some error copy embeds the ID it received. The test permits exactly that substitution and nothing else.
+- **`BODY_THAT_REACHES_THE_404` canary.** If a new route's random body is rejected before the ID lookup, the "unknown" probe won't return 404 and the comparison is skipped. The `MUST_COMPARE`/`COMPARED` pair guards against the translations rows being the ones skipped.
+- **60 s timeout per test** — each path-site test sends 1 (unknown) + 5 (malformed) requests; the timeout is generous for CI.
+- **The PDF mock** is a module-level `jest.mock` that resolves to a 3-byte buffer; it exists only because the invoice-with-order path would otherwise try to render HTML to PDF.

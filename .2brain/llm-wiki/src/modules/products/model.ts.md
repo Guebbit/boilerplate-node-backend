@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/model.ts
-sha256: 51fe46d61114ae1770f6c43bdb9811a5ce8e15a67819997acf25794a0dcc5054
-generated_at: 2026-11-08T07:44:55.340395+00:00
+sha256: 41824fd1b7dd785284e3a0e1a3c9be04d40fa6b104df98c70a5098a6114e0f0b
+generated_at: 2026-11-14T21:24:11.368547+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the product data model end-to-end: the Mongoose schema, the TypeScript interfaces that describe stored vs. derived vs. snapshot shapes, and the Zod validation schemas (create / replace / update) that layer business refinements on top of the generated API contract. It is the single source of truth for what a product document looks like in the database and how inbound bodies are validated before a write.
+Defines the Mongoose schema, document/model types, and Zod validation schemas for the product collection. It owns the shape of stored product data (including the `onHand`/`reserved` stock counters and preorder fields) and enforces business-level refinements (fallback-locale presence, date horizon, price precision) that the OpenAPI-generated Zod schemas cannot express. Derived fields (`available`, `preorder`, `inStock`, `lowStock`, `buyable`) are computed at serialization time and never persisted.
 
 ## Key elements
 
-- **`ProductRecord`** – Plain-object shape of the stored fields (dates as `Date`, `_id` as `ObjectId`). Excludes derived fields (`available`, `inStock`, `lowStock`, `preorder`, `backorder`) and currency. Acceptable for lean reads and test fixtures.
-- **`ProductSnapshot`** – `ProductRecord` minus stock counters, backorder fields, and active/purchasable flags. Represents what an order line remembers; consumed by `orders/model.ts`.
-- **`ProductDocument`** – `ProductRecord` ∩ Mongoose `Document`. Adds `id` string getter and `pendingImageKey` (document-only, never serialized to snapshots).
-- **`ProductModel`** – Typed `Model<ProductDocument>` for repository and service use.
-- **`checkProductTranslationFields`** – Validates one locale's title/description against the contract's `translations` schema; returns `TranslationFieldIssue[]`.
-- **`refineProduct`** (internal) – Aggregates four business refinements: fallback-locale guard, release/restock date ≤ 1 year ahead, and price decimal-place check.
-- **`zodProductCreateSchema` / `zodProductReplaceSchema` / `zodProductUpdateSchema`** – `superRefine`-wrapped versions of the generated `CreateProductBody`, `ReplaceProductByIdBody`, `UpdateProductByIdBody` respectively.
-- **`productSchema`** – Mongoose `Schema` with `moneyPlugin`, `revisionPlugin`, `applySerialization`, and the field definitions (title, price, taxClass, rates, translations, stock counters, image digest fields).
+- **`ProductRecord`** — Plain-data interface (no Mongoose `Document`) describing a stored product row. Omits all derived/API-only fields. Includes `_id`, optional `releaseDate`, `restockDate`, `backorderLimit`, `backordered`, `stockVersion`, and timestamps.
+- **`ProductSnapshot`** — Subset of `ProductRecord` minus stock counters, backorder fields, `active`/`purchasable`, `allowBackorder`, and `restockDate`. The shape an order line freezes; used by `orders/model.ts`.
+- **`ProductDocument`** — `ProductRecord` + Mongoose `Document`; adds `id`, `pendingImageKey`.
+- **`ProductModel`** — `Model<ProductDocument, …>` type for the registered Mongoose model.
+- **`productTranslationFieldRules`** — Extracted from the generated `UpdateProductByIdBody` Zod schema; exposes the per-locale field rules to the i18n translatables registry.
+- **`zodProductCreateSchema` / `zodProductReplaceSchema` / `zodProductUpdateSchema`** — `superRefine` wrappers over the generated create/PUT/PATCH bodies. All three apply the same four refinements via `refineProduct`; `mustBePresent` is `true` for create and PUT, `false` for PATCH.
+- **`refineFallbackLocale`** — Rejects `null` (or absence on create/PUT) for the fallback locale entry in `translations`.
+- **`refineDateWithinYear`** — Rejects `releaseDate`/`restockDate` more than one shop-day ahead of `latestReleaseDate(now)`.
+- **`refinePricePlaces`** — Rejects a price whose decimal places exceed the shop currency's minor-unit exponent.
+- **`productSchema`** — Mongoose `Schema<ProductDocument>`: declares `title`, `price` (via `moneyPath`), `taxClass`, `rateType`, `sku`, `onHand`, `reserved`, `backorderLimit`, `backordered`, `stockVersion`, `releaseDate`, `restockDate`, translations, and timestamps. Registers `revisionPlugin`, `moneyPlugin`, and `applySerialization`.
 
 ## Relationships
 
-- **`@domain-primitives/money`** – Imports `fitsCurrency` and `minorUnitExponent` to validate price decimal places against the shop currency.
-- **`@infrastructure/i18n`** – Imports `getFallbackLocale` (to guard the fallback locale) and `t` (for i18n error messages).
-- **`@infrastructure/persistence/money-field`** – Imports `moneyPath` and `moneyPlugin` to declare the `price` field in the Mongoose schema.
-- **`@infrastructure/persistence/revision-plugin`** – Imports `revisionPlugin` to attach revision tracking to the schema.
-- **`@infrastructure/persistence/serialize`** – Imports `applySerialization` to register the derived-field transform (e.g. `available`).
-- **`@kernel/registry`** – Imports the `TranslationFieldIssue` type returned by `checkProductTranslationFields`.
-- **`@modules/orders/model.ts`** – Embeds a Mongoose sub-schema that mirrors `ProductSnapshot`; its `OrderDocumentItem.product` is typed by this file's `ProductSnapshot`, not `ProductRecord`.
-- **`@modules/cart/services/*`** (preorder, shelf, view) and **`@modules/orders/services/*`** (place, snapshot) – Downstream consumers that import `ProductRecord` or `ProductSnapshot` for reads and snapshots.
-- **`@modules/orders/tests/factories.ts`** – Produces `ProductRecord`-shaped fixtures for order tests.
+- **`src/domain-primitives/money.ts`** — Imports `fitsCurrency` and `minorUnitExponent` for the price-precision refinement.
+- **`src/infrastructure/i18n/`** (`catalog.ts`, `context.ts`, `index.ts`) — Imports `getFallbackLocale` and `t` for i18n-aware validation messages and fallback-locale resolution.
+- **`src/infrastructure/persistence/money-field.ts`** — Imports `moneyPath` (price field definition) and `moneyPlugin` (schema plugin).
+- **`src/infrastructure/persistence/revision-plugin.ts`** — Imports `revisionPlugin` for schema revision tracking.
+- **`src/infrastructure/persistence/serialize.ts`** — Imports `applySerialization` to hook the `available`-derivation transform into Mongoose's serialization pipeline.
+- **`src/modules/products/domain/preorder.ts`** — Imports `latestReleaseDate` to bound `releaseDate`/`restockDate` refinements.
+- **`src/modules/orders/model.ts`** — Embeds a Mongoose sub-schema mirroring `ProductSnapshot` (intentionally *not* `productSchema`) so stock counters are unreachable on order lines.
+- **`src/modules/orders/services/snapshot.ts` / `place.ts`** — Consume `ProductSnapshot` to freeze product state at order time.
+- **`src/modules/cart/services/preorder.ts` / `shelf.ts` / `view.ts`** — Read `ProductRecord`/`ProductDocument` for stock and preorder availability.
+- **`src/modules/orders/tests/factories.ts`** — Builds fixture objects conforming to `ProductRecord` / `ProductSnapshot`.
 
 ## Notes
 
-- `available`, `inStock`, `lowStock`, `preorder`, and `backorder` are **never persisted**; they are computed at serialization time so no writer can let them drift.
-- `onHand` and `reserved` are declared in this schema but are **written exclusively by the inventory module**; this module only declares the fields.
-- `pendingImageKey` lives on `ProductDocument` only, intentionally excluded from `ProductSnapshot` so it never appears in embedded order-line copies.
-- The `CHECKED_LOCALE = 'checked'` sentinel parks a single locale's fields under a synthetic key so the contract's own `translations` map can parse them; the key name never appears in user-facing messages.
-- `mustBePresent` is `true` for create and PUT (whole-set semantics) but `false` for PATCH (omission = leave unchanged), yet a `null` fallback locale is always rejected.
-- Past `releaseDate`/`restockDate` values are valid; only dates more than one year in the future (relative to `latestReleaseDate`) are rejected.
-- Absent `taxClass` means the shop's standard rate; absent `rateType` means `zero` — both rely on the service layer resolving the default, not on a stored value.
+- `onHand` and `reserved` are **declared** here (this module owns the collection) but **written only** by the `@modules/inventory` module. Never update them from product services.
+- `available` is **never stored**; it is derived from `onHand` and `reserved` at serialization time via `applyProductTransform`. Any writer that sets it would be silently overwritten.
+- `taxClass` and `rateType` use "absent means shop default" semantics: `taxClass` absent → standard rate; `rateType` absent → `zero`. Both `enum` values match the OpenAPI `TaxClass`/`RateType` contracts exactly.
+- `sku` uniqueness is enforced by a **sparse unique index** (`products_sku`), not by the schema definition. Concurrent writes are safe only because of that index.
+- `ProductSnapshot` is intentionally narrower than `ProductRecord`: it strips everything warehouse-state or availability-related so a frozen order line never carries stale stock numbers.
+- The `pendingImageKey` field exists **only** on `ProductDocument` (not on `ProductRecord` or `ProductSnapshot`) to keep the image-digest bookkeeping out of embedded order copies.

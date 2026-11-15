@@ -1,7 +1,7 @@
 ---
 source: shared/contracts/spectral.yaml
-sha256: b10684f07ce6819fab29f95727f08073d8d02ad8601d88b0fa340842c890cec9
-generated_at: 2026-11-08T03:08:36.077627+00:00
+sha256: 78a529d5f151523c9e82384f80ff4309e1704d7585650e5951aefee0b0e58e93
+generated_at: 2026-11-14T17:45:18.881581+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Spectral linting configuration for the project's OpenAPI 3.1 contract. It extends the built-in `spectral:oas` ruleset and layers project-specific rules on top, covering security declaration, naming conventions, schema shape constraints, and US-English spelling. Every rule is set to `error` severity — violations block the build.
+Spectral ruleset (extending `spectral:oas`) that enforces the project's OpenAPI 3.1 house style. Every rule is an **error**-severity gate: it codifies conventions around security declarations, error-response shape, naming (operationIds, schemas, parameters), and field-level bounds so that API contracts are linted consistently before they reach review.
 
 ## Key elements
 
-- **`operation-security-declared`** — Requires every operation to declare a `security` key (`[]` for public, a scheme list for auth). Prevents ambiguous "forgotten guard" vs. "deliberately public."
-- **`no-nullable-keyword`** — Rejects the OpenAPI 3.0 `nullable` keyword (unknown in 3.1 / JSON Schema 2020-12). Exempts a literal property *named* `nullable` under `properties`.
-- **`no-refs-typo`** — Catches the common `$refs` misspelling of `$ref`.
-- **`error-responses-are-problem-json`** — 4xx/5xx responses must declare exactly `application/problem+json` (RFC 9457). `x-not-problem: true` opts a non-JSON answer out.
-- **`success-body-is-not-an-array`** — 2xx `application/json` bodies must be objects, never bare top-level arrays.
-- **`verb-replace-is-put` / `verb-update-is-patch`** — An operationId prefixed `replace` must sit under `PUT`; one prefixed `update` must sit under `PATCH`. Comments reference an allowlist for genuine exceptions.
-- **`operation-id-no-http-verb-prefix` / `operation-id-camel-case`** — operationIds must be camelCase and must not start with `post`, `put`, or `patch` + capital.
-- **`request-schema-no-http-verb-prefix` / `request-schema-pascal-case`** — `*Request` schemas are PascalCase with no HTTP-verb prefix.
-- **`response-schema-no-http-verb-prefix` / `response-schema-pascal-case`** — Same constraints for `*Response` schemas.
-- **`parameter-name-camel-case`** — Parameter names are camelCase; `in: header` is excluded (wire names are conventionally hyphenated).
-- **`string-declares-max-length`** — Every request-carried `string` (in bodies or nested parameter schemas) must set `maxLength`. Exempts enums, fixed formats (`date`, `uuid`, etc.), `binary`, and composed schemas (`allOf`/`oneOf`/`anyOf`).
-- **`string-parameter-declares-max-length`** — Same requirement for a parameter whose schema *is* the string (one level up, not a child).
-- **`names-in-us-english-operation-ids`** (and likely siblings) — Enforces US-English spelling in machine-read names via an explicit stem list (not a suffix regex, to avoid flagging e.g. `promisedAt`).
+- **`extends: ['spectral:oas']`** — inherits the standard Spectral OpenAPI rules, then overrides `operation-operationId` and `operation-tags` to error level.
+- **`operation-security-declared`** — every operation must have a `security` field (even `[]` for public), so "forgot the guard" ≠ "deliberately public."
+- **`no-nullable-keyword`** — rejects the OpenAPI 3.0 `nullable: true` keyword (invalid in 3.1 / JSON Schema 2020-12); enforces `type: [X, 'null']` or `oneOf` instead.
+- **`no-refs-typo`** — flags the `$refs` typo.
+- **`error-responses-are-problem-json`** — 4xx/5xx responses must declare only `application/problem+json` (RFC 9457 / Zalando 176); opt-out via `x-not-problem: true`.
+- **`error-responses-have-a-body`** — companion rule: 4xx/5xx must actually declare a `content` block.
+- **`success-body-is-not-an-array`** — 2xx `application/json` schema `type` must not be `array` (Zalando 110).
+- **`verb-replace-is-put` / `verb-update-is-patch`** — operationId prefix must agree with the HTTP method (`replace*` → PUT, `update*` → PATCH).
+- **`operation-id-no-http-verb-prefix` / `operation-id-camel-case`** — operationIds are camelCase and must not begin with a raw HTTP verb.
+- **`request-schema-*` / `response-schema-*`** — PascalCase names for `*Request` / `*Response` schemas; no HTTP-verb prefix.
+- **`parameter-name-camel-case`** — camelCase parameter names, excluding `in: header` (wire headers stay hyphenated).
+- **`string-declares-max-length` / `string-parameter-declares-max-length`** — every request-reachable string must carry `maxLength`; exempts enums, fixed formats (`date`, `uuid`, `binary`, …), and composed schemas. The second rule covers the case where the parameter's schema *is* the string.
+- **US-English naming rule** *(truncated in source)* — enforces American English stems in machine-readable names (operationIds, schema/property names, enum values, error-code keys).
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — The primary OpenAPI spec that this ruleset lints. Rules here target the document structure of that file (paths, components, responses).
-- **`shared/contracts/spectral.modules.yaml`** — Sibling Spectral ruleset covering module-specific linting rules; loaded alongside this file by the Spectral CLI.
-- **`shared/contracts/spectral.asyncapi.names.yaml`** — Sibling Spectral ruleset for AsyncAPI naming conventions; separate concern, no shared rules with this file.
+- **`shared/contracts/openapi.root.yaml`** — the document this ruleset lints; the rules' `given` JSONPath expressions are written against that spec's structure.
+- **`shared/contracts/spectral.asyncapi.names.yaml`** — sibling ruleset applying analogous naming conventions to AsyncAPI broker contracts.
+- **`shared/contracts/spectral.modules.yaml`** — sibling ruleset with additional module-specific gates; both files are loaded alongside this one in the same Spectral invocation.
 
 ## Notes
 
-- All rules are `error`; there is no `warn` tier. A single violation fails the lint run.
-- `no-nullable-keyword` uses `schema: { not: {} }` in its functionOptions to reject the keyword *regardless of its value* (true, false, or otherwise).
-- The `x-not-problem: true` annotation is a **house rule** (not part of Zalando's ruleset) and the only documented escape hatch for `error-responses-are-problem-json`.
-- The verb/operationId pairing rules (`verb-replace-is-put`, `verb-update-is-patch`) select offenders via `given` so a match is always a real drift; the comments reference an "allowlist" that lives above the rule in the file.
-- `string-declares-max-length` deliberately does **not** exempt `pattern`, `format: email`, or `format: uri` — none of those bound length.
-- The US-English rules operate on machine-read names only (operationIds, schema names, property names, enum values, error-code keys); prose fields (`description`, `summary`) are exempt.
-- The file is truncated in the snapshot; additional rules (likely more spelling rules for schema names, property names, etc.) follow `names-in-us-english-operation-ids`.
+- All rules are `severity: error` — there is no warning tier; a violation blocks the lint pass.
+- The two error-body rules (`error-responses-are-problem-json` + `error-responses-have-a-body`) are intentionally separate: merging them into one `given` would double-report every hit (the first selects `.content`, which an empty response never has).
+- `x-not-problem: true` is the **only** opt-out for the problem+json rules; it is checked via a JSONPath negative filter, not a `not` schema.
+- `string-declares-max-length` checks *request*-reachable strings only (request bodies, path/query/header params). Response strings are excluded by design.
+- The `no-nullable-keyword` rule's `given` deliberately excludes properties literally named `nullable` under `properties` (a valid schema field name), using `@parentProperty !== 'properties'`.
+- `parameter-name-camel-case` skips `in: header` because HTTP header names are conventionally hyphenated on the wire.

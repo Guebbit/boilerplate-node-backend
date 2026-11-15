@@ -5,49 +5,32 @@ audience: [staff, owner]
 
 # Test it yourself
 
-**Every kind of person the shop knows about has an account you can log into.** Pick one, sign in,
+**Every kind of person the shop knows about has an account you can sign into.** Pick one, sign in,
 and see the shop the way that person sees it.
 
-::: warning These passwords are public on purpose
-They only ever exist on a demo database on your own machine. The tool that creates them refuses
-to run against a production server.
-:::
+## Before you start
 
-## 1. Start the shop
+- Node installed, and the two repositories (the shop's engine and its screens) side by side.
+- The passwords below are public on purpose: they exist only on a demo database on your own
+  machine, and the tool that creates them refuses to run against a production server.
 
-You need two windows: one for the shop's engine (the backend) and one for its screens (the
-frontend).
+## Steps
 
-```bash
-# window 1 — this repository
-npm install
-npm run demo
-
-# window 2 — the frontend repository, next to this one
-npm install
-npm run dev
-```
-
-Then open `http://localhost:8080`.
-
-Want a walk-through? Sign in, then add `?tour=welcome` to any page's address.
-
-`npm run demo` builds a fresh shop every time it starts and throws it away when you close it. You
-can't break anything permanently: stop it and start it again, and the shop is back to how it was.
+1. **Start the shop.** Set-up, and the one command that starts it, are on
+   [the demo page](../build/demo-profile.md). The screens open at `http://localhost:8080`.
+2. **Pick who you are** from the tables below and sign in.
+3. **Try something** from [Things to try](#things-to-try).
+4. **Want a walk-through?** Sign in, then add `?tour=welcome` to any page's address.
+5. **Broke something?** Stop the demo and start it again. It builds a fresh shop every time, so
+   nothing you click is permanent.
 
 ::: details Keeping your changes between restarts
-Fill your own local database once, and it stays until you empty it:
-
-```bash
-npm run scenario:apply         # fill an empty database with the demo shop
-npm run scenario:apply:reset   # empty it and fill it again from scratch
-```
-
-Then start the backend with `npm run dev` instead of `npm run demo`. This needs the developer
-setup from [Getting started](../build/run-locally.md) (a database running locally, and so on).
+The demo throws everything away when you close it. To keep a shop between restarts, fill your own
+local database once instead: the steps are in [the demo page](../build/demo-profile.md) and the
+developer set-up in [Getting started](../build/run-locally.md).
 :::
 
-## 2. Pick who you are
+## Who you can be
 
 ### The staff
 
@@ -64,10 +47,9 @@ something outside the job and you get refused, which is what's being shown.
 | **The moderator** | `moderator@example.com` | `Demo-Moderator1!` | [The moderator](./moderator.md)  |
 | **The operator**  | `operator@example.com`  | `Demo-Operator1!`  | [What each role may do][roles]   |
 
-Every staff login then asks for a 6-digit code from an authenticator app. Add this key to any
-authenticator app once, as a manual "setup key" entry under any name:
-`JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP`. It is the same for all seven accounts and survives a restart.
-[Changing it](../build/demo-profile.md#the-named-accounts).
+Every staff sign-in then asks for a 6-digit code from an authenticator app. Add this key once, as
+a manual "setup key" entry under any name: `JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP`. It is the same for
+all seven accounts and survives a restart. [Changing it](../build/demo-profile.md#the-named-accounts).
 
 The admin can do anything **inside the shop**. The same account is also the operator, the person
 who keeps the installation running. The operator account has only that second job: it can see
@@ -90,7 +72,7 @@ For the **two-step login**, type one of these instead of the emailed code: `a1b2
 You'll also see ten more customers in the staff screens: `amelia.clarke`, `benjamin.hughes` and
 so on. They're there so the shop has an order history to look at. Nobody logs in as them.
 
-## 3. Things to try
+## Things to try {#things-to-try}
 
 Each line points to the page that explains what you're seeing.
 
@@ -111,17 +93,20 @@ Each line points to the page that explains what you're seeing.
 ## Emails
 
 The demo never sends a real email. Every message the shop "sends" (order confirmations, reset
-links, two-step codes) is kept so you can read it at
-`http://localhost:3000/__test/emails`.
-
-That page only exists with `npm run demo`. With `npm run dev` the emails are written to the
-backend's log and not kept, so use the demo when you need to read one.
+links, two-step codes) is kept so you can read it at `http://localhost:3000/__test/emails`. That
+page exists only in the demo, so use the demo when you need to read one.
 
 ## If something looks wrong
 
-- **Too many attempts?** The shop limits how often anyone can try a password. Restart the demo.
-- **An order you need is gone?** Somebody (maybe you) already moved it along. Restart the demo.
-- **Something else?** Check [What this demo models](./scope.md) first. Some things are left out
-  on purpose.
+| You see                   | Because                                             | Do this                                   |
+| ------------------------- | --------------------------------------------------- | ----------------------------------------- |
+| Too many attempts         | The shop limits how often anyone can try a password | Restart the demo                          |
+| An order you need is gone | Somebody (maybe you) already moved it along         | Restart the demo                          |
+| Something is missing      | Some things are left out on purpose                 | Check [What this demo models](./scope.md) |
+
+## Read next
+
+- [The demo shop](./start.md): what it sells, and what each role may do.
+- [When something goes wrong](./when-something-goes-wrong.md): the fixes for a stuck order, refund or parcel.
 
 [roles]: ./start.md#what-each-role-may-do

@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/runtime/database.ts
-sha256: 8b3c31fa2d2538e3528ce003c31ca77219d3335426091b9a078ecd8908a2e5fe
-generated_at: 2026-11-08T03:46:38.949175+00:00
+sha256: 76d686565c39776bd57b8400e3cd5e647620f2e62c7ae5ce93af8f10893e0940
+generated_at: 2026-11-14T18:16:24.908627+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,41 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Manages the full MongoDB connection lifecycle for the process: URI resolution, Mongoose global configuration, connect-with-retry, connection-drop logging, clean disconnect, and multi-document transactions. Every entry point (server, cron scripts, one-shot ops) funnels through this file so that retry, monitoring, and time-limit policy are set in exactly one place.
+Single ownership of the MongoDB connection lifecycle: URI resolution, Mongoose global configuration, connect-with-retry, disconnect, connection-health logging, and a transaction wrapper. Every entry point (server, cron scripts, one-shot ops) goes through `start` or `startJob` here rather than calling `mongoose.connect()` directly.
 
 ## Key elements
 
-- **`COMMAND_MONITORING`** – `as const` option object that enables the driver's `commandStarted`/`Succeeded`/`Failed` events, consumed by `command-metrics.ts`.
-- **`isPermanentConnectError(error)`** – Returns `true` for parse errors, invalid-argument errors, or auth-failed (code 18), signalling that retry is pointless.
-- **`JOB_MAX_TIME_MS`** – `10 × MINUTE_MS`; the per-query ceiling passed to `startJob` for long-running sweeps/reapers.
-- **`getDatabaseUri()`** – Resolves the Mongo URI from `databaseConfig()`: a non-empty `NODE_DB_URI` wins; otherwise `mongodb://host:port/db` is assembled from fragments.
-- **`configureMongoose(maxTimeMs?)`** – Sets Mongoose globals (`autoIndex` off in prod, `maxTimeMS` for queries) and applies `mongoose-defaults`. Idempotent.
-- **`start(maxTimeMs?)`** – Configures Mongoose, then connects with recursive exponential-backoff retry (1 s → 30 s cap, 10 attempts). Wires command monitoring on success. Throws immediately on a permanent error. Attaches disconnect/reconnect logging.
-- **`startJob()`** – Thin wrapper: `start(JOB_MAX_TIME_MS)` for scheduled jobs.
-- **`stopDatabase()`** – Calls `mongoose.disconnect()`, absorbs and logs any rejection so the shutdown chain is not aborted.
-- **`connection`** – Destructured re-export of `mongoose.connection`; safe to read before `start()` resolves (the object exists at import time, populated later). Used by readiness probes.
-- **`withTransaction(work)`** – Runs `work(session)` inside a MongoDB multi-document transaction via `connection.transaction`, retrying on transient errors per the driver's recommended pattern. Requires a replica set.
+- **`COMMAND_MONITORING`** – connect option (`monitorCommands: true`) that makes the driver emit command events consumed by `command-metrics.ts`.
+- **`isPermanentConnectError`** – returns `true` for unparseable URIs, invalid arguments, or auth failure (code 18) so the boot aborts immediately instead of burning the full retry budget.
+- **`JOB_MAX_TIME_MS`** – 10-minute per-query ceiling for scheduled jobs (reapers, sweeps), longer than the request-path limit.
+- **`getDatabaseUri`** – resolves the connection string: full `NODE_DB_URI` wins; otherwise assembles from `NODE_MONGODB_HOST`/`NODE_MONGODB_PORT`/`NODE_MONGODB_NAME` fragments.
+- **`configureMongoose`** – sets Mongoose global options (`autoIndex` off in production, `maxTimeMS`) before any query runs. Idempotent.
+- **`start(maxTimeMs?)`** – connects with exponential backoff (1 s → 30 s cap, max 10 attempts), calls `configureMongoose`, starts command observation, attaches disconnect/reconnect listeners.
+- **`startJob()`** – convenience alias: `start(JOB_MAX_TIME_MS)`.
+- **`watchConnection`** – logs `disconnected` / `reconnected` events so an in-flight Mongo outage is visible in logs.
+- **`stopDatabase`** – calls `mongoose.disconnect()`, absorbs rejections (process is already exiting), resets the internal `stopping` flag.
+- **`connection`** – re-export of `mongoose.connection`; the object exists at import time so readiness probes can read its `readyState` before `start()` resolves.
+- **`withTransaction(work)`** – wraps `work(session)` in a MongoDB multi-document transaction (delegates to `connection.transaction`), which retries the whole body up to 120 s on transient errors.
 
 ## Relationships
 
-- **`@infrastructure/runtime/config`** – Source of `databaseConfig()` (URI, host, port, name, `NODE_MONGO_MAX_TIME_MS`) and `isRelaxedEnvironment()`.
-- **`@infrastructure/runtime/mongoose-defaults`** – `applyMongooseDefaults()` is called inside `configureMongoose` for a caller that skips the app entry.
-- **`@infrastructure/persistence/command-metrics`** – `observeDatabaseCommands` is invoked once the connection succeeds, subscribing to the driver's command events.
-- **`@domain-primitives/time`** – Supplies `MINUTE_MS` used to compute `JOB_MAX_TIME_MS`.
-- **`@infrastructure/adapters/logger`** – `logger.warn` / `logger.info` for retry, disconnect, reconnect, and disconnect-failure messages.
-- **`scripts/db/sync-indexes.ts`** – Explicitly referenced: it is the production path that ensures indexes exist before `autoIndex` is turned off here.
-- **`scenarios/support/database-snapshot.ts`** – Deliberately a *separate* concern (demo-profile capture/restore); not imported here.
-- **`src/app.ts`, cron/job scripts** – Primary consumers of `start`, `startJob`, `stopDatabase`, and `withTransaction`.
+- **`src/infrastructure/runtime/config.ts`** – reads `databaseConfig()` (URI fragments, `NODE_MONGO_MAX_TIME_MS`) and `isRelaxedEnvironment()` (gates `autoIndex`).
+- **`src/infrastructure/runtime/mongoose-defaults.ts`** – calls `applyMongooseDefaults()` inside `configureMongoose` to establish baseline Mongoose settings first.
+- **`src/infrastructure/persistence/command-metrics.ts`** – on successful connect, `observeDatabaseCommands()` is invoked to start timing every command the driver emits.
+- **`src/infrastructure/adapters/logger.ts`** – all retry warnings, disconnect/reconnect notices, and disconnect-failure logs go through this shared logger.
+- **`src/domain-primitives/time.ts`** – provides `MINUTE_MS` used to define `JOB_MAX_TIME_MS`.
+- **`src/infrastructure/runtime/readiness.ts`** – reads the exported `connection` object to answer health/readiness probes.
+- **`scripts/ops/run-job.ts`** – scheduled-job entry point; calls `startJob()` to get the longer query limit.
+- **`scripts/db/sync-indexes.ts` / `scripts/db/index-sync.ts`** – explicitly mentioned in the `start` doc as having run with `autoIndex: false` in production; this file never turns `autoIndex` back on.
+- **`scenarios/support/database-snapshot.ts`** – the module doc calls this out as a *separate* concern (snapshot capture/restore for the demo profile); this file does not interact with it.
+- **`src/app.ts`** – the application boot path calls `start()` (and potentially `configureMongoose` redundantly); this file is the shared guard for all entry points.
 
 ## Notes
 
-- The `NODE_DB_URI` check is a **truthiness** test, not `!== undefined`. An empty string intentionally falls through to host/port fragments so the `host` npm script can blank the URI and override only the host. This is pinned by `tests/unit/scripts/db/host-scripts.test.ts`.
-- Mongoose is a **process-wide singleton**: `mongoose.connect()` mutates global state. There is no per-instance isolation; the first successful connect in the process is the one every schema sees.
-- `mongoose.set('maxTimeMS', …)` applies only to **queries and aggregates** that did not set their own limit. Writes (`save`, `insertMany`, `bulkWrite`, raw `collection.*`) are unaffected and must set a limit by hand.
-- `autoIndex` is **never turned on** by this file. Production turns it off; dev/test rely on Mongoose's default (on).
-- The retry loop is a **recursive promise chain**, not `async`/`await` — a codebase-wide convention.
-- `withTransaction` will throw on a standalone `mongod`; every deployment (prod, docker-compose, `mongodb-memory-server` in tests) uses a single-node replica set.
-- `watchConnection` is idempotent (`watching` flag); `stopDatabase` sets `stopping` so its own `disconnected` event is not logged as an outage.
+- **Truthiness, not `!== undefined`, in `getDatabaseUri`.** An empty `NODE_DB_URI` deliberately falls through to the host/port/name fragments. This is how `npm run host` blanks the URI and overrides only the host while keeping the database name from `.env`. Pinned by `tests/unit/scripts/db/host-scripts.test.ts`.
+- **Mongoose is a process-wide singleton.** `import mongoose` anywhere yields the same connection object; `mongoose.connect()` mutates global state. No file needs to pass the handle around.
+- **Retry uses recursive promise chains, not `async/await`.** A codebase-wide convention; each retry chains onto the previous `.then()` to stay on the event loop (a `setTimeout`-based sleep yields to the loop so the health-check endpoint keeps answering).
+- **`autoIndex` is only ever turned *off* here** (production). Dev/test rely on Mongoose's own default (on) to get index constraints for free. Never set to `true` explicitly.
+- **`withTransaction` requires a replica set.** A standalone `mongod` rejects `startTransaction()`. All environments (ephemeral test mongod, docker-compose) run one.
+- **Side-effect rule for transactions:** only writes and outbox rows go inside `work`. External calls (provider APIs, mail, cache) must run *after* the transaction resolves, because a retried/aborted transaction re-runs the entire body.
+- **`stopping` flag** prevents the `disconnected` listener from logging a spurious "connection lost" during the intentional `stopDatabase` shutdown.

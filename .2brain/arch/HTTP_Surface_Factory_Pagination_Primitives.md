@@ -13,12 +13,11 @@ graph LR
     HTTP_Surface_Factory_Upload_Pipeline["HTTP Surface Factory & Upload Pipeline"]
     Observability_HTTP_Readback_SSE_Stream["Observability HTTP Readback & SSE Stream"]
     Tasks_Contact_Task_Management_["Tasks (Contact & Task Management)"]
-    Domain_Module_Controllers_Shared_Persistence_Primitives -- "Hand-written controllers (account, api-keys) consume the same controller plumbing the factories wrap" --> HTTP_Surface_Factory_Upload_Pipeline
-    Domain_Module_Controllers_Shared_Persistence_Primitives -- "Account/api-key controllers emit audit records surfaced by the observability incident read" --> Observability_HTTP_Readback_SSE_Stream
-    HTTP_Surface_Factory_Upload_Pipeline -- "Delegates ID validation and pagination normalization to the shared contract" --> Domain_Module_Controllers_Shared_Persistence_Primitives
-    Tasks_Contact_Task_Management_ -- "Consumes the shared ID-validation contract for endpoint guards" --> Domain_Module_Controllers_Shared_Persistence_Primitives
-    Tasks_Contact_Task_Management_ -- "Consumes the search-controller factory to build the staff queue list endpoint" --> HTTP_Surface_Factory_Upload_Pipeline
-    Tasks_Contact_Task_Management_ -- "Emits audit events that the observability module reads back as incident entries" --> Observability_HTTP_Readback_SSE_Stream
+    Domain_Module_Controllers_Shared_Persistence_Primitives -- "Consumes handler primitives for request parsing, error propagation, and response shaping" --> HTTP_Surface_Factory_Upload_Pipeline
+    Domain_Module_Controllers_Shared_Persistence_Primitives -- "Emits HTTP request metrics to shared Prometheus registry consumed by observability readback" --> Observability_HTTP_Readback_SSE_Stream
+    HTTP_Surface_Factory_Upload_Pipeline -- "Dispatches to module services via spec-object callbacks at runtime" --> Domain_Module_Controllers_Shared_Persistence_Primitives
+    Tasks_Contact_Task_Management_ -- "Uses shared pagination and ID-validation primitives for uniform paged responses" --> Domain_Module_Controllers_Shared_Persistence_Primitives
+    Tasks_Contact_Task_Management_ -- "Consumes controller factories for REST endpoint construction via spec-object injection" --> HTTP_Surface_Factory_Upload_Pipeline
 ```
 
 ## Details
@@ -30,14 +29,14 @@ The concrete domain-module endpoint implementations and the shared persistence-l
 
 **Related Classes/Methods**:
 
-- `src.infrastructure.http.ids.RequiredId`:68-79
+- `src.infrastructure.http.ids.RequiredId`:50-62
 - `src.modules.account.controllers.delete-session.deleteSession`:25-49
 - `src.modules.api-keys.repository.deleteByUserId`:72-78
 
 **Source Files:**
 
 - `src/infrastructure/http/ids.ts`
-  - `src.infrastructure.http.ids.RequiredId` (L68-L79) - Interface
+  - `src.infrastructure.http.ids.RequiredId` (L50-L62) - Interface
 - `src/infrastructure/persistence/search.ts`
   - `src.infrastructure.persistence.search.PaginationInput` (L11-L17) - Interface
   - `src.infrastructure.persistence.search.PaginationResult` (L20-L24) - Interface
@@ -55,8 +54,8 @@ The concrete domain-module endpoint implementations and the shared persistence-l
   - `src.modules.addresses.controllers.get-address.getAddress` (L17-L33) - Class
   - `src.modules.addresses.controllers.get-address.getAddress.then() callback` (L28-L31) - Function
 - `src/modules/addresses/controllers/put-address-default.ts`
-  - `src.modules.addresses.controllers.put-address-default.putAddressDefault` (L19-L38) - Class
-  - `src.modules.addresses.controllers.put-address-default.putAddressDefault.then() callback` (L31-L36) - Function
+  - `src.modules.addresses.controllers.put-address-default.putAddressDefault` (L20-L39) - Class
+  - `src.modules.addresses.controllers.put-address-default.putAddressDefault.then() callback` (L32-L37) - Function
 - `src/modules/api-keys/controllers/delete-api-key.ts`
   - `src.modules.api-keys.controllers.delete-api-key.revokeApiKey` (L20-L32) - Class
   - `src.modules.api-keys.controllers.delete-api-key.revokeApiKey.then() callback` (L27-L30) - Function
@@ -78,8 +77,8 @@ The concrete domain-module endpoint implementations and the shared persistence-l
   - `src.modules.cart.controllers.delete-cart-item.deleteCartItem` (L20-L38) - Class
   - `src.modules.cart.controllers.delete-cart-item.deleteCartItem.then() callback` (L33-L36) - Function
 - `src/modules/cart/controllers/patch-cart-item.ts`
-  - `src.modules.cart.controllers.patch-cart-item.patchCartItem` (L21-L49) - Class
-  - `src.modules.cart.controllers.patch-cart-item.patchCartItem.then() callback` (L43-L47) - Function
+  - `src.modules.cart.controllers.patch-cart-item.patchCartItem` (L22-L50) - Class
+  - `src.modules.cart.controllers.patch-cart-item.patchCartItem.then() callback` (L44-L48) - Function
 - `src/modules/delivery/controllers/get-date-impact.ts`
   - `src.modules.delivery.controllers.get-date-impact.dateImpactController` (L29-L67) - Class
   - `src.modules.delivery.controllers.get-date-impact.dateImpactController.<function>` (L36-L67) - Function
@@ -96,8 +95,8 @@ The concrete domain-module endpoint implementations and the shared persistence-l
   - `src.modules.delivery.controllers.get-shipment.getShipment` (L15-L26) - Class
   - `src.modules.delivery.controllers.get-shipment.getShipment.then() callback` (L21-L24) - Function
 - `src/modules/delivery/controllers/patch-shipment.ts`
-  - `src.modules.delivery.controllers.patch-shipment.patchShipment` (L17-L31) - Class
-  - `src.modules.delivery.controllers.patch-shipment.patchShipment.then() callback` (L26-L29) - Function
+  - `src.modules.delivery.controllers.patch-shipment.patchShipment` (L20-L34) - Class
+  - `src.modules.delivery.controllers.patch-shipment.patchShipment.then() callback` (L29-L32) - Function
 - `src/modules/delivery/controllers/post-deliver-shipment.ts`
   - `src.modules.delivery.controllers.post-deliver-shipment.postDeliverShipment` (L17-L28) - Class
   - `src.modules.delivery.controllers.post-deliver-shipment.postDeliverShipment.then() callback` (L23-L26) - Function
@@ -113,8 +112,8 @@ The concrete domain-module endpoint implementations and the shared persistence-l
   - `src.modules.delivery.controllers.post-mark-shipment-lost.postMarkShipmentLost` (L17-L31) - Class
   - `src.modules.delivery.controllers.post-mark-shipment-lost.postMarkShipmentLost.then() callback` (L26-L29) - Function
 - `src/modules/delivery/controllers/post-process-order.ts`
-  - `src.modules.delivery.controllers.post-process-order.postProcessOrder` (L17-L30) - Class
-  - `src.modules.delivery.controllers.post-process-order.postProcessOrder.then() callback` (L25-L28) - Function
+  - `src.modules.delivery.controllers.post-process-order.postProcessOrder` (L18-L33) - Class
+  - `src.modules.delivery.controllers.post-process-order.postProcessOrder.then() callback` (L26-L31) - Function
 - `src/modules/delivery/controllers/post-ship-fulfillment-order.ts`
   - `src.modules.delivery.controllers.post-ship-fulfillment-order.postShipFulfillmentOrder` (L17-L35) - Class
   - `src.modules.delivery.controllers.post-ship-fulfillment-order.postShipFulfillmentOrder.then() callback` (L26-L33) - Function
@@ -125,10 +124,10 @@ The concrete domain-module endpoint implementations and the shared persistence-l
   - `src.modules.delivery.services.board.listPreorderFulfillmentOrders.items.items.map() callback` (L101-L112) - Function
   - `src.modules.delivery.services.board.summarizePreorders.items.items.map() callback` (L140-L140) - Function
 - `src/modules/delivery/services/deliver.ts`
-  - `src.modules.delivery.services.deliver.deliverShipment.then() callback.shelf` (L112-L114) - Class
-  - `src.modules.delivery.services.deliver.deliverShipment.then() callback.shelf.shipment.lines.map() callback` (L113-L113) - Function
-  - `src.modules.delivery.services.deliver.deliverShipment.then() callback.shelf.then() callback` (L115-L118) - Function
-  - `src.modules.delivery.services.deliver.deliverShipment.then() callback.shelf.then() callback.then() callback` (L116-L117) - Function
+  - `src.modules.delivery.services.deliver.deliverShipment.then() callback.shelf` (L105-L107) - Class
+  - `src.modules.delivery.services.deliver.deliverShipment.then() callback.shelf.shipment.lines.map() callback` (L106-L106) - Function
+  - `src.modules.delivery.services.deliver.deliverShipment.then() callback.shelf.then() callback` (L108-L111) - Function
+  - `src.modules.delivery.services.deliver.deliverShipment.then() callback.shelf.then() callback.then() callback` (L109-L110) - Function
 - `src/modules/delivery/services/digest.ts`
   - `src.modules.delivery.services.digest.DeliveryDigest` (L22-L31) - Interface
   - `src.modules.delivery.services.digest.DeliveryDigestAllowance` (L34-L38) - Interface
@@ -155,20 +154,21 @@ The concrete domain-module endpoint implementations and the shared persistence-l
   - `src.modules.delivery.services.slip.expectedFrom.then() callback.expectedDateOfWaiting() callback.product` (L44-L44) - Class
   - `src.modules.delivery.services.slip.expectedFrom.then() callback.expectedDateOfWaiting() callback.product.products.find() callback` (L44-L44) - Function
 - `src/modules/delivery/services/split.ts`
-  - `src.modules.delivery.services.split.withoutAllocated` (L40-L57) - Class
-  - `src.modules.delivery.services.split.withoutAllocated.moved` (L44-L44) - Class
-  - `src.modules.delivery.services.split.withoutAllocated.moved.allocated.map() callback` (L44-L44) - Function
-  - `src.modules.delivery.services.split.withoutAllocated.lines.map() callback` (L47-L53) - Function
-  - `src.modules.delivery.services.split.withoutAllocated.filter() callback` (L55-L55) - Function
+  - `src.modules.delivery.services.split.withoutAllocated` (L41-L55) - Class
+  - `src.modules.delivery.services.split.withoutAllocated.moved` (L45-L45) - Class
+  - `src.modules.delivery.services.split.withoutAllocated.moved.allocated.map() callback` (L45-L45) - Function
+  - `src.modules.delivery.services.split.withoutAllocated.lines.map() callback` (L48-L51) - Function
+  - `src.modules.delivery.services.split.withoutAllocated.filter() callback` (L53-L53) - Function
 - `src/modules/example/controllers/delete-example.ts`
-  - `src.modules.example.controllers.delete-example.deleteExample` (L21-L32) - Class
-  - `src.modules.example.controllers.delete-example.deleteExample.then() callback` (L27-L30) - Function
+  - `src.modules.example.controllers.delete-example.deleteExample` (L23-L33) - Class
+  - `src.modules.example.controllers.delete-example.deleteExample.withIfMatch() callback` (L27-L27) - Function
+  - `src.modules.example.controllers.delete-example.deleteExample.then() callback` (L28-L31) - Function
 - `src/modules/inventory/controllers/get-inventory-level.ts`
   - `src.modules.inventory.controllers.get-inventory-level.getInventoryLevel` (L15-L29) - Class
   - `src.modules.inventory.controllers.get-inventory-level.getInventoryLevel.then() callback` (L24-L27) - Function
 - `src/modules/inventory/controllers/patch-inventory-level.ts`
-  - `src.modules.inventory.controllers.patch-inventory-level.patchInventoryLevel` (L18-L47) - Class
-  - `src.modules.inventory.controllers.patch-inventory-level.patchInventoryLevel.edit.then() callback` (L42-L45) - Function
+  - `src.modules.inventory.controllers.patch-inventory-level.patchInventoryLevel` (L22-L51) - Class
+  - `src.modules.inventory.controllers.patch-inventory-level.patchInventoryLevel.edit.then() callback` (L46-L49) - Function
 - `src/modules/inventory/controllers/post-adjustment.ts`
   - `src.modules.inventory.controllers.post-adjustment.postAdjustment` (L20-L45) - Class
   - `src.modules.inventory.controllers.post-adjustment.postAdjustment.then() callback` (L40-L43) - Function
@@ -176,8 +176,8 @@ The concrete domain-module endpoint implementations and the shared persistence-l
   - `src.modules.inventory.controllers.post-receipt.postReceipt` (L18-L36) - Class
   - `src.modules.inventory.controllers.post-receipt.postReceipt.then() callback` (L31-L34) - Function
 - `src/modules/inventory/repository.ts`
-  - `src.modules.inventory.repository.stockLevelRepository.preorderBoard.then() callback.ids` (L442-L442) - Class
-  - `src.modules.inventory.repository.stockLevelRepository.preorderBoard.then() callback.ids.rows.map() callback` (L442-L442) - Function
+  - `src.modules.inventory.repository.stockLevelRepository.preorderBoard.then() callback.ids` (L455-L455) - Class
+  - `src.modules.inventory.repository.stockLevelRepository.preorderBoard.then() callback.ids.rows.map() callback` (L455-L455) - Function
 - `src/modules/inventory/services/types.ts`
   - `src.modules.inventory.services.types.StockLine` (L16-L25) - Interface
   - `src.modules.inventory.services.types.StockShortfall` (L31-L36) - Interface
@@ -201,14 +201,14 @@ The concrete domain-module endpoint implementations and the shared persistence-l
   - `src.modules.locales.controllers.delete-locale-entry.deleteLocaleEntry` (L20-L38) - Class
   - `src.modules.locales.controllers.delete-locale-entry.deleteLocaleEntry.then() callback` (L32-L36) - Function
 - `src/modules/locales/controllers/get-entity-translations.ts`
-  - `src.modules.locales.controllers.get-entity-translations.getEntityTranslations.id` (L23-L25) - Class
-  - `src.modules.locales.controllers.get-entity-translations.getEntityTranslations.id.notFound` (L24-L24) - Method
+  - `src.modules.locales.controllers.get-entity-translations.getEntityTranslations.id` (L24-L26) - Class
+  - `src.modules.locales.controllers.get-entity-translations.getEntityTranslations.id.notFound` (L25-L25) - Method
 - `src/modules/locales/controllers/get-locale-entries.ts`
-  - `src.modules.locales.controllers.get-locale-entries.getLocaleEntry` (L100-L117) - Class
-  - `src.modules.locales.controllers.get-locale-entries.getLocaleEntry.then() callback` (L112-L115) - Function
+  - `src.modules.locales.controllers.get-locale-entries.getLocaleEntry` (L104-L121) - Class
+  - `src.modules.locales.controllers.get-locale-entries.getLocaleEntry.then() callback` (L116-L119) - Function
 - `src/modules/locales/controllers/put-locale-entry.ts`
-  - `src.modules.locales.controllers.put-locale-entry.replaceLocaleEntry` (L22-L53) - Class
-  - `src.modules.locales.controllers.put-locale-entry.replaceLocaleEntry.then() callback` (L47-L51) - Function
+  - `src.modules.locales.controllers.put-locale-entry.replaceLocaleEntry` (L23-L54) - Class
+  - `src.modules.locales.controllers.put-locale-entry.replaceLocaleEntry.then() callback` (L48-L52) - Function
 - `src/modules/locales/controllers/update-entity-translations.ts`
   - `src.modules.locales.controllers.update-entity-translations.writeEntityTranslations.<function>.id` (L57-L59) - Class
   - `src.modules.locales.controllers.update-entity-translations.writeEntityTranslations.<function>.id.notFound` (L58-L58) - Method
@@ -219,12 +219,12 @@ The concrete domain-module endpoint implementations and the shared persistence-l
   - `src.modules.notifications.controllers.get-notification.getNotification` (L18-L30) - Class
   - `src.modules.notifications.controllers.get-notification.getNotification.then() callback` (L24-L28) - Function
 - `src/modules/orders/controllers/get-order-timeline.ts`
-  - `src.modules.orders.controllers.get-order-timeline.getOrderTimeline` (L20-L39) - Class
-  - `src.modules.orders.controllers.get-order-timeline.getOrderTimeline.then() callback` (L29-L37) - Function
-  - `src.modules.orders.controllers.get-order-timeline.getOrderTimeline.then() callback.then() callback` (L34-L36) - Function
+  - `src.modules.orders.controllers.get-order-timeline.getOrderTimeline` (L29-L52) - Class
+  - `src.modules.orders.controllers.get-order-timeline.getOrderTimeline.then() callback` (L42-L50) - Function
+  - `src.modules.orders.controllers.get-order-timeline.getOrderTimeline.then() callback.then() callback` (L47-L49) - Function
 - `src/modules/orders/controllers/get-order.ts`
-  - `src.modules.orders.controllers.get-order.getOrderItem` (L25-L53) - Class
-  - `src.modules.orders.controllers.get-order.getOrderItem.then() callback` (L34-L51) - Function
+  - `src.modules.orders.controllers.get-order.getOrderItem` (L24-L51) - Class
+  - `src.modules.orders.controllers.get-order.getOrderItem.then() callback` (L33-L49) - Function
 - `src/modules/orders/controllers/order-notes.ts`
   - `src.modules.orders.controllers.order-notes.postOrderNote` (L20-L41) - Class
   - `src.modules.orders.controllers.order-notes.postOrderNote.then() callback` (L32-L39) - Function
@@ -233,18 +233,18 @@ The concrete domain-module endpoint implementations and the shared persistence-l
 - `src/modules/orders/controllers/post-cancel-order.ts`
   - `src.modules.orders.controllers.post-cancel-order.postCancelOrder` (L23-L50) - Class
   - `src.modules.orders.controllers.post-cancel-order.postCancelOrder.then() callback` (L44-L48) - Function
-- `src/modules/orders/controllers/post-order-status-override.ts`
-  - `src.modules.orders.controllers.post-order-status-override.postOrderStatusOverride` (L20-L43) - Class
-  - `src.modules.orders.controllers.post-order-status-override.postOrderStatusOverride.then() callback` (L32-L41) - Function
+- `src/modules/orders/controllers/post-order-override-status.ts`
+  - `src.modules.orders.controllers.post-order-override-status.postOrderOverrideStatus` (L20-L43) - Class
+  - `src.modules.orders.controllers.post-order-override-status.postOrderOverrideStatus.then() callback` (L32-L41) - Function
 - `src/modules/orders/controllers/post-order.ts`
   - `src.modules.orders.controllers.post-order.createOrder` (L18-L38) - Class
   - `src.modules.orders.controllers.post-order.createOrder.then() callback` (L29-L36) - Function
 - `src/modules/orders/controllers/put-shipping-address.ts`
-  - `src.modules.orders.controllers.put-shipping-address.putShippingAddress` (L17-L40) - Class
-  - `src.modules.orders.controllers.put-shipping-address.putShippingAddress.then() callback` (L29-L38) - Function
+  - `src.modules.orders.controllers.put-shipping-address.putShippingAddress` (L20-L43) - Class
+  - `src.modules.orders.controllers.put-shipping-address.putShippingAddress.then() callback` (L32-L41) - Function
 - `src/modules/orders/controllers/respond.ts`
-  - `src.modules.orders.controllers.respond.respondWithOrder` (L35-L48) - Class
-  - `src.modules.orders.controllers.respond.respondWithOrder.then() callback` (L44-L47) - Function
+  - `src.modules.orders.controllers.respond.respondWithOrder` (L37-L53) - Class
+  - `src.modules.orders.controllers.respond.respondWithOrder.then() callback` (L46-L52) - Function
 - `src/modules/payments/controllers/get-order-payments.ts`
   - `src.modules.payments.controllers.get-order-payments.getOrderPayments` (L17-L28) - Class
   - `src.modules.payments.controllers.get-order-payments.getOrderPayments.then() callback` (L23-L26) - Function
@@ -281,8 +281,9 @@ The concrete domain-module endpoint implementations and the shared persistence-l
   - `src.modules.returns.controllers.get-return-options.getReturnOptions` (L15-L29) - Class
   - `src.modules.returns.controllers.get-return-options.getReturnOptions.then() callback` (L24-L27) - Function
 - `src/modules/returns/controllers/get-return.ts`
-  - `src.modules.returns.controllers.get-return.getReturnById` (L17-L36) - Class
-  - `src.modules.returns.controllers.get-return.getReturnById.then() callback` (L25-L34) - Function
+  - `src.modules.returns.controllers.get-return.getReturnById` (L18-L42) - Class
+  - `src.modules.returns.controllers.get-return.getReturnById.then() callback` (L26-L40) - Function
+  - `src.modules.returns.controllers.get-return.getReturnById.then() callback.then() callback` (L30-L39) - Function
 - `src/modules/returns/controllers/post-return-cancel.ts`
   - `src.modules.returns.controllers.post-return-cancel.postReturnCancel` (L17-L37) - Class
   - `src.modules.returns.controllers.post-return-cancel.postReturnCancel.then() callback` (L28-L35) - Function
@@ -294,6 +295,9 @@ The concrete domain-module endpoint implementations and the shared persistence-l
   - `src.modules.returns.controllers.post-return-decision.postReturnApprove.then() callback` (L25-L32) - Function
   - `src.modules.returns.controllers.post-return-decision.postReturnDecline` (L37-L56) - Class
   - `src.modules.returns.controllers.post-return-decision.postReturnDecline.then() callback` (L47-L54) - Function
+- `src/modules/returns/controllers/post-return-proof.ts`
+  - `src.modules.returns.controllers.post-return-proof.postReturnProof` (L17-L40) - Class
+  - `src.modules.returns.controllers.post-return-proof.postReturnProof.then() callback` (L31-L38) - Function
 - `src/modules/returns/controllers/post-return-receive.ts`
   - `src.modules.returns.controllers.post-return-receive.postReturnReceive` (L18-L38) - Class
   - `src.modules.returns.controllers.post-return-receive.postReturnReceive.then() callback` (L29-L36) - Function
@@ -303,27 +307,28 @@ The concrete domain-module endpoint implementations and the shared persistence-l
 - `src/modules/stock-alerts/controllers/delete-stock-alert.ts`
   - `src.modules.stock-alerts.controllers.delete-stock-alert.deleteStockAlert` (L14-L28) - Class
   - `src.modules.stock-alerts.controllers.delete-stock-alert.deleteStockAlert.then() callback` (L23-L26) - Function
-- `src/modules/tasks/controllers/delete-task-assignee.ts`
-  - `src.modules.tasks.controllers.delete-task-assignee.deleteTaskAssignee` (L17-L28) - Class
-  - `src.modules.tasks.controllers.delete-task-assignee.deleteTaskAssignee.then() callback` (L23-L26) - Function
 - `src/modules/tasks/controllers/delete-task.ts`
   - `src.modules.tasks.controllers.delete-task.deleteTask` (L21-L32) - Class
   - `src.modules.tasks.controllers.delete-task.deleteTask.then() callback` (L27-L30) - Function
 - `src/modules/tasks/controllers/get-task.ts`
   - `src.modules.tasks.controllers.get-task.getTaskById` (L23-L42) - Class
   - `src.modules.tasks.controllers.get-task.getTaskById.then() callback` (L29-L40) - Function
+- `src/modules/tasks/controllers/post-task-assign.ts`
+  - `src.modules.tasks.controllers.post-task-assign.postTaskAssign` (L18-L34) - Class
+  - `src.modules.tasks.controllers.post-task-assign.postTaskAssign.then() callback` (L29-L32) - Function
 - `src/modules/tasks/controllers/post-task-note.ts`
   - `src.modules.tasks.controllers.post-task-note.postTaskNote` (L24-L40) - Class
   - `src.modules.tasks.controllers.post-task-note.postTaskNote.then() callback` (L35-L38) - Function
-- `src/modules/tasks/controllers/put-task-assignee.ts`
-  - `src.modules.tasks.controllers.put-task-assignee.putTaskAssignee` (L18-L34) - Class
-  - `src.modules.tasks.controllers.put-task-assignee.putTaskAssignee.then() callback` (L29-L32) - Function
+- `src/modules/tasks/controllers/post-task-unassign.ts`
+  - `src.modules.tasks.controllers.post-task-unassign.postTaskUnassign` (L17-L28) - Class
+  - `src.modules.tasks.controllers.post-task-unassign.postTaskUnassign.then() callback` (L23-L26) - Function
 - `src/modules/webhooks/controllers/delete-subscription-secret.ts`
-  - `src.modules.webhooks.controllers.delete-subscription-secret.deleteWebhookSubscriptionSecret` (L21-L39) - Class
-  - `src.modules.webhooks.controllers.delete-subscription-secret.deleteWebhookSubscriptionSecret.then() callback` (L31-L37) - Function
+  - `src.modules.webhooks.controllers.delete-subscription-secret.deleteWebhookSubscriptionSecret` (L19-L34) - Class
+  - `src.modules.webhooks.controllers.delete-subscription-secret.deleteWebhookSubscriptionSecret.then() callback` (L29-L32) - Function
 - `src/modules/webhooks/controllers/delete-subscription.ts`
-  - `src.modules.webhooks.controllers.delete-subscription.deleteWebhookSubscription` (L19-L31) - Class
-  - `src.modules.webhooks.controllers.delete-subscription.deleteWebhookSubscription.then() callback` (L26-L29) - Function
+  - `src.modules.webhooks.controllers.delete-subscription.deleteWebhookSubscription` (L21-L34) - Class
+  - `src.modules.webhooks.controllers.delete-subscription.deleteWebhookSubscription.withIfMatch() callback` (L26-L27) - Function
+  - `src.modules.webhooks.controllers.delete-subscription.deleteWebhookSubscription.then() callback` (L29-L32) - Function
 - `src/modules/webhooks/controllers/get-delivery.ts`
   - `src.modules.webhooks.controllers.get-delivery.getWebhookDelivery` (L18-L29) - Class
   - `src.modules.webhooks.controllers.get-delivery.getWebhookDelivery.then() callback` (L24-L27) - Function
@@ -331,33 +336,42 @@ The concrete domain-module endpoint implementations and the shared persistence-l
   - `src.modules.webhooks.controllers.post-delivery-replay.replayWebhookDelivery` (L19-L31) - Class
   - `src.modules.webhooks.controllers.post-delivery-replay.replayWebhookDelivery.then() callback` (L26-L29) - Function
 - `src/modules/webhooks/controllers/post-subscription-disable.ts`
-  - `src.modules.webhooks.controllers.post-subscription-disable.disableWebhookSubscription` (L19-L37) - Class
-  - `src.modules.webhooks.controllers.post-subscription-disable.disableWebhookSubscription.then() callback` (L29-L35) - Function
+  - `src.modules.webhooks.controllers.post-subscription-disable.disableWebhookSubscription` (L20-L38) - Class
+  - `src.modules.webhooks.controllers.post-subscription-disable.disableWebhookSubscription.then() callback` (L30-L36) - Function
 - `src/modules/webhooks/controllers/post-subscription-enable.ts`
-  - `src.modules.webhooks.controllers.post-subscription-enable.enableWebhookSubscription` (L19-L34) - Class
-  - `src.modules.webhooks.controllers.post-subscription-enable.enableWebhookSubscription.then() callback` (L26-L32) - Function
+  - `src.modules.webhooks.controllers.post-subscription-enable.enableWebhookSubscription` (L20-L35) - Class
+  - `src.modules.webhooks.controllers.post-subscription-enable.enableWebhookSubscription.then() callback` (L27-L33) - Function
 - `src/modules/webhooks/controllers/post-subscription-secret.ts`
-  - `src.modules.webhooks.controllers.post-subscription-secret.createWebhookSubscriptionSecret` (L20-L38) - Class
-  - `src.modules.webhooks.controllers.post-subscription-secret.createWebhookSubscriptionSecret.then() callback` (L30-L36) - Function
+  - `src.modules.webhooks.controllers.post-subscription-secret.createWebhookSubscriptionSecret` (L21-L43) - Class
+  - `src.modules.webhooks.controllers.post-subscription-secret.createWebhookSubscriptionSecret.then() callback` (L31-L41) - Function
 - `src/modules/webhooks/controllers/post-subscription.ts`
-  - `src.modules.webhooks.controllers.post-subscription.createWebhookSubscription` (L22-L42) - Class
-  - `src.modules.webhooks.controllers.post-subscription.createWebhookSubscription.then() callback` (L32-L40) - Function
+  - `src.modules.webhooks.controllers.post-subscription.createWebhookSubscription` (L23-L47) - Class
+  - `src.modules.webhooks.controllers.post-subscription.createWebhookSubscription.then() callback` (L33-L45) - Function
 - `src/modules/webhooks/metrics.ts`
   - `src.modules.webhooks.metrics._webhookDeliveriesOverdue` (L50-L62) - Class
   - `src.modules.webhooks.metrics._webhookDeliveriesOverdue.collect` (L54-L61) - Method
 - `src/modules/webhooks/repository.ts`
-  - `src.modules.webhooks.repository.forgetOwner` (L142-L146) - Class
-  - `src.modules.webhooks.repository.forgetOwner.then() callback` (L146-L146) - Function
+  - `src.modules.webhooks.repository.forgetOwner` (L145-L149) - Class
+  - `src.modules.webhooks.repository.forgetOwner.then() callback` (L149-L149) - Function
+- `src/modules/webhooks/services/actions.ts`
+  - `src.modules.webhooks.services.actions.standingOn.reads` (L39-L39) - Method
 - `src/modules/webhooks/services/catalog.ts`
-  - `src.modules.webhooks.services.catalog.AsyncApiChannelsDocument` (L22-L24) - Interface
-  - `src.modules.webhooks.services.catalog.eventsOf` (L34-L45) - Class
-  - `src.modules.webhooks.services.catalog.eventsOf.map() callback` (L39-L44) - Function
-  - `src.modules.webhooks.services.catalog.registerWebhookCatalog` (L53-L55) - Class
-  - `src.modules.webhooks.services.catalog.registerWebhookCatalog.moduleNames.flatMap() callback` (L54-L54) - Function
-  - `src.modules.webhooks.services.catalog.unknownEventTypes` (L67-L70) - Class
-  - `src.modules.webhooks.services.catalog.unknownEventTypes.known` (L68-L68) - Class
-  - `src.modules.webhooks.services.catalog.unknownEventTypes.known.catalogue.map() callback` (L68-L68) - Function
-  - `src.modules.webhooks.services.catalog.unknownEventTypes.filter() callback` (L69-L69) - Function
+  - `src.modules.webhooks.services.catalog.AsyncApiChannelsDocument` (L27-L29) - Interface
+  - `src.modules.webhooks.services.catalog.CatalogEvent` (L32-L37) - Interface
+  - `src.modules.webhooks.services.catalog.eventsOf` (L65-L77) - Class
+  - `src.modules.webhooks.services.catalog.eventsOf.map() callback` (L70-L76) - Function
+  - `src.modules.webhooks.services.catalog.registerWebhookCatalog` (L85-L87) - Class
+  - `src.modules.webhooks.services.catalog.registerWebhookCatalog.moduleNames.flatMap() callback` (L86-L86) - Function
+  - `src.modules.webhooks.services.catalog.listWebhookEventCatalog` (L103-L108) - Class
+  - `src.modules.webhooks.services.catalog.listWebhookEventCatalog.catalogue.map() callback` (L104-L108) - Function
+  - `src.modules.webhooks.services.catalog.unknownEventTypes` (L117-L120) - Class
+  - `src.modules.webhooks.services.catalog.unknownEventTypes.known` (L118-L118) - Class
+  - `src.modules.webhooks.services.catalog.unknownEventTypes.known.catalogue.map() callback` (L118-L118) - Function
+  - `src.modules.webhooks.services.catalog.unknownEventTypes.filter() callback` (L119-L119) - Function
+  - `src.modules.webhooks.services.catalog.unreadableEventTypes` (L132-L138) - Class
+  - `src.modules.webhooks.services.catalog.unreadableEventTypes.catalogue.filter() callback` (L135-L135) - Function
+  - `src.modules.webhooks.services.catalog.unreadableEventTypes.filter() callback` (L136-L136) - Function
+  - `src.modules.webhooks.services.catalog.unreadableEventTypes.map() callback` (L137-L137) - Function
 - `src/modules/webhooks/services/publish.ts`
   - `src.modules.webhooks.services.publish.fanOut.then() callback.then() callback.failures` (L94-L94) - Class
   - `src.modules.webhooks.services.publish.fanOut.then() callback.then() callback.failures.outcomes.filter() callback` (L94-L94) - Function
@@ -404,29 +418,29 @@ The generic REST controller construction layer — the write-once-reuse-everywhe
   - `src.infrastructure.surfaces.create-list-controller.createListController.namedHandler() callback` (L58-L75) - Function
   - `src.infrastructure.surfaces.create-list-controller.createListController.namedHandler() callback.then() callback` (L71-L73) - Function
 - `src/infrastructure/surfaces/create-restore-controller.ts`
-  - `src.infrastructure.surfaces.create-restore-controller.RestoreControllerSpec` (L22-L39) - Interface
-  - `src.infrastructure.surfaces.create-restore-controller.createRestoreController` (L47-L71) - Class
-  - `src.infrastructure.surfaces.create-restore-controller.createRestoreController.namedHandler() callback` (L55-L70) - Function
-  - `src.infrastructure.surfaces.create-restore-controller.createRestoreController.namedHandler() callback.then() callback` (L61-L68) - Function
-  - `src.infrastructure.surfaces.create-restore-controller.createRestoreController.namedHandler() callback.then() callback.then() callback` (L65-L67) - Function
+  - `src.infrastructure.surfaces.create-restore-controller.RestoreControllerSpec` (L23-L42) - Interface
+  - `src.infrastructure.surfaces.create-restore-controller.createRestoreController` (L50-L77) - Class
+  - `src.infrastructure.surfaces.create-restore-controller.createRestoreController.namedHandler() callback` (L59-L76) - Function
+  - `src.infrastructure.surfaces.create-restore-controller.createRestoreController.namedHandler() callback.then() callback` (L65-L74) - Function
+  - `src.infrastructure.surfaces.create-restore-controller.createRestoreController.namedHandler() callback.then() callback.then() callback` (L69-L73) - Function
 - `src/infrastructure/surfaces/create-search-controller.ts`
   - `src.infrastructure.surfaces.create-search-controller.SearchControllerSpec` (L17-L34) - Interface
-  - `src.infrastructure.surfaces.create-search-controller.createSearchController` (L73-L97) - Class
-  - `src.infrastructure.surfaces.create-search-controller.createSearchController.namedHandler() callback` (L82-L96) - Function
-  - `src.infrastructure.surfaces.create-search-controller.createSearchController.namedHandler() callback.then() callback` (L92-L94) - Function
+  - `src.infrastructure.surfaces.create-search-controller.createSearchController` (L74-L98) - Class
+  - `src.infrastructure.surfaces.create-search-controller.createSearchController.namedHandler() callback` (L83-L97) - Function
+  - `src.infrastructure.surfaces.create-search-controller.createSearchController.namedHandler() callback.then() callback` (L93-L95) - Function
 - `src/infrastructure/surfaces/create-update-controller.ts`
   - `src.infrastructure.surfaces.create-update-controller.clearableFields` (L115-L119) - Class
   - `src.infrastructure.surfaces.create-update-controller.clearableFields.filter() callback` (L118-L118) - Function
   - `src.infrastructure.surfaces.create-update-controller.clearableFields.map() callback` (L119-L119) - Function
-  - `src.infrastructure.surfaces.create-update-controller.pipelineOf` (L141-L189) - Class
-  - `src.infrastructure.surfaces.create-update-controller.pipelineOf.<function>` (L143-L189) - Function
-  - `src.infrastructure.surfaces.create-update-controller.pipelineOf.<function>.<function>` (L149-L189) - Function
-  - `src.infrastructure.surfaces.create-update-controller.<function>.<function>.then() callback` (L173-L176) - Function
-  - `src.infrastructure.surfaces.create-update-controller.pipelineOf.<function>.<function>.then() callback.withIfMatch() callback` (L175-L175) - Function
-  - `src.infrastructure.surfaces.create-update-controller.pipelineOf.<function>.<function>.then() callback` (L178-L186) - Function
-  - `src.infrastructure.surfaces.create-update-controller.pipelineOf.<function>.<function>.then() callback.then() callback` (L183-L185) - Function
-  - `src.infrastructure.surfaces.create-update-controller.createUpdateController.replaceFills` (L221-L223) - Class
-  - `src.infrastructure.surfaces.create-update-controller.createUpdateController.replaceFills.filter() callback` (L222-L222) - Function
+  - `src.infrastructure.surfaces.create-update-controller.pipelineOf` (L141-L193) - Class
+  - `src.infrastructure.surfaces.create-update-controller.pipelineOf.<function>` (L143-L193) - Function
+  - `src.infrastructure.surfaces.create-update-controller.pipelineOf.<function>.<function>` (L149-L193) - Function
+  - `src.infrastructure.surfaces.create-update-controller.<function>.<function>.then() callback` (L175-L178) - Function
+  - `src.infrastructure.surfaces.create-update-controller.pipelineOf.<function>.<function>.then() callback.withIfMatch() callback` (L177-L177) - Function
+  - `src.infrastructure.surfaces.create-update-controller.pipelineOf.<function>.<function>.then() callback` (L180-L190) - Function
+  - `src.infrastructure.surfaces.create-update-controller.pipelineOf.<function>.<function>.then() callback.then() callback` (L187-L189) - Function
+  - `src.infrastructure.surfaces.create-update-controller.createUpdateController.replaceFills` (L225-L227) - Class
+  - `src.infrastructure.surfaces.create-update-controller.createUpdateController.replaceFills.filter() callback` (L226-L226) - Function
 - `src/modules/api-keys/controllers/get-api-keys.ts`
   - `src.modules.api-keys.controllers.get-api-keys.listApiKeys` (L17-L25) - Class
   - `src.modules.api-keys.controllers.get-api-keys.listApiKeys.runList` (L23-L24) - Method
@@ -437,37 +451,37 @@ The generic REST controller construction layer — the write-once-reuse-everywhe
   - `src.modules.audit-logs.controllers.get-audit.getAudit` (L16-L32) - Class
   - `src.modules.audit-logs.controllers.get-audit.getAudit.runList` (L27-L31) - Method
 - `src/modules/audit-logs/repository.ts`
-  - `src.modules.audit-logs.repository.AuditLogSearchFilters` (L23-L34) - Interface
-  - `src.modules.audit-logs.repository.OwnEntriesCursor` (L89-L92) - Interface
-  - `src.modules.audit-logs.repository.OwnEntriesPage` (L95-L99) - Interface
-  - `src.modules.audit-logs.repository.cursorAfter.atEdge` (L113-L113) - Class
-  - `src.modules.audit-logs.repository.cursorAfter.atEdge.rows.filter() callback` (L113-L113) - Function
-  - `src.modules.audit-logs.repository.cursorAfter.seen.atEdge.map() callback` (L115-L115) - Function
-  - `src.modules.audit-logs.repository.ownEntriesPage` (L129-L148) - Class
-  - `src.modules.audit-logs.repository.ownEntriesPage.then() callback` (L143-L148) - Function
+  - `src.modules.audit-logs.repository.AuditLogSearchFilters` (L23-L36) - Interface
+  - `src.modules.audit-logs.repository.OwnEntriesCursor` (L92-L95) - Interface
+  - `src.modules.audit-logs.repository.OwnEntriesPage` (L98-L102) - Interface
+  - `src.modules.audit-logs.repository.cursorAfter.atEdge` (L116-L116) - Class
+  - `src.modules.audit-logs.repository.cursorAfter.atEdge.rows.filter() callback` (L116-L116) - Function
+  - `src.modules.audit-logs.repository.cursorAfter.seen.atEdge.map() callback` (L118-L118) - Function
+  - `src.modules.audit-logs.repository.ownEntriesPage` (L132-L151) - Class
+  - `src.modules.audit-logs.repository.ownEntriesPage.then() callback` (L146-L151) - Function
 - `src/modules/audit-logs/service.ts`
-  - `src.modules.audit-logs.service.searchIncidents` (L112-L121) - Class
-  - `src.modules.audit-logs.service.searchIncidents.then() callback` (L121-L121) - Function
-  - `src.modules.audit-logs.service.searchIncidents.then() callback.items.page.items.map() callback` (L121-L121) - Function
-  - `src.modules.audit-logs.service.findOwnAuditEntries.readFrom` (L137-L141) - Class
-  - `src.modules.audit-logs.service.findOwnAuditEntries.readFrom.then() callback` (L138-L141) - Function
+  - `src.modules.audit-logs.service.searchIncidents` (L115-L124) - Class
+  - `src.modules.audit-logs.service.searchIncidents.then() callback` (L124-L124) - Function
+  - `src.modules.audit-logs.service.searchIncidents.then() callback.items.page.items.map() callback` (L124-L124) - Function
+  - `src.modules.audit-logs.service.findOwnAuditEntries.readFrom` (L140-L144) - Class
+  - `src.modules.audit-logs.service.findOwnAuditEntries.readFrom.then() callback` (L141-L144) - Function
 - `src/modules/delivery/controllers/get-preorder-fulfillment-orders.ts`
   - `src.modules.delivery.controllers.get-preorder-fulfillment-orders.getPreorderFulfillmentOrders` (L16-L26) - Class
   - `src.modules.delivery.controllers.get-preorder-fulfillment-orders.getPreorderFulfillmentOrders.runList` (L24-L25) - Method
   - `src.modules.delivery.controllers.get-preorder-fulfillment-orders.getPreorderSummary` (L29-L36) - Class
   - `src.modules.delivery.controllers.get-preorder-fulfillment-orders.getPreorderSummary.runList` (L35-L35) - Method
 - `src/modules/delivery/services/lost.ts`
-  - `src.modules.delivery.services.lost.markShipmentLost.then() callback.productIds` (L187-L187) - Class
-  - `src.modules.delivery.services.lost.markShipmentLost.then() callback.productIds.shipment.lines.map() callback` (L187-L187) - Function
+  - `src.modules.delivery.services.lost.markShipmentLost.then() callback.productIds` (L186-L186) - Class
+  - `src.modules.delivery.services.lost.markShipmentLost.then() callback.productIds.shipment.lines.map() callback` (L186-L186) - Function
 - `src/modules/delivery/services/reship.ts`
   - `src.modules.delivery.services.reship.reopenLines.origin` (L40-L40) - Class
   - `src.modules.delivery.services.reship.reopenLines.origin.orders.find() callback` (L40-L40) - Function
 - `src/modules/delivery/services/split.ts`
-  - `src.modules.delivery.services.split.allocatedLines` (L64-L74) - Class
-  - `src.modules.delivery.services.split.allocatedLines.allocated.map() callback` (L68-L74) - Function
-  - `src.modules.delivery.services.split.allocatedLines.allocated.map() callback.title.held.lines.find() callback` (L70-L70) - Function
-  - `src.modules.delivery.services.split.splitAct.covers.held.lines.every() callback.taken` (L101-L101) - Class
-  - `src.modules.delivery.services.split.splitAct.covers.held.lines.every() callback.taken.units.find() callback` (L101-L101) - Function
+  - `src.modules.delivery.services.split.allocatedLines` (L62-L72) - Class
+  - `src.modules.delivery.services.split.allocatedLines.allocated.map() callback` (L66-L72) - Function
+  - `src.modules.delivery.services.split.allocatedLines.allocated.map() callback.title.held.lines.find() callback` (L68-L68) - Function
+  - `src.modules.delivery.services.split.splitAct.covers.held.lines.every() callback.taken` (L99-L99) - Class
+  - `src.modules.delivery.services.split.splitAct.covers.held.lines.every() callback.taken.units.find() callback` (L99-L99) - Function
 - `src/modules/example/controllers/get-example.ts`
   - `src.modules.example.controllers.get-example.getExample` (L15-L19) - Class
   - `src.modules.example.controllers.get-example.getExample.fetch` (L18-L18) - Method
@@ -475,17 +489,17 @@ The generic REST controller construction layer — the write-once-reuse-everywhe
   - `src.modules.example.controllers.get-examples.getExamples` (L27-L31) - Class
   - `src.modules.example.controllers.get-examples.getExamples.runSearch` (L30-L30) - Method
 - `src/modules/example/controllers/post-example-event.ts`
-  - `src.modules.example.controllers.post-example-event.eventHandler` (L32-L43) - Class
-  - `src.modules.example.controllers.post-example-event.eventHandler.namedHandler() callback` (L33-L43) - Function
-  - `src.modules.example.controllers.post-example-event.eventHandler.namedHandler() callback.then() callback` (L38-L41) - Function
+  - `src.modules.example.controllers.post-example-event.eventHandler` (L33-L46) - Class
+  - `src.modules.example.controllers.post-example-event.eventHandler.namedHandler() callback` (L34-L46) - Function
+  - `src.modules.example.controllers.post-example-event.eventHandler.namedHandler() callback.then() callback` (L39-L44) - Function
 - `src/modules/example/controllers/post-example.ts`
-  - `src.modules.example.controllers.post-example.postExample` (L24-L35) - Class
-  - `src.modules.example.controllers.post-example.postExample.namedHandler('postExample') callback` (L24-L35) - Function
-  - `src.modules.example.controllers.post-example.postExample.namedHandler('postExample') callback.then() callback` (L30-L33) - Function
+  - `src.modules.example.controllers.post-example.postExample` (L25-L39) - Class
+  - `src.modules.example.controllers.post-example.postExample.namedHandler('postExample') callback` (L25-L39) - Function
+  - `src.modules.example.controllers.post-example.postExample.namedHandler('postExample') callback.then() callback` (L31-L37) - Function
 - `src/modules/example/controllers/put-example-cover.ts`
-  - `src.modules.example.controllers.put-example-cover.putExampleCover` (L20-L45) - Class
-  - `src.modules.example.controllers.put-example-cover.putExampleCover.namedHandler('putExampleCover') callback` (L22-L44) - Function
-  - `src.modules.example.controllers.put-example-cover.putExampleCover.namedHandler('putExampleCover') callback.then() callback` (L38-L42) - Function
+  - `src.modules.example.controllers.put-example-cover.putExampleCover` (L23-L48) - Class
+  - `src.modules.example.controllers.put-example-cover.putExampleCover.namedHandler('putExampleCover') callback` (L25-L47) - Function
+  - `src.modules.example.controllers.put-example-cover.putExampleCover.namedHandler('putExampleCover') callback.then() callback` (L41-L45) - Function
 - `src/modules/inventory/controllers/get-inventory-levels.ts`
   - `src.modules.inventory.controllers.get-inventory-levels.getInventoryLevels` (L13-L22) - Class
   - `src.modules.inventory.controllers.get-inventory-levels.getInventoryLevels.runList` (L21-L21) - Method
@@ -517,7 +531,7 @@ The generic REST controller construction layer — the write-once-reuse-everywhe
   - `src.modules.orders.controllers.get-orders.getOrders.runSearch` (L57-L60) - Method
   - `src.modules.orders.controllers.get-orders.getOrders.runSearch.then() callback` (L60-L60) - Function
 - `src/modules/orders/controllers/post-order-restore.ts`
-  - `src.modules.orders.controllers.post-order-restore.restoreOrders` (L15-L20) - Class
+  - `src.modules.orders.controllers.post-order-restore.restoreOrders` (L15-L21) - Class
   - `src.modules.orders.controllers.post-order-restore.restoreOrders.restore` (L17-L17) - Method
   - `src.modules.orders.controllers.post-order-restore.restoreOrders.present` (L18-L18) - Method
 - `src/modules/payments/controllers/get-payments.ts`
@@ -545,12 +559,12 @@ The generic REST controller construction layer — the write-once-reuse-everywhe
   - `src.modules.products.controllers.get-products.getProducts` (L86-L96) - Class
   - `src.modules.products.controllers.get-products.getProducts.runSearch` (L90-L95) - Method
 - `src/modules/products/controllers/post-product-restore.ts`
-  - `src.modules.products.controllers.post-product-restore.restoreProducts` (L15-L20) - Class
+  - `src.modules.products.controllers.post-product-restore.restoreProducts` (L15-L21) - Class
   - `src.modules.products.controllers.post-product-restore.restoreProducts.restore` (L17-L17) - Method
 - `src/modules/products/controllers/post-product.ts`
-  - `src.modules.products.controllers.post-product.createProduct` (L23-L88) - Class
-  - `src.modules.products.controllers.post-product.createProduct.writeWithUploadedImage() callback` (L72-L73) - Function
-  - `src.modules.products.controllers.post-product.createProduct.catch() callback` (L85-L87) - Function
+  - `src.modules.products.controllers.post-product.createProduct` (L24-L93) - Class
+  - `src.modules.products.controllers.post-product.createProduct.writeWithUploadedImage() callback` (L73-L74) - Function
+  - `src.modules.products.controllers.post-product.createProduct.catch() callback` (L90-L92) - Function
 - `src/modules/returns/controllers/get-returns.ts`
   - `src.modules.returns.controllers.get-returns.getReturns` (L13-L21) - Class
   - `src.modules.returns.controllers.get-returns.getReturns.runList` (L20-L20) - Method
@@ -561,21 +575,21 @@ The generic REST controller construction layer — the write-once-reuse-everywhe
   - `src.modules.sitemap.controllers.get-sitemap-pages.getSitemapPages` (L13-L19) - Class
   - `src.modules.sitemap.controllers.get-sitemap-pages.getSitemapPages.then() callback` (L16-L18) - Function
 - `src/modules/sitemap/controllers/get-sitemap-products.ts`
-  - `src.modules.sitemap.controllers.get-sitemap-products.getSitemapProducts` (L17-L33) - Class
-  - `src.modules.sitemap.controllers.get-sitemap-products.getSitemapProducts.then() callback` (L25-L31) - Function
+  - `src.modules.sitemap.controllers.get-sitemap-products.getSitemapProducts` (L17-L35) - Class
+  - `src.modules.sitemap.controllers.get-sitemap-products.getSitemapProducts.then() callback` (L27-L33) - Function
 - `src/modules/sitemap/controllers/send-xml.ts`
   - `src.modules.sitemap.controllers.send-xml.sendXml` (L24-L34) - Class
   - `src.modules.sitemap.controllers.send-xml.sendXml.pipeline() callback` (L30-L33) - Function
 - `src/modules/sitemap/service.ts`
-  - `src.modules.sitemap.service.entriesFor` (L57-L67) - Class
-  - `src.modules.sitemap.service.entriesFor.languages.tags.map() callback` (L62-L66) - Function
-  - `src.modules.sitemap.service.sitemapService` (L79-L121) - Class
-  - `src.modules.sitemap.service.sitemapService.listFiles` (L84-L96) - Method
-  - `src.modules.sitemap.service.sitemapService.listFiles.Array.from() callback` (L93-L93) - Function
-  - `src.modules.sitemap.service.sitemapService.listPages` (L99-L102) - Method
-  - `src.modules.sitemap.service.sitemapService.listPages.STATIC_PAGES.flatMap() callback` (L101-L101) - Function
-  - `src.modules.sitemap.service.sitemapService.listProducts` (L111-L120) - Method
-  - `src.modules.sitemap.service.sitemapService.listProducts.products.flatMap() callback` (L117-L118) - Function
+  - `src.modules.sitemap.service.entriesFor` (L56-L66) - Class
+  - `src.modules.sitemap.service.entriesFor.languages.tags.map() callback` (L61-L65) - Function
+  - `src.modules.sitemap.service.sitemapService` (L78-L125) - Class
+  - `src.modules.sitemap.service.sitemapService.listFiles` (L83-L95) - Method
+  - `src.modules.sitemap.service.sitemapService.listFiles.Array.from() callback` (L92-L92) - Function
+  - `src.modules.sitemap.service.sitemapService.listPages` (L98-L101) - Method
+  - `src.modules.sitemap.service.sitemapService.listPages.STATIC_PAGES.flatMap() callback` (L100-L100) - Function
+  - `src.modules.sitemap.service.sitemapService.listProducts` (L110-L124) - Method
+  - `src.modules.sitemap.service.sitemapService.listProducts.products.flatMap() callback` (L121-L122) - Function
 - `src/modules/stats/controllers/get-stats.ts`
   - `src.modules.stats.controllers.get-stats.getSalesStats` (L17-L21) - Class
   - `src.modules.stats.controllers.get-stats.getSalesStats.statsHandler('getSalesStats') callback` (L20-L20) - Function
@@ -596,9 +610,9 @@ The generic REST controller construction layer — the write-once-reuse-everywhe
   - `src.modules.stats.controllers.get-stats.getPipelineStats` (L79-L85) - Class
   - `src.modules.stats.controllers.get-stats.getPipelineStats.then() callback` (L82-L84) - Function
 - `src/modules/stats/controllers/respond.ts`
-  - `src.modules.stats.controllers.respond.statsHandler` (L38-L65) - Class
-  - `src.modules.stats.controllers.respond.statsHandler.namedHandler() callback` (L49-L65) - Function
-  - `src.modules.stats.controllers.respond.statsHandler.namedHandler() callback.then() callback` (L61-L63) - Function
+  - `src.modules.stats.controllers.respond.statsHandler` (L38-L66) - Class
+  - `src.modules.stats.controllers.respond.statsHandler.namedHandler() callback` (L49-L66) - Function
+  - `src.modules.stats.controllers.respond.statsHandler.namedHandler() callback.then() callback` (L62-L64) - Function
 - `src/modules/stats/services/breakdowns.ts`
   - `src.modules.stats.services.breakdowns.getProductSeries.then() callback.reversed` (L85-L85) - Class
   - `src.modules.stats.services.breakdowns.getProductSeries.then() callback.reversed.returned.map() callback` (L85-L85) - Function
@@ -613,11 +627,6 @@ The generic REST controller construction layer — the write-once-reuse-everywhe
 - `src/modules/tasks/controllers/get-tasks.ts`
   - `src.modules.tasks.controllers.get-tasks.getTasks` (L30-L35) - Class
   - `src.modules.tasks.controllers.get-tasks.getTasks.runSearch` (L33-L34) - Method
-- `src/modules/users/controllers/delete-purchase-hold.ts`
-  - `src.modules.users.controllers.delete-purchase-hold.deletePurchaseHold` (L19-L38) - Class
-  - `src.modules.users.controllers.delete-purchase-hold.deletePurchaseHold.namedHandler('liftUserPurchaseHold') callback` (L21-L37) - Function
-  - `src.modules.users.controllers.delete-purchase-hold.deletePurchaseHold.namedHandler('liftUserPurchaseHold') callback.then() callback` (L27-L35) - Function
-  - `src.modules.users.controllers.delete-purchase-hold.deletePurchaseHold.namedHandler('liftUserPurchaseHold') callback.then() callback.then() callback` (L32-L34) - Function
 - `src/modules/users/controllers/delete-users.ts`
   - `src.modules.users.controllers.delete-users.deleteUsers` (L22-L27) - Class
   - `src.modules.users.controllers.delete-users.deleteUsers.remove` (L24-L25) - Method
@@ -630,39 +639,52 @@ The generic REST controller construction layer — the write-once-reuse-everywhe
   - `src.modules.users.controllers.get-users.getUsers.runSearch` (L45-L52) - Method
   - `src.modules.users.controllers.get-users.getUsers.runSearch.then() callback` (L48-L51) - Function
   - `src.modules.users.controllers.get-users.getUsers.runSearch.then() callback.then() callback` (L51-L51) - Function
+- `src/modules/users/controllers/post-lift-purchase-hold.ts`
+  - `src.modules.users.controllers.post-lift-purchase-hold.postLiftPurchaseHold` (L20-L41) - Class
+  - `src.modules.users.controllers.post-lift-purchase-hold.postLiftPurchaseHold.namedHandler('liftUserPurchaseHold') callback` (L22-L40) - Function
+  - `src.modules.users.controllers.post-lift-purchase-hold.postLiftPurchaseHold.namedHandler('liftUserPurchaseHold') callback.then() callback` (L28-L38) - Function
+  - `src.modules.users.controllers.post-lift-purchase-hold.postLiftPurchaseHold.namedHandler('liftUserPurchaseHold') callback.then() callback.then() callback` (L33-L37) - Function
+- `src/modules/users/controllers/post-place-purchase-hold.ts`
+  - `src.modules.users.controllers.post-place-purchase-hold.postPlacePurchaseHold` (L21-L49) - Class
+  - `src.modules.users.controllers.post-place-purchase-hold.postPlacePurchaseHold.namedHandler('placeUserPurchaseHold') callback` (L23-L48) - Function
+  - `src.modules.users.controllers.post-place-purchase-hold.postPlacePurchaseHold.namedHandler('placeUserPurchaseHold') callback.then() callback` (L36-L46) - Function
+  - `src.modules.users.controllers.post-place-purchase-hold.postPlacePurchaseHold.namedHandler('placeUserPurchaseHold') callback.then() callback.then() callback` (L41-L45) - Function
 - `src/modules/users/controllers/post-user-activation.ts`
-  - `src.modules.users.controllers.post-user-activation.switchHandler` (L23-L38) - Class
-  - `src.modules.users.controllers.post-user-activation.switchHandler.namedHandler() callback` (L24-L38) - Function
-  - `src.modules.users.controllers.post-user-activation.switchHandler.namedHandler() callback.then() callback` (L30-L36) - Function
-  - `src.modules.users.controllers.post-user-activation.switchHandler.namedHandler() callback.then() callback.then() callback` (L33-L35) - Function
-  - `src.modules.users.controllers.post-user-activation.postActivate.switchHandler('activateUserById') callback` (L41-L42) - Function
-  - `src.modules.users.controllers.post-user-activation.postActivate` (L41-L43) - Class
-  - `src.modules.users.controllers.post-user-activation.postDeactivate.switchHandler('deactivateUserById') callback` (L46-L47) - Function
-  - `src.modules.users.controllers.post-user-activation.postDeactivate` (L46-L48) - Class
+  - `src.modules.users.controllers.post-user-activation.switchHandler` (L24-L41) - Class
+  - `src.modules.users.controllers.post-user-activation.switchHandler.namedHandler() callback` (L25-L41) - Function
+  - `src.modules.users.controllers.post-user-activation.switchHandler.namedHandler() callback.then() callback` (L31-L39) - Function
+  - `src.modules.users.controllers.post-user-activation.switchHandler.namedHandler() callback.then() callback.then() callback` (L34-L38) - Function
+  - `src.modules.users.controllers.post-user-activation.postActivate.switchHandler('activateUserById') callback` (L44-L45) - Function
+  - `src.modules.users.controllers.post-user-activation.postActivate` (L44-L46) - Class
+  - `src.modules.users.controllers.post-user-activation.postDeactivate.switchHandler('deactivateUserById') callback` (L49-L50) - Function
+  - `src.modules.users.controllers.post-user-activation.postDeactivate` (L49-L51) - Class
 - `src/modules/users/controllers/post-user-restore.ts`
-  - `src.modules.users.controllers.post-user-restore.restoreUsers` (L16-L21) - Class
+  - `src.modules.users.controllers.post-user-restore.restoreUsers` (L16-L22) - Class
   - `src.modules.users.controllers.post-user-restore.restoreUsers.restore` (L18-L18) - Method
   - `src.modules.users.controllers.post-user-restore.restoreUsers.present` (L19-L19) - Method
+- `src/modules/users/controllers/post-user-role.ts`
+  - `src.modules.users.controllers.post-user-role.answer` (L27-L45) - Class
+  - `src.modules.users.controllers.post-user-role.answer.done.then() callback` (L34-L44) - Function
+  - `src.modules.users.controllers.post-user-role.answer.done.then() callback.then() callback` (L39-L43) - Function
+  - `src.modules.users.controllers.post-user-role.postAssignRole` (L48-L64) - Class
+  - `src.modules.users.controllers.post-user-role.postAssignRole.namedHandler('assignUserRole') callback` (L50-L63) - Function
+  - `src.modules.users.controllers.post-user-role.postRevokeRole` (L67-L80) - Class
+  - `src.modules.users.controllers.post-user-role.postRevokeRole.namedHandler('revokeUserRole') callback` (L69-L79) - Function
 - `src/modules/users/controllers/post-user.ts`
-  - `src.modules.users.controllers.post-user.createUser` (L21-L71) - Class
-  - `src.modules.users.controllers.post-user.createUser.writeWithUploadedImage() callback` (L51-L52) - Function
-  - `src.modules.users.controllers.post-user.createUser.then() callback` (L54-L67) - Function
-  - `src.modules.users.controllers.post-user.createUser.then() callback.then() callback` (L64-L66) - Function
-  - `src.modules.users.controllers.post-user.createUser.catch() callback` (L68-L70) - Function
-- `src/modules/users/controllers/put-purchase-hold.ts`
-  - `src.modules.users.controllers.put-purchase-hold.putPurchaseHold` (L20-L46) - Class
-  - `src.modules.users.controllers.put-purchase-hold.putPurchaseHold.namedHandler('setUserPurchaseHold') callback` (L22-L45) - Function
-  - `src.modules.users.controllers.put-purchase-hold.putPurchaseHold.namedHandler('setUserPurchaseHold') callback.then() callback` (L35-L43) - Function
-  - `src.modules.users.controllers.put-purchase-hold.putPurchaseHold.namedHandler('setUserPurchaseHold') callback.then() callback.then() callback` (L40-L42) - Function
+  - `src.modules.users.controllers.post-user.createUser` (L23-L76) - Class
+  - `src.modules.users.controllers.post-user.createUser.writeWithUploadedImage() callback` (L53-L54) - Function
+  - `src.modules.users.controllers.post-user.createUser.then() callback` (L56-L72) - Function
+  - `src.modules.users.controllers.post-user.createUser.then() callback.then() callback` (L66-L71) - Function
+  - `src.modules.users.controllers.post-user.createUser.catch() callback` (L73-L75) - Function
 - `src/modules/users/model.ts`
-  - `src.modules.users.model.UserRecord` (L25-L190) - Interface
-  - `src.modules.users.model.PurchaseHoldRecord` (L196-L204) - Interface
-  - `src.modules.users.model.DeliveredCodeState` (L219-L231) - Interface
-  - `src.modules.users.model.TwoFactorMethodRecord` (L247-L262) - Interface
-  - `src.modules.users.model.MfaReservation` (L268-L274) - Interface
-  - `src.modules.users.model.OAuthAccount` (L281-L288) - Interface
-  - `src.modules.users.model.UserDocument` (L293-L303) - Interface
-  - `src.modules.users.model.userSchema.pre('save') callback.then() callback` (L728-L730) - Function
+  - `src.modules.users.model.UserRecord` (L26-L191) - Interface
+  - `src.modules.users.model.PurchaseHoldRecord` (L197-L205) - Interface
+  - `src.modules.users.model.DeliveredCodeState` (L220-L232) - Interface
+  - `src.modules.users.model.TwoFactorMethodRecord` (L248-L263) - Interface
+  - `src.modules.users.model.MfaReservation` (L269-L275) - Interface
+  - `src.modules.users.model.OAuthAccount` (L282-L289) - Interface
+  - `src.modules.users.model.UserDocument` (L294-L304) - Interface
+  - `src.modules.users.model.userSchema.pre('save') callback.then() callback` (L733-L735) - Function
 - `src/modules/users/two-factor-write.ts`
   - `src.modules.users.two-factor-write.EntryChange` (L37-L44) - Interface
   - `src.modules.users.two-factor-write.TwoFactorWrite` (L49-L64) - Interface
@@ -695,10 +717,10 @@ The generic REST controller construction layer — the write-once-reuse-everywhe
   - `src.modules.webhooks.services.publish.fanOut.then() callback.matches` (L88-L90) - Class
   - `src.modules.webhooks.services.publish.fanOut.then() callback.matches.map() callback` (L92-L92) - Function
 - `src/modules/webhooks/services/subscriptions.ts`
-  - `src.modules.webhooks.services.subscriptions.SubscriptionWithMintedSecrets` (L42-L48) - Interface
-  - `src.modules.webhooks.services.subscriptions.SubscriptionListFilters` (L96-L102) - Interface
-  - `src.modules.webhooks.services.subscriptions.getById` (L141-L149) - Class
-  - `src.modules.webhooks.services.subscriptions.getById.then() callback` (L147-L148) - Function
+  - `src.modules.webhooks.services.subscriptions.SubscriptionWithMintedSecrets` (L43-L49) - Interface
+  - `src.modules.webhooks.services.subscriptions.SubscriptionListFilters` (L113-L119) - Interface
+  - `src.modules.webhooks.services.subscriptions.getById` (L158-L166) - Class
+  - `src.modules.webhooks.services.subscriptions.getById.then() callback` (L164-L165) - Function
 
 ### Observability HTTP Readback & SSE Stream
 The in-app observability surface that reads back the shared Prometheus HTTP counters and duration histogram and exposes them as human-readable numbers. getHttpRequestCounters sums the httpRequestsTotal and httpRequestErrorsTotal counters across all method/route label series. percentileFromHistogramBuckets walks cumulative histogram buckets to approximate p50/p95 latency. getObservabilityHealth and getObservabilityMetricsOverview are the two REST controllers that assemble these numbers into the contract-defined response shapes. The stream module provides an SSE endpoint that periodically re-reads the same counters and pushes updates to connected dashboards.
@@ -717,7 +739,7 @@ The in-app observability surface that reads back the shared Prometheus HTTP coun
 - `src/modules/observability/controllers/get-observability-metrics-overview.ts`
   - `src.modules.observability.controllers.get-observability-metrics-overview.MetricSample` (L21-L24) - Interface
   - `src.modules.observability.controllers.get-observability-metrics-overview.readCounter` (L40-L50) - Class
-  - `src.modules.observability.controllers.get-observability-metrics-overview.readCounter.then() callback` (L47-L48) - Function
+  - `src.modules.observability.controllers.get-observability-metrics-overview.readCounter.then() callback` (L45-L48) - Function
   - `src.modules.observability.controllers.get-observability-metrics-overview.hasShopMetrics` (L64-L65) - Class
   - `src.modules.observability.controllers.get-observability-metrics-overview.hasShopMetrics.SHOP_METRIC_NAMES.some() callback` (L65-L65) - Function
   - `src.modules.observability.controllers.get-observability-metrics-overview.histogramCounts` (L71-L72) - Class
@@ -745,10 +767,10 @@ The in-app observability surface that reads back the shared Prometheus HTTP coun
   - `src.modules.observability.services.stream.writeMetricsEvent` (L88-L95) - Class
   - `src.modules.observability.services.stream.writeMetricsEvent.then() callback` (L91-L93) - Function
   - `src.modules.observability.services.stream.writeMetricsEvent.catch() callback` (L94-L94) - Function
-  - `src.modules.observability.services.stream.streamObservabilityMetrics.updatesInterval` (L120-L122) - Class
-  - `src.modules.observability.services.stream.streamObservabilityMetrics.updatesInterval.setInterval() callback` (L120-L122) - Function
-  - `src.modules.observability.services.stream.streamObservabilityMetrics.heartbeatInterval` (L126-L128) - Class
-  - `src.modules.observability.services.stream.streamObservabilityMetrics.heartbeatInterval.setInterval() callback` (L126-L128) - Function
+  - `src.modules.observability.services.stream.streamObservabilityMetrics.updatesInterval` (L124-L126) - Class
+  - `src.modules.observability.services.stream.streamObservabilityMetrics.updatesInterval.setInterval() callback` (L124-L126) - Function
+  - `src.modules.observability.services.stream.streamObservabilityMetrics.heartbeatInterval` (L130-L132) - Class
+  - `src.modules.observability.services.stream.streamObservabilityMetrics.heartbeatInterval.setInterval() callback` (L130-L132) - Function
 
 ### Tasks (Contact & Task Management)
 The self-contained `tasks` domain module that owns the visitor contact form and staff task workflow — creating contact requests (announced on the domain-event bus), staff reads/deletes, the workflow "doors" (resolve, assign, note), and the module's `personalData` export/erasure halves, with jurisdiction-based access control and audit logging.
@@ -786,43 +808,35 @@ The self-contained `tasks` domain module that owns the visitor contact form and 
 - `src/modules/tasks/presenter.ts`
   - `src.modules.tasks.presenter.TaskView` (L16-L20) - Interface
 - `src/modules/tasks/repository.ts`
-  - `src.modules.tasks.repository.TaskRepository` (L43-L82) - Interface
-  - `src.modules.tasks.repository.NewSystemTask` (L85-L99) - Interface
-  - `src.modules.tasks.repository.taskRepository` (L108-L321) - Class
-  - `src.modules.tasks.repository.taskRepository.moveFrom` (L111-L125) - Method
-  - `src.modules.tasks.repository.taskRepository.assign` (L127-L145) - Method
+  - `src.modules.tasks.repository.TaskRepository` (L44-L83) - Interface
+  - `src.modules.tasks.repository.NewSystemTask` (L86-L100) - Interface
+  - `src.modules.tasks.repository.taskRepository` (L109-L325) - Class
+  - `src.modules.tasks.repository.taskRepository.moveFrom` (L112-L126) - Method
+  - `src.modules.tasks.repository.taskRepository.assign` (L128-L145) - Method
   - `src.modules.tasks.repository.taskRepository.assign.then() callback` (L136-L144) - Function
-  - `src.modules.tasks.repository.taskRepository.unassign` (L147-L162) - Method
-  - `src.modules.tasks.repository.taskRepository.unassign.then() callback` (L154-L161) - Function
-  - `src.modules.tasks.repository.taskRepository.appendNote` (L164-L171) - Method
-  - `src.modules.tasks.repository.taskRepository.claimOverdue` (L173-L189) - Method
-  - `src.modules.tasks.repository.taskRepository.claimDueSoon` (L191-L210) - Method
-  - `src.modules.tasks.repository.taskRepository.sawEvent` (L212-L216) - Method
-  - `src.modules.tasks.repository.taskRepository.sawEvent.then() callback` (L216-L216) - Function
-  - `src.modules.tasks.repository.taskRepository.insertSystem` (L218-L236) - Method
-  - `src.modules.tasks.repository.taskRepository.touchOpen` (L238-L253) - Method
-  - `src.modules.tasks.repository.taskRepository.touchOpen.then() callback` (L253-L253) - Function
-  - `src.modules.tasks.repository.taskRepository.findOpenSystem` (L255-L256) - Method
-  - `src.modules.tasks.repository.taskRepository.findOpenByKey` (L258-L258) - Method
-  - `src.modules.tasks.repository.taskRepository.deleteOwned` (L260-L276) - Method
-  - `src.modules.tasks.repository.deleteOwned.then() callback` (L270-L270) - Function
-  - `src.modules.tasks.repository.taskRepository.deleteOwned.then() callback.rows.map() callback` (L270-L270) - Function
-  - `src.modules.tasks.repository.taskRepository.deleteOwned.then() callback` (L271-L275) - Function
-  - `src.modules.tasks.repository.taskRepository.deleteOwned.then() callback.then() callback` (L275-L275) - Function
-  - `src.modules.tasks.repository.taskRepository.deleteSystemAbout` (L278-L289) - Method
-  - `src.modules.tasks.repository.taskRepository.deleteSystemAbout.then() callback` (L289-L289) - Function
-  - `src.modules.tasks.repository.taskRepository.detachSubject` (L291-L299) - Method
-  - `src.modules.tasks.repository.taskRepository.detachSubject.then() callback` (L299-L299) - Function
-  - `src.modules.tasks.repository.taskRepository.forgetStaff` (L301-L320) - Method
-  - `src.modules.tasks.repository.taskRepository.forgetStaff.then() callback` (L320-L320) - Function
-- `src/modules/tasks/service.ts`
-  - `src.modules.tasks.service.findOwnTasks` (L385-L393) - Class
-  - `src.modules.tasks.service.findOwnTasks.readAll() callback` (L387-L391) - Function
-  - `src.modules.tasks.service.exportNotesOf` (L401-L402) - Class
-  - `src.modules.tasks.service.exportNotesOf.task.notes.map() callback` (L402-L402) - Function
-  - `src.modules.tasks.service.findOwnTasksForExport` (L429-L430) - Class
-  - `src.modules.tasks.service.findOwnTasksForExport.then() callback` (L430-L430) - Function
-  - `src.modules.tasks.service.findOwnTasksForExport.then() callback.tasks.map() callback` (L430-L430) - Function
+  - `src.modules.tasks.repository.taskRepository.unassign` (L147-L166) - Method
+  - `src.modules.tasks.repository.taskRepository.unassign.then() callback` (L158-L165) - Function
+  - `src.modules.tasks.repository.taskRepository.appendNote` (L168-L175) - Method
+  - `src.modules.tasks.repository.taskRepository.claimOverdue` (L177-L193) - Method
+  - `src.modules.tasks.repository.taskRepository.claimDueSoon` (L195-L214) - Method
+  - `src.modules.tasks.repository.taskRepository.sawEvent` (L216-L220) - Method
+  - `src.modules.tasks.repository.taskRepository.sawEvent.then() callback` (L220-L220) - Function
+  - `src.modules.tasks.repository.taskRepository.insertSystem` (L222-L240) - Method
+  - `src.modules.tasks.repository.taskRepository.touchOpen` (L242-L257) - Method
+  - `src.modules.tasks.repository.taskRepository.touchOpen.then() callback` (L257-L257) - Function
+  - `src.modules.tasks.repository.taskRepository.findOpenSystem` (L259-L260) - Method
+  - `src.modules.tasks.repository.taskRepository.findOpenByKey` (L262-L262) - Method
+  - `src.modules.tasks.repository.taskRepository.deleteOwned` (L264-L280) - Method
+  - `src.modules.tasks.repository.deleteOwned.then() callback` (L274-L274) - Function
+  - `src.modules.tasks.repository.taskRepository.deleteOwned.then() callback.rows.map() callback` (L274-L274) - Function
+  - `src.modules.tasks.repository.taskRepository.deleteOwned.then() callback` (L275-L279) - Function
+  - `src.modules.tasks.repository.taskRepository.deleteOwned.then() callback.then() callback` (L279-L279) - Function
+  - `src.modules.tasks.repository.taskRepository.deleteSystemAbout` (L282-L293) - Method
+  - `src.modules.tasks.repository.taskRepository.deleteSystemAbout.then() callback` (L293-L293) - Function
+  - `src.modules.tasks.repository.taskRepository.detachSubject` (L295-L303) - Method
+  - `src.modules.tasks.repository.taskRepository.detachSubject.then() callback` (L303-L303) - Function
+  - `src.modules.tasks.repository.taskRepository.forgetStaff` (L305-L324) - Method
+  - `src.modules.tasks.repository.taskRepository.forgetStaff.then() callback` (L324-L324) - Function
 - `src/modules/tasks/services/overdue.ts`
   - `src.modules.tasks.services.overdue.claimAndAnnounce` (L25-L33) - Class
   - `src.modules.tasks.services.overdue.claimAndAnnounce.announceInTransaction() callback` (L29-L33) - Function
@@ -860,18 +874,18 @@ The self-contained `tasks` domain module that owns the visitor contact form and 
   - `src.modules.tasks.services.workflow.DOORS.resolve.rule` (L53-L53) - Method
   - `src.modules.tasks.services.workflow.DOORS.markSpam.rule` (L54-L54) - Method
   - `src.modules.tasks.services.workflow.DOORS.reopen.rule` (L55-L55) - Method
-  - `src.modules.tasks.services.workflow.superseded` (L127-L138) - Class
-  - `src.modules.tasks.services.workflow.superseded.then() callback` (L130-L137) - Function
-  - `src.modules.tasks.services.workflow.move` (L150-L192) - Class
-  - `src.modules.tasks.services.workflow.move.then() callback` (L156-L192) - Function
-  - `src.modules.tasks.services.workflow.move.then() callback.then() callback.then() callback` (L186-L186) - Function
-  - `src.modules.tasks.services.workflow.move.then() callback.catch() callback` (L188-L191) - Function
-  - `src.modules.tasks.services.workflow.assignAndAnnounce` (L222-L244) - Class
-  - `src.modules.tasks.services.workflow.assignAndAnnounce.announceInTransaction() callback` (L229-L243) - Function
-  - `src.modules.tasks.services.workflow.workflow` (L382-L390) - Class
-  - `src.modules.tasks.services.workflow.workflow.resolve` (L383-L383) - Method
-  - `src.modules.tasks.services.workflow.workflow.markSpam` (L384-L384) - Method
-  - `src.modules.tasks.services.workflow.workflow.reopen` (L385-L385) - Method
+  - `src.modules.tasks.services.workflow.superseded` (L135-L146) - Class
+  - `src.modules.tasks.services.workflow.superseded.then() callback` (L138-L145) - Function
+  - `src.modules.tasks.services.workflow.move` (L158-L200) - Class
+  - `src.modules.tasks.services.workflow.move.then() callback` (L164-L200) - Function
+  - `src.modules.tasks.services.workflow.move.then() callback.then() callback.then() callback` (L194-L194) - Function
+  - `src.modules.tasks.services.workflow.move.then() callback.catch() callback` (L196-L199) - Function
+  - `src.modules.tasks.services.workflow.assignAndAnnounce` (L231-L253) - Class
+  - `src.modules.tasks.services.workflow.assignAndAnnounce.announceInTransaction() callback` (L238-L252) - Function
+  - `src.modules.tasks.services.workflow.workflow` (L395-L403) - Class
+  - `src.modules.tasks.services.workflow.workflow.resolve` (L396-L396) - Method
+  - `src.modules.tasks.services.workflow.workflow.markSpam` (L397-L397) - Method
+  - `src.modules.tasks.services.workflow.workflow.reopen` (L398-L398) - Method
 - `src/modules/tasks/views.ts`
   - `src.modules.tasks.views.Viewable` (L16-L21) - Interface
   - `src.modules.tasks.views.assigneeNamesOf.wanted` (L32-L32) - Class

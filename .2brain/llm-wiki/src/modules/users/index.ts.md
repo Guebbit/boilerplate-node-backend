@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/index.ts
-sha256: 0dd33fb4d37ad44f103579fbab15ba5252df639815db77e88200300190a7fbb6
-generated_at: 2026-11-08T08:46:07.167487+00:00
+sha256: d7fd08d183c1c363b572bf362a074b6d7099f02861866e39eaf014e52987356d
+generated_at: 2026-11-14T22:22:32.198522+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Public barrel for the `users` module. It is the **only** import surface available to sibling modules (per `docs/theory/strategic-ddd.md` §5), re-exporting services, events, emails, and model types while keeping the repository and model runtime strictly internal.
+Public barrel for the `users` module — the **only** import surface a sibling module (currently `account`) is allowed to use. It re-exports the module's public API (services, events, emails, model types) while deliberately keeping the repository, the model runtime, and the `friends/account.ts` step file internal. See `docs/theory/strategic-ddd.md` §5 for the governing rule.
 
 ## Key elements
 
-- **`export * from './services'`** — exposes the user service layer (the sole write/read path for all external callers).
-- **`export * from './events'`** — exposes user domain events.
-- **`export * from './emails'`** — exposes user-related email definitions.
-- **`export type * from './model'`** — exposes Zod schema types (the "Zod twin") for consumption at compile time; the model's runtime is **not** exported.
+- **`export * from './services'`** — exposes `userService` and any other service-layer functions; this is the primary entry point for sibling modules.
+- **`export * from './events'`** — re-exports event types/emitters defined by the module.
+- **`export * from './emails'`** — re-exports email-related helpers or templates.
+- **`export type * from './model'`** — re-exports the Zod schema types (the "Zod twin") from the model file. Types only; the runtime model (`userModel`) is **not** exported.
 
 ## Relationships
 
-- **`src/modules/account/*`** (controllers, services, `module.ts`) — the `account` module is the sole external consumer of this barrel. It imports from here to authenticate, co-administer, and delete the user document. All its reads and writes route through the `userService` exported by `./services`; it never touches `userRepository` or the model runtime directly.
+All listed graph neighbors live in `src/modules/account/` and are the current consumers of this barrel:
+
+- **Controllers** (`post-login.ts`, `post-login-2fa.ts`, `get-oauth-callback.ts`) and **services** (`login.ts`, `logout.ts`, `oauth.ts`, `password-reset*.ts`, `email-change.ts`, `account-deletion.ts`, `deletion-sign-in.ts`, `export-job.ts`, `caller.ts`) import `userService` (and related exports) through this barrel to perform authentication, password/email lifecycle, and data-export operations on the user document that `users` owns.
+- **`src/modules/account/emails.ts`** likely imports or references email exports from this barrel.
+- **`src/modules/account/module.ts`** is the module-registration entry point that wires the above services and controllers together.
 
 ## Notes
 
-- `userModel` (runtime) is deliberately **unexported**; only its type-level Zod twin leaks out via `export type * from './model'`.
-- `userRepository` is internal to the module — even `account`'s service calls go through `userService`.
-- This barrel is intentionally wider than a typical module boundary because `account` and `users` share a single domain-primitive (the user document); the docstring flags this as the one exception in the repo.
-- For the full module-level narrative, see `docs/modules/users.md`.
+- `userRepository` and the model runtime are intentionally hidden — no sibling should reach for them. Sibling code goes through `userService`.
+- `userModel` is unexported by design; nothing outside this module calls it.
+- The barrel does **not** publish `friends/account.ts`; `account`'s internal steps remain behind that internal seam.
+- Adding a new public symbol to `./services`, `./events`, or `./emails` automatically widens the barrel surface. Gate new exports through the barrel's JSDoc rule before committing.
+- Architectural rationale is documented in `docs/theory/strategic-ddd.md` §5 and `docs/modules/users.md`; consult those before proposing changes to the export surface.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/controllers/patch-inventory-level.ts
-sha256: 42b4933f36ae0c529e3a9434f57a5924a9b0cf57ec2eed5d6bd6348e4e3fff0b
-generated_at: 2026-11-08T05:57:47.497612+00:00
+sha256: eb30f4dcfcd73b0b6f44f03dc5aa573222522b357da6f9a1f851d7143d8652b1
+generated_at: 2026-11-14T20:03:11.882109+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Handles `PATCH /inventory/levels/:productId`. Edits a product's backorder (preorder) limit — the only mutable field on an inventory level. Because this value represents the shop's binding promise to buyers, every write is audited via caller context.
+Controller for `PATCH /inventory/levels/:productId`. Updates the single editable field on a product's inventory level — the backorder (preorder) limit. The mutation is audited because this value is the cap the shop's purchase promise is made under.
 
 ## Key elements
 
-- **`patchInventoryLevel(request, response)`** (exported) — The sole handler. Validates the `productId` param, parses the body against the `UpdateInventoryLevelBody` Zod schema, then either reads or writes the level and returns it with HTTP 200.
-- **Merge-patch short-circuit** — If the parsed body has `backorderLimit === undefined`, the handler performs a read-only `inventoryService.getLevel(productId)` call (no write, no audit). Otherwise it calls `inventoryService.setBackorderLimit(productId, value, callerContextOf(request))`.
-- **Error handling** — Delegates all failure paths to `refused(response, result)` (business-level rejections) and `catchAs(response, 'patchInventoryLevel')` (unexpected errors).
+- **`patchInventoryLevel`** (exported) — Express route handler. Validates `productId` via `requireId`, parses the request body against the `UpdateInventoryLevelBody` Zod schema, then either reads the current level (no-op) or writes a new backorder limit via `inventoryService.setBackorderLimit`.
+- **No-op short-circuit** — If the parsed body has `backorderLimit === undefined`, the handler calls `inventoryService.getLevel(productId)` instead of writing, returns the current level with 200, and performs no audit.
+- **Audited write path** — When `backorderLimit` is present, `callerContextOf(request)` is passed to the service so the mutation is recorded with attribution.
 
 ## Relationships
 
-- **`src/modules/inventory/services/index.ts`** — Calls `inventoryService.getLevel` (read path) and `inventoryService.setBackorderLimit` (write path).
-- **`src/infrastructure/http/controller.ts`** — Imports `catchAs`, `parseBody`, and `refused` for body validation and uniform error responses.
-- **`src/infrastructure/http/ids.ts`** — Imports `requireId` to extract and validate the `productId` route param.
-- **`src/infrastructure/http/request.ts`** — Imports `callerContextOf` to capture audit metadata for the write path.
-- **`src/infrastructure/http/response.ts`** — Imports `successResponse` to shape the 200 reply.
-- **`src/types/index.ts`** — Imports the `InventoryLevel` type used as the success-response generic.
-- **`src/modules/inventory/routes.ts`** — Expected consumer that registers this handler on the `PATCH /inventory/levels/:productId` route.
+- **`src/infrastructure/http/controller.ts`** — provides the `catchAs`, `parseBody`, and `refused` helpers used for error handling and body validation.
+- **`src/infrastructure/http/ids.ts`** — provides `requireId` to extract and validate the `productId` route param.
+- **`src/infrastructure/http/request.ts`** — provides `callerContextOf` to derive the audit context from the incoming request.
+- **`src/infrastructure/http/response.ts`** — provides `successResponse` to emit the JSON 200 payload.
+- **`src/modules/inventory/routes.ts`** — wires this handler onto the `PATCH /inventory/levels/:productId` route.
+- **`src/modules/inventory/services/index.ts`** — source of `inventoryService`, whose `getLevel` and `setBackorderLimit` methods are the two service calls this controller makes.
+- **`src/types/index.ts`** — defines the `InventoryLevel` type used as the response payload.
 
 ## Notes
 
-- Despite being a PATCH handler, a request body with no fields (or an explicitly `undefined` `backorderLimit`) results in a **read**, not a write. The response still returns the current level with 200 — callers should not expect a 204 or "no-op" signal.
-- Early-exit branches return `Promise.resolve()` (a resolved no-op) rather than throwing or calling `next()`, which means the Express chain simply ends.
-- Audit context (`callerContextOf`) is attached **only** on the write path; the read path passes no context.
+- **No `If-Match` / ETag**: the handler deliberately omits optimistic concurrency. The file's doc comment explains that stock quantity changes flow through separate `receive`/`adjust` endpoints with their own atomic rules; this endpoint only touches the single backorder-limit field.
+- **Merge-patch semantics**: an empty or field-less body is treated as a read, not a write. This avoids spurious audit entries for clients that send `{}`.
+- The Zod schema (`UpdateInventoryLevelBody`) is imported from `@api/schemas.zod` (not listed in the graph neighbors) and is the single source of truth for what fields the client may submit.

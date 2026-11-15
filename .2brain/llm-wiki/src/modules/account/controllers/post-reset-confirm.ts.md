@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-reset-confirm.ts
-sha256: 6eff640b228e8480e7545e4280cc7102904c5cfb9def271b6cdcaabbd88d3af6
-generated_at: 2026-11-08T04:07:18.151234+00:00
+sha256: 282ba340dca018e45417e118755a51ee48e1ab220d669c0812cb316799ece6f4
+generated_at: 2026-11-14T18:34:00.104347+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP controller for `POST /account/password/reset/confirm`. It validates a one-time password-reset token (delivered in the reset email URL) and sets the user's new password, then tears down any existing session. All domain logic (token check, password validation, atomic spend) is delegated to the account service.
+HTTP controller for `POST /account/password/reset/confirm`. It validates the request body, delegates the token spend + password set to the account service, and on success clears the session cookie and returns 204. It also emits a Prometheus counter for every attempt (success or failure).
 
 ## Key elements
 
-- **`postResetConfirm`** (exported) — The sole handler. Parses the JSON body against the `ConfirmPasswordResetBody` Zod schema, extracts `token`, `password`, and `passwordConfirm`, then calls `accountService.completePasswordReset`. On success it destroys the session cookie and returns `204 No Content`. On refusal it increments the failure metric and delegates the response to `refused`. On thrown errors it increments the failure metric and delegates to `catchAs`.
-- **Metrics** — Every outcome (success / refused / thrown) increments `authPasswordResetConfirmTotal` with a `status` label (`'success'` or `'failure'`).
+- **`postResetConfirm`** (export) — The only export. Accepts an Express `Request` (typed with a `token` route param and `PasswordResetConfirmRequest` body) and `Response`. Flow:
+  1. Parses/validates the body against `ConfirmPasswordResetBody` (Zod schema from `@api/schemas.zod`) via `parseBody`.
+  2. Calls `accountService.completePasswordReset(token, password, passwordConfirm, callerContext, termsAccepted)`.
+  3. On a `refused` result → increments the failure metric, returns early.
+  4. On success → increments the success metric, calls `destroySessionCookie`, sends 204 via `noContentResponse`.
+  5. On thrown error → increments the failure metric, forwards to `catchAs(response, 'postResetConfirm')`.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/account/services/index.ts` | Calls `accountService.completePasswordReset(token, password, passwordConfirm, ctx)`. All validation and the atomic token spend happen there. |
-| `src/modules/account/session/cookies.ts` | Calls `destroySessionCookie(response)` after a successful reset to invalidate any prior session. |
-| `src/infrastructure/http/controller.ts` | Uses `parseBody` (Zod validation), `refused` (uniform rejection response), and `catchAs` (error-to-HTTP mapping). |
-| `src/infrastructure/http/request.ts` | Uses `callerContextOf(request)` to build the context object passed into the service. |
-| `src/infrastructure/http/response.ts` | Uses `noContentResponse` to send the `204` on success. |
-| `src/modules/account/metrics.ts` | Reads `authPasswordResetConfirmTotal` and calls `.inc` on every terminal path. |
-| `src/modules/account/routes.ts` | Registers this handler for the `POST /account/password/reset/confirm` route. |
-| `src/types/index.ts` | Imports `PasswordResetConfirmRequest` as the typed body shape for the Express generic. |
+- **`src/modules/account/services/index.ts`** — This file imports `accountService` from this module and delegates all business logic (token validation, password hashing, one-time-token spend) to it. The controller performs no domain logic itself.
+- **`src/infrastructure/http/controller.ts`** — Supplies the `parseBody`, `refused`, and `catchAs` helpers that structure the request-validation / error-handling flow.
+- **`src/infrastructure/http/request.ts`** — `callerContextOf(request)` extracts caller metadata passed into the service call.
+- **`src/infrastructure/http/response.ts`** — `noContentResponse` sends the 204 on success.
+- **`src/modules/account/session/cookies.ts`** — `destroySessionCookie` clears the auth cookie so the old session is invalidated after the password change.
+- **`src/modules/account/metrics.ts`** — `authPasswordResetConfirmTotal` is a labelled counter (`status: 'success' | 'failure'`) incremented on every path through the controller.
+- **`src/modules/account/routes.ts`** — Registers this handler on the `POST /account/password/reset/confirm` route.
+- **`src/types/index.ts`** — Provides the `PasswordResetConfirmRequest` type used in the Express request generic.
 
 ## Notes
 
-- **Token location ambiguity.** The Express generic declares `token` as a *route param* (`Request<{ token?: string }, …>`), and a comment says it comes "in the url." However the code actually destructures `token` from the **parsed body** (`const { token, … } = body`). When wiring or testing the route, confirm which transport the token actually travels in.
-- **Atomicity lives in the service.** The controller intentionally does *not* validate the password before calling the service. The comment and the service (`completePasswordReset`) guarantee that a refused password never burns the one-time link. Don't add pre-checks here.
-- **No explicit auth guard.** This endpoint is reachable without a session cookie (the user is locked out, after all). Any abuse control must come from the token's single-use nature and rate-limiting, not from middleware on this route.
+- The reset **token is a URL path parameter**, not part of the body. The body carries `password`, `passwordConfirm`, and `termsAccepted`.
+- The comment explicitly states that the ordering guarantee ("checks first, atomic spend second") is enforced **inside the service**, not here. A rejected password will never burn the one-time token.
+- `authPasswordResetConfirmTotal` is incremented in *all three* exit paths (success, `refused`, catch), meaning every request produces exactly one metric increment.
+- `src/infrastructure/adapters/logger.ts` appears in the dependency graph but is **not imported** by this file; it is likely used downstream by `catchAs` or the service.

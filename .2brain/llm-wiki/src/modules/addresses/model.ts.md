@@ -1,7 +1,7 @@
 ---
 source: src/modules/addresses/model.ts
-sha256: de0f7c664ec78dabf94d946584472d8ae3ebf764102dd57a9216b3724ac8203d
-generated_at: 2026-11-08T04:54:57.062438+00:00
+sha256: cd2a1f0586d572924077368fb9ebf7bc2ea4be0595549a5b44a281df18530be9
+generated_at: 2026-11-14T19:19:15.564423+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Mongoose schema and compiled model for the user address book: a single document per user (keyed by `userId`) containing an array of address entries. Each entry is an independently-addressable subdocument (its own `_id`), so two entries can share identical fields and still be distinct (e.g. "home" vs. "office").
+Defines the Mongoose schema and compiled model for the user address book. One document per `userId` (the same pattern as the cart), so editing an address updates a small document rather than the whole account. Subdocuments carry their own `_id` because two entries can have identical fields yet represent "home" vs. "office".
 
 ## Key elements
 
-- **`AddressItem`** – Interface describing one stored entry (`fullName`, `street`, `city`, `zip`, `country` required; `label`, `phone`, `default` optional).
-- **`AddressBookDocument`** – Document shape: `userId` (ObjectId), `items: AddressItem[]`, Mongoose timestamps.
-- **`AddressBookModel`** – Type alias for the Mongoose model, used by the repository.
-- **`addressItemSchema`** – Subdocument schema. Explicitly sets `{ _id: true }` to keep per-entry identity (contrast with cart/wishlist line schemas that omit it).
-- **`addressBookSchema`** – Top-level schema. `userId` is `required` and `unique`; `items` defaults to `[]`. Enables `timestamps`.
-- **`applyAddressBookTransform`** – Serialization transform (`_id` → `id`, drops `__v`) exported for the repository factory's lean reads.
-- **`addressBookModel`** – The compiled Mongoose model (`'AddressBook'`) that the repository queries against.
-- **`applySerialization(addressItemSchema)`** – Wires `toJSON` on the item subdocument so `id` appears on the wire; currently exercised only by the conformance test, not by any request path.
+- **`AddressItem`** (interface) — shape of one address entry; includes `fullName`, `street`, `city`, `zip`, `country`, optional `label`/`phone`, and a `default: boolean` flag.
+- **`AddressBookDocument`** (interface) — top-level document: `userId: Types.ObjectId`, `items: AddressItem[]`, timestamps.
+- **`AddressBookModel`** (type) — Mongoose `Model` typed for use in the repository layer.
+- **`addressItemSchema`** (internal) — subdocument schema built from `postalAddressPaths`; explicitly sets `{ _id: true }` so entries remain individually addressable. Serialization (`_id`→`id`) is applied via `applySerialization`.
+- **`addressBookSchema`** (exported) — top-level schema with `userId` unique/required, `items` array defaulting to `[]`, and `timestamps: true`.
+- **`applyAddressBookTransform`** (exported) — the serialization transform produced by `applySerialization` on the book schema (renames `_id`→`id`, drops `__v`); used by the repository for lean reads.
+- **`addressBookModel`** (exported) — the compiled Mongoose model (`'AddressBook'`) that `./repository` queries against.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/serialize.ts`** – Provides `applySerialization`, applied to both the item subdocument schema and the top-level book schema to produce the `id`/drop-`__v` wire shape.
-- **`src/modules/addresses/repository.ts`** – The sole query layer for this model; owns all mutations (including maintaining the `default` flag invariant) and uses `applyAddressBookTransform` for lean reads.
-- **`src/modules/addresses/service.ts`** – Maps entries to the wire contract by hand; does not rely on the schema's `toJSON` in request paths.
-- **`src/modules/addresses/index.ts`** – Module barrel; re-exports the model, types, and transform for consumers.
-- **`tests/integration/scenarios/shop.test.ts`** – The only caller that reads a seeded book's `toJSON()` through the item serialization (conformance check).
-- **`tests/unit/schema-contract.test.ts`** – Validates the schema shape and field constraints defined here.
+- **`postal-address-paths.ts`** — provides the shared `postalAddressPaths` object spread into `addressItemSchema` (street, city, zip, country, phone).
+- **`serialize.ts`** — `applySerialization` is called on both `addressItemSchema` and `addressBookSchema` to attach the `_id`→`id` / `__v`-removal transform.
+- **`repository.ts`** — imports `addressBookModel` and `applyAddressBookTransform` for all read/write queries; the comment explicitly states "Queries live in `./repository`".
+- **`service.ts`** — maps `AddressItem` entries to the wire `Address` contract by hand; does **not** rely on the item-level serialization.
+- **`index.ts`** — barrel file that re-exports the model's public symbols to consumers outside the module.
+- **`tests/integration/scenarios/shop.test.ts`** — the only code path that reads a seeded book's `toJSON()` through `applySerialization` (conformance check).
 
 ## Notes
 
-- **`_id: true` on subdocuments is intentional.** It is the single structural difference from the cart/wishlist line schemas; removing it would break the "two identical entries are still distinct" guarantee.
-- **`default` is server-authoritative.** The repository enforces that exactly one entry carries `default: true` on every write; the client value is never trusted.
-- **The item-level `toJSON` serialization is effectively dormant in production code.** Services map entries manually; only the shop conformance test exercises it. If you add a code path that calls `toJSON()` on a raw book, the output will carry `id` instead of `_id`.
-- **One book per user is a database invariant** (`unique: true` on `userId`), not an application-level check. Every mutation is a single `findOneAndUpdate` keyed by `userId`.
+- **`default` flag invariant** — exactly one entry is `true` when the book is non-empty. This is maintained exclusively by the repository's write logic; the model schema defaults it to `false` but never enforces uniqueness.
+- **Subdocument `_id` is intentional** — unlike cart/wishlist line schemas (which suppress `_id`), address entries need stable identifiers because entries are individually addressable. The `{ _id: true }` option is spelled out with a comment to prevent a future refactor from "simplifying" it away.
+- **Item-level serialization is effectively dead in production** — `service.ts` maps entries manually, so the `applySerialization` on `addressItemSchema` is only exercised by the shop conformance test. Removing it would not break a request path but would break that test.
+- **One book per user is a database fact** — enforced by `unique: true` on `userId`; every mutation is a single `findOneAndUpdate({ userId }, …)` in the repository.

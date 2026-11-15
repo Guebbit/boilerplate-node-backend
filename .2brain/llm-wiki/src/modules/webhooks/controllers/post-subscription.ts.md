@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/controllers/post-subscription.ts
-sha256: 06c68493a167539f66f8beb14930ec1bdb4a26e43df9d1f13cf1c2b8dac32494
-generated_at: 2026-11-08T09:02:05.737790+00:00
+sha256: c8ee94995d520dbdf83727f2092425af90429e55947c6f2610351e78dd0d85f0
+generated_at: 2026-11-14T22:42:30.457108+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single-purpose controller handler for `POST /webhooks/subscriptions`. Parses the request body against the generated Zod schema, delegates to the webhooks service, and returns a `201 Created` response containing the subscription (projected) plus the one-time `secret`.
+HTTP controller for `POST /webhooks/subscriptions`. Parses and validates the incoming body, delegates subscription creation to the webhooks service, and emits a `201 Created` response carrying the new subscription plus its one-time secret.
 
 ## Key elements
 
-- **`createWebhookSubscription`** (exported) — The sole export. Accepts Express `Request`/`Response`, validates the body with `CreateWebhookSubscriptionBody`, extracts tenant/caller context, calls `webhooksService.createSubscription`, and either returns `201` with the projected subscription + secret, a `4xx` via `refused`, or a standard error via `catchAs`.
-- **`viewSubscription`** (imported from `../services/actions`) — Projects the raw subscription into the caller-facing shape before it is serialized in the response.
+- **`createWebhookSubscription`** (exported) – The sole handler. Steps:
+  1. `parseBody` validates the raw body against the `CreateWebhookSubscriptionBody` Zod schema; short-circuits with an error response if invalid.
+  2. `tenantCallerContextOf` extracts the authenticated tenant/caller identity.
+  3. Calls `webhooksService.createSubscription(body, context)`.
+  4. On success: shapes the record via `viewSubscription`, constructs the `location` path (`/webhooks/subscriptions/{id}`), writes the resource answer (`answerAsResource`), and sends `createdResponse` with `{ ...subscription, secret }`.
+  5. On service-level rejection: `refused` writes the appropriate error status.
+  6. On unexpected error: `catchAs` maps the thrown value to a structured error response.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** — Provides the shared handler utilities used here: `parseBody` (schema validation), `refused` (rejects with 4xx when the service returns a refusal), and `catchAs` (maps thrown/rejected errors to a JSON error response).
-- **`@infrastructure/http/request`** — `tenantCallerContextOf` extracts the authenticated tenant and caller from the request headers.
-- **`@infrastructure/http/response`** — `createdResponse` sends the `201` status, `Location` header, and body.
-- **`../services`** — `webhooksService.createSubscription` performs the actual persistence/registration work.
-- **`../services/actions`** — `viewSubscription` shapes the stored subscription for the response.
-- **`@types`** — `CreateWebhookSubscriptionRequest` types the request body; `WebhookSubscriptionCreated` types the response payload.
-- **`src/modules/webhooks/routes.ts`** — Registers this handler at the `POST /webhooks/subscriptions` route.
+- **`src/modules/webhooks/routes.ts`** – Registers this handler for the `POST /webhooks/subscriptions` route.
+- **`src/modules/webhooks/services/index.ts`** – Exports `webhooksService`, whose `createSubscription` method this controller invokes for the business logic.
+- **`src/modules/webhooks/services/actions.ts`** – Provides `viewSubscription`, which filters/shapes the persisted subscription into the caller-facing representation.
+- **`src/infrastructure/http/controller.ts`** – Supplies `parseBody`, `refused`, and `catchAs` (shared request-validation / error helpers).
+- **`src/infrastructure/http/request.ts`** – Supplies `tenantCallerContextOf` (identity extraction).
+- **`src/infrastructure/http/response.ts`** – Supplies `createdResponse` (201 response builder).
+- **`src/infrastructure/http/preconditions.ts`** – Supplies `answerAsResource` (writes the resource-answer header).
+- **`src/types/index.ts`** – Source of the `CreateWebhookSubscriptionRequest` and `WebhookSubscriptionCreated` types used in the handler signature and response payload.
 
 ## Notes
 
-- The `secret` appears **only** in this creation response. Subsequent reads (e.g. via `viewSubscription` in GET handlers) do not include it.
-- URL `https://` enforcement is done twice: at creation by the schema's `pattern`, and again on every delivery against the **resolved IP** (see `@infrastructure/adapters/ssrf-guard.ts`), because DNS can change after the subscription is stored.
-- The handler uses a `.then`/`.catch` promise chain rather than `async`/`await`, consistent with the rest of the controller layer.
+- The **one-time `secret`** appears only in the `201` body (`result.data.secret` spread into the payload). The resource answer written by `answerAsResource` intentionally excludes it, so the secret is returned exactly once.
+- The `location` path is `/webhooks/subscriptions/{id}`; the `id` comes from the *viewed* representation (`viewSubscription` output), not the raw stored record.
+- URL safety: the `https://` prefix is enforced by the Zod schema at creation time, but the SSRF guard re-resolves and re-validates the target IP on **every** delivery attempt (see `@infrastructure/adapters/ssrf-guard.ts`). This means a subscription whose DNS changes after creation will be re-checked.

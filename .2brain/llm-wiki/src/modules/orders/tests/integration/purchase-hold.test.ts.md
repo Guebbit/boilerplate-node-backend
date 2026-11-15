@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/integration/purchase-hold.test.ts
-sha256: 22878ddb1265bcead38402de853f7e05608423bdb55cf82cdc37239104014d54
-generated_at: 2026-11-08T07:08:01.607464+00:00
+sha256: dc067a259f15ac95d67ab8866929fcfe8798e55890c1893f0caa33bfcff4fb89
+generated_at: 2026-11-14T20:53:47.825851+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,41 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the **purchase hold** feature: after a buyer's repeated cancellations (or bot-like expirations/withdrawals) within a configured window, their checkout is paused. The tests verify the counting rules, idempotency, staff-notification semantics, staff-lift reset, configurability via environment, and the module-level event wiring — all against a real test database.
+Integration tests for the purchase-hold feature: a time-limited pause on a buyer's checkout that activates after the buyer's own repeated order cancellations (the third within a window). Verifies the counting rules, idempotency, staff notification, staff lift reset, configurable thresholds, module event wiring, error resilience, and that bot-like causes (reservation expiry, withdrawal through returns) also feed the same counter.
 
 ## Key elements
 
-- **`cancelOneAsBuyer` / `cancelOnePaidAsBuyer`** — helpers that create a real order (pending or paid) and cancel it via `orderService.cancelOnRequestById` with a customer caller context.
-- **`withdrawOneUnpaid` / `letOneExpire`** — helpers exercising the two non-explicit "cancel" paths (withdrawal through returns, reservation expiry) that the hold also counts.
-- **`buyerCanceled(orderId)`** — constructs the `order.canceled` event payload (`cause: 'customer'`) that `considerPurchaseHold` consumes.
-- **`placedFacts`** — module-level array that accumulates `ORDER_PURCHASE_HOLD_PLACED` domain events via an `onDomainEvent` listener registered in `beforeEach`; the assertion surface for staff notifications.
-- **`holdOf(userId)`** — reads the stored hold back through `userService.purchaseHoldOf`.
-- **`flaggedAt(userId)`** — reads `purchaseHoldFlaggedAt` from `userRepository`.
-- **`describe('considerPurchaseHold')`** — main suite: threshold counting, idempotent replay, buyer-only cause filtering, staff-lift restart, configurable limit, notification payload shape, module wiring, graceful failure on DB error, and no-op for missing orders.
-- **`describe('the pause counts what bots do')`** — verifies that expired reservations (`cause: 'reservation_expired'`) and unpaid withdrawals (`cause: 'withdrawal'`) count toward the same threshold, and that the two "doors" are combined.
+- **`cancelOneAsBuyer` / `cancelOnePaidAsBuyer` / `withdrawOneUnpaid` / `letOneExpire`** — helper factories that create a product + order and trigger the relevant cancellation path, returning the order id.
+- **`buyerCanceled` / `placedFacts` / `staffNotices` / `holdOf` / `flaggedAt`** — small query helpers that read the side-effects (domain events collected, stored hold, user flag) so assertions stay declarative.
+- **`describe('considerPurchaseHold')`** — the main suite: threshold (3rd cancel), idempotent replay, buyer-only attribution, staff-caused exclusion, lift-then-recount, env-var limit override, notification payload shape, `ORDER_CANCELED` → module wiring, graceful failure (log + resolve), missing-order no-op.
+- **`describe('the pause counts what bots do')`** — verifies that `reservation_expired` and `withdrawal` causes also increment the counter and that mixed causes accumulate together.
+- **`jest.mock('@infrastructure/adapters/mailer')`** — replaces `enqueueEmail` with a mock so no real mail is sent; the buyer-mail `.catch` chain is stubbed via `mockResolvedValue`.
 
 ## Relationships
 
-- **`orderService`** (`src/modules/orders/services/index.ts`) — the system under test; every test drives `considerPurchaseHold` (and the cancel/withdraw/expire helpers) through it.
-- **`ORDER_CANCELED`, `ORDER_PURCHASE_HOLD_PLACED`** (`src/modules/orders/events.ts`) — the domain events the tests emit, subscribe to, and assert on.
-- **`ordersModule`** (`src/modules/orders/module.ts`) — registered via `registerModules` in the wiring test to confirm the `order.canceled → considerPurchaseHold` subscription is declared by the module.
-- **`orderRepository`** (`src/modules/orders/repository.ts`) — spied on (`findById` → reject) to simulate a DB outage in the failure-path test.
-- **`enqueueEmail`** (`src/infrastructure/adapters/mailer.ts`) — mocked at the queue level; tests assert the queue was called (or not) rather than sending real mail.
-- **`logger`** (`src/infrastructure/adapters/logger.ts`) — spied on to assert the error is logged and the call still resolves.
-- **`emitDomainEvent`, `onDomainEvent`, `resetDomainEvents`** (`src/kernel/events.ts`) — event bus used to subscribe in `beforeEach`, emit in the wiring test, and reset in `afterEach`.
-- **`settleOutboxNudges`** (`src/kernel/outbox.ts`) — called in the wiring test to flush any outbox writes before asserting.
-- **`registerModules`** (`src/kernel/registry.ts`) — wires `ordersModule` so its event subscriptions activate.
-- **`DEPLOYMENT_TENANT_ID`** (`src/kernel/access/tenant.ts`) — asserted in the notification-payload test.
-- **`DAY_MS`** (`src/domain-primitives/time.ts`) — imported for hold-duration arithmetic in assertions.
-- **`userService`** (`src/modules/users/index.ts`) — provides `purchaseHoldOf` and `liftPurchaseHold` (the staff-lift action).
-- **`createUser`, `userRepository`** (`src/modules/users` factories / `src/modules/users/repository.ts`) — buyer fixture and direct flag lookup.
-- **`createProduct`** (`src/modules/products/tests/factories.ts`) — product fixture for order items.
-- **`createOrder`, `toOrderItem`** (`src/modules/orders/tests/factories.ts`) — order fixtures used by every helper.
+| Neighbor file | Interaction |
+|---|---|
+| `src/modules/orders/services/index.ts` | Imports `orderService`; exercises its `considerPurchaseHold`, `cancelOnRequestById`, `withdrawById`, and `expireReservationById` methods as the system under test |
+| `src/modules/orders/events.ts` | Imports `ORDER_CANCELED` and `ORDER_PURCHASE_HOLD_PLACED` to drive and assert on domain events |
+| `src/modules/orders/module.ts` | Imported as `ordersModule`; passed to `registerModules` in the wiring test to verify the `ORDER_CANCELED` → hold subscription |
+| `src/modules/orders/repository.ts` | Imports `orderRepository`; spies on its `findById` in the failure-path test |
+| `src/kernel/events.ts` | Uses `onDomainEvent` to collect `ORDER_PURCHASE_HOLD_PLACED` facts; `emitDomainEvent` / `resetDomainEvents` for the wiring test and cleanup |
+| `src/kernel/registry.ts` | Calls `registerModules` to activate the orders module for the wiring test |
+| `src/kernel/outbox.ts` | Calls `settleOutboxNudges` to flush pending outbox entries before asserting in the wiring test |
+| `src/kernel/access/tenant.ts` | Imports `DEPLOYMENT_TENANT_ID`; asserted in the notification-payload test |
+| `src/infrastructure/adapters/mailer.ts` | Fully mocked at module level; `enqueueEmail` is the integration seam for staff/buyer mail |
+| `src/infrastructure/adapters/logger.ts` | Imports `logger`; spies on `logger.error` to confirm the failure path logs |
+| `src/domain-primitives/time.ts` | Imports `DAY_MS` (used for window-related assertions) |
+| `src/modules/users/index.ts` | Imports `userService`; calls `purchaseHoldOf` and `liftPurchaseHold` |
+| `src/modules/users/repository.ts` | Imports `userRepository`; reads `findById` via the `flaggedAt` helper |
+| `src/modules/orders/tests/factories.ts` | Uses `createOrder` and `toOrderItem` to build fixture orders |
+| `src/modules/products/tests/factories.ts` | Uses `createProduct` to build fixture products |
 
 ## Notes
 
-- The mailer mock asserts on the **queue** (`enqueueEmail`), not on rendered mail copy; `mockResolvedValue(undefined)` mirrors the production `.catch` chain so the promise never rejects mid-test.
-- `placedFacts` is a **module-scoped** array (not a `let` inside `describe`); it is truncated in `beforeEach` and in the staff-lift test. Forgetting to clear it would leak assertions across tests.
-- The only test that exercises the **full event pipeline** (module registration → outbox settle → `emitDomainEvent`) is the "is wired to order.canceled by the module" case; all others call `considerPurchaseHold` directly with a hand-built payload.
-- The configurable-limit test uses `withEnvironmentOverrides` with `NODE_PURCHASE_HOLD_CANCEL_COUNT: '2'`, meaning the threshold and window are environment-driven, not hard-coded.
-- The failure-path test asserts that `considerPurchaseHold` **resolves** (does not throw) after a DB error, protecting the surrounding cancel-mail and later-event flow from being blocked.
+- Tests run against a real database (`setupTestDb`) — this is an integration suite, not a unit mock-heavy file.
+- The `placedFacts` array is the single source of truth for "what staff were told"; it is cleared in `beforeEach` and read via `staffNotices()`.
+- The module-wiring test (`is wired to order.canceled by the module`) is the only test that exercises the full event-dispatch path through `registerModules` + `settleOutboxNudges` + `emitDomainEvent`; all other tests call the service method directly.
+- The failure-path test asserts that the call **resolves** (does not throw) so downstream cancel-mail and subsequent order events are not blocked — a deliberate design contract.
+- `NODE_PURCHASE_HOLD_CANCEL_COUNT` env var controls the threshold (default 3); tested via `withEnvironmentOverrides`.

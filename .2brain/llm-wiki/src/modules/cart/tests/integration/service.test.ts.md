@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/tests/integration/service.test.ts
-sha256: 209347a5d48b3eb3b9af4bf7e454b6cea376aaaf30320f8d94d33af673032184
-generated_at: 2026-11-08T05:22:56.966666+00:00
+sha256: 395a8f45e70b1b5c50061c43a835e00e297099bdd33d12e3b30d3ae60718f50e
+generated_at: 2026-11-14T19:35:24.363152+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,41 +9,43 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the cart service layer (`src/modules/cart/services/`). Targets the highest-risk seam in the module — `set` vs `add` sharing a single `upsertCartItem` where a collapsed `$set`/`$inc` silently multiplies or drops quantities — and pins the serialization contract (no extra keys, no per-line `_id`). Runs against a real Mongo instance (`setupTestDb`) because the guarded write logic in `cartRepository.upsertLine` is not observable through a mock.
+Integration test suite for the cart service (`cartService`) that verifies the highest-risk seam in the cart domain: the `set` vs `add` distinction (backed by `$set` vs `$inc` in a shared private `upsertCartItem`). It also pins the over-serialization guard on `getForBadge`, the per-user single-document cart shape (no per-line `_id`), and the checkout/hold interaction rules. Runs against a real MongoDB instance rather than mocks, because the guarded write logic lives in the repository layer.
 
 ## Key elements
 
-- **`EMPTY_CART`** — canonical expected shape for every "no items" assertion (zeroed summary, `checkoutable: false`, no shipping options).
-- **`storedQuantity(userId, productId)`** — reads the persisted line back from `cartRepository` so assertions verify what actually landed in Mongo.
-- **`atDefault(body)` / `atHardCap(body)`** — run a test body under a pinned `NODE_CART_LINE_MAX` (10 or 999) via `withEnvironmentOverrides`, immune to a developer's local `.env`.
-- **`giveUserAnAddress(userId)`** — creates a minimal Italian address so checkout-dependent cases don't each repeat the setup.
-- **`buyerReadyToCheckOut()`** — builds a user + product + single cart line + `pickup` shipping method, the minimum state that passes all checkout preconditions.
-- **`mailQueued()`** — polls (via `eventually` + `settleOutboxNudges`) until the mocked `enqueueEmail` has been called, decoupling the assertion from the outbox relay timing.
-- **`describe('cart storage')`** — verifies document lifecycle: no doc until first write, single doc per user, `createdAt`/`updatedAt` stamps, and that a line is exactly `{ productId, quantity }` with no subdocument `_id`.
-- **`describe('get')`** — verifies the populated-item read path, including that a deleted product yields `product: null` while `productId` is retained.
-- **`describe('getForBadge')`** — verifies the lean read path: no `product` key at all (enforced by key-list assertion), correct multi-line summary math, and the `EMPTY_CART` fallback.
+- **`EMPTY_CART`** – constant describing the full `getForBadge` response for a user with no items; used as the universal "nothing in cart" assertion target.
+- **`storedQuantity(userId, productId)`** – helper that reads the persisted quantity directly from `cartRepository.findByUserId`, so assertions survive the Mongo round-trip.
+- **`atDefault` / `atHardCap`** – wrappers around `withEnvironmentOverrides` that pin `NODE_CART_LINE_MAX_QUANTITY` to `'10'` or `'999'`, isolating tests from a developer's local `.env`.
+- **`giveUserAnAddress`** – creates a standard IT address via `addressService.create`; required for `standard`/`express` shipping in checkout cases.
+- **`buyerReadyToCheckOut`** – composes a user + address + one cart line + `pickup` shipping into a state where only a hold can block checkout.
+- **`onHoldAtTheCap`** – extends the above with two pending orders and a moderator-set purchase hold, producing the exact precondition for the hold-rejection tests.
+- **`mailQueued`** – polls (via `eventually` + `settleOutboxNudges`) until the mocked `enqueueEmail` has been called, verifying the outbox→commit→dispatch sequence.
+- **`describe('cart storage')`** – verifies no document until first write, `createdAt` stamp, single-document-per-user invariant, line shape (no sub-document `_id`), and `updatedAt` refresh.
+- **`describe('get')`** – covers empty/missing-user reads, populated product inclusion, and the deleted-product null-product case.
+- **`describe('getForBadge')`** – asserts the exact key set (no `product` field) and multi-line summary computation.
+- *(truncated sections)* – additional suites covering `set`/`add` semantics, quantity caps, checkout flow, purchase-hold rejection, and product-deletion events.
 
 ## Relationships
 
-- **`src/modules/cart/services/index.ts`** — under test; provides `cartService` (the `set`/`add`/`get`/`getForBadge` API).
-- **`src/modules/cart/repository.ts`** — used directly in assertions (`findByUserId`, `count`, `setShippingMethod`) to verify persisted state.
-- **`src/modules/cart/module.ts`** — imported for module registration context in checkout-related tests.
-- **`src/modules/addresses/index.ts`** / **`service.ts`** — `addressService.create` supplies the required shipping address for checkout-flow cases.
-- **`src/modules/products/services/index.ts`** — `productService` used in product-deletion and catalogue-join scenarios.
-- **`src/modules/products/index.ts`** — source of the `PRODUCT_DELETED` domain event constant.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `toOrderItem`, `countOrders`, `findOrder` for checkout and post-order assertions.
-- **`src/infrastructure/adapters/mailer.ts`** — mocked; the test asserts the *dispatch* happened, not the email body.
-- **`src/infrastructure/adapters/logger.ts`** — imported for log-output assertions (or suppression) in error-path tests.
-- **`src/infrastructure/i18n/index.ts`** — `t` used to assert localized error messages.
-- **`src/infrastructure/i18n/context.ts`** — context setup for i18n assertions.
-- **`src/kernel/events.ts`** — `resetDomainEvents` / `emitDomainEvent` to drive and clean up domain-event dispatch between tests.
-- **`src/kernel/outbox.ts`** — `settleOutboxNudges` flushes pending outbox entries so the `mailQueued` helper can observe delivery.
-- **`src/kernel/registry.ts`** — `registerModules` wires all dependent modules before the test suite runs.
+- **`src/modules/cart/services/index.ts`** (`cartService`) – the unit under test; every assertion calls its public methods (`get`, `getForBadge`, `setItemById`, `addItemById`, etc.).
+- **`src/modules/cart/repository.ts`** (`cartRepository`) – used for direct-persistence assertions (`findByUserId`, `count`) and for test setup (`setShippingMethod`).
+- **`src/modules/cart/module.ts`** (`cartModule`) – imported and registered via `registerModules` to wire DI.
+- **`src/modules/orders/tests/factories.ts`** (`createOrder`, `toOrderItem`, `countOrders`, `findOrder`) – builds the pending-order and hold preconditions; also asserts order state after checkout.
+- **`src/modules/addresses/service.ts`** (`addressService`) – creates the address required by standard/express shipping rules.
+- **`src/modules/products/index.ts`** (`productService`, `PRODUCT_DELETED`) – product fixtures and the domain event emitted when a product is deleted mid-test.
+- **`src/kernel/events.ts`** (`resetDomainEvents`, `emitDomainEvent`) – controls and inspects domain event emission (e.g. product-deletion propagation to the cart).
+- **`src/kernel/outbox.ts`** (`settleOutboxNudges`) – flushes the outbox so that event-driven side effects (mailer dispatch) complete before assertions.
+- **`src/kernel/registry.ts`** (`registerModules`) – registers cart and related modules for the DI container.
+- **`src/infrastructure/adapters/mailer.ts`** (`enqueueEmail`) – mocked; the test verifies dispatch *timing* (outbox → commit), while the mailer template suite pins the *content*.
+- **`src/infrastructure/adapters/logger.ts`** (`logger`) – imported for test-level log assertions or silencing.
+- **`src/infrastructure/i18n/index.ts`** (`t`) – resolves i18n strings used in response assertions.
 
 ## Notes
 
-- **Real DB, not mocks.** The file's header comment explicitly states the guarded-write behaviour in the repository is unobservable through a mock; every `cartRepository` call hits the test Mongo.
-- **Serializer contract is tested structurally.** `getForBadge` assertions check `Object.keys` against an exact list because `CartResponseItem` is `additionalProperties: false` — a stray key is a contract violation, not just a wrong value.
-- **Environment pinning is deliberate.** `atDefault`/`atHardCap` exist so a developer's uncommitted `NODE_CART_LINE_MAX` in `.env` cannot shift the ceiling under test.
-- **Mailer mock asserts dispatch, not content.** The queue is the contract; the email copy is pinned separately in the mailer template suite.
-- **`EMPTY_CART` is the single source of truth** for the empty-state shape across the file; any change to the cart view must update this constant or the suite catches the drift immediately.
+- **Real Mongo, not mocks.** The module doc-block explicitly states that a mock cannot exercise the guarded writes in `cartRepository.upsertLine`; `setupTestDb` is called unconditionally.
+- **Only the mailer is mocked.** `enqueueEmail` is replaced with `jest.fn()` so the test can assert *that* dispatch happened and *when*, without coupling to email content.
+- **`set` vs `add` is the critical invariant.** They share one private `upsertCartItem`; the only difference is `$set` vs `$inc` on a single repository field. A regression here silently multiplies or zeroes a user's quantity and is invisible in code review — the tests exist specifically to pin that distinction.
+- **Line items have no `_id`.** `CartItem` is `additionalProperties: false`; any generated Mongoose sub-document `_id` would be a contract violation. Tests assert the exact key set.
+- **`getForBadge` must not include `product`.** An extra `product` key on `CartResponseItem` is a contract violation; the test enumerates allowed keys explicitly.
+- **Environment variables are pinned per-test.** `atDefault`/`atHardCap` prevent a developer's local `.env` from shifting the quantity cap and silently changing test outcomes.
+- **`EMPTY_CART` includes `checkoutable: false` and `shipping: { required: false, options: [] }`** — these are asserted as part of the empty-state contract, not as incidental fields.

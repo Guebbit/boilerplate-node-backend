@@ -1,7 +1,7 @@
 ---
 source: tests/integration/kernel/outbox-bus-failure.test.ts
-sha256: 8d0843c9b379671c3496532d7d88efe935db5060e651b45c4cf15044754490d2
-generated_at: 2026-11-08T09:41:29.773941+00:00
+sha256: 8b9a5555ea151b359751bd6be195798dff53939f97068a148c38256839ce4303
+generated_at: 2026-11-14T23:16:31.663960+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Verifies that `relayOutbox` correctly records a bus-level rejection in the outbox row's `lastError` field and leaves the event in `pending` state for retry, rather than marking it as a permanent failure. This scenario (the event bus itself rejecting) is outside the normal `emitDomainEvent` contract, so it must be simulated.
+Integration test verifying that `relayOutbox` gracefully handles an event-bus rejection: the outbox row must retain the rejection message in `lastError` and remain in `pending` status rather than being silently lost. This covers a failure path (`emitDomainEvent` rejecting) that the function itself never triggers under normal operation.
 
 ## Key elements
 
-- **`jest.mock('@kernel/events', …)`** — Partial mock that spreads `requireActual` and replaces only `emitDomainEvent` with a function that rejects with `"bus broke"`. All other exports from the events module remain real, so the rest of the kernel loads normally.
-- **`setupTestDb()`** — Top-level call that initialises the in-memory (or transaction-wrapped) test database before any test runs.
-- **`describe('relayOutbox on a rejecting bus')`** — Single test that:
-  1. Enqueues one outbox event via `enqueueOutboxEvent` inside a `withTransaction` session.
-  2. Calls `relayOutbox()` and asserts the return value contains `{ retried: 1 }`.
-  3. Reads the row back with `outboxEventModel.findOne().lean()` and asserts `status` is still `'pending'` and `lastError` contains `"bus broke"`.
+- **Partial `jest.mock('@kernel/events', …)`** — Replaces only `emitDomainEvent` with a rejecting mock (`mockRejectedValue(new Error('bus broke'))`) and `domainEventsWired` with `() => true`; spreads `jest.requireActual` so the rest of the module still loads.
+- **`setupTestDb()`** — Initializes the in-memory test database before any test runs.
+- **`it('records the rejection message in lastError and reschedules', …)`** — Enqueues one event via `enqueueOutboxEvent` inside `withTransaction`, calls `relayOutbox()`, then asserts the return value is `{ retried: 1 }` and the persisted row still has `status: 'pending'` with `lastError` containing `"bus broke"`.
 
 ## Relationships
 
-- **`src/kernel/outbox.ts`** — The module under test. Provides `enqueueOutboxEvent` (seeds a row), `relayOutbox` (drives delivery), and `outboxEventModel` (reads the row back).
-- **`src/infrastructure/runtime/database.ts`** — Supplies `withTransaction`, used to obtain a DB session for the setup `enqueueOutboxEvent` call.
-- **`tests/support/setup-test-db.ts`** — Provides `setupTestDb`, which configures the test database connection/model registrations that the test depends on.
+- **`src/kernel/outbox.ts`** — Source of the system under test (`relayOutbox`, `enqueueOutboxEvent`) and the model used to inspect the persisted row (`outboxEventModel`).
+- **`src/infrastructure/runtime/database.ts`** — Provides `withTransaction`, used to enqueue the test event within a DB transaction.
+- **`tests/support/setup-test-db.ts`** — Provides `setupTestDb`, which configures the test database connection before tests execute.
+- **`tests/support/stub.ts`** — Provides `asStub`, used to cast a minimal object (`{ n: 1 }`) to satisfy the aggregate-payload type without constructing a real domain object.
 
 ## Notes
 
-- The mock is intentionally **partial** (`...jest.requireActual`). Replacing the whole module would break internal kernel wiring; the comment in the file flags this.
-- The test data uses `as never` casts on the `enqueueOutboxEvent` arguments — a type-level workaround, not a semantic concern.
-- The assertion checks that `status` remains `'pending'` (i.e. the event is **rescheduled**, not dropped). This is the key behavioural contract: a transient bus failure must not poison the outbox.
+- The mock is deliberately partial: spreading `requireActual` ensures other exports from `@kernel/events` (consumed by other kernel modules) remain functional during the test.
+- `domainEventsWired: () => true` is included in the mock because the kernel's initialization path checks this; omitting it would cause the module to fail to wire up.
+- The `as never` cast on `'test.outbox'` sidesteps the typed event-name constraint, since this test only cares about the failure path, not event routing.

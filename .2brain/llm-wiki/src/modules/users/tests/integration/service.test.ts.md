@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/integration/service.test.ts
-sha256: 1a89fd49033282017e53d8b244ff37d8dcffe50fa2176dbefd90a50e28015659
-generated_at: 2026-11-08T08:57:15.261024+00:00
+sha256: 5a2eff69dee90ea2d7bb41079112be6d4869ba2bf83e7b3afe0234d41e815da4
+generated_at: 2026-11-14T22:38:43.810065+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,42 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite for `userService` that exercises validation, search, and the admin create/update/delete flows against an in-memory MongoDB instance (via `setupTestDb`). It verifies cross-cutting concerns the service depends on—role granting through `accessService`, domain-event dispatch via the kernel outbox, audit/analytics emission, and image-store hand-off—without hitting real filesystem, network, or database.
+Integration test suite for `userService` exercising validation, search, and the admin create / update / delete flows against an in-memory MongoDB wired up by `setupTestDb`. It verifies business-level behavior (pagination, filtering, role assignment, image hand-off, terms recording) end-to-end without hitting a real database or filesystem.
 
 ## Key elements
 
-- **`expectCreated(...)`** — Helper that calls `userService.create`, asserts the `ResponseSuccess` envelope, and returns the unwrapped `UserDocument`, shortening every create-case by one assertion.
-- **`seedActiveAndDeleted()`** — Seeds three users whose `active` and `deletedAt` fields deliberately disagree (active + deleted, deactivated + not deleted, active + not deleted) to prove the two facts are independent in the `search({ active })` filter.
-- **`describe('userService.search')`** — Covers default pagination, text/email/username partial-match filters, the `active` boolean filter (including its independence from soft-delete), `.lean()`-path phone decryption through `presentAccount`, and empty-collection meta.
-- **`describe('userService.getById')`** — Asserts a real Mongoose document is returned for existing IDs, and `undefined` for missing or absent IDs.
-- **`describe('userService.create')`** — Covers: successful creation; image hand-off failure after commit (asserts 201 + `logger.error` call); absence of `termsAcceptedAt`/`termsVersion`; role membership written via `accessService.rolesOf`; and a moderator creating a plain customer with no role.
-- **Jest mocks** — `@infrastructure/observability/audit` and `@infrastructure/observability/analytics` are replaced with plain `jest.fn()` factories (required by `observePort`); `@infrastructure/adapters/image-store` preserves the real `applyImageWriteback` while stubbing `imageStore.remove`.
+- **`setupTestDb()`** — boots the in-memory Mongo instance for the whole file; called once at module scope.
+- **`expectCreated(...)`** — helper that calls `userService.create`, asserts the success envelope, and unwraps the `UserDocument`, keeping individual create tests one assertion shorter.
+- **`seedActiveAndDeleted()`** — seeds three users whose `active` and `deletedAt` fields deliberately disagree, backing the three "active filter" cases.
+- **`describe('userService.search', …)`** — covers default pagination, text/email/username partial-match filters, `active` vs. soft-delete distinction, pagination math, empty-collection meta, and phone decryption through `presentAccount` on a `.lean()` result.
+- **`describe('userService.getById', …)`** — verifies a real Mongoose document is returned (has `.save`), and `undefined` for missing/absent IDs.
+- **`describe('userService.create', …)`** — verifies document creation, post-commit image-handoff failure logging, absence of `termsAcceptedAt`/`termsVersion` for admin-created users, role granting via `accessService`, and moderator-created customers holding no role.
+- **`jest.mock` for audit / analytics / image-store** — replaces the non-configurable real exports with plain jest mocks so `observePort` can clear and re-hand them; image-store keeps `applyImageWriteback` real and stubs only `imageStore.remove`.
+- **`callerContextAs('admin' | 'moderator')`** — simulates authenticated caller context; distinct from `systemCallerContext` (kernel) which is imported for system-level caller paths.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/logger.ts`** — `logger.error` is spied on to assert the post-commit image-handoff failure is logged with the correct `userId`.
-- **`src/infrastructure/http/response.ts`** — `ResponseSuccess` / `ResponseReject` types shape the expected return envelopes of every service call.
-- **`src/infrastructure/observability/audit.ts`** — Mocked so `observePort` can clear and inspect `usersAuditActions` invocations per test.
-- **`src/infrastructure/observability/analytics/index.ts`** — `emitAnalyticsEvent` stubbed to record `usersAnalyticsEvents` payloads without real network I/O.
-- **`src/kernel/access/tenant.ts`** — `DEPLOYMENT_TENANT_ID` passed to `accessService.rolesOf` to assert role membership in the correct tenant scope.
-- **`src/kernel/events.ts`** — `markDomainEventsWired`, `onDomainEvent`, `resetDomainEvents` used to subscribe to / reset domain-event wiring between tests.
-- **`src/kernel/outbox.ts`** — `outboxEventModel`, `relayOutbox`, `settleOutboxNudges` drive assertions that create/update/delete flows enqueue the expected outbox entries (e.g. `USER_SETUP_REQUESTED`).
-- **`src/kernel/permissions.ts`** — `systemCallerContext` available for tests that need the service-level (non-user) caller.
-- **`src/kernel/registry.ts`** — `PersonalDataSubject` type parameterises erasure-registry assertions.
-- **`src/modules/access/index.ts` / `src/modules/access/services/index.ts`** — `accessService.rolesOf` is the read-side assertion target for role-granting side effects of `create`.
-- **`src/modules/access/tests/factories.ts`** — `seedMembership` helper for pre-seeding role documents in access tests.
-- **`src/modules/users/analytics.ts`** — `usersAnalyticsEvents` constants matched against the analytics mock calls.
-- **`src/modules/users/audit.ts`** — `usersAuditActions` constants matched against the audit mock calls.
-- **`src/modules/users/erasure-registry.ts`** — `personalDataErasers` / `setPersonalDataErasers` swapped per test to verify the erasure pipeline runs for the right subject.
+- **`src/infrastructure/observability/audit.ts`** — fully mocked via `auditPortMock()`; tests assert audit events are emitted for create/update/delete flows.
+- **`src/infrastructure/observability/analytics/index.ts`** — mocked; `emitAnalyticsEvent` is a jest mock so tests can assert which `usersAnalyticsEvents` fired.
+- **`src/infrastructure/adapters/logger.ts`** — spied on to assert the post-commit image-handoff failure is logged with the correct `userId`.
+- **`src/infrastructure/http/response.ts`** — `ResponseSuccess` / `ResponseReject` types shape the envelope assertions in `expectCreated` and reject-path tests.
+- **`src/kernel/access/tenant.ts`** — `DEPLOYMENT_TENANT_ID` is the tenant argument passed to the access module when verifying granted roles.
+- **`src/kernel/permissions.ts`** — `systemCallerContext` is imported for tests that exercise system-level (non-user) caller paths.
+- **`src/kernel/registry.ts`** — `PersonalDataSubject` type used when registering or asserting entries in the erasure registry.
+- **`src/kernel/events.ts`** — `markDomainEventsWired`, `onDomainEvent`, `resetDomainEvents` manage the domain-event bus between tests (e.g. `USER_SETUP_REQUESTED`).
+- **`src/kernel/outbox.ts`** — `outboxEventModel`, `relayOutbox`, `settleOutboxNudges` are used to assert that outbox rows are written and relayed as part of create/update flows.
+- **`src/modules/access/index.ts`** — `accessService` is the read path used to verify that `create` grants the named role and that a plain customer gets none.
+- **`src/modules/access/services/index.ts`** — service-layer access checks exercised during create/update permission assertions.
+- **`src/modules/access/tests/factories.ts`** — `seedMembership` inserts a pre-existing role membership for tests that depend on an already-granted role.
+- **`src/modules/users/erasure-registry.ts`** — `setPersonalDataErasers` / `personalDataErasers` are used to register and assert eraser wiring during create/delete.
+- **`src/modules/users/audit.ts`** — `usersAuditActions` enumerates the audit action names asserted against the mocked audit port.
+- **`src/modules/users/analytics.ts`** — `usersAnalyticsEvents` enumerates the analytics event names asserted against the mocked analytics port.
 
 ## Notes
 
-- The audit and analytics mocks must be **plain `jest.fn()`s**, not the real module exports, because `observePort` (from `@tests/ports`) needs to call `.mockClear()` and re-issue a new mock per test. Using the real (non-configurable) export would silently break that contract.
-- The image-store mock intentionally keeps `applyImageWriteback` **real** (it is a pure in-memory mutation the tests depend on) and only stubs the filesystem-touching `remove`.
-- `search()` goes through the `.lean()` repository path, so `presentAccount` receives a plain JS object—not a hydrated Mongoose document. This is the only read path in the suite where that distinction matters.
-- The `active` filter and `deletedAt` (soft-delete) are **independent columns**; a deleted-but-active user still appears in `search({ active: true })`. Tests explicitly assert this to prevent accidental coupling.
-- The file is truncated in the source; additional `describe` blocks (update, delete, erasure) are expected beyond what is visible here.
+- The audit and analytics `jest.mock` calls **must** resolve to a plain jest mock (not the real, non-configurable export) because `observePort` (from `@tests/ports`) needs to `.mockClear()` and reassign the mock between tests. The inline comment in the file calls this out explicitly.
+- The image-store mock intentionally keeps `applyImageWriteback` real (a pure in-memory mutation) and stubs only the filesystem-touching `imageStore.remove`.
+- `search()` returns **lean** (plain-object) results via `.lean()` in the repository; `getById` returns a **hydrated** Mongoose document. The phone-decryption test exists specifically to confirm `presentAccount` handles both shapes.
+- The `active` filter and `deletedAt` are **independent** columns; a user can be `active: true` and `deletedAt: <date>` simultaneously. The seed helper and two filter tests document this intentionally.
+- `termsAcceptedAt` / `termsVersion` are **never** set by `userService.create` — admin creation does not imply the user saw the terms text.
+- Role granting during create goes through the access module (membership document), not a field on the user document itself.

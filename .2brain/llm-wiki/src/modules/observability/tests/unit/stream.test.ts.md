@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/tests/unit/stream.test.ts
-sha256: d7ae6e7981527f9d53090fc72a8e7868be283cee979cb8b0684e5d8dd65508f4
-generated_at: 2026-11-08T06:44:38.393432+00:00
+sha256: 87e0ff1bdecc8e383a64d901a52d7225f3ec97b4fc8896bde81fdd43872d70e7
+generated_at: 2026-11-14T20:31:21.454864+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit-test suite for the SSE metrics stream (`streamObservabilityMetrics`) and its payload builder (`buildObservabilityPayload`). It verifies the wire format, connection bookkeeping, timer cadence, permission-recheck lifecycle, and error absorption of the stream module using fake timers and a hand-built response stub, so no real socket or clock is involved.
+Unit test suite for the SSE (Server-Sent Events) metrics stream. It verifies the three externally-observable, silently-failing concerns of the stream module — SSE wire-format correctness, interval teardown on disconnect, and error absorption inside interval callbacks — while also asserting the shape and contract-compliance of the metrics payload. All timers are faked and `getHttpRequestCounters` is mocked so frames are deterministic.
 
 ## Key elements
 
-- **`makeResponse()`** — builds a `FakeResponse` that records every `write` call in `frames`, captures headers, and exposes a `disconnect()` method that fires registered `close` handlers. Hand-built (not a real Express `Response`) so the test can read exact bytes and trigger teardown deterministically.
-- **`parseFrame(frame)`** — splits a single SSE frame into `{ event, payload, terminator }` so tests can assert on the event name, JSON body, and the blank-line boundary.
-- **`reportedClients()`** — reads `payload.realtime.sseClients` from `buildObservabilityPayload()`, the only public surface that exposes the open-connection count.
-- **`open(reverify?)`** — convenience helper that calls `streamObservabilityMetrics` with a `FakeResponse` and tracks it in `opened` for cleanup in `afterEach`.
-- **Mocked `getHttpRequestCounters`** — `jest.mock('../../http-readback', …)` replaces the counters reader with a stable `jest.fn`, making payload contents deterministic.
-- **Test groups** — `buildObservabilityPayload`, open-connection count, opening a stream (headers, flush, first snapshot, wire format), the two timers (update / heartbeat), and the permission recheck (cadence, failure → `end`, timer cleanup).
+- **`makeResponse()`** — Builds a hand-crafted `FakeResponse` (via `asStub<Response>`) that captures every string passed to `write`, records `setHeader` calls, and exposes a `disconnect()` helper that fires registered `close` handlers.
+- **`parseFrame(frame)`** — Splits a written SSE frame back into `event`, `payload`, and `terminator` (the trailing `['', '']` that proves the blank-line boundary is present).
+- **`reportedClients()`** — Convenience helper that calls `buildObservabilityPayload()` and extracts `payload.realtime.sseClients`.
+- **`open(reverify?)`** — Opens a stream through `streamObservabilityMetrics` with a controllable recheck predicate; tracks the fake so `afterEach` can disconnect it.
+- **`buildObservabilityPayload` tests** — Asserts memory/http/realtime fields, AsyncAPI schema conformance, ISO-8601 timestamp, and floor-to-whole-seconds uptime.
+- **Timer tests** — Verifies the 5 s update tick, the 15 s heartbeat, and the 30 s permission recheck cadence; confirms the stream `end`s on a failed recheck.
+- **`jest.mock('../../http-readback')`** — Replaces `getHttpRequestCounters` with a controllable jest mock so the counters in every frame are known constants.
 
 ## Relationships
 
-- **`src/modules/observability/services/stream.ts`** — the module under test. The file imports `buildObservabilityPayload` and `streamObservabilityMetrics` and asserts on their observable side-effects (frames written, headers set, timers scheduled, `end` called).
-- **`tests/support/stub.ts`** — provides `asStub<Response>(…)` which lets the fake response object be typed as Express `Response` without extending the interface; used in `makeResponse`.
-- **`src/kernel/registry.ts`** — appears as a graph neighbor (likely a transitive dependency through the stream service); no direct import in this test file.
+- **`src/modules/observability/services/stream.ts`** — The module under test; the suite exercises `buildObservabilityPayload` and `streamObservabilityMetrics` directly.
+- **`src/types/index.ts`** — Provides `ObservabilityMetricsPayloadSchema` (a Zod/valibot-style schema) used to validate that the built payload matches the AsyncAPI contract.
+- **`tests/support/stub.ts`** — Supplies `asStub<T>()`, which casts a partial object to a full `T` type so the hand-built `FakeResponse` can be passed where an Express `Response` is expected.
 
 ## Notes
 
-- **Fake timers are mandatory.** Every test that touches scheduling uses `jest.useFakeTimers()` + `jest.advanceTimersByTimeAsync`; the intervals (5 s update, 15 s heartbeat, 30 s recheck) are asserted by exact tick counts, not wall-clock.
-- **`opened` / `afterEach` disconnect pattern.** The module keeps a module-level `Set` of open responses. `afterEach` disconnects every fake opened by the current test so that set is empty before the next test; forgetting this causes cross-test contamination of the client count.
-- **Wire-format assertion is load-bearing.** The tests explicitly check that each frame ends with `\n\n` and that the `data:` line contains no embedded newline. The file's header comment explains that omitting the trailing blank line causes silent client-side buffering with no server-side error.
-- **`asStub` is a type-level escape hatch.** It casts the hand-built object to `Response` so TypeScript accepts it where the production function expects a real Express response, without requiring `Response` to be `any`.
-- **Reverify-failure tests assert `end` directly**, not by inferring it from a subsequent missing timer tick. The truncated test ("stops every timer once a recheck fails") also verifies no further frames are written after `end` is called.
+- The file intentionally uses a **hand-built response** rather than a real Express/Node socket: the goal is to read exact written bytes and fire `close` on demand, which a real socket makes non-deterministic.
+- `afterEach` disconnects every opened stream and clears the module-level `Set`, ensuring each test starts with zero tracked clients.
+- The recheck-failure path asserts `end` is called **directly** (not inferred from timer state) so a missing `clearInterval` or a leaked `Set` entry would be caught.
+- The `terminator` check in `parseFrame` (`['', '']`) is the guard against the "server looks healthy but the client buffers forever" failure mode — a missing trailing `\n\n` is the most common silent SSE bug.
+- `src/kernel/registry.ts` appears in the dependency graph (likely as a transitive dependency of the mocked `http-readback` module) but is not directly imported or exercised by this test file.

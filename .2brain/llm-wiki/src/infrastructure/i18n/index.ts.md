@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/i18n/index.ts
-sha256: d8ea365174cc839a384c53a05ae586078a771d7e7d2154ef3d391d6bb8bfcfc9
-generated_at: 2026-11-08T03:36:57.035164+00:00
+sha256: c252b1fb81412ee5ebf2b03196033ed8d93e8478e186c31279d5bcff2ffbacf8
+generated_at: 2026-11-14T18:08:20.636712+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel (re-export) module that serves as the single import point for all i18n functionality. Importing `t` or any other i18n symbol from `@infrastructure/i18n` (this file) keeps the global i18next instance out of the request path and routes through the per-request context defined in `./context`. It also exposes catalog, overrides, served-language, and boot APIs so ~70 call-sites can use one alias.
+Request-scoped i18n barrel that re-exports the sub-modules under `src/infrastructure/i18n/` so that every call site imports `t` and locale utilities from `@infrastructure/i18n` rather than reaching into `i18next` directly. This keeps the single global i18next instance out of the per-request path.
 
 ## Key elements
 
-- **`t`, `translator`, `createLocaleContext`, `createPreviewContext`, `runWithLocale`, `runWithLocaleContext`, `getLocaleContext`, `getCurrentLocale`, `LocaleContext`** (from `./context`) — the per-request translation function and its scoping helpers; `t` is the primary entry point for translating a string in the current request's locale.
-- **`bootI18n`** (from `./boot`) — one-time startup of the shared i18next instance (loads resources, registers backends).
-- **`getDefaultLocale`, `getFallbackLocale`, `listSupportedLocales`, `loadLocaleResources`, `localeCandidatesFor`, `readLocaleDictionary`, `registerLocaleDirectories`, `resetSupportedLocales`** (from `./catalog`) — locale resource loading, candidate-chain resolution, and supported-locale registry.
-- **`applyLocaleOverlay`, `applyLocaleOverrides`, `getOverrideRefreshMs`, `isLocaleOverrideAvailable`, `refreshLocaleOverrides`, `registerLocaleOverrideProvider`, `resetLocaleOverrides`, `startLocaleOverrideRefresh`, `stopLocaleOverrideRefresh`, `LocaleOverlay`, `LocaleOverrideProvider`** (from `./overrides`) — admin-side translation overlay: register a provider, poll for refreshes, and apply per-locale overrides on top of the base catalog.
-- **`dictionaryLocaleFor`, `draftLocaleFor`, `hasServedDictionary`, `isServedLocale`, `listServedLocales`, `resetServedLanguages`, `servedLocaleFor`, `setServedLanguages`** (from `./served`) — determines which languages a given request may actually be answered in (subset of supported locales).
+- **`t`, `translator`, `runWithLocale`, `getLocaleContext`, `createLocaleContext`, `createPreviewContext`** (from `./context`) — the per-request translation function and locale-context helpers.
+- **`bootI18n`** (from `./boot`) — one-time startup of the shared i18next instance.
+- **`getDefaultLocale`, `getFallbackLocale`, `listSupportedLocales`, `loadLocaleResources`, `localeCandidatesFor`, `readLocaleDictionary`, `resetSupportedLocales`** (from `./catalog`) — translation loading and the pure locale-candidate resolution chain.
+- **`baseLanguage`, `canonicalLocale`, `canonicalLocaleSetter`, `isWellFormedLocale`** (from `./locale-tag`) — BCP-47 tag parsing/normalization helpers.
+- **`refreshLocaleOverrides`, `registerLocaleOverrideProvider`, `startLocaleOverrideRefresh`, `stopLocaleOverrideRefresh`, `resetLocaleOverrides`, `isLocaleOverrideAvailable`, `getOverrideRefreshMs`** + types `LocaleOverlay`, `LocaleOverrideProvider` (from `./overrides`) — admin overlay that can hot-swap translations at runtime.
+- **`setServedLanguages`, `resetServedLanguages`, `listServedLocales`, `isServedLocale`, `servedLocaleFor`, `dictionaryLocaleFor`, `draftLocaleFor`, `hasServedDictionary`** (from `./served`) — gates which languages a request may actually be answered in.
 
 ## Relationships
 
-- **`src/app.ts`** — calls `bootI18n` during application startup to initialise the shared i18next instance before any request is handled.
-- **`src/app/error-handling.ts`** — imports `t` (or `runWithLocale`) to render localised error messages.
-- **`src/infrastructure/http/errors.ts`** — uses `t` to produce locale-aware HTTP error bodies.
-- **`src/infrastructure/http/middlewares/locale.ts`** — explicitly *not* part of this barrel; owns `Accept-Language` negotiation via `request.acceptsLanguages`. This barrel's `./served` module only decides *which* locales are valid; `locale.ts` picks *which one* the client actually got.
-- **`scenarios/locales.ts`** — test scenario that exercises the catalog/served/locale-context exports end-to-end.
-- **`scenarios/products.ts`**, **`scenarios/support/demo.ts`** — import i18n symbols to assert localised output in product and demo flows.
-- **`scripts/ops/prepare-job.ts`**, **`scripts/ops/reapply-erasures.ts`** — ops scripts that import catalog/boot helpers to load or verify translation resources outside a live request.
+- All listed graph neighbors — `scenarios/locales.ts`, `scenarios/products.ts`, `scenarios/support/demo.ts`, `scripts/ops/reapply-erasures.ts`, `src/app.ts`, `src/app/boot-rendering.ts`, `src/app/error-handling.ts`, and the HTTP middleware files (`errors.ts`, `frontend-link.ts`, `ids.ts`, `content-type.ts`, `human-challenge.ts`, `idempotency.ts`, `json-depth.ts`, `json-object.ts`) — import their i18n symbols from this barrel via the `@infrastructure/i18n` path alias.
 
 ## Notes
 
-- **Never import `t` directly from `'i18next'`.** The doc block explicitly forbids it because i18next's default export is a single global instance with one active language; this barrel routes through `./context` to keep the active locale per-request.
-- **The translation "port" lives in `kernel/translation.ts`**, not here. A module's *published* translation vocabulary is defined there (same inversion pattern as `kernel/authentication.ts`). This barrel is the *infrastructure* implementation, not the contract.
-- **`Accept-Language` parsing is not in this directory.** It is handled by `attachLocale` in `http/middlewares/locale.ts`; do not add a hand-rolled language parser to `./catalog` or `./served`.
-- All ~70 import sites use the alias `@infrastructure/i18n`, which resolves to this file. Adding a new sub-module export means updating this barrel.
+- This is an **intentional, selective** re-export list, not a catch-all barrel: a re-export that nothing imports should be removed. Do not add speculative exports.
+- The rule "import `t` from here, never from `'i18next'`" is a hard convention stated in the docblock.
+- The docblock explicitly states that `Accept-Language` matching and the translation port (a module's published vocabulary) are owned elsewhere; do not add those concerns to this directory.
+- `./config` is not re-exported here; each consuming file imports its config slice directly, consistent with every other `config.ts` in the codebase.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/controllers/post-process-order.ts
-sha256: 5a924e11e30bfe279a85f52b25217eb537f8ad297fb6b93d587da72f1e9ff137
-generated_at: 2026-11-08T05:27:49.444029+00:00
+sha256: 40f00ae6e5622cb415acd17872891ec44d6a93e699542c30bfa10487f9ba2693
+generated_at: 2026-11-14T19:38:31.862835+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP handler for `POST /orders/:id/process`. It is the single entry point that transitions a paid order into the `processing` state (i.e., staff has begun fulfillment). It runs before any parcel exists, distinguishing it from later parcel-recording endpoints.
+HTTP controller handler for `POST /orders/:id/process`. It is the single endpoint that transitions an order from `paid` to `processing`, called by staff to signal that fulfillment has begun — before any parcel or shipment record exists.
 
 ## Key elements
 
-- **`postProcessOrder(request, response)`** — The sole export. Validates the `:id` route param via `requireId`, delegates to `deliveryService.processOrder`, and either returns the resulting `Order` via `successResponse` or short-circuits with a refusal/404. Errors are funnelled through `catchAs`.
+- **`postProcessOrder`** (exported const) — Express handler that:
+  1. Validates and extracts the `:id` route param via `requireId`.
+  2. Delegates to `deliveryService.processOrder(orderId, authContext, callerContext)`.
+  3. If the service returns a refusal, short-circuits via `refused()`.
+  4. Otherwise sets the resource link (`/orders/:id`) and sends the updated `Order` in the response body.
+  5. Catches and maps any thrown error through `catchAs()`.
 
 ## Relationships
 
-- **`src/infrastructure/http/ids.ts`** — `requireId` extracts and validates the `:id` param; on failure it sends a 404 (with i18n key `delivery.order-not-found`) and the handler bails out early.
-- **`src/modules/delivery/services/index.ts`** — `deliveryService.processOrder(orderId, authContext, callerContext)` performs the actual state transition; this controller contains no business logic.
-- **`src/infrastructure/http/controller.ts`** — `refused` checks the service result for an expected rejection (e.g., wrong status) and writes the error response; `catchAs` maps unexpected exceptions to a standard error shape.
-- **`src/infrastructure/http/response.ts`** — `successResponse` serialises the `Order` payload with the correct status code.
-- **`src/infrastructure/http/request.ts`** — `callerContextOf` pulls audit/trace metadata off the request for the service call.
-- **`src/types/index.ts`** — Provides the `Order` interface used as the generic on `successResponse`.
-- **`src/modules/delivery/order-routes.ts`** — Registers this handler on the `POST /orders/:id/process` route.
+- **`src/infrastructure/http/controller.ts`** — provides `catchAs` (async error → HTTP mapping) and `refused` (service-refusal → HTTP short-circuit).
+- **`src/infrastructure/http/ids.ts`** — provides `requireId`, which reads and validates the `:id` param, sending a 400/404 if missing or malformed.
+- **`src/infrastructure/http/preconditions.ts`** — provides `answerAsResource` to emit the canonical resource `Link` header on the response.
+- **`src/infrastructure/http/request.ts`** — provides `callerContextOf` to extract audit/caller metadata from the request.
+- **`src/infrastructure/http/response.ts`** — provides `successResponse` for consistent JSON response formatting.
+- **`src/modules/delivery/order-routes.ts`** — route registration file that wires this handler to `POST /orders/:id/process`.
+- **`src/modules/delivery/services/index.ts`** — exports `deliveryService`; the actual `processOrder` business logic (state transition, validation) lives there.
+- **`src/types/index.ts`** — supplies the `Order` type used in the response generic.
 
 ## Notes
 
-- The early-return pattern (`if (!orderId) return Promise.resolve()`) is intentional: `requireId` has already written the 404 response, so the handler must not continue into the service call.
-- `request.authContext` is read directly (not via a helper) and passed to the service — it is expected to be populated by an upstream auth middleware.
-- The module doc-comment explicitly positions this as the *only* transition from `paid → processing`; any other code path that sets `processing` would bypass the intended state-machine guard.
+- The module doc-comment calls this "the one door" for `paid → processing`; no other endpoint performs this transition.
+- The resource link uses the order's own id (`/orders/${result.data.id}`), not the incoming request URL — intentional per RFC 9110.
+- Early-return path (`if (!orderId) return Promise.resolve()`) relies on `requireId` having already written the error response; the handler must not fall through to `deliveryService`.
+- `refused()` is checked *before* `answerAsResource`/`successResponse`, so a refused result produces no `Link` header and no body beyond what `refused` itself sends.

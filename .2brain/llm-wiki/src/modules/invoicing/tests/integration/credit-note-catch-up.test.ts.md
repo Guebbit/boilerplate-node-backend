@@ -1,7 +1,7 @@
 ---
 source: src/modules/invoicing/tests/integration/credit-note-catch-up.test.ts
-sha256: 4d9accb17ef3adbd9dd461014c9a1c2c629883adaaddc36c452d21816e5b6df2
-generated_at: 2026-11-08T06:16:46.157232+00:00
+sha256: 28d0b14b07bac397466ca5b769f2134c36d117d670c3a5b1717ae98e45717680
+generated_at: 2026-11-14T20:14:26.334017+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that verifies the credit-note catch-up path: when an invoice event was missed (the invoice row was lost) and the `ORDER_STATUS_CHANGED → paid` event is re-emitted, the system issues the invoice and then creates one credit note per **settled** refund in settlement order, idempotently, while skipping refunds that never settled. Runs against real Mongo with the full module registry.
+Integration test verifying the "catch-up" path: when an invoice-issuing event died in the outbox and is later revived, the system re-issues the invoice and then creates one credit note per already-settled refund (oldest first, idempotently), while skipping any refund that has not yet settled. Runs against real Mongo through the real `invoicingModule` subscription to the paid event.
 
 ## Key elements
 
-- **`paidWithDeadInvoice()`** — Sets up a user, a product (2 × 50.00), an order, and a confirmed payment so an invoice exists. Returns the `orderId`.
-- **`refund(orderId, amount)`** — Calls `refundOrderPayment` as an admin, then `settleOutboxNudges()` to let the invoicing subscription for the refund event execute.
-- **`loseInvoice(orderId)`** — Deletes the `invoiceModel` and `creditNoteModel` rows for the order, simulating the "dead invoice" state.
-- **`revive(orderId)`** — Re-emits `ORDER_STATUS_CHANGED` (pending → paid) via `emitDomainEvent`, mimicking a dead outbox row being replayed.
-- **Test: "issues the invoice, then one note per settled refund in settlement order, once"** — Refunds 30.00 and 20.00, wipes the invoice, revives the event **twice**, and asserts the invoice reappears with exactly two notes (20.00, 30.00) linked to it.
-- **Test: "issues no note for a refund that has not settled"** — Uses `setFakeRefundFailure` to force a declined refund, wipes the invoice, revives, and asserts zero credit notes.
+- **`paidWithDeadInvoice()`** – Creates a user, product, and a 2-item order (total 100.00); pays it via `paymentService` and waits for the invoice to appear. Returns the `orderId`.
+- **`refund(orderId, amount)`** – Calls `refundOrderPayment` as an admin, then `settleOutboxNudges()` so the credit-note listener fires.
+- **`loseInvoice(orderId)`** – Deletes both `invoiceModel` and `creditNoteModel` rows for the order, simulating the state after a dead outbox event.
+- **`revive(orderId)`** – Re-emits `ORDER_STATUS_CHANGED` (pending → paid) via `emitDomainEvent`, mimicking what reviving the dead outbox row does.
+- **`describe('reviving a dead invoice event')`** – Two specs:
+  1. Two settled refunds → after revival (called twice for idempotency) exactly two notes appear in settlement order, both linked to the re-issued invoice.
+  2. A refund that was declined (via fake) → after revival the invoice re-issues but no credit note is created.
 
 ## Relationships
 
-- **`src/kernel/events.ts`** — `emitDomainEvent` (revive), `resetDomainEvents` (teardown).
-- **`src/kernel/outbox.ts`** — `settleOutboxNudges` flushes the outbox so the invoicing subscription fires after each refund.
-- **`src/kernel/registry.ts`** — `registerModules` wires all six modules per test.
-- **`src/modules/invoicing/module.ts`** — The module under test; its subscription to the paid event performs the invoice issuance and credit-note catch-up.
-- **`src/modules/invoicing/model.ts`** — `invoiceModel` / `creditNoteModel` used directly in `loseInvoice` to simulate data loss.
-- **`src/modules/invoicing/repository.ts`** — `invoicingRepository.findCreditNotesByOrderId` for assertions.
-- **`src/modules/invoicing/tests/factories.ts`** — `waitForInvoice` helper.
-- **`src/modules/orders/index.ts`** — Exports `ORDER_STATUS_CHANGED` event name.
-- **`src/modules/orders/module.ts`** / **`src/modules/orders/tests/factories.ts`** — Order creation and module registration.
-- **`src/modules/payments/index.ts`** — Exports `paymentService` used for intent creation and payment confirmation.
-- **`src/modules/payments/module.ts`** — Registered so its own subscription (the "door" for refunds) is active.
-- **`src/modules/payments/services/index.ts`** — Provides `refundOrderPayment` (imported via the payments test factories which wraps the service).
-- **`scenarios/support/doubles/payments/fake.ts`** — `setFakeRefundFailure` to simulate a declined refund provider response.
-- **`src/modules/inventory/module.ts`** — Registered as a peer dependency of the invoicing flow (no direct calls in this test).
+- **`src/kernel/events.ts`** – `emitDomainEvent` (revive) and `resetDomainEvents` (teardown).
+- **`src/kernel/outbox.ts`** – `settleOutboxNudges` to drain the outbox after each refund.
+- **`src/kernel/registry.ts`** – `registerModules` wires all six modules in `beforeEach`.
+- **`src/modules/invoicing/module.ts`** – The real module whose subscription to the paid event is under test.
+- **`src/modules/invoicing/model.ts`** – `invoiceModel` / `creditNoteModel` used directly in `loseInvoice` and assertions.
+- **`src/modules/invoicing/repository.ts`** – `findCreditNotesByOrderId` for all note-level assertions.
+- **`src/modules/invoicing/tests/factories.ts`** – `waitForInvoice` helper.
+- **`src/modules/orders/index.ts`** – Exports `ORDER_STATUS_CHANGED` used by `revive`.
+- **`src/modules/orders/module.ts`** – Registered so the orders module participates in the event flow.
+- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `toOrderItem`.
+- **`src/modules/payments/index.ts`** – Exports `paymentService` used for intent/confirm flow.
+- **`src/modules/payments/module.ts`** – Registered so the payments module processes refund events.
+- **`src/modules/payments/services/index.ts`** – Source of `paymentService` re-exported via the payments index.
+- **`src/modules/inventory/module.ts`** – Registered (required by order fulfilment flow).
+- **`scenarios/support/doubles/payments/fake.ts`** – `setFakeRefundFailure` forces a "declined" refund to test the un-settled path.
 
 ## Notes
 
-- The first test calls `revive` **twice** specifically to assert idempotency ("never twice").
-- Refunds go through the `payments` module's public door (`refundOrderPayment`), not a direct repository call, so the test exercises the real event-driven subscription path.
-- `eventually` is used for the credit-note count assertion because the subscription is async relative to `waitForInvoice`.
-- The test file uses `setupTestDb()` (real Mongo) rather than an in-memory store, so timing-sensitive outbox nudges are flushed explicitly via `settleOutboxNudges`.
+- The test deliberately avoids mocking the invoicing module; it exercises the real subscription to verify end-to-end event wiring.
+- `revive` is called **twice** in the first spec specifically to prove idempotency (no duplicate notes).
+- `loseInvoice` operates at the Mongoose model level (bypassing the repository) because the goal is to simulate a state the repository would never intentionally produce.
+- The fake refund failure (`setFakeRefundFailure`) is the only injected double; everything else (Mongo, outbox, event bus, module subscriptions) is real.

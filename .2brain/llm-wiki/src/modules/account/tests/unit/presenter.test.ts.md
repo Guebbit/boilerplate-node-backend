@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/unit/presenter.test.ts
-sha256: f68c9fdc1bf7cdb624920935c5c93d2002c3553ddb5ce3f6e4850db363b391dc
-generated_at: 2026-11-08T04:48:33.355399+00:00
+sha256: 875ac0cf97a4ab7dee82b411113c97aaf87b4c7dc9e0b07c1fc698a8346aa973
+generated_at: 2026-11-14T19:15:57.938638+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the three presenter functions in the account module (`presentSession`, `presentExportSession`, `presentExport`). Verifies that each maps a stored row into the correct wire shape, omits fields that are absent, and never leaks the credential digest into the output.
+Unit tests for the account presenter's three wire-mapping functions. They verify that stored domain objects (`SessionRow`, export request rows) are shaped correctly for the API response and—critically—that the credential (`tokenHash`) never appears in the serialized output.
 
 ## Key elements
 
-- **`row`** — a shared `SessionRow` fixture that deliberately carries `tokenHash: 'a-credential-digest'` so every test can assert it does not appear in the wire result.
-- **`describe('presentSession')`** — two tests: (1) full field mapping with `current: true`; (2) that `undefined` fields (`lastUsedAt`, `device`) are absent from the output and the credential string never appears (checked via `JSON.stringify`).
-- **`describe('presentExportSession')`** — one test: expiration comes from the row's own `expiresAt` (not a caller-supplied date) and the output has no `current` property.
-- **`describe('presentExport')`** — uses a separate `exportRow` fixture (`_id`, `createdAt`, `expiresAt`). Three tests covering status-dependent behavior:
-  - `expiresAt` is present only when status is `'ready'`.
-  - `actions.download` is `true` only when `'ready'`; `actions.request` is `false` only when `'building'`.
-  - The full `toEqual` shape for the `'building'` status.
+- **`row`** – A shared `SessionRow` stub (via `asStub`) that carries a `tokenHash` credential, so tests can assert it stays out of the wire shape.
+- **`describe('presentSession')`** – Two cases: (1) happy-path mapping of `familyId → id`, dates, `device`, and the `current` flag (set by the third boolean argument); (2) that absent `lastUsedAt`/`device` are omitted from the result and the credential string is absent from `JSON.stringify` of the wire.
+- **`describe('presentExportSession')`** – Confirms the wire uses the row's own `expiresAt` and does **not** include a `current` field (unlike `presentSession`).
+- **`describe('presentExport')`** – Covers the export-request wire across three statuses (`building`, `ready`, `failed`): `id`/`createdAt`/`status` are always present; `expiresAt` appears only for `ready`; `actions.download` is `true` only for `ready`; `actions.request` is `false` when `building`, `true` otherwise.
 
 ## Relationships
 
-- **`src/modules/account/presenter.ts`** — source under test; this file imports `presentSession`, `presentExportSession`, and `presentExport` and asserts on their return values.
-- **`src/modules/account/repository.ts`** — provides the `SessionRow` type used to shape the main fixture; defines the "in" side of the mapping the presenter consumes.
+- **`src/modules/account/presenter.ts`** – The module under test. This file imports and exercises `presentSession`, `presentExportSession`, and `presentExport`.
+- **`src/modules/account/repository.ts`** – Source of the `SessionRow` type used to type the test stubs.
+- **`tests/support/stub.ts`** – Provides `asStub<T>`, a helper that lets tests build a partial `T` with only the fields they care about while satisfying the type.
 
 ## Notes
 
-- The credential-leak check is intentionally done with `JSON.stringify(wire).not.toContain('a-credential-digest')` rather than a named-property assertion, guarding against the digest appearing under any key.
-- `presentExport` receives a *different* input shape (plain `_id`/`createdAt`/`expiresAt`) than `SessionRow`; the `exportRow` fixture is not typed as `SessionRow`.
-- The `'ready'` vs `'building'` vs `'failed'` status string is passed at call time — the presenter does not read status from the row itself.
+- The security invariant "credential never reaches the wire" is pinned by a `JSON.stringify` containment check, not just a `toHaveProperty` absence check—this catches accidental nesting or renamed keys.
+- `presentSession`'s `expiration` field is set from the **caller-supplied** date (second argument), whereas `presentExportSession` reads `expiresAt` off the row itself. This distinction is intentional and asserted separately.
+- All date assertions use ISO-8601 strings with `.000Z` millisecond suffixes, matching `Date.prototype.toISOString()` output.

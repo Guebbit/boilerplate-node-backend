@@ -113,9 +113,9 @@ them back would count the goods twice. `ShipmentActions.deliver` is true for a l
 when the condition holds.
 
 **What the shop does about the second parcel** is a guide matter: ask for one back or let the buyer
-keep it ([The lost parcel arrived](../use-the-shop/when-something-goes-wrong.md#lost-parcel-arrived)).
+keep it ([The lost parcel arrived](../use-the-shop/when-something-goes-wrong-orders-and-delivery.md#lost-parcel-arrived)).
 A parcel returned to sender needs no door of its own: receive the units
-([It came back to us](../use-the-shop/when-something-goes-wrong.md#parcel-came-back)), then ship them again.
+([It came back to us](../use-the-shop/when-something-goes-wrong-orders-and-delivery.md#parcel-came-back)), then ship them again.
 
 For the accountant, the shipment with its tracking code and note is the loss documentation: Italy
 presumes goods that went missing were sold unless the loss is documented (DPR 441/1997).
