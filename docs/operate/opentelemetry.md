@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [operator]
 ---
 
@@ -98,7 +98,7 @@ The API is reachable by anyone, so it never adopts a caller's `traceparent` as i
 - [OpenTelemetry concepts](https://opentelemetry.io/docs/concepts/) — signals, spans, context propagation
 - [OTel Collector configuration](https://opentelemetry.io/docs/collector/configuration/) — receivers, processors, exporters reference
 
-## Related pages
+## Read next
 
 - [Observability Reference](./observability-reference.md)
 - [Tempo](./tempo.md)

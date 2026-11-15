@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [operator]
 ---
 
@@ -217,7 +217,7 @@ Use this for live widgets in a custom UI. For historical charts, query your back
 
 - [PromQL basics](https://prometheus.io/docs/prometheus/latest/querying/basics/) — needed to write queries in [Grafana](./grafana.md)'s Prometheus Explore view
 
-## Related pages
+## Read next
 
 - [Observability Reference](./observability-reference.md)
 - [Grafana](./grafana.md)

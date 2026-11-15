@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [operator]
 ---
 
@@ -338,7 +338,7 @@ The private setting (`hash`) is the default deliberately: a boilerplate's defaul
 - [OWASP Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html) — guidance for what audit/security logs should capture
 - [winston-loki transport](https://github.com/JaniAnttonen/winston-loki) — drop-in if you want to push logs directly to [Loki](./loki.md) instead of via Alloy
 
-## Related pages
+## Read next
 
 - [Events & Logging](../understand/events-and-logging.md) — how these two streams relate to analytics, metrics and queue jobs
 - [OpenTelemetry](./opentelemetry.md)

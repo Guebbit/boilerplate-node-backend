@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [operator]
 ---
 
@@ -157,7 +157,7 @@ The client's `BACKUP_HEARTBEAT_URL` is
 alert. The second machine's weekly upkeep can have its own endpoint the same way
 ([Backup server](./backup-server.md#the-upkeep)). See [Backups](./backups.md#the-heartbeat).
 
-## Related pages
+## Read next
 
 - [Prometheus](./prometheus.md#alert-routing): the routing and the knobs
 - [Grafana](./grafana.md)

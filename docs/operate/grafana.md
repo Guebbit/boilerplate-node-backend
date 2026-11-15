@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [operator]
 ---
 
@@ -74,7 +74,7 @@ The `/observability/*` endpoints expose the same metrics as Grafana but as a **p
 
 - [Correlating logs and traces](https://grafana.com/docs/grafana/latest/datasources/loki/#derived-fields) — how the [Loki](./loki.md) ↔ [Tempo](./tempo.md) cross-signal jumps are configured
 
-## Related pages
+## Read next
 
 - [Observability Reference](./observability-reference.md)
 - [Tempo](./tempo.md)

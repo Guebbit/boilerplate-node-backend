@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [operator]
 ---
 
@@ -39,7 +39,7 @@ App  →  OTel Collector (OTLP/HTTP :4318)  →  Tempo (OTLP/gRPC :4317)  →  G
 
 - [TraceQL query language](https://grafana.com/docs/tempo/latest/traceql/) — needed to write trace queries beyond simple `trace_id` lookups in [Grafana](./grafana.md)
 
-## Related pages
+## Read next
 
 - [Observability Reference](./observability-reference.md)
 - [OpenTelemetry](./opentelemetry.md)

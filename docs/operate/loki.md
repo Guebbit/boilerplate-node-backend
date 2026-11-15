@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [operator]
 ---
 
@@ -86,7 +86,7 @@ Config file: `docker/observability/loki.config.yaml`
 
 - [LogQL query language](https://grafana.com/docs/loki/latest/query/) — needed to write log queries in [Grafana](./grafana.md) Explore beyond the examples above
 
-## Related pages
+## Read next
 
 - [Observability Reference](./observability-reference.md)
 - [Grafana](./grafana.md)
