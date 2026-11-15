@@ -448,7 +448,8 @@ invalidate the claim — and some of them are **supposed** to break:
 
 - **A test that imports a removed module is deleted**, and so is every test that imports one of
   those — `tests/support` helpers included. A test may also say `// requires-module: a, b` on a line
-  of its own when it drives the kernel through a module's subjects without importing it.
+  of its own when it drives the kernel through a module's subjects without importing it
+  (`tests/support/checkout-as.ts` does this for `cart`: it posts to the route without importing it).
 - **The shared authorization files lose the module's keys.** `shared/rules/authorization-roles.yaml` drops
   the grants, and `shared/cases/authorization.cases.yaml` drops every case about a subject only that
   module declared.
@@ -467,8 +468,8 @@ Writing a test that survives this is one rule: **a test that needs a module to s
 in its imports, and a foundation test never borrows one as sample data.** A test about a foundation
 module that also has shop cases keeps those cases in a file of their own (`shop.contract.test.ts`,
 `checkout.test.ts`), so the strip removes exactly them. A sweep with an exact expected set filters it
-through `isDeployed(<module>)` from `@tests/paths`, and a canary floor is a floor the foundation
-modules alone clear.
+through `isDeployed(<module>)` from `@tests/paths`, and a canary floor is `≥ 1` against the disk
+(see below).
 
 ---
 

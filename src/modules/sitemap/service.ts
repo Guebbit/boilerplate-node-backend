@@ -25,9 +25,9 @@ interface Languages {
 
 /**
  * The languages the API answers in right now: the same list language negotiation uses, so the
- * sitemap needs no `locales` module and a deployment without one is monolingual. `x-default` is the
- * default language while it is served, otherwise the first served one: a hreflang target must be a
- * page the same sitemap lists.
+ * sitemap needs no `locales` module: a deployment without one serves the deployed dictionaries
+ * plus the fallback language. `x-default` is the default language while it is served, otherwise
+ * the first served one: a hreflang target must be a page the same sitemap lists.
  */
 const servedLanguages = (): Languages => {
     const tags = listServedLocales().toSorted();

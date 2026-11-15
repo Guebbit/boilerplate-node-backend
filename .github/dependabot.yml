@@ -79,7 +79,9 @@ updates:
       cooldown:
           default-days: 7
       # dependabot-core#15718: it reads this image's `-386` tag suffix as a version segment and
-      # proposes the i386-only build. Bump it by hand.
+      # proposes the i386-only build. Bump it by hand: when the dev-images group PR lands, move this
+      # image to the latest otel tag and run `bash docker/observability/validate-configs.sh`. Drop
+      # the ignore when dependabot-core#15718 closes.
       ignore:
           - dependency-name: otel/opentelemetry-collector-contrib
           # Mongo minors are short-lived. On a patch PR, bump `config.mongodbMemoryServer.version`

@@ -956,7 +956,8 @@ components:
         # from the root's `x-image-upload-types` (OpenAPI 3.1's per-part accepted types). No
         # `maxLength` or `contentMediaType` on the property itself: `contentMediaType` is ignored in
         # multipart, and orval's zod generator short-circuits `format: binary` to
-        # `zod.instanceof(File)` with no constant to read.
+        # `zod.instanceof(Blob)` with no constant to read. `format: binary` stays on purpose (still in
+        # the OAS format registry; the PHP twin detects uploads by it).
         #
         # Where each limit lives:
         #   - accepted types -> the contract (`x-image-upload-types`); BE `fileFilter` and the
