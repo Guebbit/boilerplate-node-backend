@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [developer]
 ---
 
@@ -203,7 +203,7 @@ Why once, and why a copy:
 
 - **A flow is not idempotent.** Checking out twice makes two orders. Running the flows per restore
   would grow the shop every time a spec started.
-- **A restore has to be cheap.** Replaying rows skips the fourteen password hashes a reseed
+- **A restore has to be cheap.** Replaying rows skips the password hashing a reseed
   pays for and the three hundred requests the flows make. A `shop` restore is around 10 ms.
 - **The flows need a listening app.** They get a throwaway loopback listener of their own
   (`scenarios/flows/loopback.ts`), opened before `NODE_PORT` is bound and closed after — so the
@@ -266,3 +266,9 @@ lists equal in both directions.
 - **Not the full stack.** Cache and queue run `disabled`, so invalidation behaviour and the queue-backed email/PDF paths are not exercised. That is the live profile's job — the frontend's `test:e2e:live` against `compose:restart`, which its CI requires on every PR.
 - **Not persistent, by default.** A fresh world per process is what makes the default shape a test fixture — the compose stack's database is the other half of that story, in [Which database am I looking at?](run-locally.md#which-database-am-i-looking-at). Pointing `NODE_TEST_MONGO_URI` at a compose Mongo trades that for a shop that survives a restart — the same trade `scenario:apply` against the compose stack makes — at the cost of every instance sharing one `demo` database rather than each owning its own; do not run several this way at once. A live backend never mounts `/__test/*` at all — `scenario:apply --describe-to=<file>` writes the same JSON `GET /__test/scenario` serves, which is how the frontend's live e2e profile learns the same ids.
 - **Not a mock.** Nothing here imitates anything: same routes, same validators, same serializers, same visibility rules as production. When a demo-profile answer surprises you, believe it — that is the API.
+
+## Read next
+
+- [Getting Started](./run-locally.md#which-database-am-i-looking-at)
+- [Test doubles](./test-doubles.md)
+- [Flow runner](./flow-runner.md)

@@ -5,6 +5,8 @@ audience: [developer]
 
 # antibot
 
+The human-challenge port, and the endpoint that tells a frontend which provider is active.
+
 ::: tip At a glance
 **Owns** — rung 3 of the anti-automation ladder: the human-challenge port, and the two endpoints
 a frontend uses: `antibot` on `GET /config` (which provider is active) and `GET /antibot/challenge`
@@ -106,7 +108,7 @@ A payload that carries no id cannot be made single-use, so it is refused. The in
 a Map swept from its front (every record lives the same time, so insertion order is expiry order);
 Redis `SET NX` widens the claim across workers when it is reachable.
 
-## Related pages
+## Read next
 
 - [Modules overview](./start.md) — the whole context map
 - [account](./account.md) — mounts the gate on `/signup` and `/reset`

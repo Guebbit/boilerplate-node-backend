@@ -1,11 +1,24 @@
 ---
-type: task
+type: concept
 audience: [developer]
 ---
 
 # Build
 
 Run it locally, start a project, change a contract, test it, and the conventions every change follows.
+
+```mermaid
+flowchart LR
+    Run["Run it"] --> Change["Change it"] --> Test["Test it"] --> Conv["Conventions"]
+```
+
+| You want to                         | Start at                                            |
+| ----------------------------------- | --------------------------------------------------- |
+| See the API running in five minutes | [Getting Started](./run-locally.md)                 |
+| Add or remove a module              | [Adding & removing a module](./module-lifecycle.md) |
+| Change an endpoint or an event      | [API](./api-contracts.md)                           |
+| Know which test to write            | [Testing — Quick Start](./testing-quickstart.md)    |
+| Write a page or a comment           | [Writing These Docs](./documentation-style.md)      |
 
 ## Run it
 

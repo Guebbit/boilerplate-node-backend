@@ -1,14 +1,14 @@
 ---
-type: task
+type: concept
 audience: [operator]
 ---
 
 # Gatus
 
-## What it is
-
 Gatus is the **off-host heartbeat service**: a small status-page and health-check server (Apache-2.0) that
 lives on a **different machine** from the stack it watches.
+
+## What it is
 
 It does two jobs:
 
@@ -157,7 +157,7 @@ The client's `BACKUP_HEARTBEAT_URL` is
 alert. The second machine's weekly upkeep can have its own endpoint the same way
 ([Backup server](./backup-server.md#the-upkeep)). See [Backups](./backups.md#the-heartbeat).
 
-## Related pages
+## Read next
 
 - [Prometheus](./prometheus.md#alert-routing): the routing and the knobs
 - [Grafana](./grafana.md)

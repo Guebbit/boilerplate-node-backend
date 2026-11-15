@@ -1,5 +1,6 @@
 import {
     moduleSidebar,
+    pageOwner,
     renderModuleList,
     type CatalogEntry
 } from '../../../../scripts/docs/module-catalog';
@@ -92,5 +93,19 @@ describe('moduleSidebar for the example module', () => {
         expect(sidebar[3].items).toEqual([
             { text: 'example', link: '/understand/modules#the-module-template' }
         ]);
+    });
+});
+
+describe('pageOwner', () => {
+    const names = new Set(['shop', 'shop-tasks', 'api-keys', 'account']);
+
+    it('gives a page to the longest module name it starts with', () => {
+        expect(pageOwner('shop-tasks-notices', names)).toBe('shop-tasks');
+        expect(pageOwner('shop-hours', names)).toBe('shop');
+    });
+
+    it('gives a module’s own page, and a page of no module, to nobody', () => {
+        expect(pageOwner('shop-tasks', names)).toBeUndefined();
+        expect(pageOwner('start', names)).toBeUndefined();
     });
 });

@@ -5,7 +5,7 @@
  * `POST /analytics/events` (`AppModule.browserEvents`); this sweep guards every name, the
  * server-emitted ones and those.
  *
- * @see docs/build/contract-fragmentation.md#the-analytics-names-—-owned-by-the-module-published-to-no-one
+ * @see docs/build/contract-fragmentation-other-bundles.md#the-analytics-names-—-owned-by-the-module-published-to-no-one
  */
 
 import { existsSync, readdirSync } from 'node:fs';

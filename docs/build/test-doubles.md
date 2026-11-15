@@ -1,5 +1,5 @@
 ---
-type: task
+type: reference
 audience: [developer]
 ---
 
@@ -95,6 +95,8 @@ the SSRF guard: the registries are empty until a dev-shaped process fills them.
 
 `npm run demo:remove` deletes a removed module's doubles folder and its two lines in `register.ts`.
 
-See: [Payments provider port](../modules/payments-provider-port.md) ·
-[Email & rendering](../understand/email-and-rendering.md#which-transport-and-who-decides) ·
-[Demo profile](./demo-profile.md)
+## Read next
+
+- [Payments provider port](../modules/payments-provider-port.md)
+- [Email & rendering](../understand/email-and-rendering.md#which-transport-and-who-decides)
+- [Demo profile](./demo-profile.md)

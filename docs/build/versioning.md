@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [developer]
 ---
 
@@ -105,7 +105,7 @@ plus `x-sunset: <date>` on the channel.
 - `ACKNOWLEDGED_BREAKS` entries gain a sunset date. The removal PR is checked: it is refused while
   the channel's `x-sunset` is still in the future.
 
-## Related pages
+## Read next
 
 - [Contract Ownership & Fragmentation](./contract-fragmentation.md)
 - [AsyncAPI Workflow](./asyncapi-workflow.md)

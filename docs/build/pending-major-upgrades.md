@@ -1,5 +1,5 @@
 ---
-type: task
+type: reference
 audience: [developer]
 ---
 
@@ -84,5 +84,7 @@ npm view ts-jest peerDependencies
 npm view @prometheus-io/client version        # has it reached 1.0?
 ```
 
-See also: [Dependency Vetting](./dependency-vetting.md) for what is checked before any upgrade,
-[Package Dependencies](../reference/package-dependencies.md) for what each package is for.
+## Read next
+
+- [Dependency Vetting](./dependency-vetting.md)
+- [Package Dependencies](../reference/package-dependencies.md)

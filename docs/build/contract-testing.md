@@ -1,9 +1,11 @@
 ---
-type: task
+type: concept
 audience: [developer]
 ---
 
 # Contract Testing (Response Shape)
+
+Does the serialized JSON response match `openapi.yaml` exactly, including the fields that must not be there?
 
 The layer that answers: **does the wire response match `openapi.yaml`, exactly?** Not "does the business logic look right" (that's [Unit Testing](./unit-testing.md)) and not "is the right middleware mounted" (that's [Integration Testing](./integration-testing.md)) — specifically, does the _serialized JSON_ match the contract other services and the paired frontend are written against, including the fields that must **not** be there.
 
@@ -127,7 +129,7 @@ A case that is about one mode's own machinery (refresh rotation, the origin chec
 | `npm run test:contract`        | `tsx scripts/testing/run-suite.ts contract` — jest over `tests/contract` and every `src/modules/*/tests/contract`                                                              |
 | `npm run test:contract:cookie` | the same suite with `NODE_SESSION_MODE=cookie`: every operation answers the spec when a session id in a cookie, not an access token, is what signs the caller in. CI runs both |
 
-## Related pages
+## Read next
 
 - [Testing](./testing-and-docs.md) — suite overview
 - [Contract-Derived Request Data](./contract-request-data.md) — the request-shape mirror of this page

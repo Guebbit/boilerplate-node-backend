@@ -243,7 +243,7 @@ appears here by declaring them.
 Ships with every deployment, whatever the project becomes.
 
 - [`access`](./access.md) — Headless. The tenant and membership model every role check reads, owned apart from account and users so neither has to.
-- [`account`](./account.md) — Who is making this request: signup, login, sessions, two-factor, OAuth and the account lifecycle. Deeper: [OAuth](./account-oauth.md), [Sessions](./account-sessions.md), [Two-factor authentication](./account-two-factor.md).
+- [`account`](./account.md) — Who is making this request: signup, login, sessions, two-factor, OAuth and the account lifecycle. Deeper: [OAuth](./account-oauth.md), [OAuth registration, outcomes and endpoints](./account-oauth-flow.md), [Proving an address, deletion and data export](./account-proof-and-export.md), [Sessions](./account-sessions.md), [Cookie mode and where sessions live](./account-sessions-cookie.md), [JWT mode: tokens, keys and claims](./account-sessions-jwt.md), [Freshness and step-up](./account-sessions-step-up.md), [Two-factor authentication](./account-two-factor.md).
 - [`addresses`](./addresses.md) — The address book, its own module so the cart's checkout can reach it without importing account.
 - [`analytics`](./analytics.md) — The relay a browser uses to report browsing events (a product viewed, a search made) once the visitor has agreed to be measured.
 - [`antibot`](./antibot.md) — The human-challenge port, and the endpoint that tells a frontend which provider is active.
@@ -252,24 +252,24 @@ Ships with every deployment, whatever the project becomes.
 - [`locales`](./locales.md) — Language discovery and the API's own message dictionary.
 - [`notifications`](./notifications.md) — A per-user inbox: messages that stay until the owner deletes them, fed by domain events and pushed live over SSE.
 - [`observability`](./observability.md) — Health, metrics, the platform operator's audit read and the SSE stream.
-- [`tasks`](./tasks.md) — Situations someone must take and close: contact messages and system-opened tasks, routed to the staff who hold the matching permission set.
-- [`users`](./users.md) — Admin-side user management; the self-service half is account.
-- [`webhooks`](./webhooks.md) — Outbound event delivery to a subscriber's own URL.
+- [`tasks`](./tasks.md) — Situations someone must take and close: contact messages and system-opened tasks, routed to the staff who hold the matching permission set. Deeper: [Task kinds, jurisdiction and lifecycle](./tasks-lifecycle.md), [Task notices and the staff badge](./tasks-notices.md).
+- [`users`](./users.md) — Admin-side user management; the self-service half is account. Deeper: [Sibling doors, purchase hold and erasure](./users-siblings-and-erasure.md).
+- [`webhooks`](./webhooks.md) — Outbound event delivery to a subscriber's own URL. Deeper: [Webhook delivery, switches and updates](./webhooks-delivery.md).
 
 ### Demo shop
 
 The pet-supply e-commerce domain this boilerplate demos itself with. Nothing in the foundation may depend on it, and `npm run demo:remove` deletes it.
 
 - [`cart`](./cart.md) — One document per user, and checkout, the transaction the whole shop turns on. Deeper: [Checkout](./cart-checkout.md).
-- [`delivery`](./delivery.md) — Shipping rates as pure rules, fulfillment orders, the staff doors that cut a shipment, record its arrival, report it lost and hold or release a fulfillment order, and what a late preorder owes its buyer.
-- [`inventory`](./inventory.md) — The only writer of stock in the application. Deeper: [Reservations](./inventory-reservations.md).
+- [`delivery`](./delivery.md) — Shipping rates as pure rules, fulfillment orders, the staff doors that cut a shipment, record its arrival, report it lost and hold or release a fulfillment order, and what a late preorder owes its buyer. Deeper: [Cutting, shipping and delivering](./delivery-acts.md), [Lost shipments and replacements](./delivery-lost-and-replaced.md), [Fulfillment orders and shipments](./delivery-records.md).
+- [`inventory`](./inventory.md) — The only writer of stock in the application. Deeper: [Reservations](./inventory-reservations.md), [Orphaned holds and the ledger](./inventory-reservations-orphaned-holds.md), [Preorders and backorders](./inventory-reservations-preorders-and-backorders.md).
 - [`invoicing`](./invoicing.md) — Frozen invoice and credit-note documents, issued from payment and refund events.
-- [`orders`](./orders.md) — What a checkout produces: its status machine, its totals and its invoice link.
-- [`payments`](./payments.md) — An order's money, behind a provider port. Deeper: [The provider port](./payments-provider-port.md).
-- [`products`](./products.md) — The catalogue, its search surface and its cache.
-- [`returns`](./returns.md) — Sending goods back, including the EU withdrawal button.
+- [`orders`](./orders.md) — What a checkout produces: its status machine, its totals and its invoice link. Deeper: [Creating an order, exports and mails](./orders-creation-and-exports.md), [Order status and timeline](./orders-status-and-timeline.md), [Withdrawal window, purchase hold and shop identity](./orders-withdrawal-and-hold.md).
+- [`payments`](./payments.md) — An order's money, behind a provider port. Deeper: [Disputes and writing an adapter](./payments-disputes-and-adapters.md), [Offline and bank-transfer payments](./payments-offline.md), [The provider port](./payments-provider-port.md), [Refunds and refund failures](./payments-refunds.md), [How a payment settles](./payments-settlement.md), [The staff Payments page, mails and retention](./payments-staff-and-retention.md).
+- [`products`](./products.md) — The catalogue, its search surface and its cache. Deeper: [Product states and backorder](./products-states.md).
+- [`returns`](./returns.md) — Sending goods back, including the EU withdrawal button. Deeper: [Remedies for a return](./returns-remedies.md), [Declining, closing and cancelling a return](./returns-statuses-and-cancellation.md), [The withdrawal button and its deadlines](./returns-withdrawal.md).
 - [`shop`](./shop.md) — The shop itself: its time zone, where goods come back to, what it ships to, and the one currency it trades in.
-- [`shop-tasks`](./shop-tasks.md) — The shop's side of the helpdesk: opens a to-do for each payment, stock or delivery situation that needs a person, writes the buyer's messages and the staff's work notices, and sends the staff digest.
+- [`shop-tasks`](./shop-tasks.md) — The shop's side of the helpdesk: opens a to-do for each payment, stock or delivery situation that needs a person, writes the buyer's messages and the staff's work notices, and sends the staff digest. Deeper: [Shop-tasks notices, digest and badge](./shop-tasks-notices.md), [Shop to-dos by situation](./shop-tasks-todos.md).
 - [`sitemap`](./sitemap.md) — sitemap.xml for search engines: the shop pages and every public product, once per language.
 - [`stats`](./stats.md) — Sales numbers, read on demand from the modules that own them.
 - [`stock-alerts`](./stock-alerts.md) — Back-in-stock requests: a signed-in buyer asks to be told once when a product they cannot order can be again.
@@ -299,3 +299,8 @@ frontend's one extra module — an asymmetry that is real architecture rather th
 | `antibot`       | none                       | No screen of its own — whichever form is guarded (signup, reset, contact) fetches the challenge inline.                                                                                                                                        |
 | `invoicing`     | `orders`                   | No screen of its own — `GET /orders/{id}/invoice` and `/credit-notes` are two buttons on the frontend's own order detail page.                                                                                                                 |
 | everything else | the same name              | —                                                                                                                                                                                                                                              |
+
+## Read next
+
+- [Modules](../understand/modules.md) — what a module is, and the rules every one obeys
+- [Adding & removing a module](../build/module-lifecycle.md) — what to do when you start or end a domain

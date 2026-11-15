@@ -20,8 +20,10 @@ audience: [developer]
 
 # ${names.kebab}
 
+${options.summary}
+
 ::: tip At a glance
-**Owns** — ${options.summary}
+**Owns** — TODO: what it stores and decides, in one line.
 **Depends on** — nothing yet. Fill this in when the module starts importing a sibling.
 **Breaks if you change** — TODO: the one contract a caller cannot live without.
 :::
@@ -67,7 +69,7 @@ flowchart LR
     class D store;
 \`\`\`
 
-## Related pages
+## Read next
 
 - [Modules overview](./start.md) — the whole context map
 - [Adding & removing a module](../build/module-lifecycle.md) — what to do next

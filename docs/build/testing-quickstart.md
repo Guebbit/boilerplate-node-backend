@@ -8,7 +8,12 @@ audience: [developer]
 Everything you can run, what each answers, and what it costs. Start here; the pages linked from
 each row go deeper.
 
-## The 30-second version
+## Before you start
+
+- `npm install` has run.
+- No database to start: the suites bring their own in-memory Mongo.
+
+## Steps {#the-30-second-version}
 
 ```bash
 npx jest --runInBand -- src/modules/products   # one module, every layer it owns, seconds
@@ -46,7 +51,7 @@ script rather than something you type: the contract and integration suites share
 must not run concurrently.
 
 ```bash
-npx jest --runInBand -- src/modules/products      # every suite the module owns (28 test files)
+npx jest --runInBand -- src/modules/products      # every suite the module owns (31 test files)
 npx jest --runInBand -- src/modules/orders/tests/unit
 ```
 
@@ -162,7 +167,7 @@ unlucky afternoon and everyone learns to ignore it.
 `bench:k6 checkout` **writes** — it creates orders and moves stock. Point it at a throwaway
 database and `npm run scenario:apply:reset` afterwards.
 
-## Related
+## Read next
 
 - [Testing & Docs](./testing-and-docs.md) — the layers and the data behind them
 - [Package Scripts](../reference/package-scripts.md) — every script, annotated

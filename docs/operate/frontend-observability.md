@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [operator]
 ---
 
@@ -166,7 +166,7 @@ Because each job is behind an SDK boundary, switching is localized:
 3. Add the new services to [`docker-compose.yml`](../build/docker-and-podman.md) — one file, both
    runtimes.
 
-## Related pages
+## Read next
 
 - [Observability Reference](./observability-reference.md) — the backend stack this reuses
 - [OpenTelemetry](./opentelemetry.md) — how a backend request links to the FE trace that caused it, via Tempo

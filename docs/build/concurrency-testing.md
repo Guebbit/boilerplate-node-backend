@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [developer]
 ---
 
@@ -51,7 +51,7 @@ The whole point of a race is that some participants lose, and **losing is the co
 
 ## Two things that quietly make these tests worthless
 
-**Rate limiting.** `credentialLimiters` is mounted on exactly the endpoints these tests hammer — signup, login, reset. It is a set of four budgets — one per account named, one per address calling, one per address block and one per device — and only failed attempts spend any of them. At the shipped budgets a ten-participant signup race sits close to the per-address limit and twelve starts returning 429s, so `tests/support/setup-environment.ts` raises them all — raising one alone just moves which of them the suite trips over.
+**Rate limiting.** `credentialLimiters` is mounted on login, `/password/reset/confirm` and `/restore`. It is a set of four budgets — one per account named, one per address calling, one per address block and one per device — and only failed attempts spend any of them. Signup has its own budgets, `signupLimiters`, and every request counts there, because the abuse it guards against (a Sybil account) is a successful 201. At the shipped budgets a ten-participant signup race sits close to the per-address `signupLimiters` limit and twelve starts returning 429s, so `tests/support/setup-environment.ts` raises them all — raising one alone just moves which of them the suite trips over.
 
 The trap is that the test still **passes**: "not two users" is trivially true when two of the requests never reached the handler. So the limits are raised in `tests/support/setup-environment.ts`, and the shared assertion rejects a 429 explicitly rather than lumping it into "not a success". One case keeps a small, freshly-constructed limiter to prove the budget is still enforced rather than switched off.
 
@@ -131,7 +131,7 @@ The lost update between two _editors_ is the one race here with a client-facing 
 
 Run with `npm run test:integration` — they are part of the ordinary integration suite, not a separate command, because they gate merges like the rest of it.
 
-## Related pages
+## Read next
 
 - [Integration Testing](./integration-testing.md) — the harness these are built on
 - [MongoDB & Mongoose](../understand/mongodb-mongoose.md) — indexes, the one-author rule, atomic update operators

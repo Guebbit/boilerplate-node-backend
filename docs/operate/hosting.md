@@ -1,6 +1,6 @@
 ---
-type: task
-audience: [operator]
+type: reference
+audience: [operator, architect]
 ---
 
 # Hosting
@@ -57,31 +57,9 @@ flowchart TD
 **Serverless functions cannot run this app** — no long-lived process, no queue consumer, no local
 disk to hold an upload between requests.
 
-## 2 · Hosting categories, drawn
+## 2 · Hosting categories
 
-```mermaid
-flowchart LR
-    subgraph Categories
-        Shared["Shared / cPanel"]
-        VPS["VPS / cloud VM"]
-        Dedicated["Dedicated server"]
-        PaaS["Container PaaS"]
-        Serverless["Serverless"]
-        K8s["Managed Kubernetes"]
-    end
-
-    Shared -.->|"usually no"| Runs(["Runs this app"])
-    VPS -->|"as shipped"| Runs
-    Dedicated -->|"as shipped"| Runs
-    PaaS -->|"image + managed services"| Runs
-    Serverless -.->|"never"| Runs
-    K8s -->|"see the trigger list"| Runs
-
-    classDef no fill:#fee2e2,stroke:#dc2626,color:#111827;
-    classDef yes fill:#dcfce7,stroke:#16a34a,color:#111827;
-    class Shared,Serverless no;
-    class VPS,Dedicated,PaaS,K8s yes;
-```
+The categories are drawn once, with one page each: [Ways to deploy](./ways-to-deploy/index.md).
 
 ## 3 · The capability matrix
 
@@ -132,11 +110,12 @@ provider work until then.
 
 ## 4 · How to deploy, per category
 
-| Category           | What actually runs                                                                                                                                                                                                         |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VPS / dedicated    | The compose file as shipped — see [Getting Started — Production](first-deploy.md)                                                                                                                                          |
-| Container PaaS     | The image `docker build -f docker/Dockerfile.production` produces, plus the platform's own managed Postgres/Redis in place of the bundled ones — none checked manage MongoDB itself, see [§3](#_3-·-the-capability-matrix) |
-| Managed Kubernetes | Not yet — see the trigger list linked above                                                                                                                                                                                |
+| Category           | Page                                                 |
+| ------------------ | ---------------------------------------------------- |
+| VPS / dedicated    | [Docker server](./ways-to-deploy/docker-server.md)   |
+| Container PaaS     | [Container PaaS](./ways-to-deploy/container-paas.md) |
+| Managed Kubernetes | [Kubernetes](./ways-to-deploy/kubernetes.md)         |
+| Shared / cPanel    | [Shared hosting](./ways-to-deploy/shared-hosting.md) |
 
 ## 5 · Managed backing services — "compatible, not identical"
 
@@ -189,10 +168,11 @@ compromised account or one provider outage cannot take both the shop and its his
   PaaS (Render). Add a row when a rule-based candidate is missing; drop one only when it stops
   meeting the rule.
 
-## Where to go next
+## Read next
 
 | You want to                                | Read                                            |
 | ------------------------------------------ | ----------------------------------------------- |
+| See every way to deploy                    | [Ways to deploy](./ways-to-deploy/index.md)     |
 | Run a single stack, start to finish        | [Getting Started — Production](first-deploy.md) |
 | Run two, on one host                       | [Two Client Stacks](./two-client-stacks.md)     |
 | Understand why one stack serves one client | [Tenancy](../understand/tenancy.md)             |

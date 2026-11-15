@@ -5,6 +5,8 @@ audience: [developer]
 
 # invoicing
 
+Frozen invoice and credit-note documents, issued from payment and refund events.
+
 ::: tip At a glance
 **Owns** — the `Invoice`/`CreditNote` collections and their own numbering series, outright.
 **Depends on** — [`orders`](./orders.md) (the VAT breakdown, the seller's jurisdiction, an
@@ -314,7 +316,7 @@ since there is no numeric form for a reason code to become.
 - **A render cache.** The PDF store above already keeps the rendered file. The document is
   immutable once issued, so there is no correctness reason for a shorter-lived cache on top.
 
-## Related pages
+## Read next
 
 - [`orders`](./orders.md) — the order this module reads, and the `paidAt`/`actions.invoice` proxy it keeps instead of a live dependency
 - [`payments`](./payments.md) — the fake payment provider port this module's own `EInvoicingProvider` is shaped after
