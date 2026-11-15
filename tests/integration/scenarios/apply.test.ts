@@ -1,6 +1,7 @@
 /**
- * `scenarios/apply.ts`'s own gates: the refusal outside development/test, the non-empty-database refusal, and
- * `--reset`.
+ * `scenarios/apply.ts`'s own gates: the refusal outside development/test, the non-empty-database refusal,
+ * `--reset`, and the rate limits being lifted before any limiter is built (a driving seed under a
+ * small `.env` budget).
  *
  * Spawned ASYNCHRONOUSLY, and that is load-bearing: `spawnSync` blocks jest's event loop for the
  * whole run, and jest is what drains the shared `mongod`'s stdout. A seed boots the app and builds
@@ -39,7 +40,12 @@ const NAMED_ACCOUNT_COUNT = Object.keys(seedCredentials).length;
  * Redis and RabbitMQ forced off: neither is under test here, and left alone the `.env` this script
  * loads names the docker-compose hostnames, which cost a real (if short) DNS failure per run.
  */
-const runApply = (args: string[], dbUri: string, nodeEnv = 'test'): Promise<ApplyResult> =>
+const runApply = (
+    args: string[],
+    dbUri: string,
+    nodeEnv = 'test',
+    extraEnv: Record<string, string> = {}
+): Promise<ApplyResult> =>
     new Promise((resolve, reject) => {
         const child = execFile(
             TSX_BIN,
@@ -52,7 +58,8 @@ const runApply = (args: string[], dbUri: string, nodeEnv = 'test'): Promise<Appl
                     NODE_ENV: nodeEnv,
                     NODE_DB_URI: dbUri,
                     NODE_REDIS_CACHE_ENABLED: '0',
-                    NODE_RABBITMQ_ENABLED: '0'
+                    NODE_RABBITMQ_ENABLED: '0',
+                    ...extraEnv
                 }
             },
             // The callback's own error is ignored: a non-zero exit is a case under test here, and
@@ -161,5 +168,29 @@ describe('scenarios/apply.ts', () => {
             await rm(scratch, { recursive: true });
         },
         APPLY_TIMEOUT_MS
+    );
+
+    it(
+        'lifts the rate limits before any limiter is built, so a driving scenario outruns a small .env budget',
+        async () => {
+            // `shop` is the scenario that DRIVES requests (hundreds, from one address). With the
+            // `.env` budget this small, a limiter built before the overrides applied answers 429.
+            const dbUri = freshDbUri();
+            const result = await runApply(['shop'], dbUri, 'test', {
+                NODE_RATE_LIMIT_MAX: '5',
+                NODE_AUTH_RATE_LIMIT_MAX: '2'
+            });
+
+            expect(result.stdout + result.stderr).not.toContain('"http.response.status_code":429');
+            expect(result.status).toBe(0);
+
+            // Proof the scenario really drove checkouts, not just exited cleanly.
+            const connection = await mongoose.createConnection(dbUri).asPromise();
+            await expect(connection.collection('orders').countDocuments()).resolves.toBeGreaterThan(
+                0
+            );
+            await connection.close();
+        },
+        APPLY_TIMEOUT_MS * 8
     );
 });
