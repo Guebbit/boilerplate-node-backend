@@ -7,6 +7,20 @@ audience: [developer, architect]
 
 How a request is authenticated and where a token is verified.
 
+```mermaid
+flowchart LR
+    A[Login\nPOST /account/login] --> B[Access token in response]
+    A --> C[Refresh token in\nHttpOnly __Host-session cookie]
+    B --> D[Protected API call\nAuthorization Bearer]
+    D --> E{Access token valid?}
+    E -- Yes --> F[Controller executes]
+    E -- No (401) --> G[POST /account/refresh\nwith __Host-session cookie]
+    G --> H{Refresh JWT valid\nand stored in DB?}
+    H -- Yes --> I[New access token]
+    I --> D
+    H -- No --> J[401 Unauthorized]
+```
+
 ## Auth architecture (current backend pattern)
 
 A deployment runs one of two session modes, picked by `NODE_SESSION_MODE` and explained in
@@ -72,20 +86,6 @@ The `jwt` mode flow. `cookie` mode has no refresh step: the cookie authenticates
 5. Client calls `POST /account/refresh`; browser sends the `__Host-session` cookie automatically.
 6. Server validates refresh token signature **and** DB presence, then returns a new access token.
 7. Client retries protected request with the new access token.
-
-```mermaid
-flowchart LR
-    A[Login\nPOST /account/login] --> B[Access token in response]
-    A --> C[Refresh token in\nHttpOnly __Host-session cookie]
-    B --> D[Protected API call\nAuthorization Bearer]
-    D --> E{Access token valid?}
-    E -- Yes --> F[Controller executes]
-    E -- No (401) --> G[POST /account/refresh\nwith __Host-session cookie]
-    G --> H{Refresh JWT valid\nand stored in DB?}
-    H -- Yes --> I[New access token]
-    I --> D
-    H -- No --> J[401 Unauthorized]
-```
 
 ## Read next
 

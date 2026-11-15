@@ -441,7 +441,3 @@ One row per attack, with what stops it.
 | XSS — stored                                   | [Client-side](client-side.md#script-execution-in-the-origin)                                               |
 | XSS — universal (UXSS)                         | [Client-side](client-side.md#script-execution-in-the-origin)                                               |
 | Zip slip                                       | [Files, uploads and paths](files-and-uploads.md#where-it-gets-stored-and-where-it-is-read-from)            |
-
-## Read next
-
-- [index](./index.md): the hub this page belongs to.

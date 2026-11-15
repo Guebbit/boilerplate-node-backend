@@ -232,7 +232,7 @@ The numbers and wording of a budget (name, namespace, env var, default, window, 
 `onStoreError`) are YAML: the module's `module.yaml` under `rateLimits:`, or
 `shared/rules/rate-limits.yaml` for the kernel's three. `regenerate` writes a committed
 `rate-limits.generated.ts` from each, so a twin backend copies the YAML. How a caller is bucketed
-(`keyGenerator`), what counts as a success and what is skipped stay code, in `rate-limit.ts`.
+(`keyGenerator`), what counts as a success and what is skipped stay code, in each module's `rate-limits.ts` (the kernel's in `rate-limit.ts`).
 See [shared rules](shared-rules.md#rule-data-the-twin-will-need-yaml-generated-ts):
 
 <!-- rate-limit-budgets:start -->

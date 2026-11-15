@@ -48,7 +48,7 @@ A path the contract declares, asked with a method it does not give it, answers *
   judges `OPTIONS` itself: that answer runs before any router.
 - **A trailing slash is the same path.** `/things/` reads as `/things`.
 - **A literal path wins over a templated one.** `DELETE /products/facets` would otherwise
-  read `categories` as the `{id}` of `/products/{id}` and answer 404, so the guard runs a second
+  read `facets` as the `{id}` of `/products/{id}` and answer 404, so the guard runs a second
   time before the routers, for paths with no `{param}` only.
 - **A module this build does not serve stays a 404**: its paths are in the table, but nothing is
   mounted to ask.

@@ -22,16 +22,22 @@ Every route declares which query parameters change its answer, and the key is bu
 plus the resolved `scopeKey` and the locale:
 
 ```ts
-// `cacheScopeKey` is the `hasAnonymousReadScope` check above: 'guest', or undefined to bypass.
-const cacheProductsSearch = searchCache('products', searchProductsKeyParameters, cacheScopeKey);
-
-router.get('/', cacheProductsSearch, getProducts);
-router.get(
-    '/:id',
-    setCache(3600, { tags: ['products'], keyParameters: [], scopeKey: cacheScopeKey }),
-    getProductItem
+const cacheProductsSearch = searchCache(
+    'products',
+    searchProductsKeyParameters,
+    cacheScopeKey,
+    undefined,
+    {
+        keyValues: searchProductsKeyValues,
+        orderedKeyParameters: searchProductsOrderedParameters
+    }
 );
+
+router.post('/search', previewDraftLanguage, cacheProductsSearch, getProducts);
+router.get('/', previewDraftLanguage, cacheProductsSearch, getProducts);
 ```
+
+`cacheScopeKey` is the [`hasAnonymousReadScope` check](./redis-cache.md#no-caching-depends-on-who-is-asking): `guest`, or undefined to bypass.
 
 `keyParameters` is required rather than optional, because it decides which requests share a cached
 response — a parameter the controller reads but the key omits would serve one search's results
