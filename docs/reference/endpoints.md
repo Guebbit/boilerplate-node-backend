@@ -1,12 +1,20 @@
 ---
-type: reference
-audience: [anyone]
+type: concept
+audience: [developer]
 ---
 
 # Endpoints
 
 Why the application's HTTP surface is shaped the way it is, domain by domain — the reasoning that
 does not fit in a table row.
+
+```mermaid
+flowchart LR
+    Q["a question about a route"] --> L{"which one?"}
+    L -->|"what does it accept and answer"| O["openapi.yaml"]
+    L -->|"which middleware guards it"| R["src/modules/NAME/routes.ts"]
+    L -->|"why is it shaped so"| P["this page, one section per domain"]
+```
 
 ::: tip Looking for the exhaustive list?
 The complete, authoritative list of routes is [`openapi.yaml`](../build/openapi-workflow.md) — every path,
@@ -88,13 +96,11 @@ Shipping rates as pure domain rules (flat rates, free-above thresholds), priced 
 
 The only writer of stock in the application. A product's stock level carries three counters — `onHand` (units that exist), `reserved` (units an open order has claimed) and `backordered` (units promised that do not exist yet) — and what a customer may buy is the difference, published as the derived `available`. All three live in this module's own `stocklevels` collection, the only place they are written; `products` keeps a read-only mirror of them on its own document so a catalogue read needs no join.
 
-The transitions below move them, each a conditional write paired with the ledger row that explains it, so the ledger cannot have gaps (a payment's commit moves nothing and writes no row):
-
-Every transition, who calls it, which counters it moves and which ledger `reason` it writes is one table: [Reservations](../modules/inventory-reservations.md); the stocktake `adjust` and the returned-goods `restock` are in [Inventory](../modules/inventory.md).
+Each transition is a conditional write paired with the ledger row that explains it, so the ledger cannot have gaps (a payment's commit moves nothing and writes no row). Every transition, who calls it, which counters it moves and which ledger `reason` it writes is one table: [Reservations](../modules/inventory-reservations.md); the stocktake `adjust` and the returned-goods `restock` are in [Inventory](../modules/inventory.md).
 
 A checkout is **all-or-nothing** — the shop never silently ships fewer units than were ordered, because an order is what the customer agreed to buy. What it does do is say exactly what blocked it: a refusal carries `errors[0].details.lines`, one entry per short line with `productId`, `title`, `requested` and `availability` (sold out, short, off sale), never the number left, so a basket is fixed in one pass rather than one refusal per line. A staff order's refusal adds `available` for a caller who reads stock. That holds on both refusal paths — the pre-flight, and the conditional reserve that decides a race, where the reported figure is read back at the moment the write refused.
 
-Paying moves no counter: the units stay on the shelf and spoken for until they ship, and leave the shop at dispatch. An unpaid order costs availability for the length of its window (`NODE_RESERVATION_TTL_MINUTES`, default 15) and nothing more. The application process owns no timer: the sweep (`sweep:reservations`, every 5 minutes) is declared in `inventory/jobs.ts` and run by the `cron` service from the generated `docker/crontab` ([scheduled jobs](ops.md#scheduled-jobs)). Outside that compose setup the sweep is driven from outside — the platform's scheduled job, or an operator. Run it at least as often as the window, or holds outlive their deadline by the gap.
+Paying moves no counter: the units stay on the shelf and spoken for until they ship, and leave the shop at dispatch. An unpaid order costs availability for the length of its window (`NODE_RESERVATION_TTL_MINUTES`, default 15) and nothing more. The application process owns no timer: the sweep (`sweep:reservations`, every 5 minutes) is declared in `src/modules/inventory/module.yaml` and run by the `cron` service from the generated `docker/crontab` ([scheduled jobs](ops.md#scheduled-jobs)). Outside that compose setup the sweep is driven from outside — the platform's scheduled job, or an operator. Run it at least as often as the window, or holds outlive their deadline by the gap.
 
 Both reads page and report `meta.totalItems`, and neither is bounded in the service. The ledger is the record an audit works through, so a read answering only the newest rows would misreport history as complete; the board sorts on availability, which is derived, so mongod projects it in an aggregation rather than the service loading every product to sort in memory. The low-stock threshold (`NODE_LOW_STOCK_THRESHOLD`) is shared by the board's `lowOnly` filter and the `products_low_stock_total` gauge, but the two count different populations on purpose: the board spans the whole catalogue, because somebody restocking needs to see an inactive product's units, while the gauge counts only publicly visible products, because an alert about stock nobody can buy is noise. Both measure AVAILABILITY rather than units on hand.
 
@@ -214,7 +220,7 @@ Realtime is server → client only, via Server-Sent Events on `GET /observabilit
 
 There is no WebSocket endpoint. SSE covers the push case without upgrade handling and works unchanged under clustering, since each stream is served entirely by the worker that accepted it. Adding bidirectional messaging means adding `ws` plus an `'upgrade'` listener on the HTTP server in `src/app.ts` — and, if connections need to talk to each other, a Redis/NATS backplane, because a connection is pinned to one worker.
 
-## Related pages
+## Read next
 
 - [Observability Endpoints](./observability.md)
 - [API overview](../build/api-contracts.md#rest-patterns-used-here)
