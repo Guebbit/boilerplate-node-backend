@@ -262,7 +262,7 @@ passing a check. Judgement stays with whoever writes the page.
 | [Tactical DDD](../understand/tactical-ddd.md)        | 11       | Concept-heavy material kept visual throughout                        |
 | [Mutation Testing](mutation-testing.md)              | 9        | The most worked, copy-pasteable examples in the repo                 |
 
-## Where to go next
+## Read next
 
 | You want to                            | Read                                   |
 | -------------------------------------- | -------------------------------------- |

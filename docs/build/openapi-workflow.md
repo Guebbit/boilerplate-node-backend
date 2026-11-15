@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [developer]
 ---
 
@@ -239,7 +239,7 @@ Document:
 Do **not** create a page for every tiny request or response object.
 Those belong in the spec itself.
 
-## Useful links
+## Read next
 
 - [OpenAPI 3.1 specification](https://spec.openapis.org/oas/v3.1.0)
 - [Swagger guide](https://swagger.io/docs/specification/about/)

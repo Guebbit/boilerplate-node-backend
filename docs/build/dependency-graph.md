@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [developer]
 ---
 
@@ -83,6 +83,7 @@ dependsOn:
     - orders # placeOrder — the one function every order is written through
     - payments # listPaymentMethods, to validate the requested method
     - products # prices and availability
+    - shop # the currency and the countries the shop ships to
     - users # the buyer
 ```
 
@@ -181,3 +182,8 @@ except by deleting a type import that is doing its job. Nothing is lost — a di
 The tier walls, restated. Two tools enforcing one property is one tool too many: they drift, and
 the second failure is always the confusing one. Anything expressible as "this file may not import
 that file" belongs in `eslint.config.ts`.
+
+## Read next
+
+- [Dependency Vetting](./dependency-vetting.md)
+- [Module lifecycle](./module-lifecycle.md)
