@@ -142,7 +142,7 @@ The runbook, including re-applying erasures, is [Restoring](./backups.md#restori
 - **Size.** The server has no quota of its own: size the disk for `BACKUP_KEEP_*` times what changes, and
   alert on it (`node_exporter` on that machine, or your provider's).
 
-## Related pages
+## Read next
 
 - [Backups](./backups.md): the client side, the knobs, the drill
 - [rclone](./rclone.md): the server software

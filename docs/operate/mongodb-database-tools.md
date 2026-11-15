@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [operator]
 ---
 
@@ -39,3 +39,7 @@ stream) and `mongorestore` (write a stream back).
 - [mongodump](https://www.mongodb.com/docs/database-tools/mongodump/)
 - [mongorestore](https://www.mongodb.com/docs/database-tools/mongorestore/)
 - [Built-in roles: backup](https://www.mongodb.com/docs/manual/reference/built-in-roles/#backup)
+
+## Read next
+
+- [Backups](./backups.md)

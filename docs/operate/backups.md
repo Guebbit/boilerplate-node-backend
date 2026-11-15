@@ -387,7 +387,7 @@ for small deployments. Past tens of GB, or when minutes of data loss matter:
   backups need Percona Server, not the stock MongoDB this stack runs.
 - **Disk snapshots** (LVM or ZFS) of the data volume.
 
-## Where to go next
+## Read next
 
 | You want to                                   | Read                                        |
 | --------------------------------------------- | ------------------------------------------- |

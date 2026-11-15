@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [operator]
 ---
 
@@ -254,3 +254,8 @@ re-imports a module (`jest.resetModules()`) keeps its overrides, because the sto
 envalid and t3-env are maintained but each is a thin wrapper; t3-env parses at import, which is the
 side effect `createApp()` removed. Fail-closed environment switches are
 [Security](../understand/security.md#one-environment-switch).
+
+## Read next
+
+- [Getting Started — Production](./first-deploy.md#secrets)
+- [Add a variable](#add-a-variable)

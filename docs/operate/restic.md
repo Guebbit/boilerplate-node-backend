@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [operator]
 ---
 
@@ -48,3 +48,8 @@ static binary that writes **encrypted, deduplicated snapshots** to a repository.
 - [restic documentation](https://restic.readthedocs.io/en/stable/)
 - [Scripting and exit codes](https://restic.readthedocs.io/en/stable/075_scripting.html)
 - [Removing snapshots: forget and prune](https://restic.readthedocs.io/en/stable/060_forget.html)
+
+## Read next
+
+- [Backups](./backups.md)
+- [Backup server](./backup-server.md)
