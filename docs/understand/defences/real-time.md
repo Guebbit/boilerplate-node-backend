@@ -54,7 +54,7 @@ RabbitMQ is the other real-time surface, and it is not reachable from outside �
 [Data layer](data-layer.md#the-broker) for message validation and dead-lettering, and
 [Reaching the store](data-layer.md#reaching-the-store) for why no port is published.
 
-## Related
+## Read next
 
 - [Data layer](data-layer.md) — the broker half of this family
 - [Authorization](authorization.md) — the permission rule this stream demands

@@ -5,6 +5,8 @@ audience: [developer, architect]
 
 # Redis Cache
 
+Redis as an optional cache for repeated GET responses: the key, the entry, and how the API behaves without it.
+
 ## Why Redis is here
 
 [Redis](https://redis.io/docs/latest/) is used as an **optional server-side cache** for repeated GET responses.
@@ -92,104 +94,18 @@ Why not trust `scopeKey`: a custom role or an API key can hold `display:Locale` 
 this middleware owns, and decides whether the request is even a candidate for the Redis lookup
 `serveOrArm` does next.
 
-**`Cache-Control` itself:** every response starts as `no-store` (`installRoutes`, after the static
-files, so an image keeps its year-long cache), and the rules below overwrite it on the routes that
-opt in. A response is uncacheable unless a route says it is, so a secret in one (`POST /api-keys`,
-a webhook secret, an audit page) cannot be kept by a shared cache or a browser's disk because an
-opt-in was forgotten. An error answer is `no-store` too, whatever the route set before it failed
-(`rejectResponse`).
-
-- A cached POST (`POST /x/search`, keyed the same as its GET twin) is a SERVER-side arrangement
-  only — the wire always says `no-store`, since a shared cache holding a POST response could
-  answer a later POST from it, including a real write on some other route.
-- A cacheable GET gets `max-age`/`stale-*` (a shared cache in front of this server is what absorbs
-  a guest-scope stampede), or `no-cache` when the route asked for `browserRevalidate` instead (`GET /products/:id` does: the
-  page shows a stock count, and inventory clears the `products` tag on every stock write).
-- `cacheScope === undefined` — this caller sees more than the shared answer, per
-  [the scope-key rule above](#no-caching-depends-on-who-is-asking) — answers `private, no-cache`
-  regardless of `browserRevalidate`: `serveOrArm` is about to bypass Redis for this same request,
-  and a shared/browser cache must not store this ONE caller's wider answer as if it were generic.
-- A response that already carries a `Set-Cookie` (the dead-session clear `getAuth` writes in cookie
-  mode) is answered `private, no-cache` and skips Redis too: RFC 9111 §7.3 lets a shared cache store
-  and replay a cookie, which would log everyone out. Only a cookie set before `setCache` is seen.
-
-**The `Vary` headers:** `Authorization`, because `getAuth` derives `authContext` from it, or from
-the session cookie in cookie mode — without this, a shared cache could serve one anonymous response
-back to an admin, the same class of bug `GET /account` once had. `Accept-Language`, because
-`attachLocale` already sets it and a route reaching this by another path should still declare it.
-`Cookie`, set by `getAuth` itself and only in cookie mode, since there the cookie is the credential;
-`cache.ts` may not import the kernel, so it cannot say it.
-
-**Two throws guard a mounting mistake, not a runtime condition:**
-
-- `noStore` already forbade caching. Left unchecked, the `Cache-Control` set here would REPLACE
-  that header rather than merge — exactly how `GET /account` once cached a caller's profile for an
-  hour behind a router-wide no-store mount.
-- `browserRevalidate` on a POST. RFC 9110 makes a POST response browser-cacheable only under
-  conditions nothing here meets, so there would be nothing for the browser to revalidate.
+Full detail: [Response headers](./redis-cache-keys.md).
 
 ## The key is what the request asked for, not how it was written
 
 Every route declares which query parameters change its answer, and the key is built from those
-plus the resolved `scopeKey` and the locale:
-
-```ts
-// `cacheScopeKey` is the `hasAnonymousReadScope` check above: 'guest', or undefined to bypass.
-const cacheProductsSearch = searchCache('products', searchProductsKeyParameters, cacheScopeKey);
-
-router.get('/', cacheProductsSearch, getProducts);
-router.get(
-    '/:id',
-    setCache(3600, { tags: ['products'], keyParameters: [], scopeKey: cacheScopeKey }),
-    getProductItem
-);
-```
-
-`keyParameters` is required rather than optional, because it decides which requests share a cached
-response — a parameter the controller reads but the key omits would serve one search's results
-for another, and that is a correctness bug rather than a missed optimisation. Most routes declare
-`[]`: a path-only route has no query parameter that changes anything. The one cached search
-controller, `products`', exports its own as `Object.keys(schema.shape)`, derived from the very
-schema it validates against, so the list cannot drift from what the controller actually reads.
-
-Two URLs asking for the same thing therefore land on one entry, and an undeclared parameter
-cannot mint a new one:
-
-| Request                              | Key      |
-| ------------------------------------ | -------- |
-| `?page=1&pageSize=10`                | one key  |
-| `?pageSize=10&page=1` (same request) | same key |
-| `?page=1&anything=else`              | same key |
-
-The first two rows are what costs something in ordinary traffic: query-string order is not stable
-across HTTP clients, so a URL-derived key stores the same request twice and pays for a second
-Mongo query behind the second copy. The third row is why an arbitrary parameter cannot mint an
-entry, and the same body is never stored twice under two spellings.
-
-Note what the key still separates, and must: the path, the `guest` scope segment (see above), the
-locale, and any declared parameter that genuinely differs — including a repeated one
-(`?tag=a&tag=b` arrives as an array) and a blank one, which is not assumed to mean the same as
-absent.
+plus the resolved `scopeKey` and the locale.
 
 ### What reaches the key, and how
 
-The key is built BEFORE the controller validates anything, so what feeds it is bounded on purpose:
+The key is built BEFORE the controller validates anything, so what feeds it is bounded on purpose.
 
-- **Parsed, where the route can.** A route may hand `setCache` a `keyValues` function: the search
-  routes run the controller's own merge and schema, so `priceMin: "0e0"`, `"0x0"` and `0` are one
-  key, and a request the controller would refuse never gets one. Without it, the raw body or
-  query value feeds the key.
-- **Scalars only.** A string, number, boolean or null, or an array of those. Anything else (a
-  nested array, an object) skips the cache for that request, uncached and unharmed. A recursive
-  walk would throw a `RangeError` on a 100 kB `[[[…]]]` body.
-- **Hashed.** The values become one `sha256`, so a 90 kB `title` costs a 64-character key, not a
-  90 kB one stored twice.
-- **Arrays are sets, unless declared ordered.** `?id=a&id=b` and `?id=b&id=a` share a key;
-  `sort` is declared in `orderedKeyParameters`, because its tokens apply in sequence.
-
-Every entry is also indexed under its tags in a **sorted set scored by the entry's expiry**. Each
-write first drops the members already past their score, so the index follows the live entries and
-cannot grow without bound between invalidations.
+Full detail: [The key is what the request asked for, not how it was written](./redis-cache-keys.md).
 
 ## Entry size is bounded
 
@@ -198,18 +114,7 @@ simply answering it: `GET /products` is public and `setCache(3600, …)` keeps i
 hour. The declared-parameter key above bounds how many entries a caller can mint; this bounds how
 large any one of them may be, at whatever size the endpoint happens to return.
 
-The `setCache` middleware therefore refuses to store a body above `NODE_REDIS_CACHE_MAX_BYTES`
-(default `262144`, 256 KB) and logs a warning naming the key and the size. It lives with the
-middleware rather than in the adapter because the limit is measured on a serialized RESPONSE — the
-adapter below it stores opaque bytes and has no opinion about how many of them a response is
-allowed to be. The response is still returned
-normally — skipping is a lost optimisation, not a failure — so the endpoint stays correct and only
-loses its cache.
-
-This is deliberately independent of the request layer's own bounds. `PageSize.maximum` is `100`
-in `openapi.yaml` and a full page of products serializes to roughly 50 KB, so the guard never
-fires in normal traffic; it exists so the property holds regardless of which endpoint is writing,
-and regardless of whether that endpoint's page size is ever raised.
+Full detail: [Entry size is bounded](./redis-cache-keys.md).
 
 ## Refresh-ahead: no stampede when a hot key goes stale
 
@@ -217,33 +122,12 @@ A popular key expiring is a cache **stampede**: every request being served from 
 same instant, and all of them run the same expensive query. `scopeKey` answers `true` for
 every cacheable caller (see [No caching depends on who is asking](#no-caching-depends-on-who-is-asking)),
 so the crowd behind one entry is exactly that — every visitor to `GET /products` who reads the
-published catalogue, guest or logged-in alike, shares one entry; a caller who sees more bypasses
-Redis and has no crowd to be part of.
-
-The fix is the pattern behind Rails' `race_condition_ttl`, Caffeine's `refreshAfterWrite`,
-memcached leases and HTTP's `stale-while-revalidate` (RFC 5861): **serve the old value, let
-exactly one caller rebuild it.** Two layers apply it:
-
-| Layer                                             | Mechanism                         | Covers                                               |
-| ------------------------------------------------- | --------------------------------- | ---------------------------------------------------- |
-| The edge (a shared cache in front of this server) | `Cache-Control` directives, below | `GET`, guest scope, wherever a proxy/CDN is deployed |
-| The origin (`cache.ts`)                           | Redis `SET … NX EX` claim, below  | Everything else, across every worker and replica     |
 
 ### The two advertised windows
 
 `setCache`'s `max-age` branch (not `no-cache`, not `no-store`) adds two RFC 5861 directives,
 as fixed constants — not the resolved/clamped `ttl` — so a shared cache in front of this server
-can absorb a stampede before it ever reaches Node:
-
-```
-Cache-Control: <private|public>, max-age=<ttl>, stale-while-revalidate=60, stale-if-error=300
-```
-
-- `stale-while-revalidate=60` — a shared cache may serve the expired copy for up to 60s while it
-  refetches once in the background.
-- `stale-if-error=300` — during a 5xx or an unreachable origin, serve the last good copy for 5
-  minutes instead of an error page. Advertised only; nothing server-side enforces it, since an
-  origin that is down cannot also be the one enforcing its own header.
+can absorb a stampede before it ever reaches Node.
 
 ### The origin's own claim
 
@@ -251,58 +135,13 @@ Each cache entry carries a soft expiry (`staleAt`) ahead of its hard Redis expir
 where `grace` is `stale-while-revalidate`'s 60s clamped to at most `ttl` — see
 [Writes that bypass the API](#writes-that-bypass-the-api) for why a fixed 60s grace would
 otherwise undo the dev TTL ceiling). A read past `staleAt` tries `claimCacheRefresh`: Redis'
-`SET <key> 1 NX EX <grace>` grants the claim to exactly one caller across every worker and
-replica — everyone else gets `null` back for the same window.
-
-```mermaid
-flowchart TD
-    R[read entry] --> E{entry present?}
-    E -->|no| M["Cache-Status: fwd=miss → controller"]
-    E -->|yes| S{past staleAt?}
-    S -->|no| H["Cache-Status: hit → serve"]
-    S -->|yes| C{won SET NX?}
-    C -->|yes| RF["Cache-Status: fwd=stale → controller, rewrites entry"]
-    C -->|no| ST["Cache-Status: hit, negative ttl → serve old body from OWN key"]
-```
-
-The outcome is sent as an [RFC 9211](https://www.rfc-editor.org/rfc/rfc9211) `Cache-Status`
-header named `api-redis`. It is a debug aid: not in the contract, not CORS-exposed (devtools and
-curl see it anyway).
-
-| Outcome | Header                                                                                     |
-| ------- | ------------------------------------------------------------------------------------------ |
-| MISS    | `Cache-Status: api-redis; fwd=miss`                                                        |
-| HIT     | `Cache-Status: api-redis; hit; ttl=N` (seconds to `staleAt`)                               |
-| STALE   | `Cache-Status: api-redis; hit; ttl=-N` (seconds past `staleAt`, RFC 9211's stale-hit form) |
-| REFRESH | `Cache-Status: api-redis; fwd=stale`                                                       |
-
-`fwd=miss` rather than `uri-miss`: the key also folds in locale and the cacheable gate, so a URI
-miss cannot be told from a vary miss.
-
-Nobody waits, and nobody but the claimer ever runs the controller — everyone else reads back
-their own key's stale body. That is also the trap to keep in mind if this is ever changed: the key
-stays scoped by `scopeKey` and locale, because a rebuild collapsed across a caller who sees more
-than the shared answer would turn an availability fix into a data leak.
-
-Every failure degrades to what already happens without this feature — there is no state that a
-crash or an evicted claim leaves stuck:
-
-| Failure                      | Result                                                        |
-| ---------------------------- | ------------------------------------------------------------- |
-| Claimer crashes mid-rebuild  | the claim expires; the next reader past `staleAt` claims it   |
-| Refresh key evicted by LRU   | an extra claimer picks it up — one extra rebuild              |
-| Entry hard-expired, not soft | no stale body to serve — falls straight through to MISS       |
-| Tag invalidated              | key gone entirely — falls straight through to MISS, by design |
-
-Invalidation (`invalidateCache`, a `DEL` on every key in the tag) deliberately gets no
-refresh-ahead treatment: after a `DEL` there is no stale body left to serve, and marking entries
-stale instead of deleting them would serve data the API already knows is wrong — the one thing
-invalidation exists to prevent.
 
 ### `cache_requests_total`
 
 The one hit/miss signal this cache has: a Prometheus counter labelled `result`, one of `hit`,
 `miss`, `stale`, `refresh` — see `infrastructure/observability/metrics-cache.ts`.
+
+Full detail: [Refresh-ahead: no stampede when a hot key goes stale](./redis-cache-refresh.md).
 
 ## Memory is capped, and the cap evicts
 
@@ -390,105 +229,13 @@ In cluster mode (`npm run start:cluster`) the primary forks one worker per CPU c
 the whole Express app — see [Clustering](clustering.md). Workers are separate OS
 processes: they share no memory, no variables, no in-process cache. What they do share is Redis.
 
-```mermaid
-flowchart TD
-    subgraph proc["Node cluster (one host or container)"]
-        P["Primary<br/>src/cluster.ts"]
-        W1["Worker 1<br/>src/app.ts"]
-        W2["Worker 2<br/>src/app.ts"]
-        WN["Worker N<br/>src/app.ts"]
-        P -. fork .-> W1
-        P -. fork .-> W2
-        P -. fork .-> WN
-    end
-    W1 -->|own TCP connection| R
-    W2 --> R
-    WN --> R
-    R[("Redis<br/>one keyspace<br/>prefix:key:* + prefix:tag:*")]
-    R -.-> Note["No per-worker copy of the data:<br/>every read is a round-trip"]
-```
-
-Each worker opens **its own connection** (`src/infrastructure/adapters/cache.ts` over
-`adapters/managed-connection.ts`, one lazy client per process), but every connection addresses the **same keyspace** — same
-`NODE_REDIS_URL`, same `NODE_REDIS_CACHE_PREFIX`. A worker never keeps a local copy of a cached
-response, so there is no such thing as "worker 2's cache" to fall out of date. There is one cache,
-and four processes reading it.
-
-The same holds beyond one host: replicas in separate containers, pods or machines behave
-identically as long as they point at the same Redis with the same prefix. "Worker" below means
-any of them.
-
 ### Why there is no cross-instance broadcast
 
 That shared keyspace is what makes invalidation a solved problem rather than a coordination one.
-A write handled by worker 1 deletes the keys; worker 2 finds them gone on its very next read,
-without being told anything:
-
-```mermaid
-sequenceDiagram
-    participant C1 as Client A
-    participant W1 as Worker 1
-    participant R as Redis (shared)
-    participant W2 as Worker 2
-    participant C2 as Client B
-    participant M as MongoDB
-    C1->>W1: PUT /products/42
-    W1->>M: update
-    W1->>R: ZRANGE prefix:tag:products 0 -1
-    W1->>R: DEL those keys + the tag index
-    Note over R: the cached answers no longer exist<br/>for anyone
-    C2->>W2: GET /products
-    W2->>R: GET prefix:key:...
-    R-->>W2: (miss)
-    W2->>M: re-read
-    W2->>R: SET + ZADD (fresh entry, new TTL)
-    W2-->>C2: fresh response
-```
-
-Worker 2 is correct **before any message could have been sent**. A pub/sub broadcast on top of
-this would tell worker 2 to delete keys worker 1 already deleted — three extra round-trips per
-write per worker, a second Redis connection per process, and a shutdown ordering constraint, all
-to change no state. One was implemented here and has been removed; the AsyncAPI channel
-`cache.tags.invalidated` went with it.
-
-The one design that would need the broadcast is a **process-local L1 cache** — an in-memory map
-in each worker, in front of Redis, saving the network hop on every hit. Then worker 2 really
-would hold a stale copy only it can see, and only a message could reach it. That tier does not
-exist in `cache.ts`; if it is ever added, the pub/sub comes back in the same commit, tested
-against the in-memory eviction it actually serves.
-
-Two consequences worth keeping in mind:
-
-- **A missed invalidation is bounded by the TTL, and nothing else.** That was already true — the
-  broadcast never contributed to correctness — which is why the TTL cap above is load-bearing.
-- **Whatever a worker keeps in its own memory is invisible to the other workers.** Rate-limit
-  counters, session state, dedup sets: if it must be shared, it goes in Redis or Mongo.
 
 ### Queue workers
 
-`src/infrastructure/adapters/` (email, image digest) plus the module-owned consumers (webhook delivery, account export) are a different meaning of the word:
-those are RabbitMQ consumers, and `registerWorkers()` runs them **inside every cluster worker**,
-so N processes consume from the same queues.
-
-```mermaid
-flowchart LR
-    subgraph W["Each cluster worker process"]
-        E["Express routes"] --> Cache[("Redis cache")]
-        Q["Mail + module consumers"] --> Rabbit[("RabbitMQ")]
-        I["Image digest consumer"] --> Rabbit
-        I -. invalidates on a<br/>matched writeback .-> Cache
-    end
-    Q -. no cache access .-x Cache
-```
-
-That is fine for every shipped worker but one — sending mail, delivering a webhook and building
-an export change no cached resource. The image digest worker is the exception, and it is one of the
-[writes that bypass the API](#writes-that-bypass-the-api) described above: the write that enqueues
-its job already cleared the target's cache tag, before the digest ran, so the response that write
-re-warmed still carries the pre-digest placeholder. The worker clears the same tag a second time
-once its writeback actually matches a document — never passing through the `invalidateCache`
-middleware, so it calls `invalidateCacheTagsLogged` itself, same as that middleware does. See
-`settleWriteback` in `infrastructure/adapters/image.worker.ts`.
+`src/infrastructure/adapters/` (email, image digest) plus the module-owned consumers (webhook delivery, account export) are a different meaning of the word.
 
 ### When invalidation cannot reach Redis
 
@@ -497,11 +244,7 @@ digest) it follows has already succeeded in Mongo, and rejecting would turn a co
 an error response the client would retry. `invalidateCacheTags` reports instead, with the same
 `{ deleted, reachable }` `clearCache` returns.
 
-`reachable: false` means the pre-write response is still cached and will be served until its TTL
-expires: a customer edits a product, gets a 200, and the catalogue shows the old one for up to an
-hour. The response has already been sent by then, so observability is the only move left —
-`invalidateCacheTagsLogged` logs at `error` and increments `cache_invalidation_failures_total{tag}`.
-A non-zero rate on that counter means some endpoint is serving a stale answer to somebody.
+Full detail: [Redis and the workers](./redis-cache-workers.md).
 
 ## Configuration
 
@@ -529,7 +272,7 @@ difference shows up as a `warn` on boot in the second case and silence in the fi
 
 - [Redis pub/sub](https://redis.io/docs/latest/develop/interact/pubsub/) — the mechanism this page deliberately does _not_ use, and the one to reach for if an L1 tier is ever added
 
-## Related pages
+## Read next
 
 - [Clustering & Graceful Shutdown](clustering.md) — where the workers sharing this cache come from
 - [Request Flow](request-flow.md)

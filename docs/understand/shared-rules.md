@@ -146,3 +146,8 @@ padded string (`"19.90"` EUR, `"1000"` JPY, `"1.500"` KWD), with exponent cases 
 (2 places). The ISO 4217 exponent table itself stays in `src/domain-primitives/money.ts`; it is not
 a shared YAML, and the frontend keeps no table at all, because an amount at its currency's scale
 carries its own decimals.
+
+## Read next
+
+- [Architecture](./architecture.md)
+- [Modules](./modules.md)

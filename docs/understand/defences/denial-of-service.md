@@ -73,7 +73,7 @@ someone else's patience.
 | Resource-limit misconfiguration | one tenant starves others; no per-user quota | Budgets are per-address and per-identity, not global, so one caller cannot consume the whole budget. |
 | HTTP/2 rapid reset              | cheap stream resets exhaust the server       | See [HTTP and caches](http-and-caches.md#cheap-request-expensive-server).                            |
 
-## Related
+## Read next
 
 - [HTTP and caches](http-and-caches.md) — the protocol half
 - [Automation and abuse](automation-and-abuse.md) — the ladder past IP-keyed limits

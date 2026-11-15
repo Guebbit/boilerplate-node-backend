@@ -126,7 +126,7 @@ If shutdown takes longer than the timeout, the worker (or the primary) force-exi
 - [Graceful shutdown best practices (DigitalOcean)](https://www.digitalocean.com/community/tutorials/how-to-scale-node-js-applications-with-clustering)
 - [The Twelve-Factor App — Disposability](https://12factor.net/disposability)
 
-## Related pages
+## Read next
 
 - [Architecture](./architecture.md)
 - [Request Flow](./request-flow.md)

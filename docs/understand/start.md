@@ -3,12 +3,12 @@ type: concept
 audience: [developer, architect]
 ---
 
-# Theory
+# Understand
 
-This section explains **how the boilerplate thinks**.
-It is about patterns and structure, not product details.
+How the boilerplate is shaped and why: patterns and structure, not product details.
+Start with the map below, then follow [Where each topic lives](#where-each-topic-lives).
 
-## Theory in one screen
+## The map in one screen
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 65}}}%%
@@ -158,3 +158,9 @@ surely as no barrel would, since there is nothing in it to reach for.
 | Know why each piece of personal data is kept as long as it is      | [Data Retention](./data-retention.md)                                       |
 | Understand dependency choices                                      | [Tools](tool-map.md)                                                        |
 | Change contract, types, or mocks                                   | [API](../build/api-contracts.md)                                            |
+
+## Read next
+
+- [Reading Path](./reading-path.md): open the code for the first time.
+- [Architecture](./architecture.md): the big blocks and their boundaries.
+- [Request Flow](./request-flow.md): one request, end to end.

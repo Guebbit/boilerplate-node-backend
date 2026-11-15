@@ -260,3 +260,9 @@ of its routes, so a source declared on one route it serves excuses that source o
 delete controller is shared by the `{id}` and `/hard` forms, so the `hardDelete`
 query parameter has to be declared on every one of them — it is a shared `HardDeleteParam` for that
 reason. Per-operation declarations are what would remove the blind spot.
+
+## Read next
+
+- [Request Flow](./request-flow.md)
+- [Write Methods: POST, PUT, PATCH](./write-methods.md)
+- [API Standards](./api-standards.md)

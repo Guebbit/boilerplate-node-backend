@@ -69,7 +69,7 @@ the honest verdict.
 | Reporting channel             | no way for a finder to reach the owner          | Closed here — `/.well-known/security.txt`, [opt-in](../security.md#reporting-a-vulnerability). |
 | DNS zone transfer             | AXFR allowed to anyone                          | The DNS provider.                                                                              |
 
-## Related
+## Read next
 
 - [Authentication](authentication.md) — enumeration through the credential endpoints
 - [Authorization](authorization.md) — the scoping that makes an id safe to reveal

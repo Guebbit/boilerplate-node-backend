@@ -90,7 +90,7 @@ is just not automatically account takeover plus a purchase.
 | Browser fingerprinting           | canvas, fonts, audio, hardware quirks               | Frontend, and a privacy question more than an exploit — see [Data protection](../data-protection.md).                                        |
 | Browser cache poisoning          | a cacheable response with injected content persists | No surface here: nothing reflects request input into a response body.                                                                        |
 
-## Related
+## Read next
 
 - [Authentication](authentication.md) — the cookies and tokens every shared row above is about
 - [Infrastructure](infrastructure.md#headers-the-browser-acts-on) — the headers half

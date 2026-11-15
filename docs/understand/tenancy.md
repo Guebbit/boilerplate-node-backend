@@ -221,3 +221,8 @@ one, not just the ones with an obvious column already sitting unused.
 | Back up what one stack holds                  | [Backups](../operate/backups.md)                     |
 | Share one off-site machine between stacks     | [Backup server](../operate/backup-server.md)         |
 | Pick a host that can run one stack            | [Hosting](../operate/hosting.md)                     |
+
+## Read next
+
+- [Authorization](./authorization.md)
+- [Data Protection](./data-protection.md)

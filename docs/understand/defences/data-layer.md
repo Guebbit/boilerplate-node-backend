@@ -64,7 +64,7 @@ filter that matches nothing. Failing closed is a property of the shape, not of t
 | ------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Secrets in database | third-party tokens in plaintext columns | Session, reset and restore tokens are stored as sha256 digests; backup codes as salted `scrypt`; a TOTP device secret is AES-256-GCM under a versioned key — `src/infrastructure/security/hash-token.ts`, `account/two-factor/` |
 
-## Related
+## Read next
 
 - [Injection](injection.md#into-a-database-query) — what reaches the query planner
 - [Authorization](authorization.md#object-level-whose-row-is-it) — the same filter, from the caller's side
