@@ -7,6 +7,18 @@ audience: [developer]
 
 How a return ends other than by refund: declined, closed by hand or cancelled, the events it raises and the statuses beside the order's own.
 
+```mermaid
+stateDiagram-v2
+    requested --> declined: staff decline, with a reason code
+    approved --> canceled: staff cancel, the goods never came
+    received --> closed: the money went back, or staff close it by hand
+    declined --> [*]
+    canceled --> [*]
+    closed --> [*]
+```
+
+`declined` and `canceled` are final; `closed` follows the goods and the refund. The full lifecycle is on [the returns page](./returns.md#the-lifecycle).
+
 ## Declining a request {#declining-a-request}
 
 `POST /returns/{id}/decline` takes a **code** and, when the code is `other`, a **message** (Shopify's
