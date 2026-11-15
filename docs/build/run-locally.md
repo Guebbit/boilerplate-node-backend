@@ -8,13 +8,25 @@ audience: [developer]
 From a fresh clone to a browsable API with demo data. Five minutes, three commands, no manual
 editing.
 
-This stack is **container-first**: the shipped `.env` uses compose service hostnames. The default
-profile is lean — 6 containers (`app`, `cron`, `database`, `redis`, `limits`, `rabbitmq`) — with Tempo, Loki,
-Prometheus, Grafana, Alloy and Umami opt-in behind the `observability`/`analytics` profiles
-(`npm run compose:up:full`, or `COMPOSE_PROFILES` in `.env` to keep them across every restart). The dev profiles are `observability`, `analytics`, `docs` and `integrations`; the `bundled` value `.env-example` ships belongs to the production compose file. Host
-mode is supported and has its own scripts; it is the secondary path.
+## Before you start
 
-## First run
+- Node `>=24.7` and npm `>=11.16` (`engines` in `package.json`).
+- Podman or Docker with compose. The `npm run compose` wrapper uses `CONTAINER_ENGINE` and defaults to `podman`.
+- Ports `3000–3099` free: this repo owns them ([Pairing & Ports](./pairing-and-ports.md)).
+
+This stack is **container-first**: the shipped `.env` uses compose service hostnames. Host mode is supported and has its own scripts; it is the secondary path.
+
+| Profile (compose) | Containers                                                                   |
+| ----------------- | ---------------------------------------------------------------------------- |
+| default (lean)    | `app`, `cron`, `database`, `redis`, `limits`, `rabbitmq`                     |
+| `observability`   | tempo, otel-collector, prometheus, alertmanager, gatus, loki, grafana, alloy |
+| `analytics`       | umami, umami-db, umami-init                                                  |
+| `docs`            | this site                                                                    |
+| `integrations`    | webhook-tester, webhook-tester-tls, mailpit                                  |
+
+`npm run compose:up:full` starts `observability`, `analytics` and `docs`; set `COMPOSE_PROFILES` in `.env` to keep any of them across every restart. The `bundled` value `.env-example` ships belongs to the production compose file.
+
+## Steps {#first-run}
 
 ```mermaid
 flowchart TD
@@ -30,11 +42,10 @@ flowchart TD
     class Ready done;
 ```
 
-```bash
-npm install
-npm run setup                    # creates .env from .env-example, fills every secret it refuses to boot without
-npm run compose:up               # the lean default, or: npm run compose:up:full
-```
+1. `npm install`
+2. `npm run setup`: creates `.env` from `.env-example` and fills every secret the app refuses to boot without.
+3. `npm run compose:up` for the lean default, or `npm run compose:up:full`.
+4. Check it worked, below.
 
 What `setup` touches, and what it leaves for you, is on
 [First run: `npm run setup`](../operate/configuration.md#first-run-npm-run-setup).
@@ -49,7 +60,7 @@ orders rather than empty lists, without asking for them. Which mongod that lands
 happens on the second boot, is [Which database am I looking at?](#which-database-am-i-looking-at)
 below.
 
-## Check it worked
+## Check it worked {#check-it-worked}
 
 ```bash
 curl http://localhost:3000/                          # health probe — also returns trace headers

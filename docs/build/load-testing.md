@@ -13,6 +13,12 @@ actually experienced.
 
 Nothing about load testing ships in the server, and k6 is not an npm dependency.
 
+## Before you start
+
+- A running server (`npm run compose:up` or `npm run host -- dev`) on `NODE_PORT`.
+- The container engine `CONTAINER_ENGINE` names (podman by default): k6 runs in an image, not on the host.
+- Seeded data: [Getting Started](./run-locally.md).
+
 ## k6 runs in a container, not on the host
 
 k6 has no npm package — it is a Go binary nobody installs by hand, and this repo does not ask you
@@ -59,7 +65,7 @@ Run one in the two cases where the number can actually have moved:
 There is no recorded baseline to compare against. Take the numbers from a run on the same machine
 before the change, not from a previous release on different hardware.
 
-## Running one
+## Steps {#running-one}
 
 Start the stack, then point a run at it:
 

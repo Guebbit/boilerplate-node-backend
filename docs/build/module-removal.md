@@ -3,11 +3,16 @@ type: task
 audience: [developer]
 ---
 
-# Removing a module
+# Remove a module
 
 The other half of [Adding & removing a module](./module-lifecycle.md): delete the folder, re-bundle, read the failures.
 
-## Removing a module
+## Before you start
+
+- The module is not one another module depends on: `npm run check` names every dependant (step 6).
+- A clean tree, so the failures you read are only this removal's.
+
+## Steps {#removing-a-module}
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 45}}}%%

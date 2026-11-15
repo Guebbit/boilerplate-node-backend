@@ -8,7 +8,12 @@ audience: [developer]
 Everything you can run, what each answers, and what it costs. Start here; the pages linked from
 each row go deeper.
 
-## The 30-second version
+## Before you start
+
+- `npm install` has run.
+- No database to start: the suites bring their own in-memory Mongo.
+
+## Steps {#the-30-second-version}
 
 ```bash
 npx jest --runInBand -- src/modules/products   # one module, every layer it owns, seconds

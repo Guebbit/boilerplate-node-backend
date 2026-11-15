@@ -19,11 +19,17 @@ Both halves are the same claim read in two directions:
 That claim is not aspirational — the cost of one real addition is recorded below, honestly,
 including the parts beyond the registration.
 
+## Before you start
+
+- A clean tree and a green `npm run complete:light` on the base.
+- The shape of a module: [the module registry](./module-registry.md) and [the module template](../understand/modules.md#the-module-template).
+- A name: lower-case letters and single hyphens.
+
 ## The registry
 
 The one folder-driven registry, and everything that reads from it: [The module registry](./module-registry.md).
 
-## Adding a module
+## Steps {#adding-a-module}
 
 ::: tip Steps 1 to 5 can be generated
 `npm run scaffold:module -- <name>` writes the folder, the contract fragment, the permission rules and set,

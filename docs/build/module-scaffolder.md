@@ -10,6 +10,15 @@ audience: [developer]
 something that compiles, lints and passes the gate instead of from a copy-and-rename. A scaffolded
 module is a real module, so it gets its own page; the `example` module it was cut from has none.
 
+## Before you start
+
+- A clean tree on the base branch.
+- A name: lower-case letters and single hyphens, no digits.
+
+## Steps
+
+1. Run it, with the options you need:
+
 ```sh
 npm run scaffold:module -- field-notes
 npm run scaffold:module -- categories --entity Category --group shop --summary "Product groupings."
@@ -24,6 +33,9 @@ npm run scaffold:module -- audits-lite --no-audit
 | `--summary <text>` | a TODO sentence        | The line in the docs index and sidebar                              |
 | `--no-audit`       | audits                 | No `audit.ts`, no `rules.yaml`, no audit calls in the service       |
 | `--no-regenerate`  | regenerates            | Write the files and stop before `regenerate --no-sync`              |
+
+2. Read what it generated, then do the central edits: [the central edits](#the-central-edits).
+3. `npm run check`.
 
 ## What it generates
 
