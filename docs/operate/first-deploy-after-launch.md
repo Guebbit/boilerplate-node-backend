@@ -7,7 +7,13 @@ audience: [operator]
 
 Make the first admin, publish a disclosure contact and wire the first integration, on a stack that is already up.
 
-## The first admin
+## Before you start
+
+- The stack is up and healthy: [Check it worked](./first-deploy.md#check-it-worked).
+
+## Steps
+
+### 1 · The first admin {#the-first-admin}
 
 `setup` gives the database its shop and its preset roles, but nobody starts with a role above
 `customer` — the first signup racing to become admin is a known vulnerability pattern, so nothing
@@ -35,13 +41,13 @@ that was switched off, or erased, comes back with `db.users.updateOne({ _id: Obj
 { $set: { active: true }, $unset: { deletedAt: "" } })`. The app has no way to do either on an
 administrator's behalf: only a role manager changes one, and the app has no role manager above an administrator ([Authorization](../understand/authorization.md#protecting-people)).
 
-## Publish a disclosure contact
+### 2 · Publish a disclosure contact {#publish-a-disclosure-contact}
 
 Set `NODE_SECURITY_CONTACT`, `NODE_SECURITY_EXPIRES` (and optionally `NODE_SECURITY_POLICY_URL`) so
 a researcher who finds a bug in your deployment knows where to send it. Left unset, nothing is
 published. See [Reporting a vulnerability](../understand/security.md#reporting-a-vulnerability).
 
-## The first third-party integration
+### 3 · The first third-party integration {#the-first-third-party-integration}
 
 The contracts ship at `0.1.0` (alpha: REST may break freely). Before the first partner script uses
 an `sk_` API key, or the first outside subscriber receives a webhook, bump `info.version` to

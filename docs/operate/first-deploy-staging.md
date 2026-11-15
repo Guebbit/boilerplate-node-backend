@@ -7,7 +7,14 @@ audience: [operator]
 
 Rehearse a deploy on a copy before the real one.
 
-## A staging copy
+## Before you start
+
+- A small throwaway machine and a hostname for it.
+- You have read [Getting Started — Production](./first-deploy.md).
+
+## Steps
+
+### 1 · A staging copy
 
 The test suite proves the code. It cannot prove the install: a real certificate, mail that lands in
 an inbox, a firewall, a reboot. Staging is where those get checked, before a customer does it for you.

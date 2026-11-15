@@ -5,10 +5,10 @@ audience: [operator]
 
 # Gatus
 
-## What it is
-
 Gatus is the **off-host heartbeat service**: a small status-page and health-check server (Apache-2.0) that
 lives on a **different machine** from the stack it watches.
+
+## What it is
 
 It does two jobs:
 

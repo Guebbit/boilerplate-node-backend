@@ -5,10 +5,10 @@ audience: [operator]
 
 # restic
 
-## What it is
-
 [restic](https://restic.net) is the backup program behind the [`backup` container](./backups.md): one
 static binary that writes **encrypted, deduplicated snapshots** to a repository.
+
+## What it is
 
 | Fact        | Value                                                                                                 |
 | ----------- | ----------------------------------------------------------------------------------------------------- |

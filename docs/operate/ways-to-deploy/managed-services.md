@@ -9,17 +9,17 @@ A managed MongoDB, Redis or RabbitMQ is compatible, not identical. Every "compat
 
 ```mermaid
 flowchart LR
-    App["app"] -->|"NODE_*_URL"| Bundled[("Bundled container")]
-    App -->|"NODE_*_URL"| Managed[("Managed service")]
+    App["app"] -->|"connection URL"| Bundled[("Bundled container")]
+    App -->|"connection URL"| Managed[("Managed service")]
 ```
 
 ## What changes
 
-| Service  | Switch                                | Risk                                            | Tested here |
-| -------- | ------------------------------------- | ----------------------------------------------- | ----------- |
-| MongoDB  | Point the URL at the managed cluster  | Wire protocol is shared, features may not be    | No          |
-| Redis    | Point the URL at the managed instance | Two instances are needed: cache and `limits`    | No          |
-| RabbitMQ | Point the URL at the managed broker   | Queue and exchange names are created by the app | No          |
+| Service  | Setting                                                                   | Risk                                            | Tested here |
+| -------- | ------------------------------------------------------------------------- | ----------------------------------------------- | ----------- |
+| MongoDB  | `NODE_DB_URI` at the managed cluster                                      | Wire protocol is shared, features may not be    | No          |
+| Redis    | `NODE_REDIS_URL` and `NODE_RATE_LIMIT_REDIS_URL` at the managed instances | Two instances are needed: cache and `limits`    | No          |
+| RabbitMQ | `NODE_RABBITMQ_URL` at the managed broker                                 | Queue and exchange names are created by the app | No          |
 
 Wire-compatible stores (Cosmos DB for MongoDB, DocumentDB) can lack an aggregation operator or index type. Check each against the vendor's compatibility page.
 

@@ -258,4 +258,4 @@ side effect `createApp()` removed. Fail-closed environment switches are
 ## Read next
 
 - [Getting Started — Production](./first-deploy.md#secrets)
-- [Add a variable](#add-a-variable)
+- [Deploy and rollback](./deploy-and-rollback.md)

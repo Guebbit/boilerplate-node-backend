@@ -5,8 +5,6 @@ audience: [operator]
 
 # Grafana
 
-## What it is
-
 Grafana is the **single UI** for all observability signals: traces (Tempo), metrics (Prometheus), and logs (Loki).
 
 ## Where to find it

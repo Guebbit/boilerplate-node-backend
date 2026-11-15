@@ -7,7 +7,14 @@ audience: [operator]
 
 Prove a backup restores, on the real deployment, against the real repository.
 
-## The restore drill
+## Before you start
+
+- A stack that has taken at least one backup ([Backups](./backups.md)).
+- The `restore-drill` profile available in `docker-compose.production.yml`.
+
+## Steps
+
+### 1 · The restore drill
 
 One command, on the real deployment, against the real repository:
 
@@ -43,7 +50,7 @@ Point `BACKUP_REPOSITORY` at the second machine's `rest:` URL to drill the off-s
 rotate which one gets drilled rather than testing all of them every time.
 On the real deployment, the first drill is the production readiness check for backups: this command, once, before launch.
 
-### CI proves it on every change
+#### CI proves it on every change
 
 The `backup-drill` job (`npm run backup:drill`, which anyone with Docker can run, `docker/backup/drill.sh`)
 builds the backup image and then, on one private network with no published port:

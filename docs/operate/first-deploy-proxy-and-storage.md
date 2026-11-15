@@ -7,13 +7,18 @@ audience: [operator]
 
 What differs from dev, how to put TLS in front, where uploads live, and the first backup.
 
+## Before you start
+
+- The stack is up and healthy: [Check it worked](./first-deploy.md#check-it-worked).
+- A domain pointing at the host.
+
 ## What's different from dev
 
 | Dev (`docker-compose.yml`)                                  | Production (`docker-compose.production.yml`)                                                                                             |
 | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Source bind-mounted, `tsx` watches for changes              | Source baked into the image at build time                                                                                                |
 | API port published to `${NODE_HOST:-127.0.0.1}`             | API port published to `127.0.0.1` only                                                                                                   |
-| Full observability stack included                           | No observability containers — see [below](./first-deploy-monitoring.md#monitoring-and-alerts)                                            |
+| Full observability stack included                           | Only with the `monitoring` profile — see [Monitoring and alerts](./first-deploy-monitoring.md#monitoring-and-alerts)                     |
 | `NODE_ENABLE_CLUSTERING=1` (optional, `dev:docker:cluster`) | The image runs `src/main.ts`: one process per container, always; scale with `--scale app=N`                                              |
 | Runs as whatever user starts compose                        | Runs as the non-root `node` user inside the image, `read_only` root filesystem, all Linux capabilities dropped                           |
 | Mongo is a single-member replica set with no auth           | Mongo is a single-node replica set (`rs0`), a scoped `readWrite` app user behind a root account, both Redis instances require a password |
@@ -23,7 +28,9 @@ Clustering is off on purpose: scale replicas with `--scale app=N` or an orchestr
 one thing decides how many processes are live, not two layers of process management fighting a
 rolling deploy.
 
-## Putting a reverse proxy in front
+## Steps
+
+### 1 · Putting a reverse proxy in front {#putting-a-reverse-proxy-in-front}
 
 The app itself never terminates TLS; the `docker-compose.proxy.yml` Traefik overlay does, with Let's Encrypt certificates. The API is bound to loopback specifically so that publishing
 it on a public interface — plain HTTP, carrying the auth cookies this application sets — is not the
@@ -39,7 +46,7 @@ sudo sysctl --system
 ```
 
 Then set `NODE_TRUST_PROXY_HOPS` to the number of proxies in front (usually `1`; the Traefik overlay
-below sets it to `1` unless the client file sets it, and `.env-example` leaves it commented). It defaults to `0`, which reads the caller's address from the socket — with a proxy in front, that is the proxy's
+in the compose file sets it to `1` unless the client file sets it, and `.env-example` leaves it commented). It defaults to `0`, which reads the caller's address from the socket — with a proxy in front, that is the proxy's
 address for every request, so every caller shares one rate-limit bucket and every audit row names
 the proxy. See [trust proxy](../understand/security.md#trust-proxy-and-the-two-ways-to-get-it-wrong).
 
@@ -47,15 +54,14 @@ Running **several client stacks on one host** is different enough to have its ow
 `docker-compose.proxy.yml` fronts them all with one shared Traefik that serves each stack from its
 own route file, with no Docker socket mounted. See [Two Client Stacks](./two-client-stacks.md).
 
-## Uploaded images do not outlive the container
+### 2 · Uploaded images do not outlive the container {#uploaded-images-do-not-outlive-the-container}
 
 `imageStore` (`src/infrastructure/adapters/image-store.ts`) writes uploads to disk. The compose
 file mounts a named volume (`uploads:/app/public/images`) as the stopgap — without it, a redeploy
 loses every uploaded image. The volume still pins the deployment to one host, and two replicas do
-not share what they store. The durable answer is an S3-compatible `ImageStore` implementation;
-nothing selects a backend yet, on purpose.
+not share what they store. Where uploads live, and why: [Uploads and the host volume](./deployment-hardening.md#object-storage-for-uploads).
 
-## Backups
+### 3 · Backups {#backups}
 
 Before the first real customer, in this order:
 

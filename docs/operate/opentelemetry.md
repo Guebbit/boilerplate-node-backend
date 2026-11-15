@@ -5,10 +5,10 @@ audience: [operator]
 
 # OpenTelemetry
 
-## Why it is here
-
 OpenTelemetry (OTel) is the **trace** layer of this boilerplate.
 A trace is the timeline of a single request: HTTP in, every Mongoose query, every Redis call, the response out.
+
+## Why it is here
 
 We use OTel **auto-instrumentation**: there is no per-request code to write.
 

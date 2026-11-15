@@ -10,6 +10,11 @@ snapshots are deleted. It ships as `docker-compose.backup-server.yml`, **dormant
 starts it on a machine of their own. Nothing in a client stack points at it until that client sets
 `BACKUP_REPOSITORY=rest:https://<host>:8000/<client>/`.
 
+## Before you start
+
+- A second machine, ideally at a different provider than the stack.
+- Podman or Docker with Compose on it.
+
 ## The threat it answers
 
 | Threat                                                                                                             | What stops it                                                                                                      |
@@ -46,7 +51,9 @@ else. One server holds many clients, each with its own repository path and its o
 
 Both long-running services are read-only, drop every capability and run as uid 1000. No Docker socket.
 
-## Set it up
+## Steps
+
+### 1 · Set it up {#set-it-up}
 
 On the second machine, any host that runs Docker or Podman. Provider-neutral: pick the host yourself
 ([Hosting](./hosting.md)).
@@ -86,13 +93,13 @@ RESTIC_REST_PASSWORD=A_LONG_RANDOM_PASSWORD
 `BACKUP_PRUNE=false` is the one line that matters. Left `true`, the first run's `forget` is
 **refused**, the run goes red and the heartbeat alerts: loud on day one, one line to fix.
 
-### Adding a client
+#### Adding a client
 
 Repeat steps 3 and 4 with the new name, restart `rest` so it re-reads the htpasswd file
 (`docker compose -f docker-compose.backup-server.yml restart rest`). The repository itself is created
 by the client's first run.
 
-### Certificates
+#### Certificates
 
 The clients verify the server's certificate with the system CA store. A certificate from your own
 CA needs that CA inside the client's backup container (a mounted bundle and `RESTIC_CACERT`, added

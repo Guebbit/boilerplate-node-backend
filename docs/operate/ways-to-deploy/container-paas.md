@@ -5,7 +5,7 @@ audience: [operator]
 
 # Container PaaS
 
-A platform that runs a built image for you. The image fits; the compose file does not apply, and no platform has been tested here.
+A platform that runs a built image for you. The image is a standard OCI image and the compose file does not apply. It has not been tested on any PaaS here.
 
 ```mermaid
 flowchart LR

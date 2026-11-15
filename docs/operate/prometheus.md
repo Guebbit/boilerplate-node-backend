@@ -5,10 +5,10 @@ audience: [operator]
 
 # Prometheus
 
-## What it is
-
 Prometheus is the **metrics backend** of this boilerplate.
 It scrapes the app's `/observability/metrics` endpoint every 15 s, stores numeric time-series, evaluates alert rules, and sends firing alerts to Alertmanager.
+
+## What it is
 
 Grafana reads Prometheus for all metric charts and dashboards.
 

@@ -8,7 +8,13 @@ audience: [operator]
 The deployment shape of this stack, not the development one. `docker-compose.yml` bind-mounts the
 working tree and brings up the whole observability estate because seeing everything is the point
 of a dev box. `docker-compose.production.yml` is the other half: it runs the **built** image, binds
-the API port to loopback only, and keeps to what a host needs: `app`, `cron`, the one-shot `setup`, the datastores (`database`, `cache`, `limits`, `queue`), and two opt-in profiles: `backup` (the backup job) and `monitoring` (`prometheus`, `alertmanager`, `loki`, `node-exporter`, `alloy`) — see [Monitoring and alerts](./first-deploy-monitoring.md#monitoring-and-alerts).
+the API port to loopback only, and keeps to what a host needs: `app`, `cron`, the one-shot `setup`, the datastores (`database`, `cache`, `limits`, `queue`), with `database`, `cache`, `limits` and `queue` in the `bundled` profile, on by default (`COMPOSE_PROFILES=bundled` in `.env-example`), and three opt-in profiles: `backup` (the backup job), `restore-drill` (the restore drill) and `monitoring` (`prometheus`, `alertmanager`, `loki`, `node-exporter`, `alloy`) — see [Monitoring and alerts](./first-deploy-monitoring.md#monitoring-and-alerts).
+
+## Before you start
+
+- A host that runs Podman or Docker with Compose: [Ways to deploy](./ways-to-deploy/index.md).
+- A checkout of this repository on that host.
+- A domain name for the API, for the proxy step.
 
 ::: warning Read this alongside the file, not instead of it
 Every decision below — why the port is loopback-only, why it is one process per container, why observability is
@@ -16,7 +22,9 @@ absent — is explained inline in `docker-compose.production.yml` and `docker/Do
 themselves. This page is the short version; the compose file is the source of truth.
 :::
 
-## First run
+## Steps
+
+### 1 · First run {#first-run}
 
 A production stack serves **one client organisation**. It is named, and the name picks up that
 client's configuration:
@@ -61,7 +69,7 @@ complete list; `MONGO_ROOT_USER` defaults to `root`, `MONGO_APP_USER` and `MONGO
 authenticates as `MONGO_APP_USER`, a `readWrite` user scoped to `MONGO_DB` and created by
 `docker/mongo-init.js` the first time the volume is empty.
 
-## Secrets
+### 2 · Secrets {#secrets}
 
 Every credential and key is **one file** under `clients/acme/secrets/`, and compose hands each
 service only the files it needs. A secret in an environment variable shows in `docker inspect` and
@@ -166,11 +174,11 @@ one of them silently gives every client the same application config.
 
 That builds `docker/Dockerfile.production` (multi-stage: type-checks in a build stage, ships only
 production dependencies in the runtime stage), runs `setup` once — indexes and the shop's row, see
-[below](./first-deploy-after-launch.md#the-first-admin) — then starts the API, `cron`, and (bundled profile) `database`, `cache`,
+[the first admin](./first-deploy-after-launch.md#the-first-admin) — then starts the API, `cron`, and (bundled profile) `database`, `cache`,
 `limits` and `queue` — the production names for Mongo, the cache Redis, the rate-limit Redis and RabbitMQ. No bind mount, no hot reload:
 what's running is exactly what was built.
 
-## Check it worked
+### 3 · Check it worked {#check-it-worked}
 
 ```bash
 docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml logs -f app
@@ -186,9 +194,9 @@ docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml e
   file, but only this sees a value someone put straight into the client's `.env`.
 
 The port is published to `127.0.0.1`, not `0.0.0.0` — reachable from the host, not from the
-network. That is deliberate, see [Putting a reverse proxy in front](./first-deploy-proxy-and-storage.md#putting-a-reverse-proxy-in-front) below.
+network. That is deliberate, see [Putting a reverse proxy in front](./first-deploy-proxy-and-storage.md#putting-a-reverse-proxy-in-front).
 
-## Surviving a reboot
+### 4 · Surviving a reboot {#surviving-a-reboot}
 
 Rootless Podman has no daemon, so `restart: unless-stopped` alone does nothing at boot: nobody is
 there to read it. Two commands, once per host, as the user that runs the stacks:

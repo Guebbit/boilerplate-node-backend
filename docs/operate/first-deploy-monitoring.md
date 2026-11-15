@@ -7,7 +7,14 @@ audience: [operator]
 
 Turn on the monitoring set and prove one alert reaches you.
 
-## Monitoring and alerts
+## Before you start
+
+- The stack is up and healthy: [Check it worked](./first-deploy.md#check-it-worked).
+- A way to receive mail or a webhook for alerts.
+
+## Steps
+
+### 1 · Monitoring and alerts {#monitoring-and-alerts}
 
 The `monitoring` profile adds five services, **off by default**: Prometheus (scrapes `app` and
 evaluates the alert rules), Alertmanager (routes what fires), node_exporter (the host's disk, for

@@ -8,6 +8,15 @@ audience: [operator]
 One command ships a release, checks it came up healthy, and puts the previous release back when it
 did not. No orchestrator is needed: it is a bash script over the production compose file.
 
+## Before you start
+
+- A client stack created as in [Getting Started — Production](./first-deploy.md).
+- The client directory `clients/<name>/` with its `.env` and `secrets/`.
+
+## Steps
+
+### 1 · What a deploy does {#what-a-deploy-does}
+
 ```bash
 docker/deploy.sh acme                      # build here, tag with the git sha, start, check
 docker/deploy.sh acme registry.example/api@sha256:…   # run a pushed image by digest
@@ -17,8 +26,6 @@ docker/deploy.sh acme --rollback           # run the previous good image again
 `acme` is the client: the directory under `clients/` that holds its `.env` and `secrets/`
 ([First run](first-deploy.md#first-run)). `CONTAINER_ENGINE` picks `podman`
 (default) or `docker`, the same switch `npm run compose` uses.
-
-## What a deploy does
 
 ```mermaid
 flowchart LR

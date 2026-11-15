@@ -5,12 +5,14 @@ audience: [operator]
 
 # Winston & Audit Logs
 
+How the app writes its two log streams, and where each one ends up.
+
 ## Two log streams
 
-| Stream        | Purpose                                                               | Format                                          |
-| ------------- | --------------------------------------------------------------------- | ----------------------------------------------- |
-| `logger`      | normal application logs (request access logs, errors, warnings)       | JSON in production/test, pretty + colour in dev |
-| `auditLogger` | security/admin events (login attempts, role checks, token cleanup, …) | always JSON                                     |
+| Stream        | Purpose                                                               | Format                                                                                                |
+| ------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `logger`      | normal application logs (request access logs, errors, warnings)       | Pretty and coloured only in a relaxed environment on a terminal (`logger.ts:470-471`), JSON otherwise |
+| `auditLogger` | security/admin events (login attempts, role checks, token cleanup, …) | always JSON                                                                                           |
 
 Both write to **stdout**, which Docker captures. There is no Loki transport bundled — adding one later is a few lines in `src/infrastructure/adapters/logger.ts`.
 

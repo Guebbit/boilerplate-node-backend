@@ -7,7 +7,14 @@ audience: [operator]
 
 Restore the database and the uploads, and handle erasures after a restore.
 
-## Restoring
+## Before you start
+
+- A reachable restic repository and its `restic_password`.
+- A stack with an empty or replaceable database.
+
+## Steps
+
+### 1 · Restoring
 
 The drill proves the machinery. For a real incident:
 
@@ -53,7 +60,7 @@ The Database Tools spell TLS `--ssl --sslCAFile`, and the bundled `database` req
 5. **Start the stack** and look: log in, open an order, fetch an image. Mail, stock alerts, the purge job
    and webhooks only ever see the already-erased state.
 
-### Erasures after a restore
+#### Erasures after a restore
 
 A backup kept for six months holds accounts erased since. GDPR's accepted standard (the ICO's guidance, the
 EDPB's 2025 enforcement report) lets a backup keep them until it ages out, **if** they stay "beyond use" and
@@ -109,7 +116,7 @@ survives, write it in the incident log, as the
 [Art. 33 runbook](../understand/data-protection.md#breach-runbook-art-33-—-72-hours) already asks: the erasures that
 could not be re-applied, and why.
 
-## Uploaded images and the mail spool
+### 2 · Uploaded images and the mail spool {#uploaded-images-and-the-mail-spool}
 
 The dump covers the database only. Two named volumes hold durable state of their own: `uploads`
 (uploaded images) and the `mail-spool/` directory of `storage` (queued outbound mail a restart must

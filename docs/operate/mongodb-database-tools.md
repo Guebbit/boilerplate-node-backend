@@ -5,11 +5,11 @@ audience: [operator]
 
 # MongoDB Database Tools
 
-## What it is
-
 The [Database Tools](https://www.mongodb.com/docs/database-tools/) are MongoDB's own command-line
 programs. The [`backup` container](./backups.md) uses two: `mongodump` (read the database into a
 stream) and `mongorestore` (write a stream back).
+
+## What it is
 
 | Fact        | Value                                                                                         |
 | ----------- | --------------------------------------------------------------------------------------------- |

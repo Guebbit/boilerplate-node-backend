@@ -12,6 +12,7 @@ flowchart LR
     Proxy["TLS proxy"] --> App["app"]
     App --> Mongo[("MongoDB\nreplica set of one")]
     App --> Redis[("Redis\ncache + limits")]
+    App --> Queue[("RabbitMQ\nqueue")]
     Cron["cron"] --> Mongo
     Backup["backup"] --> Repo[("restic repository")]
 ```

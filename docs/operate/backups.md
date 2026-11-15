@@ -10,6 +10,11 @@ and copies the uploaded files into an encrypted [restic](./restic.md) repository
 It is **off until you ask for it** (the `backup` profile) and **dormant until you name a
 repository** (`BACKUP_REPOSITORY`).
 
+## Before you start
+
+- A running stack with the `backup` profile enabled: `COMPOSE_PROFILES=bundled,backup`.
+- A restic repository to write to ([which one](#the-knobs)).
+
 A backup you have never restored is a hope, not a backup. [The restore drill](./backups-restore-drill.md#the-restore-drill)
 restores the latest one, for real, with one command; CI runs the same thing on every change.
 
@@ -115,7 +120,9 @@ db.getSiblingDB('admin').createUser({
 The Database Tools take the password from a `0600` config file in the container's tmpfs, so it never
 appears in `ps` or in `/proc/*/cmdline`.
 
-## The knobs
+## Steps
+
+### 1 · The knobs {#the-knobs}
 
 All in the client's `.env` (the block is in `.env-example`, Part D6). The compose file passes them
 to the container; none reaches the app.
@@ -154,7 +161,7 @@ data is stored once, the repository grows with what _changed_, not with how ofte
 **An external database** (`bundled` profile off): the provider backs it up. Set `BACKUP_DATABASE=false`:
 the dump is skipped, the uploads and mail spool are still backed up.
 
-## The second machine
+### 2 · The second machine {#the-second-machine}
 
 A backup on the same machine dies with the machine, and an attacker who owns the server finds the restic
 password on it, deletes every backup, then encrypts the database: encryption does not help, they have the
@@ -165,7 +172,7 @@ On the client side it is two knobs: `BACKUP_REPOSITORY=rest:https://<host>:8000/
 `BACKUP_PRUNE=false`. The cleaning up (`forget --prune`, the keep knobs) then runs **on the second machine**,
 weekly, against its own disk. It stays dormant until someone starts it there.
 
-## The heartbeat
+### 3 · The heartbeat {#the-heartbeat}
 
 `BACKUP_HEARTBEAT_URL` is a [Gatus](./gatus.md) external endpoint, with `?success=true` in it, the
 same shape as `ALERT_HEARTBEAT_URL`. Every run pings it: green on success, red (`success=false`
@@ -186,7 +193,7 @@ a dead host and a failing job all end in the same alert.
 Gatus has no "started" signal, so there is no start ping: the endpoint only knows finished runs.
 Left empty, nothing is sent and nothing warns.
 
-## Integrity check
+### 4 · Integrity check {#integrity-check}
 
 `restic check --read-data-subset=5%`, on `BACKUP_CHECK_SCHEDULE` (weekly). Each run reads a
 different 5% slice of the stored data, so a corrupted pack is found weeks before the day you
