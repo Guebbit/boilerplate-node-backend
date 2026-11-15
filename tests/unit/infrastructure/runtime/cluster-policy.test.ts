@@ -1,8 +1,13 @@
 /**
- * `src/infrastructure/runtime/cluster-policy.ts` — how many workers the primary forks, and what it
- * does about a crash.
+ * `src/infrastructure/runtime/cluster-policy.ts` — how many workers the primary forks, whether it
+ * may fork them, and what it does about a crash.
  */
-import { crashVerdict, workerTarget } from '@infrastructure/runtime/cluster-policy';
+import { ConfigError } from '@infrastructure/config/define';
+import {
+    assertSharedRateLimitCounters,
+    crashVerdict,
+    workerTarget
+} from '@infrastructure/runtime/cluster-policy';
 
 describe('workerTarget', () => {
     it('forks the number a deployment asked for', () => {
@@ -15,6 +20,54 @@ describe('workerTarget', () => {
 
     it('never forks fewer than one', () => {
         expect(workerTarget(-2, 0)).toBe(1);
+    });
+});
+
+describe('assertSharedRateLimitCounters', () => {
+    const base = {
+        clustered: true,
+        configuredWorkers: 4,
+        availableCpus: 8,
+        limitsRedisUrl: undefined
+    };
+
+    it('refuses several workers with no limits Redis, naming the variable', () => {
+        expect(() => {
+            assertSharedRateLimitCounters(base);
+        }).toThrow(ConfigError);
+        expect(() => {
+            assertSharedRateLimitCounters(base);
+        }).toThrow(/NODE_RATE_LIMIT_REDIS_URL/);
+    });
+
+    it('counts the default one-per-CPU worker target', () => {
+        expect(() => {
+            assertSharedRateLimitCounters({ ...base, configuredWorkers: 0 });
+        }).toThrow(ConfigError);
+    });
+
+    it('passes when the limits Redis is set', () => {
+        expect(() => {
+            assertSharedRateLimitCounters({ ...base, limitsRedisUrl: 'redis://limits:6379' });
+        }).not.toThrow();
+    });
+
+    it('passes with one worker, where per-process counting is correct', () => {
+        expect(() => {
+            assertSharedRateLimitCounters({ ...base, configuredWorkers: 1 });
+        }).not.toThrow();
+    });
+
+    it('passes on a one-CPU host left at the one-per-CPU default', () => {
+        expect(() => {
+            assertSharedRateLimitCounters({ ...base, configuredWorkers: 0, availableCpus: 1 });
+        }).not.toThrow();
+    });
+
+    it('passes when clustering is off, whatever the worker setting', () => {
+        expect(() => {
+            assertSharedRateLimitCounters({ ...base, clustered: false });
+        }).not.toThrow();
     });
 });
 

@@ -231,3 +231,6 @@ mark rows published with nobody listening.
 - **Delivery is after the response.** Every event above is published by the relay, not inside the
   request, so a listener sees it milliseconds later and a test that asserts the effect awaits
   `settleOutboxNudges()` first.
+- **Three shop events skip the outbox.** `cart.lines_removed`, `wishlist.items_removed` and
+  `cart.merge_refused` stay on the in-process bus. They only write inbox notes, and losing one on
+  a crash is acceptable, so no outbox row is written for them.

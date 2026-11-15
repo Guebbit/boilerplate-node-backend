@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — `sitemap.xml`: the shop pages and every public product, once per language, built on request.
-**Depends on** — [`products`](./products.md). The languages come from the API's own served list (`@infrastructure/i18n`), so it works with no `locales` module (one language).
+**Depends on** — [`products`](./products.md). The languages come from the API's own served list (`@infrastructure/i18n`), so it works with no `locales` module (the deployed dictionaries plus the fallback language).
 **Breaks if you change** — the three file addresses: the frontend's `robots.txt` names `/sitemap/index.xml`.
 :::
 

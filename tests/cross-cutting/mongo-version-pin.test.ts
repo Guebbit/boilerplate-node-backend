@@ -13,11 +13,7 @@ import { REPO_ROOT } from '@tests/paths';
  */
 
 /** The compose files that run a MongoDB image. */
-const COMPOSE_FILES = [
-    'docker-compose.yml',
-    'docker-compose.test.yml',
-    'docker-compose.production.yml'
-];
+const COMPOSE_FILES = ['docker-compose.yml', 'docker-compose.production.yml'];
 
 /** The shape read out of a compose file: only each service's image matters here. */
 interface ComposeFile {

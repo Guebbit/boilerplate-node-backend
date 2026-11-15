@@ -45,7 +45,6 @@ flowchart LR
 | `docker/backup/`                                          | The backup container's scripts: `entrypoint.sh` (knobs into a crontab), `backup.sh` (one run), `maintenance.sh` (weekly prune and check), `server-maintenance.sh` (the second machine's), `common.sh` (shared: knobs, heartbeat, counts), `restore-drill.sh` (the restore drill) and `drill.sh` (`npm run backup:drill`: the whole system on a private docker network). Copied into the image by `docker/Dockerfile.backup`. | [Backups](../tools/backups.md)                                                                                      |
 | `docker-compose.backup-server.yml`                        | The second machine: an append-only restic server (`rclone serve restic`) and its weekly prune and check. Dormant until started there; run from its own directory with its own `.env`.                                                                                                                                                                                                                                        | [Backup server](../tools/backup-server.md)                                                                          |
 | `docker-compose.proxy.yml`<br>`traefik/`                  | The shared Traefik proxy for several client stacks on one host, and the per-client route template (`traefik/client.example.yml`) copied into `traefik/dynamic/`.                                                                                                                                                                                                                                                             | [Hosting](../tools/hosting.md)                                                                                      |
-| `docker-compose.test.yml`                                 | The wired half of the container lane: proves `NODE_TEST_MONGO_URI` / `NODE_TEST_REDIS_URL` reach the suites, with a `gate` service that runs `npm run complete` against real services.                                                                                                                                                                                                                                       | [Docker & Podman](../tools/docker-and-podman.md)                                                                    |
 
 ## Images
 
@@ -94,7 +93,7 @@ outbox nudges it caused before it returns, inside its lease; only a `connectFirs
 `jobs:` block (`shared/rules/jobs.yaml` for the kernel's), generated into `jobs.generated.ts`
 beside `jobs.ts`, which adds the rest. `npm run regenerate` writes the two things derived from it —
 `docker/crontab` and the table below — and `npm run check` fails `complete` when either has
-drifted. `npm run job <name>` runs one by hand; with no name it lists them. Deleting a module deletes its jobs on the next regeneration.
+drifted. `npm run job <name>` runs one by hand (inside a running container: `cd /app && node --import tsx scripts/ops/run-job.ts <name>`); with no name it lists them. Deleting a module deletes its jobs on the next regeneration.
 
 The backup schedule is **not** in `docker/crontab`: the `backup` service (the `backup` compose profile)
 builds its own crontab at start from `BACKUP_SCHEDULE` and `BACKUP_CHECK_SCHEDULE`, and runs it with

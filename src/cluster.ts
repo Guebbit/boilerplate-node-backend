@@ -20,7 +20,11 @@ import cluster from 'node:cluster';
 import { extractErrorMessage } from '@guebbit/js-toolkit';
 import { logger } from '@infrastructure/adapters/logger';
 import { clusterConfig } from '@infrastructure/runtime/config';
-import { crashVerdict, workerTarget } from '@infrastructure/runtime/cluster-policy';
+import {
+    assertSharedRateLimitCounters,
+    crashVerdict,
+    workerTarget
+} from '@infrastructure/runtime/cluster-policy';
 
 /**
  * Cluster management
@@ -174,6 +178,25 @@ const supervise = (): void => {
 };
 
 /**
+ * Refuses to fork workers that would each count rate limits alone. Primary only: this is not part
+ * of `assertProcessConfig`, which every ops script and a plain single-process boot run too.
+ *
+ * @returns resolves when the check passes
+ * @throws {ConfigError} when 2+ workers would run with no `NODE_RATE_LIMIT_REDIS_URL`
+ */
+const refuseUnsharedRateLimits = (): Promise<void> =>
+    // Lazy: a static import is hoisted above `startTracing()`, so the Redis client would load
+    // before OTel patches it (the same reason `serve` is imported dynamically).
+    import('@infrastructure/adapters/limits-redis').then(({ limitsRedisUrl }) => {
+        assertSharedRateLimitCounters({
+            clustered: CLUSTER_ENABLED,
+            configuredWorkers: clusterConfig().NODE_CLUSTER_WORKERS,
+            availableCpus: os.availableParallelism(),
+            limitsRedisUrl: limitsRedisUrl()
+        });
+    });
+
+/**
  * Entry fork: the primary supervises workers; a worker (or a single-process run) serves.
  * https://nodejs.org/api/cluster.html#clusterisprimary
  */
@@ -181,6 +204,7 @@ if (cluster.isPrimary && CLUSTER_ENABLED) {
     // Lazy: the primary loads every module's config only to judge it, once, before forking.
     void import('@app/config')
         .then(({ assertProcessConfig }) => assertProcessConfig())
+        .then(refuseUnsharedRateLimits)
         .then(supervise)
         .catch((error: unknown) => {
             logger.error({

@@ -9,9 +9,8 @@
  * until nobody noticed. Deriving it removes the chance.
  *
  * The one deliberate difference from the root file: `.git` stays IN. `npm run complete` — which
- * `docker-compose.test.yml`'s `gate` service and the `container-gate` CI job both run inside this
- * image — includes `lint`, and the `local/comment-links` ESLint rule shells out to `git ls-files`
- * to check that a comment's file reference still exists. No `.git` directory means that rule
+ * the `container-gate` CI job runs inside this image — includes `lint`, and the
+ * `local/comment-links` ESLint rule shells out to `git ls-files` to check that a comment's file reference still exists. No `.git` directory means that rule
  * hard-crashes rather than reporting a finding, not a lint failure that could be waived.
  * `docker/Dockerfile.production` has the same gap and sidesteps it by never running `lint` at all
  * — see the comment on its build stage — which is not an option here because running `npm run
@@ -37,8 +36,8 @@ const HEADER = `# Per-Dockerfile override of the root \`.dockerignore\`, for \`d
 # back to the root file, and use it INSTEAD, not merged with it. This file therefore repeats the
 # root list in full; the one deliberate difference is \`.git\` staying IN.
 #
-# Why: \`npm run complete\` — which \`docker-compose.test.yml\`'s \`gate\` service and the
-# \`container-gate\` CI job both run inside this image — includes \`lint\`, and the
+# Why: \`npm run complete\` — which the \`container-gate\` CI job
+# runs inside this image — includes \`lint\`, and the
 # \`local/comment-links\` ESLint rule shells out to \`git ls-files\` to check that a
 # comment's file reference still exists. No \`.git\` directory means that rule hard-crashes rather
 # than reporting a finding, not a lint failure that could be waived. \`docker/Dockerfile.production\`

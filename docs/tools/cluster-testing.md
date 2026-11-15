@@ -1,7 +1,7 @@
 # Cluster testing
 
 `npm run test:cluster` — the only suite that boots `src/cluster.ts` and forks real worker
-processes. Two clusters, about 25 seconds, and it needs a Redis. A third case, `tests/cluster/redis-idle.test.ts`, forks nothing: it leaves one real shared Redis client idle past its socket ceiling and checks the keepalive holds it open.
+processes. One cluster plus a refusal boot, about 25 seconds, and it needs a Redis. A third case, `tests/cluster/redis-idle.test.ts`, forks nothing: it leaves one real shared Redis client idle past its socket ceiling and checks the keepalive holds it open.
 
 ## What it is for, and why nothing else could do it
 
@@ -17,21 +17,26 @@ real there and unreachable from the rest of the suite.
 
 The first target is the rate limiter, because it is the one where the gap is a security control:
 with per-process counters a budget of 100/minute is really `100 × workers`/minute, and nothing in
-the configuration says so.
+the configuration says so. The primary refuses to fork 2+ workers without the `limits` Redis.
 
 ## The shape of the assertion
 
-Two cases in `rate-limit.test.ts`, and the second is what makes the first mean anything:
+Two cases in `rate-limit.test.ts`:
 
-| Case                                  | Store     | Expected                          |
-| ------------------------------------- | --------- | --------------------------------- |
-| spends one budget across every worker | Redis     | exactly `LIMIT` allowed           |
-| gives each worker its own budget      | in-memory | exactly `LIMIT × WORKERS` allowed |
+| Case                                  | Setup                     | Expected                                          |
+| ------------------------------------- | ------------------------- | ------------------------------------------------- |
+| spends one budget across every worker | Redis                     | exactly `LIMIT` allowed                           |
+| refuses to boot two workers           | no `limits` Redis URL set | primary exits non-zero, output names the variable |
 
 A single case asserting "the budget is spent once" passes just as well when the harness is broken —
-if only one worker ever serves, a per-process counter also spends exactly one budget. The
-memory-store case is the control: asserting the allowance **doubles** can only pass if two separate
-processes are really each counting.
+if only one worker ever serves, a per-process counter also spends exactly one budget, and so does a
+worker whose Redis errors (each limit falls back to in-memory counting). The spread across workers
+is the control: every log line carries the writing process's `pid`, the harness counts answered
+requests per pid, and the Redis case asserts at least two workers answered and that the counts sum
+to the whole burst. The harness also waits for every worker's ready line and opens one connection
+per request.
+The refusal case boots no cluster at all (`expectRefusal`): a primary still alive after its
+timeout fails the case.
 
 ## Three settings that decide whether it measures anything
 
@@ -61,7 +66,7 @@ precisely what [Docker & Podman](./docker-and-podman.md#running-the-gate-in-a-co
 purpose. The container lane **must** supply `NODE_TEST_REDIS_URL` — there is no code change to
 make this work, since the resolver already honours it, only a variable to set. `test:cluster` is
 not part of `npm run complete` (it is `complete:manual`), so this does not block the `container-gate`
-CI job or `docker-compose.test.yml`'s `gate` service; it blocks anyone running the full manual pass
+CI job; it blocks anyone running the full manual pass
 inside a container.
 
 [testcontainers](https://testcontainers.com/) is the obvious dependency for this and was not taken:
