@@ -185,7 +185,7 @@ The signature check is the actual defence, so only an unverified delivery needs 
 `404`) per address BLOCK, the key every other anonymous budget uses. A forgery costs one HMAC per
 secret, two log lines and a security event; it is bounded per block, not in total, since a proxy
 pool spans many blocks. The budget is `audited: false`: a forged flood would bury the audit trail
-in `security.rate-limit.hit` rows, and the refusal metric (`RateLimitRefusals`) and the
+in `security.rate_limit_hit` rows, and the refusal metric (`RateLimitRefusals`) and the
 signature-failure alert (`PaymentWebhookSignatureFailures`) still fire.
 Default `NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX=60` per window.
 
@@ -232,7 +232,7 @@ The numbers and wording of a budget (name, namespace, env var, default, window, 
 `onStoreError`) are YAML: the module's `module.yaml` under `rateLimits:`, or
 `shared/rules/rate-limits.yaml` for the kernel's three. `regenerate` writes a committed
 `rate-limits.generated.ts` from each, so a twin backend copies the YAML. How a caller is bucketed
-(`keyGenerator`), what counts as a success and what is skipped stay code, in `rate-limits.ts`.
+(`keyGenerator`), what counts as a success and what is skipped stay code, in `rate-limit.ts`.
 See [shared rules](shared-rules.md#rule-data-the-twin-will-need-yaml-generated-ts):
 
 <!-- rate-limit-budgets:start -->

@@ -22,7 +22,7 @@ In `cookie` mode there is one credential, a random session id kept hashed in the
 ## Where token verification happens
 
 - **Access token verification**: `getAuth` middleware reads the Bearer token from `Authorization` and verifies JWT signature/expiry with `verifyAccessToken`.
-- **Refresh token verification**: `createAccessToken` calls `verifyRefreshToken`, which checks both:
+- **Refresh token verification**: `createAccessToken` calls `verifyRefreshWithRow`, which checks both:
     1. JWT signature/expiry with the refresh secret.
     2. a live row in the `sessions` collection, to reject revoked/unknown refresh tokens.
 

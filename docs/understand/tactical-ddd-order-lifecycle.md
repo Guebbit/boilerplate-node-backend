@@ -44,6 +44,8 @@ stateDiagram-v2
     processing --> canceled: admin, withdrawal
     shipped --> delivered: system
     processing --> delivered: system (digital fulfillment)
+    shipped --> processing: system (parcel lost)
+    delivered --> processing: system (replacement)
     canceled --> [*]
 ```
 

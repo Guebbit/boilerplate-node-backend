@@ -47,7 +47,7 @@ Each cache entry carries a soft expiry (`staleAt`) ahead of its hard Redis expir
 where `grace` is `stale-while-revalidate`'s 60s clamped to at most `ttl` — see
 [Writes that bypass the API](./redis-cache.md#writes-that-bypass-the-api) for why a fixed 60s grace would
 otherwise undo the dev TTL ceiling). A read past `staleAt` tries `claimCacheRefresh`: Redis'
-`SET <key> 1 NX EX <grace>` grants the claim to exactly one caller across every worker and
+`SET <prefix>:refresh:<key> 1 NX EX <grace>` grants the claim to exactly one caller across every worker and
 replica — everyone else gets `null` back for the same window.
 
 ```mermaid
