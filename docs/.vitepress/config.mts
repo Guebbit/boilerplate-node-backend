@@ -206,6 +206,11 @@ export default withMermaid(
                             { text: 'Getting Started', link: '/build/run-locally' },
                             { text: 'Start a New Project', link: '/build/new-project' },
                             { text: 'Docker & Podman', link: '/build/docker-and-podman' },
+                            {
+                                text: 'Containers: reference',
+                                link: '/build/docker-and-podman-reference'
+                            },
+                            { text: 'Containers: Podman', link: '/build/docker-and-podman-podman' },
                             { text: 'Pairing & Ports', link: '/build/pairing-and-ports' },
                             { text: 'The demo profile', link: '/build/demo-profile' },
                             { text: 'The flow runner', link: '/build/flow-runner' }
@@ -224,6 +229,14 @@ export default withMermaid(
                                 text: 'Contract Ownership & Fragmentation',
                                 link: '/build/contract-fragmentation'
                             },
+                            {
+                                text: 'Fragmentation: products example',
+                                link: '/build/contract-fragmentation-state'
+                            },
+                            {
+                                text: 'Fragmentation: the other bundles',
+                                link: '/build/contract-fragmentation-other-bundles'
+                            },
                             { text: 'Regenerating After a Change', link: '/build/regenerating' },
                             {
                                 text: 'Versioning and Retiring an Endpoint',
@@ -236,6 +249,10 @@ export default withMermaid(
                         items: [
                             { text: 'Testing — Quick Start', link: '/build/testing-quickstart' },
                             { text: 'Testing & Docs', link: '/build/testing-and-docs' },
+                            {
+                                text: 'Testing: gate or hunter',
+                                link: '/build/testing-and-docs-not-done'
+                            },
                             { text: 'Unit Testing', link: '/build/unit-testing' },
                             { text: 'Integration Testing', link: '/build/integration-testing' },
                             {
@@ -266,6 +283,26 @@ export default withMermaid(
                                 link: '/build/mutation-testing-ratchet'
                             },
                             {
+                                text: 'Mutation: the ruler and scope',
+                                link: '/build/mutation-testing-ruler'
+                            },
+                            {
+                                text: 'Mutation: commands and sweeps',
+                                link: '/build/mutation-testing-sweeps'
+                            },
+                            {
+                                text: 'Mutation: runaway memory',
+                                link: '/build/mutation-testing-oom'
+                            },
+                            {
+                                text: 'Mutation: the buffers case study',
+                                link: '/build/mutation-testing-oom-case-study'
+                            },
+                            {
+                                text: 'Mutation: file map and commands',
+                                link: '/build/mutation-testing-reference'
+                            },
+                            {
                                 text: 'Coverage & Confidence',
                                 link: '/build/coverage-and-confidence'
                             },
@@ -284,7 +321,15 @@ export default withMermaid(
                                 text: 'Pending Major Upgrades',
                                 link: '/build/pending-major-upgrades'
                             },
-                            { text: 'AI Auditing', link: '/build/ai-auditing' }
+                            { text: 'AI Auditing', link: '/build/ai-auditing' },
+                            {
+                                text: 'AI auditing: code-shape',
+                                link: '/build/ai-auditing-code-shape'
+                            },
+                            {
+                                text: 'AI auditing: test-honesty',
+                                link: '/build/ai-auditing-test-honesty'
+                            }
                         ]
                     }
                 ],

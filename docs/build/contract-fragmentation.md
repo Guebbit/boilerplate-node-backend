@@ -48,19 +48,19 @@ layout and shared parts are declared in one file under `scripts/contracts/`.
 
 **Four different verbs, and the difference is not cosmetic:**
 
-| Bundle                 | Verb          | What does it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ---------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `openapi.yaml`         | **compiled**  | `redocly bundle` resolves `$ref` across whole documents, then the root's `x-app-level-responses` (429, 500 and 503 for every operation; 400/413/415 for a body-carrying one; 415 for a body-less write too — none of them any one module's business) is merged into every operation that doesn't already declare its own. A step (`scripts/contracts/image-upload-encoding.ts`) stamps the root's `x-image-upload-types` onto every multipart `imageUpload` part as `encoding.imageUpload.contentType`. A second step (`scripts/contracts/cookie-auth.ts`) adds `cookieAuth` as an alternative to every operation that takes `bearerAuth`, and the origin `403` to its unsafe methods. A step (`scripts/contracts/response-headers.ts`) stamps the root's `x-app-level-headers` (`x-request-id`, `Cache-Control`, `Content-Language`, `Vary`, `RateLimit-Policy`, `RateLimit`, `ETag`) onto every response that does not declare the same header itself, and `Idempotent-Replayed` onto every response of an operation that takes an `Idempotency-Key` except a 429 (the ledger never sees one), through a `<Name>Replayable` twin of each shared response. A step (`scripts/contracts/fill-enum.ts`) fills a schema marked `x-enum-from: <source>` with that source's values (after any written `enum`, which is how a module extends another's enum), so the webhook event names are never copied into `webhooks/openapi.yaml`. A step (`scripts/contracts/openapi-extensions.ts`) merges another module's `openapi.<owner>.yaml` variants into the owner's `oneOf` unions ([Extending another module's contract](#extending-another-modules-contract)). An operation's own `x-error-codes: { '<status>': [CODE, ...] }` lists the codes it answers with, and the bundle fails if a name is not in the collected catalogue or sits under another status; a catalogue entry's optional `scope: app` marks a code any operation may send, so none lists it ([what an operation lists](../reference/errors.md#what-an-operation-lists)) |
-| `asyncapi.yaml`        | **merged**    | `scripts/contracts/asyncapi-bundles.ts` copies five maps; `$ref`s stay untouched                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `asyncapi.public.yaml` | **merged**    | the same merge over the shared sections only — one `SHARED_SECTIONS` list decides which                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| the client collection  | **generated** | produced whole from `openapi.yaml` + the dataset, nothing on disk between; untracked                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Bundle                 | Verb          | What does it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `openapi.yaml`         | **compiled**  | `redocly bundle` resolves `$ref` across whole documents, then the root's `x-app-level-responses` (429, 500 and 503 for every operation; 400/413/415 for a body-carrying one; 415 for a body-less write too — none of them any one module's business) is merged into every operation that doesn't already declare its own. A step (`scripts/contracts/image-upload-encoding.ts`) stamps the root's `x-image-upload-types` onto every multipart `imageUpload` part as `encoding.imageUpload.contentType`. A second step (`scripts/contracts/cookie-auth.ts`) adds `cookieAuth` as an alternative to every operation that takes `bearerAuth`, and the origin `403` to its unsafe methods. A step (`scripts/contracts/response-headers.ts`) stamps the root's `x-app-level-headers` (`x-request-id`, `Cache-Control`, `Content-Language`, `Vary`, `RateLimit-Policy`, `RateLimit`, `ETag`) onto every response that does not declare the same header itself, and `Idempotent-Replayed` onto every response of an operation that takes an `Idempotency-Key` except a 429 (the ledger never sees one), through a `<Name>Replayable` twin of each shared response. A step (`scripts/contracts/fill-enum.ts`) fills a schema marked `x-enum-from: <source>` with that source's values (after any written `enum`, which is how a module extends another's enum), so the webhook event names are never copied into `webhooks/openapi.yaml`. A step (`scripts/contracts/openapi-extensions.ts`) merges another module's `openapi.<owner>.yaml` variants into the owner's `oneOf` unions ([Extending another module's contract](./contract-fragmentation-other-bundles.md#extending-another-modules-contract)). An operation's own `x-error-codes: { '<status>': [CODE, ...] }` lists the codes it answers with, and the bundle fails if a name is not in the collected catalogue or sits under another status; a catalogue entry's optional `scope: app` marks a code any operation may send, so none lists it ([what an operation lists](../reference/errors.md#what-an-operation-lists)) |
+| `asyncapi.yaml`        | **merged**    | `scripts/contracts/asyncapi-bundles.ts` copies five maps; `$ref`s stay untouched                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `asyncapi.public.yaml` | **merged**    | the same merge over the shared sections only — one `SHARED_SECTIONS` list decides which                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| the client collection  | **generated** | produced whole from `openapi.yaml` + the dataset, nothing on disk between; untracked                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 A 405 is not merged in: it answers a request that matched no operation, so it is the
 `METHOD_NOT_ALLOWED` code in the root's `x-error-codes` and a guard built from `api/operation-routes.ts`
 ([Write Methods](../understand/write-methods.md#a-known-path-with-the-wrong-method)).
 
 A hand-written restatement of the contract is a copy and copies rot, which is why the last row
-exists at all. See [The client collections](#the-client-collections-generated).
+exists at all. See [The client collections](./contract-fragmentation-other-bundles.md#the-client-collections-generated).
 
 ```bash
 npm run contracts:bundle              # build the specs
@@ -139,7 +139,7 @@ result, copy that.
 
 The comments do **not** travel into `openapi.yaml` — a parse cannot keep them, and Redocly parses.
 They live in the module documents instead, which is where they are read and edited. See
-[Why the REST contract stopped concatenating](#why-the-rest-contract-stopped-concatenating-and-the-rest-did-not).
+[Why the REST contract stopped concatenating](./contract-fragmentation-state.md#why-the-rest-contract-stopped-concatenating-and-the-rest-did-not).
 
 ## Which fragment owns which operation
 
@@ -248,395 +248,37 @@ security:
 
 Neither is wire data a server reads. The bundler passes both through untouched.
 
-## Practical example: the `products` module
+## Where the rest went
 
-`products` owns everything about itself, its slice of the contract included:
+The long sections moved to sub-pages; each heading below keeps its old link target.
 
-```
-src/modules/products/
-├── module.ts        name, mounts [{ basePath '/products', routes }], locales
-├── routes.ts        the express router
-├── controllers/     request handling
-├── services/        business rules
-├── repository.ts    persistence
-├── model.ts         the mongoose schema
-├── events.ts        what it publishes and subscribes to
-├── openapi.yaml     its paths and the schemas only it uses
-├── probes.ts        requests the contract cannot describe
-├── locales/         its own copy
-└── tests/           its own specs
+### Why the REST contract stopped concatenating, and the rest did not {#why-the-rest-contract-stopped-concatenating-and-the-rest-did-not}
 
-scenarios/products.ts its own seed data — outside src/, see Demo profile
-```
+Moved: [Why the REST contract stopped concatenating, and the rest did not](./contract-fragmentation-state.md#why-the-rest-contract-stopped-concatenating-and-the-rest-did-not).
 
-Its `openapi.yaml` holds every operation under `/products`:
+### `asyncapi.yaml` — one whole document per section, merged {#asyncapi-yaml-—-one-whole-document-per-section-merged}
 
-```
-/products                /products/search      /products/facets
-/products/{id}           /products/{id}/restore
-/products/{id}/hard
-```
-
-At which point the goal test the whole module architecture exists to satisfy finally includes the
-contract:
-
-> Deleting a domain is `rm -rf` of one folder plus removing one line from `src/modules.ts`. The
-> bundler's input is what is on disk, so it needs no edit.
-
-## Current state
-
-Every operation and every single-domain type lives with the module that owns it.
-
-```
-shared/contracts/openapi.root.yaml    preamble · securitySchemes · parameters · responses ·
-                                      the shared types · GET / · the per-module path index
-                                      (a preference: completed from the fragments, see below)
-src/modules/<name>/openapi.yaml       one standalone OpenAPI document per module:
-                                      its paths, its tags, and every schema it owns
-```
-
-```bash
-npm run contracts:bundle              # rebuild every bundle from the fragments
-npm run check                         # fail if any bundle on disk is stale
-```
-
-**The root's path index is completed, not trusted.** `scripts/contracts/root-assembly.ts` reads
-every fragment on disk, drops the root's `$ref` for a path no fragment declares any more, appends
-the paths and tags of a fragment the root has not heard of (a tag the fragment declares in its own
-`tags:` arrives with that description), and stages the completed tree under `tmp/` for redocly. The root's hand order is kept for what it already lists, so the bundle's
-section order does not move; a new module is in the contract from its own `openapi.yaml` alone.
-
-**Two guards close the bundle.** `redocly bundle` runs with
-`--component-renaming-conflicts-severity=error`, so two files defining one schema name fail the
-build instead of coming out as `Name-2`. And `scripts/contracts/prune-unused.ts` runs last, after
-every step that adds references, dropping the components nothing reaches and the tags no operation
-uses: a deleted module leaves nothing orphaned behind. A security scheme no operation names goes
-with them.
-
-**The data export's schema is assembled the same way.** `AccountExportResponse` lives in
-`account/openapi.yaml` as a stub (`exportedAt`, `profile`). Each module that contributes a
-section declares it beside its paths:
-
-```yaml
-x-personal-data:
-    orders: # the property name in the export
-        required: false # optional, defaults to true
-        schema: { type: array, items: { $ref: '#/components/schemas/Order' } }
-```
-
-`scripts/contracts/personal-data-assembly.ts` reads those off disk and adds one property per section
-to the staged stub, rewriting each in-file `$ref` to point at the declaring module. A module that is
-deleted takes its section with it, so `demo:remove` has no export list to edit.
-
-To rebuild one document while iterating, name it: `npm run contracts:bundle -- openapi`. The
-ordering lives inside `scripts/contracts/build-bundles.ts` rather than as an `&&` chain in `package.json`,
-which is what makes that flag narrow the run instead of silently doing everything else. See
-[Regenerating After a Change](./regenerating.md#regenerate-one-bundle-only).
-
-What the bundle check in `npm run check` catches, and why nothing is diffed in CI: see
-[The seven bundles](#the-seven-bundles) above.
-
-### Why the REST contract stopped concatenating, and the rest did not
-
-A module's contract is a whole OpenAPI document, not a slice of one. The explanations sit in the
-file that is actually read and edited, and the bundle is an artefact nobody opens by hand. So
-`redocly bundle` does the job the standard way, resolving `$ref`, and the comments in the sources
-are untouched by it. One step runs after it, on the bundled document rather than on a source:
-merging `x-app-level-responses` into every operation, since a `$ref` has to be resolved first for an
-operation to be reachable exactly once — see `scripts/contracts/openapi-bundle.ts`. A second such
-step reads the `x-versioned: [methods]` marker a fragment puts on a path item, and hangs the shared
-`If-Match` parameter, the 412 and the `ETag` header on exactly the operations it lists (a listed `post` gets `ETag` and `Content-Location`, no `If-Match`) — see
-[Conditional writes](../understand/write-methods.md#conditional-writes-etag-and-if-match).
-
-What this buys:
-
-- **A module contract is a valid document.** `npm run lint:openapi:modules` lints each one on its
-  own; you can open one in Swagger Editor.
-- **Refs are checkable where they are written.** A module `$ref`s the root across a file boundary
-  instead of assuming a neighbour's text will be concatenated above it.
-- **The layout is one every tool already understands** — no section-order file, no indentation
-  contract between files.
-
-**No YAML anchors.** An anchor cannot cross a file, so a shape two fragments share is a named schema
-a `$ref` can reach. A success response references its payload schema directly: there is no wrapper
-schema ([Success Responses](../reference/responses.md)).
-
-No bundle is built by concatenating text slices: the REST and AsyncAPI contracts are whole
-documents, and the client collections are generated whole.
-
-### Which schemas stayed shared, and why
-
-A schema lives with the module that owns the thing it describes, and other modules `$ref` it by
-file (`../orders/openapi.yaml#/components/schemas/Order`). Only what has no single owner stays in
-`shared/contracts/openapi.root.yaml`:
-
-| Kind                  | Examples                                                           | Why shared                                                                           |
-| --------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| Scalars               | `Id`, `Email`, `Locale`, `Page`, `PageSize`, `Text`, `ImageUrl`    | referenced everywhere                                                                |
-| Response machinery    | `PaginationMeta`, `ErrorItem`, `Problem`, the `NoContent` response | every operation's success and failure shape                                          |
-| The user record       | `User`, `UserActions`                                              | `account` authenticates the record `users` administers: the repo's one shared kernel |
-| Cross-domain requests | `RequiredIdempotencyKeyHeader`                                     | belongs to a middleware in `infrastructure`                                          |
-| The shell's own       | `HealthPing`, the `System` tag                                     | `GET /` belongs to no module, so neither does its answer                             |
-
-The root file is the authority for the exact set. Everything else is owned: `Product` and its tax
-fields by `products`, the order schemas by `orders`, `CartItem` by `cart`, the password fields by
-`account`, the abilities schemas by `access`.
-
-**A `$ref` between two modules follows `module.yaml` `dependsOn`.** Nothing checks it: deleting
-the sibling fails the bundle on a dangling reference, which is how an undeclared one shows.
-
-**Duplicating a schema into two fragments is the failure to watch for** — the bundle would carry
-two definitions that drift apart silently, and the conflict flag above refuses the same name twice.
-
-### What the split changed in the bundle
-
-Only key ORDER. Parsed and compared ignoring order, the contract is the same as a single hand-kept
-file would be, and orval's generated output does not depend on it.
-
-Each fragment carries its own header, and the substantive comment blocks — the one explaining why
-`imageUpload` declares no limits, the one explaining `active` versus `deletedAt` — sit with the
-schemas they explain.
-
-What does not change:
-
-- the module registry, the `basePath` per module, and the one-line enable/disable in `src/modules.ts`
-- `npm run lint:openapi`, `npm run gen:api`, and the spec-identity check
-- the frontend holding a byte-identical copy
-
-## The other five, and what each one taught
-
-### `asyncapi.yaml` — one whole document per section, merged
-
-A domain appears three times in this document (`channels:`, `components.messages:`,
-`components.schemas:`). **A section is one complete AsyncAPI document** (one exception: [`webhooks`](#module-owned-webhook-events)):
-`src/modules/<name>/asyncapi.yaml` for a domain's public events, exactly as it carries one
-`openapi.yaml`; `src/modules/<name>/asyncapi.internal.yaml` for a queue the module owns; and
-`shared/contracts/asyncapi.workers.yaml` for the `worker.*` queues that belong to no domain — the
-async twin of filing `GET /` under `system`. Each section also declares the SERVER its channels bind
-to, so a bundle that leaves a section out leaves its transport out with it — which is what produces
-`asyncapi.public.yaml` without a second list of servers to keep in step.
-`shared/contracts/asyncapi.root.yaml` holds what describes the deployment rather than a domain, and
-no channels.
-
-`observability` and `notifications` own their SSE channels because the module serving the stream
-decides what it pushes down it. The `worker.email.send`/`worker.image.digest` queues are shared
-because those two workers are substrate, enqueued by whichever domain needs one sent.
-`worker.webhook.deliver` and `worker.account.export` are the exception: `webhooks` and `account` own
-those queues outright, in a PRIVATE `asyncapi.internal.yaml` section — `backend`-scoped like the
-shared queues file, but a module's, so deleting the module deletes the queue's contract along with
-everything else that names it.
-
-Each public section is valid on its own — lintable by `npm run lint:asyncapi:modules`. (A private
-`asyncapi.internal.yaml` is the one deliberate exception: it declares no `servers` of its own — its
-channel binds to the shared queues file's `rabbitmqLocal` — so it is valid only once merged, and is
-left out of that glob for that reason.)
-
-**Why this is a merge and not `asyncapi bundle`.** `asyncapi bundle` dereferences: every `$ref` is
-inlined, the document balloons, each payload is repeated once per channel that names it _and_
-kept under `components` — and `scripts/contracts/generate-asyncapi-types.ts`, which walks
-`channels[*].messages.*.$ref` to decide what to name a generated model, is left
-with nothing to follow. So the merge happens in a small function in
-`scripts/contracts/asyncapi-bundles.ts`, deliberately dumber than a bundler: it copies five maps —
-`servers`, `channels`, `operations` and the two under `components` — and refuses on a collision,
-carrying `$ref` strings across untouched because every section already resolves its own refs
-internally. That file's header is the full argument. See also
-[AsyncAPI Workflow](./asyncapi-workflow.md).
+Moved: [`asyncapi.yaml` — one whole document per section, merged](./contract-fragmentation-other-bundles.md#asyncapi-yaml-—-one-whole-document-per-section-merged).
 
 ### Module-owned webhook events {#module-owned-webhook-events}
 
-The `webhooks` section is the one section that is not complete on its own. Its file keeps the server
-and the headers schema every event shares; each event is declared by the module that fires it, in
-`src/modules/<module>/asyncapi.webhooks.yaml` (`delivery`, `orders`, `payments`, `returns`, `users`, `example`).
-`scripts/contracts/asyncapi-webhook-events.ts` lists the event names, and `asyncapi-section-fragments.ts` finds those files on disk and
-`withSectionFragments` folds them into the section before it joins the bundle: one call, in
-`asyncapi-bundles.ts`. The same collision refusal applies, so two modules claiming one event name
-fail the bundle.
-
-Each channel also carries `x-read-rule`: `public`, or the declared tenant rule (no conditions) a subscriber
-must hold to receive that event. `webhooks/services/catalog.ts` reads it at boot and refuses a channel
-without a usable one; the bundler passes it through untouched into `asyncapi.public.yaml`
-([who may subscribe to what](../modules/webhooks.md#who-may-subscribe-to-what)).
-
-A payload field with a closed set of values `$ref`s the owning module's own REST schema
-(`./openapi.yaml#/components/schemas/ReturnReason`) rather than copying its enum. The bundle has to
-stand alone, so `withSectionFragments` copies each referenced schema into the fragment's
-`components.schemas`, just before the first schema that uses it (the Zod emitter declares in order),
-and points the ref at the copy. A text written next to such a `$ref` is ignored by AsyncAPI, so the
-enum's own description is the one that shows.
-
-```mermaid
-flowchart LR
-    W["webhooks/asyncapi.yaml<br/>server + Id + WebhookHeaders"] --> S["webhooks section"]
-    D["delivery/asyncapi.webhooks.yaml"] --> S
-    O["orders/asyncapi.webhooks.yaml"] --> S
-    P["payments/asyncapi.webhooks.yaml"] --> S
-    R["returns/asyncapi.webhooks.yaml"] --> S
-    U["users/asyncapi.webhooks.yaml"] --> S
-    E["example/asyncapi.webhooks.yaml"] --> S
-    S --> B["asyncapi.yaml +<br/>asyncapi.public.yaml"]
-```
-
-Why: removing `orders` removes its events from the contract with no hand edit, and removing `webhooks`
-leaves the fragments unmerged. The fragments are not documents (they ref the shared server), so
-`lint:asyncapi:modules` skips them and `lint:asyncapi` lints the merged result.
+Moved: [Module-owned webhook events](./contract-fragmentation-other-bundles.md#module-owned-webhook-events).
 
 ### Extending another module's contract (`x-extends`) {#extending-another-modules-contract}
 
-A module can add to what another module published, without that module naming it. The extender ships
-a fragment named for the owner and the format:
-
-| File in the extender      | Extends                                                      | Merged by                                                                                                                                                                             |
-| ------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `openapi.<owner>.yaml`    | the owner's OpenAPI enums and `oneOf` unions                 | `scripts/contracts/openapi-extensions.ts` (its schemas are staged into redocly's tree; the variants are appended in a step in `bundleSteps`, before `pruneUnused`) and `fill-enum.ts` |
-| `asyncapi.<section>.yaml` | the section's channels, messages, schemas and `oneOf` unions | `withSectionFragments` (`asyncapi-section-fragments.ts`), the generalised form of the webhook-event merge                                                                             |
-
-The fragment's `x-extends` maps a schema name to what it appends. Both formats read the map with
-`scripts/contracts/extends-map.ts`, so a map that is not string lists, an empty list, a repeated
-entry or an undeclared variant fails the bundle the same way on either side. In OpenAPI the owner
-(`<owner>` in the file name) must be a module with an `openapi.yaml` that declares every extended schema:
-
-- **Enum**: values. The owner keeps its written `enum` and adds `x-enum-from: <its own name>`; the
-  appended values follow the written ones. The bundle fails on a duplicate value, and on a target
-  that does not declare `x-enum-from`.
-- **Union**: schema names the fragment declares under `components.schemas`. Each is added to the
-  `oneOf`, and to the discriminator `mapping` under the value its `<propertyName>.enum` holds
-  (`propertyName` is the union's own `discriminator.propertyName`). The fragment is staged into
-  redocly's tree, so its refs (`../notifications/openapi.yaml#/components/schemas/X`) resolve like any
-  module's and a ref that answers nothing fails the bundle; a schema name the bundle already holds is
-  a collision and fails.
-- AsyncAPI payload enums use the existing way to share an enum: a `$ref` into a REST contract, copied
-  in and stamped `x-openapi-schema`. A `../<module>/openapi.yaml#/...` ref reaches a sibling module's file.
-  A ref to an OPEN enum (one a module extends, marked `x-enum-from`) fails the bundle: the copy would be
-  the owner's raw file without the extenders' values. Write the payload's values out, or `$ref` a closed enum.
-
-Delete the extender and its fragment goes with it: the owner's contract falls back to its own values
-and variants. This is why the owner never names the extension.
-
-**Why not OpenAPI Overlay 1.0?** It is OpenAPI only (AsyncAPI has no twin), and it would be a new
-tool beside the bundler's existing `x-` steps. One mechanism for both formats won.
+Moved: [Extending another module's contract (`x-extends`)](./contract-fragmentation-other-bundles.md#extending-another-modules-contract).
 
 ### Module-owned browser events {#module-owned-browser-events}
 
-`POST /analytics/events` accepts a closed set of events, and each belongs to the module whose page
-reports it. A module ships `src/modules/<m>/openapi.browser-events.yaml` (components only, one schema
-per event, each with a one-value `event` enum). After the bundle is built,
-`scripts/contracts/analytics-browser-events.ts` adds those schemas and replaces `analytics`'
-placeholder `AnalyticsEventRequest` with a `oneOf` discriminated on `event`: one call in
-`openapi-bundle.ts`. With `analytics` absent nothing is added; with no fragment the placeholder stays.
-The runtime half is `AppModule.browserEvents`, the same shape as `publicEvents` for webhooks.
+Moved: [Module-owned browser events](./contract-fragmentation-other-bundles.md#module-owned-browser-events).
 
-### The analytics names — owned by the module, published to no one
+### The analytics names — owned by the module, published to no one {#the-analytics-names-—-owned-by-the-module-published-to-no-one}
 
-`PRODUCTS_SEARCHED` is a fact about products and `CART_ITEM_ADDED` one about the cart, so each
-module owns its names as **ordinary TypeScript**, in `src/modules/<name>/analytics.ts`, exported as a
-normal `as const` its own controllers import and augmenting the analytics port's `AnalyticsEventMap`
-exactly as `audit.ts` augments `AuditActionMap`. `src/infrastructure/` stays free of domain names.
-
-Nothing is published across the repos: the paired frontend emits no custom events, so there is no
-second catalogue to disagree with. Every name in the shared Umami website is written in exactly one
-place — a module's `analytics.ts`. A single catalogue shared by both sides would say which names
-EXIST and never which side EMITS them, which is how one add-to-cart once counted twice.
-
-The sweep that holds it: `tests/cross-cutting/analytics-events.test.ts` reads every
-`src/modules/<name>/analytics.ts` off disk and rejects two modules claiming one constant name or one
-event string, a name outside the convention, or a module that exports names without the
-`declare module` block that puts them in `AnalyticsEventMap`. No list to maintain, and a module
-added or deleted changes nothing but its own folder.
-
-The lesson worth keeping: **a shared artefact is only worth its machinery when both sides really
-write.**
-
-### The demo dataset — not a bundle
-
-Each module's seed records live in `scenarios/<name>.ts`, collected by `npm run regenerate` and imported by
-nothing under `src/` — no fragment, no text concatenation. What the API actually answers for a
-seeded row is not published to a file: it is asserted directly, against a real database, by
-`tests/integration/scenarios/shop.test.ts`. The one thing consumers can read is
-`scenarios/subjects.ts`: the named ids and credentials a consumer that cannot import module code
-(a generated client collection) needs to point at a specific seeded row.
-
-Fragmenting a document is right when both repos consume the same document. When what they actually
-need is the same ANSWER, publish the answer. See `docs/understand/mongodb-mongoose.md`.
+Moved: [The analytics names — owned by the module, published to no one](./contract-fragmentation-other-bundles.md#the-analytics-names-—-owned-by-the-module-published-to-no-one).
 
 ### The client collections — generated, because a restatement is a copy {#the-client-collections-generated}
 
-A hand-written collection rots exactly as a copy does: endpoints go missing, URLs the app no longer
-serves stay in, and a mock server serving shapes the frontend cannot parse is worse than no mock
-server.
-
-So `scripts/contracts/client-collections-bundle.ts` produces it — **one gitignored file
-generated whole.** There is no intermediate on disk: no per-module slice to hand-edit, no
-header to keep in step with a footer, and nothing under `src/` that must never be opened.
-
-The traversal, the example synthesis and the emitters live in
-[`@guebbit/openapi-runnable-collections`](https://www.npmjs.com/package/@guebbit/openapi-runnable-collections),
-which knows nothing about this repo. That file is **configuration**: which module owns which path,
-where the values come from, where the probes are, and where the output lands. Everything below is a
-property of that configuration rather than of the package.
-
-- **shapes come from `openapi.yaml`** — every operation, its auth, its request body, one example per
-  declared response;
-- **values come from `scenarios/subjects.ts` and `scenarios/values/<module>.ts`** — the first
-  holds the credentials, each of the others the example ids its module knows, so `GET
-/products/{id}` asks for a product the database actually holds and `POST /account/login` sends
-  credentials that work. A deleted module's file leaves with it; the bundler scans the folder.
-  That is the difference between a collection you can click and one you have to fix first. Only
-  ids and credentials, though: those files cannot import a module's own fixtures without
-  pulling in the `@api/` client the bundler is still building (see below), so a body field this
-  file cannot name — a title, a price, a description — falls to a type- and format-shaped default;
-- **ownership comes from the module contracts** — a path in `src/modules/orders/openapi.yaml`
-  is the orders module's, so the mapping is recorded once and a path that moves between modules
-  moves in the collection with it;
-- **identifiers are hashed from method and path**, not generated fresh, so regenerating rewrites
-  only what actually changed rather than re-forking all three files.
-
-Two assertions hold it in place: each collection must equal a fresh run, and every collection must
-carry one request per operation the contract declares — which is precisely the check that was
-missing while they rotted.
-
-**A request the contract cannot describe still has a home — `src/modules/<name>/probes.ts`.** A
-collection is also where you keep the requests that prove the API _rejects_ things, and a spec
-describes valid calls and their declared answers, so no generator can derive them. A module declares
-its probes as data — method, path, headers, body, and a `why` that becomes the description — and
-they are emitted after its contract-derived requests.
-
-They are TypeScript rather than YAML, and the generator is called with them directly. That buys two
-things a data file cannot: the seed tokens and the probe shape are typechecked, and a module deleted
-without its probes leaving `scripts/contracts/client-collections-bundle.ts` stops the build — which is the
-failure [module lifecycle](module-lifecycle.md) asks for, rather than a collection that
-silently comes out short.
-
-Each probe is a question a contract cannot ask. A few examples:
-
-| Module     | Probes                                                                                                                                                                                      |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `account`  | log in as the non-admin · 401 from a bogus token · 409 from a duplicate signup · the rate limiter (send repeatedly)                                                                         |
-| `products` | 422 from a body that breaks two constraints · the same product under `Accept-Language: it` · every optional filter at once · the soft-deleted product · the inactive one · the off-sale one |
-| `cart`     | checkout with an empty cart · adding a product that does not exist · a quantity the schema forbids                                                                                          |
-| `orders`   | the owner asking for their own soft-deleted order                                                                                                                                           |
-| `wishlist` | saving a product the storefront will not show · moving or unsaving one that was never saved · an id no ObjectId can be built from                                                           |
-| `example`  | reading a published example that does not exist · editing one with a malformed id                                                                                                           |
-
-A probe refers to seed records as `{{seedSoftDeletedProductId}}` rather than pasting an id — the
-tokens are filled in `scripts/contracts/client-collections-bundle.ts` from the seed ids (the soft-deleted product is _named_ once, in `scenarios/product-ids.ts`), so
-a fixture that stops being soft-deleted takes its probe with it instead of leaving one that quietly
-tests nothing. An unknown token fails the generator with the list of known ones.
-
-**One tool.** The collection is Bruno's YAML. `@guebbit/openapi-runnable-collections` can also emit Insomnia, Postman and Mockoon collections: add the tool's name to `COLLECTION_TOOLS` in `scripts/contracts/client-collections-bundle.ts` (and a bundle in `bundle-registry.ts`) to get one.
-
-## What the frontend does — and does not — do
-
-Worth stating explicitly, because it is the question that prompted this page:
-
-|                                         |                                                                                                                                     |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Authors the contract                    | ❌ never                                                                                                                            |
-| Holds a byte-identical copy             | ✅ at its own repo root                                                                                                             |
-| Fragments the spec                      | ❌ no — it would be a second source of truth for a document it does not own                                                         |
-| Owns a per-module slice of the contract | ✅ but as **code**, not YAML: `src/modules/<name>/responseSchemas.ts` maps that module's URLs to the generated Zod response schemas |
-
-So both repos end up with per-module contract ownership — this one in YAML, the frontend in
-TypeScript — while exactly one of them decides what the contract says.
+Moved: [The client collections — generated, because a restatement is a copy](./contract-fragmentation-other-bundles.md#the-client-collections-generated).
 
 ## How this connects to the rest of the docs
 
@@ -646,6 +288,9 @@ TypeScript — while exactly one of them decides what the contract says.
 - [API overview](./api-contracts.md) — REST conventions used throughout
 
 ## Read next
+
+- [Contract fragmentation: the products example and current state](./contract-fragmentation-state.md)
+- [Contract fragmentation: the other five bundles](./contract-fragmentation-other-bundles.md)
 
 - [OpenAPI 3.1 specification](https://spec.openapis.org/oas/v3.1.0)
 - [Redocly CLI](https://redocly.com/docs/cli/commands/bundle) — `bundle` / `split` for OpenAPI

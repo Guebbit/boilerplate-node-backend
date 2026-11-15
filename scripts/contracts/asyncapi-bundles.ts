@@ -13,7 +13,7 @@
  *
  * Merged through the YAML AST so each node keeps its authored quoting and scalar style.
  *
- * @see docs/build/contract-fragmentation.md#asyncapi-yaml-—-one-whole-document-per-section-merged
+ * @see docs/build/contract-fragmentation-other-bundles.md#asyncapi-yaml-—-one-whole-document-per-section-merged
  */
 
 import { readFileSync } from 'node:fs';
