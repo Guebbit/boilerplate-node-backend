@@ -1,7 +1,7 @@
 /**
  * @module
- * Dead `docs/…` links cited OUTSIDE `docs/` — in source comments, scripts, contract YAML and
- * `.env-example` — resolved the way `check-references.ts` resolves a page's own citations.
+ * Dead `docs/…` links cited OUTSIDE `docs/` — in source, tests, scripts, configs, root docs,
+ * contract YAML and `.env-example` — resolved the way `check-references.ts` resolves a page's own citations.
  *
  * Checks:      the cited page is tracked, and a `#anchor` is a heading of that page.
  * Does not:    judge wording, coverage or how many citations exist.
@@ -52,16 +52,27 @@ export const headingSlugs = (markdown: string): Set<string> => {
  * `docs/<path>.md` with an optional `#anchor`, not glued to a longer path or a URL. Starting at
  * the repo's own `docs/` is what leaves a peer repo's pages and `https://…/docs/…` alone.
  */
-const CITATION = /(?<![\w/.:-])(docs\/[\w./-]+\.md)(?:#([^\s"$'),;<>\]`{}]+))?/g;
+const CITATION = /(?<![\w/.:-])(?:\.\/)?(docs\/[\w./-]+\.md)(?:#([^\s"$'),;<>\]`{}]+))?/g;
 
-/** Tracked files that may carry a citation: code, scripts, YAML contracts and the env example. */
+/** Test files whose `docs/…` strings are inputs to the docs checkers, not citations. */
+const FIXTURES = [
+    'tests/unit/scripts/docs/',
+    'tests/unit/scripts/modules/new-module-needs-nothing.test.ts',
+    'tests/unit/scripts/scaffold/plan.test.ts'
+];
+
+/** Every tracked file that may cite a page: code, tests, configs, root docs, YAML, the env example. */
 const isCitingFile = (file: string): boolean =>
-    (file.startsWith('src/') ||
-        file.startsWith('scripts/') ||
+    (['src/', 'scripts/', 'scenarios/', 'tests/', 'docker/', '.claude/'].some((p) =>
+        file.startsWith(p)
+    ) ||
+        // README/INSTALL/CLAUDE/SECURITY.md, eslint/jest/knip configs, .dependency-cruiser.cjs
+        /^[^/]+\.(?:md|[cm]?[jt]s)$/.test(file) ||
         /\.ya?ml$/.test(file) ||
-        file === '.env-example') &&
+        ['.env-example', '.gitignore', '.gitattributes'].includes(file)) &&
     !file.startsWith('docs/') &&
-    !file.startsWith('.2brain/');
+    !file.startsWith('.2brain/') &&
+    FIXTURES.every((prefix) => !file.startsWith(prefix));
 
 /**
  * Every `docs/…` citation in the tracked non-docs files of `root` that points at nothing.

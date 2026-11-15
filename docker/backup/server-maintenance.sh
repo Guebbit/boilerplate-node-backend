@@ -7,7 +7,7 @@
 # Layout it expects:  /data/<client>/            the client's repository (rclone's `--private-repos` path)
 #                     /clients/<client>/password  that repository's restic password
 # One heartbeat for the whole run (BACKUP_HEARTBEAT_URL): red names the client that failed.
-# Design: docs/tools/backup-server.md#upkeep
+# Design: docs/tools/backup-server.md#the-upkeep
 # shellcheck source=common.sh
 source /usr/local/lib/backup/common.sh
 

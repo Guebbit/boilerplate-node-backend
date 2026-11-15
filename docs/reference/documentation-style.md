@@ -87,7 +87,7 @@ to everyone who has not opened the tree. This is the only check that looks for i
 | Tokens starting with `/` skipped   | HTTP routes, not files. The contract owns those, and `lint:openapi` refuses a missing one.    |
 | Directories count as targets       | `src/infrastructure/` resolves without naming a file.                                         |
 | The paired repo's name resolves    | Over THERE, which makes citing it by package name instead of directory name a finding.        |
-| Code citations are checked too     | A `docs/…md#anchor` in `src/`, `scripts/`, contract YAML or `.env-example` must resolve.      |
+| Code citations are checked too     | A `docs/…md#anchor` in code, tests, configs, root docs, YAML or `.env-example` must resolve.  |
 | `npm run <x>` is checked too       | Any page, fenced or inline: `x` must be a script here or in the paired frontend.              |
 | `<!-- doc-paths:ignore -->`        | Skips the whole line, for prose that names an absent path on purpose (a rename table).        |
 

@@ -84,4 +84,25 @@ describe('deadCodeCitations', () => {
 
         expect(deadCodeCitations(root, files)).toEqual([]);
     });
+
+    it('sweeps a test file and a `./docs/…` link in the README', async () => {
+        const files = await track({
+            'docs/modules/orders.md': '# orders\n',
+            'tests/x.test.ts': '// docs/modules/gone.md\n',
+            'README.md': '[x](./docs/modules/orders.md) [y](./docs/modules/missing.md)\n'
+        });
+
+        expect(deadCodeCitations(root, files)).toEqual([
+            'README.md: docs/modules/missing.md',
+            'tests/x.test.ts: docs/modules/gone.md'
+        ]);
+    });
+
+    it('does not report a dead string under a fixture path', async () => {
+        const files = await track({
+            'tests/unit/scripts/docs/case.test.ts': "const page = 'docs/modules/gone.md';\n"
+        });
+
+        expect(deadCodeCitations(root, files)).toEqual([]);
+    });
 });
