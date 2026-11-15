@@ -109,7 +109,7 @@ flowchart TD
   approval mails for a defect or a wrong item tell the buyer they choose, and that a repair extends
   the guarantee by 12 months.
 - **Price reduction** (Art. 15) needs no door: the Refund button, with the guide entry
-  [A faulty item](../use-the-shop/when-something-goes-wrong.md#faulty-item).
+  [A faulty item](../use-the-shop/when-something-goes-wrong-returns.md#faulty-item).
 
 ## Cancelling what has not shipped {#cancelling-what-has-not-shipped}
 

@@ -176,7 +176,7 @@ board's **Late** view lists them. The shop already told the buyer by email (the 
 new date yet", and how to cancel), and it never cancels on its own: a buyer who says nothing keeps
 waiting. So the routine is a person's:
 
-1. **About once a week**, open the Late view.
+1. **About once a week**, open the **Late** filter.
 2. For an order that is **very late** (30 days past the agreed date, the threshold this shop starts
    from; [FTC 16 CFR 435.2(b)](https://www.ecfr.gov/current/title-16/section-435.2)), write to the buyer and ask whether they still want it.
 3. If they do not, or the goods will not come, **cancel and refund** with the ordinary staff cancel.

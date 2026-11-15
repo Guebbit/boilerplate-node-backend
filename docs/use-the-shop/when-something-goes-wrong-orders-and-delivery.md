@@ -117,7 +117,7 @@ arrive.
 3. Write the **message**: this is what the buyer reads, in the mail and on their order. Say what you will
    do and when ("we are sending a new one on Monday"). The **note** is for your colleagues and the
    buyer never sees it.
-4. The units are open again on the **same order**. Either **ship them again** with the normal Ship button
+4. The units are open again on the **same order**. Either **ship them again** with the **Ship items** button
    (the order goes back to _being prepared_ and forward again), or **cancel the rest** and refund the
    buyer if they would rather have the money. If nothing of the order ever arrived, a full refund makes
    the order show **Cancelled (lost in transit)**, not _Delivered_.
@@ -144,10 +144,10 @@ with a date. The shelf had fewer units than the parcel carried.
 are owed to this buyer **before** any new customer, in the order of the original payment. The date is the
 product's restock date or, when it has none, thirty days. The buyer is told both in the mail.
 
-1. Ship what the shelf covers (the normal Ship button).
+1. Ship what the shelf covers (the **Ship items** button).
 2. When stock arrives, the rest is released by itself, as for any waiting order.
 3. If the buyer would rather have a refund, cancel the waiting part.
-4. **Check the preorder board** after a loss on a popular product: the owed units count there with the
+4. Check the **Preorders** page after a loss on a popular product: the owed units count there with the
    other promises, and they are not limited by the product's backorder limit.
 
 **Whose job.** The warehouse ships; the manager handles a refund.
@@ -158,7 +158,7 @@ product's restock date or, when it has none, thirty days. The buyer is told both
 **What you see.** A parcel you reported lost shows up at the buyer's after all (the carrier updates, or
 the buyer writes).
 
-**What to do.** Open the shipment and press **Record arrival**, like any arrival. It works when every unit
+**What to do.** Open the shipment and press **Mark delivered**, like any arrival. It works when every unit
 on it is still open: the replacement was not sent and the rest was not cancelled. The shop then counts
 the original parcel as the delivery and gives back the stock it had set aside again.
 
@@ -175,7 +175,7 @@ note.
 **What you see.** The carrier returned the parcel to the shop (returned to sender, wrong address, refused).
 
 **What to do.** Record the units as **received** with a note ("returned to sender, parcel 12"), so the
-shelf is true again. Then ship them again with the normal Ship button, or cancel and refund. If the
+shelf is true again. Then ship them again with the **Ship items** button, or cancel and refund. If the
 parcel was reported lost earlier, ship again from the same order: you do not need to report anything
 else.
 

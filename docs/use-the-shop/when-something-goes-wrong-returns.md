@@ -118,12 +118,12 @@ they would like (repair, replacement or money back).
 
 **What to do.** Press **Goods received** and pick the remedy; the buyer's wish is preselected.
 
-- **Replace**: the same product goes out again on the same order. After you press, the order is back
+- **Replace it**: the same product goes out again on the same order. After you press, the order is back
   in processing: ship it from its fulfillment order like any other. If the shelf is short it waits on
   hold for stock.
-- **Repair**: you repair it and post it back with a tracking note. The return closes with no money
+- **Repair it**: you repair it and post it back with a tracking note. The return closes with no money
   moving, and the guarantee is extended by 12 months, once.
-- **Refund**: the money goes back, with the delivery. You cannot hold anything back for handling on a
+- **Refund me**: the money goes back, with the delivery. You cannot hold anything back for handling on a
   faulty item.
 - **Keep it, partial refund** (price reduction): do not receive it. Use the Refund button on the
   payment for the part you agree.

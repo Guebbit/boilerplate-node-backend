@@ -62,7 +62,7 @@ A card payment is different: the shop refunds the card itself, and has no hand s
 the refund sits **open**. On the payment, the refund reads **Failed** with a reason. If the reason
 is one of the clear ones (the bank declined it, the card expired or was reported lost or stolen, or
 the shop's own provider balance was too low), the payment's **Mark returned** button is offered and
-the order is on the "needs attention" list at once. The shop does not keep sending a refund the bank
+the order is on the **Needs attention** list at once. The shop does not keep sending a refund the bank
 has refused for good.
 
 **What to do.**
@@ -102,7 +102,7 @@ believe they were paid back and nobody is left to notice.
 ## A refund the bank sent back {#refund-bounced}
 
 **What you see.** A refund read **succeeded** (the buyer was told, the credit note was issued), and
-days later the order is on the "needs attention" list as **Refund sent back by the bank**. On the
+days later the order is on the **Needs attention** list as **Sent back by the bank: return the money another way**. On the
 payment the refund reads **Failed** again, with a "Reversed on" date. The buyer was emailed
 automatically: their bank returned the money, we still owe it, and they are asked how they would
 like to receive it.
@@ -129,7 +129,7 @@ refund returned after you paid them, never before.
 
 ## A card dispute {#card-dispute}
 
-**What you see.** The order is on the "needs attention" list as **Dispute to answer**, with a
+**What you see.** The order is on the **Needs attention** list as **Dispute to answer in the provider's dashboard**, with a
 deadline. On the order's payment a banner shows the dispute: its kind (a question from the bank, or
 a **chargeback**, where the bank has already taken the money back), the reason the buyer gave, the
 amount and the day your evidence is due. The **Refund** button is off while a chargeback is open.
@@ -168,7 +168,7 @@ insolvency).
 
 **What you see.** A refund the card could not take back (refused for good, or sent back by the
 bank) is open, and the buyer was emailed asking how they would like the money. Days pass with no
-reply. The order stays on the "needs attention" list.
+reply. The order stays on the **Needs attention** list.
 
 **What to do.**
 
@@ -193,7 +193,7 @@ with the credit note and the buyer's email like any other refund. Nothing to do 
 
 If the shop also held its own refund for the same money, the payment may now be refunded for more
 than was paid. The shop records the dashboard refund anyway (the money really left), keeps its own
-refund **unsent**, and puts the order on the "needs attention" list as **A refund made elsewhere left
+refund **unsent**, and puts the order on the **Needs attention** list as **A refund made elsewhere left
 no room**, with by how much. On the payment, the shop's refund reads **open**, and the payment's
 **Cancel refund** button is offered.
 
