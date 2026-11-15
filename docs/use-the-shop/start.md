@@ -5,21 +5,13 @@ audience: [staff, owner]
 
 # The demo shop
 
-**A small online shop that really works.** You can browse it, put things in a basket, pay, and
-watch the parcel go out. Nothing here is a mock-up or a slideshow — it is the real thing, with
-pretend money and a pretend courier.
+**A small online shop that really works.** You can browse it, fill a basket, pay and watch the
+parcel go out, with pretend money and a pretend courier.
 
 ::: tip Who this section is for
-People who need to understand **what the application does**, not how it is built. No code on any of
-these pages. Every technical word is explained the first time it appears, and links point to
-the deeper page if you ever want it.
-
-The rest of this site is written for developers. This part is not.
+Staff and owners: people who need to know **what the shop does**, not how it is built. No code on
+these pages. Developers: the rest of this site is yours, start at [Modules](../modules/start.md).
 :::
-
-## The whole shop on one picture
-
-Someone buys something. That is the sentence the entire application exists to support:
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
@@ -39,80 +31,99 @@ flowchart LR
     class G done;
 ```
 
-Blue is the customer doing something. Amber is the shop doing something in the background. Every
-other page in this section is one of those boxes, opened up.
+Blue is the customer acting. Amber is the shop working in the background. Each page in this
+section opens one of those boxes.
+
+## Which page do you want
+
+| You are…                                              | Read                                                        |
+| ----------------------------------------------------- | ----------------------------------------------------------- |
+| Wanting to log in and click around                    | [Test it yourself](./test-me.md)                            |
+| Wondering what a customer experiences                 | [The customer](./shopper.md)                                |
+| Running the shop: products, prices, orders            | [The shop manager](./manager.md)                            |
+| Looking after stock and getting parcels out           | [The warehouse](./warehouse.md)                             |
+| Answering emails, resets, complaints                  | [The support desk](./support.md)                            |
+| Writing and photographing products, and pricing them  | [The editor](./editor.md)                                   |
+| Translating the shop's screens, and a product's words | [The editor](./editor.md)                                   |
+| Handling accounts, disputed orders and refunds        | [The moderator](./moderator.md)                             |
+| Something odd happened and you need the fix           | [When something goes wrong](./when-something-goes-wrong.md) |
+| Checking what the shop does and does not do           | [What this demo models](./scope.md)                         |
+| Thinking of selling for real                          | [Before you sell for real](./before-you-sell.md)            |
+| A developer who took a wrong turn                     | [Modules](../modules/start.md)                              |
+
+This section describes the example shop built on the reusable starting point. The parts it is
+assembled from are under [Modules](../modules/start.md).
 
 ## What the shop sells
 
-139 products — a pet-supply retailer. Eleven are hand-picked, each there to show the shop behaving
-differently; the other 128 are a combinatorial grid (six animals × seven product types × three
-quality tiers) plus two downloadable guides, so lists, pagination and the category filters have
-enough real rows to work with. The grid carries shipping weights, and three of its product types
-have a VAT treatment of their own (supplements reduced, bowls zero-rated, dispensers exempt).
+139 products, a pet-supply retailer. Eleven are hand-picked, each there to show the shop behaving
+differently. The other 128 are a generated grid (six animals × seven product types × three quality
+tiers) plus two downloadable guides, so lists, pages and filters have enough rows to work with.
+Three of the grid's product types have their own VAT treatment: supplements reduced, bowls
+zero-rated, dispensers exempt.
 
-Every product starts with no stock. The shelf is filled the way a real shop's is: an opening stock
-receipt per product, recorded through the inventory module, so every unit is accounted for.
+Every product starts with no stock. The shelf is filled the way a real shop's is, with an opening
+stock receipt per product, so every unit is accounted for.
 
-| Product                                              | Price | In stock | Why it exists                                         |
-| ---------------------------------------------------- | ----- | -------- | ----------------------------------------------------- |
-| Premium Grain-Free Dog Food, 15kg                    | €68   | 30       | a completely normal product                           |
-| Orthopedic Memory Foam Dog Bed                       | €84   | 45       | another normal one, so baskets can have two lines     |
-| Heavy-Duty Cat Scratching Post                       | €45   | **0**    | shows what "out of stock" looks like                  |
-| Universal Small Animal Water Bottle                  | €9    | 9        | has only a name and a price, nothing else             |
-| 150W Ceramic Heat Emitter                            | €55   | 12       | **deleted** — proves a deleted product disappears     |
-| Rabbit Starter Bundle — Hutch, Feeder & Water Bottle | €96   | 18       | **switched off** — visible to staff, not to buyers    |
-| Online Puppy Training Course — Video Access          | €29   | 50       | **digital** — never shipped                           |
-| Limited-Edition Brass Pet Bowl                       | €24   | **1**    | the last unit — one checkout holds it, a second fails |
-| Hand-Painted Personalised Pet Bowl                   | €80   | 20       | made to order — no right of withdrawal                |
-| Extra-Large Cat Tree, 12kg                           | €40   | 10       | too heavy for express delivery                        |
-| Heated Orthopedic Pet Bed — Winter Edition           | €120  | 15       | **off sale** — the cart takes it, checkout refuses it |
-| _...128 more_                                        | —     | —        | a generated catalogue, e.g. "Premium Bird Carrier"    |
+| Product                                              | Price | In stock | Why it exists                                        |
+| ---------------------------------------------------- | ----- | -------- | ---------------------------------------------------- |
+| Premium Grain-Free Dog Food, 15kg                    | €68   | 30       | a completely normal product                          |
+| Orthopedic Memory Foam Dog Bed                       | €84   | 45       | another normal one, so baskets can have two lines    |
+| Heavy-Duty Cat Scratching Post                       | €45   | **0**    | shows what "out of stock" looks like                 |
+| Universal Small Animal Water Bottle                  | €9    | 9        | has only a name and a price, nothing else            |
+| 150W Ceramic Heat Emitter                            | €55   | 12       | **deleted**: proves a deleted product disappears     |
+| Rabbit Starter Bundle — Hutch, Feeder & Water Bottle | €96   | 18       | **switched off**: visible to staff, not to buyers    |
+| Online Puppy Training Course — Video Access          | €29   | 50       | **digital**: never shipped                           |
+| Limited-Edition Brass Pet Bowl                       | €24   | **1**    | the last unit: one checkout holds it, a second fails |
+| Hand-Painted Personalised Pet Bowl                   | €80   | 20       | made to order: no right of withdrawal                |
+| Extra-Large Cat Tree, 12kg                           | €40   | 10       | too heavy for express delivery                       |
+| Heated Orthopedic Pet Bed — Winter Edition           | €120  | 15       | **off sale**: the cart takes it, checkout refuses it |
+| _...128 more_                                        | —     | —        | a generated catalogue, e.g. "Premium Bird Carrier"   |
 
-So a visitor sees **137** products (the nine public named ones, plus all 128 generated).
-Staff see all 139. That difference is deliberate and it is explained on
-[the shop manager's page](./manager.md).
+A visitor sees **137** products (the nine public named ones plus all 128 generated). Staff see all 139. The difference is deliberate: see [the shop manager](./manager.md).
+
+## Money and delivery
+
+Prices are in **euros**. The customer picks the delivery at checkout:
+
+| Delivery   | Costs | Note                               |
+| ---------- | ----- | ---------------------------------- |
+| Standard   | €5    | **free** from €100 up; up to 30 kg |
+| Express    | €15   | always €15; up to 5 kg             |
+| Pick it up | €0    | the customer collects it           |
+
+Paying is fake. No real card is processed and no real money moves: any made-up card is accepted,
+and the test card `pm_card_declined` is always refused, so the "your card was declined" path can be
+shown on demand.
 
 ## The people in it
 
-Every role below has its own account with a password you can type. They're all listed, with
-things to try as each one, on **[Test it yourself](./test-me.md)**.
+Every role has its own account with a password you can type. They are all listed, with things to
+try as each one, on [Test it yourself](./test-me.md).
 
-Each staff account holds **exactly one role**, on purpose. An account that can do everything
-can't show you a restriction; a narrower one, refused when it reaches past its own job, can. Log
-into `editor@example.com` and try to open `/users`: the 403 is the reason that account exists.
-`/orders` shows the same restriction a different way, coming back 200 and empty rather than
-refused, since nothing routes that list read through a permission check at all. See
-[the editor's own page](./editor.md#what-this-role-cannot-reach-and-why-each-one-is-a-different-reason)
-for why the two shapes differ.
+Each staff account holds **exactly one role**, on purpose. An account that can do everything cannot
+show a restriction. A narrow one, refused when it reaches past its own job, can. Sign in as the
+editor and try to open the list of users: the refusal is the reason that account exists. The same
+account's order list shows the limit another way: empty instead of refused. See
+[the editor's own page](./editor.md#what-this-role-cannot-reach-and-why-each-one-is-a-different-reason).
 
-A further ten customer accounts exist too — `amelia.clarke`, `benjamin.hughes` and so on — with an
-order history spread across them (mostly one small order each, three with a couple more) so the
-staff side has more than one shopper's activity to look at. Nobody is meant to log in as one of
-the ten; they exist to be _looked at_, not signed into.
+A further ten customer accounts hold an order history (mostly one small order each) so the staff
+screens have more than one shopper's activity to look at. Nobody signs in as them.
 
-## What each role may do
+### What each role may do {#what-each-role-may-do}
 
-The roles are described here rather than in the theory pages because this is where you pick an account
-to log in as. They are defined in `shared/rules/authorization-roles.yaml`, the same file the PHP twin
-seeds from — which is what makes both backends ship the same shop rather than two that merely pass the
-same tests.
+| Role                        | What it is                                                                                                  |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Guest, unverified, customer | Not roles anybody is given: who the visitor is right now (signed out, signed in but unconfirmed, signed in) |
+| Manager, warehouse, support | The shop's day-to-day jobs                                                                                  |
+| Editor, moderator           | The words and pictures, and the accounts and disputes                                                       |
+| Admin                       | Everything inside the shop, and the only one who can give someone a role                                    |
+| Operator                    | Runs the installation, sees its health, reads no order                                                      |
 
-**`guest`, `unverified` and `customer`** — not roles anybody is granted: the audience a request
-belongs to, computed from the session and the account's `verifiedAt`. Every staff role below is
-added on top of `customer`, so a staff member shops like anyone else. `guest` is an unauthenticated
-request and reads published products, the dictionary the shop is rendered in, and the delivery
-options; `unverified` is a signed-in account whose address is not proven yet — what `customer` is
-minus the ability to spend.
-
-Each staff role is a job somebody actually does, defined in `shared/rules/authorization-roles.yaml`; the
-accounts to log in as, with something to try as each, are in [Test it yourself](./test-me.md), and the
-matrix below says what each one holds.
-
-A role is only a bundle of keys: there is no level and nothing ranks. What protects people is one
-key, `assign:Role`, held by `admin` alone: staff work on customers, and only an administrator
-changes an account that holds a role or hands one out. Every signed-in account is a customer too,
-staff included, so a staff member fills a basket like anyone else. See
-[Authorization](../understand/authorization.md#protecting-people).
+A role is a bundle of permissions, and nothing ranks above another. Staff work on customers: only
+an administrator changes an account that holds a role, or hands one out. Every signed-in account is
+a customer too, staff included, so a staff member shops like anyone else. The rules behind this are
+in [Authorization](../understand/authorization.md#protecting-people).
 
 ### What that actually grants
 
@@ -146,53 +157,14 @@ why `admin` — unrestricted **inside one shop** — cannot reach observability 
 The rules behind them, and why a role cannot span both scopes, are in
 [Authorization](../understand/authorization.md).
 
-## Money and delivery
-
-Prices are in **euros**. Delivery is picked by the customer at checkout:
-
-| Delivery   | Costs | Note                               |
-| ---------- | ----- | ---------------------------------- |
-| Standard   | €5    | **free** from €100 up; up to 30 kg |
-| Express    | €15   | always €15; up to 5 kg             |
-| Pick it up | €0    | the customer collects it           |
-
-Paying is fake. There is no real card processing and no real money — any made-up card is
-accepted, and one specific test method (`pm_card_declined`) is always refused, so the "your card was
-declined" path can be shown on demand.
-
-## Which page do you want
-
-| You are…                                              | Read                                                        |
-| ----------------------------------------------------- | ----------------------------------------------------------- |
-| Wondering what a customer experiences                 | [The customer](./shopper.md)                                |
-| Running the shop — products, prices, orders           | [The shop manager](./manager.md)                            |
-| Looking after stock and getting parcels out           | [The warehouse](./warehouse.md)                             |
-| Answering emails, resets, complaints                  | [The support desk](./support.md)                            |
-| Writing and photographing products, and pricing them  | [The editor](./editor.md)                                   |
-| Translating the shop's screens, and a product's words | [The editor](./editor.md)                                   |
-| Handling accounts, disputed orders and refunds        | [The moderator](./moderator.md)                             |
-| Something odd happened and you need the fix           | [When something goes wrong](./when-something-goes-wrong.md) |
-| Wanting to log in and click around                    | [Test it yourself](./test-me.md)                            |
-| A developer who took a wrong turn                     | [Modules](../modules/start.md)                              |
-
 ## Opening it yourself
 
-Two things to type, and you need nothing installed but Node:
+Setup and sign-in are one short page: [Test it yourself](./test-me.md). The demo is a throwaway
+shop: close it and it all disappears, start it again and it is back as it was. Nothing you click
+breaks anything for good.
 
-```bash
-npm install
-npm run demo
-```
+## Read next
 
-That starts the shop with its own throwaway database, already filled with everything described
-above. Close it and it all disappears; start it again and it is back exactly as it was. Nothing you
-click can break anything permanently.
-
-::: info This section describes _this_ shop
-The application underneath is a reusable starting point — a **boilerplate** — and this pet-supply
-shop is just the example built on top of it. These pages describe the example. The pages under
-[Modules](../modules/start.md) describe the parts it is assembled from, one per area of the business.
-:::
-
-Thinking of selling for real? Read [Before you sell for real](./before-you-sell.md) first: every
-legal text in this demo is an example.
+- [Test it yourself](./test-me.md): sign in as each role.
+- [What this demo models](./scope.md): what the shop does, will do and never will.
+- [Before you sell for real](./before-you-sell.md): every legal text here is an example.
