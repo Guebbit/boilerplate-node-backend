@@ -5,6 +5,8 @@ audience: [developer]
 
 # products
 
+The catalogue, its search surface and its cache.
+
 ::: tip At a glance
 **Owns** — the catalogue: what the shop sells. `onHand`/`reserved`/`available` sit on every product
 row too, but as a read-only mirror — [`inventory`](./inventory.md) owns the counters themselves.
@@ -62,6 +64,29 @@ flowchart LR
 ```
 
 <!-- module-graph:products:end -->
+
+## Who can do what
+
+Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
+
+The client does not re-derive these: every `Product` carries `actions { update, delete, restore, hardDelete }`, the server's answer for the caller (`update` needs `update:Product` and `update:Translation`; `restore` also needs the product to be soft-deleted). A caller answered from the cache shared with guests gets all `false`; see [Capabilities](../understand/tactical-ddd.md#_2-capabilities-the-server-answers-what-a-client-may-do).
+
+<!-- permissions:start -->
+
+| Rule              | Set                 | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                             |
+| ----------------- | ------------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | -------------------------------------------------------------------------------- |
+| `read:Product`    | `ProductStorefront` | ✅      | ✅           | ✅         | ✅        | ✅          | ✅        | ✅       | ✅          | ✅      | —          | ✅         | Read active, undeleted products — the storefront's own view.                     |
+| `display:Product` | `ProductDisplay`    | —       | —            | —          | ✅        | ✅          | —         | ✅       | —           | ✅      | —          | ✅         | Read every product regardless of publish state — what staff need to see a draft. |
+| `create:Product`  | `ProductManagement` | —       | —            | —          | ✅        | —           | —         | ✅       | —           | ✅      | —          | ✅         | Add a product to the catalogue.                                                  |
+| `update:Product`  | `ProductManagement` | —       | —            | —          | ✅        | —           | —         | ✅       | —           | ✅      | —          | ✅         | Change a product, including its price and its published state.                   |
+| `delete:Product`  | `ProductManagement` | —       | —            | —          | ✅        | —           | —         | ✅       | —           | ✅      | —          | ✅         | Remove a product. Separate from update because the blast radius is.              |
+
+✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
+Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
+`src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
+evaluator — [Authorization](../understand/authorization.md) explains the model.
+
+<!-- permissions:end -->
 
 ## The story
 
@@ -381,30 +406,7 @@ snapshot resolver does the resolving, bound explicitly to the buyer's locale wit
 rather than read off the ambient request context, since the order being created is not always the
 buyer's own request.
 
-## Who can do what
-
-Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
-
-The client does not re-derive these: every `Product` carries `actions { update, delete, restore, hardDelete }`, the server's answer for the caller (`update` needs `update:Product` and `update:Translation`; `restore` also needs the product to be soft-deleted). A caller answered from the cache shared with guests gets all `false`; see [Capabilities](../understand/tactical-ddd.md#_2-capabilities-the-server-answers-what-a-client-may-do).
-
-<!-- permissions:start -->
-
-| Rule              | Set                 | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                             |
-| ----------------- | ------------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | -------------------------------------------------------------------------------- |
-| `read:Product`    | `ProductStorefront` | ✅      | ✅           | ✅         | ✅        | ✅          | ✅        | ✅       | ✅          | ✅      | —          | ✅         | Read active, undeleted products — the storefront's own view.                     |
-| `display:Product` | `ProductDisplay`    | —       | —            | —          | ✅        | ✅          | —         | ✅       | —           | ✅      | —          | ✅         | Read every product regardless of publish state — what staff need to see a draft. |
-| `create:Product`  | `ProductManagement` | —       | —            | —          | ✅        | —           | —         | ✅       | —           | ✅      | —          | ✅         | Add a product to the catalogue.                                                  |
-| `update:Product`  | `ProductManagement` | —       | —            | —          | ✅        | —           | —         | ✅       | —           | ✅      | —          | ✅         | Change a product, including its price and its published state.                   |
-| `delete:Product`  | `ProductManagement` | —       | —            | —          | ✅        | —           | —         | ✅       | —           | ✅      | —          | ✅         | Remove a product. Separate from update because the blast radius is.              |
-
-✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
-Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
-`src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../understand/authorization.md) explains the model.
-
-<!-- permissions:end -->
-
-## Related pages
+## Read next
 
 - [Modules overview](./start.md) — the whole context map
 - [`locales`](./locales.md) — the `translations` collection and its own admin door

@@ -5,6 +5,8 @@ audience: [developer]
 
 # shop-tasks
 
+The shop's side of the helpdesk: opens a to-do for each payment, stock or delivery situation that needs a person, writes the buyer's messages and the staff's work notices, and sends the staff digest.
+
 ::: tip At a glance
 **Owns** — the shop's side of the helpdesk: the to-dos a payment, stock or delivery situation opens, the buyer's messages, the staff's work notices and the daily and weekly staff digest. One read route (the nav badge counts), no collection: [`tasks`](./tasks.md) and [`notifications`](./notifications.md) do the writing.
 **Depends on** — `tasks` and `notifications` (the doors it writes through), `payments`, `orders`, `inventory`, `delivery`, `returns`, `cart`, `wishlist` and `stock-alerts` (the events it hears; `products` names a product for the unknown-outcome notice, and the counts the digest reads), `users` (who can act today) and `shop` (the shop's country).
@@ -325,7 +327,7 @@ flowchart LR
 | `NODE_STAFF_TRACKING_MISSING_HOURS`                                                         | 24      | hours before a missing tracking code counts                            |
 | `NODE_DELIVERY_UNDELIVERED_REMINDER_DAYS`                                                   | 14      | days before an unmarked parcel counts                                  |
 
-## Related pages
+## Read next
 
 - [Tasks](./tasks.md) — the engine these openers feed
 - [Notifications](./notifications.md) — the inbox, the bell and the work-notice engine

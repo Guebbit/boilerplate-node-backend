@@ -5,6 +5,8 @@ audience: [developer]
 
 # payments
 
+An order's money, behind a provider port.
+
 ::: tip At a glance
 **Owns** — an order's money, behind a provider port. The intent freezes a total; the confirm moves the order to `paid`.
 **Depends on** — [`orders`](./orders.md), [`access`](./access.md) (the audit flag of a money step on the caller's own order) and [`shop`](./shop.md) (the zone of a transfer's pay-by deadline).
@@ -63,6 +65,26 @@ flowchart LR
 ```
 
 <!-- module-graph:payments:end -->
+
+## Who can do what
+
+Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
+
+<!-- permissions:start -->
+
+| Rule              | Set                | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                                                                  |
+| ----------------- | ------------------ | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read:Payment`    | `PaymentOwn`       | —       | ✅ own       | ✅ own     | ✅ own    | ✅ own      | ✅ own    | ✅ own   | ✅ own      | ✅ own  | —          | —          | Read the caller's own payments.                                                                                                                                       |
+| `display:Payment` | `PaymentDisplay`   | —       | —            | —          | ✅        | —           | ✅        | —        | ✅          | ✅      | —          | ✅         | Read every payment in the shop — the support desk helping with an order that is never their own, and the shop manager seeing the money behind the orders they handle. |
+| `create:Payment`  | `PaymentRecording` | —       | —            | —          | —         | —           | —         | —        | ✅ ⚡c      | ✅ ⚡c  | —          | —          | Record a payment that arrived outside the provider — cash, a transfer, by hand.                                                                                       |
+| `create:Refund`   | `PaymentRefunding` | —       | —            | —          | —         | —           | —         | —        | ✅ ⚡c      | ✅ ⚡c  | —          | —          | Return money to the payer — refund a payment, whole or in part.                                                                                                       |
+
+✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
+Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
+`src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
+evaluator — [Authorization](../understand/authorization.md) explains the model.
+
+<!-- permissions:end -->
 
 ## The story
 
@@ -1206,27 +1228,7 @@ The redirect gap is open. `PreparedPayment` carries only `clientSecret`, so a re
 cannot tell the storefront where to send the customer, and closing it changes the contract. Until
 it is decided, a redirect adapter has no honest place to put its URL.
 
-## Who can do what
-
-Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
-
-<!-- permissions:start -->
-
-| Rule              | Set                | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                                                                  |
-| ----------------- | ------------------ | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read:Payment`    | `PaymentOwn`       | —       | ✅ own       | ✅ own     | ✅ own    | ✅ own      | ✅ own    | ✅ own   | ✅ own      | ✅ own  | —          | —          | Read the caller's own payments.                                                                                                                                       |
-| `display:Payment` | `PaymentDisplay`   | —       | —            | —          | ✅        | —           | ✅        | —        | ✅          | ✅      | —          | ✅         | Read every payment in the shop — the support desk helping with an order that is never their own, and the shop manager seeing the money behind the orders they handle. |
-| `create:Payment`  | `PaymentRecording` | —       | —            | —          | —         | —           | —         | —        | ✅ ⚡c      | ✅ ⚡c  | —          | —          | Record a payment that arrived outside the provider — cash, a transfer, by hand.                                                                                       |
-| `create:Refund`   | `PaymentRefunding` | —       | —            | —          | —         | —           | —         | —        | ✅ ⚡c      | ✅ ⚡c  | —          | —          | Return money to the payer — refund a payment, whole or in part.                                                                                                       |
-
-✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
-Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
-`src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../understand/authorization.md) explains the model.
-
-<!-- permissions:end -->
-
-## Related pages
+## Read next
 
 - [The provider port](./payments-provider-port.md) — the interface and the fake behind it
 - [`orders`](./orders.md) — what a payment is about

@@ -5,6 +5,8 @@ audience: [developer]
 
 # shop
 
+The shop itself: its time zone, where goods come back to, what it ships to, and the one currency it trades in.
+
 ::: tip At a glance
 **Owns** — the shop itself: the time zone its days follow, the one currency it trades in, the
 countries it ships to, where returned goods go and who pays the postage, and the backorder promise
@@ -113,3 +115,7 @@ These settings are deploy-time env on purpose: a correction is a restart, not an
 | `NODE_RETURN_ADDRESS_*`, `NODE_RETURN_POSTAGE_PAYER` | Where returns go (default: the operator's postal address; the country is a two-letter code, upper-cased at boot) and who pays the postage                                   |
 | `NODE_SHIP_TO_COUNTRIES`                             | Countries a physical order ships to, ISO 3166-1 alpha-2 in any case, upper-cased at boot (default: the operator's country)                                                  |
 | `NODE_DEFAULT_CURRENCY`                              | The one ISO-4217 currency, `EUR` by default; an unknown code is refused                                                                                                     |
+
+## Read next
+
+- [Modules overview](./start.md) — the whole context map
