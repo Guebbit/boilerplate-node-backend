@@ -4,7 +4,7 @@
  * what each product can do right now, like the cart's: the client renders from its own product
  * store, and shipping a product per line is over-serialization the contract suite fails on.
  *
- * See: docs/modules/wishlist.md
+ * @see docs/modules/wishlist.md
  */
 
 import type { ClientSession } from 'mongoose';

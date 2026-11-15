@@ -4,7 +4,7 @@
  * if Redis is unreachable the app keeps serving without a cache rather than erroring. What gets
  * cached (today, HTTP responses) and how it's framed is the caller's business, not this module's.
  *
- * See: docs/understand/redis-cache.md
+ * @see docs/understand/redis-cache.md
  */
 
 // `createClient` builds a (not yet connected) Redis client from a connection URL;
@@ -265,7 +265,7 @@ export const claimCacheRefresh = (key: string, seconds: number): Promise<boolean
  * and served until its TTL expires — a stale read window, not a crash — so the caller decides
  * what to do with the answer; this never rejects.
  *
- * See: docs/understand/redis-cache.md#why-there-is-no-cross-instance-broadcast
+ * @see docs/understand/redis-cache.md#why-there-is-no-cross-instance-broadcast
  */
 export const invalidateCacheTags = (tags: string[]): Promise<ClearCacheResult> => {
     const cacheTags = [...new Set(tags.filter(Boolean))];
@@ -397,7 +397,7 @@ export const drainMatchingKeys = async (
  *
  * Never rejects, but reports via `reachable` — fail-open is each caller's own choice.
  *
- * See: docs/understand/redis-cache.md#writes-that-bypass-the-api
+ * @see docs/understand/redis-cache.md#writes-that-bypass-the-api
  */
 export const clearCache = (): Promise<ClearCacheResult> =>
     cacheConnection

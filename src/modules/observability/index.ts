@@ -5,7 +5,7 @@
  * services (`./services`) — nothing imports them from outside today, but the barrel is where a
  * future caller would reach them, not a deep import into this module.
  *
- * See: docs/modules/observability.md
+ * @see docs/modules/observability.md
  */
 
 export * from './services';

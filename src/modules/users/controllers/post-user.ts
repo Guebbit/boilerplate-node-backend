@@ -2,7 +2,7 @@
  * @module
  * Controller for `POST /users` — staff create. The update half lives in `update-user.ts`.
  *
- * See: docs/modules/users.md
+ * @see docs/modules/users.md
  */
 
 import type { Request, Response } from 'express';

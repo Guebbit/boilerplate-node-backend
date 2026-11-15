@@ -3,7 +3,7 @@
  * Controller for `POST /tasks` — the one public write this module has, mounted above
  * the admin gate in `../routes` rather than exempted from it.
  *
- * See: docs/modules/tasks.md
+ * @see docs/modules/tasks.md
  */
 
 import type { Request, Response } from 'express';

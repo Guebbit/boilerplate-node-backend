@@ -14,7 +14,7 @@
  * hand-rolled parser; the translation PORT — a module's published vocabulary — is
  * `kernel/translation.ts`, the same inversion `kernel/authentication.ts` already uses.
  *
- * See: docs/understand/i18n.md
+ * @see docs/understand/i18n.md
  */
 
 export {

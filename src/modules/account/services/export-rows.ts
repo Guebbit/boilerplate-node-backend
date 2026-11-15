@@ -4,7 +4,7 @@
  * share, and the nightly reaper itself. Kept apart from `./export.ts` so the module barrel can
  * publish the reaper without publishing the build, which reaches every sibling's data.
  *
- * See: docs/modules/account.md#data-export
+ * @see docs/modules/account.md#data-export
  */
 
 import { removeExport, reapExports } from '@infrastructure/adapters/export-store';

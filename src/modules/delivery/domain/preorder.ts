@@ -14,7 +14,7 @@
  * Silence always means the buyer keeps waiting. The buyer can cancel any time before it ships, and
  * staff see the late orders on the board and decide whom to call.
  *
- * See: docs/modules/delivery.md#preorders-and-a-moved-date
+ * @see docs/modules/delivery.md#preorders-and-a-moved-date
  */
 
 import { DAY_MS, dayInZone } from '@domain-primitives/time';

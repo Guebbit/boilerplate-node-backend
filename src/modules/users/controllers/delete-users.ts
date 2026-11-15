@@ -2,7 +2,7 @@
  * @module
  * Controller for `DELETE /users/:id` and its `/hard` form — admin soft/hard delete.
  *
- * See: docs/modules/users.md
+ * @see docs/modules/users.md
  */
 
 import { createDeleteController } from '@infrastructure/surfaces/create-delete-controller';

@@ -7,7 +7,7 @@
  * import, keeping the import graph acyclic. No rules worth modelling here: deleting it costs a
  * convenience, not a capability.
  *
- * See: docs/modules/wishlist.md
+ * @see docs/modules/wishlist.md
  */
 
 import path from 'node:path';

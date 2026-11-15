@@ -10,7 +10,7 @@
  *   already imports this module) gives a new product its stock without this module importing back.
  *   This module never moves either counter itself. See that module's docblock.
  *
- * See: docs/modules/products.md
+ * @see docs/modules/products.md
  */
 
 import path from 'node:path';

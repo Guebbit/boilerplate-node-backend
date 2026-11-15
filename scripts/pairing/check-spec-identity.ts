@@ -13,7 +13,7 @@
  * `2` is separate from `1` because it is an environment problem, not a contract problem. A missing
  * sibling is lenient locally and fatal under `CI` — the one place leniency could hide a real fork.
  *
- * See: docs/build/pairing-and-ports.md#keeping-the-pair-in-step
+ * @see docs/build/pairing-and-ports.md#keeping-the-pair-in-step
  */
 import { existsSync } from 'node:fs';
 import { DEFAULT_FRONTEND_PATH, resolveFrontendPath } from './paired-frontend-path';

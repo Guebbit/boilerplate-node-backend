@@ -5,7 +5,7 @@
  * The dates are overridden from the generated `Task` type (string → Date): Mongoose holds native dates, and serialization is what narrows them back to
  * the wire's ISO strings.
  *
- * See: docs/modules/tasks.md
+ * @see docs/modules/tasks.md
  */
 
 import { model, Schema, Types } from 'mongoose';

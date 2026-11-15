@@ -7,7 +7,7 @@
  *        a snapshot without it.
  * Never: overrides a variable the shell already set (dotenv's own rule).
  *
- * See: docs/operate/configuration.md
+ * @see docs/operate/configuration.md
  */
 
 // dotenv: loads `.env` from the working directory into `process.env`, skipping keys already set.

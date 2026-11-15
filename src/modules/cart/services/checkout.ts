@@ -3,7 +3,7 @@
  * Checkout — the one cart operation that writes to another module's collection, and the only one
  * where a race can cost a customer money.
  *
- * See: docs/modules/cart-checkout.md
+ * @see docs/modules/cart-checkout.md
  */
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';

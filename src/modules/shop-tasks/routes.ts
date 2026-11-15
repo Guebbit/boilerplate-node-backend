@@ -4,7 +4,7 @@
  * not an API key: every count is read as the caller, and a key resolves to no `AuthContext`, so it
  * would silently widen the orders scope.
  *
- * See: docs/modules/shop-tasks.md#the-nav-badge-summary
+ * @see docs/modules/shop-tasks.md#the-nav-badge-summary
  */
 
 import { Router } from 'express';

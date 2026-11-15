@@ -11,7 +11,7 @@
  * Incomplete: a file some part of which no finished shard covered. It is left OUT of the merged
  *   report, so the ratchet records nothing for it rather than a partial score.
  *
- * See: docs/build/mutation-testing.md#the-github-sweep
+ * @see docs/build/mutation-testing.md#the-github-sweep
  */
 import { SLICE_IGNORE_REASON } from './slice-ignorer';
 import type { CiShard, ScopeFile } from './waves';

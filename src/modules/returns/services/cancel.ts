@@ -9,7 +9,7 @@
  * again. A parcel lost on the way back is NOT canceled: the shop bears that risk and the refund may
  * be owed, so it is received with a restock count of 0.
  *
- * See: docs/modules/returns.md#canceling-a-return
+ * @see docs/modules/returns.md#canceling-a-return
  */
 
 import { t } from '@infrastructure/i18n';

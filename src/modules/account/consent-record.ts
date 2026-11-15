@@ -3,7 +3,7 @@
  * What an account's own record says about the terms and the analytics choice: the fields a
  * signup stamps so the controller can later show who agreed to what, and when.
  *
- * See: docs/understand/data-protection.md
+ * @see docs/understand/data-protection.md
  */
 
 import { accountConfig } from './config';

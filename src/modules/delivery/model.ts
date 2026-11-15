@@ -10,7 +10,7 @@
  *   it, since the tracking code and delivery timestamp are carrier facts the order has no field for;
  *   `lost` is the one a parcel reaches when staff report it will not arrive.
  *
- * See: docs/modules/delivery.md
+ * @see docs/modules/delivery.md
  */
 
 import { model, Schema, Types } from 'mongoose';

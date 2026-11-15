@@ -6,7 +6,7 @@
  * would ship goods the stock ledger never counted out, a consistency guard (CLAUDE.md § Scope), not a
  * policy about administrators.
  *
- * See: docs/modules/delivery.md#holds
+ * @see docs/modules/delivery.md#holds
  */
 
 import type { ClientSession } from 'mongoose';

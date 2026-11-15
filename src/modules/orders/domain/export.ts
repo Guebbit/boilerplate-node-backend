@@ -7,7 +7,7 @@
  * The email IS in the file, and `zod.email()` accepts `+cmd@example.com`, so a cell can start a
  * formula: escaping is the CSV writer's job (`escape_formulas`), not this file's.
  *
- * See: docs/modules/orders.md#the-csv-export
+ * @see docs/modules/orders.md#the-csv-export
  */
 
 import type { Order } from '@types';

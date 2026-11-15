@@ -9,7 +9,7 @@
  * Own-message severity is `warning` throughout, except a back-in-stock answer: each says
  * "something you had changed without you asking", which is worth a look and not an error.
  *
- * See: docs/modules/shop-tasks.md
+ * @see docs/modules/shop-tasks.md
  */
 
 import { Types } from 'mongoose';

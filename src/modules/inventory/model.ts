@@ -6,7 +6,7 @@
  * on its own document purely so a catalogue read needs no join, but never writes it and this
  * module never reads that copy back. See `docs/modules/inventory.md#why-products-still-carries-a-copy`.
  *
- * See: docs/modules/inventory.md
+ * @see docs/modules/inventory.md
  */
 
 import { model, Schema, Types } from 'mongoose';

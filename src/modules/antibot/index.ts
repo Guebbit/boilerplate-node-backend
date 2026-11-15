@@ -7,7 +7,7 @@
  * `account` and `tasks` depend on `infrastructure/http/middlewares/human-challenge` and
  * `infrastructure/adapters/antibot` directly rather than on this module.
  *
- * See: docs/modules/antibot.md
+ * @see docs/modules/antibot.md
  */
 
 export * from './service';

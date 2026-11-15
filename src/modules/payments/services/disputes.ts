@@ -8,7 +8,7 @@
  * a staff timeline row, and changes what a refund may do (`../domain/disputes.ts`). It never
  * touches `amountRefunded`, the order's status or a credit note.
  *
- * See: docs/modules/payments.md#disputes
+ * @see docs/modules/payments.md#disputes
  */
 
 import type { ClientSession } from 'mongoose';

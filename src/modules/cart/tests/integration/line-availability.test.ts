@@ -4,7 +4,7 @@
  * off-sale product's line is kept and reads `unavailable`, and checkout refuses both for its own
  * reason. Nothing here removes a line — only a deletion does.
  *
- * See: docs/modules/cart.md#line-availability
+ * @see docs/modules/cart.md#line-availability
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

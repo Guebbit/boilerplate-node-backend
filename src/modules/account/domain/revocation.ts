@@ -4,7 +4,7 @@
  * tells subscribers. `services/revocation.ts` reads it to act; the type of the reasons an
  * `account.sessions_revoked` event can carry is derived from it, so no list is restated.
  *
- * See: docs/modules/account-sessions.md#revocation
+ * @see docs/modules/account-sessions.md#revocation
  */
 
 /**

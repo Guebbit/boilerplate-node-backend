@@ -4,7 +4,7 @@
  * A wrong "false" lets a new integration test skip the commit gate; a wrong "true" reruns a
  * file light already ran. Both directions are asserted.
  *
- * See: docs/reference/package-scripts.md
+ * @see docs/reference/package-scripts.md
  */
 
 import { isOutsideLightGate } from '../../../../scripts/testing/suites';

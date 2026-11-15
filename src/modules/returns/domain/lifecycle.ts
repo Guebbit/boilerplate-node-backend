@@ -5,7 +5,7 @@
  * beside it: two staff members approving and declining the same request race in the database and
  * exactly one wins.
  *
- * See: docs/modules/returns.md#the-lifecycle
+ * @see docs/modules/returns.md#the-lifecycle
  */
 
 import { ReturnKind, ReturnStatus, ReturnReason, ReturnRemedy } from '@types';

@@ -5,7 +5,7 @@
  * configured. No locale handling here — the producer already resolved every string before
  * publishing, so this file only interpolates and sends.
  *
- * See: docs/understand/email-and-rendering.md
+ * @see docs/understand/email-and-rendering.md
  */
 
 import type { EmailJobPayload } from '@types';

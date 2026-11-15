@@ -2,7 +2,7 @@
  * @module
  * The deadlines an order froze, as `returns` judges a reason against them.
  *
- * See: docs/modules/returns.md#the-two-deadlines
+ * @see docs/modules/returns.md#the-two-deadlines
  */
 
 import { withdrawalClosesAt } from '@modules/orders';

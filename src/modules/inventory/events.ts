@@ -8,7 +8,7 @@
  * allocated to a paid preorder is the other: `delivery` must release the fulfillment order that
  * waits for it, and imports this module only for the event's name.
  *
- * See: docs/modules/inventory.md
+ * @see docs/modules/inventory.md
  */
 
 /** Registers this module's event payload shape into the kernel's `DomainEventMap`. */

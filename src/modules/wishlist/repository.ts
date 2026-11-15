@@ -4,7 +4,7 @@
  * actually takes: add a line, remove a line, and the two cleanup writes owed to product and user
  * deletion.
  *
- * See: docs/modules/wishlist.md
+ * @see docs/modules/wishlist.md
  */
 
 import type { ClientSession } from 'mongoose';

@@ -5,7 +5,7 @@
  * Art. 5(1)(e)). The caller pipes the stream into the response and a client that hangs up stops the
  * cursor with it.
  *
- * See: docs/modules/orders.md#the-csv-export
+ * @see docs/modules/orders.md#the-csv-export
  */
 
 import { Readable, type Transform } from 'node:stream';

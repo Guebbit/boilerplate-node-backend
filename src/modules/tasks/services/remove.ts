@@ -2,7 +2,7 @@
  * @module
  * The staff delete: a guarded door (`mayDelete`, then an audit row).
  *
- * See: docs/modules/tasks.md
+ * @see docs/modules/tasks.md
  */
 
 import type { CallerContext } from '@types';

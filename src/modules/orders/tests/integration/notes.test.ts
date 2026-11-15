@@ -4,7 +4,7 @@
  * row whose text is encrypted at rest, kept on the text clock, scrubbed with the order's erasure,
  * handed to the buyer in their data export and withdrawable by staff. Over real HTTP and real Mongo.
  *
- * See: docs/modules/orders.md#the-timeline
+ * @see docs/modules/orders.md#the-timeline
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

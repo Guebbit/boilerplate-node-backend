@@ -7,7 +7,7 @@
  * The mail rule is the one `notifications` states: `now` only where someone must act soon, every
  * other code is the bell's alone. The ten summary rows are counts the daily digest rewrites.
  *
- * See: docs/modules/shop-tasks.md#who-is-told
+ * @see docs/modules/shop-tasks.md#who-is-told
  */
 
 import { NotificationSeverity } from '@types';

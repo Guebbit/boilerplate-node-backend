@@ -3,7 +3,7 @@
  * The scheduled jobs `account` owns: the inactivity reaper, the previous-email sweep, the
  * expired-export sweep and the purge of accounts whose self-deletion grace has run out.
  *
- * See: docs/reference/ops.md#scheduled-jobs
+ * @see docs/reference/ops.md#scheduled-jobs
  */
 
 import type { JobDeclaration } from '@kernel/registry';

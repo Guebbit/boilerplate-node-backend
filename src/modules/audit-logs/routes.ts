@@ -3,7 +3,7 @@
  * The `/audit` router: one read, gated on `read:AuditLog` — a shop's own action history, for the
  * roles that hold the key rather than for the platform operator.
  *
- * See: docs/modules/audit-logs.md
+ * @see docs/modules/audit-logs.md
  */
 
 import { Router } from 'express';

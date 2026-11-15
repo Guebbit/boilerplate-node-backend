@@ -5,7 +5,7 @@
  * go to a dedicated always-on logger (`auditLogger`) with a stable, machine-readable field set
  * that must not be reshaped for convenience.
  *
- * See: docs/operate/winston.md
+ * @see docs/operate/winston.md
  */
 
 import { auditLogger, redactCredentials } from '@infrastructure/adapters/logger';

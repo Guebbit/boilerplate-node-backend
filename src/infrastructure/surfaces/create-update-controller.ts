@@ -10,7 +10,7 @@
  *                                                                       value → $set · null → $unset
  * ```
  *
- * See: docs/understand/request-flow.md#put-replaces-patch-merges
+ * @see docs/understand/request-flow.md#put-replaces-patch-merges
  */
 
 import type { Request, Response } from 'express';

@@ -1,8 +1,8 @@
 /**
  * @module
- * Requests the contract cannot describe, for the orders module. See:
- * `scripts/contracts/client-collections-bundle.ts` for what a probe is for, where these are
- * emitted, and which `{{seedToken}}` values a probe may refer to.
+ * Requests the contract cannot describe, for the orders module.
+ * @see `scripts/contracts/client-collections-bundle.ts` for what a probe is for, where these are
+ *   emitted, and which `{{seedToken}}` values a probe may refer to.
  */
 
 import type { Probe } from '@guebbit/openapi-runnable-collections';

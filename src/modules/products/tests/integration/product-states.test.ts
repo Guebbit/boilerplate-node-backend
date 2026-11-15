@@ -4,7 +4,7 @@
  * takes it off sale. A stranger sees the second kind in every listing and by id, and the first
  * kind nowhere; staff see both.
  *
- * See: docs/modules/products.md#product-states
+ * @see docs/modules/products.md#product-states
  */
 
 import { api, authenticateAsRole } from '@tests/http';

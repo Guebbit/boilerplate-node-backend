@@ -7,7 +7,7 @@
  * minter is recorded. Detail reads only — a list
  * would write one entry per page, and the entry that matters is the one naming a record.
  *
- * See: docs/understand/defences/authorization.md#a-rule-is-not-a-licence-over-everyone
+ * @see docs/understand/defences/authorization.md#a-rule-is-not-a-licence-over-everyone
  */
 
 import type { Request } from 'express';
@@ -41,7 +41,7 @@ export interface StaffReadTarget {
  * gives dates and purposes, not the employee). Doubles as the list of actions that count as a
  * consultation, so a new `admin.<resource>.viewed` is added here or it never reaches the export.
  *
- * See: docs/modules/audit-logs.md#the-person-can-see-who-looked
+ * @see docs/modules/audit-logs.md#the-person-can-see-who-looked
  */
 export const STAFF_READ_PURPOSES = {
     'admin.order.viewed': 'handling your order',

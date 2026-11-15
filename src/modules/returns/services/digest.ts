@@ -3,7 +3,7 @@
  * The two figures the daily staff digest reads off the returns: requests nobody has decided, and
  * approved returns long overdue for their goods. Counts only.
  *
- * See: docs/modules/shop-tasks.md#the-staff-digest
+ * @see docs/modules/shop-tasks.md#the-staff-digest
  */
 
 import { ReturnKind, ReturnReason, ReturnStatus } from '@types';

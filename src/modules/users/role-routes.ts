@@ -7,7 +7,7 @@
  * (an API key never manages staff), and the router in `./routes` lets a key in. Mounted after it,
  * so a key's request reaches here and `isAuth` answers it 401.
  *
- * See: docs/modules/users.md#the-role-door
+ * @see docs/modules/users.md#the-role-door
  */
 
 import { Router } from 'express';

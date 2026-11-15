@@ -14,7 +14,7 @@
  * Idempotent, since the outbox delivers at least once: a redelivery finds the date already expected
  * (or, for a cleared date, no expected date left) and does nothing.
  *
- * See: docs/modules/delivery.md#preorders-and-a-moved-date
+ * @see docs/modules/delivery.md#preorders-and-a-moved-date
  */
 
 import { orderService } from '@modules/orders';

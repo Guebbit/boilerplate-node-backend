@@ -5,7 +5,7 @@
  * total, and a refunding `ORDER_CANCELED` opens the refund — see `docs/modules/payments.md`)
  * Detaches an erased account through its own `personalData.erase` hook — the payment survives account erasure, same as the order it paid for.
  *
- * See: docs/modules/payments.md
+ * @see docs/modules/payments.md
  */
 
 import path from 'node:path';

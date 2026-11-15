@@ -11,7 +11,7 @@
  *         return (`kernel/middlewares/authorizations.ts`) for why mounting two routers there
  *         costs one auth resolution, not two.
  *
- * See: docs/modules/addresses.md
+ * @see docs/modules/addresses.md
  */
 
 import path from 'node:path';

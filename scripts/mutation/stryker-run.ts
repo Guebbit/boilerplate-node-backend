@@ -7,7 +7,7 @@
  *         `npx stryker` directly would silently run without the heap cap — which is the one setting
  *         a run on a 30 GB machine cannot do without.
  *
- * See: docs/build/mutation-testing.md#worker-heap-cap
+ * @see docs/build/mutation-testing.md#worker-heap-cap
  */
 import { spawn } from 'node:child_process';
 import { rm } from 'node:fs/promises';

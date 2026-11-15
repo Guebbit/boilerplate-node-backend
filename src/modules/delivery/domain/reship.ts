@@ -5,7 +5,7 @@
  * every case is testable without a database. The lines themselves change through `withLoss`, the
  * same rule a lost parcel follows.
  *
- * See: docs/modules/delivery.md#replacement-after-a-return
+ * @see docs/modules/delivery.md#replacement-after-a-return
  */
 
 import type { FulfillmentLine, ProductQuantity } from './fulfillment';

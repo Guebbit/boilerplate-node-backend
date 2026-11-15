@@ -6,7 +6,7 @@
  * module reaches `products` and not the other way round). Account erase covers the rows through
  * `personalData` below.
  *
- * See: docs/modules/stock-alerts.md
+ * @see docs/modules/stock-alerts.md
  */
 
 import path from 'node:path';

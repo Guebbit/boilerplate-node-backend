@@ -7,7 +7,7 @@
  *
  * Pure: the one rule that decides which of the two fields each caller may or must send.
  *
- * See: docs/modules/returns.md#staff-open-a-return-for-the-buyer
+ * @see docs/modules/returns.md#staff-open-a-return-for-the-buyer
  */
 
 import type { ReturnStatementChannel, StaffStatementChannel } from '@types';

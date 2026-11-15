@@ -13,7 +13,8 @@
  *               every caller downstream.
  * Mongo-only:   the kernel's one store-specific file besides `../outbox.ts`.
  *
- * See: docs/understand/authorization.md, docs/understand/layers.md
+ * @see docs/understand/authorization.md
+ * @see docs/understand/layers.md
  */
 
 import { accessibleBy } from '@casl/mongoose';

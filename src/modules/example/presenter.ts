@@ -5,7 +5,7 @@
  * Here: the one field a document cannot supply is `ownerName`, which belongs to `users`; `actions`
  * is decided by the caller's service and handed in, never asked for here.
  *
- * See: docs/understand/layers.md
+ * @see docs/understand/layers.md
  */
 
 import type { Example, ExampleActions, ExportExample } from '@types';

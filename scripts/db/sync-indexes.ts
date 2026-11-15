@@ -16,7 +16,7 @@
  *   npm run db:sync -- --prune   # also drop every undeclared index (dev; a deploy never does)
  *   npm run host -- db:sync      # against a containerised database, from the host
  *
- * See: docs/reference/data.md
+ * @see docs/reference/data.md
  */
 import '@infrastructure/config/dotenv';
 // Before any model loads: Mongoose defaults are read at schema build.

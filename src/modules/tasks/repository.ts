@@ -4,7 +4,7 @@
  * the doors need and the bulk writes the erasure needs. A move is ONE `findOneAndUpdate` filtered
  * on the status the caller read, so two clicks cannot both win.
  *
- * See: docs/modules/tasks.md
+ * @see docs/modules/tasks.md
  */
 
 import type { ClientSession } from 'mongoose';

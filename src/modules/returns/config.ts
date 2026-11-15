@@ -3,7 +3,7 @@
  * `returns`' retention window for free text. Read per call, the pattern `orders/config.ts` sets,
  * so a test can vary it per case.
  *
- * See: docs/modules/returns.md#configuration
+ * @see docs/modules/returns.md#configuration
  */
 
 import { defineConfig } from '@infrastructure/config/define';

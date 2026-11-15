@@ -11,7 +11,7 @@
  *      value cannot be a legal one. A free string may legitimately answer 200.
  *
  * The list of operations comes from the spec walk, like the valid-value fuzzer's.
- * See: docs/build/fuzz-testing.md#negative-mode
+ * @see docs/build/fuzz-testing.md#negative-mode
  */
 import fc from 'fast-check';
 import { api, authenticateAs } from '@tests/http';

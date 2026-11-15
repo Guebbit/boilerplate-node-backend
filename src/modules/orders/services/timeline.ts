@@ -7,7 +7,7 @@
  * inside ITS transaction. `orders` cannot listen to them: they import it, so listening would be a
  * cycle.
  *
- * See: docs/modules/orders.md#the-timeline
+ * @see docs/modules/orders.md#the-timeline
  */
 
 import type { ClientSession } from 'mongoose';

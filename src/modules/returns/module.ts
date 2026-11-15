@@ -9,7 +9,7 @@
  * A return is keyed by `orderId`, never by `userId`, so account erasure needs no `erase` hook here
  * — see `./services/personal-data.ts`.
  *
- * See: docs/modules/returns.md
+ * @see docs/modules/returns.md
  */
 
 import path from 'node:path';

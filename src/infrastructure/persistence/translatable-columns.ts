@@ -7,7 +7,7 @@
  *
  * Same shape as `reencryptOf(model)` in `../security/reencrypt.ts`: a function of the model.
  *
- * See: docs/modules/locales.md
+ * @see docs/modules/locales.md
  */
 
 import type { ClientSession, Document, Model, UpdateQuery } from 'mongoose';

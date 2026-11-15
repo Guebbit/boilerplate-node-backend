@@ -3,7 +3,7 @@
  * What a saved line can do right now: the one precedence rule behind a cart line, a wishlist line,
  * a merge result and checkout's refusal. Pure.
  *
- * See: docs/modules/cart.md#line-availability
+ * @see docs/modules/cart.md#line-availability
  */
 
 import type { LineAvailability } from '@types';

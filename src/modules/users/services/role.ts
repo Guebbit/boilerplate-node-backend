@@ -8,7 +8,7 @@
  * Judged by the grant (`assign:Role`), not by `access`'s protection of staff accounts: a holder of
  * `assign:Role` always passes that, and nobody else gets here.
  *
- * See: docs/modules/users.md#the-role-door
+ * @see docs/modules/users.md#the-role-door
  */
 
 import type { ClientSession } from 'mongoose';

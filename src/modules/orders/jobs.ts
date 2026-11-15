@@ -2,7 +2,7 @@
  * @module
  * The scheduled job `orders` owns: the retention scrub.
  *
- * See: docs/reference/ops.md#scheduled-jobs
+ * @see docs/reference/ops.md#scheduled-jobs
  */
 
 import type { JobDeclaration } from '@kernel/registry';

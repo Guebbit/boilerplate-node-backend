@@ -4,7 +4,7 @@
  * `services/health.ts`; this file only calls it and shapes the response. See the JSDoc on
  * `getObservabilityHealth` below for why liveness lives elsewhere.
  *
- * See: docs/modules/observability.md
+ * @see docs/modules/observability.md
  */
 
 import type { Request, Response } from 'express';

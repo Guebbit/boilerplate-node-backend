@@ -6,7 +6,7 @@
  * dated proof of the withdrawal. Staff record the one a buyer stated by phone, email or letter the
  * same way, with the day it was stated and the channel on the record.
  *
- * See: docs/modules/returns.md#the-withdrawal-button
+ * @see docs/modules/returns.md#the-withdrawal-button
  */
 
 import { padDecimal } from '@domain-primitives/money';

@@ -8,7 +8,7 @@
  * expired one needs no sweep. It never blocks paying an existing order, cancelling, a withdrawal,
  * a return, or the account's own data rights: checkout is the only door that asks.
  *
- * See: docs/modules/users.md#purchase-hold
+ * @see docs/modules/users.md#purchase-hold
  */
 
 import { logger } from '@infrastructure/adapters/logger';

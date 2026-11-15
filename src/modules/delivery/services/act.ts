@@ -9,7 +9,7 @@
  * writes will land in. They are thrown as {@link ActRefusal}, which aborts the transaction and is
  * turned back into the ordinary `ResponseReject` at the door.
  *
- * See: docs/modules/delivery.md#one-transaction-per-act
+ * @see docs/modules/delivery.md#one-transaction-per-act
  */
 
 import type { ClientSession } from 'mongoose';

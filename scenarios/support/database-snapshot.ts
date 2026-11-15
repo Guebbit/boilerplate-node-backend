@@ -5,7 +5,7 @@
  * different concern from taking and replaying a snapshot, and only `./demo` and
  * `scenarios/apply.ts` need this half.
  *
- * See: docs/understand/mongodb-mongoose.md
+ * @see docs/understand/mongodb-mongoose.md
  */
 
 // The driver's own raw-document type: what `collection.find()` yields and `collection.insertMany()`

@@ -5,7 +5,7 @@
  * Each mount states the one key its own action needs. Here: one open read, then the caller's
  * own examples (or everyone's, for a key that says so).
  *
- * See: docs/understand/request-flow.md
+ * @see docs/understand/request-flow.md
  */
 
 import { Router } from 'express';

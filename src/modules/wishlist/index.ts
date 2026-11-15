@@ -3,7 +3,7 @@
  * Wishlist — public barrel; the only surface a sibling may import (see
  * `docs/understand/strategic-ddd.md` §5 for the rule).
  *
- * See: docs/modules/wishlist.md
+ * @see docs/modules/wishlist.md
  */
 
 export * from './service';

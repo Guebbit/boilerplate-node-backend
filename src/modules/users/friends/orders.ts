@@ -5,7 +5,7 @@
  * Why `orders` is the friend:  `orders` owns the cancellation count that justifies the hold, so no
  *                              other module may take a hold on its own.
  *
- * See: docs/understand/strategic-ddd.md §5
+ * @see docs/understand/strategic-ddd.md §5
  */
 
 export { takeAutomaticPurchaseHold } from '../services/purchase-hold';

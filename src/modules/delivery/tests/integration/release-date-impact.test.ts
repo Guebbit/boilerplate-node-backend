@@ -6,7 +6,7 @@
  *
  * Real Mongo and a real outbox, the mailer mocked at its queue.
  *
- * See: docs/modules/delivery.md#preorders-and-a-moved-date
+ * @see docs/modules/delivery.md#preorders-and-a-moved-date
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

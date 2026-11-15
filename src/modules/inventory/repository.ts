@@ -4,7 +4,7 @@
  * written out because Mongoose's generics are too large for TypeScript to serialize an inferred
  * one at an export boundary (TS7056) — the same reason `Repository` exists.
  *
- * See: docs/modules/inventory.md
+ * @see docs/modules/inventory.md
  */
 
 import { Types } from 'mongoose';

@@ -4,7 +4,7 @@
  * `docs/understand/strategic-ddd.md` §5 for the rule). `module.ts` registers the write path itself at
  * import time.
  *
- * See: docs/modules/audit-logs.md
+ * @see docs/modules/audit-logs.md
  */
 
 export * from './service';

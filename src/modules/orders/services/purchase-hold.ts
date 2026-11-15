@@ -13,7 +13,7 @@
  * - REVIEW ONLY: paid cancellations by either door. Cancelling before dispatch is a statutory
  *   withdrawal, so it never pauses anyone; it only flags the account for a person to look at.
  *
- * See: docs/modules/orders.md#the-purchase-hold
+ * @see docs/modules/orders.md#the-purchase-hold
  */
 
 import { logger } from '@infrastructure/adapters/logger';

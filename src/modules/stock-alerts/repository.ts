@@ -4,7 +4,7 @@
  * find who waits for a product (or which products anyone waits for), and the two cleanups owed to an erased account and a deleted
  * product.
  *
- * See: docs/modules/stock-alerts.md
+ * @see docs/modules/stock-alerts.md
  */
 
 import type { ClientSession } from 'mongoose';

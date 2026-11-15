@@ -4,7 +4,7 @@
  * that change it. A role lives in exactly one place, the membership row — the user document holds
  * none of its own.
  *
- * See: docs/understand/authorization.md
+ * @see docs/understand/authorization.md
  */
 
 import type { ClientSession } from 'mongoose';

@@ -15,7 +15,7 @@
  * Only the provider call follows the commit, as on receipt: the record is already durable, and a
  * refund the provider refuses stays open for the payment sweep.
  *
- * See: docs/modules/returns.md#cancelling-what-has-not-shipped
+ * @see docs/modules/returns.md#cancelling-what-has-not-shipped
  */
 
 import { t } from '@infrastructure/i18n';

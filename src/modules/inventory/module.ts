@@ -11,7 +11,7 @@
  * arrives the other way, as `PRODUCT_CREATED` — `products` cannot import this module back, so it
  * emits instead of calling in.
  *
- * See: docs/modules/inventory.md
+ * @see docs/modules/inventory.md
  */
 
 import path from 'node:path';

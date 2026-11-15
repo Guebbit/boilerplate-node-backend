@@ -4,7 +4,7 @@
  * (a broken unit is set to 0); the default is all of them. Pure, so the rule that keeps a broken
  * unit from reaching the shelf — and from there a backorder buyer — is testable without a database.
  *
- * See: docs/modules/returns.md#what-the-customer-gets-back
+ * @see docs/modules/returns.md#what-the-customer-gets-back
  */
 
 /** A line staff gave a restock count for. */

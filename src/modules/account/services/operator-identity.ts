@@ -4,7 +4,7 @@
  * (e-Commerce Directive Art. 5(1), GDPR Art. 13(1)(a)). `GET /config` publishes it; `invoicing` and
  * `orders` print it. Owned here, not by `shop`: a site without the shop still has an operator.
  *
- * See: docs/modules/account.md
+ * @see docs/modules/account.md
  */
 
 import { ConfigError } from '@infrastructure/config/define';

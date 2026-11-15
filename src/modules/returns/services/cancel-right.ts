@@ -4,7 +4,7 @@
  * (`cancel-remainder.ts`) and the options read that offers (`options.ts`). Two copies would let the
  * button promise what the door then refuses.
  *
- * See: docs/modules/returns.md#cancelling-what-has-not-shipped
+ * @see docs/modules/returns.md#cancelling-what-has-not-shipped
  */
 
 import { callerForSubject } from '@kernel/permissions';

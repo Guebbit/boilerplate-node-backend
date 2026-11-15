@@ -6,7 +6,7 @@
  *
  * Real inventory and a real outbox: the point is the seam between the two modules.
  *
- * See: docs/modules/delivery.md#a-short-stock-delivery
+ * @see docs/modules/delivery.md#a-short-stock-delivery
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

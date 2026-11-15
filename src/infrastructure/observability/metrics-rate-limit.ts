@@ -5,7 +5,7 @@
  * Registers against the shared registry like every module's own `metrics.ts` — see
  * `metrics-registry.ts`.
  *
- * See: docs/operate/prometheus.md
+ * @see docs/operate/prometheus.md
  */
 
 import { Counter } from 'prom-client';

@@ -8,7 +8,7 @@
  * i18n through `@infrastructure/i18n` — the one exception is the `app` tier, which alone may see
  * which modules exist, handing this file the `translatables` lookup it cannot collect itself.
  *
- * See: docs/modules/locales.md
+ * @see docs/modules/locales.md
  */
 
 import path from 'node:path';

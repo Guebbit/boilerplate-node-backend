@@ -8,7 +8,7 @@
  * The notice, the state it leaves on the fulfillment order and the event are one transaction;
  * the email follows. Real Mongo and a real outbox, the mailer mocked at its queue.
  *
- * See: docs/modules/delivery.md#preorders-and-a-moved-date
+ * @see docs/modules/delivery.md#preorders-and-a-moved-date
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

@@ -5,7 +5,7 @@
  * the moment someone activates the account again) and announces `user.deactivated` with it.
  * Each refuses a repeat with 409 rather than answering success twice.
  *
- * See: docs/modules/users.md#activating-and-deactivating
+ * @see docs/modules/users.md#activating-and-deactivating
  */
 
 import { t } from '@infrastructure/i18n';

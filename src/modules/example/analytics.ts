@@ -5,7 +5,7 @@
  * Here: one event, `example_published`, fired when a publish lands.
  * Delete it if: the module reports nothing to analytics (and drop the `emitAnalyticsEvent` call).
  *
- * See: docs/understand/analytics.md#naming
+ * @see docs/understand/analytics.md#naming
  */
 
 import { exampleAnalyticsEvents } from './rules.generated';

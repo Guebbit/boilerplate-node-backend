@@ -12,7 +12,7 @@ import { REPO_ROOT } from '@tests/paths';
  * (`npm run regenerate`, held by `npm run check`), so the old "two files must agree"
  * checks became "the declarations obey the rules the generators assume".
  *
- * See: docs/reference/ops.md#scheduled-jobs
+ * @see docs/reference/ops.md#scheduled-jobs
  */
 
 /** Every job in the build, in the order the crontab lists them. */

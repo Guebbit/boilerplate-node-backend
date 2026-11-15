@@ -8,7 +8,7 @@
  * back exactly when every unit on it is still open. Real Mongo and a real outbox, the mailer
  * mocked at its queue.
  *
- * See: docs/modules/delivery.md#lost-in-transit
+ * @see docs/modules/delivery.md#lost-in-transit
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

@@ -2,7 +2,7 @@
  * @module
  * `POST /tasks/:id/assign` (take or assign).
  *
- * See: docs/modules/tasks.md
+ * @see docs/modules/tasks.md
  */
 
 import type { Request, Response } from 'express';

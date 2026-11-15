@@ -4,7 +4,7 @@
  * `docs/understand/strategic-ddd.md` §5 for the rule). `cartRepository` and the model's runtime stay
  * inside: publishing either would let a sibling bypass the service's rules.
  *
- * See: docs/modules/cart.md
+ * @see docs/modules/cart.md
  */
 
 export * from './services';

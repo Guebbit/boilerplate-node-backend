@@ -2,7 +2,7 @@
  * @module
  * The scheduled jobs `delivery` owns: the hold-note scrub and the daily preorder sweep.
  *
- * See: docs/reference/ops.md#scheduled-jobs
+ * @see docs/reference/ops.md#scheduled-jobs
  */
 
 import type { JobDeclaration } from '@kernel/registry';

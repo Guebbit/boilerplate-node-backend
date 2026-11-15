@@ -2,7 +2,7 @@
  * @module
  * The scheduled job `tasks` owns: the overdue and due-soon reminder sweep.
  *
- * See: docs/reference/ops.md#scheduled-jobs
+ * @see docs/reference/ops.md#scheduled-jobs
  */
 
 import type { JobDeclaration } from '@kernel/registry';

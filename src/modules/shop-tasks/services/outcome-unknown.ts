@@ -6,7 +6,7 @@
  * registers; here the subject is named in words (the order's number, the product's name) and the
  * people who do that work are told, once per stuck key.
  *
- * See: docs/understand/idempotency.md#do-not-retry-operations
+ * @see docs/understand/idempotency.md#do-not-retry-operations
  */
 
 import type { PermissionSetName } from '@api/permission-vocabulary';

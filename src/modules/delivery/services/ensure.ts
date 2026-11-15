@@ -5,7 +5,7 @@
  * by a preorder allocation and by an operator reviving a dead `paid` event, because the outbox
  * gives up after its last retry. A read never makes them.
  *
- * See: docs/modules/delivery.md#when-they-are-made
+ * @see docs/modules/delivery.md#when-they-are-made
  */
 
 import { orderService, isShippedItem, isAwaitingGoods } from '@modules/orders';

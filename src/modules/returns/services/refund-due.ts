@@ -4,7 +4,7 @@
  * (`../domain/refund-due.ts`); this adds the one thing a domain file cannot reach, the shop's
  * calendar.
  *
- * See: docs/modules/returns.md#the-refund-deadline
+ * @see docs/modules/returns.md#the-refund-deadline
  */
 
 import { withdrawalRefundDueBy } from '@modules/orders';

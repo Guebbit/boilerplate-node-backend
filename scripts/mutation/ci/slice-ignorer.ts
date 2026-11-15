@@ -10,7 +10,7 @@
  * Inert:  without `MUTATION_SLICE` it ignores nothing.
  * Loaded: by Node's own type stripping, not tsx — so no imports, and erasable syntax only.
  *
- * See: docs/build/mutation-testing.md#the-github-sweep
+ * @see docs/build/mutation-testing.md#the-github-sweep
  */
 
 /** An inclusive, 1-based line range of one file. */

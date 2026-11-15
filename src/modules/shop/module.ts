@@ -4,7 +4,7 @@
  * required, and so is the operator's phone, which `account` leaves optional (the withdrawal notice
  * prints it).
  *
- * See: docs/modules/shop.md
+ * @see docs/modules/shop.md
  */
 
 import type { AppModule } from '@kernel/registry';

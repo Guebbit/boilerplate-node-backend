@@ -4,7 +4,7 @@
  * visible to whoever happens to read the log line at the moment it happens. Registers against the
  * shared registry the same way every module's own `metrics.ts` does — see `metrics-registry.ts`.
  *
- * See: docs/operate/prometheus.md
+ * @see docs/operate/prometheus.md
  */
 
 import { Counter } from 'prom-client';

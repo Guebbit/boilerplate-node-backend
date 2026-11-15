@@ -5,7 +5,7 @@
  * subscription, tracking attempts through to success, exhaustion, or a subscriber never told
  * about it because the subscription was disabled first).
  *
- * See: docs/reference/data.md
+ * @see docs/reference/data.md
  */
 
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';

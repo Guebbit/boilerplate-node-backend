@@ -3,7 +3,7 @@
  * Backorder rules — whether a RELEASED product keeps selling while its shelf is empty. Pure: a clock
  * comes in as an argument, so every case is testable without waiting.
  *
- * See: docs/modules/products.md#backorder
+ * @see docs/modules/products.md#backorder
  */
 
 import { preorderAllowanceLeft } from './stock';

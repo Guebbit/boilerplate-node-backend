@@ -10,7 +10,7 @@
  * `api-keys` and `antibot` went unmeasured for a month while sitting in `stryker.json`'s own
  * `mutate` list.
  *
- * See: docs/build/mutation-testing.md#scope-—-what-is-mutated
+ * @see docs/build/mutation-testing.md#scope-—-what-is-mutated
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';

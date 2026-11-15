@@ -9,7 +9,7 @@
  * they do. A buyer who sends nothing and shows no proof leaves the shop holding the refund, with no
  * time limit.
  *
- * See: docs/modules/returns.md#the-refund-deadline
+ * @see docs/modules/returns.md#the-refund-deadline
  */
 
 import { isGuaranteeReason } from './reasons';

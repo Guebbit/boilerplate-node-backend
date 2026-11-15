@@ -4,7 +4,7 @@
  * `docs/understand/strategic-ddd.md` §5 for the rule). The module owns no event of its own, so
  * what is published is the openings rules, the service and the digest mail.
  *
- * See: docs/modules/shop-tasks.md
+ * @see docs/modules/shop-tasks.md
  */
 
 export * from './domain';

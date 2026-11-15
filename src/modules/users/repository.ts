@@ -3,7 +3,7 @@
  * The user collection's persistence layer: standard CRUD from the repository factory, plus the
  * credential and token operations `account` needs from the other side of the domain-primitives edge.
  *
- * See: docs/modules/users.md
+ * @see docs/modules/users.md
  */
 
 import {

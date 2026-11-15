@@ -4,7 +4,7 @@
  * image sweep and the outbox backstop. Everything a module owns is declared on its manifest
  * (`AppModule.jobs`).
  *
- * See: docs/reference/ops.md#scheduled-jobs
+ * @see docs/reference/ops.md#scheduled-jobs
  */
 
 import type { JobDeclaration } from '@kernel/registry';

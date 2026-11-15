@@ -24,7 +24,7 @@
  * source is one more entry in the object `openapi-bundle.ts` hands to {@link withFilledEnums};
  * a new use of an existing one is two lines in a fragment. Nothing here knows any source by name.
  *
- * See: docs/build/contract-fragmentation.md
+ * @see docs/build/contract-fragmentation.md
  */
 
 import type { OpenApiDocument } from './openapi-document';

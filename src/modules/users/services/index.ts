@@ -8,7 +8,7 @@
  * The flows themselves — HTTP, sessions, emails, rate limits, anti-automation — stay in `account`;
  * these files only ever enforce what the document itself requires.
  *
- * See: docs/modules/users.md
+ * @see docs/modules/users.md
  */
 
 import { presentAccount } from '../presenter';

@@ -20,7 +20,7 @@
  *
  * Reads the rules through the kernel, never a copy: the question is the guard's own.
  *
- * See: docs/build/contract-fragmentation.md#the-permission-on-an-operation
+ * @see docs/build/contract-fragmentation.md#the-permission-on-an-operation
  */
 
 import {

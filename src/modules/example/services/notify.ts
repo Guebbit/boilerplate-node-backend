@@ -6,7 +6,7 @@
  * Delete it if: nothing reacts to the module's events (with `../emails.ts`, `../templates/` and the
  * `subscribe` line).
  *
- * See: docs/understand/events-and-logging.md#the-domain-event-bus-and-what-it-is-not
+ * @see docs/understand/events-and-logging.md#the-domain-event-bus-and-what-it-is-not
  */
 
 import { enqueueEmail } from '@infrastructure/adapters/mailer';

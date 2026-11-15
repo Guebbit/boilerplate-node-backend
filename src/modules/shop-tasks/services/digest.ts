@@ -8,7 +8,7 @@
  *
  * Idempotent: a re-run writes the same counts, and an unchanged count mails nothing.
  *
- * See: docs/modules/shop-tasks.md#the-staff-digest
+ * @see docs/modules/shop-tasks.md#the-staff-digest
  */
 
 import { Types } from 'mongoose';

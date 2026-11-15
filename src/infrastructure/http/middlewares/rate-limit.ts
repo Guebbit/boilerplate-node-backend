@@ -11,7 +11,7 @@
  *          on a store error, answers through the shared error envelope, never express-rate-limit's
  *          own plain-text body.
  *
- * See: docs/understand/security.md#the-rate-limit-budgets
+ * @see docs/understand/security.md#the-rate-limit-budgets
  */
 
 import { isIPv4 } from 'node:net';
@@ -425,7 +425,7 @@ export const priorHits = (info: RateLimitInfo): number => info.used - 1;
  * address-block budget, and by any keying function that needs a fallback for a caller supplying
  * no identifying value of its own.
  *
- * See: docs/understand/security.md#the-rate-limit-budgets
+ * @see docs/understand/security.md#the-rate-limit-budgets
  */
 export const addressBlockOf = (request: Request): string => {
     const { ip } = request;

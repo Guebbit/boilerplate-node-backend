@@ -3,7 +3,7 @@
  * The module's two `personalData` halves, the export and the erasure. They share
  * `ownTasksFilter` and cover exactly the same set, so they stay together.
  *
- * See: docs/modules/tasks.md
+ * @see docs/modules/tasks.md
  */
 
 import type { ClientSession } from 'mongoose';

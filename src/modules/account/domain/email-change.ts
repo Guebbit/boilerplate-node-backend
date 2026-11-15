@@ -4,7 +4,7 @@
  * leaves the account. The state is derived from two optional fields on the User document, never
  * stored, so the table is the one place that lists every edge.
  *
- * See: docs/modules/account.md#proving-an-address
+ * @see docs/modules/account.md#proving-an-address
  */
 
 /** The four states the two fields spell out between them. */

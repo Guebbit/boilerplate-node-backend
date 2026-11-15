@@ -6,7 +6,7 @@
  * positional: a route appended in the wrong half is public or admin-only purely by where it was
  * typed.
  *
- * See: docs/modules/tasks.md
+ * @see docs/modules/tasks.md
  */
 
 import { Router } from 'express';

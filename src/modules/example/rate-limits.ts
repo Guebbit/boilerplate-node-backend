@@ -5,7 +5,7 @@
  * Here: a create budget per caller.
  * Delete it if: the module needs no budget (and its route mount).
  *
- * See: docs/understand/security.md#the-rate-limit-budgets
+ * @see docs/understand/security.md#the-rate-limit-budgets
  */
 
 import type { RequestHandler } from 'express';

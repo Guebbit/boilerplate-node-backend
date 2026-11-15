@@ -2,7 +2,7 @@
  * @module
  * The scheduled job `invoicing` owns: the stored-PDF reaper and the buyer-block reaper.
  *
- * See: docs/reference/ops.md#scheduled-jobs
+ * @see docs/reference/ops.md#scheduled-jobs
  */
 
 import type { JobDeclaration } from '@kernel/registry';

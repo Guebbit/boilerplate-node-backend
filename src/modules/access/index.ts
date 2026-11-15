@@ -6,7 +6,7 @@
  * schemas stay unpublished, same as every module — `TenantDocument`/`MembershipDocument` are
  * exported as types only.
  *
- * See: docs/understand/authorization.md
+ * @see docs/understand/authorization.md
  */
 
 export * from './services';

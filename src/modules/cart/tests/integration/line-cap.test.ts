@@ -5,7 +5,7 @@
  * line already held is never refused, and a merge or reorder reports `cart_full` per line instead
  * of failing. The cap is in the write's own filter, so it holds under concurrency too.
  *
- * See: docs/modules/cart.md
+ * @see docs/modules/cart.md
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

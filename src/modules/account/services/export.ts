@@ -16,7 +16,7 @@
  * `./personal-data-registry.ts` for how the list gets here without this module importing every
  * sibling that contributes to it.
  *
- * See: docs/modules/account.md#data-export
+ * @see docs/modules/account.md#data-export
  */
 
 import { Types } from 'mongoose';

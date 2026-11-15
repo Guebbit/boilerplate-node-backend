@@ -2,7 +2,7 @@
  * @module
  * The contact form's configuration: how long a closed task is kept, and how soon a contact message is due.
  *
- * See: docs/operate/configuration.md
+ * @see docs/operate/configuration.md
  */
 
 import { defineConfig } from '@infrastructure/config/define';

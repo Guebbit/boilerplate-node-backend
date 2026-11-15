@@ -3,7 +3,7 @@
  * The user record's Mongoose schema — long, and deliberately one
  * file, since splitting would separate the password hash hook from the `select: false` that keeps
  * the hash off every read.
- * See: docs/modules/users.md
+ * @see docs/modules/users.md
  */
 
 import { model, Schema, Types } from 'mongoose';

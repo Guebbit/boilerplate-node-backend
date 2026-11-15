@@ -3,7 +3,7 @@
  * Sitemap: `sitemap.xml` for search engines, built on request from the live catalogue. Owns no
  * collection — it reads `products` and `locales` through their services.
  *
- * See: docs/modules/sitemap.md
+ * @see docs/modules/sitemap.md
  */
 
 import type { AppModule } from '@kernel/registry';

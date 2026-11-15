@@ -5,7 +5,7 @@
  *
  * Relative imports only: see `src/infrastructure/config/shared-rules/load.ts`.
  *
- * See: docs/understand/shared-rules.md
+ * @see docs/understand/shared-rules.md
  */
 
 import { z } from 'zod';

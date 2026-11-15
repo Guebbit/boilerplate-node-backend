@@ -3,7 +3,7 @@
  * Reserving a line the shelf only half covers: the shelf part is taken, the rest is claimed
  * against the cap, and the hold says which is which, all in one transaction.
  *
- * See: docs/modules/inventory-reservations.md#preorders
+ * @see docs/modules/inventory-reservations.md#preorders
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

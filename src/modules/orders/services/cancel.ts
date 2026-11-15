@@ -8,7 +8,7 @@
  * `payments` opens its refund record from that event, and the outbox relay retries the event
  * until it has.
  *
- * See: docs/understand/outbox.md
+ * @see docs/understand/outbox.md
  */
 
 import { SYSTEM_ACTOR, systemCallerContext } from '@kernel/permissions';

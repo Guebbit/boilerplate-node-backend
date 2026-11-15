@@ -6,7 +6,7 @@
  * `{}`, and an all-optional PATCH schema accepts `{}` — a 200 that changed nothing.
  * RFC 9110 §15.5.16 names the honest answer.
  *
- * See: docs/understand/write-methods.md#patch-—-json-merge-patch
+ * @see docs/understand/write-methods.md#patch-—-json-merge-patch
  */
 
 import type { NextFunction, Request, RequestHandler, Response } from 'express';

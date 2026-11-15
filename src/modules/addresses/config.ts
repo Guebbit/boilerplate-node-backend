@@ -2,7 +2,7 @@
  * @module
  * The address book's one knob: how many entries a book may hold.
  *
- * See: docs/operate/configuration.md
+ * @see docs/operate/configuration.md
  */
 
 import { defineConfig } from '@infrastructure/config/define';

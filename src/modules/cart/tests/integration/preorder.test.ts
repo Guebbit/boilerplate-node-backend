@@ -4,7 +4,7 @@
  * not the shelf, and checkout holds the allowance, freezes the promise on the order's line and
  * accepts a basket that mixes it with ordinary goods.
  *
- * See: docs/modules/cart.md#line-availability
+ * @see docs/modules/cart.md#line-availability
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

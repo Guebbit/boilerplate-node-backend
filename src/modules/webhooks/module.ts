@@ -11,7 +11,7 @@
  * Deleting this module is then enough to stop the queue meaning anything, with nothing left to
  * also delete in `app/`.
  *
- * See: docs/modules/webhooks.md
+ * @see docs/modules/webhooks.md
  */
 
 import path from 'node:path';

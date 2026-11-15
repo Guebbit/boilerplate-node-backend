@@ -7,7 +7,7 @@
  * for the goods or the proof, whichever comes first). On a defective or wrong item it only records
  * the proof, because the remedy is decided at receipt.
  *
- * See: docs/modules/returns.md#the-refund-deadline
+ * @see docs/modules/returns.md#the-refund-deadline
  */
 
 import { NO_MONEY, toMinorUnits } from '@domain-primitives/money';

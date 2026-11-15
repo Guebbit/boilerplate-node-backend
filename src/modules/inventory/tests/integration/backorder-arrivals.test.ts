@@ -4,7 +4,7 @@
  * own transaction: a stocktake that finds units, a returned parcel, an expired or canceled hold,
  * a remainder cancel. Not only a receipt.
  *
- * See: docs/modules/inventory-reservations.md#preorders
+ * @see docs/modules/inventory-reservations.md#preorders
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

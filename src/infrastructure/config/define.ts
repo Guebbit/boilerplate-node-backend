@@ -8,7 +8,7 @@
  * layer's unit; the boot gate (`assertConfigIn`) validates every slice at once and lists every
  * mistake, not the first one.
  *
- * See: docs/operate/configuration.md
+ * @see docs/operate/configuration.md
  */
 
 import type { Field, Presence } from './fields';

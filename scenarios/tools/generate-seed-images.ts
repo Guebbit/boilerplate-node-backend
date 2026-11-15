@@ -17,7 +17,7 @@
  * `scenarios/products.ts` and `scenarios/products-filler.ts`, and `scenarios/users.ts`, read the
  * resulting `*-images.generated.json` files — nothing there is hand-edited.
  *
- * See: docs/understand/image-processing.md
+ * @see docs/understand/image-processing.md
  */
 import '@infrastructure/config/dotenv';
 import { randomBytes } from 'node:crypto';

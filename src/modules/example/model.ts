@@ -3,7 +3,7 @@
  * In any module: the Mongoose schema, one collection, and the wire-shape transform the repository
  * and presenter share. Here: an example is a note with an owner, a status and an optional cover.
  *
- * See: docs/understand/layers.md
+ * @see docs/understand/layers.md
  */
 
 import { model, Schema, type Document, type Model, type Types } from 'mongoose';

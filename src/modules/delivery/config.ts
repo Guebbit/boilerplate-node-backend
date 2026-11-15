@@ -3,7 +3,7 @@
  * `delivery`'s retention window for the one piece of free text it holds: staff's note on a hold.
  * Read per call, the pattern `returns/config.ts` sets, so a test can vary it per case.
  *
- * See: docs/modules/delivery.md#configuration
+ * @see docs/modules/delivery.md#configuration
  */
 
 import { defineConfig } from '@infrastructure/config/define';

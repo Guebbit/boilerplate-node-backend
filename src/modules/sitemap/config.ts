@@ -4,7 +4,7 @@
  * address is `products/config.ts`). The shop's static pages are `STATIC_PAGES` below, not configuration:
  * a page exists or not with the frontend's router, not per deployment.
  *
- * See: docs/modules/sitemap.md
+ * @see docs/modules/sitemap.md
  */
 
 import { defineConfig } from '@infrastructure/config/define';

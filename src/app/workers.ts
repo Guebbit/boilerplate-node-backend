@@ -8,7 +8,7 @@
  * `resolveConsumers` — see `ModuleConsumer` (`@kernel/registry.ts`) for why a module cannot call
  * `consumeFromQueue` itself.
  *
- * See: docs/understand/rabbitmq.md
+ * @see docs/understand/rabbitmq.md
  */
 
 import { consumeFromQueue, isQueueEnabled } from '@infrastructure/adapters/queue';

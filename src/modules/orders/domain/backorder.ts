@@ -2,7 +2,7 @@
  * @module
  * What an order freezes about the units it owes: how many, and the day they were promised. Pure.
  *
- * See: docs/modules/orders.md
+ * @see docs/modules/orders.md
  */
 
 import { DAY_MS } from '@domain-primitives/time';

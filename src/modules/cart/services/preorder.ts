@@ -8,7 +8,7 @@
  * cart names the preorder products and `availableFor` answers with what is left of their allowance
  * instead of the shelf.
  *
- * See: docs/modules/cart.md#line-availability
+ * @see docs/modules/cart.md#line-availability
  */
 
 import { isBackorder, isPreorder } from '@modules/products';

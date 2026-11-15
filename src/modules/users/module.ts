@@ -8,7 +8,7 @@
  *
  * Not in the import graph: `account` writes this same document — the shared kernel.
  *
- * See: docs/modules/users.md
+ * @see docs/modules/users.md
  */
 
 import path from 'node:path';

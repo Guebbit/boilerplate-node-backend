@@ -3,7 +3,7 @@
  * Tracer helper — a thin wrapper around the OpenTelemetry API. Import `getTracer()` or
  * `withSpan()` anywhere a custom span is needed.
  *
- * See: docs/operate/opentelemetry.md
+ * @see docs/operate/opentelemetry.md
  */
 
 // `@opentelemetry/api` is the *interface* package, separate from the SDK — trace/SpanStatusCode/

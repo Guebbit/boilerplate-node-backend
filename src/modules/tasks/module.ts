@@ -4,7 +4,7 @@
  * in records the sender's account; an anonymous one only the address typed. The export and the
  * erasure take both (see `./domain/ownership`). Announces `task.opened` / `task.assigned`; `notifications` does the telling. Opens and closes system tasks from other modules' events (`./services/system`).
  *
- * See: docs/modules/tasks.md
+ * @see docs/modules/tasks.md
  */
 
 import path from 'node:path';

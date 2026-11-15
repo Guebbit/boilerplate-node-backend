@@ -11,7 +11,7 @@
  *   session's public id, sign-in time and absolute expiry.
  * - `lastUsedAt` is written at most once a minute, so a busy tab does not write per request.
  *
- * See: docs/understand/sessions.md
+ * @see docs/understand/sessions.md
  */
 
 import { RememberTier } from '@types';

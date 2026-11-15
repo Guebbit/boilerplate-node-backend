@@ -6,7 +6,7 @@
  * `onHand`/`reserved` mirror through `productService`, never the collection directly; only
  * `@modules/inventory` ever writes it.
  *
- * See: docs/modules/products.md
+ * @see docs/modules/products.md
  */
 
 export * from './services';

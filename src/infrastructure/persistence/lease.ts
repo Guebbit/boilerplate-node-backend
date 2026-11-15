@@ -11,7 +11,7 @@
  * already requires it of `scripts/ops/` scripts) — add a fencing token only for a job that turns out not
  * to be idempotent, and treat needing one as a signal the job is wrong.
  *
- * See: docs/reference/ops.md#scheduled-jobs
+ * @see docs/reference/ops.md#scheduled-jobs
  */
 
 import { randomUUID } from 'node:crypto';

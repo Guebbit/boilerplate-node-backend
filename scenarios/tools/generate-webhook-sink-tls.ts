@@ -19,7 +19,7 @@
  *
  * After remaking: `npm run sync:frontend`. The frontend's Cypress sink serves the same pair.
  *
- * See: docs/modules/webhooks.md#https-in-the-demo
+ * @see docs/modules/webhooks.md#https-in-the-demo
  */
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';

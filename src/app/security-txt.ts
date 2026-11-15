@@ -6,7 +6,7 @@
  * Off by default: a fork must never publish the boilerplate author's contact.
  * Off again once `Expires` passes: RFC 9116 §2.5.5 says an expired file must not be trusted.
  *
- * See: docs/understand/security.md#reporting-a-vulnerability
+ * @see docs/understand/security.md#reporting-a-vulnerability
  */
 
 /** The variables these functions read, already parsed (`app/config.ts#securityTxtSettings`). */

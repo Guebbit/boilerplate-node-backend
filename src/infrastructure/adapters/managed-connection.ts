@@ -12,7 +12,8 @@
  * the CONNECTION forever and re-runs `setup` after every reconnect, which this module has no
  * equivalent for. It does share {@link unavailabilityLatch}, the one piece that generalises.
  *
- * See: docs/understand/redis-cache.md, docs/understand/rabbitmq.md
+ * @see docs/understand/redis-cache.md
+ * @see docs/understand/rabbitmq.md
  */
 
 import { logger } from '@infrastructure/adapters/logger';

@@ -7,7 +7,7 @@
  * can't honour part of the contract narrows its own type instead of inheriting a method it must
  * break.
  *
- * See: docs/understand/mongodb-mongoose.md
+ * @see docs/understand/mongodb-mongoose.md
  */
 
 import { isObjectIdOrHexString, Types } from 'mongoose';

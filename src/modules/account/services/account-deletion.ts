@@ -4,7 +4,7 @@
  * erasure at `purgeAt`; a mailed link or a sign-in cancels it; `./purge-deletions` erases it.
  * Staff cancel through `users`, and `account` hears of it as an event.
  *
- * See: docs/understand/data-retention.md#self-deletion-a-grace-under-one-month
+ * @see docs/understand/data-retention.md#self-deletion-a-grace-under-one-month
  */
 
 import type { ClientSession } from 'mongoose';

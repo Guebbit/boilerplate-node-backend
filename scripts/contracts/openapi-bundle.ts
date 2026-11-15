@@ -15,7 +15,7 @@
  * The root's path index and tag list are completed from the fragments on disk before redocly runs
  * ({@link assembleRoot}), so adding a module is its own `openapi.yaml` and deleting one is `rm -rf`.
  *
- * See: docs/build/contract-fragmentation.md#why-the-rest-contract-stopped-concatenating-and-the-rest-did-not
+ * @see docs/build/contract-fragmentation.md#why-the-rest-contract-stopped-concatenating-and-the-rest-did-not
  */
 
 import { execFileSync } from 'node:child_process';
@@ -196,7 +196,7 @@ const withDefaults = (
  * Runs on the BUNDLED document rather than on each fragment, because `$ref`s are already resolved
  * by then and an operation is reachable exactly once.
  *
- * See: docs/build/contract-fragmentation.md
+ * @see docs/build/contract-fragmentation.md
  */
 export const withAppLevelResponses: Step = (document_) => {
     const appLevel = document_['x-app-level-responses'];

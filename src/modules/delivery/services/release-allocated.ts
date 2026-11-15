@@ -9,7 +9,7 @@
  * so the listener is idempotent without remembering which events it saw. It releases what it holds
  * beyond `waiting`, and a redelivery finds nothing beyond it.
  *
- * See: docs/modules/delivery.md#a-short-stock-delivery
+ * @see docs/modules/delivery.md#a-short-stock-delivery
  */
 
 import { FulfillmentHoldReason, FulfillmentOrderStatus } from '@types';

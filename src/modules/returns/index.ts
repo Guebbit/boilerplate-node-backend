@@ -5,7 +5,7 @@
  * inside: the service is the door, and a return is only ever opened, decided or received through
  * the rules that make each of those exactly-once.
  *
- * See: docs/modules/returns.md
+ * @see docs/modules/returns.md
  */
 
 export * from './services';

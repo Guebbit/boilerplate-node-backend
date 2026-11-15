@@ -5,7 +5,7 @@
  * can answer "what has actor X done" from the API. camelCase fields like every other model,
  * returned verbatim as `AuditEntryItem` in `openapi.yaml`; only the log line renames them.
  *
- * See: docs/modules/audit-logs.md
+ * @see docs/modules/audit-logs.md
  */
 
 import { model, Schema } from 'mongoose';

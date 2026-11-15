@@ -7,7 +7,7 @@
  * in the provider registry, which imports this file. The registry's own resolver refuses an
  * unknown name, and the app tier probes it at boot (`app/config.ts`).
  *
- * See: docs/operate/configuration.md
+ * @see docs/operate/configuration.md
  */
 
 import path from 'node:path';

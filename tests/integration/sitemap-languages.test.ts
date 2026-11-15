@@ -4,7 +4,7 @@
  * switched off, changes every address and alternate. Lives here, not in the sitemap module, because
  * it needs `locales` and a strip of that module must not silently delete the sitemap's own tests.
  *
- * See: docs/modules/sitemap.md
+ * @see docs/modules/sitemap.md
  */
 
 import { Readable } from 'node:stream';

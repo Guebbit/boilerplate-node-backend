@@ -2,7 +2,7 @@
  * @module
  * The scheduled jobs `payments` owns: the abandoned-attempt reaper and the effect retries.
  *
- * See: docs/reference/ops.md#scheduled-jobs
+ * @see docs/reference/ops.md#scheduled-jobs
  */
 
 import type { JobDeclaration } from '@kernel/registry';

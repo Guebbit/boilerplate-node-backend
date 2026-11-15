@@ -6,7 +6,7 @@
  * to `returns`, which is the only module that already reaches all of them, so it drives this door
  * inside its own transaction.
  *
- * See: docs/modules/delivery.md#cancelling-what-has-not-shipped
+ * @see docs/modules/delivery.md#cancelling-what-has-not-shipped
  */
 
 import type { ClientSession } from 'mongoose';

@@ -2,7 +2,7 @@
  * @module
  * HTML → PDF rendering (invoices, reports).
  *
- * See: docs/understand/email-and-rendering.md
+ * @see docs/understand/email-and-rendering.md
  */
 
 // `puppeteer-core`, not `puppeteer`: the -core package skips the ~150 MB Chromium download at

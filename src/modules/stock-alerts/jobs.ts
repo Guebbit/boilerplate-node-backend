@@ -3,7 +3,7 @@
  * The scheduled job `stock-alerts` owns: the hourly pass that answers requests for a product that
  * became orderable without a write (a preorder whose release date passed).
  *
- * See: docs/reference/ops.md#scheduled-jobs
+ * @see docs/reference/ops.md#scheduled-jobs
  */
 
 import type { JobDeclaration } from '@kernel/registry';

@@ -8,7 +8,7 @@
  * builds a limiter FROM this shape, and infrastructure may not import kernel — only downward, into
  * `types`, which is erased at compile time and carries no such wall.
  *
- * See: docs/understand/security.md#the-rate-limit-budgets
+ * @see docs/understand/security.md#the-rate-limit-budgets
  */
 
 import type { Request, Response } from 'express';

@@ -3,7 +3,7 @@
  * Audit actions this module emits, declared by augmentation — see `modules/account/audit.ts` for
  * why, rather than a shared enum. Most are `admin.` because they are the admin-facing writes
  * to the user record; what a person does to their own account is `account`'s vocabulary.
- * See: docs/modules/users.md
+ * @see docs/modules/users.md
  */
 
 /** The audit action vocabulary this module owns. */

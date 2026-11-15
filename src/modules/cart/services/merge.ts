@@ -8,7 +8,7 @@
  * the stock read and the cart's own cap in one place. A browser-side loop of `POST /cart/items` calls
  * could do neither.
  *
- * See: docs/modules/cart.md#merging-a-guest-cart
+ * @see docs/modules/cart.md#merging-a-guest-cart
  */
 
 import { emitDomainEvent } from '@kernel/events';

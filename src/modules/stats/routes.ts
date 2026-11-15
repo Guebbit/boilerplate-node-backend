@@ -4,7 +4,7 @@
  * the shop's money. A session, not an API key: this is a dashboard, and a credential reaching a
  * sales figure is a decision nobody has made.
  *
- * See: docs/modules/stats.md
+ * @see docs/modules/stats.md
  */
 
 import { Router } from 'express';

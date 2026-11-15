@@ -8,7 +8,7 @@
  * reason that must stay quiet reads as the plainest one. Hiding the hold altogether would be a
  * false "being prepared" (UCPD Art. 6(1)(b)) and would leave an address problem unfixable.
  *
- * See: docs/modules/delivery.md#holds
+ * @see docs/modules/delivery.md#holds
  */
 
 import { FulfillmentHoldNotice, FulfillmentHoldReason } from '@types';

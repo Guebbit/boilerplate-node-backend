@@ -4,7 +4,7 @@
  * The frontend translates the code from its own locale files, so a row outlives a language change
  * and carries no copy this backend would have to keep in step with it.
  *
- * See: docs/modules/notifications.md
+ * @see docs/modules/notifications.md
  */
 
 import { model, Schema, Types } from 'mongoose';

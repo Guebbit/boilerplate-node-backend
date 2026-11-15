@@ -3,7 +3,7 @@
  * The staff reads: the paginated search and the one-task read, both bounded by the caller's
  * jurisdiction.
  *
- * See: docs/modules/tasks.md
+ * @see docs/modules/tasks.md
  */
 
 import type { CallerContext, SearchTasksRequest, Task, TaskListItem } from '@types';

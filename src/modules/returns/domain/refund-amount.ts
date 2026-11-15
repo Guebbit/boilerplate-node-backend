@@ -14,7 +14,7 @@
  * goods that were faulty or not what was ordered are the seller's own doing, so the whole delivery
  * goes back.
  *
- * See: docs/modules/returns.md#what-the-customer-gets-back
+ * @see docs/modules/returns.md#what-the-customer-gets-back
  */
 
 import {

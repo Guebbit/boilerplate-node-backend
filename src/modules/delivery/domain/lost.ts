@@ -5,7 +5,7 @@
  * database. The shape: the lost units reopen on the SAME fulfillment order and ship again through
  * the ordinary door; the part the shelf cannot cover moves to a new fulfillment order on hold.
  *
- * See: docs/modules/delivery.md#lost-in-transit
+ * @see docs/modules/delivery.md#lost-in-transit
  */
 
 import { DAY_MS } from '@domain-primitives/time';

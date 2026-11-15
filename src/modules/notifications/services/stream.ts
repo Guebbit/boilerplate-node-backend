@@ -8,7 +8,7 @@
  * Per process, like it: a message written in another worker process arrives at the next
  * `GET /notifications` instead. No broker fan-out: the app runs as a single host.
  *
- * See: docs/modules/notifications.md
+ * @see docs/modules/notifications.md
  */
 
 import type { Response } from 'express';

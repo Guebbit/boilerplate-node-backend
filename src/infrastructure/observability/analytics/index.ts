@@ -5,7 +5,7 @@
  * answers is a deployment decision (`NODE_ANALYTICS_PROVIDER`); default `umami`, `posthog` for
  * identity-shaped funnels, `none` to collect nothing.
  *
- * See: docs/understand/analytics.md
+ * @see docs/understand/analytics.md
  */
 
 import { getActiveSpanContext } from '@infrastructure/observability/span-context';

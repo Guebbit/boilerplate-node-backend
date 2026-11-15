@@ -10,7 +10,7 @@
  * Order link:             owned here, because `infrastructure/http/frontend-link.ts` does not know
  *                         `orders` exists (see `docs/understand/layers.md`).
  *
- * See: docs/modules/orders.md
+ * @see docs/modules/orders.md
  */
 
 import { defineConfig } from '@infrastructure/config/define';

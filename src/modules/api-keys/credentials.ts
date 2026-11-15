@@ -7,7 +7,7 @@
  * space for bcrypt/argon2 to make expensive, so the ~100ms they would cost on every authenticated
  * request buys nothing.
  *
- * See: docs/understand/security.md#machine-to-machine-credentials
+ * @see docs/understand/security.md#machine-to-machine-credentials
  */
 
 import { randomBytes } from 'node:crypto';

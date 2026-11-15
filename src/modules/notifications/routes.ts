@@ -6,7 +6,7 @@
  * caller by the service; the module declares no permission rule. One thing can silently break:
  * the stream authenticates by refresh cookie, not by header, so it sits above the bearer chain.
  *
- * See: docs/modules/notifications.md
+ * @see docs/modules/notifications.md
  */
 
 import { Router } from 'express';

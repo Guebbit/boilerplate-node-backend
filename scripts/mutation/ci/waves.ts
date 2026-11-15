@@ -10,7 +10,7 @@
  *         is allowed to be wrong — a shard that runs out of time comes back as smaller pieces.
  *
  * Pure: the CLI (`cli.ts`) does the reading and writing.
- * See: docs/build/mutation-testing.md#the-github-sweep
+ * @see docs/build/mutation-testing.md#the-github-sweep
  */
 import type { LineSlice } from './slice-ignorer';
 

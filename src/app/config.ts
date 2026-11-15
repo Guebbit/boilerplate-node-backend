@@ -8,7 +8,7 @@
  * Probes:      the provider selectors whose valid names live in a registry that imports its own
  *              config — a typo is refused here, at boot, not on the first request.
  *
- * See: docs/operate/configuration.md
+ * @see docs/operate/configuration.md
  */
 
 import { assertConfig, defineConfig, type ConfigSlice } from '@infrastructure/config/define';

@@ -5,7 +5,7 @@
  * a redelivered event (same `eventId`) changes nothing, two racing events open one task (the
  * unique `openKey`), and a clearing event on a task staff already closed is a no-op.
  *
- * See: docs/modules/tasks.md
+ * @see docs/modules/tasks.md
  */
 
 import { TaskKind } from '@types';

@@ -4,7 +4,7 @@
  * `audit-logs`' collection — the one place this module reaches beyond its own process snapshot, and
  * the reason it depends on `audit-logs` at all.
  *
- * See: docs/modules/observability.md
+ * @see docs/modules/observability.md
  */
 
 import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';

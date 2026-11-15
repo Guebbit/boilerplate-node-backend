@@ -18,7 +18,7 @@
  * A deduction or an earlier partial refund makes the refund smaller than its goods: the weights
  * then split what was actually refunded, never more.
  *
- * See: docs/modules/invoicing.md#issuing-a-document
+ * @see docs/modules/invoicing.md#issuing-a-document
  */
 
 import {

@@ -13,7 +13,8 @@
  * is code, declared beside the routes that check it, and `assertDeclared` refuses one no module
  * owns — so a typo in a mount is a boot failure rather than a route nobody can reach.
  *
- * See: docs/understand/security.md · docs/understand/authorization.md
+ * @see docs/understand/security.md
+ * @see docs/understand/authorization.md
  */
 
 import type { Request, Response, NextFunction } from 'express';
@@ -458,8 +459,7 @@ const isCredentialCaller = (request: Request): boolean =>
  * A route whose subject is the tenant's data rather than the caller mounts
  * {@link isAuthOrCredential} instead.
  *
- * See: docs/understand/security.md#machine-to-machine-credentials
- *
+ * @see docs/understand/security.md#machine-to-machine-credentials
  * @param request - must already carry `authContext`, set upstream by `getAuth`
  * @param response - answered 401 when no bearer-authenticated session was resolved
  * @param next - called only once a session is confirmed present
@@ -592,7 +592,7 @@ export const requirePermission = <TSubject extends PermissionSubject>(
          * caller: `authContext` (a human session) or `caller` alone (an api-key — see `getAuth`'s
          * `sk_...` branch); neither present is genuinely unauthenticated.
          *
-         * See: docs/understand/security.md#_401-or-403-and-why-the-guards-agree
+         * @see docs/understand/security.md#_401-or-403-and-why-the-guards-agree
          */
         if (!request.authContext && !request.caller) {
             auditRefusal(request, {
@@ -818,8 +818,7 @@ const cookieGuard = (
  * Leaves the stream's recheck on `request.sessionRecheck`, bound to the session FAMILY rather than
  * to this cookie's value, which the next rotation supersedes.
  *
- * See: docs/understand/security.md#why-the-sse-endpoints-authenticate-by-cookie
- *
+ * @see docs/understand/security.md#why-the-sse-endpoints-authenticate-by-cookie
  * @param action - the action this route requires
  * @param subject - the subject it is taken on
  * @throws Error at mount time when no module declares the rule

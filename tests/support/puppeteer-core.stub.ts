@@ -6,7 +6,7 @@
  * route table, would fail to PARSE rather than fail an assertion. Nothing ever wanted the real
  * one: CI installs no Chromium, and the suites that exercise the adapter mock it themselves.
  *
- * See: docs/build/unit-testing.md
+ * @see docs/build/unit-testing.md
  */
 
 /**

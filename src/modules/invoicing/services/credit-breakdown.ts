@@ -5,7 +5,7 @@
  * Kept out of `domain/credit-shares.ts` on purpose: the tax extraction is `orders`' rule, and a
  * domain folder may not reach a sibling module.
  *
- * See: docs/modules/invoicing.md#issuing-a-document
+ * @see docs/modules/invoicing.md#issuing-a-document
  */
 
 import { orderTaxBreakdown, type OrderTaxBreakdown } from '@modules/orders';

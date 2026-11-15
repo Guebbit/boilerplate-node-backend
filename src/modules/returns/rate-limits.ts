@@ -4,7 +4,7 @@
  * (`RateLimitBudget`, declared on `./module.ts`'s `rateLimits`) turned into middleware by
  * `buildRateLimiter`, the same factory every other module's budgets go through.
  *
- * See: docs/understand/security.md#the-rate-limit-budgets
+ * @see docs/understand/security.md#the-rate-limit-budgets
  */
 
 import type { RequestHandler } from 'express';

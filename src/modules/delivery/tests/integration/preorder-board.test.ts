@@ -5,7 +5,7 @@
  * written twice, and this is what keeps them one rule), the Late view and the due-soon warning, the
  * product summary adding up, and who may see which row.
  *
- * See: docs/modules/delivery.md#the-preorder-board
+ * @see docs/modules/delivery.md#the-preorder-board
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

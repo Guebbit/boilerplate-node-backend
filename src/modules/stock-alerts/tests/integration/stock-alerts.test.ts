@@ -5,7 +5,7 @@
  * and deletes it. The real modules are registered so the wiring in `module.ts` is part of what is
  * tested.
  *
- * See: docs/modules/stock-alerts.md
+ * @see docs/modules/stock-alerts.md
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

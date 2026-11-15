@@ -8,7 +8,7 @@
  * turned into middleware by `buildRateLimiter` (`@infrastructure/http/middlewares/rate-limit`),
  * the same factory every other module's budgets go through.
  *
- * See: docs/understand/security.md#the-rate-limit-budgets
+ * @see docs/understand/security.md#the-rate-limit-budgets
  */
 
 import type { Request, RequestHandler, Response } from 'express';
@@ -147,7 +147,7 @@ const SHARED_CREDENTIAL_LIMITERS: RequestHandler[] = [
  * office, CI, the e2e suite) is never locked out by people getting it right. Exported as an array
  * because Express flattens one, so a route cannot apply part of the set.
  *
- * See: docs/understand/security.md#the-rate-limit-budgets
+ * @see docs/understand/security.md#the-rate-limit-budgets
  */
 export const credentialLimiters: RequestHandler[] = [
     buildRateLimiter(CREDENTIAL_IDENTITY_BUDGET),
@@ -249,7 +249,7 @@ const SIGNUP_BLOCK_BUDGET: RateLimitBudget = {
  * gives a fresh bucket here; the address and block budgets, and the canonical-mailbox budget
  * (`mail-budget.ts`), still bound it.
  *
- * See: docs/understand/security.md#the-rate-limit-budgets
+ * @see docs/understand/security.md#the-rate-limit-budgets
  */
 export const signupLimiters: RequestHandler[] = [
     buildRateLimiter(SIGNUP_IDENTITY_BUDGET),
@@ -282,7 +282,7 @@ const RESET_BLOCK_BUDGET: RateLimitBudget = {
  * `signupLimiters`. `postResetRequest` always answers 200 to avoid revealing whether an account
  * exists, which makes it, like signup, a route whose abuse is entirely on the success path.
  *
- * See: docs/understand/security.md#the-rate-limit-budgets
+ * @see docs/understand/security.md#the-rate-limit-budgets
  */
 export const resetRequestLimiters: RequestHandler[] = [
     buildRateLimiter(RESET_IDENTITY_BUDGET),

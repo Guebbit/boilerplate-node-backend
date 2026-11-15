@@ -7,7 +7,8 @@
  * extension carries the machine codes. Internally both outcomes stay one `ServiceResult` union
  * discriminated on `success`; only the serialisers below put anything on the wire.
  *
- * See: docs/reference/responses.md, docs/reference/errors.md
+ * @see docs/reference/responses.md
+ * @see docs/reference/errors.md
  */
 
 import { STATUS_CODES } from 'node:http';
@@ -192,8 +193,7 @@ const isErrorCode = (name: string): name is ErrorCode => Object.hasOwn(ERROR_COD
  * A name the catalogue does not list is `CLIENT_ERROR`, so no wording is invented for it. A 5xx
  * other than 503 is `INTERNAL_SERVER_ERROR`: the flavour of a server fault would leak internals.
  *
- * See: docs/reference/errors.md#the-errors-extension
- *
+ * @see docs/reference/errors.md#the-errors-extension
  * @param status - HTTP status code
  * @returns a code from the generated catalogue
  */

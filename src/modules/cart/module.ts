@@ -9,7 +9,7 @@
  * through this module's own `personalData.erase` hook below — neither an import, keeping the
  * import graph acyclic.
  *
- * See: docs/modules/cart.md
+ * @see docs/modules/cart.md
  */
 
 import path from 'node:path';

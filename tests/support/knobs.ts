@@ -10,7 +10,8 @@
  * allowlist of exactly these names in the main process, before any worker forks. Nothing under
  * `src/` reads them, so a knob changes what a suite ASKS, never what the code answers.
  *
- * See: docs/build/property-testing.md, docs/build/fuzz-testing.md
+ * @see docs/build/property-testing.md
+ * @see docs/build/fuzz-testing.md
  */
 
 import { positiveInteger } from '../../scripts/testing/machine-budget';

@@ -15,7 +15,7 @@
  *             and each claim carries its own `leaseToken`: a relay whose lease lapsed mid-dispatch
  *             finds the token changed, writes nothing and counts nothing (a warning is logged).
  *
- * See: docs/understand/outbox.md
+ * @see docs/understand/outbox.md
  */
 
 import { randomUUID } from 'node:crypto';

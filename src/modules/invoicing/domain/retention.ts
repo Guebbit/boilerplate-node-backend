@@ -6,7 +6,7 @@
  * c.c., DE, FR). So a document is due on 1 January of (issue year + N + 1), in the zone it was
  * issued in. `issuedAt + N * 365 days` would run up to a year early.
  *
- * See: docs/understand/data-retention.md#invoices-the-tax-clock
+ * @see docs/understand/data-retention.md#invoices-the-tax-clock
  */
 
 import { DAY_MS, yearInZone, zonedStartOfDay } from '@domain-primitives/time';

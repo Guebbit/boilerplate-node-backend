@@ -5,7 +5,7 @@
  * transaction, where the copy cannot be written; the hold's owner announces it
  * (`backorder_allocated`) and this module refreshes that product's copy once the relay delivers.
  *
- * See: docs/modules/inventory.md#why-products-still-carries-a-copy
+ * @see docs/modules/inventory.md#why-products-still-carries-a-copy
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

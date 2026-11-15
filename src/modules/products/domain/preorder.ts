@@ -3,7 +3,7 @@
  * Preorder rules — whether a product is sold before its release date, and how far ahead a date may
  * sit. Pure: a clock comes in as an argument, so every case is testable without waiting.
  *
- * See: docs/modules/products.md#preorder
+ * @see docs/modules/products.md#preorder
  */
 
 /** What the preorder rule reads off a product. Absent flags read as their defaults (`true`). */

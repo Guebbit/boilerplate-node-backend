@@ -10,7 +10,7 @@
  * Bank transfer:          not here; `payments` owns it, since it renders `transferInstructions`.
  * VAT rates:              not here; `products` resolves them and `orders` only freezes the number.
  *
- * See: docs/modules/shop.md
+ * @see docs/modules/shop.md
  */
 
 import { defineConfig } from '@infrastructure/config/define';

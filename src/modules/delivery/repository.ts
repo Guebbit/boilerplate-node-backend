@@ -3,7 +3,8 @@
  * Delivery persistence — the two collections and the conditional writes every act is driven
  * through. The return types are written out because Mongoose's generics are too large for
  * TypeScript to serialize an inferred one at an export boundary (TS7056), the same reason
- * `Repository` exists. See: docs/modules/delivery.md
+ * `Repository` exists.
+ * @see docs/modules/delivery.md
  */
 
 import {

@@ -4,7 +4,7 @@
  * an account on or off. `userService` owns the 404, the 403 for a staff account, the 409 for a
  * repeat and the audit row.
  *
- * See: docs/modules/users.md#activating-and-deactivating
+ * @see docs/modules/users.md#activating-and-deactivating
  */
 
 import type { Request, Response } from 'express';

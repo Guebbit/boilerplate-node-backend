@@ -24,7 +24,7 @@
  * Also holds the hostile-CONTENT cases (depth, `__proto__`), which are a different question —
  * well-formed bodies carrying something nasty — but need this exact harness.
  *
- * See: docs/understand/request-flow.md
+ * @see docs/understand/request-flow.md
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';

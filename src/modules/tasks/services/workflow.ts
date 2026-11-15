@@ -5,7 +5,7 @@
  * read, so two clicks produce one 200 and one 409. The rules (which status may go where, which
  * stamps a move owes) are `./domain`; this file is the write path around them.
  *
- * See: docs/modules/tasks.md
+ * @see docs/modules/tasks.md
  */
 
 import type { CallerContext, Task, TaskSummary } from '@types';

@@ -12,7 +12,7 @@
  * order that waited for the stock, and `products`' `release_date_changed` tells the buyers who
  * already paid that their date moved.
  *
- * See: docs/modules/delivery.md
+ * @see docs/modules/delivery.md
  */
 
 import path from 'node:path';

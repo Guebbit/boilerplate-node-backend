@@ -6,7 +6,7 @@
  * `secrets.ts` stays internal — signing/encrypting a delivery secret is this module's own
  * business, nothing a sibling calls.
  *
- * See: docs/modules/webhooks.md
+ * @see docs/modules/webhooks.md
  */
 
 export * from './services';

@@ -6,7 +6,7 @@
  * Relative imports only: `adapters/logger.ts` sits on jest's `globalSetup` import chain, where the
  * `@infrastructure` alias does not resolve, and it reads this file.
  *
- * See: docs/operate/configuration.md
+ * @see docs/operate/configuration.md
  */
 
 import { defineConfig, isRelaxedIn } from '../config/define';
@@ -123,7 +123,7 @@ export const isTestEnvironment = (): boolean => nodeEnvironment() === 'test';
  * behaviour, not the loose one. Fail closed: there are two settings, a developer's machine or CI,
  * and every server.
  *
- * See: docs/understand/security.md#one-environment-switch
  * OWASP "secure by default": https://devguide.owasp.org/en/04-design/02-web-app-checklist/01-secure-by-default/
+ * @see docs/understand/security.md#one-environment-switch
  */
 export const isRelaxedEnvironment = (): boolean => isRelaxedIn({ NODE_ENV: nodeEnvironment() });

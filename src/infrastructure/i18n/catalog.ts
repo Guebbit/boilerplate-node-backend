@@ -5,7 +5,7 @@
  * on top of what this produces, one direction, never back. A project that changes where
  * dictionaries live edits this file and nothing else.
  *
- * See: docs/understand/i18n.md
+ * @see docs/understand/i18n.md
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';

@@ -5,7 +5,7 @@
  * Here: an unreachable id read anonymously, a malformed id on a write, and a move of an absent example.
  * Delete it if: every refusal the module has is reachable from its contract.
  *
- * See: docs/build/contract-fragmentation.md
+ * @see docs/build/contract-fragmentation.md
  */
 
 import type { Probe } from '@guebbit/openapi-runnable-collections';

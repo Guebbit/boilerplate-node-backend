@@ -7,7 +7,7 @@
  * with the only consumer of all four rather than in `adapters/cache.ts` — a project caching
  * something that is not a response inherits none of them.
  *
- * See: docs/understand/redis-cache.md
+ * @see docs/understand/redis-cache.md
  */
 
 import { createHash } from 'node:crypto';
@@ -89,7 +89,7 @@ export const resolveCacheTtl = (seconds: number): number => {
     // bypassed the API (a seed, a one-off script under `scripts/ops/`, a `mongosh` session) can
     // keep serving a stale answer. Production is never clamped, because there the API is the only
     // writer. `NODE_REDIS_CACHE_DEV_TTL_MAX=0` opts out.
-    // See: docs/understand/redis-cache.md#writes-that-bypass-the-api
+    /** @see docs/understand/redis-cache.md#writes-that-bypass-the-api */
     const max = responseCacheConfig().NODE_REDIS_CACHE_DEV_TTL_MAX;
     if (max <= 0) return seconds;
     return Math.min(seconds, max);
@@ -102,12 +102,12 @@ export const resolveCacheTtl = (seconds: number): number => {
  * state: the key varies with the declared key parameters, so an unauthenticated caller can mint
  * an entry per distinct value and keep every one resident. Bounding the ENTRY is what stops that being an amplifier;
  * bounding the KEY (see {@link getCacheKey}) is what stops the input being one.
- * See: docs/understand/redis-cache.md#entry-size-is-bounded
  *
  * Serialized once, here, so the size check measures exactly what would be written rather than an
  * estimate of it. Skipping is not a failure: the caller still gets its response, it just will not
  * be replayed from cache, so the endpoint stays correct and only loses an optimisation.
  *
+ * @see docs/understand/redis-cache.md#entry-size-is-bounded
  * @param key - the cache key, for the log line
  * @param value - status + body envelope to replay on a later hit
  * @returns the bytes to store, or `undefined` when the response is over the limit
@@ -225,7 +225,7 @@ interface CacheOptions {
      * Safe by: `kernel/access/query.ts#hasAnonymousReadScope`, which compares compiled read
      *          filters, so a role that widens visibility fails it with no cache change.
      *
-     * See: docs/understand/redis-cache.md#no-caching-depends-on-who-is-asking
+     * @see docs/understand/redis-cache.md#no-caching-depends-on-who-is-asking
      */
     scopeKey: (request: Request) => boolean;
 }

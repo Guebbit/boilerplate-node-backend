@@ -7,7 +7,7 @@
  *
  * Delete it if: the module has no action doors.
  *
- * See: docs/understand/request-flow.md
+ * @see docs/understand/request-flow.md
  */
 
 import type { Request, Response } from 'express';

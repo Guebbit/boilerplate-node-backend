@@ -7,7 +7,7 @@
  * reach INTO `users` — the `personalData.erase` hook, `userService.getById` — is `module.ts`'s
  * business, not this barrel's.
  *
- * See: docs/modules/orders.md
+ * @see docs/modules/orders.md
  */
 
 export * from './services';

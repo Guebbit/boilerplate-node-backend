@@ -6,7 +6,7 @@
  * shipment still be recorded as arrived? — so a `ShipmentActions.deliver` flag cannot disagree
  * with the act.
  *
- * See: docs/modules/delivery.md#lost-in-transit
+ * @see docs/modules/delivery.md#lost-in-transit
  */
 
 import type { ClientSession } from 'mongoose';

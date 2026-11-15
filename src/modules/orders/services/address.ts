@@ -9,7 +9,7 @@
  * The write, its timeline row and nothing else: the address stays encrypted under the order's id,
  * the audit row and the timeline name WHO changed it but never WHAT it says.
  *
- * See: docs/modules/orders.md#correcting-the-shipping-address
+ * @see docs/modules/orders.md#correcting-the-shipping-address
  */
 
 import { t } from '@infrastructure/i18n';

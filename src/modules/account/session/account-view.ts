@@ -7,7 +7,7 @@
  * One rule: the client's copy of the abilities has NO authority. It decides what to RENDER, never
  *           what is allowed; every request is re-evaluated server-side.
  *
- * See: docs/modules/account.md
+ * @see docs/modules/account.md
  */
 
 import { packRules } from '@casl/ability/extra';

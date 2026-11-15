@@ -5,7 +5,7 @@
  * and becomes a claim on the restock, outside the backorder cap (that cap limits new sales, not a
  * promise the shop already made). Never touches units held for another order.
  *
- * See: docs/modules/inventory-reservations.md#owed-after-a-loss
+ * @see docs/modules/inventory-reservations.md#owed-after-a-loss
  */
 
 import type { ClientSession } from 'mongoose';

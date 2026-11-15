@@ -6,7 +6,7 @@
  * Why its own file: `ssrf-guard.ts` is mocked whole by `remote-image.test.ts`, and keeping the
  * request here keeps that seam.
  *
- * See: docs/understand/defences/ssrf.md
+ * @see docs/understand/defences/ssrf.md
  */
 
 import type { IncomingMessage, OutgoingHttpHeaders } from 'node:http';

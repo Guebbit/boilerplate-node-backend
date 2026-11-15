@@ -6,7 +6,7 @@
  * price a line — so as an event, not an import, the arrow points one way. Not a substitute for the
  * broker: no durability, no retry, no replay.
  *
- * See: docs/understand/events-and-logging.md#the-domain-event-bus-and-what-it-is-not
+ * @see docs/understand/events-and-logging.md#the-domain-event-bus-and-what-it-is-not
  */
 
 import { logger } from '@infrastructure/adapters/logger';
@@ -133,7 +133,7 @@ export const emitDomainEvent = async <TEventName extends DomainEventName>(
  * Shipped to production for the benefit of tests, and that is a real cost — nothing stops
  * application code from calling it and silently unsubscribing every module.
  *
- * See: docs/understand/events-and-logging.md#resetdomainevents-is-a-test-seam-with-a-real-cost
+ * @see docs/understand/events-and-logging.md#resetdomainevents-is-a-test-seam-with-a-real-cost
  */
 export const resetDomainEvents = (): void => {
     handlers.clear();

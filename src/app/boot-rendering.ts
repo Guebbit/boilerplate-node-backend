@@ -7,7 +7,7 @@
  * Runs after `registerModules` (the overlay reader is installed by `locales`' `onRegistered`) and
  * after the database connects (the overlay is read from it).
  *
- * See: docs/reference/ops.md#scheduled-jobs
+ * @see docs/reference/ops.md#scheduled-jobs
  */
 
 import { registerTemplateDirectories } from '@infrastructure/adapters/mailer';

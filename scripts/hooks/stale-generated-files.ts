@@ -8,7 +8,7 @@
  * regenerated on disk but never staged, therefore cannot make a stale commit look fresh.
  * The same shape as Kubernetes' `verify-generated.sh`.
  *
- * See: docs/build/regenerating.md#the-pre-commit-hook
+ * @see docs/build/regenerating.md#the-pre-commit-hook
  */
 
 import { execFileSync } from 'node:child_process';

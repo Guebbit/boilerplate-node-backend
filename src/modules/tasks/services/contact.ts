@@ -3,7 +3,7 @@
  * The contact form's creation, announced on the bus as `task.opened`, and the mail that carries
  * the visitor's own words to the main mailbox.
  *
- * See: docs/modules/tasks.md
+ * @see docs/modules/tasks.md
  */
 
 import { TaskCategory, TaskKind, TaskResolution, TaskSource } from '@types';

@@ -4,7 +4,7 @@
  * one mail and one inbox row per waiting request, then delete the request. The click on "Notify
  * me" is the buyer's consent for that single mail, so nothing else is ever sent on it.
  *
- * See: docs/modules/stock-alerts.md
+ * @see docs/modules/stock-alerts.md
  */
 
 import type { ClientSession } from 'mongoose';

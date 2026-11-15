@@ -4,7 +4,7 @@
  * parcel, a replacement under the guarantee). They wait on a new fulfillment order on hold for
  * stock, promised for the restock date, outside the backorder cap.
  *
- * See: docs/modules/delivery.md#lost-in-transit
+ * @see docs/modules/delivery.md#lost-in-transit
  */
 
 import type { ClientSession } from 'mongoose';

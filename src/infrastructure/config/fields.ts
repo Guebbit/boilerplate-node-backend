@@ -12,7 +12,7 @@
  * Presence rules (length, placeholder, production-only) are data on the field, not parse rules:
  * a developer machine legitimately leaves a secret unset, so they are checked at boot only.
  *
- * See: docs/operate/configuration.md
+ * @see docs/operate/configuration.md
  */
 
 import { z } from 'zod';

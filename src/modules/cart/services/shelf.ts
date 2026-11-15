@@ -3,7 +3,7 @@
  * What is on the shelf for a set of products: the joined product plus the ledger's units, read
  * together once, so the merge reads the catalogue and the ledger in two queries per request.
  *
- * See: docs/modules/cart.md#stock-checked-in-three-places
+ * @see docs/modules/cart.md#stock-checked-in-three-places
  */
 
 import { inventoryService } from '@modules/inventory';

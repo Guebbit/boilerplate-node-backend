@@ -4,7 +4,7 @@
  * behind it. `tasks` reads it to date the work it opens and to say why; a refund the law sets no
  * deadline for has none here, and the opener picks its own.
  *
- * See: docs/modules/payments.md
+ * @see docs/modules/payments.md
  */
 
 import { refundDueBy, type RefundDue } from '../domain';

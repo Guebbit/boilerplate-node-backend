@@ -6,7 +6,7 @@
  * I/O — one `leases` query — because there is no in-memory copy anywhere in the process of when
  * last night's `reap:orders` finished, or whether it did.
  *
- * See: docs/reference/ops.md#scheduled-jobs
+ * @see docs/reference/ops.md#scheduled-jobs
  */
 
 import type { ObservabilityHealthJob } from '@types';

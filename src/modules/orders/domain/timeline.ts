@@ -7,7 +7,7 @@
  * Decided per type, never by stripping fields at read time: Magento's `is_visible_on_front`,
  * WooCommerce's `is_customer_note`. A private row is hidden whole.
  *
- * See: docs/modules/orders.md#the-timeline
+ * @see docs/modules/orders.md#the-timeline
  */
 
 import type { OrderTimelineEntry } from '@types';

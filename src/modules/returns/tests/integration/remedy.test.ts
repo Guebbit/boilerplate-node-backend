@@ -6,7 +6,7 @@
  * 12 months, once. Neither moves money, and the units are in the buyer's hands again, so they stay
  * returnable. A withdrawal never has a choice. Real database, the real `fake` payment provider.
  *
- * See: docs/modules/returns.md#what-the-customer-gets-back
+ * @see docs/modules/returns.md#what-the-customer-gets-back
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

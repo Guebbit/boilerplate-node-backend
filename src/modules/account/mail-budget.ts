@@ -12,7 +12,7 @@
  * Doors:   {@link mailRecipientLimiter} for a route whose body names the address (signup, reset),
  *          {@link mailRecipientRefusal} for a service that chose the recipient itself.
  *
- * See: docs/understand/security.md#the-rate-limit-budgets
+ * @see docs/understand/security.md#the-rate-limit-budgets
  */
 
 import type { Request, RequestHandler } from 'express';

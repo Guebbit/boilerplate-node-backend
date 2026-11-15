@@ -18,7 +18,7 @@
  *             the file the PHP twin reads byte-for-byte. `memberships` is the part that genuinely
  *             is per-database data — WHO holds a role, never WHAT a role holds.
  *
- * See: docs/understand/authorization.md
+ * @see docs/understand/authorization.md
  */
 
 import { model, Schema } from 'mongoose';

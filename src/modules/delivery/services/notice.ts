@@ -5,7 +5,7 @@
  * date that will be missed. Both write the fulfillment order's new state and the event in one transaction;
  * the email follows the commit.
  *
- * See: docs/modules/delivery.md#preorders-and-a-moved-date
+ * @see docs/modules/delivery.md#preorders-and-a-moved-date
  */
 
 import type { ClientSession } from 'mongoose';

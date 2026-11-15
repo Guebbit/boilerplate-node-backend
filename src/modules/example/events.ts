@@ -5,7 +5,7 @@
  * Here: `example.published`, which also becomes a public webhook through `module.ts`'s `publicEvents`.
  * Delete it if: the module announces nothing to the rest of the app.
  *
- * See: docs/understand/events-and-logging.md#the-domain-event-bus-and-what-it-is-not
+ * @see docs/understand/events-and-logging.md#the-domain-event-bus-and-what-it-is-not
  */
 
 /** Registers this module's event payloads into the kernel's app-wide `DomainEventMap`. */

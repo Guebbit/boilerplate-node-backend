@@ -6,7 +6,7 @@
  *
  * Nothing is stored: every call reads the live catalogue, which is why the HTTP side may cache.
  *
- * See: docs/modules/sitemap.md
+ * @see docs/modules/sitemap.md
  */
 
 import type { SitemapItemLoose } from 'sitemap';

@@ -3,7 +3,7 @@
  * Controller for `GET /tasks/:id` — one task of the staff queue, inside the caller's
  * jurisdiction. Reading a visitor's task is audited: it names a person.
  *
- * See: docs/modules/tasks.md
+ * @see docs/modules/tasks.md
  */
 
 import type { Request, Response } from 'express';

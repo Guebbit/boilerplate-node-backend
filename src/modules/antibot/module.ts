@@ -8,7 +8,7 @@
  * provider selection and its secrets, since that gate keeps running whether or not this module's
  * two HTTP routes are even mounted.
  *
- * See: docs/modules/antibot.md
+ * @see docs/modules/antibot.md
  */
 
 import type { AppModule } from '@kernel/registry';

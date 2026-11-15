@@ -4,7 +4,7 @@
  * `reap:scheduled-deletions` runs it hourly; only the purge discharges GDPR Art. 17, the lock at
  * request time is a restriction.
  *
- * See: docs/understand/data-retention.md#self-deletion-a-grace-under-one-month
+ * @see docs/understand/data-retention.md#self-deletion-a-grace-under-one-month
  */
 
 import { type UserDocument } from '@modules/users';

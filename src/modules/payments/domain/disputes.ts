@@ -7,7 +7,7 @@
  * `payment.refunded` and never issues a credit note. These rules only decide what the shop may
  * still do with the payment while one stands.
  *
- * See: docs/modules/payments.md#disputes
+ * @see docs/modules/payments.md#disputes
  */
 
 import { addMoney, toMinorUnits, type Money } from '@domain-primitives/money';

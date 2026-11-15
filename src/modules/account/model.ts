@@ -12,7 +12,8 @@
  * Never serialized to the wire as-is: the contract's shapes are built from these rows by hand, and
  * the token digests are stripped from `toJSON` regardless.
  *
- * See: docs/modules/account.md#data-export, docs/modules/account-sessions.md
+ * @see docs/modules/account.md#data-export
+ * @see docs/modules/account-sessions.md
  */
 
 import { model, Schema, Types } from 'mongoose';

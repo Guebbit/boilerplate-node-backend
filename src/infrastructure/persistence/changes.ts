@@ -1,7 +1,7 @@
 /**
  * @module
  * Applying an update's change-set to a hydrated Mongoose document.
- * See: docs/understand/request-flow.md#put-replaces-patch-merges
+ * @see docs/understand/request-flow.md#put-replaces-patch-merges
  */
 
 /**

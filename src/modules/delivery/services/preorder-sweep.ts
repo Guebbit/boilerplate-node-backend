@@ -12,7 +12,7 @@
  *
  * Repeating is harmless: a date that was noticed (`dueNoticeFor`) is not noticed again.
  *
- * See: docs/modules/delivery.md#the-daily-sweep
+ * @see docs/modules/delivery.md#the-daily-sweep
  */
 
 import { FulfillmentHoldReason, FulfillmentOrderStatus } from '@types';

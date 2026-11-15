@@ -3,7 +3,7 @@
  * The pure rules of protecting people: may a caller change an account, and is a thing the
  * caller's own. No I/O; the lookups that feed them live in `services/protection.ts`.
  *
- * See: docs/understand/authorization.md#protecting-people
+ * @see docs/understand/authorization.md#protecting-people
  */
 
 import type { CallerContext } from '@types';

@@ -5,7 +5,7 @@
  * coming back, offered only to the buyer and only while a `reasons` deadline is open; `cancelable` is each fulfillment order with a remainder and the exact refund
  * cancelling it would owe, delivery included when it takes the last unit.
  *
- * See: docs/modules/returns.md#the-options-read
+ * @see docs/modules/returns.md#the-options-read
  */
 
 import { t } from '@infrastructure/i18n';

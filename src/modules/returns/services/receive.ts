@@ -18,7 +18,7 @@
  *   refund finally lands. A return is therefore never stuck `received` for a reason nobody is
  *   retrying.
  *
- * See: docs/modules/returns.md#what-the-customer-gets-back
+ * @see docs/modules/returns.md#what-the-customer-gets-back
  */
 
 import type { ClientSession } from 'mongoose';

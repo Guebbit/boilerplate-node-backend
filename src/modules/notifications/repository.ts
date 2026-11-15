@@ -5,7 +5,7 @@
  * whose it is, which is what makes "another user's id is a 404" a property of the query rather
  * than of a check someone has to remember.
  *
- * See: docs/modules/notifications.md
+ * @see docs/modules/notifications.md
  */
 
 import type { ClientSession } from 'mongoose';

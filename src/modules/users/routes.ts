@@ -3,7 +3,7 @@
  * The admin-only `/users` router: search, item read, write and delete, wired to the shared
  * response cache and the route-flag middleware the hard-delete endpoint uses.
  *
- * See: docs/modules/users.md
+ * @see docs/modules/users.md
  */
 
 import { Router, type Request } from 'express';

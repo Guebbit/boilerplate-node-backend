@@ -6,7 +6,7 @@
  * a new fulfillment order on hold for stock. Everything commits in ONE transaction with the
  * order's summary, its step back to `processing` and `shipment.lost`.
  *
- * See: docs/modules/delivery.md#lost-in-transit
+ * @see docs/modules/delivery.md#lost-in-transit
  */
 
 import type { ClientSession } from 'mongoose';

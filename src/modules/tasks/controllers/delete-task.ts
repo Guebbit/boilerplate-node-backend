@@ -4,7 +4,7 @@
  * on `createDeleteController`: that factory exists for the soft/hard delete triplet, and this
  * module has no soft-delete tier.
  *
- * See: docs/modules/tasks.md
+ * @see docs/modules/tasks.md
  */
 
 import type { Request, Response } from 'express';

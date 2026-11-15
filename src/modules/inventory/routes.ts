@@ -5,7 +5,7 @@
  * they are looking at — but not every route needs the same key: `manager` reads levels without
  * moving stock, `warehouse` moves stock through `create:StockMovement`.
  *
- * See: docs/modules/inventory.md
+ * @see docs/modules/inventory.md
  */
 
 import { Router } from 'express';

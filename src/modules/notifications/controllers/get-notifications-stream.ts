@@ -3,7 +3,7 @@
  * Controller for `GET /notifications/stream`: opens the caller's SSE stream and wires its
  * permission recheck to the same cookie that opened it. See `services/stream.ts` for the stream.
  *
- * See: docs/modules/notifications.md
+ * @see docs/modules/notifications.md
  */
 
 import type { Request, Response } from 'express';

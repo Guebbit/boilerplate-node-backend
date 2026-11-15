@@ -4,7 +4,7 @@
  * an analytics event. The request shapes are in `./openapi.browser-events.yaml`, which the bundler
  * folds into `analytics`' contract; this file is the matching half the relay calls.
  *
- * See: docs/modules/analytics.md
+ * @see docs/modules/analytics.md
  */
 
 import type { BrowserEventTarget } from '@kernel/registry';

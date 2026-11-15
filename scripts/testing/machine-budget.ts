@@ -8,7 +8,7 @@
  * Beaten: by an explicit environment variable, always — a number the operator sets is a fact about
  *         their machine that no heuristic here should second-guess.
  *
- * See: docs/build/weak-machines.md
+ * @see docs/build/weak-machines.md
  */
 
 import { existsSync, readFileSync } from 'node:fs';

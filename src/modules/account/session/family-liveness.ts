@@ -4,7 +4,7 @@
  * idled out or outlived the lifetime cap. Shared by the `jwt` bearer (an access token names its family in `sid`) and by an open
  * SSE stream's recheck, which follows the family because a credential rotates under it.
  *
- * See: docs/understand/sessions.md#the-staff-idle-timeout
+ * @see docs/understand/sessions.md#the-staff-idle-timeout
  */
 
 import type { Resolution } from '@kernel/authentication';

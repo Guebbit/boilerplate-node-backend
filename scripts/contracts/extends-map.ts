@@ -6,7 +6,7 @@
  * Reading it in one place means a malformed map, a repeated name or an undeclared variant is
  * refused identically on both sides, never dropped on one and thrown on the other.
  *
- * See: docs/build/contract-fragmentation.md#extending-another-modules-contract
+ * @see docs/build/contract-fragmentation.md#extending-another-modules-contract
  */
 
 import { isPlainObject } from '../../src/infrastructure/object-guards';

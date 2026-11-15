@@ -17,7 +17,7 @@
  * | `scenarios/support/doubles/<module>/register.ts` | `registerDouble`      | `registerModuleDoubles` |
  * | `scenarios/support/doubles/<module>/levers.ts`   | `installLever`        | `installModuleLevers`   |
  *
- * See: docs/build/demo-profile.md#how-a-scenario-is-built
+ * @see docs/build/demo-profile.md#how-a-scenario-is-built
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';

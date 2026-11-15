@@ -2,7 +2,7 @@
  * @module
  * The scheduled jobs `shop-tasks` owns: the daily and the weekly staff digest.
  *
- * See: docs/reference/ops.md#scheduled-jobs
+ * @see docs/reference/ops.md#scheduled-jobs
  */
 
 import type { JobDeclaration } from '@kernel/registry';

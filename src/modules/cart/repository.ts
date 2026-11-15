@@ -4,7 +4,7 @@
  * takes: upsert a line, remove a line, clear all lines (plain and version-guarded for checkout),
  * and the two cleanup writes owed to product and user deletion.
  *
- * See: docs/modules/cart.md
+ * @see docs/modules/cart.md
  */
 
 import type { QueryFilter, ClientSession } from 'mongoose';

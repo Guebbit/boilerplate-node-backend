@@ -7,7 +7,7 @@
  * Why:    the report is the one source. The baseline is derived from it, here as in CI, so the
  *         two can never disagree. Review the baseline's diff, then commit it.
  * Needs:  the GitHub CLI, logged in (`gh auth login`).
- * See:    docs/build/mutation-testing.md#the-github-sweep
+ * @see docs/build/mutation-testing.md#the-github-sweep
  */
 import { execFile, spawnSync } from 'node:child_process';
 import { copyFile, mkdir, mkdtemp, rm } from 'node:fs/promises';

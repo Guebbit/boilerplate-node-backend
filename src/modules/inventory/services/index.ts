@@ -7,7 +7,9 @@
  * Transactions: only where a half-done write would be wrong — a hold's claim and commit
  *               (`holds.ts`), a delivery with its preorder allocation (`admin.ts`), a hold's
  *               release with its announcement (`sweep.ts`). The rest are conditional
- *               single-document writes; gaps are noted at the call sites that own them. See: docs/modules/inventory.md
+ *               single-document writes; gaps are noted at the call sites that own them.
+ *
+ * @see docs/modules/inventory.md
  */
 
 import { reserveForOrder } from './reserve';

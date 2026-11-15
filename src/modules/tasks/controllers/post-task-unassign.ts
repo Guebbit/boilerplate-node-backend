@@ -2,7 +2,7 @@
  * @module
  * `POST /tasks/:id/unassign` (give back).
  *
- * See: docs/modules/tasks.md
+ * @see docs/modules/tasks.md
  */
 
 import type { Request, Response } from 'express';

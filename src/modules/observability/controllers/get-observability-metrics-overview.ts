@@ -5,7 +5,7 @@
  * why, and `module-coupling-observability` in `.dependency-cruiser.cjs`, which keeps this module
  * from reaching any domain beyond `audit-logs`.
  *
- * See: docs/modules/observability.md
+ * @see docs/modules/observability.md
  */
 
 import type { Request, Response } from 'express';

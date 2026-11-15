@@ -11,7 +11,7 @@
  * Failure is a state, not an exception to hide: a build that throws marks its row `failed`, logs the
  * error, counts it, and mails the requester a short notice (no link); asking again replaces it.
  *
- * See: docs/modules/account.md#data-export
+ * @see docs/modules/account.md#data-export
  */
 
 import { DAY_MS } from '@domain-primitives/time';

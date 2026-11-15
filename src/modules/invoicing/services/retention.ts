@@ -4,7 +4,7 @@
  * ended. The numbered document stays, with its seller, lines and amounts: stats read revenue from
  * it and a credit note points at its invoice. Only the person goes.
  *
- * See: docs/modules/invoicing.md#retention
+ * @see docs/modules/invoicing.md#retention
  */
 
 import { removeDocument } from '@infrastructure/adapters/document-store';

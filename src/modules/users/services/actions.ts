@@ -4,7 +4,7 @@
  * the protection of staff accounts (`access`'s `mayChangeAccount`) and the account's own state, so
  * a client never offers a move the server would refuse. The presenter only maps the finished block.
  *
- * See: docs/modules/users.md#actions
+ * @see docs/modules/users.md#actions
  */
 
 import type { Caller, UserActions } from '@types';

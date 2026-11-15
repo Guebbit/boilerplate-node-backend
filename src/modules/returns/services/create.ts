@@ -16,7 +16,7 @@
  * that asks for it — born approved, with what they waived written on the record; and they record a
  * withdrawal the buyer stated outside the shop, judged on the day it was sent.
  *
- * See: docs/modules/returns.md#the-withdrawal-button
+ * @see docs/modules/returns.md#the-withdrawal-button
  */
 
 import { Types } from 'mongoose';

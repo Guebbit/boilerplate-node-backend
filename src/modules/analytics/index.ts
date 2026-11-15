@@ -6,7 +6,7 @@
  * barrel never publishes. The provider port it feeds lives in
  * `infrastructure/observability/analytics`.
  *
- * See: docs/modules/analytics.md
+ * @see docs/modules/analytics.md
  */
 
 export * from './services';

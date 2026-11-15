@@ -5,7 +5,7 @@
  * mailed; the others are the bell's alone. The wording is the notice code's own dictionary path, so
  * a module that adds notices ships its copy beside them.
  *
- * See: docs/modules/notifications.md#work-notices-for-staff
+ * @see docs/modules/notifications.md#work-notices-for-staff
  */
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';

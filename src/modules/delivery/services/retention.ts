@@ -6,7 +6,7 @@
  * clock, and the address copy on each shipment, when the
  * order's own address is scrubbed.
  *
- * See: docs/understand/data-retention.md#free-text-on-holds
+ * @see docs/understand/data-retention.md#free-text-on-holds
  */
 
 import { logger } from '@infrastructure/adapters/logger';

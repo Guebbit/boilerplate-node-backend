@@ -7,7 +7,7 @@
  * registry, which imports this file. The registry's resolver refuses an unknown name, and the app
  * tier probes it at boot (`app/config.ts`).
  *
- * See: docs/operate/configuration.md
+ * @see docs/operate/configuration.md
  */
 
 import { defineConfig } from '@infrastructure/config/define';

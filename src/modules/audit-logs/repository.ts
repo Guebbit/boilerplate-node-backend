@@ -6,7 +6,7 @@
  * update or delete: an audit trail that can be edited from the application is not an audit trail,
  * and expiry is Mongo's job via the TTL index on the model.
  *
- * See: docs/modules/audit-logs.md
+ * @see docs/modules/audit-logs.md
  */
 
 import { auditLogModel, applyAuditLogTransform } from './model';

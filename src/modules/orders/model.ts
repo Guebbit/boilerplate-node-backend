@@ -14,7 +14,7 @@
  *           derives them from `items` at the single serialization point every response passes
  *           through, letting the contract mark them required.
  *
- * See: docs/modules/orders.md
+ * @see docs/modules/orders.md
  */
 
 import { model, Schema, Types } from 'mongoose';

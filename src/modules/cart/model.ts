@@ -5,7 +5,7 @@
  * Mongo, not Redis: Redis here is cache-only, fails open — the wrong properties for the only
  * durable copy of what's in someone's cart.
  *
- * See: docs/modules/cart.md
+ * @see docs/modules/cart.md
  */
 
 import { model, Schema, Types } from 'mongoose';

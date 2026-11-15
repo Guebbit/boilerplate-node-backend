@@ -4,7 +4,7 @@
  * Pure — Consumer Rights Directive Art. 9/16 and the guarantee of conformity (Directive 2019/771
  * Art. 10), nothing else.
  *
- * See: docs/modules/returns.md#the-two-deadlines
+ * @see docs/modules/returns.md#the-two-deadlines
  */
 
 import { ReturnReason } from '@types';

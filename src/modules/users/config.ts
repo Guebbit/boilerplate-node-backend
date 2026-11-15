@@ -6,7 +6,7 @@
  * The adapter that reads the ring is shape-only (`infrastructure/security/config.ts`); the
  * requirement that it be set is this module's, so deleting the module deletes it.
  *
- * See: docs/operate/configuration.md
+ * @see docs/operate/configuration.md
  */
 
 import { defineConfig } from '@infrastructure/config/define';

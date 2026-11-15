@@ -6,7 +6,7 @@
  * Its own file so the layer runner and the staged-tests step read one list:
  * `run-suite.ts` runs on import, so it cannot be imported for its table.
  *
- * See: docs/build/weak-machines.md
+ * @see docs/build/weak-machines.md
  */
 
 /**

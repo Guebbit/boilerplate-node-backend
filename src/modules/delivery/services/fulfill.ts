@@ -5,7 +5,7 @@
  * without shipping too), and — when nothing else remains or is still out — completes the order in
  * one transaction, its withdrawal clock counted from payment (digital content, Art. 9(2)(c)).
  *
- * See: docs/modules/delivery.md#digital-fulfilment
+ * @see docs/modules/delivery.md#digital-fulfilment
  */
 
 import type { ClientSession } from 'mongoose';

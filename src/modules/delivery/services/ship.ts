@@ -8,7 +8,7 @@
  * A `paid` order ships too: the act makes the `paid → processing` move itself, so the caller needs
  * `start:Shipment` as well as `update:Shipment`. Nothing ships from `on_hold`.
  *
- * See: docs/modules/delivery.md#shipping
+ * @see docs/modules/delivery.md#shipping
  */
 
 import type { ClientSession } from 'mongoose';

@@ -6,7 +6,7 @@
  * an amount matters it belongs in the cart (`POST /wishlist/items/{productId}/move-to-cart`), and one
  * field fewer is what makes `$addToSet` the whole idempotence story below.
  *
- * See: docs/modules/wishlist.md
+ * @see docs/modules/wishlist.md
  */
 
 import { model, Schema, Types } from 'mongoose';

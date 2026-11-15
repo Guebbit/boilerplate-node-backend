@@ -4,7 +4,7 @@
  * (never the shelf), the payment that stamps the queue key, the receipt that allocates oldest
  * payment first in its own transaction, and what a release or an expiry gives back.
  *
- * See: docs/modules/inventory-reservations.md#preorders
+ * @see docs/modules/inventory-reservations.md#preorders
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

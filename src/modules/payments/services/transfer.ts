@@ -6,7 +6,7 @@
  * operator later finds by reference, records the money on (`./offline`) and settles through the
  * same `settlePayment` every payment goes through.
  *
- * See: docs/modules/payments.md#bank-transfer
+ * @see docs/modules/payments.md#bank-transfer
  */
 
 import { logger } from '@infrastructure/adapters/logger';

@@ -4,7 +4,7 @@
  * credential. The secret itself is never stored — only `hash`, a sha256 digest (see
  * `./credentials`) — so a database leak alone can never forge a credential.
  *
- * See: docs/reference/data.md
+ * @see docs/reference/data.md
  */
 
 import { model, Schema } from 'mongoose';

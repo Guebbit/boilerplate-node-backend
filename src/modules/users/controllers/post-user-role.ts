@@ -4,7 +4,7 @@
  * `userService` owns the 404, the 403, the 422 for a name nobody can be given, the 409 for a repeat
  * and the audit row.
  *
- * See: docs/modules/users.md#the-role-door
+ * @see docs/modules/users.md#the-role-door
  */
 
 import type { Request, Response } from 'express';

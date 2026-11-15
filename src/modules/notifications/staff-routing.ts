@@ -8,7 +8,7 @@
  * The mail rule: `now` only where someone must act soon (money, a legal clock, security). Every
  * other code is inbox-only, so the bell is the default and the mailbox is the exception.
  *
- * See: docs/modules/notifications.md#work-notices-for-staff
+ * @see docs/modules/notifications.md#work-notices-for-staff
  */
 
 import { NotificationSeverity } from '@types';

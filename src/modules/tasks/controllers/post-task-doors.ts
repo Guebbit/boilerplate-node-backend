@@ -3,7 +3,7 @@
  * The three bodyless status doors — `POST /tasks/:id/resolve`, `/mark-spam`, `/reopen` — one
  * handler each, built from the same shape: read the id, run the door, answer 200 with the task.
  *
- * See: docs/modules/tasks.md
+ * @see docs/modules/tasks.md
  */
 
 import type { Request, Response } from 'express';

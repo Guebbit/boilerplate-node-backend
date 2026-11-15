@@ -9,7 +9,7 @@
  * the hold) and fire no email and no webhook: nothing left that anyone recorded, which keeps the
  * override's promise of "no parcel, no email".
  *
- * See: docs/modules/delivery.md#the-status-override
+ * @see docs/modules/delivery.md#the-status-override
  */
 
 import type { ClientSession } from 'mongoose';

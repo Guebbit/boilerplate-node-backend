@@ -5,7 +5,7 @@
  * CURRENT permissions on every request. `module.ts` only registers the result at import time —
  * the resolution logic itself lives here, alongside the rest of this module's services.
  *
- * See: docs/understand/security.md#machine-to-machine-credentials
+ * @see docs/understand/security.md#machine-to-machine-credentials
  */
 
 import { logger } from '@infrastructure/adapters/logger';

@@ -5,7 +5,7 @@
  * what, it stays possible while units remain to send, and it never names a country the shop
  * does not ship to.
  *
- * See: docs/modules/orders.md#correcting-the-shipping-address
+ * @see docs/modules/orders.md#correcting-the-shipping-address
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

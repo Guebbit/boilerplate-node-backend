@@ -8,7 +8,7 @@
  * operation is covered the moment its contract declares it. Every one is sent a stale bearer
  * over the real mounted chain; none may answer the `invalid_token` challenge.
  *
- * See: docs/understand/security.md
+ * @see docs/understand/security.md
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';

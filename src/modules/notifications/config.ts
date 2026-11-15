@@ -3,7 +3,7 @@
  * The inbox's knobs: how many notifications a user keeps, and how many work notices (with their
  * lifetime) a staff member keeps beside them.
  *
- * See: docs/operate/configuration.md
+ * @see docs/operate/configuration.md
  */
 
 import { defineConfig } from '@infrastructure/config/define';

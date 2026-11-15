@@ -5,7 +5,8 @@
  * registered once rather than once per generator — and a generator that finds no entry fails
  * loudly instead of emitting a value the contract forbids.
  *
- * See: docs/build/contract-request-data.md, docs/build/fuzz-testing.md
+ * @see docs/build/contract-request-data.md
+ * @see docs/build/fuzz-testing.md
  */
 
 /**

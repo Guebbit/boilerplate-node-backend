@@ -13,7 +13,7 @@
  * purpose and in writing: at-rest protection is the host's, like the Mongo data files
  * (`docs/understand/defences/crypto-and-secrets.md`).
  *
- * See: docs/modules/account.md
+ * @see docs/modules/account.md
  */
 
 import path from 'node:path';

@@ -10,7 +10,7 @@
  * copy is an output, so a difference has one correct resolution. Files the two repos merely keep
  * identical for convenience are not on the list and are nobody's to overwrite.
  *
- * See: docs/build/pairing-and-ports.md#the-shared-file-list-and-what-earns-a-place-on-it
+ * @see docs/build/pairing-and-ports.md#the-shared-file-list-and-what-earns-a-place-on-it
  */
 
 import { execFileSync } from 'node:child_process';
@@ -64,7 +64,7 @@ if (!existsSync(frontendRoot))
  * syncing on top of it. A lane syncs into its own paired frontend worktree instead.
  * `--dry` writes nothing, so it may still look.
  *
- * See: docs/build/pairing-and-ports.md#worktrees-sync-into-their-own-pair
+ * @see docs/build/pairing-and-ports.md#worktrees-sync-into-their-own-pair
  */
 if (!dryRun && writesIntoMainFromWorktree(process.cwd(), frontendRoot))
     fail(

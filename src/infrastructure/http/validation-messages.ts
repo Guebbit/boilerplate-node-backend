@@ -7,7 +7,7 @@
  * request-scoped `t`; keys are per CONSTRAINT, not per field, and every sentence names the field
  * through `{{attribute}}` (Laravel's `:attribute`), resolved by {@link attributeOf}.
  *
- * See: docs/understand/i18n.md#validation-messages
+ * @see docs/understand/i18n.md#validation-messages
  */
 
 import { z } from 'zod';

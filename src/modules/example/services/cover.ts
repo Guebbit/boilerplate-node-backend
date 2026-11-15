@@ -6,7 +6,7 @@
  * Delete it if: the module has no upload (with the controller, the route, the contract path and the
  * manifest entry).
  *
- * See: docs/understand/image-processing.md
+ * @see docs/understand/image-processing.md
  */
 
 import type { CallerContext, Example } from '@types';

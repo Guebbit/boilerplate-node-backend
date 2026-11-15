@@ -3,7 +3,7 @@
  * The count behind each staff navigation badge: what waits on that screen, read through the
  * owning module's own list as the caller, so a badge and its screen cannot disagree.
  *
- * See: docs/modules/shop-tasks.md#the-nav-badge-summary
+ * @see docs/modules/shop-tasks.md#the-nav-badge-summary
  */
 
 import { holds } from '@kernel/ability';

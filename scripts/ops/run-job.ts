@@ -12,7 +12,7 @@
  * Meant to run from cron (`docker/crontab`, generated from the same declarations), never on boot.
  * Every job is idempotent, so a missed or overlapping run costs nothing.
  *
- * See: docs/reference/ops.md#scheduled-jobs
+ * @see docs/reference/ops.md#scheduled-jobs
  */
 import '@infrastructure/config/dotenv';
 // Before any model loads: Mongoose defaults are read at schema build.

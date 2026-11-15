@@ -5,7 +5,7 @@
  * dedup (`taskService.openSystemTask` / `clearSystemTasks`); this file only says which event is
  * which situation, and which staff screen does the work.
  *
- * See: docs/modules/shop-tasks.md
+ * @see docs/modules/shop-tasks.md
  */
 
 import { RefundFailureReason, TaskKind } from '@types';

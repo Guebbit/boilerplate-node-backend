@@ -4,7 +4,7 @@
  * `listObservabilityAuditEntries` serves, reached with a tenant key instead of a platform one — see
  * `../service.ts` for why one collection answers both.
  *
- * See: docs/modules/audit-logs.md
+ * @see docs/modules/audit-logs.md
  */
 
 import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';

@@ -6,7 +6,7 @@
  * `buildRateLimiter` (`@infrastructure/http/middlewares/rate-limit`), the same factory every other
  * module's budgets go through.
  *
- * See: docs/understand/security.md#the-rate-limit-budgets
+ * @see docs/understand/security.md#the-rate-limit-budgets
  */
 
 import type { RequestHandler } from 'express';

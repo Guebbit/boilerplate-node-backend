@@ -19,7 +19,7 @@
  * That is a schema-authoring mistake rather than a migration one, and it still shows up here as an
  * index nobody meant to declare.
  *
- * See: docs/reference/data.md
+ * @see docs/reference/data.md
  */
 
 import fs from 'node:fs';

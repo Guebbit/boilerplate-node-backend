@@ -18,7 +18,8 @@
  * there means "the paired FRONTEND holds a copy", which is not this file's story at all: it is
  * shared with the PHP twin, a repository this one has no access to and no pairing test for.
  *
- * See: docs/build/contract-fragmentation.md, docs/understand/authorization.md
+ * @see docs/build/contract-fragmentation.md
+ * @see docs/understand/authorization.md
  */
 
 import { existsSync, readFileSync } from 'node:fs';

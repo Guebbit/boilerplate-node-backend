@@ -5,7 +5,7 @@
  * Here: the owner's display name, which the contract carries on every example and the collection
  * does not store, and the two ways a row is presented (for a caller, for anyone).
  *
- * See: docs/understand/strategic-ddd.md
+ * @see docs/understand/strategic-ddd.md
  */
 
 import type { CallerContext, Example } from '@types';

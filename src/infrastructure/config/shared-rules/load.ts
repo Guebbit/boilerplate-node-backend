@@ -6,7 +6,7 @@
  * Relative imports only: the logger reads its redaction lists through here, and the logger is on
  * jest's `globalSetup` import chain, which runs outside path-alias resolution.
  *
- * See: docs/understand/shared-rules.md
+ * @see docs/understand/shared-rules.md
  */
 
 import { readFileSync } from 'node:fs';

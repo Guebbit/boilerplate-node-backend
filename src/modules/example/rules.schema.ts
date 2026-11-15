@@ -4,7 +4,7 @@
  * copies) and what `npm run regenerate` writes from it.
  * Here: the example's two lists.
  *
- * See: docs/understand/shared-rules.md
+ * @see docs/understand/shared-rules.md
  */
 
 import { z } from 'zod';

@@ -14,7 +14,7 @@
  * `fingerprint` this repo has no use for — it pairs with either backend twin, which do not
  * serialise YAML identically.
  *
- * See: docs/build/pairing-and-ports.md#the-shared-file-list-and-what-earns-a-place-on-it
+ * @see docs/build/pairing-and-ports.md#the-shared-file-list-and-what-earns-a-place-on-it
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';

@@ -4,7 +4,7 @@
  * purpose: that file registers two gauges whose `collect` queries the database, and loading it
  * here would put them on the registry of every test or process that merely imports the holds.
  *
- * See: docs/modules/inventory-reservations.md#orphaned-hold
+ * @see docs/modules/inventory-reservations.md#orphaned-hold
  */
 
 import { Counter } from 'prom-client';

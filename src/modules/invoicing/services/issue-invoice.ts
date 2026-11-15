@@ -7,7 +7,7 @@
  * transaction, so the loser's duplicate-key error aborts it — the number goes back — and the
  * loser reads the winner's row instead of doubling the document.
  *
- * See: docs/modules/invoicing.md
+ * @see docs/modules/invoicing.md
  */
 
 import { Types } from 'mongoose';

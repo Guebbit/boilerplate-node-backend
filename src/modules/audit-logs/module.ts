@@ -11,7 +11,7 @@
  * Not in the import graph: retention is a TTL index on the collection, not code — see `./model`.
  *   Change the window and nothing in TypeScript moves.
  *
- * See: docs/modules/audit-logs.md
+ * @see docs/modules/audit-logs.md
  */
 
 import path from 'node:path';

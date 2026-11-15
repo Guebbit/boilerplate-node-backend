@@ -9,7 +9,7 @@
  * Delete it if: the module has no lifecycle beyond create, edit and delete.
  * Instead see: `orders` (`services/override.ts`) for a step-up-gated door.
  *
- * See: docs/understand/outbox.md
+ * @see docs/understand/outbox.md
  */
 
 import type { CallerContext, Example, ExampleStatus } from '@types';

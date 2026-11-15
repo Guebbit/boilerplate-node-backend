@@ -10,7 +10,7 @@
  * `POST /returns` carries the account-keyed budget and an `Idempotency-Key`: it opens a row staff
  * must read, and a retried request must open it once.
  *
- * See: docs/modules/returns.md
+ * @see docs/modules/returns.md
  */
 
 import type { Request } from 'express';

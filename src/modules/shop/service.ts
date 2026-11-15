@@ -4,7 +4,7 @@
  * ("which country do we charge VAT in", "where do returns go"), and the one public read of the lot,
  * `GET /shop`'s body.
  *
- * See: docs/modules/shop.md
+ * @see docs/modules/shop.md
  */
 
 import { ConfigError } from '@infrastructure/config/define';

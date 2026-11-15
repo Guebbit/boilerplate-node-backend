@@ -4,7 +4,7 @@
  * checkout takes the shelf units there are and claims the rest against the cap, and the order
  * freezes how many are owed and the day they were promised.
  *
- * See: docs/modules/cart.md#line-availability
+ * @see docs/modules/cart.md#line-availability
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

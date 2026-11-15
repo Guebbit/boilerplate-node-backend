@@ -4,7 +4,7 @@
  * and read back, `backorder` is derived (never stored), the date is bounded to a year ahead, and a
  * passed date reads sold out.
  *
- * See: docs/modules/products.md#backorder
+ * @see docs/modules/products.md#backorder
  */
 
 import { api, authenticateAsRole } from '@tests/http';

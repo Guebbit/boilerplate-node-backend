@@ -10,7 +10,7 @@
  * what for the notices every project has, `access` and `users` say who that is today. A module
  * that adds notices (the shop's) writes them through `notificationsService` with its own routing.
  *
- * See: docs/modules/notifications.md
+ * @see docs/modules/notifications.md
  */
 
 import path from 'node:path';

@@ -2,7 +2,7 @@
  * @module
  * Controller for `POST /users/:id/place-purchase-hold` — staff pausing checkout for one account.
  *
- * See: docs/modules/users.md#purchase-hold
+ * @see docs/modules/users.md#purchase-hold
  */
 
 import type { Request, Response } from 'express';

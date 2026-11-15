@@ -2,7 +2,7 @@
  * @module
  * Controller for `POST /users/:id/lift-purchase-hold` — ending the pause staff put on one account.
  *
- * See: docs/modules/users.md#purchase-hold
+ * @see docs/modules/users.md#purchase-hold
  */
 
 import type { Request, Response } from 'express';

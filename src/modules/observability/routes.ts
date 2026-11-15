@@ -5,7 +5,7 @@
  * browser's `EventSource` and a Prometheus scraper, respectively. The other three routes take the
  * normal `getAuth`/`isAuth`/`requirePermission(...)` chain.
  *
- * See: docs/modules/observability.md
+ * @see docs/modules/observability.md
  */
 
 import { Router } from 'express';

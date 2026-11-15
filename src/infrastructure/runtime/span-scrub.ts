@@ -5,7 +5,7 @@
  *
  * Why here: an instrumentation's own options cannot stop it, and a Collector processor only
  * protects deployments that run ours. This is the last place before a span leaves the process.
- * See: docs/operate/opentelemetry.md
+ * @see docs/operate/opentelemetry.md
  */
 
 import type { Attributes } from '@opentelemetry/api';

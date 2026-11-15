@@ -18,7 +18,7 @@
  * Queue:       `worker.account.export`, consumed here (`consumers`), declared in
  *              `./asyncapi.internal.yaml`.
  *
- * See: docs/modules/account.md
+ * @see docs/modules/account.md
  */
 
 import path from 'node:path';

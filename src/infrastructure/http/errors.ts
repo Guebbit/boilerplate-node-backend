@@ -60,8 +60,7 @@ export const isInfrastructureError = (error: unknown): boolean =>
  * (503), or a bug (500) — in the single place that answer is made, so all twelve models agree on
  * it. A new branch belongs here, not in a controller.
  *
- * See: docs/understand/request-flow.md#the-database-error-interpreter
- *
+ * @see docs/understand/request-flow.md#the-database-error-interpreter
  * @param error - whatever the caught rejection actually was — a driver/Mongoose error in every
  *   case seen so far, but a `.catch()` callback's argument is never provably one
  * @returns a `[httpCode, message]` tuple for the response layer

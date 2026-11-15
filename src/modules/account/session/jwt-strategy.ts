@@ -5,7 +5,7 @@
  * detection live in `./jwt.ts`; this file is the adapter that puts them behind
  * {@link SessionStrategy}, so nothing above it knows tokens are involved.
  *
- * See: docs/modules/account-sessions.md
+ * @see docs/modules/account-sessions.md
  */
 
 import type { RememberTier } from '@types';

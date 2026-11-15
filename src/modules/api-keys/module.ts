@@ -9,7 +9,7 @@
  *              `onRegistered` hook, the same "module fills a kernel port" shape
  *              `account/module.ts`'s `registerAuthResolver` already establishes.
  *
- * See: docs/modules/api-keys.md
+ * @see docs/modules/api-keys.md
  */
 
 import path from 'node:path';

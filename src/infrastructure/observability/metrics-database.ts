@@ -3,7 +3,7 @@
  * Database metrics (Prometheus). One counter: a query killed at its time limit is a 503 like an
  * outage, so without its own series the 5xx alert cannot tell "slow" from "down".
  *
- * See: docs/operate/prometheus.md
+ * @see docs/operate/prometheus.md
  */
 
 import { Counter } from 'prom-client';

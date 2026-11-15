@@ -5,7 +5,7 @@
  * reopened `committed` and keeps its place in the paid queue; giving the top-up back ends the hold
  * `shipped`, not `released`.
  *
- * See: docs/modules/inventory-reservations.md#owed-after-a-loss
+ * @see docs/modules/inventory-reservations.md#owed-after-a-loss
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

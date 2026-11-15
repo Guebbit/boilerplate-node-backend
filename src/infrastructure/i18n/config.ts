@@ -3,7 +3,7 @@
  * Locale configuration: the default, the fallback, which languages are offered, and how often the
  * edited-copy overlay is refreshed.
  *
- * See: docs/operate/configuration.md
+ * @see docs/operate/configuration.md
  */
 
 import { defineConfig } from '@infrastructure/config/define';

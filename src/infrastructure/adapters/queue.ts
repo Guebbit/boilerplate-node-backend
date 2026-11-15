@@ -14,7 +14,7 @@
  *             demand-driven (the next cache read retries) rather than a background loop; only its
  *             shared warn-once latch is reused here.
  *
- * See: docs/understand/rabbitmq.md
+ * @see docs/understand/rabbitmq.md
  */
 
 // `amqplib` is the AMQP 0-9-1 client. `ChannelModel` is the TCP connection `setup` receives on
@@ -393,7 +393,7 @@ const cancelConsumers = (channel: ConfirmChannel | undefined): Promise<void> => 
  * side is not an error anywhere, it is a message published to a queue nobody drains. So the
  * spelling comes from `WORKER_CHANNELS`, generated out of `asyncapi.yaml`.
  *
- * See: docs/build/asyncapi-workflow.md#rabbitmq-queue-channels
+ * @see docs/build/asyncapi-workflow.md#rabbitmq-queue-channels
  */
 export const EMAIL_QUEUE = WORKER_CHANNELS.EMAIL_SEND;
 
@@ -506,7 +506,7 @@ export const parkedCounts = (): Promise<{ name: string; parked: number }[]> => {
  * here. Kept to two on purpose: the idea is one gap, between "most things" and "the few things a
  * person is actively blocked on," not a fine-grained priority system.
  *
- * See: docs/understand/rabbitmq.md#priority
+ * @see docs/understand/rabbitmq.md#priority
  */
 export type JobPriority = 'normal' | 'high';
 

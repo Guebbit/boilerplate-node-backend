@@ -11,7 +11,7 @@
  * guards cannot name them. They are listed by hand below, while `products` is deployed, and the
  * canary holds the list to the spec, in both directions.
  *
- * See: docs/understand/security.md#machine-to-machine-credentials
+ * @see docs/understand/security.md#machine-to-machine-credentials
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';

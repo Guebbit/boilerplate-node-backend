@@ -5,7 +5,7 @@
  * a partial one carries only the refunded share (see `../domain/credit-shares.ts`), so an order refunded
  * in parts ends up with a credit note per part.
  *
- * See: docs/modules/invoicing.md
+ * @see docs/modules/invoicing.md
  */
 
 import { Types, type ClientSession } from 'mongoose';

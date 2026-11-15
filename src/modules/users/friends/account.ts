@@ -10,7 +10,8 @@
  * Spies:                        a test spies the object the code under test imports, this one.
  * Where it may be imported:     `account` only (lint); `account` may not import `userService`.
  *
- * See: docs/understand/strategic-ddd.md §5, docs/modules/users.md
+ * @see docs/understand/strategic-ddd.md §5
+ * @see docs/modules/users.md
  */
 
 import { presentAccount } from '../presenter';

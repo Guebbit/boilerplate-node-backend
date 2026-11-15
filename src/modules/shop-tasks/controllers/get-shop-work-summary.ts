@@ -2,7 +2,7 @@
  * @module
  * Controller for `GET /shop-tasks/summary` — the counts behind the staff navigation badges.
  *
- * See: docs/modules/shop-tasks.md#the-nav-badge-summary
+ * @see docs/modules/shop-tasks.md#the-nav-badge-summary
  */
 
 import type { Request, Response } from 'express';

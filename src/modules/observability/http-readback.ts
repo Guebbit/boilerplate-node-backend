@@ -5,7 +5,7 @@
  * summed across every method/route series, and the two latency percentiles this in-app view
  * approximates from Prometheus histogram buckets.
  *
- * See: docs/operate/opentelemetry.md
+ * @see docs/operate/opentelemetry.md
  */
 
 import {

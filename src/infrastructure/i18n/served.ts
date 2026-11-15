@@ -8,7 +8,7 @@
  * The state is filled by the database overlay's refresh (`./overrides`), never read from Mongo on
  * a request. Until the first refresh lands it is empty, which serves exactly the deployed files.
  *
- * See: docs/understand/i18n.md#one-language-per-request
+ * @see docs/understand/i18n.md#one-language-per-request
  */
 
 import { getFallbackLocale, listSupportedLocales } from './catalog';

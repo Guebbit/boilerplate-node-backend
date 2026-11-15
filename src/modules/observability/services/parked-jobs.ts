@@ -5,7 +5,7 @@
  * `job-health.ts` already gives for its own `leases` query, since a queue's parked count exists
  * nowhere in this process's memory either.
  *
- * See: docs/operate/prometheus.md
+ * @see docs/operate/prometheus.md
  */
 
 import type { ObservabilityHealthQueue } from '@types';

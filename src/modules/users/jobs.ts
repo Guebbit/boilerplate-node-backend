@@ -2,7 +2,7 @@
  * @module
  * The scheduled job `users` owns: the nightly reduction of expired purchase holds.
  *
- * See: docs/reference/ops.md#scheduled-jobs
+ * @see docs/reference/ops.md#scheduled-jobs
  */
 
 import type { JobDeclaration } from '@kernel/registry';

@@ -374,7 +374,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
          * Buyability, stock aside: `false` is listed but "Not available right now". Cart accepts
          * it like a sold-out product, checkout refuses it. Ignored while `active` is false (hidden
          * wins). Defaults `true`, matching `openapi.yaml`.
-         * See: docs/modules/products.md#product-states
+         * @see docs/modules/products.md#product-states
          */
         purchasable: {
             type: Boolean,
@@ -384,7 +384,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
          * "Ships from". A future date on an active, purchasable product makes it a preorder; the
          * flag itself is derived (`./domain/preorder`), never stored, so the date passing needs no
          * job. No default: absent means the product is simply on sale.
-         * See: docs/modules/products.md#preorder
+         * @see docs/modules/products.md#preorder
          */
         releaseDate: {
             type: Date
@@ -393,7 +393,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
          * The backorder switch: a RELEASED product keeps selling while its shelf is empty, against
          * the cap in `inventory`. Off by default. `backorder` on the wire is derived from it, never
          * stored (`./domain/backorder`).
-         * See: docs/modules/products.md#backorder
+         * @see docs/modules/products.md#backorder
          */
         allowBackorder: {
             type: Boolean,

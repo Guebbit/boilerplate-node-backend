@@ -3,7 +3,7 @@
  * A repair under the legal guarantee pushes the guarantee out (Directive 2024/1799): the order's
  * `conformityUntil` moves twelve months on, once. `returns` asks, `orders` owns the field.
  *
- * See: docs/modules/returns.md#what-the-customer-gets-back
+ * @see docs/modules/returns.md#what-the-customer-gets-back
  */
 
 import type { ClientSession } from 'mongoose';

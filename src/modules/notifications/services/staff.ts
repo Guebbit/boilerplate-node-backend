@@ -7,7 +7,7 @@
  * Writing the row is the notice; the mail is a courtesy a failure cannot undo, so a mail that
  * cannot be queued is logged and never raised.
  *
- * See: docs/modules/notifications.md#work-notices-for-staff
+ * @see docs/modules/notifications.md#work-notices-for-staff
  */
 
 import { Types } from 'mongoose';

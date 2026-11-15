@@ -9,7 +9,7 @@
  * signed-in account holds, so the scope is in the query: staff holding `display:Order` see every
  * row, anyone else only their own orders'.
  *
- * See: docs/modules/delivery.md#the-preorder-board
+ * @see docs/modules/delivery.md#the-preorder-board
  */
 
 import { callerForSubject } from '@kernel/permissions';

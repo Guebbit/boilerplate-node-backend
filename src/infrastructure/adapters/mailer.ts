@@ -3,7 +3,7 @@
  * Email adapter: EJS template rendering + delivery through the named transport, optionally via the
  * queue.
  *
- * See: docs/understand/email-and-rendering.md
+ * @see docs/understand/email-and-rendering.md
  */
 
 // EJS = the HTML templating engine used for email bodies. `Data` is its type for the

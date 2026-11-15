@@ -5,7 +5,7 @@
  * reminder sweeps (`./overdue`), system tasks (`./system`) and the doors that move a task
  * (`./workflow`). The rules they apply are in `../domain`.
  *
- * See: docs/modules/tasks.md
+ * @see docs/modules/tasks.md
  */
 
 import { create, mailMainMailbox } from './contact';

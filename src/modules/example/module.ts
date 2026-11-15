@@ -23,7 +23,7 @@
  * Instead see: `orders` for a step-up-gated key (`override:Order`), a scheduled job and a CSV
  * export; `users` for PII at rest and soft delete; `payments` for an outbound port.
  *
- * See: docs/understand/modules.md#the-module-template
+ * @see docs/understand/modules.md#the-module-template
  */
 
 import path from 'node:path';

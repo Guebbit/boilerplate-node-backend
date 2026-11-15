@@ -5,7 +5,7 @@
  * own.
  * Here: the status lifecycle and the two small facts that hang off it.
  *
- * See: docs/understand/domain-layer.md
+ * @see docs/understand/domain-layer.md
  */
 
 export {

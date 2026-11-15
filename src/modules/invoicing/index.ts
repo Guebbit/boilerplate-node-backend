@@ -5,7 +5,7 @@
  * stay inside — nothing outside this module writes an invoice or a credit note; they are frozen
  * only from this module's own event listeners.
  *
- * See: docs/modules/invoicing.md
+ * @see docs/modules/invoicing.md
  */
 
 export * from './services';

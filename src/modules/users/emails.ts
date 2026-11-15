@@ -4,7 +4,7 @@
  * argument, the output is finished text, and the template queued behind it only interpolates.
  * Same rule as `@modules/account/emails`; see that file for why.
  *
- * See: docs/modules/users.md#purchase-hold
+ * @see docs/modules/users.md#purchase-hold
  */
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';

@@ -7,7 +7,7 @@
  * channel. Same principle as the OpenAPI side: a module's contract leaves with the module.
  * The merge itself is generic and lives in `./asyncapi-section-fragments`.
  *
- * See: docs/build/contract-fragmentation.md#module-owned-webhook-events
+ * @see docs/build/contract-fragmentation.md#module-owned-webhook-events
  */
 
 import { readFileSync } from 'node:fs';

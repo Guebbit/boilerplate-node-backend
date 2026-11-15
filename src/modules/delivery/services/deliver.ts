@@ -8,7 +8,7 @@
  * A `lost` shipment that turns up is accepted too, when every unit on it is still open
  * ({@link restoreLostShipment}): the same door for the same real-world fact.
  *
- * See: docs/modules/delivery.md#delivering
+ * @see docs/modules/delivery.md#delivering
  */
 
 import type { ClientSession } from 'mongoose';

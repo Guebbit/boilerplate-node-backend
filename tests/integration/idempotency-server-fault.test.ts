@@ -7,7 +7,7 @@
  * again; only a NEW key runs it. That is Stripe's v1 rule, and it is why the frontend spends a key
  * on any answer but a lost connection or `409 IDEMPOTENCY_IN_FLIGHT`.
  *
- * See: docs/understand/idempotency.md#what-a-failure-stores
+ * @see docs/understand/idempotency.md#what-a-failure-stores
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { api } from '@tests/http';

@@ -4,7 +4,7 @@
  * stored), the date is bounded to a year ahead, and moving it announces `product.release_date_changed`
  * through the outbox in the edit's own transaction.
  *
- * See: docs/modules/products.md#preorder
+ * @see docs/modules/products.md#preorder
  */
 
 import { api, authenticateAsRole } from '@tests/http';

@@ -2,7 +2,7 @@
  * @module
  * Structured logging.
  *
- * See: docs/operate/winston.md
+ * @see docs/operate/winston.md
  */
 
 // Winston is the logging library: a `Logger` combines *formats* (a transform pipeline applied
@@ -465,7 +465,7 @@ const prettyFormat = winston.format.combine(
  * container log file — exactly when something downstream has to parse the line. Production stays
  * JSON regardless. Exported so the environment matrix can be asserted rather than assumed.
  *
- * See: docs/operate/loki.md
+ * @see docs/operate/loki.md
  */
 export const resolveConsoleFormat = (): winston.Logform.Format =>
     isRelaxedEnvironment() && process.stdout.isTTY ? prettyFormat : baseFormat;

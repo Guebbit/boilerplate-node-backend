@@ -8,7 +8,7 @@
  * of the build and putting it back afterwards is enough. A process that boots with the provider on (the
  * paired suite's antibot run) still serves it: the build happens before it listens.
  *
- * See: docs/modules/antibot.md
+ * @see docs/modules/antibot.md
  */
 
 import { overrideEnvironment } from '@infrastructure/config/store';

@@ -5,7 +5,7 @@
  * Not a move: a digital shipment is BORN `delivered` (`services/cut.ts`), and a physical one is
  * born `shipped`. A birth is a write of its own, so it is not an event here.
  *
- * See: docs/modules/delivery.md#the-two-records
+ * @see docs/modules/delivery.md#the-two-records
  */
 
 import { ShipmentStatus } from '@types';

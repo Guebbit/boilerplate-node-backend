@@ -6,7 +6,7 @@
  * run means the document is complete enough to mock. Outside the pre-commit gate because it binds
  * a real port, and it owns the process it starts so a failed curl cannot leave one running.
  *
- * See: docs/build/contract-testing.md
+ * @see docs/build/contract-testing.md
  */
 
 import { spawn } from 'node:child_process';

@@ -8,7 +8,7 @@
  * The count is orders, not fulfillment orders: an order with several groups to tell counts once. A
  * snapshot — a payment or a shipment between preview and save can shift it.
  *
- * See: docs/modules/delivery.md#preorders-and-a-moved-date
+ * @see docs/modules/delivery.md#preorders-and-a-moved-date
  */
 
 import { t } from '@infrastructure/i18n';

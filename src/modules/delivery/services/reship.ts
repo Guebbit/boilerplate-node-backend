@@ -6,7 +6,7 @@
  * hold, and the order goes back to `processing` so the replacement leaves through the ordinary
  * shipping door. Runs inside the caller's transaction (a return's receipt).
  *
- * See: docs/modules/delivery.md#replacement-after-a-return
+ * @see docs/modules/delivery.md#replacement-after-a-return
  */
 
 import type { ClientSession } from 'mongoose';

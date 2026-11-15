@@ -6,7 +6,7 @@
  * (`overdueNotifiedAt`, `dueSoonNotifiedAt`); who hears of them is `notifications`' business, the
  * same as for the opener.
  *
- * See: docs/modules/tasks.md#the-overdue-reminder
+ * @see docs/modules/tasks.md#the-overdue-reminder
  */
 
 import type { ClientSession } from 'mongoose';

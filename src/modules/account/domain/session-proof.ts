@@ -3,7 +3,7 @@
  * What a session's `amr` says, as pure rules: the values this app mints, how proofs combine, and
  * when a first session must be refused for lack of one. No I/O, so every mint path shares it.
  *
- * See: docs/modules/account-sessions.md#the-mint-guard
+ * @see docs/modules/account-sessions.md#the-mint-guard
  */
 
 /**

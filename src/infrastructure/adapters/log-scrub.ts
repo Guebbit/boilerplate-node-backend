@@ -10,7 +10,7 @@
  * twin runs too. The expressions are NOT shared: each backend writes its own.
  *
  * Relative imports only: `logger.ts` imports this, and it sits on jest `globalSetup`'s chain.
- * See: docs/understand/defences/disclosure.md
+ * @see docs/understand/defences/disclosure.md
  */
 
 /**

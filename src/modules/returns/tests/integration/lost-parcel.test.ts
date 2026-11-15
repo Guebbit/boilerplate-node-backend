@@ -5,7 +5,7 @@
  * goods that never arrived cannot be returned, and a replacement can be returned once — never
  * twice the quantity bought. Real database, the real `fake` payment provider.
  *
- * See: docs/modules/delivery.md#lost-in-transit
+ * @see docs/modules/delivery.md#lost-in-transit
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

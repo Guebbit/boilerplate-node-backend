@@ -6,7 +6,7 @@
  * Which events exist, and how each becomes a provider event, is declared by the modules that own
  * them (`AppModule.browserEvents`); this file knows none of them by name.
  *
- * See: docs/modules/analytics.md
+ * @see docs/modules/analytics.md
  */
 
 import type { BrowserEventTarget } from '@kernel/registry';

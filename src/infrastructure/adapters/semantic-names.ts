@@ -9,7 +9,7 @@
  *
  * Relative imports only: `logger.ts` sits on jest's `globalSetup` import chain.
  *
- * See: docs/operate/winston.md#field-names-in-the-log-line
+ * @see docs/operate/winston.md#field-names-in-the-log-line
  */
 
 import { isPlainObject } from '../object-guards';

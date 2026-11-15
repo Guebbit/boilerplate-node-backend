@@ -8,7 +8,7 @@
  * move, and the order's hold now carries those units as ordinary `stock` — they ship, restock and
  * release like any other.
  *
- * See: docs/modules/inventory-reservations.md#preorders
+ * @see docs/modules/inventory-reservations.md#preorders
  */
 
 import type { ClientSession } from 'mongoose';

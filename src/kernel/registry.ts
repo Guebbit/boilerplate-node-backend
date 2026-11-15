@@ -6,7 +6,7 @@
  * *for* it is declared in one object. Modules are listed explicitly rather than discovered from
  * the filesystem, so the list stays statically typed and enabling a domain is a one-line edit.
  *
- * See: docs/understand/modules.md#the-manifest
+ * @see docs/understand/modules.md#the-manifest
  */
 
 import type { Router } from 'express';
@@ -244,7 +244,7 @@ export interface PersonalDataSubject {
  * `npm run regenerate` derives `docker/crontab` from it, and `npm run job <name>`
  * (`scripts/ops/run-job.ts`) is the one runner. Deleting a module deletes its jobs with it.
  *
- * See: docs/reference/ops.md#scheduled-jobs
+ * @see docs/reference/ops.md#scheduled-jobs
  */
 export interface JobDeclaration {
     /** `reap:*` for what deletes or scrubs, `sweep:*` for what retries or drains. Unique repo-wide. */
@@ -356,7 +356,7 @@ export interface RouteMount {
  * `import` statements; how it relates to a sibling is prose, and belongs in the docblock above the
  * manifest where a reader will actually meet it.
  *
- * See: docs/understand/modules.md#the-manifest
+ * @see docs/understand/modules.md#the-manifest
  */
 export interface AppModule {
     /** Registry identity. Must match the folder name under `src/modules/`. */
@@ -469,7 +469,7 @@ export interface AppModule {
      * refused at boot, never on the first request that reads it. Most modules that read a
      * variable declare one; deleting the module deletes its gate.
      *
-     * See: docs/operate/configuration.md
+     * @see docs/operate/configuration.md
      */
     config?: readonly ConfigSlice[];
 
@@ -508,7 +508,7 @@ export interface AppModule {
      * `npm run reencrypt` runs every enabled module's, so deleting a module deletes its walk.
      * Most modules store nothing encrypted and have none.
      *
-     * See: docs/understand/security.md#database-credential-and-key-rotation
+     * @see docs/understand/security.md#database-credential-and-key-rotation
      * @param dryRun - count what a real run would move, and write nothing
      */
     reencrypt?: (dryRun: boolean) => Promise<ReencryptReport>;

@@ -3,7 +3,7 @@
  * The staff digest mail: one line per summary that appeared or grew, each with a link to the page
  * that lists it, in the recipient's own language. Counts and links only, no names or addresses.
  *
- * See: docs/modules/shop-tasks.md#the-staff-digest
+ * @see docs/modules/shop-tasks.md#the-staff-digest
  */
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';

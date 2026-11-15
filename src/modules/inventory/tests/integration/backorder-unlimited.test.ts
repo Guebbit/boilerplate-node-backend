@@ -3,7 +3,7 @@
  * An unlimited cap (`backorderLimit: null`): units claimed without a ceiling, a closed cap (`0`)
  * that still refuses, and a level row that never had the field, which is closed, not open.
  *
- * See: docs/modules/inventory-reservations.md#preorders
+ * @see docs/modules/inventory-reservations.md#preorders
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

@@ -4,7 +4,7 @@
  * with 403 when the caller may not manage a staff account. One home, because a copy that drifts
  * is a privilege bug.
  *
- * See: docs/modules/users.md
+ * @see docs/modules/users.md
  */
 
 import { t } from '@infrastructure/i18n';
