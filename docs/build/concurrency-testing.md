@@ -51,7 +51,7 @@ The whole point of a race is that some participants lose, and **losing is the co
 
 ## Two things that quietly make these tests worthless
 
-**Rate limiting.** `credentialLimiters` is mounted on exactly the endpoints these tests hammer — signup, login, reset. It is a set of four budgets — one per account named, one per address calling, one per address block and one per device — and only failed attempts spend any of them. At the shipped budgets a ten-participant signup race sits close to the per-address limit and twelve starts returning 429s, so `tests/support/setup-environment.ts` raises them all — raising one alone just moves which of them the suite trips over.
+**Rate limiting.** `credentialLimiters` is mounted on login, `/password/reset/confirm` and `/restore`. It is a set of four budgets — one per account named, one per address calling, one per address block and one per device — and only failed attempts spend any of them. Signup has its own budgets, `signupLimiters`, and every request counts there, because the abuse it guards against (a Sybil account) is a successful 201. At the shipped budgets a ten-participant signup race sits close to the per-address `signupLimiters` limit and twelve starts returning 429s, so `tests/support/setup-environment.ts` raises them all — raising one alone just moves which of them the suite trips over.
 
 The trap is that the test still **passes**: "not two users" is trivially true when two of the requests never reached the handler. So the limits are raised in `tests/support/setup-environment.ts`, and the shared assertion rejects a 429 explicitly rather than lumping it into "not a success". One case keeps a small, freshly-constructed limiter to prove the budget is still enforced rather than switched off.
 

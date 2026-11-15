@@ -211,7 +211,7 @@ comparable to that statement — until it runs, treat the committed file as stal
 
 Honesty about instruments in use matters more than the instruments.
 
-**Mutation.** `stryker.json` mutates `src/modules/*/**/*.ts` and runs the integration suites that
+**Mutation.** `stryker.json` mutates every file in scope ([the ruler and the scope](./mutation-testing-ruler.md#scope-—-what-is-mutated)) and runs the integration suites that
 reach the service and repository layers, so a repository or service tested only through HTTP is
 judged on that testing. A file can still run every line and score low, which is the finding the
 number exists to produce: the lines run, nothing asserts on what they did. See

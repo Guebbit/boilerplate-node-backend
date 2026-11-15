@@ -254,8 +254,7 @@ Moved: [Related: the same arithmetic kills a plain `npm test`](./mutation-testin
 
 Moved: [The heap cap — unset is not "as much as the machine has"](./mutation-testing-oom-case-study.md#worker-heap-cap).
 
-## Read next
+## Still stuck
 
 - [Mutation testing: the buffers case study and the fix](./mutation-testing-oom-case-study.md)
-
 - [Mutation testing: memory and workers](./mutation-testing-memory.md)
