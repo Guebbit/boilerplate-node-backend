@@ -211,7 +211,7 @@ windows are not repeated here — they live in the [processing register](#proces
 - Not legal advice. It states what the code does; whether that satisfies a specific controller's
   obligations is a question for that controller's own counsel.
 - Not complete forever. A new collection that stores personal data, or a new sub-processor, earns
-  a row here in the same commit that adds it — the same habit [the file glossary](../reference/start.md#keeping-this-page-true) asks for.
+  a row here in the same commit that adds it — the same habit [the Reference hub](../reference/start.md#keeping-this-page-true) asks for.
 
 ## Read next
 
