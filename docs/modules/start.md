@@ -268,7 +268,7 @@ The pet-supply e-commerce domain this boilerplate demos itself with. Nothing in 
 - [`payments`](./payments.md) — An order's money, behind a provider port. Deeper: [Disputes and writing an adapter](./payments-disputes-and-adapters.md), [Offline and bank-transfer payments](./payments-offline.md), [The provider port](./payments-provider-port.md), [Refunds and refund failures](./payments-refunds.md), [How a payment settles](./payments-settlement.md), [The staff Payments page, mails and retention](./payments-staff-and-retention.md).
 - [`products`](./products.md) — The catalogue, its search surface and its cache. Deeper: [Product states and backorder](./products-states.md).
 - [`returns`](./returns.md) — Sending goods back, including the EU withdrawal button. Deeper: [Remedies for a return](./returns-remedies.md), [Declining, closing and cancelling a return](./returns-statuses-and-cancellation.md), [The withdrawal button and its deadlines](./returns-withdrawal.md).
-- [`shop`](./shop.md) — The shop itself: its time zone, where goods come back to, what it ships to, and the one currency it trades in. Deeper: [Shop-tasks notices, digest and badge](./shop-tasks-notices.md), [Shop to-dos by situation](./shop-tasks-todos.md).
+- [`shop`](./shop.md) — The shop itself: its time zone, where goods come back to, what it ships to, and the one currency it trades in.
 - [`shop-tasks`](./shop-tasks.md) — The shop's side of the helpdesk: opens a to-do for each payment, stock or delivery situation that needs a person, writes the buyer's messages and the staff's work notices, and sends the staff digest. Deeper: [Shop-tasks notices, digest and badge](./shop-tasks-notices.md), [Shop to-dos by situation](./shop-tasks-todos.md).
 - [`sitemap`](./sitemap.md) — sitemap.xml for search engines: the shop pages and every public product, once per language.
 - [`stats`](./stats.md) — Sales numbers, read on demand from the modules that own them.
@@ -299,3 +299,8 @@ frontend's one extra module — an asymmetry that is real architecture rather th
 | `antibot`       | none                       | No screen of its own — whichever form is guarded (signup, reset, contact) fetches the challenge inline.                                                                                                                                        |
 | `invoicing`     | `orders`                   | No screen of its own — `GET /orders/{id}/invoice` and `/credit-notes` are two buttons on the frontend's own order detail page.                                                                                                                 |
 | everything else | the same name              | —                                                                                                                                                                                                                                              |
+
+## Read next
+
+- [Modules](../understand/modules.md) — what a module is, and the rules every one obeys
+- [Adding & removing a module](../build/module-lifecycle.md) — what to do when you start or end a domain
