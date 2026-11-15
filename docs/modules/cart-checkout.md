@@ -187,7 +187,7 @@ placed one holds stock, burns an order number, sends a mail and wipes the produc
 of them is the cheap half of a denial of inventory. It sits after the permission check (a refused
 caller spends nothing) and before the idempotency ledger (a replay still counts). During a Redis
 outage it counts in this process instead of switching off — see
-[the rate-limit budgets](../tools/security.md#when-the-limits-redis-is-down).
+[the rate-limit budgets](../understand/security.md#when-the-limits-redis-is-down).
 
 ## The analytics pair
 
@@ -204,5 +204,5 @@ than a dashboard glance.
 - [`cart`](./cart.md) — the module this belongs to
 - [`orders`](./orders.md) — the status machine a checkout drops an order into
 - [Reservations](./inventory-reservations.md) — what the hold in step 9 actually is
-- [Request Flow](../theory/request-flow.md) — how a request reaches a service at all
-- [Product Analytics](../tools/analytics.md) — the funnel these two events sit in
+- [Request Flow](../understand/request-flow.md) — how a request reaches a service at all
+- [Product Analytics](../understand/analytics.md) — the funnel these two events sit in

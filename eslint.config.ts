@@ -98,7 +98,7 @@ const factoriesImportPattern = {
  * @returns the lint message
  */
 const sideEffectMessage = (what: string): string =>
-    `A controller, repository or model does not ${what}: that fact belongs to the service that knows it, so a job or sibling module calling the service inherits it. See docs/theory/layers.md.`;
+    `A controller, repository or model does not ${what}: that fact belongs to the service that knows it, so a job or sibling module calling the service inherits it. See docs/understand/layers.md.`;
 
 /**
  * The whole lint configuration, as a flat-config array: ignores first, then the shared rule set,
@@ -626,7 +626,7 @@ export default defineConfig(
      * `eslint-plugin-n`, which this repo does not install.
      *
      * A test may not WRITE `process.env` either — see `bannedEnvironmentWrites` above, and
-     * docs/tools/configuration.md.
+     * docs/operate/configuration.md.
      */
     {
         files: ['src/**/*.ts'],
@@ -642,7 +642,7 @@ export default defineConfig(
                     object: 'process',
                     property: 'env',
                     message:
-                        'Read the environment through your owner’s config.ts (defineConfig), never process.env — see docs/tools/configuration.md.'
+                        'Read the environment through your owner’s config.ts (defineConfig), never process.env — see docs/operate/configuration.md.'
                 }
             ]
         }
@@ -896,7 +896,7 @@ export default defineConfig(
     },
 
     /**
-     * The four side-effect calls belong to the service layer (docs/theory/layers.md).
+     * The four side-effect calls belong to the service layer (docs/understand/layers.md).
      *
      * A queued mail, an audit record, an analytics event and a domain event each report a fact
      * about the DOMAIN. Published from a service, a second caller (a job, a sibling module)
@@ -951,7 +951,7 @@ export default defineConfig(
      * assembles the app, and `domain` reaches nothing at all.
      *
      * Why a plugin and not `no-restricted-imports`, and why the door is a file:
-     * docs/theory/strategic-ddd.md#how-the-tier-walls-are-enforced
+     * docs/understand/strategic-ddd.md#how-the-tier-walls-are-enforced
      */
     {
         settings: {
@@ -1000,7 +1000,7 @@ export default defineConfig(
                  * Our own pure code that every tier — `domain/` included — may import: generic
                  * (Money) or domain-specific (the postal-address PII fields). It reaches npm and
                  * `@types` and nothing else, so sharing it loosens no wall.
-                 * See `docs/theory/layers.md`.
+                 * See `docs/understand/layers.md`.
                  */
                 {
                     type: 'domain-primitives',
@@ -1050,7 +1050,7 @@ export default defineConfig(
                 {
                     default: 'disallow',
                     message:
-                        '{{from.element.type}} may not depend on {{to.element.type}} — see docs/theory/layers.md.',
+                        '{{from.element.type}} may not depend on {{to.element.type}} — see docs/understand/layers.md.',
                     /*
                      * The plugin skips same-element imports by default (`isInternalDependency`) —
                      * without this, the own-barrel disallow below and the spec-vs-own-index split
@@ -1381,7 +1381,7 @@ export default defineConfig(
                                 }
                             },
                             message:
-                                'A module does not import its own barrel — the export is one relative import away from the real file. Importing a SIBLING’S index.ts is the one door; importing your own is a self-import that risks a load-order cycle under `export *`. See docs/theory/strategic-ddd.md §5.'
+                                'A module does not import its own barrel — the export is one relative import away from the real file. Importing a SIBLING’S index.ts is the one door; importing your own is a self-import that risks a load-order cycle under `export *`. See docs/understand/strategic-ddd.md §5.'
                         },
 
                         /*
@@ -1436,7 +1436,7 @@ export default defineConfig(
                          * `index.ts` is deliberately left off this list: a sibling's barrel is
                          * already open through the one door above, and a spec reaching its OWN
                          * module's barrel is exactly the self-import the disallow above exists to
-                         * block — tests included, per docs/theory/strategic-ddd.md §5.
+                         * block — tests included, per docs/understand/strategic-ddd.md §5.
                          *
                          * Stated last so it overrides the module walls above for spec files only.
                          */
@@ -1477,7 +1477,7 @@ export default defineConfig(
     },
 
     /**
-     * The barrel's deny-list (`docs/theory/strategic-ddd.md` §5) holds only if a barrel's
+     * The barrel's deny-list (`docs/understand/strategic-ddd.md` §5) holds only if a barrel's
      * `export *` cannot reach a repository, the model's runtime or a wiring file by
      * naming a source the deny-list never considered. `boundaries/dependencies` above answers
      * "which module may a FILE import"; this is the question one level up — which of a module's
@@ -1692,7 +1692,7 @@ export default defineConfig(
      * mutation testing costs: Stryker re-runs every related spec once per mutant, so a database a
      * unit spec opens at setup is paid thousands of times over for a check that needs none. A spec
      * that needs a database belongs in its module's `tests/integration/`, where the layer's name
-     * says what it costs — see docs/tools/mutation-testing.md#per-file-setup-costs — and
+     * says what it costs — see docs/build/mutation-testing.md#per-file-setup-costs — and
      * `unit-layer-stays-database-free` in `.dependency-cruiser.cjs` is
      * what keeps one from drifting back in. That rule is stated as REACHABILITY, so it also
      * catches the way it actually arrives: a spec importing a helper that already had the database.

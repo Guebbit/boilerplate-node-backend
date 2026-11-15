@@ -3,7 +3,7 @@
  * The one door onto the tenant and membership collections. `./services/` carries every
  * invariant; this file only shapes the query.
  *
- * See: docs/theory/authorization.md
+ * See: docs/understand/authorization.md
  */
 
 import { Types, type ClientSession } from 'mongoose';

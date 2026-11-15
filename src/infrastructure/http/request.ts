@@ -6,7 +6,7 @@
  * without duplicating the handler. This module owns the binding *rules*, behind one entry point,
  * `readInput`, so controllers don't re-assemble them.
  *
- * See: docs/theory/request-input.md
+ * See: docs/understand/request-input.md
  */
 
 import type { Request } from 'express';
@@ -89,7 +89,7 @@ export type RequestInputSource = 'params' | 'body' | 'query';
  * than an ordering chosen by whoever wrote the newest controller. A sixth combination has to be
  * added deliberately, where it can be reviewed against the spec.
  *
- * See: docs/theory/request-input.md
+ * See: docs/understand/request-input.md
  */
 export type RequestSurface = 'search' | 'list' | 'write' | 'create' | 'delete' | 'path';
 
@@ -105,7 +105,7 @@ export type RequestSurface = 'search' | 'list' | 'write' | 'create' | 'delete' |
  * params, then query, except `hardDelete` which is `anyTrue` and escapes ranking; `path` is
  * params-only, for a value that cannot arrive any other way.
  *
- * See: docs/theory/request-input.md
+ * See: docs/understand/request-input.md
  */
 const SURFACE_SOURCES: Record<RequestSurface, readonly RequestInputSource[]> = {
     search: ['body', 'query'],

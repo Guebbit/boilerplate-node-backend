@@ -7,7 +7,7 @@ rules:
     # at all is no rule: every signed-in account does, staff included.
     # `checkout`, not `create` on `Order`: `create:Order` already means "raise an
     # order on someone else's behalf", and reusing it here would be the identical CASL tuple,
-    # indistinguishable once packed for the browser. Docs: docs/theory/authorization.md.
+    # indistinguishable once packed for the browser. Docs: docs/understand/authorization.md.
     - action: checkout
       subject: Cart
       module: cart

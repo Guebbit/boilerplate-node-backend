@@ -40,7 +40,7 @@ and move on.
 
 ### 1 — enumerate the defences
 
-From `docs/theory/defences/*.md`, `docs/tools/security.md`, the module's own docs
+From `docs/understand/defences/*.md`, `docs/understand/security.md`, the module's own docs
 page, and every guard, middleware and error handler in scope. One testable
 sentence each: what does this refuse, and what happens when it fires?
 
@@ -105,7 +105,7 @@ Each has bitten this repo. Each passed its tests throughout.
 
 The same family from the other side: a defence skipped through another entry point.
 A published door checks scope, ownership or state, then hands the write to a function.
-That function is the step beneath the door (`docs/theory/strategic-ddd.md` §5).
+That function is the step beneath the door (`docs/understand/strategic-ddd.md` §5).
 
 For each module in scope:
 

@@ -3,7 +3,7 @@
  * The calls every flow that mints or re-mints a live session makes, in one place: the controllers
  * (login, signup, 2FA, the OAuth callback, reauth, a password change, a factor change) call these
  * and never learn which session mode is on — that is {@link activeStrategy}'s business.
- * See docs/modules/account-sessions.md and docs/theory/sessions.md.
+ * See docs/modules/account-sessions.md and docs/understand/sessions.md.
  */
 
 import type { Request, Response } from 'express';

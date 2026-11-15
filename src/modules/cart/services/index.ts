@@ -1,7 +1,7 @@
 /**
  * @module
  * Cart service — shopping cart operations, identified by userId. One file per flow, not one
- * big file; see `docs/theory/layers.md`.
+ * big file; see `docs/understand/layers.md`.
  */
 
 import * as items from './items';

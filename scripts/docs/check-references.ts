@@ -3,7 +3,7 @@
  * Every file path the docs CLAIM exists, checked against the files that do — `npm run
  * check`. `docs:build` refuses a dead LINK; this refuses a dead FACT.
  *
- * What is swept and why each narrowing matters: docs/reference/documentation-style.md#what-check-docs-references-sweeps
+ * What is swept and why each narrowing matters: docs/build/documentation-style.md#what-check-docs-references-sweeps
  *
  * The floors below are the point. A sweep that silently reads zero pages reports a clean tree
  * forever, which is worse than no sweep — see `TierWallsTest`'s canary for the same guard.

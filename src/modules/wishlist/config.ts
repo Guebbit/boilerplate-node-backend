@@ -2,7 +2,7 @@
  * @module
  * The wishlist's one knob: how many products one list may hold.
  *
- * See: docs/tools/configuration.md
+ * See: docs/operate/configuration.md
  */
 
 import { defineConfig } from '@infrastructure/config/define';

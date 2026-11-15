@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * The hand-kept half of `docs/tools/package-dependencies.md`: which family a package belongs to,
+ * The hand-kept half of `docs/reference/package-dependencies.md`: which family a package belongs to,
  * and why it's there. Everything else on that page — which packages exist, and who imports each
  * one — is derived by `./generate-dependency-map.ts` and would drift the moment it were typed
  * here too.
@@ -29,7 +29,7 @@ export const RUNTIME_GROUPS: DependencyGroup[] = [
         purpose:
             'the HTTP runtime, env loading, request validation, uploads, small shared helpers, ' +
             'and running the TS entrypoints directly — `tsx`, in production too',
-        readMore: '[Runtime](./runtime.md)',
+        readMore: '[Runtime](../understand/runtime.md)',
         match: ['express', 'dotenv', 'zod', 'multer', 'tsx', '@guebbit/js-toolkit']
     },
     {
@@ -38,7 +38,7 @@ export const RUNTIME_GROUPS: DependencyGroup[] = [
             'request guardrails, capability-based authorization, password hashing, anti-bot ' +
             'proof-of-work, blocking disposable email domains at signup, TOTP two-factor codes, and the SSRF ' +
             'guard’s resolved-IP range checks',
-        readMore: '[Security](./security.md)',
+        readMore: '[Security](../understand/security.md)',
         match: [
             'helmet',
             'cors',
@@ -59,14 +59,15 @@ export const RUNTIME_GROUPS: DependencyGroup[] = [
             'driver version `mongoose` hands back from `.connection.db` where the demo profile ' +
             'snapshots and restores raw documents. `mongodb-connection-string-url` is the ' +
             'parser the driver itself uses, here to merge a password into a Mongo URI',
-        readMore: '[MongoDB & Mongoose](./mongodb-mongoose.md)',
+        readMore: '[MongoDB & Mongoose](../understand/mongodb-mongoose.md)',
         match: ['mongodb', 'mongodb-connection-string-url', 'mongoose']
     },
     {
         name: 'Cache and messaging',
         purpose:
             'cache and pub/sub invalidation, rate-limit storage, and async job publish/consume',
-        readMore: '[Redis Cache](./redis-cache.md), [RabbitMQ](./rabbitmq.md)',
+        readMore:
+            '[Redis Cache](../understand/redis-cache.md), [RabbitMQ](../understand/rabbitmq.md)',
         match: ['redis', 'rate-limit-redis', 'amqplib']
     },
     {
@@ -75,22 +76,22 @@ export const RUNTIME_GROUPS: DependencyGroup[] = [
             'transactional email, templates, PDF rendering, CSV export with formula escaping, ' +
             'and image processing',
         readMore:
-            '[Email & PDF Rendering](./email-and-rendering.md), [orders](../modules/orders.md#libraries)',
+            '[Email & PDF Rendering](../understand/email-and-rendering.md), [orders](../modules/orders.md#libraries)',
         match: ['nodemailer', 'ejs', 'puppeteer-core', 'sharp', 'csv-stringify']
     },
     {
         name: 'Observability',
         purpose: 'tracing, metrics, structured logs, and optional product analytics',
         readMore:
-            '[OpenTelemetry](./opentelemetry.md), [Tempo](./tempo.md), [Grafana](./grafana.md), ' +
-            '[Prometheus](./prometheus.md), [Winston & Audit Logs](./winston.md), ' +
-            '[Product Analytics](./analytics.md)',
+            '[OpenTelemetry](../operate/opentelemetry.md), [Tempo](../operate/tempo.md), [Grafana](../operate/grafana.md), ' +
+            '[Prometheus](../operate/prometheus.md), [Winston & Audit Logs](../operate/winston.md), ' +
+            '[Product Analytics](../understand/analytics.md)',
         match: ['@opentelemetry/*', 'prom-client', 'winston', 'posthog-node']
     },
     {
         name: 'i18n',
         purpose: 'the shared translation runtime every module’s locale files load into',
-        readMore: '[i18n](./i18n.md)',
+        readMore: '[i18n](../understand/i18n.md)',
         match: ['i18next']
     },
     {
@@ -99,7 +100,7 @@ export const RUNTIME_GROUPS: DependencyGroup[] = [
             'parsing the small YAML files read once at boot: the authorization key/role ' +
             'declarations `kernel/permissions.ts` reads, and each module’s published event ' +
             'catalogue',
-        readMore: '[Authorization](../theory/authorization.md)',
+        readMore: '[Authorization](../understand/authorization.md)',
         match: ['yaml']
     }
 ];
@@ -109,7 +110,7 @@ export const DEV_GROUPS: DependencyGroup[] = [
     {
         name: 'TypeScript toolchain',
         purpose: 'authoring and reloading TS code in dev',
-        readMore: '[Runtime](./runtime.md)',
+        readMore: '[Runtime](../understand/runtime.md)',
         match: ['typescript', 'nodemon', 'jiti']
     },
     {
@@ -121,7 +122,7 @@ export const DEV_GROUPS: DependencyGroup[] = [
     {
         name: 'Testing',
         purpose: 'unit and integration tests, with an ephemeral MongoDB and a fast TS transpiler',
-        readMore: '[Testing & Docs](./testing-and-docs.md)',
+        readMore: '[Testing & Docs](../build/testing-and-docs.md)',
         match: [
             'jest',
             'jest-environment-node',
@@ -142,13 +143,13 @@ export const DEV_GROUPS: DependencyGroup[] = [
         purpose:
             'mutation testing, property-based testing, and matching a changed ' +
             "file against `stryker.json`'s own `mutate` globs the same way Stryker itself does",
-        readMore: '[Mutation Testing](./mutation-testing.md)',
+        readMore: '[Mutation Testing](../build/mutation-testing.md)',
         match: ['@stryker-mutator/*', 'fast-check', 'minimatch']
     },
     {
         name: 'Linting and formatting',
         purpose: 'lint rules, TS-aware parsing, rule composition, and formatting',
-        readMore: '[Testing & Docs](./testing-and-docs.md)',
+        readMore: '[Testing & Docs](../build/testing-and-docs.md)',
         match: [
             'eslint',
             'eslint-config-prettier',
@@ -168,7 +169,7 @@ export const DEV_GROUPS: DependencyGroup[] = [
     {
         name: 'Architecture',
         purpose: 'the module-boundary rules `npm run check` enforces',
-        readMore: '[Dependency Graph](./dependency-graph.md)',
+        readMore: '[Dependency Graph](../build/dependency-graph.md)',
         match: ['dependency-cruiser', 'eslint-plugin-boundaries']
     },
     {
@@ -176,7 +177,7 @@ export const DEV_GROUPS: DependencyGroup[] = [
         purpose:
             'the deterministic counters the `code-shape` AI audit judges by: unused files, ' +
             'exports and dependencies, and copy-pasted code. Run by hand, never a gate',
-        readMore: '[AI Auditing](./ai-auditing.md)',
+        readMore: '[AI Auditing](../build/ai-auditing.md)',
         match: ['knip', 'jscpd']
     },
     {
@@ -194,8 +195,8 @@ export const DEV_GROUPS: DependencyGroup[] = [
             'the OpenAPI 3.1 document type and HTTP method list every bundler step shares ' +
             '(`scripts/contracts/openapi-document.ts`)',
         readMore:
-            '[OpenAPI Workflow](../api/openapi-workflow.md), ' +
-            '[AsyncAPI Workflow](../api/asyncapi-workflow.md)',
+            '[OpenAPI Workflow](../build/openapi-workflow.md), ' +
+            '[AsyncAPI Workflow](../build/asyncapi-workflow.md)',
         match: [
             '@asyncapi/*',
             '@stoplight/*',
@@ -210,7 +211,7 @@ export const DEV_GROUPS: DependencyGroup[] = [
         purpose:
             'the docs site, diagrams, and offline search UI; `@mdit-vue/shared` is VitePress’s own ' +
             'heading slugifier, so the anchor checker matches the site',
-        readMore: '[Testing & Docs](./testing-and-docs.md)',
+        readMore: '[Testing & Docs](../build/testing-and-docs.md)',
         match: ['vitepress', 'vitepress-plugin-mermaid', 'mermaid', '@mdit-vue/shared']
     },
     {

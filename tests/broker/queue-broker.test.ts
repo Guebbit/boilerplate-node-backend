@@ -12,7 +12,7 @@
  * without testing RabbitMQ itself; the unit suite covers our branch).
  *
  * Needs a broker and a management plugin: see `./support/rabbitmq.ts`, and
- * `docs/tools/broker-testing.md` for the shape of the whole suite.
+ * `docs/build/broker-testing.md` for the shape of the whole suite.
  */
 
 import { z } from 'zod';

@@ -9,7 +9,7 @@
 #          needs false.
 # Secrets: URLs, tokens and the SMTP password go to 0600 files in <secrets-dir>, never into the
 #          config, so they stay out of `/api/v2/status` and the container's command line.
-# Why:     docs/tools/prometheus.md#alert-routing
+# Why:     docs/operate/prometheus.md#alert-routing
 
 set -eu
 

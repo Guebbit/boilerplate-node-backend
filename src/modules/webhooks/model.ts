@@ -73,7 +73,7 @@ export const webhookSubscriptionSchema = new Schema<
     WebhookSubscriptionModel
 >(
     {
-        // The organisation this row belongs to. See docs/theory/tenancy.md.
+        // The organisation this row belongs to. See docs/understand/tenancy.md.
         tenant: {
             type: String,
             required: true,

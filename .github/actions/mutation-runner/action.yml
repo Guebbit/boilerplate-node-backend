@@ -5,7 +5,7 @@ description: Set up a GitHub runner to run Stryker over this repo — Node, mong
 # (`mutation-wave.yml`) and its pre-check (`mutation.yml`). The checkout stays in the caller.
 #
 # Swap: the heap cap Stryker runs under is 12 of the runner's 16 GB, and `bson`'s buffers sit
-# outside any heap cap (docs/tools/mutation-testing.md#the-bson-warning-sign). Swap turns a spike
+# outside any heap cap (docs/build/mutation-testing.md#the-bson-warning-sign). Swap turns a spike
 # into a slow minute instead of a killed worker. Best effort: no room, no swap.
 
 runs:

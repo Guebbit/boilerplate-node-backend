@@ -5,7 +5,7 @@
  * every crontab job's last outcome. Split from `metrics-http.ts` so a file named for HTTP is not
  * where every module's `metrics.ts` reaches for the registry it registers onto.
  *
- * See: docs/tools/opentelemetry.md
+ * See: docs/operate/opentelemetry.md
  */
 
 import { getHeapStatistics } from 'node:v8';

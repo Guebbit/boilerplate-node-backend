@@ -12,7 +12,7 @@
  * that itself, since only `apply.ts`/`run-server.ts`/`check.ts` may reach `src/modules.ts`
  * (`eslint.config.ts`'s boundaries).
  *
- * See: docs/tools/demo-profile.md
+ * See: docs/build/demo-profile.md
  */
 
 import type { Express } from 'express';

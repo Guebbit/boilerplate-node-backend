@@ -11,7 +11,7 @@
  * Private: OUTSIDE `NODE_PUBLIC_PATH` (it holds a person's whole data), and a name that does not
  * match the one shape this store writes is never joined onto a path at all. Plaintext on disk, on
  * purpose and in writing: at-rest protection is the host's, like the Mongo data files
- * (`docs/theory/defences/crypto-and-secrets.md`).
+ * (`docs/understand/defences/crypto-and-secrets.md`).
  *
  * See: docs/modules/account.md
  */

@@ -4,8 +4,8 @@
  * can walk it.
  *
  * SHARED SCRIPT — kept identical in both repos of the pair by hand; it is not in
- * `SHARED_FILES` on purpose (docs/tools/pairing-and-ports.md, "Convenience is not necessity").
- * See: docs/tools/permission-vocabulary.md
+ * `SHARED_FILES` on purpose (docs/build/pairing-and-ports.md, "Convenience is not necessity").
+ * See: docs/reference/permission-vocabulary.md
  */
 import { parse } from 'yaml';
 import { isPlainObject } from '../../src/infrastructure/object-guards';

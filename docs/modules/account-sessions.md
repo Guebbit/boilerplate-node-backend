@@ -3,7 +3,7 @@
 How this application decides who is making a request — and why none of it is published.
 
 ::: tip At a glance
-**Two modes behind one port** — `strategy.ts` is the port (`issue` · `snapshot` · `reissue` · `remint` · `resolveBearer` · `resolveCookie` · `watchCookie` · `credentialOf` · `list`), `jwt-strategy.ts` and `cookie-strategy.ts` are its adapters, and `NODE_SESSION_MODE` picks one. The choice and what each defends against: [Two ways to stay signed in](../theory/sessions.md).
+**Two modes behind one port** — `strategy.ts` is the port (`issue` · `snapshot` · `reissue` · `remint` · `resolveBearer` · `resolveCookie` · `watchCookie` · `credentialOf` · `list`), `jwt-strategy.ts` and `cookie-strategy.ts` are its adapters, and `NODE_SESSION_MODE` picks one. The choice and what each defends against: [Two ways to stay signed in](../understand/sessions.md).
 **The files** — `config.ts` reads the mode and the lifetimes, `session.ts` is what controllers call, `resolver.ts` answers the kernel's port, `auth-context.ts` turns a proof into an `AuthContext`, `listing.ts` decides which rows are the caller's sessions and when each ends, and `../presenter.ts` (pure) maps a row to the wire's `Session`, `mint-guard.ts` refuses a first session without its second factor or on a stale proof, `activity.ts` stamps `lastActiveAt`, the session-epoch rule lives in `../domain/epoch.ts`, `cookies.ts` sets and clears. `jwt` mode adds `jwt.ts` (sign, verify, rotate) and `key-ring.ts` (a secret's `kid`); `cookie` mode adds `session-id.ts` (the `ses_…` id). `device-cookie.ts` is the familiar-device cookie, `login-observability.ts` records that a login happened.
 **Published** — nothing. `session/` has no barrel and may not be imported from outside the module.
 **Breaks if you change** — the cookie flags or the lifetimes. Every guard in the app resolves through here.
@@ -35,7 +35,7 @@ One variable, `NODE_SESSION_MODE`, read through `session/config.ts`. Documented 
   transport: the access-token interceptor in `jwt` mode, `credentials: 'include'` and no interceptor
   in `cookie` mode. The same answer carries each tier's lifetime (`lifetimeSeconds`) and the staff
   cap (`staffLifetimeSeconds`), so the cookie list prints the deployment's numbers, not its own.
-- **The staff idle timeout and lifetime cap apply in both modes**, judged from the session row's clocks. See [sessions](../theory/sessions.md#the-staff-idle-timeout).
+- **The staff idle timeout and lifetime cap apply in both modes**, judged from the session row's clocks. See [sessions](../understand/sessions.md#the-staff-idle-timeout).
 
 A client with no cookie jar logs in with `transport: "bearer"` in the body (`cookie` mode only;
 `jwt` mode ignores it): no session cookie is set, and the response carries the id as `sessionToken`.
@@ -91,7 +91,7 @@ the login form and the lifetime in the environment stay one decision:
 | `medium` | `NODE_SESSION_TIME_MEDIUM` | 7 days  |
 | `long`   | `NODE_SESSION_TIME_LONG`   | 30 days |
 
-Staff and admin sessions also idle out: see [the staff idle timeout](../theory/sessions.md#the-staff-idle-timeout).
+Staff and admin sessions also idle out: see [the staff idle timeout](../understand/sessions.md#the-staff-idle-timeout).
 
 The longest default is 30 days, which meets ASVS 4.0.3 V3.3.2 L1 as written. A shop session is
 long-lived on purpose and risk-based (ASVS 5.0 V7.1.1): the sensitive actions behind it ask for the
@@ -155,7 +155,7 @@ flowchart LR
 newest first. `jwt.ts` signs with `ring[0]` and stamps a `kid` (`key-ring.ts#keyId`, a digest of
 the secret itself); verifying looks the token's `kid` up in the ring rather than assuming
 `ring[0]`, so a token signed moments before a rotation still verifies. Full rotation procedure:
-[Security](../tools/security.md#signing-key-rotation).
+[Security](../understand/security.md#signing-key-rotation).
 
 ## What a token says, and who it is for {#token-claims}
 
@@ -217,7 +217,7 @@ re-authenticate at the first sensitive action instead of reading as freshly auth
 
 `POST /account/reauth` is how a caller refreshes `auth_time` without logging out — re-prove who you
 are, get a new stamp. What consumes all of this is the `stepUp` tier declared on a permission
-key, in [Authorization](../theory/authorization.md); the "remember me" tiers above set the cookie's
+key, in [Authorization](../understand/authorization.md); the "remember me" tiers above set the cookie's
 lifetime and **do not** exempt a sensitive action from the freshness check.
 
 ## Step-up for an account with no password
@@ -312,7 +312,7 @@ flowchart TD
 - **A `ses_…` Bearer** is resolved exactly like the cookie, and is how every non-browser client logs
   in (`transport: "bearer"`). Because a header is not ambient, it is not origin-checked.
 - **The origin check** is in `getAuth`, the one place a caller is resolved; see
-  [Two ways to stay signed in](../theory/sessions.md#the-cookie-asks-for-a-check-on-every-write).
+  [Two ways to stay signed in](../understand/sessions.md#the-cookie-asks-for-a-check-on-every-write).
   `POST /account/refresh` answers 404 here.
 
 ## The cookie, flag by flag
@@ -521,7 +521,7 @@ this purge, and is deliberately not among the links it kills.
 **Where the epoch is written.** In the credential's own write, so a second write failing cannot
 leave an old session live: the password's transaction, the swap's `save`, the factor's `save`. Two
 cases stand apart. Logout everywhere writes the epoch and its `account.sessions_revoked`
-[outbox](../tools/outbox.md) row in one transaction. The email undo does the same **before**
+[outbox](../understand/outbox.md) row in one transaction. The email undo does the same **before**
 restoring the address: if the old address was taken meanwhile the restore answers 409, and the
 thief must already be out when the owner retries (the undo link survives that 409, see
 [Spending a link](#spending-a-link)). Deleting the session rows afterwards is housekeeping; its
@@ -670,7 +670,7 @@ with no revocation — a real limit, chosen rather than stumbled into, and asser
 
 ## Libraries
 
-`jose` and `bowser` are `account`'s alone — see [Package Dependencies](../tools/package-dependencies.md)
+`jose` and `bowser` are `account`'s alone — see [Package Dependencies](../reference/package-dependencies.md)
 for where they sit among everything else this repo depends on.
 
 | Library                  | Maintained    | What it costs you                                                                                |
@@ -700,8 +700,8 @@ for where they sit among everything else this repo depends on.
 - [`account`](./account.md) — the module this belongs to
 - [Two-factor authentication](./account-two-factor.md) — the second factor a login may have to pass
 - [OAuth](./account-oauth.md) — the other way a session is minted
-- [Authorization](../theory/authorization.md) — what consumes `auth_time` and `amr`
+- [Authorization](../understand/authorization.md) — what consumes `auth_time` and `amr`
 - [`users`](./users.md) — the account record, its epoch and its credentials
-- [Security](../tools/security.md) — hashing, headers, and rate limits
-- [Request Flow](../theory/request-flow.md) — where the guard sits
-- [Strategic DDD](../theory/strategic-ddd.md#_2-context-map-—-how-a-module-reaches-its-siblings) — what `shared-kernel` costs
+- [Security](../understand/security.md) — hashing, headers, and rate limits
+- [Request Flow](../understand/request-flow.md) — where the guard sits
+- [Strategic DDD](../understand/strategic-ddd.md#_2-context-map-—-how-a-module-reaches-its-siblings) — what `shared-kernel` costs

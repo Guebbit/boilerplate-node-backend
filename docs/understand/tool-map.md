@@ -1,0 +1,100 @@
+# Tools
+
+This section explains **why dependencies exist** and where they fit in the app.
+
+> OpenAPI-specific tools are documented in [API](../build/api-contracts.md), not here.
+
+## Tool map
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 55, 'rankSpacing': 75}}}%%
+flowchart LR
+    subgraph Core["Core stack"]
+        Runtime[Runtime\nExpress · Node · Zod]
+        Security[Security\nHelmet · JWT · rate-limit]
+        Mongo[MongoDB & Mongoose]
+        Redis[Redis Cache]
+    end
+
+    subgraph Async["Async + outbound"]
+        Rabbit[RabbitMQ\nmessage queue]
+        Mail[Email & PDF\nnodemailer · Puppeteer]
+    end
+
+    subgraph Obs["Observability"]
+        Winston[Winston\nlogs]
+        Prometheus[Prometheus\nmetrics]
+        OTel[OpenTelemetry\ntraces]
+        Tempo[Tempo\ntrace storage]
+        Loki[Loki\nlog storage]
+        Grafana[Grafana\ndashboard UI]
+        Analytics[Analytics\nUmami or PostHog]
+    end
+
+    subgraph Project["Project workflows"]
+        Testing[Testing & Docs]
+        Dependencies[Package dependencies]
+        Scripts[Package scripts]
+        Containers[Docker & Podman]
+    end
+
+    OTel --> Tempo --> Grafana
+    Winston --> Loki --> Grafana
+    Prometheus --> Grafana
+
+    classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef async fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef obs fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    classDef project fill:#fce7f3,stroke:#db2777,color:#111827;
+    class Runtime,Security,Mongo,Redis core;
+    class Rabbit,Mail async;
+    class Winston,Prometheus,OTel,Tempo,Loki,Grafana,Analytics obs;
+    class Testing,Dependencies,Scripts,Containers project;
+```
+
+## Read by intent
+
+| Group         | Page                                                                 | What you'll find                                                                                                                           |
+| ------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Overview      | **[Tools Explained](./tools-explained.md)**                          | "What is X and why is it here?" for every tool: plain-English definition, problem it solves, and how it's wired in this repo.              |
+| Core          | **[Runtime](./runtime.md)**                                          | Express 5, Zod, Multer, i18next, TypeScript, tsx: the framework-level packages that make the app run.                                      |
+| Core          | **[Configuration](../operate/configuration.md)**                     | One typed layer reads every environment variable; a bad value refuses boot with every mistake listed.                                      |
+| Core          | **[Security](./security.md)**                                        | Helmet, CORS, rate limiting, JWT split-token auth, argon2id: every guardrail between the internet and your controllers.                    |
+| Core          | **[Idempotency](./idempotency.md)**                                  | The `Idempotency-Key` middleware: replays a retried write's stored response instead of repeating it.                                       |
+| Core          | **[Transactional Outbox](./outbox.md)**                              | A domain event written in the same transaction as the state change, published by a relay: at-least-once, ordered per aggregate.            |
+| Core          | **[MongoDB & Mongoose](./mongodb-mongoose.md)**                      | Document store, schema/model layer, index sync, and seeds.                                                                                 |
+| Core          | **[Redis Cache](./redis-cache.md)**                                  | Optional response cache with tag-based invalidation, shared by every instance through one keyspace.                                        |
+| Core          | **[Backups](../operate/backups.md)**                                 | The `backup` container: an encrypted, deduplicated dump of the database and the uploads on a schedule, and the heartbeat that says it ran. |
+| Core          | **[Backup server](../operate/backup-server.md)**                     | The second machine: an append-only restic server that accepts new backups and refuses deletes, and prunes on its own schedule.             |
+| Core          | **[restic](../operate/restic.md)**                                   | The backup program: encrypted snapshots to any repository, identical data stored once.                                                     |
+| Core          | **[rclone](../operate/rclone.md)**                                   | `rclone serve restic`: the append-only server software behind the second machine.                                                          |
+| Core          | **[MongoDB Database Tools](../operate/mongodb-database-tools.md)**   | `mongodump` and `mongorestore`: the consistent-across-collections dump and its restore.                                                    |
+| Async         | **[Email & PDF Rendering](./email-and-rendering.md)**                | Nodemailer + EJS for transactional email; Puppeteer for async PDF generation (invoices).                                                   |
+| Async         | **[RabbitMQ](./rabbitmq.md)**                                        | Message queue for fire-and-forget jobs: controllers publish, background workers consume independently.                                     |
+| Observability | **[Events & Logging](./events-and-logging.md)**                      | Every signal the app emits — logs, audit, analytics, metrics, traces, queue jobs — and which to reach for. Start here.                     |
+| Observability | **[Observability Reference](../operate/observability-reference.md)** | Full picture of logs, metrics, traces, and dashboards as one system — start here.                                                          |
+| Observability | **[Winston & Audit Logs](../operate/winston.md)**                    | Structured request/app logs to Loki, and the audit trail — logged for compliance, stored in Mongo for the admin endpoint.                  |
+| Observability | **[Prometheus](../operate/prometheus.md)**                           | Numeric time-series: request rates, latency histograms, business counters, alert rules.                                                    |
+| Observability | **[Gatus](../operate/gatus.md)**                                     | The off-host heartbeat: raises the alarm when Alertmanager's `Watchdog` pings stop, and checks `/livez` and TLS from outside.              |
+| Observability | **[OpenTelemetry](../operate/opentelemetry.md)**                     | Distributed tracing: auto-instruments HTTP, Mongoose, Redis; exports spans to Tempo; injects `trace_id` into every log line.               |
+| Observability | **[Tempo](../operate/tempo.md)**                                     | Stores and queries distributed traces; correlates with Loki logs via shared `trace_id`.                                                    |
+| Observability | **[Loki](../operate/loki.md)**                                       | Stores and queries log streams; links forward to Tempo traces via injected `trace_id`.                                                     |
+| Observability | **[Grafana](../operate/grafana.md)**                                 | Dashboard UI reading Prometheus, Tempo, and Loki in one place — the normal entry point for all observability work.                         |
+| Observability | **[Product Analytics](./analytics.md)**                              | Business events behind one provider port: Umami (default), PostHog, or none.                                                               |
+| Observability | **[Frontend Observability](../operate/frontend-observability.md)**   | How the paired frontend reuses this stack (Faro + Alloy, Umami) instead of Sentry/PostHog cloud — plus the heavy upgrade path.             |
+| Project       | **[Testing & Docs](../build/testing-and-docs.md)**                   | Jest, Supertest, Bruno, and VitePress: how the repo tests itself and generates this docs site.                                             |
+| Project       | **[Package Dependencies](../reference/package-dependencies.md)**     | Guided tour of `package.json` grouped by concern (runtime, dev, optional, peer).                                                           |
+| Project       | **[External Services](./external-services.md)**                      | Which third-party services plug in where: the four provider ports, the config-only swaps, the gaps.                                        |
+| Project       | **[Dependency Vetting](../build/dependency-vetting.md)**             | Rules for what earns a place in `package.json` — measure the transitive weight, grep for telemetry, before it lands.                       |
+| Project       | **[Pending Major Upgrades](../build/pending-major-upgrades.md)**     | dotenv 18, TypeScript 7, prom-client replacement: what breaks, what it costs, when to take each.                                           |
+| Project       | **[Permission Vocabulary](../reference/permission-vocabulary.md)**   | The action vocabulary, written once in the shared yaml and generated into both repos.                                                      |
+| Project       | **[Package Scripts](../reference/package-scripts.md)**               | What every `npm run <script>` does and when to reach for it.                                                                               |
+| Project       | **[Docker & Podman](../build/docker-and-podman.md)**                 | The local stack and its opt-in profiles: what each container is for and how to run it.                                                     |
+| Project       | **[Health checks](../operate/health-checks.md)**                     | What each container's check tests: `/livez` for the web process, its own check per worker, none for a one-shot job.                        |
+| API           | **[API](../build/api-contracts.md)**                                 | OpenAPI Generator, Spectral, Prism, Bruno: contract-first API tooling.                                                                     |
+
+## Why this section is bigger now
+
+This boilerplate does not only give you Express + Mongo.
+It also gives you **opinionated example tooling** around security, observability, and maintenance.
+That is why major tools now have their own pages.

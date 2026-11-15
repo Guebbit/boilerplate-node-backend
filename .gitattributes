@@ -18,7 +18,7 @@
 # The four client collections (`contract.<tool>.*`) are generated too, but they are `.gitignore`d
 # rather than committed, so they never appear in a diff and there is nothing here to mark.
 #
-# See docs/api/contract-fragmentation.md for who owns what.
+# See docs/build/contract-fragmentation.md for who owns what.
 
 # ── The REST and realtime contracts ──────────────────────────────────────────────────────────
 openapi.yaml                                                   linguist-generated=true

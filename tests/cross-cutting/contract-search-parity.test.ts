@@ -21,7 +21,7 @@
  * both regardless.
  *
  * A filter present in one spelling and missing from the other IS a failure. That is the shape of
- * the original `GET /products` bug in `docs/theory/request-input.md` — a filter the client could
+ * the original `GET /products` bug in `docs/understand/request-input.md` — a filter the client could
  * send and the API ignored.
  */
 

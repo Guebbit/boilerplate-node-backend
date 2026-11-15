@@ -3,7 +3,7 @@
  * The audit rows of a role change — one place that knows what a grant or a revoke looks like in
  * the trail, so the three writers (a grant, a revoke, a refused attempt) cannot word it three ways.
  *
- * See: docs/theory/authorization.md
+ * See: docs/understand/authorization.md
  */
 
 import type { AuthorizationScope, CallerContext } from '@types';

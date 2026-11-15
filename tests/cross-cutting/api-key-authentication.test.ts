@@ -19,7 +19,7 @@
  * which asks it per ROUTE off Express's own resolved stack rather than per file off the source
  * text, and so needs no list of exceptions to stay true.
  *
- * See: docs/tools/security.md#machine-to-machine-credentials
+ * See: docs/understand/security.md#machine-to-machine-credentials
  */
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import path from 'node:path';

@@ -1,7 +1,7 @@
 /**
  * @module
  * Users — public barrel, the only surface a sibling module may import (see
- * `docs/theory/strategic-ddd.md` §5 for the rule). Wider than most: `account` is the `users` end
+ * `docs/understand/strategic-ddd.md` §5 for the rule). Wider than most: `account` is the `users` end
  * of the one domain-primitives relationship in the repo, authenticating and co-administering the same
  * document this module owns. `userRepository` and the model's runtime stay inside even so. A sibling
  * goes through `userService`; `account`'s own steps sit behind `friends/account.ts` (see §5), which

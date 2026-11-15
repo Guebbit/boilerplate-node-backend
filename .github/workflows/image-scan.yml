@@ -3,7 +3,7 @@ name: Image scan (SBOM + vulnerabilities)
 # Builds the image `docker/Dockerfile.production` actually ships and reports what is inside it —
 # `container-gate` in ci.yml proves the image WORKS, this asks what it's carrying.
 #
-# Syft (SBOM) piped into Grype (vulnerabilities) — see docs/tools/deployment-hardening.md,
+# Syft (SBOM) piped into Grype (vulnerabilities) — see docs/operate/deployment-hardening.md,
 # "Supply-chain provenance: SBOM and signing". Not Trivy: ruled out after
 # the March 2026 `trivy-action` supply-chain compromise (CVE-2026-33634, every tag force-pushed
 # to a credential stealer).

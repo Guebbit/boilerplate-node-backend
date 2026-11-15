@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Shared by the backup scripts: the knobs with their defaults, restic's environment, the heartbeat,
-# and the parser for the per-collection counts. Sourced, never run. Design: docs/tools/backups.md
+# and the parser for the per-collection counts. Sourced, never run. Design: docs/operate/backups.md
 #
-# Knobs (docs/tools/backups.md#the-knobs):
+# Knobs (docs/operate/backups.md#the-knobs):
 #   BACKUP_REPOSITORY      any restic repository. Empty = dormant, nothing runs.
 #   BACKUP_DATABASE        true | false. false when the database is not in this stack.
 #   BACKUP_PRUNE           true | false. false when the repository is append-only (no `forget`).

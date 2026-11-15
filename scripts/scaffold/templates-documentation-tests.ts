@@ -46,7 +46,7 @@ Do not restate the routes or the fields; they live in \`src/modules/${names.keba
 
 ## The pipeline
 
-Scaffolded from the core of the \`example\` module ([the module template](../theory/modules.md#the-module-template)): every route sits behind one gate and one
+Scaffolded from the core of the \`example\` module ([the module template](../understand/modules.md#the-module-template)): every route sits behind one gate and one
 permission rule.
 
 \`\`\`mermaid
@@ -67,9 +67,9 @@ flowchart LR
 
 ## Related pages
 
-- [Modules overview](./index.md) — the whole context map
-- [Adding & removing a module](../theory/module-lifecycle.md) — what to do next
-- [Module scaffolder](../tools/module-scaffolder.md) — what generated this page
+- [Modules overview](./start.md) — the whole context map
+- [Adding & removing a module](../build/module-lifecycle.md) — what to do next
+- [Module scaffolder](../build/module-scaffolder.md) — what generated this page
 `;
 
 /**

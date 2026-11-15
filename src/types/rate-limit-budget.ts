@@ -8,7 +8,7 @@
  * builds a limiter FROM this shape, and infrastructure may not import kernel — only downward, into
  * `types`, which is erased at compile time and carries no such wall.
  *
- * See: docs/tools/security.md#the-rate-limit-budgets
+ * See: docs/understand/security.md#the-rate-limit-budgets
  */
 
 import type { Request, Response } from 'express';
@@ -20,7 +20,7 @@ import type { Request, Response } from 'express';
  * infrastructure-owned, is built from.
  */
 export interface RateLimitBudget {
-    /** Short, human-readable row label for the generated table in `docs/tools/security.md`. */
+    /** Short, human-readable row label for the generated table in `docs/understand/security.md`. */
     name: string;
 
     /** This budget's Redis/memory key prefix — see `rate-limit-store.ts`. */

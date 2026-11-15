@@ -4,7 +4,7 @@
  * copies) and what `npm run regenerate` writes from it.
  * Here: the example's two lists.
  *
- * See: docs/theory/shared-rules.md
+ * See: docs/understand/shared-rules.md
  */
 
 import { z } from 'zod';
@@ -17,7 +17,7 @@ import {
 export const rulesSchema = z.strictObject({
     /** Dotted `noun.verb` strings, unique across modules (`tests/cross-cutting/audit-actions.test.ts`). */
     audit: keyedListSchema(/^[a-z][\d_a-z]*(\.[a-z][\d_a-z]*){1,3}$/),
-    /** Snake-case event names (`docs/tools/analytics.md#naming`). */
+    /** Snake-case event names (`docs/understand/analytics.md#naming`). */
     analytics: keyedListSchema(/^[a-z]+(_[a-z]+)+$/)
 });
 

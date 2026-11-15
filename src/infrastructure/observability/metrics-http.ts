@@ -8,7 +8,7 @@
  * these counters into `GET /observability/metrics/overview`'s JSON live in
  * `modules/observability/http-readback.ts` — this file only defines and records them.
  *
- * See: docs/tools/opentelemetry.md
+ * See: docs/operate/opentelemetry.md
  */
 
 import type { Request } from 'express';

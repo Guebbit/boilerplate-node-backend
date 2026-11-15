@@ -6,23 +6,23 @@ hero:
     tagline: Single-package REST API boilerplate in the Node backend family.
     actions:
         - theme: brand
-          text: Get Started
-          link: /getting-started
+          text: Use the shop
+          link: /use-the-shop/start
         - theme: alt
-          text: See the shop
-          link: /demo-ecommerce/
+          text: Understand it
+          link: /understand/start
         - theme: alt
-          text: Read Theory
-          link: /theory/
+          text: Build with it
+          link: /build/start
         - theme: alt
-          text: Browse Modules
-          link: /modules/
+          text: Browse modules
+          link: /modules/start
         - theme: alt
-          text: Explore Tools
-          link: /tools/
+          text: Operate it
+          link: /operate/start
         - theme: alt
-          text: Follow the API flow
-          link: /api/
+          text: Look it up
+          link: /reference/start
 features:
     - title: This repo's specific shape
       details: Express 5 + MongoDB + Mongoose + OpenAPI-first REST API, shipped as one package instead of a monorepo.
@@ -33,6 +33,17 @@ features:
     - title: Contract-first workflow
       details: openapi.yaml covers REST contracts and asyncapi.yaml covers realtime/event contracts.
 ---
+
+## I want to…
+
+| I want to…                                  | Go to                               |
+| ------------------------------------------- | ----------------------------------- |
+| Use the demo shop, or explain it to someone | [Use the Shop](/use-the-shop/start) |
+| Understand how and why it is built          | [Understand](/understand/start)     |
+| Run it, change it, test it                  | [Build](/build/start)               |
+| Read how one domain works                   | [Modules](/modules/start)           |
+| Deploy it, back it up, watch it             | [Operate](/operate/start)           |
+| Look up an endpoint, a script, a file       | [Reference](/reference/start)       |
 
 ## What this docs site is for
 
@@ -52,58 +63,60 @@ flowchart TD
     A --> E[api-mysql-sequelize\nsame API-first idea, SQL stack]
     A --> F[mvc-mysql-sequelize\nMVC or monorepo + SQL stack]
 
-    B --> T[Theory]
+    B --> S[Use the Shop]
+    B --> U[Understand]
+    B --> D2[Build]
     B --> M[Modules]
-    B --> U[Tools]
-    B --> V[API]
+    B --> O[Operate]
+    B --> R[Reference]
 
     classDef family fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef current fill:#ddd6fe,stroke:#7c3aed,color:#111827;
     classDef docs fill:#dbeafe,stroke:#2563eb,color:#111827;
     class A,C,D,E,F family;
     class B current;
-    class T,M,U,V docs;
+    class S,U,D2,M,O,R docs;
 ```
 
 ## Read this repo as
 
 - **API**: REST API.
-- **Framework**: [Express](./tools/runtime.md).
-- **Database**: [MongoDB + Mongoose](./tools/mongodb-mongoose.md).
-- **Observability**: [Observability Reference](./tools/observability-reference.md), [Prometheus](./tools/prometheus.md), [OpenTelemetry](./tools/opentelemetry.md), and [Grafana](./tools/grafana.md).
-- **Real-time / outbound**: [SSE metrics stream](./api/observability.md) and [email + PDF rendering](./tools/email-and-rendering.md).
-- **Process model**: [Clustering & graceful shutdown](./theory/clustering.md).
-- **Contracts**: [`openapi.yaml`](./api/openapi-workflow.md#openapi-is-the-source-of-truth) + [`asyncapi.yaml`](./api/asyncapi-workflow.md#asyncapi-is-the-async-contract-source-of-truth).
-- **Shape**: layered code explained in [Theory](./theory/) and the dedicated [Layers](./theory/layers.md) page.
+- **Framework**: [Express](./understand/runtime.md).
+- **Database**: [MongoDB + Mongoose](./understand/mongodb-mongoose.md).
+- **Observability**: [Observability Reference](./operate/observability-reference.md), [Prometheus](./operate/prometheus.md), [OpenTelemetry](./operate/opentelemetry.md), and [Grafana](./operate/grafana.md).
+- **Real-time / outbound**: [SSE metrics stream](./reference/observability.md) and [email + PDF rendering](./understand/email-and-rendering.md).
+- **Process model**: [Clustering & graceful shutdown](./understand/clustering.md).
+- **Contracts**: [`openapi.yaml`](./build/openapi-workflow.md#openapi-is-the-source-of-truth) + [`asyncapi.yaml`](./build/asyncapi-workflow.md#asyncapi-is-the-async-contract-source-of-truth).
+- **Shape**: layered code explained in [Theory](./understand/start.md) and the dedicated [Layers](./understand/layers.md) page.
 
 ## Six sections, six jobs
 
-### [Demo Shop](./demo-ecommerce/)
+### [Demo Shop](./use-the-shop/start.md)
 
 What the demo application actually does, in plain language, with no code on any page.
 Start here if you are not going to read the codebase — or if you need to explain it to someone who
 never will.
 
-### [Theory](./theory/)
+### [Theory](./understand/start.md)
 
 Big picture: architecture, layers, and request flow.
 
-### [Modules](./modules/)
+### [Modules](./modules/start.md)
 
 One page per domain, top to bottom: what it owns, who depends on it, its collection fields, its
 routes, and everything it emits.
-Start at [the whole map](./modules/) — every domain grouped by subdomain, every node clickable.
+Start at [the whole map](./modules/start.md) — every domain grouped by subdomain, every node clickable.
 
-### [Tools](./tools/)
+### [Tools](./understand/tool-map.md)
 
 Dependency-focused pages: runtime, security, database, cache, logs, metrics, traces, package groups, scripts, containers, analytics, testing, and docs.
-New to the stack? Start at [Tools Explained](./tools/tools-explained.md) for a plain-English "what is X and why is it here" summary of every tool.
+New to the stack? Start at [Tools Explained](./understand/tools-explained.md) for a plain-English "what is X and why is it here" summary of every tool.
 
-### [API](./api/)
+### [API](./build/api-contracts.md)
 
 Contract-first workflow: OpenAPI + AsyncAPI, codegen, mocks, and implementation alignment.
 
-### [Files](./reference/)
+### [Files](./reference/start.md)
 
 The lookup surface: every file in the repository, what it is, and which page above explains it.
 Start here when you have landed on a filename rather than on a question.
@@ -146,14 +159,14 @@ flowchart LR
 
 ## Good starting points
 
-- Never run this repo before? Start at [Getting Started](./getting-started.md) — three commands to a browsable API.
-- Deploying instead of developing? [Getting Started — Production](./getting-started-production.md).
-- Not a developer, or explaining this to someone who is not? [Demo Shop](./demo-ecommerce/) — the whole application in five short pages.
-- Want to know what one domain does, end to end? [Modules](./modules/) — one page each, same shape every time.
-- Found a file and have no idea what it is? [File Glossary](./reference/) — one hop to an answer.
-- Edited a module's contract fragment and unsure what to rerun? [Regenerating After a Change](./api/regenerating.md).
-- Want the app shape? Start at [Theory Overview](./theory/) and [Layers](./theory/layers.md).
-- Want a specific dependency? Start at [Tools](./tools/) and jump to the tool page you need.
-- Want the `package.json` map? Read [Package Dependencies](./tools/package-dependencies.md) and [Package Scripts](./tools/package-scripts.md).
-- Want observability? Start with [Observability Reference](./tools/observability-reference.md), then jump to [Prometheus](./tools/prometheus.md), [OpenTelemetry](./tools/opentelemetry.md), and [Grafana](./tools/grafana.md).
-- Want to change payloads or routes? Start in [API Overview](./api/) and keep [`openapi.yaml`](./api/openapi-workflow.md#openapi-is-the-source-of-truth) first.
+- Never run this repo before? Start at [Getting Started](./build/run-locally.md) — three commands to a browsable API.
+- Deploying instead of developing? [Getting Started — Production](./operate/first-deploy.md).
+- Not a developer, or explaining this to someone who is not? [Demo Shop](./use-the-shop/start.md) — the whole application in five short pages.
+- Want to know what one domain does, end to end? [Modules](./modules/start.md) — one page each, same shape every time.
+- Found a file and have no idea what it is? [File Glossary](./reference/start.md) — one hop to an answer.
+- Edited a module's contract fragment and unsure what to rerun? [Regenerating After a Change](./build/regenerating.md).
+- Want the app shape? Start at [Theory Overview](./understand/start.md) and [Layers](./understand/layers.md).
+- Want a specific dependency? Start at [Tools](./understand/tool-map.md) and jump to the tool page you need.
+- Want the `package.json` map? Read [Package Dependencies](./reference/package-dependencies.md) and [Package Scripts](./reference/package-scripts.md).
+- Want observability? Start with [Observability Reference](./operate/observability-reference.md), then jump to [Prometheus](./operate/prometheus.md), [OpenTelemetry](./operate/opentelemetry.md), and [Grafana](./operate/grafana.md).
+- Want to change payloads or routes? Start in [API Overview](./build/api-contracts.md) and keep [`openapi.yaml`](./build/openapi-workflow.md#openapi-is-the-source-of-truth) first.

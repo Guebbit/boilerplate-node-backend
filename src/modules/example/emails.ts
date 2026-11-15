@@ -5,7 +5,7 @@
  * Here: the mail the owner gets when an example is published.
  * Delete it if: the module sends no mail (with `services/notify.ts` and `templates/`).
  *
- * See: docs/tools/email-and-rendering.md
+ * See: docs/understand/email-and-rendering.md
  */
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';

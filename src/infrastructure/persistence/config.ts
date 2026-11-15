@@ -2,7 +2,7 @@
  * @module
  * Persistence configuration: the default page size.
  *
- * See: docs/tools/configuration.md
+ * See: docs/operate/configuration.md
  */
 
 import { defineConfig } from '@infrastructure/config/define';

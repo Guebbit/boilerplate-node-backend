@@ -58,7 +58,7 @@ it, through the `personalData.erase` hook this module declares and `users` runs 
 transaction — the same hook `cart`, `wishlist`, `payments` and `orders` each declare for their own
 collection. An account inactive past `NODE_INACTIVE_MINIMISE_DAYS` loses its book too, through this
 module's `personalData.minimise` hook: a saved address is re-entered on the next order, so it is the
-first thing an idle account no longer needs ([why](../theory/data-retention.md#inactive-accounts-minimise-don-t-delete)).
+first thing an idle account no longer needs ([why](../understand/data-retention.md#inactive-accounts-minimise-don-t-delete)).
 Nothing here ever calls into `users`' service.
 
 ## The pipeline
@@ -112,11 +112,11 @@ the second case, not silently ship nowhere — collapsing the two would let a st
 queried on directly, so encrypting them costs no lookup capability. `repository.ts` is the one
 place that encrypts (every write) and decrypts (every read) — `service.ts` and `cart`'s checkout
 snapshot both see plaintext, never the stored ciphertext. See
-[Secrets at rest](../theory/defences/crypto-and-secrets.md#secrets-at-rest).
+[Secrets at rest](../understand/defences/crypto-and-secrets.md#secrets-at-rest).
 
 ## Related pages
 
 - [`account`](./account.md) — shares the `/account` URL prefix and the frontend screen
 - [`cart`](./cart.md) — the checkout that resolves a shipping address through this module
-- [Adding & Removing a Module](../theory/module-lifecycle.md) — the deletability procedure
-- [Strategic DDD](../theory/strategic-ddd.md#_2-context-map-—-how-a-module-reaches-its-siblings) — why the address book left `account`
+- [Adding & Removing a Module](../build/module-lifecycle.md) — the deletability procedure
+- [Strategic DDD](../understand/strategic-ddd.md#_2-context-map-—-how-a-module-reaches-its-siblings) — why the address book left `account`

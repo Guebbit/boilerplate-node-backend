@@ -8,4 +8,4 @@ allowed-tools: Agent, Read, Glob, Grep, Write, Bash(git diff:*), Bash(git status
 Read `scripts/audit/api-http/SKILL.md` and follow it. The scope is: $ARGUMENTS
 
 The audit lives under `scripts/audit/` so any AI tool can run it; this file only registers it with
-Claude Code. See `docs/tools/ai-auditing.md`.
+Claude Code. See `docs/build/ai-auditing.md`.

@@ -40,11 +40,11 @@
  *
  * ── The multipart operations, sent as urlencoded ────────────────────────────────────────
  * Every `multipart/form-data` operation here ALSO declares an `application/json` variant, and
- * `readInput`'s decode rule (`docs/theory/request-input.md`#"Only the string transports are
+ * `readInput`'s decode rule (`docs/understand/request-input.md`#"Only the string transports are
  * decoded") coerces a string-typed boolean/array ONLY for a real multipart body. The second
  * `describe.each` below sends the same hostile, spec-valid arbitrary as
  * `application/x-www-form-urlencoded`, a type none of them declares: the 415 guard
- * (`docs/api/write-methods.md`) must refuse it before a controller sees a single field.
+ * (`docs/understand/write-methods.md`) must refuse it before a controller sees a single field.
  */
 import fc from 'fast-check';
 import { api, authenticateAs } from '@tests/http';
@@ -259,7 +259,7 @@ describe.each(
 });
 
 /*
- * The merge-patch variant of every PATCH that declares one (`docs/api/write-methods.md`). The
+ * The merge-patch variant of every PATCH that declares one (`docs/understand/write-methods.md`). The
  * same field schemas as the JSON body, but a different content type — and a different reading of
  * `null` (clear) — so it is its own route through the body parser and the write.
  */

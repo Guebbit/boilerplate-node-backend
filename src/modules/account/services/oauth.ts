@@ -344,7 +344,7 @@ export const loginOrCreateFromOAuth = (
     accountUserService
         // WITH credentials, unlike every other lookup in this file: the controller may need to
         // build a 2FA login challenge off `user.twoFactorMethods`, which is `select: false` —
-        // see 1b in docs/theory/defences/authentication.md#federated-login.
+        // see 1b in docs/understand/defences/authentication.md#federated-login.
         .findByOAuthIdentity(provider, identity.providerId)
         .then((existing) => {
             if (existing) {

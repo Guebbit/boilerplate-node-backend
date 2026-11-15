@@ -9,7 +9,7 @@
  * Why by hand: breaker libraries wrap a function call; `express-rate-limit`'s `Store` is an
  *            interface with four methods, and the state has to be shared across all of them.
  *
- * See: docs/tools/security.md#when-the-limits-redis-is-down
+ * See: docs/understand/security.md#when-the-limits-redis-is-down
  */
 
 /** A breaker's state machine, driven by whoever calls Redis. */

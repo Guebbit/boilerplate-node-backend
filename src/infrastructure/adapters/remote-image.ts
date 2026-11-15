@@ -7,7 +7,7 @@
  * Best-effort by design: any failure resolves to `undefined` — a missing avatar must never fail
  * the signup that asked for it.
  *
- * See: docs/tools/image-processing.md
+ * See: docs/understand/image-processing.md
  */
 
 import { randomUUID } from 'node:crypto';

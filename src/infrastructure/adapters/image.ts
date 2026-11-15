@@ -5,7 +5,7 @@
  * file: swapping the library later is a rewrite of these two functions, not a search across the
  * codebase.
  *
- * See: docs/tools/image-processing.md
+ * See: docs/understand/image-processing.md
  */
 
 import sharp from 'sharp';

@@ -10,7 +10,7 @@
  * Unset:   `NODE_RATE_LIMIT_REDIS_URL` has no fallback to the cache's URL. No URL means the
  *          in-process stores, and each instance is named explicitly.
  *
- * See: docs/tools/redis-cache.md#two-redis-instances
+ * See: docs/understand/redis-cache.md#two-redis-instances
  */
 
 import type { RedisReply } from 'rate-limit-redis';

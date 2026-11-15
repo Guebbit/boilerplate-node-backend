@@ -8,7 +8,7 @@
  * may actually buy from those counters is `@modules/products`'s `availableStock`
  * (`src/modules/products/domain/stock.ts`), not this module's own concern.
  *
- * See: docs/theory/domain-layer.md
+ * See: docs/understand/domain-layer.md
  */
 
 import { StockMovementReason } from '@types';

@@ -71,7 +71,7 @@ against an order). Both are the filer's own words, so the export includes them.
 `GET /tasks` and `POST /tasks/search` answer a `TaskListItem`: the sender's name and email, subject,
 a `messagePreview` of the first 160 characters, category, order number, assignee, due date, status
 and `actions`. The whole message, the staff notes and the sender's account are `GET /tasks/{id}`, the
-audited read. See [a list row is a list item](../api/responses.md#a-list-row-is-a-list-item).
+audited read. See [a list row is a list item](../reference/responses.md#a-list-row-is-a-list-item).
 
 ### System tasks
 
@@ -186,7 +186,7 @@ and one that passes it as `task.overdue` (both with the payload of `task.opened`
 [`notifications`](./notifications.md#work-notices-for-staff) hears all four and does the telling,
 so a situation is one task kind or one notice code, never both.
 
-All four go through the [transactional outbox](../tools/outbox.md): the event row is written in
+All four go through the [transactional outbox](../understand/outbox.md): the event row is written in
 the same transaction as the change it announces (the insert, the assignment, the due-soon and overdue claims),
 so a crash or a failing listener cannot lose a notice. Delivery is at-least-once, and the receiver
 dedupes (`task-opened:<id>`, `task-due-soon:<id>`, `task-overdue:<id>`, `task-assigned:<id>:<assignedAt>`). The
@@ -209,8 +209,8 @@ subject carries `[#ref]` (the last eight characters of the task id) and, for a p
 the retention TTL and outside `DELETE /tasks/{id}`: the mailbox copy of a message is cleaned by
 hand. An erasure that deleted messages mails the mailbox ONE notice naming them by `[#ref]` alone
 (no address, name or text), and staff follow
-[the guide](../demo-ecommerce/support.md#mailbox-after-erasure); the retention rule is in
-[data retention](../theory/data-retention.md#the-support-mailbox). The reminders thread under the first mail (`Message-ID` `<task-<id>@<support domain>>`, then `In-Reply-To`
+[the guide](../use-the-shop/support.md#mailbox-after-erasure); the retention rule is in
+[data retention](../understand/data-retention.md#the-support-mailbox). The reminders thread under the first mail (`Message-ID` `<task-<id>@<support domain>>`, then `In-Reply-To`
 and `References` pointing at it). Nothing is mailed to the visitor.
 
 ```mermaid
@@ -324,7 +324,7 @@ Every rule this module declares and who holds it, role by role. The rule is what
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
 `src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../theory/authorization.md) explains the model.
+evaluator — [Authorization](../understand/authorization.md) explains the model.
 
 <!-- permissions:end -->
 
@@ -332,8 +332,8 @@ evaluator — [Authorization](../theory/authorization.md) explains the model.
 
 - [Users](./users.md) — the assignee, and the erase cascade this module joins
 - [Access](./access.md) — the roles a task may be given to
-- [Modules overview](./index.md) — the whole context map
-- [Email & PDF Rendering](../tools/email-and-rendering.md) — the triage notification
-- [Security](../tools/security.md) — the rate-limit budgets, including this module's own
-- [Winston & Audit Logs](../tools/winston.md) — what a triage action records
+- [Modules overview](./start.md) — the whole context map
+- [Email & PDF Rendering](../understand/email-and-rendering.md) — the triage notification
+- [Security](../understand/security.md) — the rate-limit budgets, including this module's own
+- [Winston & Audit Logs](../operate/winston.md) — what a triage action records
 - [Ops & Assets](../reference/ops.md) — the retention window and why changing it needs `db:sync`

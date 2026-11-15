@@ -5,7 +5,7 @@
  * main mailbox (`NODE_SUPPORT_EMAIL`), so it renders in `NODE_DEFAULT_LOCALE`; the customer's own
  * words stay untranslated, and it skips the shared `footer` partial.
  *
- * See: docs/tools/email-and-rendering.md
+ * See: docs/understand/email-and-rendering.md
  */
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';

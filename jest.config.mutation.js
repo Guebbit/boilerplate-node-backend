@@ -4,7 +4,7 @@
  * swapped for swc and the worker pool collapsed to one. ts-jest type-checks, and its
  * LanguageService cache grows with every mutant until the worker is OOM-killed; swc only
  * transpiles, so it retains nothing, and `npm run ts-check` already checks the types once.
- * See docs/tools/mutation-testing.md.
+ * See docs/build/mutation-testing.md.
  */
 const path = require('node:path');
 const baseConfig = require('./jest.config');
@@ -26,7 +26,7 @@ module.exports = {
     /*
      * One worker, because Stryker is already the pool: it runs `concurrency` full jests at once,
      * so the base config's `CPUs - 2` is multiplied rather than reused. `STRYKER_CONCURRENCY` in
-     * `.env` is the one knob. See docs/tools/mutation-testing.md#the-worker-pool-multiplication.
+     * `.env` is the one knob. See docs/build/mutation-testing.md#the-worker-pool-multiplication.
      */
     maxWorkers: 1,
     // Dropped with the pool: the base config only sets it for more than one worker, and a limit

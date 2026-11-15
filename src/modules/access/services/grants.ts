@@ -4,7 +4,7 @@
  * `assign:Role`. Every rule here is a REFUSAL rather than a note in a docblock — the check
  * that is not executed is the check that is not true.
  *
- * See: docs/theory/authorization.md · `shared/rules/authorization-roles.yaml`
+ * See: docs/understand/authorization.md · `shared/rules/authorization-roles.yaml`
  */
 
 import type { AuthorizationScope, CallerContext } from '@types';

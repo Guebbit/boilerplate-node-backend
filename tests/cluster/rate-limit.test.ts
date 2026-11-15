@@ -26,7 +26,7 @@
  * budget to observe.
  *
  * Two boots, ~20 seconds for the cluster. That is why this suite is not in `npm run complete`; see
- * `docs/tools/cluster-testing.md`.
+ * `docs/build/cluster-testing.md`.
  *
  * ── What this found ───────────────────────────────────────────────────────────────────────────
  * On its first run, nothing was being limited at all: 30 of 30 requests answered 200 against a

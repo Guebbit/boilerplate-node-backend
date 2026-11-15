@@ -3,7 +3,7 @@
  * User service — the User document's admin CRUD and search, and the few reads and holds a sibling
  * module really uses. The rest of what touches the document (authenticate, register, verify,
  * 2FA-protect, erase) is `account`'s and lives behind `../friends/account.ts`. One file per flow,
- * not one big file; see `docs/theory/layers.md`.
+ * not one big file; see `docs/understand/layers.md`.
  *
  * The flows themselves — HTTP, sessions, emails, rate limits, anti-automation — stay in `account`;
  * these files only ever enforce what the document itself requires.

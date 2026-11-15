@@ -1,7 +1,7 @@
 # Shared compliance rule registry. Read by scripts/audit/compliance-backend/SKILL.md and
 # scripts/audit/compliance-frontend/SKILL.md, which each filter by `responsibility` and evaluate only
 # their own `evidence.<side>` hints. Lives here, once, and the frontend audit reads this copy — see
-# docs/tools/ai-auditing.md. `rules:` is what either prompt evaluates; `suggested_rules:` is a
+# docs/build/ai-auditing.md. `rules:` is what either prompt evaluates; `suggested_rules:` is a
 # staging area for candidates pending human approval and MUST NOT be read by either prompt.
 #
 # Evidence hints name the authored contract: a module's `src/modules/<m>/openapi.yaml` fragment, or
@@ -45,7 +45,7 @@ rules:
           `termsVersion` on `GET /config`, and the page paths in the sitemap. A shipped
           `<LegalPlaceholder>` (a visible "text missing" warning plus a section checklist, no legal
           wording) is the designed default. Writing the text is the operator's go-live step
-          (frontend INSTALL.md, backend docs/demo-ecommerce/before-you-sell.md). It goes in the view
+          (frontend INSTALL.md, backend docs/use-the-shop/before-you-sell.md). It goes in the view
           template, with a `NODE_TERMS_VERSION` bump in the same deploy. The placeholder never
           decides the verdict: judge the pages, routes, footer links and identity. VIOLATION: a
           page, route or footer link is missing; wording poses as real legal text (Lorem Ipsum, a
@@ -134,9 +134,9 @@ rules:
       evidence:
           backend:
               - src/modules/users/model.ts (password hashing call site)
-              - docs/tools/security.md (single-use token entropy + sha256-digest-at-rest section)
+              - docs/understand/security.md (single-use token entropy + sha256-digest-at-rest section)
               - src/modules/payments/** (must show cardLast4 only, never a full PAN field)
-              - docs/theory/data-protection.md ("no full PAN ever stored")
+              - docs/understand/data-protection.md ("no full PAN ever stored")
               - src/infrastructure/adapters/logger.ts + NODE_LOG_PERSONAL_FIELDS
           frontend: []
       references:
@@ -267,7 +267,7 @@ rules:
           gambling, adult), or is directed at children. Categories and tags are free-form strings
           (src/modules/products/model.ts), so judge the seeded catalogue (scenarios/products.ts,
           scenarios/products-filler.ts) and the demo's audience. A deployer who adds such goods owns
-          the age check (docs/demo-ecommerce/before-you-sell.md, "Age-restricted goods").
+          the age check (docs/use-the-shop/before-you-sell.md, "Age-restricted goods").
           Frontend: no age-gate component and no date-of-birth field at signup or checkout (grep
           -rniE "age-?gate|dateOfBirth|birth").
       evidence:
@@ -359,7 +359,7 @@ rules:
           `navigator.globalPrivacyControl`.
       evidence:
           backend:
-              - docs/theory/data-protection.md (sub-processor list)
+              - docs/understand/data-protection.md (sub-processor list)
               - NODE_ANALYTICS_PROVIDER / NODE_POSTHOG_HOST config
           frontend:
               - footer / privacy-settings page for a "Do Not Sell" link
@@ -457,7 +457,7 @@ rules:
           works (mail and an in-app notice on the cart and on the profile); a contact route reaches
           staff who can lift it (POST /users/{id}/lift-purchase-hold, which also restarts the count);
           the processing basis and a legitimate-interest assessment are written down
-          (docs/theory/data-retention.md); the pause is capped at 7 days and flags the account so a
+          (docs/understand/data-retention.md); the pause is capped at 7 days and flags the account so a
           person reviews it (users list filter purchaseHoldReview). Verdict: SATISFIED when the
           Art. 22(3) safeguards hold. The house applies them as a precaution while the Art. 22(1)
           scope is open, so the verdict judges the safeguards, not the prohibition. The mail alone
@@ -467,7 +467,7 @@ rules:
           the effect must be comparable to a legal effect). If the pause is significant it is
           prohibited (C-634/21 ¶52) and no Art. 22(2) exception fits, so the fix is a person before
           the pause. That is the operator's product choice
-          (docs/theory/data-retention.md#the-purchase-hold)." Re-judge the scope question, and report
+          (docs/understand/data-retention.md#the-purchase-hold)." Re-judge the scope question, and report
           VIOLATION if it is then judged significant, when the hold loses its 7-day cap, stops ending
           by itself, stops flagging the account for review, or blocks an order already placed
           (cancelling a contract is a legal effect, WP251 p.21).
@@ -494,7 +494,7 @@ suggested_rules:
               - src/modules/users/model.ts (termsVersion)
               - src/app/config-routes.ts (termsVersion)
               - src/modules/orders/model.ts (termsVersion frozen on each checkout order)
-              - docs/demo-ecommerce/before-you-sell.md ("Changing the terms")
+              - docs/use-the-shop/before-you-sell.md ("Changing the terms")
           frontend:
               - a notice surface (mail or inbox)
       references:
@@ -505,5 +505,5 @@ suggested_rules:
       suggested_reason: >
           Promotion waits for the user: the boilerplate builds no notice to existing accounts, so a
           promoted rule would judge only the operator's row in
-          `docs/demo-ecommerce/before-you-sell.md`, and the verdict set has no operator-duty value
+          `docs/use-the-shop/before-you-sell.md`, and the verdict set has no operator-duty value
           (NEEDS-BOTH-SIDES means backend↔frontend).

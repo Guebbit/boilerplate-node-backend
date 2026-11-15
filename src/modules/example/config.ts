@@ -3,7 +3,7 @@
  * In any module: the environment variables this module reads, declared once, typed and checked at
  * boot. No other file reads `process.env`. Here: the longest body an example may have.
  *
- * See: docs/tools/configuration.md
+ * See: docs/operate/configuration.md
  */
 
 import { defineConfig } from '@infrastructure/config/define';

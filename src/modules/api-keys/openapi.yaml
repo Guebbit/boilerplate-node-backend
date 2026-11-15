@@ -59,7 +59,7 @@ paths:
                 that ever carries it. `permissions` must be a non-empty subset of the CALLER's own
                 currently-held tenant permissions: a key can never reach further than the person
                 who minted it, and that floor is re-checked on every request the key later makes,
-                not just at mint time — see `docs/tools/security.md#machine-to-machine-credentials`.
+                not just at mint time — see `docs/understand/security.md#machine-to-machine-credentials`.
                 A key whose minter is banned, soft-deleted or erased is refused with 401 like a
                 revoked one; an unban or a restore brings it back.
                 A permission no credential can use is refused with 422 too: one that demands a freshly
@@ -136,7 +136,7 @@ paths:
 components:
     schemas:
         # ---------- api-keys — the schemas only this module's paths reference. ----------
-        # The ONE sort grammar, shared with every list (docs/api/sorting.md). `-` sorts
+        # The ONE sort grammar, shared with every list (docs/reference/sorting.md). `-` sorts
         # descending; earlier entries rank first; ties end on the id.
         ApiKeySort:
             type: array

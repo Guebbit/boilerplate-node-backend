@@ -369,7 +369,7 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
      * order, and `_id` is what breaks a tie between two equally scarce products deterministically
      * (not alphabetically — `services/levels.ts`'s `listLevels` reads titles back from `products` AFTER
      * this page is settled, which is one round trip too late to sort by them). See
-     * `docs/theory/strategic-ddd.md` §5: the board reads the real counters, and
+     * `docs/understand/strategic-ddd.md` §5: the board reads the real counters, and
      * asks `products` for names through its service, never through a database join.
      *
      * @param options - `skip`/`limit` for the page, and `maxAvailable` to keep only scarce rows

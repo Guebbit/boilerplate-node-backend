@@ -5,7 +5,7 @@
  * application; a reporting module asks for the move, this file decides whether it still applies
  * and announces it once it lands.
  *
- * See `docs/theory/tactical-ddd.md` §1 "Who writes the status".
+ * See `docs/understand/tactical-ddd.md` §1 "Who writes the status".
  */
 
 import { announceInTransaction, announceWithin, type OutboxAnnouncements } from '@kernel/outbox';

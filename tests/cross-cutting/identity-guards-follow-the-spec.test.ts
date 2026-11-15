@@ -17,7 +17,7 @@
  * Route table and bundled spec only: no database, so it runs in the commit gate and under Stryker,
  * which has no mutator that removes an argument and so cannot see a guard dropped from a route.
  *
- * See: docs/tools/contract-testing.md
+ * See: docs/build/contract-testing.md
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';

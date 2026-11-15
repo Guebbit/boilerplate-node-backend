@@ -5,7 +5,7 @@
 # Markers:    `@NAME@` is replaced by the knob's value.
 #             `# BEGIN x` .. `# END x` lines are deleted when knob group `x` is empty.
 # Receivers:  every receiver is always defined; an emptied receiver notifies no one.
-# Docs:       docs/tools/prometheus.md#alert-routing
+# Docs:       docs/operate/prometheus.md#alert-routing
 
 global:
     # Time to wait before considering an alert resolved when updates stop.

@@ -110,7 +110,7 @@ export const readAll = <TItem>(
  * Unescaped `$regex` input is a remote denial of service: MongoDB evaluates the pattern
  * server-side against every candidate document, and both search endpoints are public.
  *
- * See: docs/tools/security.md#why-search-text-is-escaped-before-it-reaches-regex
+ * See: docs/understand/security.md#why-search-text-is-escaped-before-it-reaches-regex
  */
 export const escapeRegex = (value: string): string =>
     value.replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`);

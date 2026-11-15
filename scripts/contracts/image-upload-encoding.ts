@@ -10,7 +10,7 @@
  * Why the contract owns it: the list is API surface (a client must know what to send). The byte
  * signatures that verify it are server internals and stay in `shared/rules/images.yaml`.
  *
- * See: docs/tools/image-processing.md
+ * See: docs/understand/image-processing.md
  */
 
 import { operationsOf, type Step } from './openapi-document';

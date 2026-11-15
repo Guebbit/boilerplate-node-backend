@@ -2,7 +2,7 @@
  * @module
  * `removeById`/`restoreById`'s audit rows — moved out of `createDeleteController`/
  * `createRestoreController` into this service, matching every other module's write path
- * (rule 1, `docs/theory/module-lifecycle.md`). These pin that `ORDER_DELETED`/`ORDER_RESTORED`
+ * (rule 1, `docs/build/module-lifecycle.md`). These pin that `ORDER_DELETED`/`ORDER_RESTORED`
  * still land, from the new layer, with the same fields.
  */
 

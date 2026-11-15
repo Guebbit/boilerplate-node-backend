@@ -4,7 +4,7 @@
  * and never from the barrel — it writes past the rules a service enforces.
  * Here: one draft example, with every field defaulted.
  *
- * See: docs/theory/modules.md#what-a-module-contains
+ * See: docs/understand/modules.md#what-a-module-contains
  */
 
 import { Types } from 'mongoose';

@@ -5,7 +5,7 @@
  * `epoch.ts` (the session-epoch rule) is not re-exported: `session/` imports it directly, since the
  * barrel never publishes `session/`'s token surface.
  *
- * See `docs/theory/domain-layer.md`.
+ * See `docs/understand/domain-layer.md`.
  */
 
 export {

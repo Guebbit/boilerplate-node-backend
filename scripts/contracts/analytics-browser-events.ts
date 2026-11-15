@@ -10,7 +10,7 @@
  *
  * Its own file so the OpenAPI bundler meets it at one call (`withBrowserEvents`).
  *
- * See: docs/api/contract-fragmentation.md#module-owned-browser-events
+ * See: docs/build/contract-fragmentation.md#module-owned-browser-events
  */
 
 import path from 'node:path';

@@ -301,7 +301,7 @@ paths:
                 instant), after which it stops signing and disappears from `secretIds`. A ring holds at
                 most two: adding a third drops the oldest, which is already superseded. A secret is a
                 line of the subscription, so adding one is a `POST` on the line collection and answers
-                200 with the whole subscription (docs/api/write-methods.md).
+                200 with the whole subscription (docs/understand/write-methods.md).
 
                 A secret signs for the subscription's stored filter, so the caller needs the read rule
                 of every event in it (`actions.createSecret` is false otherwise): 403
@@ -450,7 +450,7 @@ paths:
                 `asyncapi.webhooks.yaml` — the same files `asyncapi.public.yaml` is generated from —
                 so this list and what can actually fire can never drift apart. A module that is
                 not deployed lists nothing. Each entry's `actions.subscribe` says whether the caller holds
-                the event's read rule and so may put it in a filter. See `docs/api/asyncapi-workflow.md`.
+                the event's read rule and so may put it in a filter. See `docs/build/asyncapi-workflow.md`.
 
                 Unpaged: the event catalogue of the deployed modules.
             operationId: listWebhookEvents
@@ -617,7 +617,7 @@ components:
                     type: string
                     description: A rotated-in secret's plaintext, present only in the response of `POST .../secrets`.
 
-        # The ONE sort grammar, shared with every list (docs/api/sorting.md). `-` sorts
+        # The ONE sort grammar, shared with every list (docs/reference/sorting.md). `-` sorts
         # descending; earlier entries rank first; ties end on the id.
         WebhookSubscriptionSort:
             type: array

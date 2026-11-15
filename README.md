@@ -50,8 +50,8 @@ npm run compose:up:full   # adds observability + analytics + the docs site (17 c
 `compose:restart` and `compose:rebuild` honour the same profiles: set `COMPOSE_PROFILES` in `.env`
 once to keep the full stack across restarts, instead of passing `:full` every time.
 
-→ Host mode, the collections, the pre-commit gate: **[Getting Started](./docs/getting-started.md)**
-→ Ports and running the pair: **[Pairing & Ports](./docs/tools/pairing-and-ports.md)**
+→ Host mode, the collections, the pre-commit gate: **[Getting Started](./docs/build/run-locally.md)**
+→ Ports and running the pair: **[Pairing & Ports](./docs/build/pairing-and-ports.md)**
 → What to set up by hand before it is yours (accounts, keys, domain, legal): **[INSTALL.md](./INSTALL.md)**
 
 ---
@@ -84,7 +84,7 @@ Four ideas carry the whole repository:
 1. **A module is a value, not a convention.** Every domain declares what it needs — routes,
    locales, scenario guarantees, event subscriptions, contract fragments — in one typed object. `src/modules.ts`
    lists them, and the registry refuses to boot on missing or placeholder config rather than
-   failing at the first request. See [Adding & removing a module](docs/theory/module-lifecycle.md)
+   failing at the first request. See [Adding & removing a module](docs/build/module-lifecycle.md)
    for what a domain actually costs to add or remove.
 2. **The contract is an output, not a document.** `openapi.yaml` is assembled from per-module
    fragments and generates the typed client and Zod schemas that both repositories import.
@@ -97,7 +97,7 @@ Four ideas carry the whole repository:
 
 ## Where things live
 
-The tiers, their folders and their main job are one table: [Layers](./docs/theory/layers.md#quick-map).
+The tiers, their folders and their main job are one table: [Layers](./docs/understand/layers.md#quick-map).
 The domains are `src/modules/*` (each one deletable; `src/modules/example` is the one to copy for a new
 domain), the contract and everything generated from it is `api/`, and `shared/` holds what both backends
 read (`rules/`, `cases/`, `locales/`, `scenarios/`, `templates/`, the authorization keys). The demo records
@@ -109,18 +109,18 @@ and the flow runner are `scenarios/`, outside `src/` entirely; index sync and th
 
 | You want to                   | Read                                                                                                                                         |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Get it running                | [Getting Started](./docs/getting-started.md)                                                                                                 |
-| **Read the code, first time** | **[Reading Path](./docs/theory/reading-path.md)** — nine files, in order                                                                     |
+| Get it running                | [Getting Started](./docs/build/run-locally.md)                                                                                               |
+| **Read the code, first time** | **[Reading Path](./docs/understand/reading-path.md)** — nine files, in order                                                                 |
 | Know what one file _is_       | [File Glossary](./docs/reference/) — every file in the repo, one hop to an answer                                                            |
-| Understand the shape          | [Architecture](./docs/theory/architecture.md) · [Layers](./docs/theory/layers.md) · [Modules](./docs/theory/modules.md)                      |
-| Add or remove a domain        | [Adding & Removing a Module](./docs/theory/module-lifecycle.md)                                                                              |
-| Change an endpoint            | [OpenAPI Workflow](./docs/api/openapi-workflow.md) · [Regenerating](./docs/api/regenerating.md)                                              |
-| Run the pair                  | [Pairing & Ports](./docs/tools/pairing-and-ports.md)                                                                                         |
-| Look up a script              | [Package Scripts](./docs/tools/package-scripts.md)                                                                                           |
-| Catch an outbound webhook     | [Docker & Podman](./docs/tools/docker-and-podman.md#the-integrations-profile-is-where-a-real-consumer-would-go) — the `integrations` profile |
-| Understand a dependency       | [Tools Explained](./docs/tools/tools-explained.md)                                                                                           |
-| Test something                | [Testing overview](./docs/tools/testing-and-docs.md)                                                                                         |
-| Deploy it                     | [Getting Started — Production](./docs/getting-started-production.md)                                                                         |
+| Understand the shape          | [Architecture](./docs/understand/architecture.md) · [Layers](./docs/understand/layers.md) · [Modules](./docs/understand/modules.md)          |
+| Add or remove a domain        | [Adding & Removing a Module](./docs/build/module-lifecycle.md)                                                                               |
+| Change an endpoint            | [OpenAPI Workflow](./docs/build/openapi-workflow.md) · [Regenerating](./docs/build/regenerating.md)                                          |
+| Run the pair                  | [Pairing & Ports](./docs/build/pairing-and-ports.md)                                                                                         |
+| Look up a script              | [Package Scripts](./docs/reference/package-scripts.md)                                                                                       |
+| Catch an outbound webhook     | [Docker & Podman](./docs/build/docker-and-podman.md#the-integrations-profile-is-where-a-real-consumer-would-go) — the `integrations` profile |
+| Understand a dependency       | [Tools Explained](./docs/understand/tools-explained.md)                                                                                      |
+| Test something                | [Testing overview](./docs/build/testing-and-docs.md)                                                                                         |
+| Deploy it                     | [Getting Started — Production](./docs/operate/first-deploy.md)                                                                               |
 
 ---
 

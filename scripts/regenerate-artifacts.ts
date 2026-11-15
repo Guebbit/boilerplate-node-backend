@@ -21,7 +21,7 @@
  * import `@api/schemas.zod`. The client collections read `scenarios/subjects.ts` instead of a
  * generated dataset, are not committed, and so are not a step here either.
  *
- * See: docs/api/regenerating.md
+ * See: docs/build/regenerating.md
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -103,28 +103,28 @@ const STEPS: readonly Step[] = [
         command: ['tsx', 'scripts/docs/generate-module-graph.ts'],
         checks: true,
         because:
-            "docs/modules/index.md's module graph, read off the real imports by dependency-cruiser"
+            "docs/modules/start.md's module graph, read off the real imports by dependency-cruiser"
     },
     {
         name: 'role matrix',
         command: ['tsx', 'scripts/docs/generate-role-matrix.ts'],
         checks: true,
         because:
-            "docs/demo-ecommerce/index.md's role tables, asked of the permission evaluator rather than restated"
+            "docs/use-the-shop/start.md's role tables, asked of the permission evaluator rather than restated"
     },
     {
         name: 'dependency map',
         command: ['tsx', 'scripts/docs/generate-dependency-map.ts'],
         checks: true,
         because:
-            "docs/tools/package-dependencies.md's tables, read off package.json and who actually imports each package"
+            "docs/reference/package-dependencies.md's tables, read off package.json and who actually imports each package"
     },
     {
         name: 'rate-limit budgets',
         command: ['tsx', 'scripts/docs/generate-rate-limit-budgets.ts'],
         checks: true,
         because:
-            "docs/tools/security.md's rate-limit budget table, read off every module's own manifest"
+            "docs/understand/security.md's rate-limit budget table, read off every module's own manifest"
     },
     {
         name: 'scheduled jobs',
@@ -138,7 +138,7 @@ const STEPS: readonly Step[] = [
         command: ['tsx', 'scripts/docs/generate-audit-actions.ts'],
         checks: true,
         because:
-            "docs/tools/winston.md's audit action table, read off every module's audit.ts and its call sites' target types"
+            "docs/operate/winston.md's audit action table, read off every module's audit.ts and its call sites' target types"
     },
     {
         name: 'Dockerfile dockerignore',

@@ -7,7 +7,7 @@ import type { ClientSession } from 'mongoose';
 import { userRepository } from '../repository';
 
 /*
- * `account` end of the one domain-primitives relationship in this repo (`docs/theory/strategic-ddd.md`
+ * `account` end of the one domain-primitives relationship in this repo (`docs/understand/strategic-ddd.md`
  * §5): the User document it authenticates, resets, links to OAuth, and 2FA-protects. Read-only
  * lookups below are still thin pass-throughs to `userRepository`, named for the question they
  * answer. WRITES are not: a raw `save`/`build`/`create`/`findOneWithCredentials(where)` published

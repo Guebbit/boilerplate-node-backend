@@ -1,7 +1,7 @@
 /**
  * @module
  * Order rules. Pure: data in, verdict out — no status codes, no i18n; `../services/place` maps verdicts.
- * See `docs/theory/domain-layer.md`.
+ * See `docs/understand/domain-layer.md`.
  */
 
 /** A line as the rules see it. Absent `product` means the reference no longer resolves. */

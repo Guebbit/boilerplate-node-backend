@@ -30,7 +30,7 @@ export const moduleDescriptorSchema = z
         /**
          * Whether this module belongs to every deployment (`foundation`), is the demo shop's own
          * worked example (`shop`), or is the one `example` module that exists only to be copied —
-         * see `docs/theory/strategic-ddd.md`'s foundation/shop section.
+         * see `docs/understand/strategic-ddd.md`'s foundation/shop section.
          * `.dependency-cruiser.cjs`'s `foundation-cannot-reach-shop` and `nothing-reaches-example`
          * rules read this, fail-closed: the line is enforced, not aspirational.
          */

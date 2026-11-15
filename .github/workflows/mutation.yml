@@ -31,7 +31,7 @@ name: Mutation
 # initial run of the most widely imported file — on this same runner setup. A sweep that cannot
 # start fails there, in about 20 minutes, instead of after days of runner time.
 #
-# One ruler, the same `stryker.json` as a local run — see docs/tools/mutation-testing.md#the-github-sweep.
+# One ruler, the same `stryker.json` as a local run — see docs/build/mutation-testing.md#the-github-sweep.
 # On demand: Actions tab → Mutation → Run workflow. Tick `check-only` to run just `preflight`.
 
 on:

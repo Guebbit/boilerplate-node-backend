@@ -26,7 +26,7 @@
  * Postman and Mockoon: add the name to `COLLECTION_TOOLS` below, give it a bundle in
  * `bundle-registry.ts` and a `.gitignore` line, and the same probes and values feed it.
  *
- * See: docs/api/contract-fragmentation.md#the-client-collections-generated
+ * See: docs/build/contract-fragmentation.md#the-client-collections-generated
  */
 
 import { existsSync, readdirSync } from 'node:fs';

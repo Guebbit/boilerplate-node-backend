@@ -105,4 +105,4 @@ stands.
 
 - [`products`](./products.md) — owns the signal and the rule behind it
 - [`notifications`](./notifications.md) — writes the inbox row
-- [Adding & Removing a Module](../theory/module-lifecycle.md) — the deletability procedure
+- [Adding & Removing a Module](../build/module-lifecycle.md) — the deletability procedure

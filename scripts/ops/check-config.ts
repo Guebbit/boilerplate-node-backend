@@ -7,7 +7,7 @@
  * judges the configuration on its own, so a broken `.env` would read as a healthy container
  * whose every job fails. Run before supercronic, it makes the container fail to start instead.
  *
- * See: docs/tools/health-checks.md
+ * See: docs/operate/health-checks.md
  */
 import '@infrastructure/config/dotenv';
 import { runScript } from '../run-script';

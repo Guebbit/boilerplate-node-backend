@@ -9,7 +9,7 @@
  *
  * The unit tests under `tests/unit/scripts/scaffold/` cover the pure half. This covers what only a
  * whole checkout can: the generated code compiles and lints, its own tests pass, no cross-cutting
- * rule objects, and the docs build. See docs/tools/module-scaffolder.md.
+ * rule objects, and the docs build. See docs/build/module-scaffolder.md.
  */
 
 import os from 'node:os';

@@ -6,7 +6,7 @@
 #   4. `restic check --read-data-subset` on the repository
 #   5. print the elapsed time: that is how long the shop is down on a bad day
 # Exit 0 only when every step passed. Never touches the live database.
-# Design: docs/tools/backups.md#the-restore-drill
+# Design: docs/operate/backups.md#the-restore-drill
 # shellcheck source=common.sh
 source /usr/local/lib/backup/common.sh
 

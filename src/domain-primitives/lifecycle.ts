@@ -7,7 +7,7 @@
  * it maps 1:1 onto Google AIP-216's one-verb-per-transition. The table stays TypeScript; the
  * contract carries only the status enum and the `actions` flags.
  *
- * See: docs/theory/tactical-ddd.md#deciding-and-enforcing-stay-separate
+ * See: docs/understand/tactical-ddd.md#deciding-and-enforcing-stay-separate
  */
 
 /** One named move: where it may start, where it lands, who may make it. */

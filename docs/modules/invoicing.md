@@ -57,7 +57,7 @@ never from a request, and it is immutable from the moment it exists.
 ::: tip Shares a URL, not a folder
 `GET /orders/{id}/invoice` and `GET /orders/{id}/credit-notes` mount at `/orders`, the same prefix
 `orders` itself answers at — see [`addresses`](./addresses.md) for the precedent (`/account`,
-shared with `account`) and `docs/api/contract-fragmentation.md` for why fragmenting by `basePath`
+shared with `account`) and `docs/build/contract-fragmentation.md` for why fragmenting by `basePath`
 still splits the two contracts correctly.
 :::
 
@@ -191,7 +191,7 @@ directory) and streamed from there for `NODE_INVOICE_PDF_RETENTION_DAYS` (30); t
   rendering, with a log line.
 - **Plaintext on disk, accepted in writing:** the file holds personal and financial data and is not
   encrypted, like the Mongo data files; at-rest protection is the host's
-  ([Secrets at rest](../theory/defences/crypto-and-secrets.md#secrets-at-rest)).
+  ([Secrets at rest](../understand/defences/crypto-and-secrets.md#secrets-at-rest)).
 - **Bounded renders.** At most two Chromium processes run at once; up to 20 more renders wait; the
   21st is refused at once with `503` and `Retry-After`, because an unbounded queue is memory and
   held connections a burst can grow at will. One render has 20 seconds in all (launch, load,
@@ -222,7 +222,7 @@ aborts both, so each document leaves exactly one row.
 | Variable                             | Default                 | Meaning                                                                                                     |
 | ------------------------------------ | ----------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `NODE_EINVOICING_PROVIDER`           | `pdf`                   | Which e-invoicing provider renders a document — see above                                                   |
-| `NODE_INVOICING_RATE_LIMIT_MAX`      | —                       | Per-account budget: see [the rate-limit budgets](../tools/security.md#the-rate-limit-budgets)               |
+| `NODE_INVOICING_RATE_LIMIT_MAX`      | —                       | Per-account budget: see [the rate-limit budgets](../understand/security.md#the-rate-limit-budgets)          |
 | `NODE_INVOICE_PDF_RETENTION_DAYS`    | `30`                    | Days a rendered PDF is kept for the next download; `0` stores nothing                                       |
 | `NODE_INVOICE_BUYER_RETENTION_YEARS` | `10`                    | Years after the end of the issue year that the buyer block stays on a document; see [Retention](#retention) |
 | `NODE_DOCUMENT_STORE_PATH`           | `tmp/storage/documents` | Where those PDFs live — private, plaintext, regenerable; mount a volume                                     |
@@ -248,7 +248,7 @@ year in the document's frozen time zone. A credit note runs on its own issue dat
 - **Idempotent:** a document without a buyer block is not a candidate, so a second run finds
   nothing, and `reencrypt` already skips it.
 
-The rule and the reasoning are in [Invoices: the tax clock](../theory/data-retention.md#invoices-the-tax-clock).
+The rule and the reasoning are in [Invoices: the tax clock](../understand/data-retention.md#invoices-the-tax-clock).
 
 ## VAT rounding and the net unit price
 
@@ -314,4 +314,4 @@ since there is no numeric form for a reason code to become.
 - [`orders`](./orders.md) — the order this module reads, and the `paidAt`/`actions.invoice` proxy it keeps instead of a live dependency
 - [`payments`](./payments.md) — the fake payment provider port this module's own `EInvoicingProvider` is shaped after
 - [`addresses`](./addresses.md) — the `/account`-sharing precedent this module's `/orders`-sharing routes follow
-- [Adding & Removing a Module](../theory/module-lifecycle.md) — the deletability procedure
+- [Adding & Removing a Module](../build/module-lifecycle.md) — the deletability procedure

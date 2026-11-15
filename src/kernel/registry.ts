@@ -6,7 +6,7 @@
  * *for* it is declared in one object. Modules are listed explicitly rather than discovered from
  * the filesystem, so the list stays statically typed and enabling a domain is a one-line edit.
  *
- * See: docs/theory/modules.md#the-manifest
+ * See: docs/understand/modules.md#the-manifest
  */
 
 import type { Router } from 'express';
@@ -24,7 +24,7 @@ import type { ReencryptReport } from '@infrastructure/security/reencrypt';
  * fallback) turns a finished digest into a persisted `imageUrl`/`thumbnailUrl` on ITS collection.
  *
  * `infrastructure/adapters/image.worker.ts` may not import `src/modules/*` (see
- * docs/tools/image-processing.md#architecture), so it cannot call a module's repository
+ * docs/understand/image-processing.md#architecture), so it cannot call a module's repository
  * directly. A module registers this instead, keyed under `imageTargets` on its manifest, and the
  * worker resolves it by the `collection` string its job payload carries.
  */
@@ -86,7 +86,7 @@ export interface ModuleConsumer {
  *
  * `kernel/translation.ts`'s translation resolver cannot import `src/modules/*` either (same wall
  * as {@link ImageTarget}: it cannot be an import from `products` into `locales`, per
- * docs/theory/modules.md and `boundaries/dependencies` in `eslint.config.ts`). A module registers
+ * docs/understand/modules.md and `boundaries/dependencies` in `eslint.config.ts`). A module registers
  * this instead, keyed under `translatables` on its manifest by the `entityType` string a
  * translation row and the `/translations/{entityType}/{id}` route both use.
  */
@@ -313,7 +313,7 @@ export interface PersonalDataSection {
      * only once every hook succeeded, so a failure is retried on the next run.
      *
      * Optional: most sections hold nothing a quiet account should lose. See
-     * docs/theory/data-retention.md#inactive-accounts-minimise-don-t-delete.
+     * docs/understand/data-retention.md#inactive-accounts-minimise-don-t-delete.
      */
     minimise?: PersonalDataMinimiser;
 }
@@ -356,7 +356,7 @@ export interface RouteMount {
  * `import` statements; how it relates to a sibling is prose, and belongs in the docblock above the
  * manifest where a reader will actually meet it.
  *
- * See: docs/theory/modules.md#the-manifest
+ * See: docs/understand/modules.md#the-manifest
  */
 export interface AppModule {
     /** Registry identity. Must match the folder name under `src/modules/`. */
@@ -469,7 +469,7 @@ export interface AppModule {
      * refused at boot, never on the first request that reads it. Most modules that read a
      * variable declare one; deleting the module deletes its gate.
      *
-     * See: docs/tools/configuration.md
+     * See: docs/operate/configuration.md
      */
     config?: readonly ConfigSlice[];
 
@@ -488,7 +488,7 @@ export interface AppModule {
     /**
      * This module's {@link RateLimitBudget}s — the data half of its own rate limiters, built into
      * the actual middleware by `buildRateLimiter`. Declared here so the generated table in
-     * `docs/tools/security.md` and `tests/cross-cutting/rate-limit-budgets.test.ts` see every
+     * `docs/understand/security.md` and `tests/cross-cutting/rate-limit-budgets.test.ts` see every
      * budget without importing each module's `rate-limits.ts` by hand. Most modules have none; a
      * budget with no one owning module (the global browsing brake, the api-key budget, the upload
      * budget shared by three modules) is declared as data in infrastructure instead — see
@@ -508,7 +508,7 @@ export interface AppModule {
      * `npm run reencrypt` runs every enabled module's, so deleting a module deletes its walk.
      * Most modules store nothing encrypted and have none.
      *
-     * See: docs/tools/security.md#database-credential-and-key-rotation
+     * See: docs/understand/security.md#database-credential-and-key-rotation
      * @param dryRun - count what a real run would move, and write nothing
      */
     reencrypt?: (dryRun: boolean) => Promise<ReencryptReport>;
@@ -702,7 +702,7 @@ export const resolveJobs = (appModules: AppModule[]): readonly JobDeclaration[] 
  * Every registered module's {@link RateLimitBudget}s, flattened in declaration order.
  *
  * Built from the passed-in list for the same reason {@link resolveImageTargets} is: this file
- * must stay free of any `src/modules/*` import. `docs/tools/security.md`'s generator and
+ * must stay free of any `src/modules/*` import. `docs/understand/security.md`'s generator and
  * `tests/cross-cutting/rate-limit-budgets.test.ts` both combine this with
  * `INFRASTRUCTURE_RATE_LIMITS` for the complete list.
  *

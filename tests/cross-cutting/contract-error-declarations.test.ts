@@ -2,7 +2,7 @@
  * Every status the id rule can answer is a status the contract describes.
  *
  * A malformed id in a URL path is the same 404 an unknown id gets (`requireId`,
- * `docs/theory/request-flow.md#a-malformed-id-has-one-answer-per-position`), so 404 is a property
+ * `docs/understand/request-flow.md#a-malformed-id-has-one-answer-per-position`), so 404 is a property
  * of the PARAMETER rather than of the endpoint, and the contract has to say so on every operation
  * that takes an id in its path, not only on the ones whose service happens to answer a miss.
  *
@@ -26,7 +26,7 @@
  * endpoints, and answering it means editing a file that must move in three repositories at once.
  *
  * ── The error codes ───────────────────────────────────────────────────────────────────────────
- * An operation's `x-error-codes` lists what it can send (`docs/api/errors.md#the-errors-extension`).
+ * An operation's `x-error-codes` lists what it can send (`docs/reference/errors.md#the-errors-extension`).
  * Three things hold that list true:
  *   - every catalogue code that is not `scope: app` is listed on at least one operation;
  *   - every guard-made code is listed on every route that mounts the guard — read off the route

@@ -14,7 +14,7 @@
  * `fingerprint` this repo has no use for — it pairs with either backend twin, which do not
  * serialise YAML identically.
  *
- * See: docs/tools/pairing-and-ports.md#the-shared-file-list-and-what-earns-a-place-on-it
+ * See: docs/build/pairing-and-ports.md#the-shared-file-list-and-what-earns-a-place-on-it
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -51,7 +51,7 @@ export const siblingRole = (role: RepoRole): RepoRole =>
  * Not members:      files both repos merely keep identical for convenience, and anything either
  *                   repo can regenerate from a file already listed.
  *
- * The reasoning and the excluded files: docs/tools/pairing-and-ports.md#the-shared-file-list-and-what-earns-a-place-on-it
+ * The reasoning and the excluded files: docs/build/pairing-and-ports.md#the-shared-file-list-and-what-earns-a-place-on-it
  */
 export const SHARED_FILES: readonly SharedFile[] = [
     /* The contract itself. */

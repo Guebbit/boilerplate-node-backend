@@ -4,7 +4,7 @@
  * Why not testcontainers: it talks to a Docker socket, and this repo is podman-first —
  * `.env-example` spells the engine as `${CONTAINER_ENGINE:-podman}`. Using it would mean exporting
  * a podman socket as `DOCKER_HOST` on every machine and in CI: a new dependency AND a workaround
- * for it. `docs/tools/docker-and-podman.md` has the two places the engines differ.
+ * for it. `docs/build/docker-and-podman.md` has the two places the engines differ.
  *
  * Used by the two suites that need a real service the in-process ones cannot fake:
  * `tests/cluster` (Redis) and `tests/broker` (RabbitMQ).

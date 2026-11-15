@@ -6,7 +6,7 @@
  * module registry, a disk glob, or a mock-safe read done before the framework installs — so this
  * only takes the resolved list.
  *
- * See: docs/tools/i18n.md
+ * See: docs/understand/i18n.md
  */
 
 import i18next from 'i18next';

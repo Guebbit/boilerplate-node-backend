@@ -6,7 +6,7 @@
  *
  * Each row of `tests/support/account-protection-rows.ts` is run as every role that holds the row's
  * key, against every kind of account: a customer, a staff account, an administrator, a
- * platform-only account and the caller's own. `docs/theory/authorization.md#protecting-people` is
+ * platform-only account and the caller's own. `docs/understand/authorization.md#protecting-people` is
  * the rule in prose.
  */
 import { api, authenticateAsRole } from '@tests/http';

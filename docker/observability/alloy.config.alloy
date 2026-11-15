@@ -60,7 +60,7 @@ loki.write "default" {
 // Forward Faro traces to the existing OTel Collector, which already fans out to Tempo.
 // Reusing the collector keeps a single trace pipeline. A backend span carries a LINK to the
 // frontend span named in the W3C traceparent; it does not share its trace_id (the API never
-// adopts a caller-chosen one — see docs/tools/opentelemetry.md#who-may-name-a-trace).
+// adopts a caller-chosen one — see docs/operate/opentelemetry.md#who-may-name-a-trace).
 otelcol.exporter.otlp "tempo" {
     client {
         endpoint = "otel-collector:4317"

@@ -2,7 +2,7 @@
  * @module
  * Inventory — the only place stock changes. A counter never moves without a ledger row, and
  * never the reverse; both halves happen inside `applyTransition`, which every function here goes
- * through. One file per flow, not one big file; see `docs/theory/layers.md`.
+ * through. One file per flow, not one big file; see `docs/understand/layers.md`.
  *
  * Transactions: only where a half-done write would be wrong — a hold's claim and commit
  *               (`holds.ts`), a delivery with its preorder allocation (`admin.ts`), a hold's

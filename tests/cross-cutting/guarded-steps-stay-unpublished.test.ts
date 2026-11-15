@@ -9,7 +9,7 @@
  * on the declaration. This suite then holds the line wherever the barrel reaches, through
  * `export *` chains, renamed re-exports and object literals that bundle functions.
  * Finding an untagged step is `scripts/audit/reachability/SKILL.md`'s job. See
- * `docs/theory/strategic-ddd.md` §5.
+ * `docs/understand/strategic-ddd.md` §5.
  */
 
 import { existsSync, readdirSync } from 'node:fs';

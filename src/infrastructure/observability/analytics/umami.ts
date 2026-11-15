@@ -5,7 +5,7 @@
  * into the same database: the browser posts to `/api/send` via its tracking script, and a server
  * posts the identical payload over HTTP — the whole integration, no server SDK needed.
  *
- * See: docs/tools/analytics.md
+ * See: docs/understand/analytics.md
  */
 
 import { logger } from '@infrastructure/adapters/logger';

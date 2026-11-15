@@ -4,7 +4,7 @@
  * `POST /x/:id/restore` that undoes it. A separate verb because DELETE must be safe to repeat
  * (RFC 9110 §9.2.2) — a retried DELETE must never bring a record back.
  *
- * See: docs/theory/request-flow.md
+ * See: docs/understand/request-flow.md
  */
 
 import type { Request, Response } from 'express';
@@ -27,7 +27,7 @@ export interface RestoreControllerSpec<TRow> {
      * The service call: 404 when absent, 409 when not soft-deleted, the restored row otherwise.
      * Takes the raw `request` so the module's own wiring can build its `CallerContext` and hand
      * it down — the service records its own audit row (rule 1,
-     * `docs/theory/module-lifecycle.md`), the same way `createUpdateController`'s `update` does.
+     * `docs/build/module-lifecycle.md`), the same way `createUpdateController`'s `update` does.
      */
     restore: (id: string, request: Request) => Promise<ServiceResult<TRow>>;
     /**

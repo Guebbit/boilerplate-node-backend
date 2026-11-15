@@ -68,7 +68,7 @@ real collections and real write invariants, consumed by several sibling modules 
 modules sharing one domain is reason enough for its own module, the same reasoning
 [`addresses`](./addresses.md) is split out of `account` for. A routeless module is not a special
 case here: `mounts` is optional on the manifest (see
-[Module lifecycle](../theory/module-lifecycle.md)), and `access` is this repo's one module that
+[Module lifecycle](../build/module-lifecycle.md)), and `access` is this repo's one module that
 omits both.
 
 ::: tip Roles are data, permissions are code
@@ -96,14 +96,14 @@ instead, so an omitted argument can never mean "no check".
 Every invariant here is a refusal, not a comment: a granter cannot hand over a role they do not
 themselves hold, and `customer`, `unverified` and `guest` are not roles at all — an audience is
 computed from the session and `verifiedAt` (see
-[the audience roles](../theory/authorization.md#everyone-is-a-customer-first)), so there is nothing
+[the audience roles](../understand/authorization.md#everyone-is-a-customer-first)), so there is nothing
 to grant and a signup has no role to assign.
 
 ::: info The last administrator CAN be removed
 Revoking, demoting or deleting a shop's last administrator is allowed, and leaves the shop with
 none. A refusal would only guard against an operator who knows what they are doing, and the repair
 is one database write: give somebody an administrator membership again, with the command under
-[The first admin](../getting-started-production.md#the-first-admin).
+[The first admin](../operate/first-deploy.md#the-first-admin).
 :::
 
 ## When the account is erased
@@ -138,7 +138,7 @@ changed only by a holder of `assign:Role`, or it is a `403 ROLE_MANAGEMENT_REQUI
 services return, and `holdsStaffRole` / `staffHoldersAmong` read from the memberships whether an
 account holds a role in either scope. A role has no level and nothing ranks. The rule, its
 exemptions and where each service asks it are on
-[Authorization](../theory/authorization.md#protecting-people); this module owns only the question,
+[Authorization](../understand/authorization.md#protecting-people); this module owns only the question,
 never the places it is asked.
 
 ## Who does the work a set names
@@ -162,7 +162,7 @@ Every rule this module declares and who holds it, role by role. The rule is what
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
 `src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../theory/authorization.md) explains the model.
+evaluator — [Authorization](../understand/authorization.md) explains the model.
 
 <!-- permissions:end -->
 
@@ -171,5 +171,5 @@ evaluator — [Authorization](../theory/authorization.md) explains the model.
 - [`account`](./account.md) — resolves a bearer token into an `AuthContext` via `rolesOf`
 - [`api-keys`](./api-keys.md) — re-derives a minted key's current role at check time
 - [`users`](./users.md) — writes a membership on create, update and email verification, and runs `eraseMemberships` in a hard delete
-- [Authorization](../theory/authorization.md) — the whole model, kernel half and module half together
-- [Tenancy](../theory/tenancy.md) — why one deployment pins one tenant id
+- [Authorization](../understand/authorization.md) — the whole model, kernel half and module half together
+- [Tenancy](../understand/tenancy.md) — why one deployment pins one tenant id

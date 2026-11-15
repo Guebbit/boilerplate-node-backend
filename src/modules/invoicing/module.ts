@@ -5,7 +5,7 @@
  *
  * Owns:        the `Invoice`/`CreditNote` collections and their own numbering series, outright.
  * Shares:      the `/orders` URL prefix with `orders` — see `./routes.ts` and
- *              `docs/api/contract-fragmentation.md`'s `account`/`addresses` precedent.
+ *              `docs/build/contract-fragmentation.md`'s `account`/`addresses` precedent.
  *
  * No route requests an invoice or a credit note into existence — both are frozen ONLY from this
  * module's own event listeners below, reacting to a fact another module already recorded. Neither

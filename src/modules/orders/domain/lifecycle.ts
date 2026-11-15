@@ -5,7 +5,7 @@
  * to, on the edge itself so nothing can drift. `updateStatusIfIn` in `../repository.ts` makes one
  * racing writer win — this table only decides which `from` set it is handed.
  *
- * See `docs/theory/tactical-ddd.md` §1.
+ * See `docs/understand/tactical-ddd.md` §1.
  */
 
 import { OrderStatus } from '@types';

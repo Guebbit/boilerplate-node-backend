@@ -34,7 +34,7 @@ const dateImpactController =
         name: string
     ) =>
     (request: Request, response: Response) => {
-        // Query params only — a GET has no body. See docs/theory/request-input.md.
+        // Query params only — a GET has no body. See docs/understand/request-input.md.
         const input = readInput(request, { surface: 'list' });
         // A blank date is read as absent, i.e. cleared, before the generated query sees it.
         const query = parseBody(

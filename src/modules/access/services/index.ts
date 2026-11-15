@@ -6,7 +6,7 @@
  * and the pure grant and ownership checks are named exports. `role-audit`'s `auditRoleChange` and
  * the grant internals are not published.
  *
- * See: docs/theory/authorization.md
+ * See: docs/understand/authorization.md
  */
 
 import { grantRefusalAudited } from './grants';

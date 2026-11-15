@@ -8,7 +8,7 @@
  * before the 404 catch-all for everything else, where it only sees a request no route answered.
  * A path of a module this build does not serve stays a 404: the module is not there to be asked.
  *
- * See: docs/api/write-methods.md#a-known-path-with-the-wrong-method
+ * See: docs/understand/write-methods.md#a-known-path-with-the-wrong-method
  */
 
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
@@ -116,7 +116,7 @@ const patchTypes = (contentTypes: readonly RequestContentType[], path: string): 
  * The 204 carries no `Content-Length` (RFC 9110 §8.6). `Allow` lists `OPTIONS` itself, like
  * the 405. A path with literal templates answers from those alone, as the router would.
  *
- * See: docs/api/write-methods.md#options-says-what-a-path-accepts
+ * See: docs/understand/write-methods.md#options-says-what-a-path-accepts
  *
  * @param routes - every contract path with its methods and owning module
  * @param served - the names of the modules this build mounts

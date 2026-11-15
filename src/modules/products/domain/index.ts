@@ -1,7 +1,7 @@
 /**
  * @module
  * Products domain — the rules, importable without the module's HTTP surface.
- * See `docs/theory/domain-layer.md`.
+ * See `docs/understand/domain-layer.md`.
  */
 
 export { productActions, NO_PRODUCT_ACTIONS, NO_PRODUCT_STANDING } from './actions';

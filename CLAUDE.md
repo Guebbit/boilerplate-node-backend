@@ -20,7 +20,7 @@ verifies all of it. The pre-commit hook runs it with
 `--no-sync`, so `npm run complete` only ever verifies — but a contract change is not finished until
 `sync:frontend` has actually run against the frontend checkout.
 
-See: `docs/api/contract-fragmentation.md`, `docs/api/regenerating.md`, `docs/theory/api-standards.md`
+See: `docs/build/contract-fragmentation.md`, `docs/build/regenerating.md`, `docs/understand/api-standards.md`
 
 ## Changing a shared rule
 
@@ -33,7 +33,7 @@ the same in both lives as `shared/cases/*.cases.yaml`.
 3. Add or adjust the cases.
 4. Never edit the twin's copy from here.
 
-See: `docs/theory/shared-rules.md`
+See: `docs/understand/shared-rules.md`
 
 ## TypeScript
 
@@ -104,14 +104,14 @@ Rules of thumb:
   module imports is that module's: its page under `docs/modules/` says why it was chosen. A new
   module gets its page, plus a `## Libraries` section if it brings one. The one exception is
   `example` (`group: example`): it has no page by design, because it exists only to be copied and
-  its files carry their own headers. `docs/theory/modules.md#the-module-template` is where it is
+  its files carry their own headers. `docs/understand/modules.md#the-module-template` is where it is
   explained, so do not "fix" the missing page. Removing a module removes what it owned.
 
 ## Module barrels
 
 Every module publishes a convenience barrel (`src/modules/<name>/index.ts`, one for every module,
 not only the ones a sibling currently imports): `export *` from its services, domain rules, events
-and emails, plus `export type *` from its model. See `docs/theory/strategic-ddd.md` §5.
+and emails, plus `export type *` from its model. See `docs/understand/strategic-ddd.md` §5.
 
 - MUST NOT export a repository, a model's runtime value (the mongoose schema, its `toJSON`
   transform, the model object itself), a wiring file (`routes.ts`, `controllers/`, `module.ts`,
@@ -170,7 +170,7 @@ and emails, plus `export type *` from its model. See `docs/theory/strategic-ddd.
 ## Tests
 
 Placement is by scope, and `eslint-plugin-boundaries` enforces the line at the import.
-See `docs/reference/tests.md`; fakes live outside `src/`: `docs/tools/test-doubles.md`.
+See `docs/reference/tests.md`; fakes live outside `src/`: `docs/build/test-doubles.md`.
 
 - A test about **one module's rules** lives in `src/modules/<module>/tests/`, and may run the real
   modules that module depends on (`dependsOn`) — through their barrel, or their
@@ -186,14 +186,14 @@ See `docs/reference/tests.md`; fakes live outside `src/`: `docs/tools/test-doubl
 - Assert through the public door (the route, the service, the repository), not on private
   internals. A test shaped like the implementation fails on every refactor and catches nothing.
 - A 401, 403 or malformed-id answer is the app-wide sweeps' job; a module test checks one only
-  when it checks more than the status. See: `docs/tools/contract-testing.md`
+  when it checks more than the status. See: `docs/build/contract-testing.md`
 - **A run that finds failures: fix them all, then re-run only what the fixes can affect.** That is
   the failed tests plus the ones that touch the same areas — never the whole suite by default. A
   long suite (the live e2e takes hours) is run in full once; a second full run is a deliberate
   choice, made when extra certainty is wanted after the fix pass is done.
 - **Mutation score is the one test-quality number; coverage is not measured.** A line can be
   executed by a test that asserts nothing about it. Stryker marks every line no test ran as a
-  `NoCoverage` mutant — `docs/tools/coverage-and-confidence.md`.
+  `NoCoverage` mutant — `docs/build/coverage-and-confidence.md`.
 
 ## Comments
 
@@ -260,7 +260,7 @@ An interface says its purpose and what each field means; a function adds `@param
 `jsdoc/check-param-names` refuses a name that is not in the signature, and the `*-description`
 rules refuse an empty one.
 MUST: docs describing flow, architecture or process include Mermaid diagrams — that detail belongs
-there, not in a comment. How a docs page is shaped: `docs/reference/documentation-style.md`.
+there, not in a comment. How a docs page is shaped: `docs/build/documentation-style.md`.
 
 Comments are **not** a replacement for `docs/`. They orient a reader already in the file; the
 reasoning, the alternatives, the diagrams live in `docs/` — a comment points there, it does not

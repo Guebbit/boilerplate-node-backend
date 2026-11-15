@@ -35,7 +35,7 @@ export const router = Router();
  * `contactLimiters` first, same reasoning as the credential budgets: a spent budget should not
  * cost a database write. Three dimensions — address, submitted email, address block — none of
  * them skipping success: this form's abuse is a successful post repeated, not a failed one.
- * See docs/tools/security.md#the-rate-limit-budgets.
+ * See docs/understand/security.md#the-rate-limit-budgets.
  *
  * `getAuth` next, so a stale sign-in is refused (401) before an antibot token — single-use — is
  * spent on a request that then fails.
@@ -73,14 +73,14 @@ router.get('/summary', requirePermission('read', 'Task'), noStore, getTaskSummar
 // GET /tasks/:id — one task. After `/`, `/search` and `/summary`, so none matches as an id.
 router.get('/:id', requirePermission('read', 'Task'), privateNoCache, getTaskById);
 
-// The status doors: one action per effect, no body (`docs/api/write-methods.md`). The status field
+// The status doors: one action per effect, no body (`docs/understand/write-methods.md`). The status field
 // is read-only, so there is no PATCH.
 router.post('/:id/resolve', requirePermission('update', 'Task'), noStore, postTaskResolve);
 router.post('/:id/mark-spam', requirePermission('update', 'Task'), noStore, postTaskMarkSpam);
 router.post('/:id/reopen', requirePermission('update', 'Task'), noStore, postTaskReopen);
 
 // Assignment: a pair of actions, each with its own bell and audit row. Taking a task is assigning
-// yourself; a repeat finds the state reached and answers 409 (`docs/api/write-methods.md`).
+// yourself; a repeat finds the state reached and answers 409 (`docs/understand/write-methods.md`).
 router.post('/:id/assign', requirePermission('update', 'Task'), noStore, postTaskAssign);
 router.post('/:id/unassign', requirePermission('update', 'Task'), noStore, postTaskUnassign);
 

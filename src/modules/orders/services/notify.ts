@@ -18,7 +18,7 @@ import type { OrderDocument } from '../model';
 import { getById } from './read';
 
 /**
- * The one buyer-mail policy every customer mail follows — see `docs/tools/outbox.md#customer-mail`.
+ * The one buyer-mail policy every customer mail follows — see `docs/understand/outbox.md#customer-mail`.
  * Looks the buyer up, then hands `build` the resolved locale and display name; `build` does the
  * actual send, a bare `enqueueEmail` call.
  *

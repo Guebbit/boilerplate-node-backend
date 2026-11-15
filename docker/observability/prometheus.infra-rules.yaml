@@ -2,7 +2,7 @@
 # Why a second file: these read Prometheus's, Alertmanager's and other exporters' own metrics, not
 # the app's, and tests/cross-cutting/alert-rules-metrics.test.ts rejects any `*_total` the app does
 # not register. Mounted next to prometheus.alert-rules.yaml in both compose files.
-# Routing for these alerts: docs/tools/prometheus.md#alert-routing
+# Routing for these alerts: docs/operate/prometheus.md#alert-routing
 
 groups:
     - name: alerting.rules

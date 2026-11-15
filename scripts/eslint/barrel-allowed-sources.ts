@@ -2,7 +2,7 @@
  * A module's barrel may only `export *` its services, domain rules, events and emails as values,
  * and its model AND its presenter(s) as TYPES ONLY — never a repository, the model's runtime
  * VALUE, a presenter FUNCTION, or a wiring file, in ANY export form. See
- * docs/theory/strategic-ddd.md §5.
+ * docs/understand/strategic-ddd.md §5.
  *
  * Checked forms:
  * - `export * from './x'` / `export type * from './x'` — against the two allowlists below.
@@ -88,7 +88,7 @@ export const barrelAllowedSources = ESLintUtils.RuleCreator.withoutDocs<Options,
             notAllowed:
                 '{{declaration}} is not one of the files a barrel may publish — services, domain, ' +
                 'events and emails as values, model and the presenter(s) as `export type *` only, ' +
-                'plus (products only) a named pick from tax or config. See docs/theory/strategic-ddd.md §5.',
+                'plus (products only) a named pick from tax or config. See docs/understand/strategic-ddd.md §5.',
             modelAsValue:
                 "The model is published as types only — `export type * from './model'`, never " +
                 "`export * from './model'`, which would also publish the mongoose schema and " +
@@ -97,25 +97,25 @@ export const barrelAllowedSources = ESLintUtils.RuleCreator.withoutDocs<Options,
                 '{{declaration}} names `{{name}}`, which reads as the model’s runtime value by ' +
                 'this repo’s naming convention (a mongoose schema, its `toJSON` transform, or the ' +
                 'model object) — `export type *` already publishes its structure; a named pick ' +
-                'stays to genuinely pure helpers. See docs/theory/strategic-ddd.md §5.',
+                'stays to genuinely pure helpers. See docs/understand/strategic-ddd.md §5.',
             presenterAsValue:
                 "The presenter is published as types only — `export type * from './presenter'`, " +
                 "never `export * from './presenter'`, which would also publish the transform " +
                 'function itself; a sibling reaches it through the service, never the presenter ' +
-                'file directly. See docs/theory/strategic-ddd.md §5.',
+                'file directly. See docs/understand/strategic-ddd.md §5.',
             presenterNamedValue:
                 '{{declaration}} names a value from the presenter by hand — only its OUTPUT TYPE ' +
                 "may leave a barrel, and only via `export type * from './presenter'`. The " +
                 'function itself stays inside, reachable through the service the same as any ' +
-                'other shaping helper. See docs/theory/strategic-ddd.md §5.',
+                'other shaping helper. See docs/understand/strategic-ddd.md §5.',
             repositoryExport:
                 '{{declaration}} publishes a repository — a write handle on a collection this ' +
                 'module does not own once published. The service is the door, in every export ' +
-                'form. See docs/theory/strategic-ddd.md §5.',
+                'form. See docs/understand/strategic-ddd.md §5.',
             wiringExport:
                 '{{declaration}} publishes a wiring file — routes, controllers, the manifest, ' +
                 'probes, metrics, analytics or audit are not the module’s public surface, in any ' +
-                'export form. See docs/theory/strategic-ddd.md §5.'
+                'export form. See docs/understand/strategic-ddd.md §5.'
         }
     },
     defaultOptions: [],

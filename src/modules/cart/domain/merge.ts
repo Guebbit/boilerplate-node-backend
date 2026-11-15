@@ -2,7 +2,7 @@
  * @module
  * Cart merge rule. Pure: what one guest line becomes, given what the cart holds and whether the
  * product is listed. The cap is passed in — this layer reaches neither the catalogue nor the model.
- * See `docs/theory/domain-layer.md`.
+ * See `docs/understand/domain-layer.md`.
  */
 
 import type { MergeLineReason } from '@types';
@@ -39,7 +39,7 @@ export interface MergePlan {
  *
  * Stock plays no part. A sold-out or short product is added like any other and flagged by the
  * caller through `fitsStock`; lowering the line to what is for sale would let a caller read exact
- * stock by merging 999 (`docs/theory/defences/authorization.md`, "Reading the shelf"). When several
+ * stock by merging 999 (`docs/understand/defences/authorization.md`, "Reading the shelf"). When several
  * reasons apply the one reported is the first that does: `removed` (nothing is added at all),
  * `cart_full` (a new product, and no line left for it: nothing is added either), `capped`, `summed`. `capped` says the shopper got less than they asked for; `summed` is context.
  *

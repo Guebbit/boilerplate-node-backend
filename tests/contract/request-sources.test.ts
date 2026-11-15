@@ -4,7 +4,7 @@
  * `readInput(request, { sources: [...] })` is a claim about a route: "a value for this endpoint
  * may arrive from params, and/or query, and/or body". `openapi.yaml` makes the same claim, per
  * operation, as `in: path` / `in: query` / `requestBody`. Nothing has ever compared the two, and
- * `docs/theory/request-input.md` lists five contract bugs found by reading them against each
+ * `docs/understand/request-input.md` lists five contract bugs found by reading them against each
  * other **by hand** — which is not a thing anyone will remember to do twice.
  *
  * This is that comparison, automated. Whether the mounted routes and the spec list the same
@@ -347,7 +347,7 @@ describe('request sources agree with openapi.yaml', () => {
         // Pinned, not merely non-empty. `RequestSurface` is a CLOSED set on purpose — precedence
         // is meant to be a property of the route's kind, not an ordering the newest controller
         // picked — so a sixth row should fail here once and be added deliberately, alongside its
-        // row in `docs/theory/request-input.md` and a look at what the spec declares for it.
+        // row in `docs/understand/request-input.md` and a look at what the spec declares for it.
         expect(Object.keys(SURFACE_SOURCES).toSorted()).toEqual([
             'create',
             'delete',
@@ -374,7 +374,7 @@ describe('request sources agree with openapi.yaml', () => {
      *
      * What survives the union is the real defect: a controller reading a source that NO route it
      * serves declares. That is the shape of every historical case in
-     * `docs/theory/request-input.md` — `hardDelete` read from a `params` no route supplied,
+     * `docs/understand/request-input.md` — `hardDelete` read from a `params` no route supplied,
      * `DELETE /cart/{productId}` reading a body it could never receive, the list controllers
      * reading a `params.id` only the item routes have.
      *

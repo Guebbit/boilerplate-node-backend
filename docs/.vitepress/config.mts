@@ -7,137 +7,270 @@ export default withMermaid(
     defineConfig({
         title: 'Boilerplate Node Backend',
         description: 'ADHD-friendly docs for the Express + MongoDB + Mongoose REST boilerplate',
+        lastUpdated: true,
         themeConfig: {
             search: {
                 provider: 'local'
             },
             nav: [
                 { text: 'Home', link: '/' },
-                { text: 'Start', link: '/getting-started' },
-                { text: 'Start (Production)', link: '/getting-started-production' },
-                { text: 'Start a New Project', link: '/getting-started-new-project' },
-                { text: 'Demo Shop', link: '/demo-ecommerce/' },
-                { text: 'Theory', link: '/theory/' },
-                { text: 'Modules', link: '/modules/' },
-                { text: 'Tools', link: '/tools/' },
-                { text: 'API', link: '/api/' },
-                { text: 'Files', link: '/reference/' }
+                { text: 'Use the Shop', link: '/use-the-shop/start' },
+                { text: 'Understand', link: '/understand/start' },
+                { text: 'Build', link: '/build/start' },
+                { text: 'Modules', link: '/modules/start' },
+                { text: 'Operate', link: '/operate/start' },
+                { text: 'Reference', link: '/reference/start' }
             ],
             sidebar: {
-                '/demo-ecommerce/': [
+                '/use-the-shop/': [
                     {
-                        text: 'The Demo Shop',
+                        text: 'Start',
+                        items: [{ text: 'Overview', link: '/use-the-shop/start' }]
+                    },
+                    {
+                        text: 'The shop',
                         items: [
-                            { text: 'Overview', link: '/demo-ecommerce/' },
-                            { text: 'Test it yourself', link: '/demo-ecommerce/test-me' },
-                            { text: 'The customer', link: '/demo-ecommerce/shopper' },
-                            { text: 'The shop manager', link: '/demo-ecommerce/manager' },
-                            { text: 'The warehouse', link: '/demo-ecommerce/warehouse' },
-                            { text: 'The support desk', link: '/demo-ecommerce/support' },
-                            { text: 'The editor', link: '/demo-ecommerce/editor' },
-                            { text: 'The moderator', link: '/demo-ecommerce/moderator' },
+                            { text: 'Test it yourself', link: '/use-the-shop/test-me' },
+                            { text: 'The customer', link: '/use-the-shop/shopper' },
+                            { text: 'The shop manager', link: '/use-the-shop/manager' },
+                            { text: 'The warehouse', link: '/use-the-shop/warehouse' },
+                            { text: 'The support desk', link: '/use-the-shop/support' },
+                            { text: 'The editor', link: '/use-the-shop/editor' },
+                            { text: 'The moderator', link: '/use-the-shop/moderator' },
                             {
                                 text: 'When something goes wrong',
-                                link: '/demo-ecommerce/when-something-goes-wrong'
+                                link: '/use-the-shop/when-something-goes-wrong'
                             },
-                            { text: 'What this demo models', link: '/demo-ecommerce/scope' },
+                            { text: 'What this demo models', link: '/use-the-shop/scope' },
                             {
                                 text: 'Before you sell for real',
-                                link: '/demo-ecommerce/before-you-sell'
+                                link: '/use-the-shop/before-you-sell'
                             }
                         ]
                     }
                 ],
-                '/theory/': [
+                '/understand/': [
                     {
-                        text: 'Theory',
+                        text: 'Start',
+                        items: [{ text: 'Overview', link: '/understand/start' }]
+                    },
+                    {
+                        text: 'The shape',
                         items: [
-                            { text: 'Overview', link: '/theory/' },
-                            { text: 'Reading Path', link: '/theory/reading-path' },
-                            { text: 'Architecture', link: '/theory/architecture' },
-                            { text: 'Modules', link: '/theory/modules' },
+                            { text: 'Reading Path', link: '/understand/reading-path' },
+                            { text: 'Architecture', link: '/understand/architecture' },
+                            { text: 'Layers', link: '/understand/layers' },
+                            { text: 'Modules', link: '/understand/modules' },
+                            { text: 'Domain layer & DDD', link: '/understand/domain-layer' },
+                            { text: 'Strategic DDD', link: '/understand/strategic-ddd' },
+                            { text: 'Tactical DDD', link: '/understand/tactical-ddd' },
+                            { text: 'Request Flow', link: '/understand/request-flow' },
+                            { text: 'Request Input', link: '/understand/request-input' },
+                            { text: 'API Standards', link: '/understand/api-standards' },
                             {
-                                text: 'Adding & Removing a Module',
-                                link: '/theory/module-lifecycle'
+                                text: 'Write Methods: POST, PUT, PATCH',
+                                link: '/understand/write-methods'
                             },
-                            { text: 'Layers', link: '/theory/layers' },
-                            { text: 'Domain Layer', link: '/theory/domain-layer' },
-                            { text: 'Strategic DDD', link: '/theory/strategic-ddd' },
-                            { text: 'Glossary', link: '/theory/glossary' },
-                            { text: 'Tactical DDD', link: '/theory/tactical-ddd' },
-                            { text: 'Request Flow', link: '/theory/request-flow' },
-                            { text: 'Request Input', link: '/theory/request-input' },
-                            { text: 'API Standards', link: '/theory/api-standards' },
-                            { text: 'Clustering & Shutdown', link: '/theory/clustering' },
-                            { text: 'Authorization', link: '/theory/authorization' },
-                            { text: 'Sessions', link: '/theory/sessions' },
-                            { text: 'Tenancy', link: '/theory/tenancy' },
-                            { text: 'Shared rules', link: '/theory/shared-rules' },
-                            { text: 'Data Protection', link: '/theory/data-protection' },
-                            { text: 'Data Retention', link: '/theory/data-retention' },
+                            {
+                                text: 'Clustering & Graceful Shutdown',
+                                link: '/understand/clustering'
+                            },
+                            { text: 'Shared rules', link: '/understand/shared-rules' }
+                        ]
+                    },
+                    {
+                        text: 'Access',
+                        items: [
+                            { text: 'Authorization', link: '/understand/authorization' },
+                            { text: 'Two ways to stay signed in', link: '/understand/sessions' },
+                            { text: 'Tenancy', link: '/understand/tenancy' },
+                            { text: 'Security', link: '/understand/security' }
+                        ]
+                    },
+                    {
+                        text: 'Mechanisms',
+                        items: [
+                            { text: 'Transactional Outbox', link: '/understand/outbox' },
+                            { text: 'Idempotency', link: '/understand/idempotency' },
+                            { text: 'Redis Cache', link: '/understand/redis-cache' },
+                            { text: 'Internationalisation', link: '/understand/i18n' },
+                            { text: 'RabbitMQ', link: '/understand/rabbitmq' },
+                            { text: 'MongoDB & Mongoose', link: '/understand/mongodb-mongoose' },
+                            {
+                                text: 'Email & PDF Rendering',
+                                link: '/understand/email-and-rendering'
+                            },
+                            { text: 'Image processing', link: '/understand/image-processing' },
+                            { text: 'Product Analytics', link: '/understand/analytics' },
+                            { text: 'Events & Logging', link: '/understand/events-and-logging' },
+                            {
+                                text: 'The Observability Layer',
+                                link: '/understand/observability-layer'
+                            },
+                            { text: 'External Services', link: '/understand/external-services' },
+                            { text: 'Runtime', link: '/understand/runtime' },
+                            { text: 'Tools Explained', link: '/understand/tools-explained' },
+                            { text: 'Tools', link: '/understand/tool-map' }
+                        ]
+                    },
+                    {
+                        text: 'Data & privacy',
+                        items: [
+                            { text: 'Data Protection', link: '/understand/data-protection' },
+                            { text: 'Data Retention', link: '/understand/data-retention' }
+                        ]
+                    },
+                    {
+                        text: 'Web attacks & defences',
+                        items: [
                             {
                                 text: 'Web Attacks & Defences',
-                                link: '/theory/defences/',
+                                link: '/understand/defences/',
                                 collapsed: true,
                                 items: [
-                                    { text: 'Injection', link: '/theory/defences/injection' },
-                                    { text: 'Client-side', link: '/theory/defences/client-side' },
+                                    { text: 'Injection', link: '/understand/defences/injection' },
+                                    {
+                                        text: 'Client-side',
+                                        link: '/understand/defences/client-side'
+                                    },
                                     {
                                         text: 'Authentication',
-                                        link: '/theory/defences/authentication'
+                                        link: '/understand/defences/authentication'
                                     },
                                     {
                                         text: 'Authorization',
-                                        link: '/theory/defences/authorization'
+                                        link: '/understand/defences/authorization'
                                     },
                                     {
                                         text: 'Business logic & payments',
-                                        link: '/theory/defences/business-logic'
+                                        link: '/understand/defences/business-logic'
                                     },
                                     {
                                         text: 'Files & uploads',
-                                        link: '/theory/defences/files-and-uploads'
+                                        link: '/understand/defences/files-and-uploads'
                                     },
-                                    { text: 'SSRF', link: '/theory/defences/ssrf' },
+                                    { text: 'SSRF', link: '/understand/defences/ssrf' },
                                     {
                                         text: 'HTTP, proxies & caches',
-                                        link: '/theory/defences/http-and-caches'
+                                        link: '/understand/defences/http-and-caches'
                                     },
                                     {
                                         text: 'Cryptography & secrets',
-                                        link: '/theory/defences/crypto-and-secrets'
+                                        link: '/understand/defences/crypto-and-secrets'
                                     },
                                     {
                                         text: 'Information disclosure',
-                                        link: '/theory/defences/disclosure'
+                                        link: '/understand/defences/disclosure'
                                     },
                                     {
                                         text: 'Denial of service',
-                                        link: '/theory/defences/denial-of-service'
+                                        link: '/understand/defences/denial-of-service'
                                     },
-                                    { text: 'Data layer', link: '/theory/defences/data-layer' },
+                                    { text: 'Data layer', link: '/understand/defences/data-layer' },
                                     {
                                         text: 'Infrastructure',
-                                        link: '/theory/defences/infrastructure'
+                                        link: '/understand/defences/infrastructure'
                                     },
                                     {
                                         text: 'Supply chain',
-                                        link: '/theory/defences/supply-chain'
+                                        link: '/understand/defences/supply-chain'
                                     },
-                                    { text: 'API surface', link: '/theory/defences/api-surface' },
-                                    { text: 'Real-time', link: '/theory/defences/real-time' },
-                                    { text: 'Email', link: '/theory/defences/email' },
+                                    {
+                                        text: 'API surface',
+                                        link: '/understand/defences/api-surface'
+                                    },
+                                    { text: 'Real-time', link: '/understand/defences/real-time' },
+                                    { text: 'Email', link: '/understand/defences/email' },
                                     {
                                         text: 'Human & social',
-                                        link: '/theory/defences/human-and-social'
+                                        link: '/understand/defences/human-and-social'
                                     },
-                                    { text: 'Runtime', link: '/theory/defences/runtime' },
+                                    { text: 'Runtime', link: '/understand/defences/runtime' },
                                     {
                                         text: 'Automation & abuse',
-                                        link: '/theory/defences/automation-and-abuse'
+                                        link: '/understand/defences/automation-and-abuse'
                                     }
                                 ]
                             }
+                        ]
+                    }
+                ],
+                '/build/': [
+                    {
+                        text: 'Start',
+                        items: [{ text: 'Overview', link: '/build/start' }]
+                    },
+                    {
+                        text: 'Run it',
+                        items: [
+                            { text: 'Getting Started', link: '/build/run-locally' },
+                            { text: 'Start a New Project', link: '/build/new-project' },
+                            { text: 'Docker & Podman', link: '/build/docker-and-podman' },
+                            { text: 'Pairing & Ports', link: '/build/pairing-and-ports' },
+                            { text: 'The demo profile', link: '/build/demo-profile' },
+                            { text: 'The flow runner', link: '/build/flow-runner' }
+                        ]
+                    },
+                    {
+                        text: 'Change it',
+                        items: [
+                            { text: 'Adding & removing a module', link: '/build/module-lifecycle' },
+                            { text: 'Module scaffolder', link: '/build/module-scaffolder' },
+                            { text: 'API', link: '/build/api-contracts' },
+                            { text: 'OpenAPI Workflow', link: '/build/openapi-workflow' },
+                            { text: 'AsyncAPI Workflow', link: '/build/asyncapi-workflow' },
+                            {
+                                text: 'Contract Ownership & Fragmentation',
+                                link: '/build/contract-fragmentation'
+                            },
+                            { text: 'Regenerating After a Change', link: '/build/regenerating' },
+                            {
+                                text: 'Versioning and Retiring an Endpoint',
+                                link: '/build/versioning'
+                            }
+                        ]
+                    },
+                    {
+                        text: 'Test it',
+                        items: [
+                            { text: 'Testing — Quick Start', link: '/build/testing-quickstart' },
+                            { text: 'Testing & Docs', link: '/build/testing-and-docs' },
+                            { text: 'Unit Testing', link: '/build/unit-testing' },
+                            { text: 'Integration Testing', link: '/build/integration-testing' },
+                            {
+                                text: 'Contract Testing (Response Shape)',
+                                link: '/build/contract-testing'
+                            },
+                            {
+                                text: 'Contract-Derived Request Data',
+                                link: '/build/contract-request-data'
+                            },
+                            { text: 'Spec-Driven Fuzzing', link: '/build/fuzz-testing' },
+                            { text: 'Property-Based Testing', link: '/build/property-testing' },
+                            { text: 'Concurrency Testing', link: '/build/concurrency-testing' },
+                            { text: 'Broker testing', link: '/build/broker-testing' },
+                            { text: 'Cluster testing', link: '/build/cluster-testing' },
+                            { text: 'Load testing', link: '/build/load-testing' },
+                            { text: 'Mutation Testing', link: '/build/mutation-testing' },
+                            {
+                                text: 'Coverage & Confidence',
+                                link: '/build/coverage-and-confidence'
+                            },
+                            { text: 'Test doubles', link: '/build/test-doubles' },
+                            { text: 'Weak Machines', link: '/build/weak-machines' }
+                        ]
+                    },
+                    {
+                        text: 'Conventions',
+                        items: [
+                            { text: 'Writing These Docs', link: '/build/documentation-style' },
+                            { text: 'Dependency Vetting', link: '/build/dependency-vetting' },
+                            { text: 'Dependency graph', link: '/build/dependency-graph' },
+                            {
+                                text: 'Pending Major Upgrades',
+                                link: '/build/pending-major-upgrades'
+                            },
+                            { text: 'AI Auditing', link: '/build/ai-auditing' }
                         ]
                     }
                 ],
@@ -149,146 +282,95 @@ export default withMermaid(
                         fileURLToPath(new URL('../modules', import.meta.url))
                     )
                 ),
-                '/tools/': [
+                '/operate/': [
                     {
-                        text: 'Overview',
+                        text: 'Start',
+                        items: [{ text: 'Overview', link: '/operate/start' }]
+                    },
+                    {
+                        text: 'Deploy',
                         items: [
-                            { text: 'Overview', link: '/tools/' },
-                            { text: 'Tools Explained', link: '/tools/tools-explained' }
+                            { text: 'Getting Started — Production', link: '/operate/first-deploy' },
+                            { text: 'Hosting', link: '/operate/hosting' },
+                            { text: 'Deploy and rollback', link: '/operate/deploy-and-rollback' },
+                            { text: 'Two Client Stacks', link: '/operate/two-client-stacks' },
+                            { text: 'Deployment hardening', link: '/operate/deployment-hardening' },
+                            { text: 'Health checks', link: '/operate/health-checks' }
                         ]
                     },
                     {
-                        text: 'Setup',
-                        collapsed: false,
-                        items: [
-                            { text: 'Package Dependencies', link: '/tools/package-dependencies' },
-                            { text: 'Dependency Vetting', link: '/tools/dependency-vetting' },
-                            {
-                                text: 'Pending Major Upgrades',
-                                link: '/tools/pending-major-upgrades'
-                            },
-                            { text: 'Testing — Quick Start', link: '/tools/testing-quickstart' },
-                            { text: 'Package Scripts', link: '/tools/package-scripts' },
-                            { text: 'Docker & Podman', link: '/tools/docker-and-podman' },
-                            { text: 'Health checks', link: '/tools/health-checks' },
-                            { text: 'Two Client Stacks', link: '/tools/two-client-stacks' },
-                            { text: 'Hosting', link: '/tools/hosting' },
-                            {
-                                text: 'External Services',
-                                link: '/tools/external-services'
-                            },
-                            { text: 'Pairing & Ports', link: '/tools/pairing-and-ports' },
-                            { text: 'Permission Vocabulary', link: '/tools/permission-vocabulary' },
-                            { text: 'Runtime', link: '/tools/runtime' },
-                            { text: 'Internationalisation', link: '/tools/i18n' },
-                            { text: 'Demo profile', link: '/tools/demo-profile' },
-                            { text: 'Test doubles', link: '/tools/test-doubles' },
-                            { text: 'Module scaffolder', link: '/tools/module-scaffolder' },
-                            { text: 'The Flow Runner', link: '/tools/flow-runner' },
-                            { text: 'Configuration', link: '/tools/configuration' },
-                            { text: 'Security', link: '/tools/security' },
-                            {
-                                text: 'Deployment Hardening',
-                                link: '/tools/deployment-hardening'
-                            },
-                            { text: 'Idempotency', link: '/tools/idempotency' },
-                            { text: 'Transactional Outbox', link: '/tools/outbox' },
-                            { text: 'Image Processing', link: '/tools/image-processing' }
-                        ]
+                        text: 'Configure',
+                        items: [{ text: 'Configuration', link: '/operate/configuration' }]
                     },
                     {
-                        text: 'Database',
-                        collapsed: false,
+                        text: 'Backups',
                         items: [
-                            { text: 'MongoDB & Mongoose', link: '/tools/mongodb-mongoose' },
-                            { text: 'Redis Cache', link: '/tools/redis-cache' },
-                            { text: 'Backups', link: '/tools/backups' },
-                            { text: 'Deploy and rollback', link: '/tools/deploy-and-rollback' },
-                            { text: 'Backup server', link: '/tools/backup-server' },
-                            { text: 'restic', link: '/tools/restic' },
-                            { text: 'rclone', link: '/tools/rclone' },
+                            { text: 'Backups', link: '/operate/backups' },
+                            { text: 'Backup server', link: '/operate/backup-server' },
+                            { text: 'restic', link: '/operate/restic' },
+                            { text: 'rclone', link: '/operate/rclone' },
                             {
                                 text: 'MongoDB Database Tools',
-                                link: '/tools/mongodb-database-tools'
+                                link: '/operate/mongodb-database-tools'
                             }
                         ]
                     },
                     {
-                        text: 'Messaging',
-                        collapsed: false,
+                        text: 'Observe',
                         items: [
-                            { text: 'RabbitMQ', link: '/tools/rabbitmq' },
-                            { text: 'Email & PDF Rendering', link: '/tools/email-and-rendering' }
-                        ]
-                    },
-                    {
-                        text: 'Observability',
-                        collapsed: false,
-                        items: [
-                            { text: 'Events & Logging', link: '/tools/events-and-logging' },
-                            { text: 'Winston & Audit Logs', link: '/tools/winston' },
-                            { text: 'The Observability Layer', link: '/tools/observability-layer' },
                             {
-                                text: 'Observability Reference',
-                                link: '/tools/observability-reference'
+                                text: 'Observability Stack Reference',
+                                link: '/operate/observability-reference'
                             },
-                            { text: 'Prometheus', link: '/tools/prometheus' },
-                            { text: 'Gatus', link: '/tools/gatus' },
-                            { text: 'OpenTelemetry', link: '/tools/opentelemetry' },
-                            { text: 'Tempo', link: '/tools/tempo' },
-                            { text: 'Grafana', link: '/tools/grafana' },
-                            { text: 'Loki', link: '/tools/loki' }
-                        ]
-                    },
-                    {
-                        text: 'Analytics',
-                        collapsed: false,
-                        items: [
-                            { text: 'Product Analytics', link: '/tools/analytics' },
+                            { text: 'Grafana', link: '/operate/grafana' },
+                            { text: 'Prometheus', link: '/operate/prometheus' },
+                            { text: 'Loki', link: '/operate/loki' },
+                            { text: 'Tempo', link: '/operate/tempo' },
+                            { text: 'OpenTelemetry', link: '/operate/opentelemetry' },
+                            { text: 'Gatus', link: '/operate/gatus' },
+                            { text: 'Winston & Audit Logs', link: '/operate/winston' },
                             {
                                 text: 'Frontend Observability',
-                                link: '/tools/frontend-observability'
+                                link: '/operate/frontend-observability'
                             }
-                        ]
-                    },
-                    {
-                        text: 'Testing',
-                        collapsed: false,
-                        items: [
-                            { text: 'Testing (overview)', link: '/tools/testing-and-docs' },
-                            { text: 'Unit Testing', link: '/tools/unit-testing' },
-                            { text: 'Integration Testing', link: '/tools/integration-testing' },
-                            {
-                                text: 'Contract Testing (Response)',
-                                link: '/tools/contract-testing'
-                            },
-                            {
-                                text: 'Contract-Derived Request Data',
-                                link: '/tools/contract-request-data'
-                            },
-                            { text: 'Mutation Testing', link: '/tools/mutation-testing' },
-                            { text: 'AI Auditing', link: '/tools/ai-auditing' },
-                            {
-                                text: 'Coverage & Confidence',
-                                link: '/tools/coverage-and-confidence'
-                            },
-                            { text: 'Load Testing', link: '/tools/load-testing' },
-                            { text: 'Dependency Graph', link: '/tools/dependency-graph' },
-                            { text: 'Cluster Testing', link: '/tools/cluster-testing' },
-                            { text: 'Broker Testing', link: '/tools/broker-testing' },
-                            { text: 'Weak Machines', link: '/tools/weak-machines' }
                         ]
                     }
                 ],
                 '/reference/': [
                     {
-                        text: 'File Glossary',
+                        text: 'Start',
+                        items: [{ text: 'Overview', link: '/reference/start' }]
+                    },
+                    {
+                        text: 'API',
                         items: [
-                            { text: 'Overview', link: '/reference/' },
+                            { text: 'Endpoints', link: '/reference/endpoints' },
+                            { text: 'GET /config — the boot answer', link: '/reference/config' },
+                            { text: 'Observability Endpoints', link: '/reference/observability' },
+                            { text: 'Error Responses', link: '/reference/errors' },
+                            { text: 'Success Responses', link: '/reference/responses' },
+                            { text: 'Sorting a List', link: '/reference/sorting' },
+                            { text: 'Field limits', link: '/reference/field-limits' }
+                        ]
+                    },
+                    {
+                        text: 'Lookups',
+                        items: [
+                            { text: 'Glossary', link: '/reference/glossary' },
+                            { text: 'Package Scripts', link: '/reference/package-scripts' },
                             {
-                                text: 'Writing These Docs',
-                                link: '/reference/documentation-style'
+                                text: 'Package Dependencies',
+                                link: '/reference/package-dependencies'
                             },
+                            {
+                                text: 'Permission Vocabulary',
+                                link: '/reference/permission-vocabulary'
+                            }
+                        ]
+                    },
+                    {
+                        text: 'Folder map',
+                        items: [
                             { text: 'Repository Root', link: '/reference/root' },
                             { text: 'App, Kernel & Types', link: '/reference/src-app' },
                             { text: 'Infrastructure', link: '/reference/src-infrastructure' },
@@ -298,33 +380,6 @@ export default withMermaid(
                             { text: 'Scripts & Hooks', link: '/reference/scripts' },
                             { text: 'Tests', link: '/reference/tests' },
                             { text: 'Ops & Assets', link: '/reference/ops' }
-                        ]
-                    }
-                ],
-                '/api/': [
-                    {
-                        text: 'API',
-                        items: [
-                            { text: 'Overview', link: '/api/' },
-                            { text: 'Endpoints', link: '/api/endpoints' },
-                            { text: 'Boot answer (GET /config)', link: '/api/config' },
-                            { text: 'Write Methods', link: '/api/write-methods' },
-                            { text: 'Success Responses', link: '/api/responses' },
-                            { text: 'Error Responses', link: '/api/errors' },
-                            { text: 'Field Limits', link: '/api/field-limits' },
-                            { text: 'Sorting a list', link: '/api/sorting' },
-                            { text: 'Observability Endpoints', link: '/api/observability' },
-                            { text: 'OpenAPI Workflow', link: '/api/openapi-workflow' },
-                            {
-                                text: 'Regenerating After a Change',
-                                link: '/api/regenerating'
-                            },
-                            {
-                                text: 'Contract Ownership & Fragmentation',
-                                link: '/api/contract-fragmentation'
-                            },
-                            { text: 'AsyncAPI Workflow', link: '/api/asyncapi-workflow' },
-                            { text: 'Versioning & Retiring', link: '/api/versioning' }
                         ]
                     }
                 ]

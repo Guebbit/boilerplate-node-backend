@@ -10,7 +10,7 @@
  * pulled sweep stays whole with this branch's files refreshed.
  *
  * Why whole files, why it cannot fail you for old debt:
- * docs/tools/mutation-testing.md#the-diff-run-and-why-it-can-fail-when-the-full-sweep-cannot
+ * docs/build/mutation-testing.md#the-diff-run-and-why-it-can-fail-when-the-full-sweep-cannot
  *
  * Usage:
  *   npm run mutation                 # against origin/main
@@ -114,7 +114,7 @@ const keepReportWhole = (): void => {
 /*
  * Through `runStryker`, not a bare `npx stryker`: this run needs the same per-worker heap cap and
  * concurrency as every other entry point. Calling Stryker directly is how it silently ran without
- * them — docs/tools/mutation-testing.md#worker-heap-cap.
+ * them — docs/build/mutation-testing.md#worker-heap-cap.
  */
 runStryker({
     label: `diff (${files.length} files)`,

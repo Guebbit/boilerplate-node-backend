@@ -8,7 +8,7 @@
  * The shop's own identity, currency and return address live in `shop`.
  * VAT rates:              not here; `products` resolves them and `orders` only freezes the number.
  * Order link:             owned here, because `infrastructure/http/frontend-link.ts` does not know
- *                         `orders` exists (see `docs/theory/layers.md`).
+ *                         `orders` exists (see `docs/understand/layers.md`).
  *
  * See: docs/modules/orders.md
  */
@@ -65,7 +65,7 @@ export const withdrawalPeriodDays = (): number => ordersConfig().NODE_WITHDRAWAL
 
 /**
  * Days a delivered order keeps the buyer after its legal-guarantee window (`conformityUntil`).
- * See docs/theory/data-retention.md#orders-after-the-account
+ * See docs/understand/data-retention.md#orders-after-the-account
  * @returns the days
  */
 export const orderPiiDaysAfterGuarantee = (): number =>
@@ -73,7 +73,7 @@ export const orderPiiDaysAfterGuarantee = (): number =>
 
 /**
  * Days a paid order that ended without delivery keeps the buyer, counted from `paidAt`.
- * See docs/theory/data-retention.md#orders-after-the-account
+ * See docs/understand/data-retention.md#orders-after-the-account
  * @returns the days
  */
 export const orderPiiDaysUndelivered = (): number => ordersConfig().NODE_ORDER_PII_DAYS_UNDELIVERED;

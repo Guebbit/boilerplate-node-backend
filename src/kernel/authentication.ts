@@ -11,7 +11,7 @@
  * The guard answers both the first two with 401, so a caller cannot tell a bad token from a deleted
  * account. The miss REASON is what the guard counts and audits.
  *
- * See: docs/tools/security.md#_401-or-403-and-why-the-guards-agree
+ * See: docs/understand/security.md#_401-or-403-and-why-the-guards-agree
  */
 
 import type { Response } from 'express';

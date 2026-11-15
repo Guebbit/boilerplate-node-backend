@@ -7,7 +7,7 @@
  * between them. Infrastructure supplies the handlers; this decides which ones this application
  * installs, and in what order.
  *
- * See: docs/tools/security.md#main-security-tools
+ * See: docs/understand/security.md#main-security-tools
  */
 
 import express from 'express';
@@ -90,7 +90,7 @@ export const applyServerTimeouts = (server: Server): void => {
      * has already closed, it sends the next request into a dead connection and answers 502 to a
      * caller who did nothing wrong.
      *
-     * See: docs/tools/security.md
+     * See: docs/understand/security.md
      */
     server.keepAliveTimeout = appConfig().NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS;
 };
@@ -118,7 +118,7 @@ export const installSecurity = (app: Express): void => {
      * deployment forgot to count — the one misconfiguration worth a warning, logged through the app
      * logger (see `buildRateLimiter`). Express reads both the same way.
      *
-     * See: docs/tools/security.md#trust-proxy-and-the-two-ways-to-get-it-wrong
+     * See: docs/understand/security.md#trust-proxy-and-the-two-ways-to-get-it-wrong
      */
     const trustProxyHops = appConfig().NODE_TRUST_PROXY_HOPS;
     app.set('trust proxy', trustProxyHops === 0 ? false : trustProxyHops);

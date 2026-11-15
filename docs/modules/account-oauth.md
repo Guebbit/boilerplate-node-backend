@@ -2,7 +2,7 @@
 
 Signing in with somebody else's identity provider — the port, the CSRF handshake across the
 redirect, and the outcomes a callback can have.
-[Web attack defences](../theory/defences/authentication.md#federated-login)
+[Web attack defences](../understand/defences/authentication.md#federated-login)
 carries the same three defences as attack rows — the `state` cookie, the server-derived URIs, and the
 linking rule — naming what each one stops. This page is the mechanism behind them.
 
@@ -48,7 +48,7 @@ of its own to go stale. An unconfigured provider resolves `undefined`
 and the route answers 404 — the same "loud, never silently wrong" stance an unset
 `NODE_PAYMENT_PROVIDER` gets.
 
-`fake` is the dev preload's stand-in (a [test double](../tools/test-doubles.md), not in `src/`): no network call and no consent screen, so a Cypress spec
+`fake` is the dev preload's stand-in (a [test double](../build/test-doubles.md), not in `src/`): no network call and no consent screen, so a Cypress spec
 clicking "Continue with Google" never leaves this app. It still round-trips the real `state` cookie,
 so the CSRF check gets genuine coverage rather than being skipped in the suite that exercises it
 most.
@@ -95,7 +95,7 @@ switch to `127.0.0.1` on its own: the `__Host-` state cookie is set on the host 
 `VITE_API_URL` names, so the start and the callback must share a host.
 
 The client id and secret go in the client's `.env`, not in `secrets/`
-([optional integrations](../getting-started-production.md)). Rotate the secret in the console if it
+([optional integrations](../operate/first-deploy.md)). Rotate the secret in the console if it
 leaks.
 
 The callback hands the library that same URL with the request's **raw query string** attached
@@ -252,7 +252,7 @@ callback turns that into a generic `?error=provider_error`, and the caller's ret
 | `GET /account/oauth/:provider/callback` | 302 back to the frontend, session cookies set |
 
 Both are public, because this **is** how an unauthenticated caller signs in. Both sit behind
-`credentialLimiters`. Which providers exist is `oauthProviders` on [`GET /config`](../api/config.md):
+`credentialLimiters`. Which providers exist is `oauthProviders` on [`GET /config`](../reference/config.md):
 a deployment with no keys lists none.
 
 Only two failures answer with a body. Everything past the state check redirects to the frontend
@@ -312,11 +312,11 @@ they were told about.
   the browser to the frontend's 2FA step and the session is minted only after
   [`POST /account/login/2fa`](./account-two-factor.md). A provider is one way to prove the first
   factor, never a replacement for the second (the attack row:
-  [Federated login](../theory/defences/authentication.md#federated-login)).
+  [Federated login](../understand/defences/authentication.md#federated-login)).
 
 ## Libraries
 
-`openid-client` is `account`'s alone — see [Package Dependencies](../tools/package-dependencies.md).
+`openid-client` is `account`'s alone — see [Package Dependencies](../reference/package-dependencies.md).
 
 | Library                     | Maintained    | What it costs you                                                                                            |
 | --------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------ |
@@ -330,5 +330,5 @@ they were told about.
 - [Sessions](./account-sessions.md) — the session a callback mints, and `amr`
 - [Two-factor authentication](./account-two-factor.md) — the second factor this path also owes
 - [`users`](./users.md) — `oauthAccounts` and the unique index behind it
-- [Web attack defences](../theory/defences/authentication.md#federated-login) — the same subsystem as attack rows
+- [Web attack defences](../understand/defences/authentication.md#federated-login) — the same subsystem as attack rows
 - [`payments` provider port](./payments-provider-port.md) — the port this one is shaped after

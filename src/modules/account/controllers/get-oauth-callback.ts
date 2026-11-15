@@ -233,7 +233,7 @@ export const getOAuthCallback = (request: Request, response: Response) => {
              * A factor armed on the password path applies here too — 2FA is a control on the
              * ACCOUNT, not on one login method. Minting a session directly would let a provider
              * alone stand in for a second factor the owner deliberately turned on — see 1b in
-             * docs/theory/defences/authentication.md#federated-login.
+             * docs/understand/defences/authentication.md#federated-login.
              */
             if (!user.twoFactorEnabledAt) {
                 // Deletion grace: no session and no login yet. The claim check rides a cookie, the

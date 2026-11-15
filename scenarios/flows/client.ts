@@ -7,7 +7,7 @@
  * file runs on a container boot (`npm run db:bootstrap` → `scenario:apply`), where
  * devDependencies may not be installed at all. `fetch` is the runtime's.
  *
- * See: docs/tools/demo-profile.md
+ * See: docs/build/demo-profile.md
  */
 
 import { randomUUID } from 'node:crypto';

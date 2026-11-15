@@ -6,7 +6,7 @@
  *
  * Run by a person, never on a schedule, on the RESTORED database with the app and cron STOPPED,
  * before the stack starts. The ledger in that database must be the live one or the newest
- * snapshot's, never the restored copy: docs/tools/backups.md#erasures-after-a-restore.
+ * snapshot's, never the restored copy: docs/operate/backups.md#erasures-after-a-restore.
  *
  * Flags:
  *   --since <ISO time>   the snapshot's time (required); ledger rows from then on are replayed

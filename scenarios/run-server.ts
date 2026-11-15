@@ -19,7 +19,7 @@
  * see `startEphemeralMongo`. Several instances then share that one database, which several
  * in-memory instances never did; do not combine the two without meaning to.
  *
- * See: docs/tools/demo-profile.md
+ * See: docs/build/demo-profile.md
  */
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';

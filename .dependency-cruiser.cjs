@@ -244,7 +244,7 @@ module.exports = {
         {
             name: 'foundation-cannot-reach-shop',
             comment:
-                "A `group: foundation` module ships with every deployment; a `group: shop` one is the demo shop's own worked example, deletable on its own (see docs/theory/strategic-ddd.md). The arrow only points one way — a SHOP module reaching another shop module, or a foundation module reaching another foundation module, is untouched by this rule and is `moduleCouplingRules`' concern instead. Relabel the importing module in its own `module.yaml` if the coupling is actually intentional; don't widen this rule to let it through.",
+                "A `group: foundation` module ships with every deployment; a `group: shop` one is the demo shop's own worked example, deletable on its own (see docs/understand/strategic-ddd.md). The arrow only points one way — a SHOP module reaching another shop module, or a foundation module reaching another foundation module, is untouched by this rule and is `moduleCouplingRules`' concern instead. Relabel the importing module in its own `module.yaml` if the coupling is actually intentional; don't widen this rule to let it through.",
             severity: 'error',
             from: {
                 path: `^src/modules/(${FOUNDATION_MODULES.join('|')})/`,

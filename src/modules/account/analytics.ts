@@ -3,7 +3,7 @@
  * The analytics event names this module emits. Signup and login anchor the funnel other rates
  * are measured against, declared by augmenting the analytics port's name map (as `./audit.ts`
  * does for audit actions) so the catalogue grows with the modules that own their names. Naming
- * rule: docs/tools/analytics.md#naming — these names stay here only, since the paired frontend
+ * rule: docs/understand/analytics.md#naming — these names stay here only, since the paired frontend
  * emits no custom events of its own and every name keeps exactly one emitter.
  */
 

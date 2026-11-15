@@ -164,7 +164,7 @@ export interface PlatformCaller {
  * `AsyncLocalStorage` so a missing `CallerContext` is a compile error, not an ALS accessor
  * silently returning the wrong (or no) request across an async boundary.
  *
- * See: docs/tools/analytics.md#caller-context
+ * See: docs/understand/analytics.md#caller-context
  */
 export interface CallerContext {
     /**

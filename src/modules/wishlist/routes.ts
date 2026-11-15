@@ -3,7 +3,7 @@
  * The wishlist route table.
  *
  * A wishlist is somebody's, so the whole router is authenticated and none of it is admin. A saved
- * product is a line of it, written through `/items` (docs/api/write-methods.md#a-line-is-written-through-its-parent).
+ * product is a line of it, written through `/items` (docs/understand/write-methods.md#a-line-is-written-through-its-parent).
  */
 
 import { Router } from 'express';

@@ -1,0 +1,386 @@
+# RabbitMQ
+
+[RabbitMQ](https://www.rabbitmq.com/) is used as a message broker to offload heavy or unreliable work (emails, webhook delivery, etc.) from the request/response cycle into background queues.
+
+## Why a queue?
+
+| Without queue                      | With queue                                     |
+| ---------------------------------- | ---------------------------------------------- |
+| Email sent inside the HTTP handler | Message published → handler responds instantly |
+| Slow SMTP = slow API response      | Consumer retries independently                 |
+| Failure loses the job              | Message is re-queued on failure                |
+
+## Where the code lives
+
+| Concern                   | File                                                                                                |
+| ------------------------- | --------------------------------------------------------------------------------------------------- |
+| Connection & helpers      | `src/infrastructure/adapters/queue.ts`                                                              |
+| Queue-aware dispatch      | `src/infrastructure/adapters/mailer.ts` → `enqueueEmail()`                                          |
+| Email worker (domainless) | `src/infrastructure/adapters/email.worker.ts`                                                       |
+| Image digest worker       | `src/infrastructure/adapters/image.worker.ts`                                                       |
+| Webhook delivery (module) | `src/modules/webhooks/services/enqueue.ts` (publish), `attempt.ts` (consume)                        |
+| Worker registration       | `src/app/workers.ts` (domainless queues) + `kernel/registry.ts`'s `resolveConsumers` (module-owned) |
+| Startup hook              | `src/app.ts` → `startQueue` + `registerWorkers`                                                     |
+| Shutdown hook             | `src/infrastructure/runtime/server-lifecycle.ts` → `stopQueue`                                      |
+
+## Architecture
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 55, 'rankSpacing': 65}}}%%
+flowchart LR
+    API[Express handler] -->|publish| RMQ[(RabbitMQ)]
+    RMQ -->|consume| Worker[Consumer process]
+    Worker --> SMTP[Send email]
+    Worker --> Hook[Deliver webhook]
+
+    classDef app fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef queue fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef worker fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef outbound fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    class API app;
+    class RMQ queue;
+    class Worker worker;
+    class SMTP,Hook outbound;
+```
+
+## How it's used
+
+### Emails (fire-and-forget)
+
+Everything that sends an email calls `enqueueEmail()` from `src/infrastructure/adapters/mailer.ts`,
+from a module's service (not a controller). A mail to a customer about an order, payment, shipment
+or return is sent from an outbox-event listener — see [outbox.md](outbox.md#customer-mail):
+
+- **Queue enabled** → the email job is published to the `worker.email.send` queue. The `email.worker.ts` consumer picks it up and calls `sendTemplatedEmail()` in the background.
+- **Queue disabled, or the publish failed** → falls back to calling `sendTemplatedEmail()` directly, at the cost of request latency.
+
+Callers include `account/services/mail.ts` (reset, verification, restore links),
+`orders/services/notify.ts` and `cancel-mail.ts`, `payments/services/notify.ts`,
+`delivery/services/notify.ts`, `returns/services/notify.ts`, `tasks/services/contact.ts` and `tasks/services/personal-data.ts`. `grep -rn enqueueEmail src` is the live list.
+
+### Invoice PDF rendering — NOT a queue
+
+`GET /orders/:id/invoice` and `/credit-notes/:creditNoteId` render synchronously, on the request thread —
+`src/modules/invoicing/services/render.ts` — and stream the bytes back. There is no queue, no
+worker and no stored status: the frozen `Invoice`/`CreditNote` row is the system of record, and
+each request just renders it again — see [invoicing](../modules/invoicing.md).
+
+## Job lifecycle
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 65}}}%%
+flowchart LR
+    Producer[Controller or service] --> Publish[enqueueEmail / publishToQueue]
+    Publish --> Queue[(worker.email.send or a module's own)]
+    Queue --> Consume[email.worker / a module's own worker]
+    Consume --> Ack[Ack on success]
+    Consume --> Retry["Nack, no requeue<br/>(routes to &lt;queue&gt;.retry)"]
+    Consume --> Drop["Park in &lt;queue&gt;.dead<br/>(malformed, refused, or attempts exhausted)"]
+
+    classDef app fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef queue fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef worker fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef result fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    class Producer,Publish app;
+    class Queue queue;
+    class Consume worker;
+    class Ack,Retry,Drop result;
+```
+
+See [Retries and parking](#retries-and-parking) for what happens after the "nack" and "park" arms.
+
+## Configuration
+
+| Env var                  | Description                                                                   |
+| ------------------------ | ----------------------------------------------------------------------------- |
+| `NODE_RABBITMQ_URL`      | Full AMQP URI (preferred). Example: `amqp://user:pass@rabbitmq:5672`          |
+| `NODE_RABBITMQ_HOST`     | Hostname fallback when URL is not set (default `127.0.0.1`).                  |
+| `NODE_RABBITMQ_PORT`     | Port fallback. Setting it is what switches the queue on when no URL is given. |
+| `NODE_RABBITMQ_USER`     | Username fallback (default `guest`).                                          |
+| `NODE_RABBITMQ_PASSWORD` | Password fallback (default `guest`).                                          |
+| `NODE_RABBITMQ_ENABLED`  | Set to `0` to disable even if URL is configured.                              |
+
+When neither the URL nor the port is set, all queue operations silently no-op — the rest of the app works normally.
+
+At boot the log names the broker in use, with the credentials left out
+(`queue: connecting to amqp://rabbitmq:5672 (from NODE_RABBITMQ_URL)`). `NODE_RABBITMQ_URL` wins over
+host and port; the boot log names the broker and its source.
+
+## Docker Compose
+
+The `docker-compose.yml` includes a `rabbitmq` service with the management plugin, `rabbitmq:4-management` —
+the same 4.x line as `docker-compose.production.yml`'s digest-pinned `rabbitmq:4-alpine` image (the
+dev one adds the management UI), which is what makes quorum queues' 4.x
+behaviour ([Queue type: quorum](#queue-type-quorum), [Priority](#priority)) the same in dev as in
+production:
+
+- **AMQP port**: `5672`
+- **Management UI**: `http://localhost:15672` (guest / guest)
+
+### Run broker tools as `rabbitmq`, never root
+
+The broker keeps an Erlang cookie at `/var/lib/rabbitmq/.erlang.cookie`, and its CLI tools
+(`rabbitmq-diagnostics`, `rabbitmqctl`) create it when it is missing. Run as root before the
+broker's first boot, a tool creates it owned by root with mode `400`; the broker then crashes on
+`eacces` and stays crashed, because the file lives in the data volume. So the production
+healthcheck is `su-exec rabbitmq rabbitmq-diagnostics -q ping` (the alpine image), and a manual
+check is `docker exec -u rabbitmq <container> rabbitmq-diagnostics -q ping`, never a plain
+`docker exec`. If it already happened, delete the volume's `.erlang.cookie` and restart.
+
+## Usage
+
+### Publishing a message
+
+```ts
+import { publishToQueue, EMAIL_QUEUE } from '@infrastructure/adapters/queue';
+
+// Inside a controller or service:
+await publishToQueue({
+    queue: EMAIL_QUEUE,
+    payload: { to: 'user@example.com', template: 'welcome', data: { name: 'Alice' } }
+});
+```
+
+Never a string literal. `EMAIL_QUEUE` and `IMAGE_QUEUE` are aliases of `WORKER_CHANNELS.EMAIL_SEND`
+and `WORKER_CHANNELS.IMAGE_DIGEST`; a module-owned queue reads its own entry off `WORKER_CHANNELS`
+directly (`webhooks`' `WORKER_CHANNELS.WEBHOOK_DELIVER`) — all generated out of `asyncapi.yaml`, so
+the name a producer publishes to, the name the consumer drains and the name the contract declares
+are one string. A typo in a literal is not an error anywhere; it is a message on a queue nobody
+reads.
+
+`publishToQueue`'s `true`/`false` answers the BROKER's own confirmation, not `sendToQueue`'s return
+value — the channel it publishes on is a confirm channel
+(`model.createConfirmChannel()`), and only the confirm callback resolves the promise (a 5s timeout
+falls back to `false` if it never arrives). `sendToQueue` returning `false` on its own means "the
+local write buffer is full, wait for `drain`" — never "failed" — so a caller reading THAT boolean
+directly would run its inline fallback alongside a publish that was going to succeed anyway.
+
+**A late confirm sends the mail twice.** An unconfirmed publish (the 5s timeout) falls back to the
+inline send, and a confirm that arrives after it means the broker has the message as well. This is
+chosen on purpose: delivery is at-least-once, and a duplicate beats a lost mail.
+
+### Consuming messages
+
+```ts
+import { consumeFromQueue, EMAIL_QUEUE } from '@infrastructure/adapters/queue';
+
+consumeFromQueue({
+    queue: EMAIL_QUEUE,
+    prefetch: 5,
+    handler: async (message) => {
+        // Return true to ack. Return false ONLY for a job that will never be processable —
+        // it is dead-lettered permanently. Let anything transient throw: the consumer republishes it
+        // to `<queue>.retry` (TTL, no consumer), which expires back onto this queue — never an
+        // immediate broker requeue.
+        await sendEmail(message);
+        return true;
+    }
+});
+```
+
+### Retries and parking
+
+A failing job waits in a TTL queue and comes back on its own — the broker owns the delay, not an
+app-side timer:
+
+```mermaid
+flowchart LR
+    W["work queue"] -->|"handler threw: republish,<br/>x-retry-attempt + 1"| R["&lt;queue&gt;.retry<br/>(TTL, no consumer)"]
+    R -->|"TTL expires"| W
+    W -->|"parked: nack, requeue=false"| D["&lt;queue&gt;.dead"]
+    W -->|"x-delivery-limit spent<br/>reason: delivery_limit"| D
+```
+
+Every work queue is declared with two companions, all through the same `dead-letter` exchange (a
+`direct` exchange — a routing key names exactly one queue):
+
+| Name            | What it is                                                                                                                                                                                                        |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<queue>.retry` | No consumer. `x-message-ttl` set to `NODE_QUEUE_RETRY_DELAY_SECONDS`; dead-letters BACK to `<queue>` once a message sits out its wait.                                                                            |
+| `<queue>.dead`  | The parking lot. No consumer, no `x-dead-letter-*` of its own; `x-message-ttl` of 7 days, after which a parked message is dropped. The work queue dead-letters into it, bound to the exchange under its own name. |
+
+The work queue's OWN dead-letter target is `<queue>.dead`: a `nack(msg, false, false)` and a spent
+`x-delivery-limit` both park the message, so nothing is ever dropped. A retry is never a
+dead-letter; the consumer republishes it itself. That is what makes the handler's outcomes mean what
+they say:
+
+| Handler does                 | What happens                                                                                       |
+| ---------------------------- | -------------------------------------------------------------------------------------------------- |
+| resolve `true`               | `ack` — deleted, the job is done                                                                   |
+| resolve `false`              | parked: `nack(msg, false, false)`, the broker moves it to `<queue>.dead` — never retried           |
+| malformed / contract-invalid | parked the same way — the bytes will never become valid on a retry                                 |
+| throws, attempts remain      | republished to `<queue>.retry` (confirmed), then acked; comes back once its TTL expires            |
+| throws, attempts exhausted   | parked in `<queue>.dead`, logged once at `error` (the job's identifying fields, never the payload) |
+
+**The attempt count is our own header.** Every retry republish stamps `x-retry-attempt` (one higher
+than it arrived with, `0` when absent). It is not `x-death`: RabbitMQ 4 ignores an `x-death` that a
+client republishes ([4.0.1 release notes](https://github.com/rabbitmq/rabbitmq-server/releases/tag/v4.0.1)),
+so a republished message would never count there.
+
+**A retry is a confirmed republish.** The original is acked only once the broker has confirmed the
+copy in `<queue>.retry` — the same confirm-channel guarantee [Publishing a message](#publishing-a-message)
+describes — and nacked with requeue when the confirm fails, so a failed hop never drops a job.
+Parking needs no publish at all: the nack and the dead-lettering are one broker-side move.
+
+**The two knobs**, one number each for every consumer — not a per-consumer option:
+
+| Env var                          | Default | Meaning                                         |
+| -------------------------------- | ------- | ----------------------------------------------- |
+| `NODE_QUEUE_MAX_ATTEMPTS`        | `5`     | Deliveries before a job is parked.              |
+| `NODE_QUEUE_RETRY_DELAY_SECONDS` | `30`    | How long a failed job waits in `<queue>.retry`. |
+
+One fixed delay per queue (not per message) is deliberate: RabbitMQ only expires a queue from the
+head, so a 5s message queued behind a 10-hour one would otherwise wait 10 hours. One retry queue
+per work queue sidesteps that entirely.
+
+**Replaying a parked job** is a management-UI action today (move the message from `<queue>.dead`
+back onto `<queue>`), not an app endpoint — a parked job is a morning's work to triage, not
+something to automate blindly.
+
+**Upgrading an existing broker.** `assertQueue` throws `PRECONDITION_FAILED` when a queue already
+exists with different arguments — which is what this retry topology, the priority argument, and
+[the move to quorum queues](#queue-type-quorum) each do in turn to a broker holding queues
+declared without them. The channel dies, is replaced, and fails the same way — and a queue's TYPE
+is the one property that cannot be changed by re-declaring it at all, `PRECONDITION_FAILED`
+included: it can only be dropped and recreated. Delete the old queues once
+(`rabbitmqctl delete_queue worker.email.send`, and the same for `worker.image.digest`,
+`worker.email.send.retry`/`.dead` and any module-owned queue's own pair) with the consumers
+stopped, then restart the app — the declarations, `.retry` included, are recreated on the first
+publish. Nothing is deployed against a broker outside this compose stack as of this writing, so
+this stays a runbook line rather than a procedure anyone has had to run.
+
+### Queue type: quorum
+
+Every queue `queue.ts` declares — work, retry and dead-letter alike — carries
+`x-queue-type: quorum`. Quorum queues are RabbitMQ 4's recommended durable type; classic MIRRORED
+queues, their predecessor, are gone in 4.x. The reason it matters here specifically: a quorum
+queue tracks its own `delivery-count`, incremented on EVERY redelivery — a consumer that crashes
+mid-handler included, not only a `nack` the app chose to send. That is what bounds a message that
+kills its consumer before the handler ever gets to answer it, which the app's own
+`x-retry-attempt` count (`NODE_QUEUE_MAX_ATTEMPTS`) alone cannot, since the handler's failure path
+never runs:
+
+```mermaid
+flowchart LR
+    W["work queue"] -->|"x-delivery-limit crashes<br/>reason: delivery_limit"| D["&lt;queue&gt;.dead"]
+```
+
+| Queue argument           | Value            | Where                    | Why                                                                                                                                                                                           |
+| ------------------------ | ---------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `x-queue-type`           | `quorum`         | work, retry, dead-letter | RabbitMQ 4's recommended durable type — see above.                                                                                                                                            |
+| `x-delivery-limit`       | `3`              | work queue only          | Caps the broker's OWN redelivery count, explicit rather than trusting 4.x's default of 20 — a message that kills the process on contact should not get 20 chances before it is dead-lettered. |
+| `x-dead-letter-strategy` | `at-least-once`  | work, retry              | The default, `at-most-once`, can silently drop a message in transit to its dead-letter target.                                                                                                |
+| `x-overflow`             | `reject-publish` | work, retry              | `at-least-once` requires it — the alternative default, `drop-head`, would silently discard the oldest queued message instead.                                                                 |
+
+When `x-delivery-limit` is reached, the work queue dead-letters the message straight to
+`<queue>.dead`, where it is parked like any other spent job.
+
+See [RabbitMQ: Quorum Queues](https://www.rabbitmq.com/docs/quorum-queues) and
+[Upgrading an existing broker](#retries-and-parking) above — a queue TYPE cannot change in place
+any more than its other arguments can.
+
+### Priority
+
+Quorum queues have no `x-max-priority` opt-in: every queue always offers the full 0-31 range, and
+a message published with no `priority` at all lands at **4**, not 0
+(https://www.rabbitmq.com/docs/quorum-queues#priority). `JobPriority`'s two levels sit above that
+default rather than at the classic-queue `0`/`1`, or `'normal'` would rank BELOW an unmarked
+message:
+
+| `JobPriority` | Number | Meaning                                                                                                        |
+| ------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
+| `'normal'`    | `4`    | Default — level with what an unmarked message gets, never below it.                                            |
+| `'high'`      | `8`    | A person is actively blocked on this — jumps ahead of `'normal'` messages currently waiting on the same queue. |
+
+`enqueueEmail()` defaults to `'normal'` and takes an optional fourth argument; the account
+module's token-bearing links (password reset, account deletion, account setup, email
+verification — all short-TTL, all a person is staring at an inbox for) pass `'high'`. Order
+confirmations, delivery notices and the rest stay `'normal'`.
+
+Two levels, deliberately: this is "give the few urgent things a preference" — one gap between
+most things and what a person is actively blocked on — not a real-time scheduler. See
+[RabbitMQ: Quorum Queues — Priorities](https://www.rabbitmq.com/docs/quorum-queues#priority).
+
+### Options
+
+| Publish option | Default    | Description                                                                                        |
+| -------------- | ---------- | -------------------------------------------------------------------------------------------------- |
+| `durable`      | `true`     | Queue survives broker restarts.                                                                    |
+| `persistent`   | `true`     | Message is written to disk.                                                                        |
+| `priority`     | `'normal'` | `'high'` jumps ahead of `'normal'` messages waiting on the same queue — see [Priority](#priority). |
+
+| Consume option      | Default                          | Description                                                |
+| ------------------- | -------------------------------- | ---------------------------------------------------------- |
+| `durable`           | `true`                           | Queue survives broker restarts.                            |
+| `prefetch`          | `1`                              | Unacknowledged messages allowed at once.                   |
+| `maxAttempts`       | `NODE_QUEUE_MAX_ATTEMPTS`        | Overrides the deployment-wide default for this queue only. |
+| `retryDelaySeconds` | `NODE_QUEUE_RETRY_DELAY_SECONDS` | Overrides the deployment-wide default for this queue only. |
+
+## Recovery
+
+The connection recovers on its own — amqplib's opt-in `recovery` option
+(`connect(url, { recovery: { setup } })`), not a hand-rolled retry loop. `setup` runs after every
+successful (re)connect, first one included, and is what opens the one channel this process uses
+and re-binds every consumer `consumeFromQueue` has ever registered — a fresh channel starts with
+none of its own, whether it is boot's first one or a reconnect's.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 60}}}%%
+flowchart LR
+    D["broker down<br/><i>or still starting</i>"] --> S["slow lane<br/><i>publish/consume degrade inline</i>"]
+    S -.->|"amqplib retries<br/>with backoff, forever"| R["broker reachable"]
+    R --> U["setup() runs<br/><i>open channel, re-bind every consumer</i>"]
+    U --> Q["queue path<br/><i>queueState() reads ready again</i>"]
+
+    classDef bad fill:#fee2e2,stroke:#b91c1c,color:#111827;
+    classDef wait fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
+    class D bad;
+    class S wait;
+    class R,U,Q done;
+```
+
+Three rules the connection layer keeps because of how amqplib's own recovery works:
+
+- **Boot never waits for the broker.** `connect(url, { recovery })`'s promise settles only once
+  the FIRST connect succeeds — retrying forever underneath — so `startQueue()` never awaits it;
+  awaiting it would stop the app booting until a broker answered.
+- **Nothing waits for a channel during an outage.** `createChannel()` on the recovering
+  connection parks the caller until reconnected, so `publishToQueue`/`consumeFromQueue` never call
+  it directly — they read `currentChannel`, a plain variable `setup` sets and the channel's own
+  `close` event clears, `undefined` meaning "take the slow lane".
+- **A channel can die while the connection lives.** Recovery only reacts to a CONNECTION drop, so
+  a channel-only close (a `PRECONDITION_FAILED`, an ack on an unknown tag) needs its own handling:
+  `setupChannel`'s `close` listener re-opens a fresh channel after `CHANNEL_REOPEN_DELAY_MS` and
+  replays every consumer this process has ever registered onto it — the same `setup()` the
+  connection-level recovery runs, called by hand instead of by amqplib.
+
+`maxRetries` is `0` under `NODE_ENV=test`: amqplib's retry timer is never `.unref()`'d, so an
+unreachable broker — the routine case locally, since `.env` names the compose hostname, which
+resolves nowhere outside it — would otherwise keep a test process from exiting on its own.
+Production keeps the library default, `Infinity`, except in a scheduled job: `run-job.ts` calls
+`boundQueueRetries()` (3 retries), because a job process has no forced-exit deadline. A job never
+calls `startQueue()`; a mail built in its first moments goes inline, and a connection that lands
+after `stopQueue()` is closed instead of kept, so a job always exits.
+
+## Graceful shutdown
+
+`stopQueue()` is called during the app's graceful shutdown sequence (after the HTTP server closes).
+It cancels every consumer, waits up to 5 s for handlers still running, then closes the AMQP
+connection. A handler that outlives the wait is redelivered.
+
+## Works with
+
+- **[Email & PDF Rendering](./email-and-rendering.md)** — the primary use case for this queue. Controllers publish email jobs instead of calling Nodemailer directly; the `email.worker.ts` consumer sends the email independently. Invoice PDF rendering is NOT queued — see [Invoice PDF rendering](#invoice-pdf-rendering-—-not-a-queue). → [How it's used](./rabbitmq.md#how-it-s-used)
+
+## External references
+
+- [amqplib channel API](https://amqp-node.github.io/amqplib/channel_api.html) — the client library used in `src/infrastructure/adapters/queue.ts`
+- [RabbitMQ tutorials (Node.js)](https://www.rabbitmq.com/tutorials) — queue patterns with code examples
+
+## Related pages
+
+- [Email & PDF Rendering](./email-and-rendering.md) — primary queue use case
+- [Runtime](./runtime.md) — startup/shutdown lifecycle
+- [AsyncAPI Workflow](../build/asyncapi-workflow.md) — async contracts for worker queues
+- [Redis Cache](./redis-cache.md) — similar optional-infrastructure pattern

@@ -13,7 +13,7 @@
  * is code, declared beside the routes that check it, and `assertDeclared` refuses one no module
  * owns — so a typo in a mount is a boot failure rather than a route nobody can reach.
  *
- * See: docs/tools/security.md · docs/theory/authorization.md
+ * See: docs/understand/security.md · docs/understand/authorization.md
  */
 
 import type { Request, Response, NextFunction } from 'express';
@@ -458,7 +458,7 @@ const isCredentialCaller = (request: Request): boolean =>
  * A route whose subject is the tenant's data rather than the caller mounts
  * {@link isAuthOrCredential} instead.
  *
- * See: docs/tools/security.md#machine-to-machine-credentials
+ * See: docs/understand/security.md#machine-to-machine-credentials
  *
  * @param request - must already carry `authContext`, set upstream by `getAuth`
  * @param response - answered 401 when no bearer-authenticated session was resolved
@@ -479,7 +479,7 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
  * credential.
  *
  * Why a second guard, where to mount it, and how both halves of that decision are kept honest:
- * see docs/tools/security.md#machine-to-machine-credentials.
+ * see docs/understand/security.md#machine-to-machine-credentials.
  *
  * @param request - must already carry `authContext` or `caller`, set upstream by `getAuth`
  * @param response - answered 401 when neither was resolved
@@ -592,7 +592,7 @@ export const requirePermission = <TSubject extends PermissionSubject>(
          * caller: `authContext` (a human session) or `caller` alone (an api-key — see `getAuth`'s
          * `sk_...` branch); neither present is genuinely unauthenticated.
          *
-         * See: docs/tools/security.md#_401-or-403-and-why-the-guards-agree
+         * See: docs/understand/security.md#_401-or-403-and-why-the-guards-agree
          */
         if (!request.authContext && !request.caller) {
             auditRefusal(request, {
@@ -607,7 +607,7 @@ export const requirePermission = <TSubject extends PermissionSubject>(
         }
 
         /*
-         * An api-key is tenant-scoped by construction (docs/tools/security.md#machine-to-machine-credentials)
+         * An api-key is tenant-scoped by construction (docs/understand/security.md#machine-to-machine-credentials)
          * and can never satisfy a platform rule. Refused here, distinctly from a missing
          * permission, rather than left to fall through to `holds` for the same 403 — the audit
          * trail should say WHY, not just that the check failed.
@@ -818,7 +818,7 @@ const cookieGuard = (
  * Leaves the stream's recheck on `request.sessionRecheck`, bound to the session FAMILY rather than
  * to this cookie's value, which the next rotation supersedes.
  *
- * See: docs/tools/security.md#why-the-sse-endpoints-authenticate-by-cookie
+ * See: docs/understand/security.md#why-the-sse-endpoints-authenticate-by-cookie
  *
  * @param action - the action this route requires
  * @param subject - the subject it is taken on
@@ -907,7 +907,7 @@ export interface FreshAuthOptions {
  * and (when `options.methods` is given) unless every one of those methods is in their `amr`.
  * MUST run after `isAuth`.
  *
- * **401, not 403** — this repository's own rule (docs/tools/security.md), not just RFC 9470's:
+ * **401, not 403** — this repository's own rule (docs/understand/security.md), not just RFC 9470's:
  * the status names the client's next move, and 401 means "authenticate and try again", which is
  * the literal definition of step-up. The rejection carries both dialects: `WWW-Authenticate` for
  * anything that speaks OAuth, this app's own `errors[].code` envelope for its own clients, which

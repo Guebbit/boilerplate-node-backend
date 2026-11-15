@@ -6,7 +6,7 @@
  * announces `order.status_overridden` so `delivery` can bring its own records in step — `orders`
  * never touches a shipment itself.
  *
- * See `docs/theory/tactical-ddd.md` §1 "Who writes the status".
+ * See `docs/understand/tactical-ddd.md` §1 "Who writes the status".
  */
 
 import { t } from '@infrastructure/i18n';

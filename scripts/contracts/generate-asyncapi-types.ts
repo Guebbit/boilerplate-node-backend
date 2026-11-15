@@ -23,7 +23,7 @@
  *
  * Usage: tsx scripts/contracts/generate-asyncapi-types.ts --out <path> [--check]
  *
- * See: docs/api/asyncapi-workflow.md#generated-typescript-types
+ * See: docs/build/asyncapi-workflow.md#generated-typescript-types
  */
 import {
     TypeScriptGenerator,

@@ -18,7 +18,7 @@
 #   clients/<name>/password  the client's restic password, for the prune job
 #
 # `--private-repos` ties each user to the folder of the same name, so `acme` reaches /acme/ only.
-# Setup, adding a client, restoring from here: docs/tools/backup-server.md
+# Setup, adding a client, restoring from here: docs/operate/backup-server.md
 #
 # Provider-neutral: any host that runs Docker or Podman. No Docker socket, no host path but the above.
 

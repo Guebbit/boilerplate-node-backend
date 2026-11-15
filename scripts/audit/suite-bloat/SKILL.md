@@ -78,5 +78,5 @@ Rules:
   "unverified". A guess here deletes real coverage.
 - A rule the contract states is never bloat while this test is its only owner. When an app-wide
   sweep pins the same rule on the same route with an equal or stronger assertion, the per-route copy
-  is redundant unless it checks more than the status (`docs/tools/contract-testing.md`).
+  is redundant unless it checks more than the status (`docs/build/contract-testing.md`).
 - `tmp/reports/` is gitignored. These files are working evidence, not deliverables.

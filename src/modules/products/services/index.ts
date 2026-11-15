@@ -2,7 +2,7 @@
  * @module
  * Product service — all business logic for the catalogue entity, and the one place a controller
  * may call into. One file per flow, not one big file; see
- * `docs/theory/layers.md`.
+ * `docs/understand/layers.md`.
  *
  * `search.ts`/`read.ts` read the catalogue, `crud.ts` writes a product, `translated-write.ts`
  * writes it together with its translations, `remove.ts` deletes and restores, `lookups.ts` is the

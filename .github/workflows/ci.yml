@@ -850,7 +850,7 @@ jobs:
         #   secrets.IMAGE_REGISTRY_TOKEN the login token or password
         #   vars.INSTALL_CHROMIUM       `true` to bake Chromium in (invoice PDFs); default false
         # Needs `ci` (the whole merge gate) and `boot` (the production image starts). Runbook:
-        # docs/tools/deploy-and-rollback.md#with-a-registry
+        # docs/operate/deploy-and-rollback.md#with-a-registry
         # Not in the `ci` job's `needs:`: a registry outage must never turn the merge gate red.
         if: >-
             github.event_name == 'push' && github.ref == 'refs/heads/main'

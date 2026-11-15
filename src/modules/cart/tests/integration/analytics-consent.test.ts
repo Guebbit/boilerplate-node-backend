@@ -2,7 +2,7 @@
  * @module
  * Whose analytics choice a cart event carries, through the real stack: the login, the auth
  * middleware, the route and the service. A stored answer outranks the banner header; only an
- * account that was never asked takes the header. See `docs/theory/data-protection.md`.
+ * account that was never asked takes the header. See `docs/understand/data-protection.md`.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

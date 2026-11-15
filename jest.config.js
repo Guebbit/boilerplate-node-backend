@@ -2,7 +2,7 @@
  * Jest configuration for the unit run, and the base the other jest configs extend. A .js file
  * rather than .json so its settings can carry their explanation — JSON holds no comment, and
  * Jest warns on any key it does not recognise. Coverage is not measured; the mutation score is the
- * test-quality number: docs/tools/coverage-and-confidence.md.
+ * test-quality number: docs/build/coverage-and-confidence.md.
  */
 
 const path = require('node:path');
@@ -66,7 +66,7 @@ for (const name of DEPTH_KNOBS) {
  * for `npx jest --onlyChanged`, an IDE's gutter button, or a single file run directly. Guessing low
  * costs a slower ad-hoc run; guessing high risks the OOM killer taking a worker mid-file.
  *
- * `JEST_WORKERS` in `.env` still wins. See docs/tools/weak-machines.md.
+ * `JEST_WORKERS` in `.env` still wins. See docs/build/weak-machines.md.
  */
 const DEFAULT_MAX_WORKERS = 2;
 

@@ -132,7 +132,7 @@ The same sync also clears the `products` response-cache tag, because the product
 lists carry `available`: every stock write (receipt, adjustment, hold, release, both sweeps, a
 return's restock) ends in `refreshStockCache`, so one call covers routes, jobs and webhooks alike.
 `GET /products/:id` is also `browserRevalidate`, so a browser checks first instead of keeping the
-page for an hour — see [Redis cache](../tools/redis-cache.md).
+page for an hour — see [Redis cache](../understand/redis-cache.md).
 
 One consequence worth naming: this module imports `products` (for a shortfall's title, and
 for the cache sync). Only `products → inventory` would be a cycle, and nothing creates it.
@@ -193,7 +193,7 @@ Every rule this module declares and who holds it, role by role. The rule is what
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
 `src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../theory/authorization.md) explains the model.
+evaluator — [Authorization](../understand/authorization.md) explains the model.
 
 <!-- permissions:end -->
 
@@ -202,5 +202,5 @@ evaluator — [Authorization](../theory/authorization.md) explains the model.
 - [Reservations](./inventory-reservations.md) — the lifecycle and the sweep, in detail
 - [`orders`](./orders.md) — what a reservation is attached to
 - [`products`](./products.md) — where the counters physically live
-- [Domain Layer](../theory/domain-layer.md) — the pure rules behind the transitions
-- [Prometheus](../tools/prometheus.md) — the counters this module exports about itself
+- [Domain Layer](../understand/domain-layer.md) — the pure rules behind the transitions
+- [Prometheus](../operate/prometheus.md) — the counters this module exports about itself

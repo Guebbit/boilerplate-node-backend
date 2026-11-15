@@ -8,7 +8,7 @@ import { decodablePng, publicDirectory } from '@tests/images';
 
 /**
  * A client may never name a path in the image store — the cross-module rule behind
- * `imageUrl: null`-only write bodies (docs/theory/defences/).
+ * `imageUrl: null`-only write bodies (docs/understand/defences/).
  *
  * Attack: a write sets `imageUrl` to ANOTHER record's file, and the next replace/clear deletes
  * "the old image", which is now the victim's. Every door that accepts an image is driven here,

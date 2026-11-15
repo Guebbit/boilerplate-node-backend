@@ -1,0 +1,723 @@
+# Modules
+
+A domain lives in exactly one folder. Adding one is a folder plus its registration in `src/modules.ts`, and at most three hand-kept lists
+([the central edits](../build/module-scaffolder.md#the-central-edits)); removing one is `rm -rf` plus deleting that registration. Everything on this page exists to make those
+two sentences true; [Adding & removing a module](../build/module-lifecycle.md) walks the steps.
+
+> New to the words **domain** and **barrel**? They are defined with a picture each in
+> [The words these pages use](./start.md#the-words-these-pages-use).
+
+## The four tiers
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 55, 'rankSpacing': 60}}}%%
+flowchart TD
+    A["<b>src/app</b><br/>this application: assembly<br/><i>security · errors · routes · workers</i>"]
+    M["<b>src/modules/*</b><br/>one domain each, top to bottom<br/><i>products · orders · account · …</i>"]
+    P["<b>src/kernel</b><br/>module system + authn/authz<br/><i>registry · events · auth port · guard</i>"]
+    C["<b>src/infrastructure</b><br/>substrate — never knows modules exist<br/><i>adapters · http · persistence · i18n · runtime</i>"]
+
+    A ==> M
+    M ==> P
+    P ==> C
+    A -.-> P
+    A -.-> C
+    M -.-> C
+
+    classDef app fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef domain fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef plat fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef core fill:#ddd6fe,stroke:#7c3aed,color:#111827;
+    class A app;
+    class M domain;
+    class P plat;
+    class C core;
+```
+
+**Every arrow points down, and none points back.** That is the whole architecture. A tier may import
+anything below it and nothing above it, and lint enforces each edge in both directions.
+
+| Tier               | Folder               | Knows about                                | May import             |
+| ------------------ | -------------------- | ------------------------------------------ | ---------------------- |
+| **App**            | `src/app`            | this application: how it is assembled      | modules, kernel, infra |
+| **Modules**        | `src/modules/<name>` | its own domain, plus siblings' **barrels** | kernel, infra          |
+| **Kernel**         | `src/kernel`         | that modules exist — never _which_ ones    | infra                  |
+| **Infrastructure** | `src/infrastructure` | Express, Mongoose, the outside world       | —                      |
+
+### The `infrastructure` / `kernel` line
+
+This is the boundary people trip on, so it gets one question and no adjectives:
+
+> **If this project had no modules at all — if it were one undivided app — would this file still
+> make sense?**
+
+- **Yes, it still works** → `infrastructure`.
+- **No, it becomes meaningless** → `kernel`.
+
+`infrastructure` is not "framework-free" — it is the opposite. Dozens of files there import Express
+or Mongoose, which is exactly right: `infrastructure/http/response.ts` is Express-coupled
+substrate and belongs where it is. The one thing it may never contain is the knowledge that a
+module system exists.
+
+It also may not hold a **business rule**, even one that two modules share. That is the trap this
+tier invites, because "two modules need it" feels like a reason to push something down. It is not:
+the substrate is what the application runs ON, and none of it knows what an order or a price is. A
+shared rule belongs to whichever domain OWNS it, exported through that module's barrel — see
+`src/modules/orders/domain/totals.ts`.
+
+So `kernel` holds only what would lose its reason to exist if modules did — which today is NOT
+just the module system machinery (`registry.ts`, `events.ts`): most of its code is the authn/authz surface every module's guard shares. That is a real weight,
+not an oversight — the table below is what earns each file its place, module system or not:
+
+| File                            | Why it cannot be infrastructure                                                                                     |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `registry.ts`                   | it _is_ the module system — `AppModule`, `registerModules`                                                          |
+| `events.ts`                     | it exists so two modules can talk without importing each other                                                      |
+| `authentication.ts`             | the socket `account` plugs into, so guards need no module import                                                    |
+| `middlewares/authorizations.ts` | the guard that consumes that socket                                                                                 |
+| `permissions.ts`                | the declared keys and preset roles, read off the shared YAML the PHP twin reads                                     |
+| `ability.ts`                    | a resolved caller's rules, built once per request from what `permissions.ts` declares                               |
+| `access/query.ts`               | a caller's rules turned into the Mongo filter that enforces them, so no module writes its own                       |
+| `access/tenant.ts`              | the one shop's pinned `_id`, needed by `permissions.ts` before `@modules/access` can be imported                    |
+| `module-config.ts`              | the boot-time gate collecting every module's — and no module's — configuration slices                               |
+| `config.ts`                     | the kernel's own variables: step-up windows and the outbox retry policy                                             |
+| `cookies.ts`                    | the session cookie's name and reader, which the auth port and the SSE-only path both consume                        |
+| `outbox.ts`                     | the transactional outbox: an event written with the state change it announces, published after by a relay           |
+| `staff-read.ts`                 | the audit entry for staff reading someone else's record, shared by every module's detail reads                      |
+| `translation.ts`                | the hook `modules/locales` answers, so a decorator can resolve content without importing `src/modules/*`            |
+| `middlewares/locale-preview.ts` | the staff preview of a draft language's product text, needing the caller the auth socket resolved                   |
+| `*.generated.ts`                | `outbox.generated.ts` and `step-up.generated.ts`, written from the shared rules ([shared rules](./shared-rules.md)) |
+
+The seed accounts' ids and credentials — the two demo identities `users`, `orders`, `cart` and
+`wishlist` each point at — are NOT here: they are pure scenario data, owned by none of the modules
+that need them, so `scenarios/accounts.ts` holds them outside `src/` entirely rather than in the
+kernel. A sibling gets what it needs to name a person without taking on the shape of a user, the
+same inversion as the auth port; the file's own header carries the full argument.
+
+Delete `src/modules/` and every file in the table above loses its reason to exist. Everything else
+that is domain-free is `infrastructure`, no matter where it sits in the request lifecycle:
+
+| Feature                     | Home                                                | Why it is not kernel                                                                         |
+| --------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| response cache, `noStore`   | `infrastructure/http/middlewares/cache.ts`          | Express caching; no module needed                                                            |
+| locale negotiation          | `infrastructure/http/middlewares/locale.ts`         | wraps `infrastructure/i18n`; no module needed                                                |
+| observability context       | `infrastructure/http/request.ts`                    | built per request, not seeded by a middleware                                                |
+| access logging              | `infrastructure/http/middlewares/request-logger.ts` | reads tracer + metrics labels                                                                |
+| rate limiting               | `infrastructure/http/middlewares/rate-limit.ts`     | generic HTTP hardening                                                                       |
+| Prometheus scrape guard     | `src/modules/observability/metrics-scraper.ts`      | guards one module's own route, not shared — see [observability](../modules/observability.md) |
+| conditional handler toggle  | `infrastructure/http/middlewares/route-flag.ts`     | imports nothing but Express                                                                  |
+| email queue consumer        | `infrastructure/adapters/email.worker.ts`           | the consumer half of `adapters/mailer.ts`                                                    |
+| worker registration at boot | `app/workers.ts`                                    | names which queues _this_ build drains                                                       |
+
+The test that keeps this honest: a `kernel` file may be imported by a module, but its **purpose**
+must dissolve if modules do. Being domain-free is not enough — most of `infrastructure` is
+domain-free too.
+
+### Why these names, and what everyone else calls them
+
+Separating a module system from its substrate is a well-established pattern. The **vocabulary is
+not**, and that is the whole reason this section exists:
+
+| Project       | The module / DI system | The substrate     |
+| ------------- | ---------------------- | ----------------- |
+| **VS Code**   | `vs/platform`          | `vs/base`         |
+| **NestJS**    | `@nestjs/core`         | `@nestjs/common`  |
+| **Angular**   | `@angular/core`        | `@angular/common` |
+| **Spring**    | `spring-context`       | `spring-core`     |
+| **Backstage** | `core-plugin-api`      | `core-components` |
+| **this repo** | `kernel`               | `infrastructure`  |
+
+Read the table for what it actually shows: **`core` names both halves, depending on who you ask.**
+Nest and Angular use it for the DI container, Spring and Backstage for the substrate, so this repo
+avoids it.
+
+A name needing a disclaimer does negative work: a NOVEL name
+makes a reader look it up, an OVERLOADED one makes them think they already know. The second failure
+is silent, and it is the expensive one.
+
+`infrastructure` needs no disclaimer. Adapters, HTTP plumbing, persistence substrate and runtime
+are what the word means in hexagonal architecture — the tradition this dependency rule already
+comes from. `common` and `base` were the other candidates and were rejected for the opposite
+reason: they describe nothing, and a folder that describes nothing accepts anything, which is
+exactly how a `utils/` becomes a dumping ground.
+
+**`kernel` over `platform`.** VS Code's `vs/platform` is its _service and DI layer_, and to platform
+engineering "the platform" is the base layer everything runs on, which is this repo's
+`infrastructure`. Read cold, `platform` and `infrastructure` would point at each other's contents.
+
+`kernel` carries none of that. These files are a **microkernel**: a small fixed host that
+loads, validates and connects plugins it has never heard of — the pattern under its textbook name.
+
+### Why "app" is a tier and not a leftovers drawer
+
+It holds the things that are allowed to know every domain: how the application is assembled
+(security, error handling, routes, workers) and the system route that belongs to no domain. `src/modules.ts` and `app.ts` sit beside it for the
+same reason — the registry names every enabled domain, which nothing below it may do.
+
+The test for whether something belongs here: **does it need to know which domains exist?** If yes,
+it is `app`. If it needs a domain's _capability_ but not its identity, it is `kernel` with a port.
+
+### The rule that forced the shape
+
+`authorizations.ts` guards every module's routes and needs a user to do it. That is a genuine
+tension, and the naive placements both fail:
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 35, 'rankSpacing': 40}}}%%
+flowchart LR
+    subgraph BAD1["❌ in a module"]
+        u1[users] --> a1[account]
+        a1 --> u1
+    end
+    subgraph BAD2["❌ in app"]
+        m2[modules] --> app2[app]
+        app2 --> m2
+    end
+    subgraph OK["✅ in kernel, behind a port"]
+        m3[modules] --> p3[kernel]
+        acct3[account] -.->|registers resolver| p3
+    end
+    classDef bad fill:#fee2e2,stroke:#dc2626,color:#111827;
+    classDef good fill:#dcfce7,stroke:#16a34a,color:#111827;
+    class u1,a1,m2,app2 bad;
+    class m3,p3,acct3 good;
+```
+
+In `account` it closes a `users → account → users` cycle, because `users`' own admin routes need
+`requirePermission`. In `app` it makes modules import upward. So `kernel` declares what it needs —
+"turn this token into a user" — and `account` registers an implementation at boot. Same inversion as
+`AuditSink` and `ImageStore`. See `src/kernel/authentication.ts`.
+
+### Where everything else sits
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 45}}}%%
+flowchart TD
+    ENTRY["app.ts · main.ts<br/><i>process entry</i>"]
+    REG["modules.ts<br/><i>THE enabled-domain list</i>"]
+    APP["app/<br/><i>security · routes · workers</i>"]
+    MODS["modules/*"]
+    PLAT["kernel/<br/><i>registry · events<br/>auth port · guard</i>"]
+    CORE["infrastructure/<br/><i>adapters · http · persistence<br/>i18n · runtime</i>"]
+
+    ENTRY --> REG --> MODS
+    ENTRY --> APP --> MODS
+    MODS --> PLAT --> CORE
+
+    classDef app fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef domain fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef plat fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef infrastructure fill:#ddd6fe,stroke:#7c3aed,color:#111827;
+    class ENTRY,REG,APP app;
+    class MODS domain;
+    class PLAT plat;
+    class CORE infrastructure;
+```
+
+**One alias per tier**, so an import line states which tier it crosses: `@app/*`, `@modules/*`,
+`@kernel/*`, `@infrastructure/*`. Two leaf folders no tier forbids — `src/domain-primitives` (`@domain-primitives/*`) and `src/types` (`@types`) — import none of them.
+`src/domain-primitives` is the Shared Kernel (generic, npm only); `src/kernel` is module glue, a different thing — see [the rulebook](./layers.md#the-rulebook-one-small-shared-kernel).
+
+Two naming details worth knowing:
+
+- **`infrastructure/runtime`** starts the _process's_ resources — database connection, env validation, the
+  OTel SDK, signal handlers. No Express anywhere, and not a twin of the app tier's assembly steps.
+- **a substrate queue consumer is `infrastructure`, not `kernel`.** Sending an email is a verb, not
+  a domain, and does not stop making sense in an app with no modules — so its consumer sits beside
+  the adapter it is the other half of. Only `registerWorkers()` is app-tier, because naming which
+  queues this build drains is an assembly fact. A domain-owned worker belongs to its module
+  instead: `webhooks`' delivery worker does, declared on its own module's manifest rather than
+  `app/workers.ts`.
+
+## What a module contains
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 45}}}%%
+flowchart TD
+    subgraph MOD["src/modules/orders/"]
+        IDX["<b>index.ts</b><br/>the public barrel"]
+        MAN["<b>module.ts</b><br/>the manifest"]
+        RT["routes.ts"]
+        CT["controllers/*"]
+        SV["service.ts"]
+        RP["repository.ts"]
+        MD["model.ts"]
+        CN["<b>openapi.yaml</b> · probes.ts<br/>its slice of the contract"]
+        DM["domain/ · events.ts · emails.ts"]
+        EX["audit.ts · metrics.ts<br/>locales/"]
+        TS["tests/unit · tests/contract"]
+    end
+
+    MAN --> RT
+    RT --> CT
+    CT --> SV
+    SV --> RP
+    RP --> MD
+    IDX -.->|re-exports| SV
+    IDX -.->|re-exports| DM
+    IDX -.->|types only| MD
+
+    classDef front fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef layer fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef side fill:#f1f5f9,stroke:#64748b,color:#111827;
+    class IDX,MAN front;
+    class RT,CT,SV,RP,MD,DM layer;
+    class CN,EX,TS side;
+```
+
+| File                                                 | Required?                                                                          | What it is                                                                                                                                                                                                                                                                             |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `module.ts`                                          | **yes**                                                                            | the manifest — the only file `src/modules.ts` imports                                                                                                                                                                                                                                  |
+| `index.ts`                                           | **yes**                                                                            | the public barrel                                                                                                                                                                                                                                                                      |
+| `routes.ts` + `controllers/`                         | only if the domain serves HTTP                                                     | only `access` has neither                                                                                                                                                                                                                                                              |
+| `service.ts` · `repository.ts` · `model.ts`          | only if it owns data                                                               | `observability` owns none — it serves URLs over other domains' data                                                                                                                                                                                                                    |
+| `services/`                                          | when `service.ts` outgrows one file                                                | see [Layers](./layers.md#when-service-ts-becomes-services)                                                                                                                                                                                                                             |
+| `presenter.ts` (`presenters.ts` for >1 resource)     | if it serves HTTP and owns a model                                                 | the one place a document becomes wire shape — see [below](#the-module-template)                                                                                                                                                                                                        |
+| `domain/`                                            | only if the module has rules to prove; a 3+-state stored status almost always does | see [Domain Layer](./domain-layer.md#a-3-state-stored-status-almost-always-earns-the-folder)                                                                                                                                                                                           |
+| `openapi.yaml`                                       | if it serves HTTP                                                                  | its standalone slice of the REST contract                                                                                                                                                                                                                                              |
+| `asyncapi.yaml`                                      | if it owns a channel                                                               | the same, for the async contract — `observability`, `webhooks`, `notifications`; `asyncapi.internal.yaml` (`account`, `webhooks`) and `asyncapi.webhooks.yaml` (`delivery`, `example`, `orders`, `payments`, `returns`) are the same idea for the internal and public-webhook channels |
+| `probes.ts`                                          | as needed                                                                          | the requests a spec cannot describe — see below                                                                                                                                                                                                                                        |
+| `providers/`                                         | if the domain has an outbound port                                                 | e.g. `payments`, `invoicing` — see below                                                                                                                                                                                                                                               |
+| `audit.ts` · `metrics.ts` · `locales/` · `events.ts` | as needed                                                                          | the domain's own slice of each cross-cutting declaration                                                                                                                                                                                                                               |
+| `analytics.ts` · `factories.ts`                      | as needed                                                                          | the event names it emits; how its test/demo records are built                                                                                                                                                                                                                          |
+| `emails.ts`                                          | only if the domain sends email                                                     | the finished copy of its emails — see below                                                                                                                                                                                                                                            |
+| `tests/unit/` · `tests/contract/`                    | yes, in practice                                                                   | deleted with the module                                                                                                                                                                                                                                                                |
+
+The table lists what a module MAY have. What decides **where** in the module a file goes is one
+rule, and `account` is the module that forced it to be written down:
+
+> A module root holds the manifest, the barrel, the contract files, the single-file layers and the
+> self-registering slots. Everything else goes in a folder named for what it holds.
+
+Under it, `account`'s token surface sits in `session/`, its behaviour in `services/`, and its
+collection files are plainly `model.ts` and `repository.ts`. A file at the root is a layer, and a
+folder is a subject.
+
+Nothing central enumerates these. `audit.ts`, `metrics.ts` and `events.ts` register or augment
+themselves on import; `locales` is declared in the manifest so the i18n boot can walk the registry
+without naming a domain.
+
+`probes.ts` is the one row that is not obvious from the name. A generated API collection can only
+contain the calls the contract describes, and a contract describes valid calls and their declared
+answers — so the requests that prove the API _rejects_ things have nowhere to come from. A module
+declares those as data (method, path, headers, body, and a `why` that becomes the description) and
+the collection generator emits them after its contract-derived requests. A handful of modules carry one. The generator
+finds `probes.ts` files by scanning `src/modules/` (`scripts/contracts/client-collections-bundle.ts`), so there is no list to edit: a
+module that writes one is in the collections, and a deleted module simply has none. See
+[Contract Ownership & Fragmentation](../build/contract-fragmentation.md#the-client-collections-generated).
+
+`providers/` is a **module-tier port**: the same inversion as `AuditSink` and `ImageStore`, owned
+by a domain instead of by the substrate. `payments/providers/` declares what a payment provider must
+do, ships no implementation (the `fake` is a test double outside `src/`), and selects one on `NODE_PAYMENT_PROVIDER` — so going live
+means writing `stripe.ts` beside it and changing an env var, while the contract, the service and the <!-- doc-paths:ignore -->
+frontend hear nothing. It belongs to `payments` and not to `infrastructure` for the reason the
+`infrastructure` / `kernel` line already gives: charging a card is this domain's business, and a
+substrate that knew what a charge was would be holding a business rule. The shape is shared, not
+copied — `infrastructure/observability/analytics/index.ts` builds its own `NODE_ANALYTICS_PROVIDER`
+seam from `createProviderRegistry` (`infrastructure/runtime/provider-registry.ts`).
+
+`emails.ts` exists for a boundary reason. An email is rendered by
+`infrastructure/adapters/email.worker.ts`, which drains a queue possibly in another process, long after
+the request that asked for the email ended — so there is no locale store there and nothing to
+resolve a translation key against. Rather than rebuild that context in the worker, each module
+resolves its own copy while the request is alive: `emails.ts` returns an `EmailContent` (template
+name, subject, and every string the template interpolates), the controller hands it to
+`enqueueEmail`, and the job that reaches the worker is finished text. The workers import no i18n
+at all, and the templates interpolate rather than translate.
+
+## The module template
+
+`src/modules/example` is this template in code: the module to copy when you start a new domain, and
+to delete once you have your own. It is only an example, which is why it has no page under
+`docs/modules/`: a page would restate files that are better read. It has its own group
+(`module.yaml#group: example`), so `npm run demo:remove` deletes it with the shop, nothing may import it, and it
+imports only the foundation (it reads the owner's name through the `users` barrel).
+
+The table above lists what a module MAY have; this is the same shape as one block, with the
+question that decides each optional row attached to it directly, and the house rule each row is
+downstream of:
+
+```
+src/modules/<name>/
+  module.ts module.yaml index.ts tests/        ALWAYS
+  openapi.yaml routes.ts controllers/          IF it serves HTTP (surfaces/* factory first)
+  service.ts                                   DEFAULT for a module with no per-record `actions`
+  services/<use-case>.ts                       REPLACES it past ~300 lines, ~12 members, or two audiences;
+                                               the scaffolder starts here: crud.ts + actions.ts + index.ts
+  model.ts repository.ts                       IF it owns a collection; every conditional write is a named repository method
+  domain/                                      IF a rule is worth a unit test; a 3+-state stored status almost always has one
+  events.ts                                    IF it emits: past tense or a reached-state word, emitted AFTER the write, with an id (naming: asyncapi-workflow)
+  audit/analytics/metrics/probes/rate-limits/config/emails.ts   IF there is something to declare
+  providers/                                   IF it owns a port to an outside service (an ACL)
+  presenter.ts                                 IF it serves HTTP and owns a model — see below
+  factories.ts locales/ asyncapi.yaml          IF needed
+```
+
+A handler file in `controllers/` starts with the HTTP method it serves (`get-`, `post-`, `put-`,
+`patch-`, `delete-`), or with `update-` for a PUT + PATCH group; the subject comes before the verb
+(`post-account-restore.ts`, `post-subscription-enable.ts`). A factory group may share one file
+(`get-stats.ts` holds eight handlers), and a helper that is not a handler (`respond.ts`,
+`send-pdf.ts`) keeps its own name. A read of the whole collection is `get-<xs>.ts` and a read of
+one record is `get-<x>.ts` (`get-orders.ts` / `get-order.ts`): the pair the scaffolder writes.
+Never `get-<x>-item.ts` or `get-<x>-by-id.ts`; the exported handler keeps the operationId's name.
+
+`routes.ts` and `controllers/` say "IF it serves HTTP", not "write them by hand": a controller is a
+short spec against one of the five shared factories in `infrastructure/surfaces/` (list, item,
+search, update, delete/restore) before it is anything else — see
+[Request Flow](./request-flow.md) for what each factory owns, so that a new endpoint states its
+differences from the shape instead of re-deriving it. `service.ts` REPLACES itself with `services/`
+past a size the module itself measures, not a line this page enforces twice —
+[Layers](./layers.md#when-service-ts-becomes-services) has the actual thresholds and the split this
+repo has used every time.
+
+### Standards the template carries
+
+Each standard is written once, in the page that owns it, and carried by `example` and by what
+`npm run scaffold:module` writes. A new module that copies either one gets all of them; a change to
+a standard lands in the owning page, the template and the scaffolder in the same commit.
+
+| Standard                                       | Written in                                                                                | Carried as                                                    |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `actions` on every read and write              | [Capabilities](./tactical-ddd.md#_2-capabilities-the-server-answers-what-a-client-may-do) | `domain/` rule, `services/actions.ts`, required in the schema |
+| A status change is a door, one per event       | [Write methods](write-methods.md#action-→-200)                                            | `POST /x/{id}/<event>`, never a field of PUT/PATCH            |
+| A refused lifecycle move is 409 + a code       | [Write methods](write-methods.md)                                                         | `x-error-codes` entry, `details {status}`                     |
+| A resource with an item write has an item read | [Write methods](write-methods.md#an-item-write-has-an-item-read)                          | `GET /x/{id}` through the item factory                        |
+| Every file opens with its role                 | `CLAUDE.md`, Comments                                                                     | the scaffolder's twin-header test against `example`           |
+
+### Optional capabilities, and the files that carry them
+
+The core is what every module has. Each capability below is one manifest entry plus its own files,
+so it can be added or dropped alone. `example` shows each one; delete the files in the middle
+column, and the manifest entry, to drop it.
+
+| Capability                 | Files (all in `src/modules/example/` unless said)                                   | Manifest entry                         | What `example` does with it                                                                                                                                         |
+| -------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Events and a subscriber    | `events.ts`, `services/notify.ts`                                                   | `subscribe`                            | publishes `example.published` on the outbox; its own mail listens                                                                                                   |
+| Mail                       | `emails.ts`, `templates/`                                                           | the manifest's `templates`             | mails the owner when an example is published                                                                                                                        |
+| Rate limits                | `rate-limits.ts`                                                                    | `rateLimits`                           | a budget on creating examples                                                                                                                                       |
+| A public webhook           | `events.ts`, the module's own `asyncapi.webhooks.yaml`                              | `publicEvents`                         | an `example.published` webhook                                                                                                                                      |
+| Translatable fields        | the `locales` port's methods on `repository.ts`                                     | `translatables`                        | the title, per language; `fieldRules` is the title as its own PATCH contract bounds it                                                                              |
+| An uploaded image          | `services/cover.ts`, `controllers/put-example-cover.ts`, the route and path         | `imageTargets`                         | a cover image                                                                                                                                                       |
+| A typed setting            | `config.ts`                                                                         | `config`                               | the longest body an example may have                                                                                                                                |
+| Demo records               | `scenarios/example.ts`, found by `npm run regenerate`                               | (the scenario table)                   | a few seeded examples for the demo profile                                                                                                                          |
+| Metrics, probes, analytics | `metrics.ts`, `probes.ts`, `analytics.ts`                                           | (found by name, not declared)          | one counter, one probe, one event                                                                                                                                   |
+| Personal data              | `services/personal-data.ts`                                                         | `personalData` (`collect` and `erase`) | exports and erases the person's examples                                                                                                                            |
+| An action endpoint         | `services/transition.ts`, `controllers/post-example-event.ts`, the routes and paths | (the route)                            | `POST /examples/{id}/publish\|archive\|unarchive`, one door per event; the write is conditional, so of two racers one lands (409 for the other)                     |
+| Capabilities (`actions`)   | `services/actions.ts`, `domain/lifecycle.ts`, `presenter.ts`                        | (on the wire)                          | each row carries what this caller may do: its moves (an event table built with `defineLifecycle`), edit, delete - computed per row by `permitsOnRows` in the kernel |
+| An idempotent create       | `idempotencyKey` in `routes.ts`                                                     | (the route)                            | a retried `POST /examples` with the same `Idempotency-Key` replays the first answer                                                                                 |
+
+Left out on purpose, with the module that really needs each: `rawBodyPaths` (`payments`: a signed
+body), `consumers` (`webhooks`: a queue), a config slice's own `check` (`account`'s session and OAuth
+settings, `payments`) and `onRegistered` (`locales`, `account`).
+
+Four rules the table above cannot show, because each is about how a file BEHAVES rather than
+whether it exists:
+
+1. **Effects live in the service.** A controller reads input and calls one service method; a
+   repository issues one query. Neither may decide to send an email, emit an event or record audit
+   (bar the few handlers that argue an exception in place, listed in [Request Flow](request-flow.md)) — a rule enforced at both ends would drift the moment one side changed alone, and a controller
+   or repository is exactly the layer a future edit reaches for first because it is where the
+   request or the query already is. The service is the one place that has BOTH the business
+   decision and the authority to act on it, so it is the only place a side effect is written down
+   once.
+2. **Every multi-document write sequence names how it survives failure.** A write that touches two
+   collections (or a collection and a queue) can be interrupted between them by nothing more exotic
+   than a process restart — and "it usually finishes" is not a survival strategy, it is an untested
+   one. Name which of the three this sequence uses: one atomic write (a single `updateOne`, or a
+   Mongo transaction across the two), OR a durable marker plus a **scheduled** sweep that finishes
+   what the request started (`inventory`'s reservation-expiry sweep is this shape). A retry loop
+   inside the request is not a fourth option — it still leaves the marker-less gap if the process
+   dies mid-loop.
+3. **A version guard moves on every write.** `updateOne({ _id, version }, { $set: ..., $inc: {
+version: 1 } })`, never a plain `findByIdAndUpdate` — a version that does not move on every write
+   is a version field that only decorates the document, since two concurrent writers reading the
+   same version and racing to save would otherwise both "succeed", the second silently discarding
+   the first's write with no error either side can see. Moving it inside the SAME filtered write
+   (not a separate check-then-write) is what makes the race impossible rather than merely unlikely.
+4. **One presenter per module.** Without it, a controller reaching for its own
+   `document.toJSON() as SomeResponse` cast, ad hoc, once per call site, would still have the
+   compiler enforce the OUTPUT type — but nothing would enforce that two call sites for the same
+   resource agree on how they got there, and a sibling wanting the same shape would find it cheaper
+   to copy the cast than to ask. `presenter.ts` is the fix: one pure function per resource
+   (`presentProduct(document): Product`), the single place a Mongoose document becomes the wire
+   shape, replacing every ad hoc cast in that module's own controllers. A sibling reaches the
+   transform through the owning module's SERVICE, the same door it already uses for a repository
+   read — never the presenter file directly, never the wire-shape cast, and never the repository,
+   which the [barrel rule](./strategic-ddd.md#_5-published-language-—-the-barrel) already refuses.
+   A type import from a sibling's barrel (`export type * from './model'`) is not a leak: it is
+   compile-time only, carries no runtime value and writes nothing. What a sibling may not do with
+   that type is write through it — no `.save()`, no mutation of another module's document; the
+   service is the door for a write. That half is held by this rule, not by the compiler. Only the
+   presenter's OUTPUT TYPE may leave the barrel, as
+   `export type *`, the same treatment `model.ts` already gets — `barrel-allowed-sources` checks
+   both. A module presenting more than one resource shape (webhooks: subscriptions AND deliveries;
+   locales: a language AND its entries) uses `presenters.ts`, plural, one function per resource
+   inside it; a module whose only shaping is a handful of identical call sites still gets the file
+   — the point is one canonical transform, not a line-count minimum.
+
+## Libraries a module owns
+
+A `package.json` dependency is a bounded context's business the same way a collection is, once
+exactly one module imports it:
+
+- **The owner is whoever imports it.** One module → that module. Several → `infrastructure`,
+  behind an adapter, or the kernel — [the same line](#the-infrastructure-kernel-line) this page
+  already draws for a substrate concern.
+- **Another module needing it asks the owner's public `index.ts`**, not the library. If two
+  modules genuinely need the library itself, it moves down to `infrastructure` behind a port.
+- **Deleting a module removes the libraries it owned** from `package.json` — see
+  [Adding & Removing a Module](../build/module-lifecycle.md#removing-a-module).
+- **Adding one** runs the vetting rules in [Dependency Vetting](../build/dependency-vetting.md)
+  first, same as any other dependency.
+
+None of this is hand-kept. [Package Dependencies](../reference/package-dependencies.md) derives who
+imports what straight from the source tree, and a module that owns one gets a `## Libraries`
+section on its own page — why this library, what was rejected — the same shape
+[`antibot`](../modules/antibot.md#choosing-a-provider) already uses to justify its provider choice.
+
+## The manifest
+
+```ts
+export default {
+    name: 'orders',
+    mounts: [{ basePath: '/orders', routes: router }],
+    locales: path.join(__dirname, 'locales')
+} satisfies AppModule;
+```
+
+Every field is read by something: each router in `mounts` is mounted at its `basePath`, `locales` is handed to
+i18next, `subscribe` attaches the module's event handlers, `onRegistered` runs once every module is
+known — installing a kernel port, or resolving a cross-module lookup like `locales`'
+`translatables`. That is the bar for a field being here at all. The subdomain and the `dependsOn` graph live next to
+the manifest, in the module's own `module.yaml` — one plain file, read by `.dependency-cruiser.cjs`
+as the enforced allow-list behind `npm run check`, not by the app at runtime — see
+[Strategic DDD](./strategic-ddd.md) §2 and §4. Demo data is not on the manifest either:
+`scenarios/<module>.ts` reads a module's repository and factories directly.
+
+`mounts` is optional, so a domain that owns data but no URL is an ordinary
+entry rather than a special case — `access` declares none and `app/routes.ts` mounts only
+what a module lists. A mount is a pair, `{ basePath, routes }`, and a module may list several:
+`delivery` serves `/delivery` and also `POST /orders/{id}/process` at `/orders`; `payments` serves
+`/payments` and also `POST /orders/{id}/payments`:
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 50}}}%%
+flowchart LR
+    IAM["AppModule"]
+    R["<b>routed</b><br/>mounts: basePath + routes<br/><i>every other module</i>"]
+    H["<b>headless</b><br/>no mounts<br/><i>access</i>"]
+    IAM --> R
+    IAM --> H
+    classDef t fill:#dbeafe,stroke:#2563eb,color:#111827;
+    class IAM,R,H t;
+```
+
+`AppModule` is a plain interface with `mounts` optional. A mount carries its `basePath` and its
+router together, so a router with no mount point cannot be written; a module with no mounts is
+skipped by `app/routes.ts` rather than reported.
+
+**Keep it small.** A field only one module fills does not belong here — that module should do the
+thing itself. `subscribe` passes the bar: several modules fill it.
+
+## The dependency graph
+
+::: tip The graph itself lives on one page, generated
+Every edge, and every node's `reaches`/`reached by` row, is generated from the manifests on
+[the Modules overview](../modules/start.md#the-map) — that page is the census; a second, hand-drawn
+one here would only go stale. What follows is the **rules** the generated graph obeys, read through
+today's shape as an example.
+:::
+
+Every arrow is an import across a module boundary, through the target's barrel. `cart` is the
+busiest node on the graph — its edges are on [the map](../modules/start.md#the-map) — and that is not
+a smell to refactor away: a checkout is the one operation that genuinely needs the catalogue, the
+customer, the order it becomes, the method and address it ships to, and the payment that settles it.
+`access` and `shop` sit at the opposite end: reached by several modules, `access` reaching none and
+`shop` only `account`.
+
+`inventory` is worth reading as a shape rather than a node. It sits one level above `products`, and
+`cart`, `orders`, `delivery`, `returns` and `shop-tasks` depend on it, because it owns the only
+writes to the three stock counters (`onHand`, `reserved`, `backordered`): `cart` reads what can be
+sold, `orders` holds, commits (inside `markPaid`), ships and releases units, `returns` puts received
+goods back, and `delivery` and `shop-tasks` listen to its events.
+
+The reverse direction is domain events, and it is a **separate** graph on purpose — an event edge is
+exactly the edge that would have made the import graph a cycle:
+
+| Event                           | Emitted by  | Handled by                   |
+| ------------------------------- | ----------- | ---------------------------- |
+| `inventory.reservation_expired` | `inventory` | `orders` (cancels the order) |
+
+That is one example. Every module page's generated neighbourhood graph (see
+[the Modules overview](../modules/start.md)) draws its own event edges as dotted arrows.
+
+A user's hard delete is deliberately not in this table: it is not an event. Each module declares a
+`personalData.erase` hook and `users` runs them all inside one transaction, so a failing eraser
+aborts the whole erasure instead of being logged and skipped. The inactivity job's
+`personalData.minimise` hooks are the same shape without the transaction: each is idempotent, and
+the account is stamped minimised only once every hook succeeded, so a failure is retried next night.
+
+Note who emits: every one comes from a module low in the import graph telling a module above it
+something, because a module cannot import its own dependants. `inventory.reservation_expired` is the
+clearest case — the sweep releases the units itself and needs nobody's help for that, but cancelling
+the order behind the hold belongs to `orders`, which already imports `inventory`. An import back
+would be the cycle dependency-cruiser's `no-circular` refuses, so it is announced instead.
+
+There is deliberately **no** stock event. A ledger row written as a REACTION to a counter change
+would depend on every mover announcing it on every path, rollbacks included, and a counter change
+nobody recorded is a corrupt audit trail. The row is written by the same function call that moves
+the counter, so it cannot be forgotten.
+
+Every solid arrow is also one of four **kinds** — `conformist`, `customer-supplier`,
+`published-language` or `shared-kernel` — though nothing on the map labels which; naming the kind
+is what turns "who touches `products`?" into "what does changing `products` cost?" — see
+[Strategic DDD](./strategic-ddd.md) for what each one means and how to tell them apart by hand.
+
+That pairing is the answer to mutual need. Deleting a product must empty it from every cart, while
+the cart needs the catalogue to price a line. As imports that is a cycle; as one import plus one
+event it is a straight edge:
+
+```mermaid
+%%{init: {'sequence': {'mirrorActors': false}}}%%
+sequenceDiagram
+    participant P as products
+    participant B as kernel/events
+    participant C as cart
+    Note over C,P: cart → products is the only IMPORT
+    Note over P: row deleted + outbox row, one transaction
+    P->>B: the relay emits 'product.deleted'
+    B->>C: handler (awaited)
+    C-->>B: cart lines removed
+    B-->>P: all handlers settled
+    Note over P: a handler that threw is retried by the relay
+```
+
+Handlers are **awaited in registration order** within one delivery. `product.deleted` rides the
+[transactional outbox](outbox.md), so the event is written with the delete and the relay
+delivers it right after the commit; a handler that throws leaves the row pending and the relay
+redelivers, so every handler must be idempotent. On the plain bus a throwing handler is logged and
+does not fail the emitter — a listener must not roll back an operation that was already authorised.
+
+### The bus is not transactional, and must not be made so
+
+That last sentence has a consequence worth stating outright, because it looks like a bug the first
+time you meet it: if cart cleanup throws while a product is being hard-deleted, **the product is
+still deleted and the orphaned cart lines stay**.
+
+This is deliberate. The emitting module cannot reason about the failure modes of code it has never
+heard of, and a subscriber must not be able to veto an operation it never authorised.
+
+**The thing to not do:** if a future flow needs cross-module cleanup to be all-or-nothing, this is
+the wrong primitive and must not be bent into one. Awaiting handlers inside the emitter's
+transaction makes every subscriber a participant in a transaction it cannot see — which is how the
+dependency arrow this bus exists to remove comes back, pointing the other way. Either that cleanup
+belongs in the owning module, or the two modules were one module.
+
+## Boot order
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 35, 'rankSpacing': 40}}}%%
+flowchart TD
+    E["validate env"] --> DB["connect database"]
+    DB --> CQ["cache · queue · workers"]
+    CQ --> L["registerLocaleDirectories&lpar;&rpar;<br/><i>from each manifest</i>"]
+    L --> I["i18next.init&lpar;&rpar;<br/><i>reads the merged result</i>"]
+    I --> S["listen"]
+    RM["registerModules&lpar;&rpar;<br/><i>validate config · subscribe · onRegistered</i>"] --> MNT["mount routers by mounts"]
+    MNT --> H404["404 catch-all"]
+
+    classDef boot fill:#fef3c7,stroke:#d97706,color:#111827;
+    class E,DB,CQ,L,I,S,RM,MNT,H404 boot;
+```
+
+Two orderings are load-bearing: locale directories must be registered **before** `i18next.init()`,
+which reads the merged dictionaries; and `registerModules` must run **before** the first route
+exists, so every subscription is attached before anything can emit.
+
+## Adding and removing a domain
+
+Adding one is a folder plus its registration in `src/modules.ts`, and at most three hand-kept
+lists ([the central edits](../build/module-scaffolder.md#the-central-edits)); removing one is `rm -rf` plus
+deleting that registration. The full procedure — the conditional registries, the bundling, the two-repo step — is
+[Adding & removing a module](../build/module-lifecycle.md). What belongs on this page is why it works and
+what it measured.
+
+**It works because nothing central enumerates domains.** Route mounting, the seeder, the i18n boot,
+the audit vocabulary and the metrics registry all walk the registry rather than naming its entries,
+so none of them is on either checklist. `src/modules.ts` is the registry that names a domain, and
+`scripts/scaffold/central-edits.ts` lists the files a new module still edits by hand. The three contract order lists name domains too, but only as a preferred position — membership is read
+off disk (`scripts/contracts/section-order.ts`), so they are not a census and never need an edit.
+
+**And it is measured, in both directions.** `wishlist` was added under it with its folder and its registration, and no edit to another module.
+
+Deleting a few depended-upon modules together gives these breaks:
+
+| Tier                  | Files that break | What they are                                                       |
+| --------------------- | ---------------- | ------------------------------------------------------------------- |
+| `scripts/db/**`       | **0**            | —                                                                   |
+| `src/**` (production) | the dependants   | modules that genuinely import it — a real coupling, failing loudly  |
+| co-located specs      | the dependants'  | those modules' own tests, reaching for a deleted domain's factories |
+| `tests/**`            | a few            | central specs using a domain as sample data, or asserting one       |
+| `scripts/**`          | a few            | the section lists, announcing the entry you have not deleted yet    |
+
+**The `scripts/db/**` zero is the verdict.\*\* Dependants break because they genuinely import what
+was deleted — a compile error naming the file and the line, which is the failure a real coupling
+should produce. What must stay at zero is the tier that names domains it has no business naming.
+
+The rest is residue in test and script code, and some of the test breaks are **correct** and must
+not be "fixed". Which is which, and how to re-run it, is
+[Re-running the deletability check](../build/module-lifecycle.md#re-running-the-deletability-check).
+
+If a module you delete is imported by another, `tsc` fails on the importing file rather than the app
+500-ing on the first request that crosses the gap — which is why the barrel is the only surface a
+sibling may reach.
+
+::: tip Run a deletability test after any significant change
+Delete two or three domains on a throwaway copy and see what breaks. Nothing in the suite checks
+this, and every finding it has ever produced was invisible to `tsc`, to lint and to a fully green
+run. The procedure is
+[Re-running the deletability check](../build/module-lifecycle.md#re-running-the-deletability-check).
+:::
+
+## What is guarded, and by what
+
+Some of these rules are relational — what a file may import depends on which module owns it — and
+`no-restricted-imports` only matches file globs. Those live as tests instead, in
+`tests/cross-cutting/`.
+
+| Rule                                                                                  | Guard                                                                                                                                           |
+| ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| No module imports a sibling's internals                                               | `eslint-plugin-boundaries`, and dependency-cruiser's `module-internals-are-private` ([how](./strategic-ddd.md#how-the-tier-walls-are-enforced)) |
+| `infrastructure` and `kernel` never import a module                                   | ESLint, per-tier blocks                                                                                                                         |
+| A spec may reach its own module, a sibling's barrel, manifest or tests — nothing else | `eslint-plugin-boundaries`                                                                                                                      |
+| Two modules never claim the same audit action, and every action is dotted             | `audit-actions.test.ts`, ESLint                                                                                                                 |
+| No module shadows a shared locale key, or writes outside its own namespace            | `locale-namespaces.test.ts`                                                                                                                     |
+| Every language declares the same keys across every module                             | `locale-parity.test.ts`                                                                                                                         |
+| `infrastructure`'s shared scalars still match every operation in `openapi.yaml`       | `contract-scalars.test.ts`                                                                                                                      |
+| Every controller handles its own rejections                                           | ESLint `controller-chain-must-catch`                                                                                                            |
+| A module's `subscribe` hook registering nothing, or one event twice                   | `module-subscriptions.test.ts`                                                                                                                  |
+| A controller reading the caller on a route that does not guarantee one                | `authenticated-controllers.test.ts`                                                                                                             |
+| Every committed bundle is structurally correct — no dangling path, channel or gap     | `contract-bundles.test.ts`                                                                                                                      |
+| Every mounted route is in the spec, and every spec operation is mounted               | `route-spec-parity.test.ts`                                                                                                                     |
+| No `shopModules` entry names a module `enabledModules` does not mount                 | `ShopModulesAreMounted`, a compile-time check in `scenarios/check.ts` (against `ModuleName`)                                                    |
+
+Each of these was verified by deliberately breaking it and watching it fail. A guard nobody has seen
+fire is a comment. Several rows are ESLint rules, dependency-cruiser rules or a `tsc` check, not
+tests; the tests live in `tests/cross-cutting/`, except `route-spec-parity.test.ts`, which sits in
+`tests/contract/` because it needs the loaded spec the contract harness already registers.
+
+**`module-subscriptions.test.ts` is the least obvious of these**, because the thing it catches never
+fails on its own. `subscribe` is the one part of a manifest that is pure behaviour: `routes` and
+`locales` are values a test can read, but a subscription only exists as the side effect
+of calling a function at boot. Nothing else in the suite calls these hooks — `app.ts` does, once —
+so an emptied `subscribe` body is invisible. The module still registers, still serves its routes,
+still passes every other check, and simply stops reacting to the rest of the system: deleting a
+product would stop emptying it out of carts and wishlists, a reservation timing out would stop
+cancelling its order.
+
+## Related pages
+
+- [Adding & removing a module](../build/module-lifecycle.md) — the procedure, with the commands
+- [Layers](./layers.md) — the layer stack inside one module
+- [Architecture](./architecture.md) — the runtime shape of the service
+- [Request Flow](./request-flow.md) — what happens to one request

@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * The EFFECTIVE role matrix in `docs/demo-ecommerce/index.md`: which rules a role actually holds,
+ * The EFFECTIVE role matrix in `docs/use-the-shop/start.md`: which rules a role actually holds,
  * per role, per module — and, on every module's own page, the "who can do what" table of that
  * module's rules. Same shape as `generate-module-graph.ts` — markers in the page, prose around
  * them untouched, `--check` in `complete`.
@@ -40,7 +40,7 @@ import { failScript } from '../fail-script';
 const checkOnly = hasFlag('check');
 
 /** The page the tables live in. */
-const PAGE = path.join(ROOT, 'docs/demo-ecommerce/index.md');
+const PAGE = path.join(ROOT, 'docs/use-the-shop/start.md');
 
 const START = '<!-- role-matrix:start -->';
 const END = '<!-- role-matrix:end -->';
@@ -256,7 +256,7 @@ const moduleBody = (pageModules: readonly string[]): string => {
         '✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·',
         'Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in',
         '`src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the',
-        'evaluator — [Authorization](../theory/authorization.md) explains the model.'
+        'evaluator — [Authorization](../understand/authorization.md) explains the model.'
     ].join('\n');
 };
 

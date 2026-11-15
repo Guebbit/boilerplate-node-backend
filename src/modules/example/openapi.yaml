@@ -227,7 +227,7 @@ paths:
 
     # One door per lifecycle event, not a PATCH field and not one generic door: a move into
     # `published` writes an outbox event and mails the owner, and `update` does not decide
-    # (docs/theory/tactical-ddd.md). No `If-Match`: the write is conditional on the status read, so
+    # (docs/understand/tactical-ddd.md). No `If-Match`: the write is conditional on the status read, so
     # of two racing moves exactly one lands.
     /examples/{id}/publish:
         # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
@@ -353,7 +353,7 @@ paths:
 
 components:
     schemas:
-        # The ONE sort grammar, shared with every list (docs/api/sorting.md). `-` sorts
+        # The ONE sort grammar, shared with every list (docs/reference/sorting.md). `-` sorts
         # descending; earlier entries rank first; ties end on the id.
         ExampleSort:
             type: array

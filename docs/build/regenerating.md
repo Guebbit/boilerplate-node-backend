@@ -1,0 +1,281 @@
+# Regenerating After a Change
+
+The cheat sheet for "I edited a fragment — now what?".
+
+[Contract Ownership & Fragmentation](./contract-fragmentation.md) explains **why** the pipeline has
+this shape. This page is the short version you keep open while working.
+
+## The bundles, `api/` and the generated TypeScript are not committed
+
+`postinstall` runs the scenario registries, the authorization bundle, the shared-rules step and then
+`contracts:bundle` + `gen:api` + `gen:asyncapi` automatically after `npm install`/`npm ci`, so a
+fresh clone has all of it without anyone doing anything. The rest of this page still matters the
+moment you're actively editing a fragment mid-session — `postinstall` only fires on install, not on
+every save — but there is no committed copy of these to go stale, forget to regenerate, or diff in
+a PR: `openapi.yaml`, both AsyncAPI bundles, `api/` and every `*.generated.ts`. What stays committed
+is a short list, because something reads it without our tools — see
+[The generated output and what is committed](#the-generated-output-and-what-is-committed).
+
+## The one command
+
+Whatever you edited — a path, a schema, an event name, a seed record, a probe:
+
+```bash
+npm run regenerate    # every generator, in dependency order, then the sync to the frontend
+```
+
+Then the gate that would have caught you anyway:
+
+```bash
+npm run complete      # build + test + lint + format — the full gate (pre-commit runs the light gate)
+```
+
+`regenerate` **writes**; `complete` only **verifies**. A gate failure saying `STALE` means the
+first one was not run.
+
+Over in the paired frontend the mirror command is `npm run regenerate` as well — run it after every
+pull, or the app ships a client for the previous contract.
+
+The steps are still individually runnable (`contracts:bundle`, `gen:api`, `gen:asyncapi`,
+`sync:frontend`) and worth reaching for when you know exactly what changed. The
+umbrella exists because the order is not guessable — see below.
+
+## Why two steps and not one
+
+Bundling and generating are different jobs with different inputs, and only the first one is
+reversible by hand:
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 55}}}%%
+flowchart LR
+    subgraph AUTH["you edit these"]
+        MF["src/modules/*/openapi.yaml"]
+        SH["shared/contracts/*.yaml"]
+        PR["src/modules/*/probes.ts"]
+    end
+
+    MF --> B[contracts:bundle]
+    SH --> B
+    B --> ROOT["openapi.yaml<br/><i>generated, gitignored</i>"]
+
+    ROOT --> COL[generate]
+    PR --> COL
+    COL --> DEV["contract.bruno.yml<br/><i>generated whole</i>"]
+
+    ROOT --> G[gen:api] --> API["api/models · api/schemas.zod.ts"]
+    ROOT --> FE["copy to the frontend"]
+
+    classDef auth fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef out fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef tool fill:#fef3c7,stroke:#d97706,color:#111827;
+    class MF,SH,PR auth;
+    class ROOT,DEV,API,DEVFRAG,FE out;
+    class B,B2,COL,G tool;
+```
+
+The four client collections are **generated from `openapi.yaml`**, so the contract has to be
+assembled before they can be produced — and they also read `scenarios/subjects.ts`
+(`scripts/contracts/client-collections-bundle.ts` imports it) for their example ids and credentials:
+
+```
+openapi.yaml  ──►  api/  ──►  the four client collections
+```
+
+`scenarios/subjects.ts` is import-free, not generated, so nothing has to build it first. Nothing
+has to sequence the collections for you either, because nothing generates one unless you ask. Ask
+last — after `regenerate` has settled the contract — and what you get is current by construction.
+There is no committed copy of a collection to go stale in the meantime, and — since `postinstall` —
+the same is true of `openapi.yaml` and `api/` themselves: neither `npm run complete` nor
+the bundle check in `npm run check` has a "stale committed copy" to report on any of them.
+
+The ordering deliberately does not live in `package.json` as commands joined by `&&`: npm appends
+`--` arguments to the LAST command of a chain only, so a narrowing flag would silently apply to one
+phase and not the others.
+
+## I changed X — run Y
+
+| You edited                                                                       | Run                                     | Because                                                                                                                                                                         |
+| -------------------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/modules/*/openapi.yaml`                                                     | `contracts:bundle` → `gen:api`          | `openapi.yaml`, then the types and Zod schemas from it                                                                                                                          |
+| `shared/contracts/openapi.root.yaml`                                             | `contracts:bundle` → `gen:api`          | same, for the parts no single module owns                                                                                                                                       |
+| `src/modules/*/asyncapi.yaml`, `shared/contracts/asyncapi.{root,workers}.yaml`   | `contracts:bundle` → `gen:asyncapi`     | `asyncapi.yaml` and `asyncapi.public.yaml`, then `src/types/asyncapi.generated.ts`                                                                                              |
+| `scenarios/*.ts`                                                                 | `scenario:apply:reset`                  | the database still holds the old records; nothing else needs rebuilding — `tests/integration/scenarios/shop.test.ts` reads the change straight from the fixture on its next run |
+| `src/modules/*/probes.ts`                                                        | `contracts:bundle`                      | probes are hand-authored, then emitted into every client collection                                                                                                             |
+| `src/modules/*/module.ts`, `model.ts`, `routes.ts`                               | nothing                                 | no generator reads them. If the change is worth a reader knowing, say so on the module's page in `docs/modules/` — by hand, like the rest of that page                          |
+| `src/modules/*/audit.ts`, `analytics.ts`, `metrics.ts`, `probes.ts`, `events.ts` | `contracts:bundle` for `probes.ts` only | the client collections embed the probes; the other four feed no generator — an analytics name is read straight from the module that declares it                                 |
+| A controller or service (no contract, no route change)                           | nothing                                 | no bundle reads source code, and no page states a service's internals                                                                                                           |
+| `openapi.yaml` / `asyncapi*.yaml` **directly**                                   | stop — edit the fragment instead        | the next bundle overwrites you, and `contracts:bundle --check` fails first                                                                                                      |
+| `contract.bruno.yml`                                                             | stop — these are generated              | edit the contract or the probes; a hand edit is reverted by the next run                                                                                                        |
+
+When in doubt, `npm run contracts:bundle` on its own is always safe: it compares before it writes
+and touches only the bundles that actually drifted.
+
+## Regenerate one bundle only
+
+Useful while iterating on a single document. A named bundle is produced from what is COMMITTED, so
+a collection named here regenerates from the contract on disk rather than one this run just built:
+
+```bash
+npm run contracts:bundle -- openapi     # just openapi.yaml
+npm run contracts:bundle -- asyncapi    # just asyncapi.yaml (asyncapi-public is its own name)
+npm run contracts:bundle -- bruno       # just contract.bruno.yml
+```
+
+Known names: `openapi`, `asyncapi`, `asyncapi-public`, `bruno`.
+An unknown name exits with the list rather than doing nothing.
+
+The four collections are **only** produced by naming them: a full `contracts:bundle` assembles the
+authored documents and stops, because the collections are `.gitignore`d and nothing else reads them.
+For the same reason `--check` refuses them outright — an uncommitted file cannot be stale.
+
+::: tip A narrowed run really does narrow
+It did not always. `contracts:bundle` used to be several commands joined by `&&` in `package.json`,
+and npm appends `--` arguments to the **last** one only — so naming a bundle bundled everything
+except the thing you named. The ordering lives in `scripts/contracts/build-bundles.ts` now, precisely so
+the flag can mean what it says.
+:::
+
+A named collection regenerates from the **committed** contract, which is the right question while
+iterating: is the state on disk self-consistent? Finish with a full `npm run contracts:bundle`
+before committing — a narrowed run leaves every other bundle untouched, and staleness is asserted
+across all seven.
+
+## Verifying, and what each failure means
+
+```bash
+npm run check                    # is any bundle stale against its fragments, and does the paired
+                                 # frontend hold the same bytes?
+npm run lint:openapi              # is openapi.yaml a valid spec, per the ruleset?
+npm run lint:asyncapi             # same, for asyncapi.yaml and asyncapi.public.yaml
+npm run test:contract             # do real responses match the contract?
+```
+
+| Failure                                                | What happened                                                                                                                        | Fix                                                    |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| `[contracts] STALE — these do not match the fragments` | a fragment was edited without re-bundling, or a bundle was hand-edited                                                               | `npm run contracts:bundle`                             |
+| `contract-bundles.test.ts` fails                       | a committed bundle is structurally wrong (a dangling path, an unresolved channel, a collection missing an operation) — not staleness | fix the fragment the failure points at, then re-bundle |
+| the spec-identity check fails                          | this repo and the frontend hold different bytes of a shared document                                                                 | copy the bundle over; never re-bundle on both sides    |
+| spectral reports a dangling `$ref`                     | a schema moved into a module document while another module still references it                                                       | move it to `shared/contracts/openapi.root.yaml`        |
+
+Freshness itself is not `contract-bundles.test.ts`'s job — its own docblock says so. The bundle
+check in `npm run check` asks "does the file on disk equal a fresh build" for a fragment edited
+mid-session; nothing about a bundle is committed, so there is no committed copy for CI to diff.
+What `contract-bundles.test.ts` asserts instead,
+on **every** test run: that the bundles are _structurally_ correct — every path
+files under exactly one module, every AsyncAPI channel resolves, the public bundle is a strict
+subset, and the generated client collections cover the contract.
+
+## The generated output and what is committed
+
+Two groups. The first is rebuilt by `postinstall`, gitignored, and never reviewed in a diff. The
+second is committed, because something reads it without running our tools; the pre-commit hook
+refuses a commit where one of them is stale ([below](#the-pre-commit-hook)).
+
+| Generated output                                    | Read by                                                                                                                                                               | Committed?                                |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `openapi.yaml`                                      | spectral · orval · Prism · the frontend                                                                                                                               | no — gitignored, rebuilt by `postinstall` |
+| `asyncapi.yaml` · `asyncapi.public.yaml`            | `gen:asyncapi` · `lint:asyncapi` · the frontend's realtime pipeline · `GET /webhooks/events`                                                                          | no — gitignored, rebuilt by `postinstall` |
+| `api/models/` · `api/schemas.zod.ts`                | `@types` and the services that validate input                                                                                                                         | no — gitignored, rebuilt by `postinstall` |
+| `api/permission-vocabulary.ts`                      | `kernel/permissions.ts` — the action vocabulary, from `shared/authorization-keys.generated.yaml` (see [Permission Vocabulary](../reference/permission-vocabulary.md)) | no — gitignored, rebuilt by `postinstall` |
+| `src/types/asyncapi.generated.ts`                   | every SSE, domain-event and queue call site                                                                                                                           | no — gitignored, rebuilt by `postinstall` |
+| every other `*.generated.ts` (`src/`, `scenarios/`) | this repo's own code only — built from the shared rules and the scenario files                                                                                        | no — gitignored, rebuilt by `postinstall` |
+| `contract.bruno.yml`                                | you, and whoever explores the API without running it                                                                                                                  | no — generated on demand, see above       |
+| `shared/authorization-keys.generated.yaml`          | `kernel/permissions.ts` at boot · the PHP twin — assembled by `regenerate` from each module's `authorization.yaml`                                                    | yes — read at boot and handed to the twin |
+| `shared/rules/schemas/*.generated.schema.json`      | the PHP twin, which validates with them and cannot rebuild them                                                                                                       | yes                                       |
+| `docker/crontab`                                    | the production host bind-mounts it, with no dev tools                                                                                                                 | yes                                       |
+| `docker/Dockerfile.dockerignore`                    | `docker build` in CI, before any npm runs                                                                                                                             | yes                                       |
+| the generated tables inside `docs/` pages           | readers; they sit inside hand-written pages                                                                                                                           | yes                                       |
+| `scenarios/*-images.generated.json`                 | seeding. Not part of `regenerate`: it downloads random photos, so it cannot be rebuilt                                                                                | yes                                       |
+
+For the gitignored ones: **never hand-edit anything under `api/`, `openapi.yaml`, the two AsyncAPI
+bundles or a `*.generated.ts`.** `npm run gen:api` starts with `rm -rf ./api`, and all of them are
+fully derived — there is no diff to review because there is nothing committed to diff against.
+
+## The pre-commit hook
+
+The hook never stages anything. It regenerates on disk, so the gates after it read current files,
+then **refuses** a commit whose committed generated files are stale. The check builds from what is
+being committed, not from your working tree: `check:generated` exports the index
+(`git checkout-index`, so a partial `git commit -- <paths>` is honoured) to a scratch folder, runs
+`regenerate --no-sync` there and fails if any file changed.
+
+```mermaid
+flowchart TD
+    A[git commit] --> B["npm run regenerate -- --no-sync<br/>(on disk, for the later gates)"]
+    B --> C["check:generated: export the index to a scratch folder"]
+    C --> D["regenerate --no-sync in the scratch folder"]
+    D --> E{"did a committed<br/>file change?"}
+    E -- yes --> F["refuse: name the files,<br/>run npm run regenerate and stage"]
+    E -- no --> G["lint-staged, light gate, test:staged"]
+```
+
+Fixing a refusal is one step: `npm run regenerate`, then stage the files it names. The hook has
+already rewritten them on disk by the time it refuses. Nothing is staged for you — a regenerated
+file you did not stage is not in the commit, and that is the thing the refusal exists to say.
+
+## Handing the contract to the frontend
+
+The frontend holds **byte-identical copies** of the six shared files in `SHARED_FILES`
+(`scripts/pairing/spec-identity.ts`): the two bundles it consumes — `openapi.yaml` and
+`asyncapi.public.yaml` — `shared/authorization-keys.generated.yaml` (for its `actions:` list only) and three
+webhook-sink TLS PEMs, and never bundles or authors them. The
+four client collections stay here, and are not committed at all: they are derived from
+`openapi.yaml`, so a copy there could not disagree without the spec disagreeing first, and nothing
+in either repo reads them.
+
+You do not move them by hand. `npm run regenerate` ends with `npm run sync:frontend`, which copies
+every backend-owned file into the sibling checkout — under its own name on that side, since one of
+the shared files is called something else there — and then runs the frontend's own `regenerate`, so
+its client is rebuilt from the contract it was just handed:
+
+```bash
+npm run regenerate                  # rebuild here, copy over there, regenerate over there
+npm run sync:frontend -- --dry      # say what would move, write nothing
+npm run sync:frontend -- --forced   # rewrite even the files that already match
+npm run check         # the gate: hashes both sides, fails on a fork
+```
+
+`sync:frontend` refuses to run on stale sources — the bundle check in `npm run check`
+go first, because copying a stale bundle makes both repos agree on a document neither one's sources
+produce. Everything it copies is produced here, so every difference it finds has one correct
+resolution and it applies it.
+
+The sibling is found beside this repo, or wherever `FRONTEND_PATH` in `.env` points. The pre-commit
+hook runs `regenerate -- --no-sync`, because a commit here must not write into a checkout you are
+not looking at.
+
+Do **not** run the bundler in both repos and assume the bytes agree. They are compared, not parsed,
+and that check is the thing standing between you and a silent contract fork — see
+[Why the root file stays whole](./contract-fragmentation.md#why-the-root-file-stays-whole).
+
+## Adding a new module to the pipeline
+
+A module joins each bundle by dropping a fragment in the expected place — the bundlers discover
+sections from disk, so there is no section list to edit:
+
+```
+src/modules/<name>/openapi.yaml      its operations, and the types only it uses
+src/modules/<name>/asyncapi.yaml     its public events and server — one whole document
+src/modules/<name>/asyncapi.internal.yaml  a queue it owns outright (backend-only)
+src/modules/<name>/analytics.ts      the events it emits
+src/modules/<name>/factories.ts       how demo/test records are built
+src/modules/<name>/probes.ts         the requests a spec cannot describe
+
+scenarios/<name>.ts                  the demo records — outside src/, see Demo profile
+```
+
+Every one is optional: a module with no HTTP surface contributes no OpenAPI fragment, and that is a
+good sign rather than an omission. Deleting a module is `rm -rf` of the folder, its registration out of
+`src/modules.ts` and its `scenarios/<name>.ts` file — the scenario registry is generated from the
+files on disk (`npm run regenerate`), and a `shopModules` key naming an unmounted module is a
+compile error. A module that
+declared probes is also named in `scripts/contracts/client-collections-bundle.ts`, and that one
+announces itself: the import stops compiling.
+
+## Related pages
+
+- [OpenAPI Workflow](./openapi-workflow.md) — how to decide what the contract should say
+- [Contract Ownership & Fragmentation](./contract-fragmentation.md) — who owns what, and why the bundler never parses
+- [AsyncAPI Workflow](./asyncapi-workflow.md) — the async half of the same pipeline
+- [Package Scripts](../reference/package-scripts.md) — every script, grouped by job
+- [Getting Started](run-locally.md) — first run, before any of this matters

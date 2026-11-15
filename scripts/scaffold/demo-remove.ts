@@ -6,7 +6,7 @@
  * and `regenerate` rewrites the crontab), the seed images, and the demo
  * catalogue's own scenario data — then edits `src/modules.ts` and regenerates the scenario
  * registries (`npm run regenerate`), the only central files that would otherwise stop the
- * repo compiling. See `docs/getting-started-new-project.md` for what this promises and does not.
+ * repo compiling. See `docs/build/new-project.md` for what this promises and does not.
  *
  * RUNS AGAINST THIS CHECKOUT, not a scratch copy.
  * A module-owned test under `src/modules/<name>/tests/` goes with its folder; any other test that

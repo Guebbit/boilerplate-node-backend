@@ -3,7 +3,7 @@
  * Which `mutation-report` artifact `npm run mutation:pull` downloads.
  *
  * Pure: `pull-report.ts` does the GitHub calls and the file writes.
- * See: docs/tools/mutation-testing.md#the-github-sweep
+ * See: docs/build/mutation-testing.md#the-github-sweep
  */
 
 /** The artifact the sweep's merge job uploads: the merged `mutation.json` and its `index.html`. */

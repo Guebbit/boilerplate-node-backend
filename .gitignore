@@ -22,7 +22,7 @@ docs/.vitepress/cache
 # `seed/` and `system/` are negated because those ARE repository content: `seed/` holds the demo
 # images `scenarios/products.ts` and `users.ts` reference, `system/` holds the pending-image
 # placeholders the digest pipeline serves while a job is in flight (see
-# docs/tools/image-processing.md). Keeping both in their own directories is what lets this stay
+# docs/understand/image-processing.md). Keeping both in their own directories is what lets this stay
 # stable lines instead of a list of filenames to maintain.
 public/images/*
 !public/images/seed/
@@ -49,7 +49,7 @@ src/modules/*/__factories-import-probe.ts
 # Claude Code's local state: session settings, and the worktrees it creates under
 # `.claude/worktrees/` — which `jest.config.js` already excludes from every test run. None of it
 # describes the project, so none of it is shared. `skills/` is shared: it registers the
-# `scripts/audit/` prompts with Claude Code — see docs/tools/ai-auditing.md.
+# `scripts/audit/` prompts with Claude Code — see docs/build/ai-auditing.md.
 /.claude/*
 !/.claude/commands/
 !/.claude/agents/
@@ -81,7 +81,7 @@ contract.bruno.yml
 # and `shared/authorization-keys.generated.yaml` (the PHP twin), `docker/crontab` (the production host),
 # `docker/Dockerfile.dockerignore` (`docker build`, before any npm), the generated tables inside
 # `docs/`, and `scenarios/*-images.generated.json` (cannot be rebuilt). The pre-commit hook
-# refuses a commit where one of those is stale — see docs/api/regenerating.md.
+# refuses a commit where one of those is stale — see docs/build/regenerating.md.
 /asyncapi.yaml
 /asyncapi.public.yaml
 *.generated.ts

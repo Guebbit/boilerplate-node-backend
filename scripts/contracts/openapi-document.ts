@@ -6,7 +6,7 @@
  * Types and the method list come from `openapi-types` (the same package Modelina already pulls
  * in), so no step keeps its own copy of "what an OpenAPI document looks like".
  *
- * See: docs/api/contract-fragmentation.md
+ * See: docs/build/contract-fragmentation.md
  */
 
 import { OpenAPIV3, type OpenAPIV3_1 } from 'openapi-types';

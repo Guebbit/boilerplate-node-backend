@@ -34,7 +34,7 @@ import type { Response } from 'express';
  * request was malformed. A module throws its OWN subclass (`access`'s `AccessInvariantError`
  * below) rather than this class directly, so a caller catching a specific failure still can —
  * `instanceof` on the base is only how {@link databaseErrorInterpreter} recognises the FAMILY.
- * `infrastructure` names no module (`docs/theory/layers.md`): it exports the shape, a module
+ * `infrastructure` names no module (`docs/understand/layers.md`): it exports the shape, a module
  * subclasses it, and the mapping below never spells out which module that was.
  */
 export class ConflictError extends Error {
@@ -60,7 +60,7 @@ export const isInfrastructureError = (error: unknown): boolean =>
  * (503), or a bug (500) — in the single place that answer is made, so all twelve models agree on
  * it. A new branch belongs here, not in a controller.
  *
- * See: docs/theory/request-flow.md#the-database-error-interpreter
+ * See: docs/understand/request-flow.md#the-database-error-interpreter
  *
  * @param error - whatever the caught rejection actually was — a driver/Mongoose error in every
  *   case seen so far, but a `.catch()` callback's argument is never provably one

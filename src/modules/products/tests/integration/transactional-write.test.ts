@@ -3,7 +3,7 @@
  * A product write and its translation rows commit together or not at all, and the event the write
  * announces rides the transactional outbox. Real Mongo; the translation port is a double whose
  * `write` can be made to fail, standing in for a locales store that dies mid-write.
- * See docs/tools/outbox.md.
+ * See docs/understand/outbox.md.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

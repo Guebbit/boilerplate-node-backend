@@ -5,7 +5,7 @@
  * is a hosted dependency, which is why it is not the default. Select with
  * `NODE_ANALYTICS_PROVIDER=posthog`, and set both `NODE_POSTHOG_API_KEY` and `NODE_POSTHOG_HOST`.
  *
- * See: docs/tools/analytics.md
+ * See: docs/understand/analytics.md
  */
 
 // `PostHog` is the Node server-side client. It buffers events in memory and flushes them in

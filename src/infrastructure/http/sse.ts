@@ -4,7 +4,7 @@
  * permission recheck and the teardown. What each stream writes (frames, heartbeat) and what it
  * tracks (its connection registry) stay with the module that owns the stream.
  *
- * See: docs/theory/defences/real-time.md
+ * See: docs/understand/defences/real-time.md
  */
 
 import type { Response } from 'express';

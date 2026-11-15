@@ -1,7 +1,7 @@
 /**
  * @module
  * Payments — how an order's money moves, behind the provider port. One file per flow, not one
- * big file; see `docs/theory/layers.md`.
+ * big file; see `docs/understand/layers.md`.
  *
  * Starts:    only a `pending` order's owner can start paying.
  * The gate:   the order's move to `paid`, not the charge. The provider answers first, and a

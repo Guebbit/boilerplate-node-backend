@@ -5,7 +5,7 @@
 #   3. the uploads and the mail spool, as plain files
 #   4. `restic forget` per the keep knobs (skipped when BACKUP_PRUNE=false)
 # then the heartbeat goes green, or red with the reason. Run by supercronic on BACKUP_SCHEDULE.
-# Design and failure behaviour: docs/tools/backups.md#one-run
+# Design and failure behaviour: docs/operate/backups.md#one-run
 # shellcheck source=common.sh
 source /usr/local/lib/backup/common.sh
 

@@ -14,7 +14,7 @@
  *             demand-driven (the next cache read retries) rather than a background loop; only its
  *             shared warn-once latch is reused here.
  *
- * See: docs/tools/rabbitmq.md
+ * See: docs/understand/rabbitmq.md
  */
 
 // `amqplib` is the AMQP 0-9-1 client. `ChannelModel` is the TCP connection `setup` receives on
@@ -233,7 +233,7 @@ let connectionGeneration = 0;
  * Kick off the recovering connection if nothing has already — idempotent, so every public
  * function below may call it defensively without risking a second connection racing the first.
  *
- * Its own promise is never awaited, on purpose (`docs/tools/rabbitmq.md`): with recovery on, that
+ * Its own promise is never awaited, on purpose (`docs/understand/rabbitmq.md`): with recovery on, that
  * promise settles only once the FIRST connect actually succeeds, retrying forever underneath in
  * production — awaiting it here would stop the app booting until a broker answers.
  */
@@ -393,7 +393,7 @@ const cancelConsumers = (channel: ConfirmChannel | undefined): Promise<void> => 
  * side is not an error anywhere, it is a message published to a queue nobody drains. So the
  * spelling comes from `WORKER_CHANNELS`, generated out of `asyncapi.yaml`.
  *
- * See: docs/api/asyncapi-workflow.md#rabbitmq-queue-channels
+ * See: docs/build/asyncapi-workflow.md#rabbitmq-queue-channels
  */
 export const EMAIL_QUEUE = WORKER_CHANNELS.EMAIL_SEND;
 
@@ -506,7 +506,7 @@ export const parkedCounts = (): Promise<{ name: string; parked: number }[]> => {
  * here. Kept to two on purpose: the idea is one gap, between "most things" and "the few things a
  * person is actively blocked on," not a fine-grained priority system.
  *
- * See: docs/tools/rabbitmq.md#priority
+ * See: docs/understand/rabbitmq.md#priority
  */
 export type JobPriority = 'normal' | 'high';
 
@@ -550,7 +550,7 @@ const AT_LEAST_ONCE_DEAD_LETTERING = {
 
 /**
  * Declare a work queue and its two companions, wired for the retry design
- * (`docs/tools/rabbitmq.md#retries-and-parking`):
+ * (`docs/understand/rabbitmq.md#retries-and-parking`):
  *
  * ```
  * work queue ──(handler threw: republish)──▶ <queue>.retry (TTL, no consumer) ──(expires)──▶ work queue
@@ -570,7 +570,7 @@ const AT_LEAST_ONCE_DEAD_LETTERING = {
  *             already must agree on `durable`, or `assertQueue` throws `PRECONDITION_FAILED` on
  *             the second call. In practice this app's consumers register at boot
  *             (`app/workers.ts`), before anything publishes.
- * Upgrading:  see `docs/tools/rabbitmq.md` for upgrading an existing broker — a queue's
+ * Upgrading:  see `docs/understand/rabbitmq.md` for upgrading an existing broker — a queue's
  *             dead-letter routing key cannot change in place.
  *
  * @param ch - the channel to declare on

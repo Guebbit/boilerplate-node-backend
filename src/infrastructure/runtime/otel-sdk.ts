@@ -6,7 +6,7 @@
  * actually handles traffic: the instrumentation packages patch those modules at `sdk.start()`
  * time, so anything already running keeps the un-patched code path and produces no spans.
  *
- * See: docs/tools/opentelemetry.md
+ * See: docs/operate/opentelemetry.md
  */
 
 // `NodeSDK` = the all-in-one OTel entry point for Node: it wires resource, span processors,

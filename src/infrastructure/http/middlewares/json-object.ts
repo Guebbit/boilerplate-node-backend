@@ -11,7 +11,7 @@
  * Scope:   JSON only; a body no parser read is `undefined` and passes. Raw-body (webhook) paths are
  *          skipped by the mount in `app/security.ts`, which knows them.
  *
- * See: docs/theory/request-flow.md
+ * See: docs/understand/request-flow.md
  */
 
 import type { NextFunction, Request, Response } from 'express';

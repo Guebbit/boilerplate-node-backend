@@ -74,7 +74,7 @@ services:
             NODE_AUTH_RATE_LIMIT_ADDRESS_MAX: '${NODE_AUTH_RATE_LIMIT_ADDRESS_MAX:-30}'
             # Observability: send traces to OTel Collector, which fans out to backends. Empty by
             # default — the `observability` profile is opt-in, and an empty value is a documented
-            # no-op (docs/getting-started-production.md).
+            # no-op (docs/operate/first-deploy.md).
             OTEL_EXPORTER_OTLP_ENDPOINT: '${OTEL_EXPORTER_OTLP_ENDPOINT:-}'
             NODE_SERVICE_NAME: '${NODE_SERVICE_NAME:-api}'
             # The three URLs `GET /observability/health` reports as `integrations.loki`,
@@ -152,7 +152,7 @@ services:
         # Health check to verify the container is alive (liveness, not readiness)
         # Inspect with "podman ps" or "podman inspect <container name>"
         healthcheck:
-            # Liveness (`/livez`), never a dependency — see docs/tools/health-checks.md.
+            # Liveness (`/livez`), never a dependency — see docs/operate/health-checks.md.
             # `node -e`, not `curl -f`: the image is node:*-alpine and does not ship curl, so the
             # curl form exited non-zero every time and parked the container on `unhealthy` while
             # the API was answering 200 throughout. Node's built-in fetch needs nothing added to
@@ -214,7 +214,7 @@ services:
             - /app/node_modules
             - ./docker/crontab:/app/crontab:ro,Z
         # Same as production: supercronic serves `/health` on loopback, and that is this
-        # container's own check — see docs/tools/health-checks.md.
+        # container's own check — see docs/operate/health-checks.md.
         command:
             [
                 'sh',
@@ -275,7 +275,7 @@ services:
             # first boot (`db:bootstrap`). A host-side `npm run host -- dev` connects to this same
             # mongod through the published port below and seeds nothing of its own — which is why
             # a freshly recreated volume already holds the demo shop before you start anything by
-            # hand. See docs/getting-started.md, "Which database am I looking at?".
+            # hand. See docs/build/run-locally.md, "Which database am I looking at?".
             - boilerplate_mongodb_volume:/data/db
 
         # Loopback by default, same as the app's own port above: no `MONGO_INITDB_ROOT_*` is set,
@@ -356,7 +356,7 @@ services:
 
     # RabbitMQ: message broker for async tasks (email, PDF generation, etc.). Matches production
     # (docker-compose.production.yml) — quorum-queue message priority is a 4.x feature, and dev
-    # must run what prod runs. See docs/tools/rabbitmq.md#queue-type-quorum.
+    # must run what prod runs. See docs/understand/rabbitmq.md#queue-type-quorum.
     rabbitmq:
         logging: *container-logging
         image: rabbitmq:4-management
@@ -426,7 +426,7 @@ services:
         image: prom/alertmanager:v0.34.1
         restart: unless-stopped
         # Renders the routing template from the environment below, then starts Alertmanager on it.
-        # Why: Alertmanager reads no env vars itself. docs/tools/prometheus.md#alert-routing
+        # Why: Alertmanager reads no env vars itself. docs/operate/prometheus.md#alert-routing
         entrypoint:
             - '/bin/sh'
             - '/etc/alertmanager/render.sh'
@@ -458,7 +458,7 @@ services:
 
     # Gatus: stands in for the off-host heartbeat service. Alertmanager pings it every minute; when
     # the pings stop (stop `alertmanager` to drill it) it mails mailpit (`integrations` profile).
-    # In production it runs on another machine: docs/tools/gatus.md.
+    # In production it runs on another machine: docs/operate/gatus.md.
     # https://github.com/TwiN/gatus#external-endpoints
     gatus:
         logging: *container-logging
@@ -677,7 +677,7 @@ services:
             - ./scenarios/support/tls:/certs:ro,Z
         ports:
             # Loopback only. 3070 sits in this repo's 3000-3099 block — see
-            # docs/tools/pairing-and-ports.md.
+            # docs/build/pairing-and-ports.md.
             - '127.0.0.1:${WEBHOOK_TESTER_PORT:-3070}:8443'
 
     # mailpit: a local SMTP sink with a web inbox. Somewhere for the app's mail to be delivered TO

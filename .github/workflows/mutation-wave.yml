@@ -7,7 +7,7 @@ name: Mutation wave
 # time, retried once if it crashed — and then whatever did not fit before.
 #
 # Nothing here is shared with `npm run mutation:full`: same `stryker.json`, sized for a 4-vCPU /
-# 16 GB runner instead of a desktop. See docs/tools/mutation-testing.md#the-github-sweep.
+# 16 GB runner instead of a desktop. See docs/build/mutation-testing.md#the-github-sweep.
 
 on:
     workflow_call:
@@ -132,7 +132,7 @@ jobs:
               # that failure; the waves absorb the speed.
               #
               # `--expose-gc`: lets the test environment collect after each test file, which the
-              # initial test run needs to fit — docs/tools/mutation-testing.md#collect-after-each-file.
+              # initial test run needs to fit — docs/build/mutation-testing.md#collect-after-each-file.
               #
               # `timeout` stops Stryker at 330 minutes so the step, not GitHub, ends the job: exit
               # 124 is how the next wave knows to split this shard rather than retry it whole.

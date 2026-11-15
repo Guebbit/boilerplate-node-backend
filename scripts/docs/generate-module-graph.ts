@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * The module graph and the grouped module list in `docs/modules/index.md`, plus one neighbourhood
+ * The module graph and the grouped module list in `docs/modules/start.md`, plus one neighbourhood
  * diagram per module page,
  * generated from the imports and subscriptions they describe.
  *
@@ -42,7 +42,7 @@ const checkOnly = hasFlag('check');
 /** Every module folder under `src/modules`. */
 
 /** The index page carrying the whole-repo graph; each module page is found from its own name. */
-const PAGE = path.join(ROOT, 'docs', 'modules', 'index.md');
+const PAGE = path.join(ROOT, 'docs', 'modules', 'start.md');
 
 /** Markers bounding the generated block — everything between them is replaced, nothing outside. */
 const START = '<!-- module-graph:start -->';
@@ -308,7 +308,7 @@ const applyTarget = ({ file, start, end, body }: Target): Promise<number> =>
 
 /**
  * Whether a module has its own page under `docs/modules/`. The one `group: example` module has
- * none: it exists to be copied, and `docs/theory/modules.md#the-module-template` is where it is
+ * none: it exists to be copied, and `docs/understand/modules.md#the-module-template` is where it is
  * explained, so a neighbourhood block has nowhere to go.
  */
 const hasModulePage = (name: string): boolean => DESCRIPTORS[name].group !== 'example';

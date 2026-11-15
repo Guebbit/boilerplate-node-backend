@@ -18,7 +18,7 @@
  *             the file the PHP twin reads byte-for-byte. `memberships` is the part that genuinely
  *             is per-database data — WHO holds a role, never WHAT a role holds.
  *
- * See: docs/theory/authorization.md
+ * See: docs/understand/authorization.md
  */
 
 import { model, Schema } from 'mongoose';
@@ -28,7 +28,7 @@ import { AUTHORIZATION_SCOPES, type AuthorizationScope } from '@types';
 /**
  * One shop — and this deployment holds exactly one, deliberately, because serving many clients is
  * a deployment concern here rather than an application one. There are no others to notice: a
- * second client gets a second stack and a second database. See docs/theory/tenancy.md.
+ * second client gets a second stack and a second database. See docs/understand/tenancy.md.
  */
 export interface TenantDocument extends Document {
     /** Stable, human-readable, and the thing a deployment names in configuration. */

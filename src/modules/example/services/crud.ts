@@ -8,7 +8,7 @@
  * Who may see or change which row is not decided by hand: `accessibleFilterFor` compiles the
  * caller's keys (`authorization.yaml`) into the query, so a row you may not touch is simply not found.
  *
- * See: docs/theory/layers.md
+ * See: docs/understand/layers.md
  */
 
 import type {

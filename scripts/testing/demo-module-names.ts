@@ -14,7 +14,7 @@ const REMOVABLE_GROUPS: ReadonlySet<string> = new Set(['shop', 'example']);
 
 /**
  * Every module folder under `src/modules/<repoRoot>` labelled `group: shop` or `group: example` —
- * see `docs/theory/strategic-ddd.md#4a-foundation-and-shop`. The example module is the template to
+ * see `docs/understand/strategic-ddd.md#4a-foundation-and-shop`. The example module is the template to
  * copy; a deployment that has copied it deletes it, and it is mounted in production (anyone can
  * create a note), so the strip takes it too.
  * @param repoRoot - the checkout root to read `src/modules/` from (a scratch copy, or the real one)

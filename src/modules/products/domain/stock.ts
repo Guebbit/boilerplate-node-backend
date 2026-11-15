@@ -2,7 +2,7 @@
  * @module
  * `available` — what a customer may buy — from the two stock counters `@modules/inventory` writes
  * onto every product. Lives beside the model, not in `inventory` or `cart`: the kernel and the
- * domain layers hold no business rules of their own (`docs/theory/layers.md`), and a product's
+ * domain layers hold no business rules of their own (`docs/understand/layers.md`), and a product's
  * catalogue price/availability is this module's own invariant, the same reasoning `tax.ts` follows
  * for `resolveTaxRate`.
  */

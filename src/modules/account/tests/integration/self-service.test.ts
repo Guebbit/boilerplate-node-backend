@@ -838,7 +838,7 @@ describe('requestPasswordReset', () => {
     // The audit is written by this service function, not the `postResetRequest` controller.
     // This pins that the "audit fires either way" contract holds there, since an
     // account-enumeration defense that only audits a REAL address would leak the same fact the
-    // identical HTTP response is built to hide. See `docs/theory/module-lifecycle.md` rule 1.
+    // identical HTTP response is built to hide. See `docs/build/module-lifecycle.md` rule 1.
     it('audits the attempt unconditionally, even for an address with no account', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
 

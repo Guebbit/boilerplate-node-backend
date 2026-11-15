@@ -7,7 +7,7 @@
  * with the only consumer of all four rather than in `adapters/cache.ts` — a project caching
  * something that is not a response inherits none of them.
  *
- * See: docs/tools/redis-cache.md
+ * See: docs/understand/redis-cache.md
  */
 
 import { createHash } from 'node:crypto';
@@ -61,7 +61,7 @@ const secondsBetween = (fromMs: number, toMs: number): number =>
 /**
  * How long a shared cache (edge) or this server (origin) may keep serving a stale entry while one
  * rebuild is in flight — RFC 5861's `stale-while-revalidate`, and the same number both layers use
- * so they agree on what "stale" means. See docs/tools/redis-cache.md#refresh-ahead-no-stampede-when-a-hot-key-goes-stale.
+ * so they agree on what "stale" means. See docs/understand/redis-cache.md#refresh-ahead-no-stampede-when-a-hot-key-goes-stale.
  */
 const STALE_WHILE_REVALIDATE_SECONDS = 60;
 
@@ -89,7 +89,7 @@ export const resolveCacheTtl = (seconds: number): number => {
     // bypassed the API (a seed, a one-off script under `scripts/ops/`, a `mongosh` session) can
     // keep serving a stale answer. Production is never clamped, because there the API is the only
     // writer. `NODE_REDIS_CACHE_DEV_TTL_MAX=0` opts out.
-    // See: docs/tools/redis-cache.md#writes-that-bypass-the-api
+    // See: docs/understand/redis-cache.md#writes-that-bypass-the-api
     const max = responseCacheConfig().NODE_REDIS_CACHE_DEV_TTL_MAX;
     if (max <= 0) return seconds;
     return Math.min(seconds, max);
@@ -102,7 +102,7 @@ export const resolveCacheTtl = (seconds: number): number => {
  * state: the key varies with the declared key parameters, so an unauthenticated caller can mint
  * an entry per distinct value and keep every one resident. Bounding the ENTRY is what stops that being an amplifier;
  * bounding the KEY (see {@link getCacheKey}) is what stops the input being one.
- * See: docs/tools/redis-cache.md#entry-size-is-bounded
+ * See: docs/understand/redis-cache.md#entry-size-is-bounded
  *
  * Serialized once, here, so the size check measures exactly what would be written rather than an
  * estimate of it. Skipping is not a failure: the caller still gets its response, it just will not
@@ -225,7 +225,7 @@ interface CacheOptions {
      * Safe by: `kernel/access/query.ts#hasAnonymousReadScope`, which compares compiled read
      *          filters, so a role that widens visibility fails it with no cache change.
      *
-     * See: docs/tools/redis-cache.md#no-caching-depends-on-who-is-asking
+     * See: docs/understand/redis-cache.md#no-caching-depends-on-who-is-asking
      */
     scopeKey: (request: Request) => boolean;
 }
@@ -402,7 +402,7 @@ const replay = (response: Response, cached: CachedResponse): void => {
  * Set every cache-control header this middleware owns, and decide whether the request is even a
  * candidate for the Redis lookup {@link serveOrArm} does next. The two throws guard a mounting
  * mistake (`noStore` already set, or `browserRevalidate` on a POST), not a runtime condition —
- * see `docs/tools/redis-cache.md#response-headers` for the full reasoning behind every header set
+ * see `docs/understand/redis-cache.md#response-headers` for the full reasoning behind every header set
  * here and the two throws.
  *
  * @param request - decides GET vs POST framing
@@ -670,7 +670,7 @@ export const isDraftPreview = (response: Response): boolean =>
  *
  * Mounted BEFORE `setCache`, whose key is built from `request.locale`: run after it, a draft
  * answer would be stored under a live language's key.
- * See docs/tools/redis-cache.md#draft-previews
+ * See docs/understand/redis-cache.md#draft-previews
  */
 export const markDraftPreview = (response: Response): void => {
     response.locals.draftPreview = true;

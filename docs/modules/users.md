@@ -61,14 +61,14 @@ has ever had one. Nothing about it differentiates this shop — which is exactly
 what `generic` means, and why no aggregate belongs here however central the record feels.
 
 The record carries no role: a staff role is a membership in [`access`](./access.md), and a
-customer is whoever has no membership. See [Authorization](../theory/authorization.md) for where
+customer is whoever has no membership. See [Authorization](../understand/authorization.md) for where
 the decision actually gets made.
 
 **Authentication is not here.** Signup, login, password reset, sessions and the one-time-token lifecycle all live in
 [`account`](./account.md), which is a _second service over this same collection_. That split is why
 this module's barrel is the widest in the repo: `account` needs more of it to authenticate the same
 document. What a barrel publishes, and the deny-list that holds even here, is
-[Published language](../theory/strategic-ddd.md#_5-published-language-—-the-barrel). Every read or
+[Published language](../understand/strategic-ddd.md#_5-published-language-—-the-barrel). Every read or
 write goes through a service, never the collection directly: `userService` for a sibling,
 `accountUserService` (`friends/account.ts`) for `account`.
 
@@ -90,16 +90,16 @@ write through a service, never the collection directly (`userService`, and `acco
 `PUT /users/{id}` replaces the record (a field left out reverts to its default); `PATCH /users/{id}`
 merges (a field left out keeps its current value). Neither carries the role: that has its own door
 ([The role door](#the-role-door)). The same replace/merge split
-[`request-flow.md`](../theory/request-flow.md) documents for the rest of the API, through the same
+[`request-flow.md`](../understand/request-flow.md) documents for the rest of the API, through the same
 shared factory.
 
 **What an edit needs, beyond the route's key.** Two rules sit in `services/update.ts` and
 `services/remove.ts`, asked before anything is written:
 
-| Rule                           | Refusal                                            | Why                                                   |
-| ------------------------------ | -------------------------------------------------- | ----------------------------------------------------- |
-| the account holds a staff role | `403 ROLE_MANAGEMENT_REQUIRED`                     | [R1](../theory/authorization.md#protecting-people)    |
-| handing a role out (create)    | `403 ROLE_MANAGEMENT_REQUIRED`, or `422` on `role` | only a holder of `assign:Role` hands out a staff role |
+| Rule                           | Refusal                                            | Why                                                    |
+| ------------------------------ | -------------------------------------------------- | ------------------------------------------------------ |
+| the account holds a staff role | `403 ROLE_MANAGEMENT_REQUIRED`                     | [R1](../understand/authorization.md#protecting-people) |
+| handing a role out (create)    | `403 ROLE_MANAGEMENT_REQUIRED`, or `422` on `role` | only a holder of `assign:Role` hands out a staff role  |
 
 The same protection covers soft delete, hard delete, restore, the purchase hold and the activate / deactivate switch. A
 refused attempt on a staff account is audited as `security.forbidden` with
@@ -108,7 +108,7 @@ refused attempt on a staff account is audited as `security.forbidden` with
 `active` is not a field of a user's `PUT` / `PATCH`: here the flip ends sessions and needs its own
 permission, so it is an action endpoint ([Activating and deactivating](#activating-and-deactivating)).
 A product's `active` has no such effect and stays a field
-(the [action-or-field test](../api/write-methods.md#action-or-field)).
+(the [action-or-field test](../understand/write-methods.md#action-or-field)).
 
 **The fresh-login step-up** asks only a caller holding `assign:Role`, and only when the write changes
 who holds powers: a create that names a role or starts deactivated, a call to `activate` /
@@ -149,7 +149,7 @@ sequenceDiagram
 `POST /users/{id}/assign-role {role}` and `POST /users/{id}/revoke-role` are the only way an existing
 account is given a staff role or loses one (`services/role.ts`, public as `userService.assignUserRole`
 and `revokeUserRole`). Each is a state change with its own check and audit row, so it is a POST pair
-([a toggle is a pair of actions](../api/write-methods.md#a-toggle-is-a-pair-of-actions)):
+([a toggle is a pair of actions](../understand/write-methods.md#a-toggle-is-a-pair-of-actions)):
 
 | Call                                   | Answers                                                                              |
 | -------------------------------------- | ------------------------------------------------------------------------------------ |
@@ -175,7 +175,7 @@ and `revokeUserRole`). Each is a state change with its own check and audit row, 
 
 **Credentials are the owner's alone.** `POST /users` takes no password: the account is created
 without one and always mails a setup link (`USER_SETUP_REQUESTED`, handled in
-[`account`](./account.md); it rides the [outbox](../tools/outbox.md) in the account's own
+[`account`](./account.md); it rides the [outbox](../understand/outbox.md) in the account's own
 transaction, so a lost mail is retried and a refused grant sends none), so no administrator ever types, sees or resets another person's
 password, second factor or sign-in email. The setup page is where its holder accepts the Terms
 (see [`account`](./account.md)); creating the row stamps no Terms record. Each row also carries an [`actions` block](#actions) with
@@ -185,7 +185,7 @@ the rank and the account's state already applied, which is what a screen renders
 (`@infrastructure/security/pii-encryption`) — `services/update.ts`'s `update` encrypts it on the one write
 path, `presentAccount` and `presentUser` (`presenter.ts`) decrypt it on the way out, whether the source document was hydrated or
 `search()`'s `.lean()` result. See
-[Secrets at rest](../theory/defences/crypto-and-secrets.md#secrets-at-rest).
+[Secrets at rest](../understand/defences/crypto-and-secrets.md#secrets-at-rest).
 
 Post-commit steps log and continue (`afterCommit`, `@infrastructure/runtime/after-commit`): once a
 create or update has committed, a failed image hand-off is logged and the saved user answered, never
@@ -217,7 +217,7 @@ has no `actions` and no review flag: a person's own record has no one to protect
 the caller holds `assign:Role` (the caller's own account is judged like any other). The role door's
 two flags are the grant alone, not this rule. The service's `canChangeAccount` asks the
 same function after a lookup, so the flag and the refusal cannot disagree. `ban:User` is the key of
-every ban-class move: deactivating is a ban today, and [support](../demo-ecommerce/support.md) keeps none of it.
+every ban-class move: deactivating is a ban today, and [support](../use-the-shop/support.md) keeps none of it.
 
 ```mermaid
 flowchart LR
@@ -235,10 +235,10 @@ after creation (a create body may still set the initial value). Deactivating end
 the same save (the [session epoch](./account-sessions.md#the-session-epoch) moves with it) and
 announces `user.deactivated` in that transaction, so `account` purges the pending links when the
 sessions died. A repeat is a conflict, not a second success: `409 USER_ALREADY_INACTIVE` /
-`USER_ALREADY_ACTIVE` ([the rule](../api/write-methods.md#repeating-an-action-409)). Audit: `admin.user.banned` / `admin.user.unbanned`.
+`USER_ALREADY_ACTIVE` ([the rule](../understand/write-methods.md#repeating-an-action-409)). Audit: `admin.user.banned` / `admin.user.unbanned`.
 
 A hard erasure also writes `user.erased` in its transaction; this module's own subscriber asks the
-analytics provider to forget the id ([PostHog erasure](../tools/analytics.md#erasure-in-posthog)).
+analytics provider to forget the id ([PostHog erasure](../understand/analytics.md#erasure-in-posthog)).
 
 ## The doors a sibling module may use
 
@@ -260,7 +260,7 @@ below, credentials, sign-up, the OAuth link, the reaper's reads); they trust tha
 `account` cannot import `userService`, so a new `account`-only function can only go in its own
 object; publishing one is a deliberate step for another module. The same pattern gives `orders` the
 one hold it may take (`friends/orders.ts`). See
-[Published language](../theory/strategic-ddd.md#_5-published-language-—-the-barrel).
+[Published language](../understand/strategic-ddd.md#_5-published-language-—-the-barrel).
 
 Two writes skip the ban check and the staff protection the admin routes enforce: the raw `update`
 and `remove`. Both are `@internal` and never leave the module. `account` reaches the record through
@@ -295,7 +295,7 @@ and is left out; so is a banned or deleted one.
 `GET /users` and `POST /users/search` answer a `UserListItem`: identity, role, active, avatar, dates,
 the `purchaseHeld` flag, the review flag and `actions`. No phone, website or pending address, and not
 the hold's reason or note: those are `GET /users/{id}`, the audited read. See
-[a list row is a list item](../api/responses.md#a-list-row-is-a-list-item).
+[a list row is a list item](../reference/responses.md#a-list-row-is-a-list-item).
 
 ## Purchase hold
 
@@ -372,7 +372,7 @@ A failing step is logged and never turns a committed erasure into an error.
 
 A third kind of soft delete is the **owner's own**: `DELETE /account` stamps `deletedAt` (the request
 time), `deletedBy: 'owner'` and `purgeAt`, and the account is erased by the `reap:scheduled-deletions`
-job once `purgeAt` passes ([the grace](../theory/data-retention.md#self-deletion-a-grace-under-one-month)).
+job once `purgeAt` passes ([the grace](../understand/data-retention.md#self-deletion-a-grace-under-one-month)).
 Staff see it in the list (`User.purgeAt`, "erases on {date}") and may restore it with
 `POST /users/{id}/restore` while `purgeAt` is ahead, the same `delete:User` key as any restore. Past
 it the answer is 409 `USER_ERASURE_DUE` and `actions.restore` is false. The restore commits with the
@@ -412,7 +412,7 @@ A factor whose setup was never confirmed has no `enrolledAt`, guards no login, a
 
 None. Passwords are hashed with argon2id from `node:crypto` (`infrastructure/security/password-hash.ts`),
 which `account` verifies against as well: no package to choose, keep patched or list on the
-[Package Dependencies](../tools/package-dependencies.md) page.
+[Package Dependencies](../reference/package-dependencies.md) page.
 
 ## Who can do what
 
@@ -431,14 +431,14 @@ Every rule this module declares and who holds it, role by role. The rule is what
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
 `src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../theory/authorization.md) explains the model.
+evaluator — [Authorization](../understand/authorization.md) explains the model.
 
 <!-- permissions:end -->
 
 ## Related pages
 
-- [Modules overview](./index.md) — the whole context map
+- [Modules overview](./start.md) — the whole context map
 - [`account`](./account.md) — the other service over this collection
-- [Strategic DDD](../theory/strategic-ddd.md#_5-published-language-—-the-barrel) — why a wide barrel is a map edge, not a private detail
-- [Security](../tools/security.md) — password hashing and the token shapes
-- [Events & Logging](../tools/events-and-logging.md) — the domain-event bus
+- [Strategic DDD](../understand/strategic-ddd.md#_5-published-language-—-the-barrel) — why a wide barrel is a map edge, not a private detail
+- [Security](../understand/security.md) — password hashing and the token shapes
+- [Events & Logging](../understand/events-and-logging.md) — the domain-event bus

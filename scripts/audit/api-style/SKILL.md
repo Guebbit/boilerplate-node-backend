@@ -60,7 +60,7 @@ Output goes to `tmp/reports/audit-<run>/api-style/<SCOPE>…`. `<run>` and `<SCO
 
 1. Read the root `openapi.yaml` (the bundle) and state its mtime in the report. Do NOT bundle it:
    the audit reads what a client reads. If it is missing, stop and say so.
-2. Read the "Where we differ, and why" section of `docs/theory/api-standards.md`. A rule whose
+2. Read the "Where we differ, and why" section of `docs/understand/api-standards.md`. A rule whose
    `difference` names a row there gets the verdict `KNOWN-DIFFERENCE` when the difference is what
    you found, with the row `id`.
 3. Read the chosen guide's rules in `scripts/audit/api-standards.yaml`. Open each `source` and
@@ -140,7 +140,7 @@ one cause; the per-rule totals give house apart (`VIOLATION 4 (house 3)`).
 
 No citation, no finding: an absence claim names the grep that found
 nothing. Three real violations over thirty maybes. The report is disposable; see
-`docs/tools/ai-auditing.md`.
+`docs/build/ai-auditing.md`.
 
 ### Outside the rules
 

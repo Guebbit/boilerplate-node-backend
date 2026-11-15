@@ -15,7 +15,7 @@
  * `localeCandidatesFor` — pure locale-chain maths, no port, no registration — stays in
  * `@infrastructure/i18n`, next to `getFallbackLocale`.
  *
- * See: docs/tools/i18n.md
+ * See: docs/understand/i18n.md
  */
 
 import type { ClientSession } from 'mongoose';

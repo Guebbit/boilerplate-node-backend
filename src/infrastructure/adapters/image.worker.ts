@@ -7,7 +7,7 @@
  * inverted port — {@link ImageWriteback} plus a registration function — supplied at boot by
  * `app/workers.ts`.
  *
- * See: docs/tools/image-processing.md
+ * See: docs/understand/image-processing.md
  */
 
 import { createHash } from 'node:crypto';

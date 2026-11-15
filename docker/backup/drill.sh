@@ -9,7 +9,7 @@
 #   6. the second-machine kit (rclone append-only server): backup accepted, `forget` refused,
 #      the maintenance job prunes on the server's own disk
 # Everything runs on one private `--internal` network; nothing publishes a port. Leaves nothing behind.
-# Run it: `npm run backup:drill` (CI: the `backup-drill` job). Docs: docs/tools/backups.md#the-restore-drill
+# Run it: `npm run backup:drill` (CI: the `backup-drill` job). Docs: docs/operate/backups.md#the-restore-drill
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."

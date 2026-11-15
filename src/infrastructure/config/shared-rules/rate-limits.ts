@@ -13,7 +13,7 @@ import { z } from 'zod';
 
 /** One budget's data. Strict: an extra key is a typo, or a behaviour that belongs in code. */
 const rateLimitBudgetDataSchema = z.strictObject({
-    /** Short row label for the generated table in `docs/tools/security.md`. */
+    /** Short row label for the generated table in `docs/understand/security.md`. */
     name: z.string().min(1),
     /** Redis/memory key prefix. The entry's key is this in camelCase. */
     namespace: z.string().regex(/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/),

@@ -14,7 +14,7 @@
  * Also:  forwards Node's `'warning'` events into the file, because jest's `process` is a copy with
  *        its own empty listener list (`jest-util` `createProcessObject`) and hears none of them.
  *
- * See: docs/tools/mutation-testing.md#one-process-per-dry-run
+ * See: docs/build/mutation-testing.md#one-process-per-dry-run
  */
 
 import { PerformanceObserver } from 'node:perf_hooks';
@@ -178,7 +178,7 @@ const inThisRealm = (record: Record<string, unknown>): Record<string, unknown> =
  *        namespace and this does nothing.
  * Shape: `mutantCoverage = { static: {id: hits}, perTest: {testId: {id: hits}} }` — written by
  *        `@stryker-mutator/instrumenter`'s preamble, read back unchanged at the end of the run.
- * See:   docs/tools/mutation-testing.md#collect-after-each-file
+ * See:   docs/build/mutation-testing.md#collect-after-each-file
  *
  * @param global - the finished file's global, where Stryker's jest environment put the namespace
  */
@@ -281,7 +281,7 @@ export default class TestEnvironment extends NodeEnvironment {
      *   memory" with the memory still reclaimable. Known jest behaviour:
      *   https://github.com/jestjs/jest/issues/11956
      * Who sets the flag: the mutation runs only, so a normal run pays nothing.
-     * See: docs/tools/mutation-testing.md#collect-after-each-file
+     * See: docs/build/mutation-testing.md#collect-after-each-file
      */
     override async teardown(): Promise<void> {
         process.off('warning', this.forwardWarning);

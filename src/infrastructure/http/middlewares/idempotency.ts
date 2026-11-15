@@ -19,7 +19,7 @@
  * The ledger never sees a 429: every budget refuses before the key is claimed, and a handler must
  * not answer 429 after a write.
  *
- * See: docs/tools/idempotency.md
+ * See: docs/understand/idempotency.md
  */
 
 import type { NextFunction, Request, RequestHandler, Response } from 'express';

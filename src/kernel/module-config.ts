@@ -10,7 +10,7 @@
  * budgets are slices too, generated from the data it already declares, so deleting the module
  * deletes its gate.
  *
- * See: docs/tools/configuration.md
+ * See: docs/operate/configuration.md
  */
 
 import type { AppModule } from '@kernel/registry';

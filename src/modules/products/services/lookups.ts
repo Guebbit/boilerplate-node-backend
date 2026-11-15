@@ -57,7 +57,7 @@ export const findManyByIds = (ids: readonly string[]) => productRepository.findB
 /**
  * How many of `ids` are still publicly visible — `@modules/inventory`'s low-stock gauge asks this
  * rather than joining into this module's own collection to answer it itself (see
- * `docs/theory/strategic-ddd.md` §5: "the service is the door"). Reuses the same
+ * `docs/understand/strategic-ddd.md` §5: "the service is the door"). Reuses the same
  * `publicScope()` a stranger's own reads are narrowed to, so a role editing that rule never has
  * to remember a second, hand-rolled copy of it living in a sibling module's aggregation pipeline.
  *

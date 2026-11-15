@@ -3,14 +3,14 @@
  * The module catalogue: every module's place in the docs, derived from what it says about itself.
  *
  * Feeds two readers that would otherwise be hand-kept lists of module names — the "Every module" section
- * of `docs/modules/index.md` and the `/modules/` sidebar in `docs/.vitepress/config.mts`. Both
+ * of `docs/modules/start.md` and the `/modules/` sidebar in `docs/.vitepress/config.mts`. Both
  * group by `module.yaml#group` (foundation first, then the demo shop), so a new module appears in
  * the right place by declaring its group and a summary, and nothing else.
  *
  * Pure apart from {@link readCatalog}, the one disk read, so a test can drive the rest with a
  * virtual module list.
  *
- * See: docs/modules/index.md, docs/theory/strategic-ddd.md#4a-foundation-and-shop
+ * See: docs/modules/start.md, docs/understand/strategic-ddd.md#4a-foundation-and-shop
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -59,10 +59,10 @@ const GROUPS: readonly {
 ];
 
 /**
- * The section of the theory page that explains the `example` module, which has no page of its own.
+ * The section of the understand page that explains the `example` module, which has no page of its own.
  * Relative to `docs/`.
  */
-const TEMPLATE_SECTION = 'theory/modules.md#the-module-template';
+const TEMPLATE_SECTION = 'understand/modules.md#the-module-template';
 
 /**
  * The docs link of one module, relative to `docs/modules/`: its own page, or for the `example`
@@ -126,7 +126,7 @@ const bullet = (entry: CatalogEntry): string => {
 };
 
 /**
- * The Markdown for the "Every module" block of `docs/modules/index.md`: one section per group,
+ * The Markdown for the "Every module" block of `docs/modules/start.md`: one section per group,
  * one bullet per module.
  * @param entries - the whole catalogue
  * @returns Markdown, no surrounding markers
@@ -160,7 +160,7 @@ export interface SidebarSection {
  * @param entries - the whole catalogue
  */
 export const moduleSidebar = (entries: readonly CatalogEntry[]): SidebarSection[] => [
-    { text: 'Overview', items: [{ text: 'The whole map', link: '/modules/' }] },
+    { text: 'Overview', items: [{ text: 'The whole map', link: '/modules/start' }] },
     ...GROUPS.flatMap(({ group, heading }) => {
         const members = inGroup(entries, group);
         if (members.length === 0) return [];

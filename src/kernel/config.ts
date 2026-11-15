@@ -4,7 +4,7 @@
  * retry policy. Kernel-level, not `account`'s: any module with a money or identity route mounts
  * `requireFreshAuth`, and none of them may reach into a sibling's config.
  *
- * See: docs/tools/configuration.md
+ * See: docs/operate/configuration.md
  */
 
 import { defineConfig } from '@infrastructure/config/define';

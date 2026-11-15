@@ -147,7 +147,7 @@ mutant which tests ran it (`coveredBy`) and which failed on it (`killedBy`). Rea
 never edit `src/` to check.
 
 - The report is `tmp/reports/mutation/mutation.json` — see
-  `docs/tools/mutation-testing.md#which-file-is-what`. After `npm run mutation:pull` it holds the
+  `docs/build/mutation-testing.md#which-file-is-what`. After `npm run mutation:pull` it holds the
   whole GitHub sweep; after `npm run mutation`, the changed files' fresh results laid over it.
   A local `npm run mutation:full` keeps one report per shard under
   `tmp/reports/mutation-shards/<size>/<shard>/` instead.
@@ -209,7 +209,7 @@ The suggested fix is prose, never code, in this order of preference:
 3. **Delete it**, naming the test that already kills the same mutant.
 
 Its expected value comes from the spec — the root `openapi.yaml` and `asyncapi.yaml`,
-`docs/modules/<module>*.md`, `docs/theory/*.md`, cited by `file:line` — or, where the spec is
+`docs/modules/<module>*.md`, `docs/understand/*.md`, cited by `file:line` — or, where the spec is
 silent, is worked out by hand from the input and labelled so. Never from running the code: that is
 **Bent to fit**, done by the auditor.
 

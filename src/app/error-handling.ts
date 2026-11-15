@@ -165,7 +165,7 @@ export const handleUncaughtError = (
      * `error.message`, which would leak field paths, hosts, filesystem layout or a URL with a key
      * in it. The detail is logged above with the request and trace ids.
      *
-     * See: docs/theory/request-flow.md#the-500-branch-says-nothing
+     * See: docs/understand/request-flow.md#the-500-branch-says-nothing
      */
     if (status >= 500) return rejectResponse(response, 500);
 
@@ -177,7 +177,7 @@ export const handleUncaughtError = (
      * `error.message`: `expose: true` is body-parser's judgement about its own text, not a licence to
      * forward library strings.
      *
-     * See: docs/theory/request-flow.md#the-database-branch-is-a-safety-net-not-a-substitute
+     * See: docs/understand/request-flow.md#the-database-branch-is-a-safety-net-not-a-substitute
      */
     rejectResponse(response, status);
 };

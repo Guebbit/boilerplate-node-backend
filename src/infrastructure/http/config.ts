@@ -3,7 +3,7 @@
  * The HTTP layer's configuration: this deployment's own addresses, the rate limiter's store, upload
  * limits, the response cache's bounds and the idempotency ledger's retention.
  *
- * See: docs/tools/configuration.md
+ * See: docs/operate/configuration.md
  */
 
 import { tmpdir } from 'node:os';
@@ -89,7 +89,7 @@ export const idempotencyConfig = defineConfig({
  * Caps on live SSE streams, counted per process. Opens past either cap are refused, since a held
  * stream is never counted by the request limiter.
  *
- * See: docs/theory/defences/denial-of-service.md
+ * See: docs/understand/defences/denial-of-service.md
  */
 export const sseConfig = defineConfig({
     name: 'sse',

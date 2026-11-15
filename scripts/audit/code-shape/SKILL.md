@@ -24,7 +24,7 @@ doing one of these:
 - **Naming a domain rule** — `isRefundable(order)` is a one-liner whose name is the documentation.
 - **Being shared** — two or more callers today, not one caller and a hope.
 - **Being a boundary** — a port, an adapter, the one place a third-party call is isolated
-  (`docs/theory/layers.md`).
+  (`docs/understand/layers.md`).
 
 Anything else is a candidate. The shapes, with the names the literature gives them:
 
@@ -132,7 +132,7 @@ KEEP reason codes — one per row, never "seems fine":
 - `boundary` — a port, an adapter, or the one wrapper around a third-party call.
 - `seam` — a test replaces it (`jest.mock`, an injected dependency) — cite the test.
 - `slot` — a self-registering extension point: `register*`, a registry entry.
-- `layout` — the module layout asks for the file: `docs/theory/modules.md#what-a-module-contains`.
+- `layout` — the module layout asks for the file: `docs/understand/modules.md#what-a-module-contains`.
 - `depth` — inlining would push nesting past `max-depth` or the caller past the comment caps.
 - `shared` — two or more references today (same file counts; a name passed to `.then` counts).
 - `door` — an exported getter, the one access to private module state: another file or a test

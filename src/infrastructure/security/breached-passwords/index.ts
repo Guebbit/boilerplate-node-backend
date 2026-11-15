@@ -11,7 +11,7 @@
  * Both fail OPEN — any failure accepts the password. Rung 3 (a strength meter) lives in the
  * paired frontend only, as advice rather than a gate; nothing here enforces it.
  *
- * See: docs/theory/defences/authentication.md
+ * See: docs/understand/defences/authentication.md
  */
 
 import { createHash } from 'node:crypto';

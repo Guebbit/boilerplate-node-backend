@@ -62,7 +62,7 @@ Rules:
 - A finding needs a citation. No citation, no finding.
 - `NOT-APPLICABLE` needs a reason too — silently skipping a rule is not allowed.
 - `tmp/reports/` is gitignored. These files are working evidence, not deliverables — the conclusions
-  belong in `docs/theory/data-protection.md`, a tracked issue, or a real fix commit.
+  belong in `docs/understand/data-protection.md`, a tracked issue, or a real fix commit.
 
 ## Reading the output
 

@@ -15,7 +15,7 @@ const headerLinesOf = (raw: string): string[] => raw.split('\n\n', 1)[0].split('
 
 /**
  * A learning test of a dependency we rely on: the contact form takes a visitor's subject as a
- * plain string and does no stripping of its own (docs/theory/defences/email.md). The stop for
+ * plain string and does no stripping of its own (docs/understand/defences/email.md). The stop for
  * header injection is nodemailer, so a bump that changed it must turn this red.
  */
 describe('a subject carrying a line break, through the real nodemailer', () => {

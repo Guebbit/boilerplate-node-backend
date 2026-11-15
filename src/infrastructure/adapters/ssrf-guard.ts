@@ -8,7 +8,7 @@
  * Infrastructure, not `domain/`: this module does DNS I/O.
  *
  * Ranges refused and why, `ipaddr.js`'s role, and what this guard deliberately leaves to its
- * caller (redirects, timeouts) — see docs/theory/defences/ssrf.md.
+ * caller (redirects, timeouts) — see docs/understand/defences/ssrf.md.
  */
 
 import { resolve4, resolve6 } from 'node:dns/promises';

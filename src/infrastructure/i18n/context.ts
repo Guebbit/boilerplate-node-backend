@@ -7,7 +7,7 @@
  * (queues, boot-time callbacks) falls outside that chain and must bind explicitly with
  * {@link runWithLocale}.
  *
- * See: docs/tools/i18n.md
+ * See: docs/understand/i18n.md
  */
 
 import { AsyncLocalStorage } from 'node:async_hooks';

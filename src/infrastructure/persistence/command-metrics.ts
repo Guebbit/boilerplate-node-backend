@@ -5,7 +5,7 @@
  * `Model.updateOne`, an aggregate — so nothing is counted twice and nothing is missed.
  * `GET /observability/metrics/overview` reads the histogram's `_count` by name.
  *
- * See: docs/tools/prometheus.md
+ * See: docs/operate/prometheus.md
  */
 
 import type { Connection, mongo } from 'mongoose';

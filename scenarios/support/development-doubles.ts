@@ -12,7 +12,7 @@
  * `cluster.fork()` hands `execArgv` to every worker, so a worker preloads this too.
  * https://nodejs.org/api/cluster.html#clustersettings
  *
- * See: docs/tools/test-doubles.md
+ * See: docs/build/test-doubles.md
  */
 
 // First, for its side effect: `.env` into `process.env`, and the config store told it did.

@@ -37,7 +37,7 @@ export const createUser = (
      * 422, never a column. `create` writes whatever it is handed, so a raw body here let an
      * operator set `verifiedAt`, `analyticsConsent` or an unencrypted `phone` straight onto the
      * document. `readInput` decodes the booleans a multipart body carries as strings — see
-     * docs/theory/request-input.md.
+     * docs/understand/request-input.md.
      */
     const body = parseBody(
         CreateUserBody.extend({ locale: wellFormedLocale(CreateUserBody.shape.locale) }),

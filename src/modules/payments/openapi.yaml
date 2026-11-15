@@ -756,7 +756,7 @@ paths:
                 # No adapter is installed under that provider name.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # Counts refused deliveries only, per address block; a verified one is refunded —
-                # see docs/tools/security.md#the-rate-limit-budgets.
+                # see docs/understand/security.md#the-rate-limit-budgets.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
 
 components:

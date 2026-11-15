@@ -11,7 +11,7 @@
  * caller working in JPY never multiplies by 100 where it should multiply by 1 — see Fowler's Money pattern, or Stripe's own "zero-decimal
  * currencies" table for the same rule under a different name.
  *
- * See `docs/theory/tactical-ddd.md` §3.
+ * See `docs/understand/tactical-ddd.md` §3.
  */
 
 /** Type-only brand: a `unique symbol` that exists for the compiler, never at runtime. */

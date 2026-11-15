@@ -29,7 +29,7 @@ info:
         Successes: a 2xx answers the resource itself, with no wrapper. A list is an object, never a
         top-level array: `{ items, meta }` when paged (`meta` is `PaginationMeta`), or a named key
         (`{ methods }`). An answer with nothing to say is `204` and has no body. A create is `201`
-        with a `Location` header. See `docs/api/responses.md`.
+        with a `Location` header. See `docs/reference/responses.md`.
 
         Errors: every 4xx and 5xx the application answers is RFC 9457 problem details as `application/problem+json`,
         whatever `Accept` says: `type` (always `about:blank`), `title` (the English status
@@ -329,7 +329,7 @@ components:
             # No `bearerFormat` — deliberately: `JWT` would claim a structure this credential
             # does not have. `sk_<prefix>_<secret>`, opaque, distinguished from a JWT by that
             # prefix alone (a JWT always begins `eyJ`). See
-            # docs/tools/security.md#machine-to-machine-credentials.
+            # docs/understand/security.md#machine-to-machine-credentials.
             description: An opaque `sk_...` machine-to-machine credential, minted via `POST /api-keys`.
         cookieAuth:
             type: apiKey
@@ -471,7 +471,7 @@ components:
                 items: { $ref: '#/components/schemas/Id' }
         # The delete flag, shared because every soft-deleting domain offers the same two
         # spellings: `/hard` in the path, `?hardDelete=true` in the query. OR'd, not ranked; a
-        # DELETE body is a 415 — see docs/theory/request-input.md. Declared once so a fourth
+        # DELETE body is a 415 — see docs/understand/request-input.md. Declared once so a fourth
         # domain cannot offer only one.
         HardDeleteParam:
             name: hardDelete
@@ -593,7 +593,7 @@ components:
                 syntax (`draft-ietf-httpapi-ratelimit-headers`):
                 `"global";q=100;w=60, "credentials-identity";q=10;w=900` is two budgets, each
                 allowing `q` requests per `w` seconds. One list item per budget the request passed,
-                named by the budget's `namespace` (the budget table in `docs/tools/security.md`).
+                named by the budget's `namespace` (the budget table in `docs/understand/security.md`).
                 Any response may carry it; no identifier of the caller is ever included.
             schema:
                 type: string
@@ -811,7 +811,7 @@ components:
 
     # `null` is a write verb. In a REQUEST it means "clear this" (PUT/PATCH only, only where `type`
     # lists 'null'). A RESPONSE never carries it: "no value" is the absent key.
-    # docs/api/write-methods.md#empty-null-omitted
+    # docs/understand/write-methods.md#empty-null-omitted
     schemas:
         # ---------- Shared — scalars and the entities more than one module references. ----------
         Page:
@@ -945,7 +945,7 @@ components:
             description: >-
                 Server-relative path to a small WebP derivative of `imageUrl`, produced by the
                 image digest pipeline once an uploaded image has finished processing (see
-                `docs/tools/image-processing.md`). Absent for a record whose image is a remote
+                `docs/understand/image-processing.md`). Absent for a record whose image is a remote
                 or default URL rather than an upload — there is nothing to derive a thumbnail
                 from. Never accepted on a request body: the server is the only writer.
 
@@ -1061,7 +1061,7 @@ components:
 
         # ---------- Domain ----------
 
-        # A success answers with the payload itself (see docs/api/responses.md): the schemas below
+        # A success answers with the payload itself (see docs/reference/responses.md): the schemas below
         # are the bodies of the 2xx responses.
 
         # The account as its OWN holder sees it: `/account`, the signup answer and the data export's
@@ -1691,7 +1691,7 @@ paths:
         $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}~1override-status'
 
     # ---------- invoicing ---------- (shares the `/orders` basePath with `orders` above, same as
-    # `addresses` sharing `/account` with `account` — see docs/api/contract-fragmentation.md)
+    # `addresses` sharing `/account` with `account` — see docs/build/contract-fragmentation.md)
     /orders/{id}/invoice:
         $ref: '../../src/modules/invoicing/openapi.yaml#/paths/~1orders~1{id}~1invoice'
     /orders/{id}/credit-notes:

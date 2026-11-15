@@ -6,7 +6,7 @@
  * into middleware by `buildRateLimiter` (`@infrastructure/http/middlewares/rate-limit`), the same
  * factory every other module's budgets go through.
  *
- * See: docs/tools/security.md#the-rate-limit-budgets
+ * See: docs/understand/security.md#the-rate-limit-budgets
  */
 
 import type { RequestHandler } from 'express';
@@ -57,7 +57,7 @@ const SUBMISSION_BLOCK_BUDGET: RateLimitBudget = {
  * identity and address-block. The form carries no identity beyond free text EXCEPT the sender's
  * own email, which `identityOf` reads exactly like the credential and signup budgets do.
  *
- * See: docs/tools/security.md#the-rate-limit-budgets
+ * See: docs/understand/security.md#the-rate-limit-budgets
  */
 export const contactLimiters: RequestHandler[] = [
     submissionLimiter,

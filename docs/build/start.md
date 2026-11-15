@@ -1,0 +1,50 @@
+# Build
+
+Run it locally, start a project, change a contract, test it, and the conventions every change follows.
+
+## Run it
+
+- [Getting Started](./run-locally.md)
+- [Start a New Project](./new-project.md)
+- [Docker & Podman](./docker-and-podman.md)
+- [Pairing & Ports](./pairing-and-ports.md)
+- [The demo profile](./demo-profile.md)
+- [The flow runner](./flow-runner.md)
+
+## Change it
+
+- [Adding & removing a module](./module-lifecycle.md)
+- [Module scaffolder](./module-scaffolder.md)
+- [API](./api-contracts.md)
+- [OpenAPI Workflow](./openapi-workflow.md)
+- [AsyncAPI Workflow](./asyncapi-workflow.md)
+- [Contract Ownership & Fragmentation](./contract-fragmentation.md)
+- [Regenerating After a Change](./regenerating.md)
+- [Versioning and Retiring an Endpoint](./versioning.md)
+
+## Test it
+
+- [Testing — Quick Start](./testing-quickstart.md)
+- [Testing & Docs](./testing-and-docs.md)
+- [Unit Testing](./unit-testing.md)
+- [Integration Testing](./integration-testing.md)
+- [Contract Testing (Response Shape)](./contract-testing.md)
+- [Contract-Derived Request Data](./contract-request-data.md)
+- [Spec-Driven Fuzzing](./fuzz-testing.md)
+- [Property-Based Testing](./property-testing.md)
+- [Concurrency Testing](./concurrency-testing.md)
+- [Broker testing](./broker-testing.md)
+- [Cluster testing](./cluster-testing.md)
+- [Load testing](./load-testing.md)
+- [Mutation Testing](./mutation-testing.md)
+- [Coverage & Confidence](./coverage-and-confidence.md)
+- [Test doubles](./test-doubles.md)
+- [Weak Machines](./weak-machines.md)
+
+## Conventions
+
+- [Writing These Docs](./documentation-style.md)
+- [Dependency Vetting](./dependency-vetting.md)
+- [Dependency graph](./dependency-graph.md)
+- [Pending Major Upgrades](./pending-major-upgrades.md)
+- [AI Auditing](./ai-auditing.md)

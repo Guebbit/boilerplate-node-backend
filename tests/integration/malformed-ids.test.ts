@@ -1,7 +1,7 @@
 /**
  * A malformed id has one answer per position, on every route the spec declares.
  *
- * The rule (`docs/theory/request-flow.md#a-malformed-id-has-one-answer-per-position`):
+ * The rule (`docs/understand/request-flow.md#a-malformed-id-has-one-answer-per-position`):
  *
  *   - an id in the URL path that is not this backend's own is the SAME 404 an unknown id gets;
  *   - an id in a body or a query that is not this backend's own is a 422 `VALIDATION_ERROR` whose

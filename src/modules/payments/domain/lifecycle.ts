@@ -13,7 +13,7 @@
  * of the conditional write that re-asserts it while mongod holds the document, and a `Set` would
  * need re-spreading for the second.
  *
- * See: docs/theory/tactical-ddd.md
+ * See: docs/understand/tactical-ddd.md
  */
 
 import { addMoney, subtractMoney, toMinorUnits, type Money } from '@domain-primitives/money';

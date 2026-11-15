@@ -1,7 +1,7 @@
 /**
  * @module
  * Ownership sweep, foundation half: another customer's id, in the URL or in the body, answers
- * exactly like an id that does not exist (`docs/theory/defences/authorization.md`, the IDOR row).
+ * exactly like an id that does not exist (`docs/understand/defences/authorization.md`, the IDOR row).
  *
  * Holds two things:
  *   completeness   every customer-reachable path, body and query id is in exactly one list of

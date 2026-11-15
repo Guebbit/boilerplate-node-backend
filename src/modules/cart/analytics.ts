@@ -7,7 +7,7 @@
  * map, same pattern as `./audit.ts` for audit actions, so the catalogue grows with the modules
  * that own their names.
  *
- * Naming rule: docs/tools/analytics.md#naming.
+ * Naming rule: docs/understand/analytics.md#naming.
  */
 
 /** The event names this module fires, keyed by intent. */

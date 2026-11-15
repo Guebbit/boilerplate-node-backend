@@ -3,7 +3,7 @@
  * The protection of people: an account that holds a staff role is changed only by a holder of
  * `assign:Role`, and a money step on one's own order is flagged in the audit trail.
  *
- * See: docs/theory/authorization.md#protecting-people
+ * See: docs/understand/authorization.md#protecting-people
  */
 
 import type { CallerContext } from '@types';

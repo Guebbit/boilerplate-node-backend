@@ -5,7 +5,7 @@
  * (`/:id/hard`) would otherwise be swallowed by `/:id`.
  *
  * `GET /orders/{id}/invoice` and `/credit-note` are NOT here: `invoicing` mounts its own router at
- * this same `/orders` basePath (see `docs/theory/layers.md`'s `account`/`addresses` precedent) and
+ * this same `/orders` basePath (see `docs/understand/layers.md`'s `account`/`addresses` precedent) and
  * owns both, since it owns what they read. Router order at the app tier still matters between the
  * two — see `invoicing/module.ts`.
  */

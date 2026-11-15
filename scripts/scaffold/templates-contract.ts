@@ -210,7 +210,7 @@ components:
                 meta:
                     $ref: '${ROOT}#/components/schemas/PaginationMeta'
 
-        # The ONE sort grammar, shared with every list (docs/api/sorting.md). A minus sorts
+        # The ONE sort grammar, shared with every list (docs/reference/sorting.md). A minus sorts
         # descending; earlier entries rank first.
         ${names.entity}Sort:
             type: array

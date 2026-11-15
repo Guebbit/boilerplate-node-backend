@@ -9,7 +9,7 @@
  * `jwt`:      the access/refresh pair.
  * Switching:  a session belongs to the mode that issued it; neither half crosses over.
  *
- * See: docs/theory/sessions.md
+ * See: docs/understand/sessions.md
  */
 
 import { api } from '@tests/http';

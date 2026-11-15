@@ -7,7 +7,7 @@
  * request is the forged one — and the probes (`/livez`, `/readyz`) are skipped by the global budget
  * before that check, so a container healthcheck never uses it up.
  *
- * See: docs/tools/security.md#trust-proxy-and-the-two-ways-to-get-it-wrong
+ * See: docs/understand/security.md#trust-proxy-and-the-two-ways-to-get-it-wrong
  */
 import { logger } from '@infrastructure/adapters/logger';
 import { api } from '@tests/http';

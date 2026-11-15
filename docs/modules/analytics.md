@@ -24,7 +24,7 @@ _Nothing reaches `analytics` and it reaches nothing — no imports either way, n
 search) answers most reads without reaching the application, so a `product_viewed` emitted by the
 server under-counts browsing, and by an amount nobody can measure. The page knows when it was shown.
 Business facts are the opposite case and stay on the server: see
-[Who sends which event](../tools/analytics.md#who-sends-which-event).
+[Who sends which event](../understand/analytics.md#who-sends-which-event).
 
 ```mermaid
 sequenceDiagram
@@ -50,7 +50,7 @@ whose `toReport` builds the provider event. The bundler assembles the shapes int
 `AnalyticsEventRequest` (a `oneOf` on `event`); the relay looks the body's `event` up in the registry
 (`resolveBrowserEvents`). Remove `products` and both halves go with it, with no edit here.
 `tests/cross-cutting/browser-events.test.ts` holds the two halves equal. See
-[Contract Fragmentation](../api/contract-fragmentation.md#module-owned-browser-events).
+[Contract Fragmentation](../build/contract-fragmentation.md#module-owned-browser-events).
 
 **The set is closed.** The body is one of two events, each with bounded fields, and anything else
 is a `422`. A cart, checkout, order, payment, signup or login event is never accepted: those are
@@ -61,6 +61,6 @@ without consent it does no work beyond parsing the body.
 
 ## Related pages
 
-- [Modules overview](./index.md) — the whole context map
-- [Product analytics](../tools/analytics.md) — the port, consent, and who sends which event
+- [Modules overview](./start.md) — the whole context map
+- [Product analytics](../understand/analytics.md) — the port, consent, and who sends which event
 - [products](./products.md) — declares the two events this relay carries

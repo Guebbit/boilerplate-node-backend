@@ -27,7 +27,7 @@ import type { OrderDocumentItem } from '../model';
  * Locale bind:   `runWithLocale` binds `locale` explicitly rather than reading the ambient one:
  *                order creation resolves the BUYER's stored or requested locale, which can differ
  *                from whatever the current request negotiated — out-of-band work must bind, not
- *                read ambient context. See `docs/tools/i18n.md`.
+ *                read ambient context. See `docs/understand/i18n.md`.
  *
  * @param locale - the language to resolve into, already known by the caller
  * @param products - the catalogue rows about to be embedded as order lines, already plain

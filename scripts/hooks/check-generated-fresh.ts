@@ -8,7 +8,7 @@
  * `shared/authorization-keys.generated.yaml`, `docker/crontab`, `docker/Dockerfile.dockerignore`, the tables
  * inside `docs/`). The core is `stale-generated-files.ts`.
  *
- * See: docs/api/regenerating.md#the-pre-commit-hook
+ * See: docs/build/regenerating.md#the-pre-commit-hook
  */
 
 import { execFileSync } from 'node:child_process';

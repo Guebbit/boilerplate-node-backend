@@ -29,7 +29,7 @@ Report path and file names: RULES.md rules 4 and 5. A `whole-repo` run: see the 
   slice.
 - **SYS** owns every source in the read list that belongs to no module: `shared/**`,
   `shared/contracts/*.root.yaml`, `asyncapi.workers.yaml`, `authorization-keys.core.yaml`,
-  `docs/theory/**/*.md`, `docs/api/*.md`, `docs/tools/*.md`. SYS reads them in full. A family slice
+  `docs/understand/**/*.md`, `docs/{build,understand,operate,reference}/*.md`. SYS reads them in full. A family slice
   searches them for its modules' names, subjects, route segments and error codes, the same way a
   module run does.
 - **Lead pass** first: grep the suite for every error code, event name and audit action the docs
@@ -54,12 +54,12 @@ From the contract and the docs, NOT from the implementation:
     Cite these. Never cite the generated root bundles (`openapi.yaml`, `asyncapi*.yaml` at the repo
     root): they are gitignored, so their line numbers point nowhere.
 
-- Docs: `docs/modules/<module>*.md`, `docs/theory/**/*.md` (including `defences/`),
-  `docs/api/*.md`, `docs/tools/*.md`.
-- Shared: `shared/rules/*.yaml`, `shared/cases/*.cases.yaml`. Layout: `docs/theory/shared-rules.md`
+- Docs: `docs/modules/<module>*.md`, `docs/understand/**/*.md` (including `defences/`),
+  `docs/{build,understand,operate,reference}/*.md`.
+- Shared: `shared/rules/*.yaml`, `shared/cases/*.cases.yaml`. Layout: `docs/understand/shared-rules.md`
   §3. A cases file counts as spec here, even though a test reads it.
 
-A module or path run reads its own docs and YAML in full. For `shared/**` and `docs/tools/*.md` it
+A module or path run reads its own docs and YAML in full. For `shared/**` and `docs/{build,understand,operate,reference}/*.md` it
 searches for the module name, its subjects, route segments and error codes, and reads only what
 matches. A `whole-repo` run: see the section above.
 

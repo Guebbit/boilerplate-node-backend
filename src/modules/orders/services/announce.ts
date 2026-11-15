@@ -3,7 +3,7 @@
  * The order events that ride the transactional outbox. Each status write hands one of these to
  * `announceInTransaction`, so the event row commits with the write or not at all.
  *
- * See: docs/tools/outbox.md
+ * See: docs/understand/outbox.md
  */
 
 import type { OutboxAnnouncement } from '@kernel/outbox';

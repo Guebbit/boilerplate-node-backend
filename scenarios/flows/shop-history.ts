@@ -10,7 +10,7 @@
  * ones, produced by the real code, and they stay right when that code changes.
  *
  * Runs ONCE per process — `scenarios/support/demo.ts` keeps the result in memory and replays it on every
- * restore. See: docs/tools/demo-profile.md
+ * restore. See: docs/build/demo-profile.md
  */
 
 import { seedCredentials } from '@scenarios/accounts';

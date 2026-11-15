@@ -243,7 +243,7 @@ before deciding what to do:
 
 The alarm **records** the fact and **pages**: the counter `inventory_commit_orphaned_total{stage}` rises
 with it, which fires the `PaidOrderWithoutHold` alert (severity `critical`, see
-[Prometheus](../tools/prometheus.md)). A human checks the stock and decides ship or refund. The payment's
+[Prometheus](../operate/prometheus.md)). A human checks the stock and decides ship or refund. The payment's
 own step also announces `inventory.hold_orphaned` in its transaction, which opens a `paid_without_hold`
 task for the warehouse ([tasks](./tasks.md#system-tasks)); it closes when the order is cancelled or
 ships. The shipping step alarms but opens no task: the goods already left.
@@ -333,7 +333,7 @@ moved: an operator recording cash or a transfer, a provider reference or webhook
 Refusing there would not un-pay anything, so they take the units again or refund, as above.
 
 When the retries are exhausted the row is `dead`, which the `OutboxEventsDead` alert already
-raises (see [Alert rules](../tools/prometheus.md#alert-rules) and [the outbox](../tools/outbox.md)).
+raises (see [Alert rules](../operate/prometheus.md#alert-rules) and [the outbox](../understand/outbox.md)).
 
 ## The ledger is half of the transition, not a reaction to it
 
@@ -412,4 +412,4 @@ slice parses the environment once per process: a changed variable takes effect o
 - [Checkout](./cart-checkout.md) — where a hold is taken
 - [`payments`](./payments.md) — where a hold becomes a sale
 - [`orders`](./orders.md) — the listener for `inventory.reservation_expired`
-- [Prometheus](../tools/prometheus.md) — the two gauges this module exports, and its orphaned-commit counter
+- [Prometheus](../operate/prometheus.md) — the two gauges this module exports, and its orphaned-commit counter

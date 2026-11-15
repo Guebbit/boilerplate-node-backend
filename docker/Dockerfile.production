@@ -200,7 +200,7 @@ EXPOSE 3000
 # The web process's own check, and only its: `GET /livez` (`app/system-routes.ts`) — liveness, never
 # a dependency, so a Mongo blip cannot restart a healthy container. A container that runs something
 # else (`cron`, `setup`) declares its own check or disables this one in compose.
-# See docs/tools/health-checks.md.
+# See docs/operate/health-checks.md.
 #
 # `start-period` covers the OTel SDK and the listen; the check itself never waits on Mongo.
 # Node's own fetch is used rather than curl or wget, so this adds nothing to the image.

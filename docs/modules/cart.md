@@ -126,7 +126,7 @@ so a line cannot read as fitting and then be refused at checkout.
 | **View**     | every answer that carries the cart | The line carries its `availability`; a client polling `GET /cart` learns it |
 
 **No number is ever disclosed.** The value says short, not how many are left: exact stock is for
-callers holding `read:StockLevel` ([Reading the shelf](../theory/defences/authorization.md)).
+callers holding `read:StockLevel` ([Reading the shelf](../understand/defences/authorization.md)).
 That is also why the merge never lowers a short line: lowering it to what is for sale would let
 anyone read the stock by merging 999.
 
@@ -301,7 +301,7 @@ Every rule this module declares and who holds it, role by role. The rule is what
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
 `src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../theory/authorization.md) explains the model.
+evaluator — [Authorization](../understand/authorization.md) explains the model.
 
 <!-- permissions:end -->
 
@@ -310,5 +310,5 @@ evaluator — [Authorization](../theory/authorization.md) explains the model.
 - [Checkout](./cart-checkout.md) — the flow, step by step
 - [`orders`](./orders.md) — what a checkout produces
 - [`inventory`](./inventory.md) — who holds the units while a checkout runs
-- [Redis Cache](../tools/redis-cache.md) — why the cart is not in it
-- [Strategic DDD](../theory/strategic-ddd.md) — reading a busy context map
+- [Redis Cache](../understand/redis-cache.md) — why the cart is not in it
+- [Strategic DDD](../understand/strategic-ddd.md) — reading a busy context map

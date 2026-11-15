@@ -587,7 +587,7 @@ components:
                     format: date-time
                     description: When the factor was armed.
 
-        # The ONE sort grammar, shared with every list (docs/api/sorting.md). `-` sorts
+        # The ONE sort grammar, shared with every list (docs/reference/sorting.md). `-` sorts
         # descending; earlier entries rank first; ties end on the id. Text fields sort
         # case-insensitively.
         UserSort:

@@ -14,7 +14,7 @@
  * does; an edit that changes nothing on the row stamps `updatedAt` by hand and moves it too. A counter, not `updatedAt`, because RFC 9110 §8.8.1 wants a strong validator to
  * change on every change — two edits in one millisecond share a timestamp but never a counter.
  *
- * See: docs/api/write-methods.md#what-the-tag-is
+ * See: docs/understand/write-methods.md#what-the-tag-is
  */
 
 import { Document, type Query, type Schema } from 'mongoose';

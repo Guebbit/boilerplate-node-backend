@@ -19,7 +19,7 @@
  * One ruler, one report, one baseline — `stryker.json` is the only config, so there is nothing here
  * to select between. The frontend has its own copy, same shape, for the same reason.
  *
- * See: docs/tools/mutation-testing.md#the-per-file-ratchet
+ * See: docs/build/mutation-testing.md#the-per-file-ratchet
  */
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';

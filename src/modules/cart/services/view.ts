@@ -33,7 +33,7 @@ import { shopCurrency } from '@modules/shop';
  * A cart line joined with the product it references.
  * `productId` and `product` are separate fields on purpose: {@link readCartLines} joins by a
  * separate `productService.findManyByIds` lookup rather than a Mongoose `populate()` — cart
- * reaches products through its service, not its collection (`docs/theory/strategic-ddd.md` §5) —
+ * reaches products through its service, not its collection (`docs/understand/strategic-ddd.md` §5) —
  * so the id it looked the product up by is kept alongside the result rather than overwritten.
  */
 export interface CartLine extends CartItem {

@@ -276,7 +276,7 @@ automatic cancel is an unpaid order timing out (the reservation expiry, in
   present afterwards. It stays `pending`, nobody is emailed, and the buyer can still pay it, by card
   or offline. A real problem with such an order is an admin's to cancel by hand. No event is emitted
   for hiding or taking off sale: nothing would listen.
-- `product.deleted` is written to the [outbox](../tools/outbox.md) in the transaction that deletes
+- `product.deleted` is written to the [outbox](../understand/outbox.md) in the transaction that deletes
   (soft or hard, `aggregateId` = the product), so it exists exactly when the delete committed and
   is retried until every subscriber has handled it. The cascade lands just after the response.
 - Only a delete pulls lines. `cart` and `wishlist` drop the line and announce whose lists held it,
@@ -314,7 +314,7 @@ input to that currency's minor unit. Read through `shopCurrency()`.
 A price may have no more decimal places than that currency's minor unit (ISO 4217, pinned in
 `domain-primitives/money.ts`): 19.999 EUR is a 422 on create, `PUT` and `PATCH`, because it would be
 stored as typed and charged as 20.00. The price is stored as a `Decimal128`
-([Money at rest](../theory/tactical-ddd.md#at-rest-decimal128)); the API still sends a plain number.
+([Money at rest](../understand/tactical-ddd.md#at-rest-decimal128)); the API still sends a plain number.
 
 ## Translated content
 
@@ -327,10 +327,10 @@ Every read resolves them onto the wire shape: `search()` and `getById()` in
 caller's negotiated language chain — exact tag, base language, then the deployment's fallback — over
 an already-serialized page in one batched query. The language is the one the API negotiated from
 `Accept-Language` among the languages that are switched on, a deployed file or a registered row
-([one language per request](../tools/i18n.md#one-language-per-request)), not the raw header; text in
+([one language per request](../understand/i18n.md#one-language-per-request)), not the raw header; text in
 a language that is switched off is never part of the chain, except a staff preview
 ([a draft language](./locales.md#a-draft-language)). See
-[Internationalisation](../tools/i18n.md#tier-3-user-authored-content) for the resolve/fallback path.
+[Internationalisation](../understand/i18n.md#tier-3-user-authored-content) for the resolve/fallback path.
 
 ::: warning The document's own `title`/`description` are a derived index column, not the wire shape
 `productSchema`'s `title`/`description` (`src/modules/products/model.ts`) exist only so Mongo has
@@ -380,7 +380,7 @@ buyer's own request.
 
 Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
 
-The client does not re-derive these: every `Product` carries `actions { update, delete, restore, hardDelete }`, the server's answer for the caller (`update` needs `update:Product` and `update:Translation`; `restore` also needs the product to be soft-deleted). A caller answered from the cache shared with guests gets all `false`; see [Capabilities](../theory/tactical-ddd.md#_2-capabilities-the-server-answers-what-a-client-may-do).
+The client does not re-derive these: every `Product` carries `actions { update, delete, restore, hardDelete }`, the server's answer for the caller (`update` needs `update:Product` and `update:Translation`; `restore` also needs the product to be soft-deleted). A caller answered from the cache shared with guests gets all `false`; see [Capabilities](../understand/tactical-ddd.md#_2-capabilities-the-server-answers-what-a-client-may-do).
 
 <!-- permissions:start -->
 
@@ -395,16 +395,16 @@ The client does not re-derive these: every `Product` carries `actions { update, 
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
 `src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../theory/authorization.md) explains the model.
+evaluator — [Authorization](../understand/authorization.md) explains the model.
 
 <!-- permissions:end -->
 
 ## Related pages
 
-- [Modules overview](./index.md) — the whole context map
+- [Modules overview](./start.md) — the whole context map
 - [`locales`](./locales.md) — the `translations` collection and its own admin door
-- [Internationalisation](../tools/i18n.md) — the resolve/fallback mechanism translated content runs on
-- [MongoDB & Mongoose](../tools/mongodb-mongoose.md) — what a repository and a model are
-- [Strategic DDD](../theory/strategic-ddd.md) — why `conformist` is the label on the `cart → products` arrow, the one this module's pages document
-- [Events & Logging](../tools/events-and-logging.md) — the bus `product.deleted` travels on
-- [Contract Ownership & Fragmentation](../api/contract-fragmentation.md) — how this module's `openapi.yaml` reaches the root document
+- [Internationalisation](../understand/i18n.md) — the resolve/fallback mechanism translated content runs on
+- [MongoDB & Mongoose](../understand/mongodb-mongoose.md) — what a repository and a model are
+- [Strategic DDD](../understand/strategic-ddd.md) — why `conformist` is the label on the `cart → products` arrow, the one this module's pages document
+- [Events & Logging](../understand/events-and-logging.md) — the bus `product.deleted` travels on
+- [Contract Ownership & Fragmentation](../build/contract-fragmentation.md) — how this module's `openapi.yaml` reaches the root document

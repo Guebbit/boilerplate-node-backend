@@ -980,7 +980,7 @@ describe('a reconnect gets its consumers back', () => {
 });
 
 /**
- * Rule 1 (`queue.ts`'s own doc, from `docs/tools/rabbitmq.md`): don't wait for RabbitMQ at boot.
+ * Rule 1 (`queue.ts`'s own doc, from `docs/understand/rabbitmq.md`): don't wait for RabbitMQ at boot.
  * With recovery on, amqplib's own `connect()` promise settles only once the broker actually
  * answers, retrying forever underneath — so `startQueue` must never await it, or a broker that is
  * merely still starting would stop the app booting at all.

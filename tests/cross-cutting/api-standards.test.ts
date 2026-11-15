@@ -7,8 +7,8 @@
  *
  * | Rule | Where it is written |
  * | --- | --- |
- * | A resource with a lifecycle `status` publishes a required `actions` | docs/theory/tactical-ddd.md |
- * | A 409 refusal carries a code the contract lists | docs/api/write-methods.md |
+ * | A resource with a lifecycle `status` publishes a required `actions` | docs/understand/tactical-ddd.md |
+ * | A 409 refusal carries a code the contract lists | docs/understand/write-methods.md |
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';

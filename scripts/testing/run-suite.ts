@@ -27,7 +27,7 @@
  * written down instead of copied into `package.json`. It still bounds the workers, unless the
  * caller passed `--runInBand` or `--maxWorkers` itself.
  *
- * See: docs/tools/weak-machines.md
+ * See: docs/build/weak-machines.md
  */
 
 import { spawn, spawnSync } from 'node:child_process';

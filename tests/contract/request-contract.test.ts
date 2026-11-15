@@ -26,7 +26,7 @@
  *     (`zodProductCreateSchema`) and never replaces a field.
  *   - **Coercion running before validation** hides a wrong type from the check that would reject
  *     it. `!!request.body.active` and `coerceStringArray(...)` run only for `multipart/form-data`,
- *     the one transport that needs them — see `readInput` and `docs/theory/request-input.md`.
+ *     the one transport that needs them — see `readInput` and `docs/understand/request-input.md`.
  *   - **Validating a subset of a schema** lets an unchecked field reach Mongoose and throw a
  *     CastError, answering 500 where the contract promises 422. A controller parses the whole
  *     generated body, not a `.pick()` of it.
@@ -316,7 +316,7 @@ const NEEDS_STATE_OR_SIGNATURE: Record<string, string> = {
 /**
  * `operationId::field` pairs where a wrong-typed value is accepted on purpose: `readInput`
  * coerces `category` and `tag` to a one-element array because the same schema serves the GET
- * query string, where everything is text (`docs/theory/request-input.md`).
+ * query string, where everything is text (`docs/understand/request-input.md`).
  */
 const ACCEPTS_ANY_TYPE = new Set(['searchProducts::category', 'searchProducts::tag']);
 

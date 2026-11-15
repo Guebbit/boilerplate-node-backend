@@ -1,6 +1,6 @@
 /**
  * `findAll` with no `limit` stops at 1000 rows: the backstop against an unbounded collection scan
- * (docs/theory/defences/denial-of-service.md). Paging goes through `search`; this is what a
+ * (docs/understand/defences/denial-of-service.md). Paging goes through `search`; this is what a
  * caller that forgot to page still gets. A scratch model, so the property is the factory's, not
  * any one module's.
  */

@@ -46,18 +46,18 @@ Read ONLY, for everything in scope:
   `shared/contracts/*.root.yaml` and `asyncapi.workers.yaml`. Cite these, never the generated root
   bundles. Plus every other YAML in `src/modules/<module>/`: `rules.yaml`, `authorization.yaml`,
   `module.yaml`.
-- Docs: `docs/modules/<module>*.md`, `docs/theory/**/*.md` (including `defences/`),
-  `docs/api/*.md`, `docs/tools/*.md`.
+- Docs: `docs/modules/<module>*.md`, `docs/understand/**/*.md` (including `defences/`),
+  `docs/{build,understand,operate,reference}/*.md`.
 - Shared: `shared/rules/*.yaml`, `shared/cases/*.cases.yaml`,
   `shared/authorization-{roles,conformance}.yaml`, `shared/contracts/authorization-keys.core.yaml`.
-  Layout: `docs/theory/shared-rules.md` §3.
+  Layout: `docs/understand/shared-rules.md` §3.
 
 Do NOT open the implementation (except the YAML files listed above) and do NOT open the test
 files yet.
 
 Under `whole-repo`, each slice follows the module rule; the system slice reads `shared/**`,
-`docs/theory/defences/` and the `docs/tools/*.md` pages that state rules in full. A module or path
-run reads its own docs and YAML in full and searches `shared/**` and `docs/tools/*.md` for scope
+`docs/understand/defences/` and the `docs/{build,understand,operate,reference}/*.md` pages that state rules in full. A module or path
+run reads its own docs and YAML in full and searches `shared/**` and `docs/{build,understand,operate,reference}/*.md` for scope
 terms.
 
 A cases or conformance file counts as spec here, even though a test reads it. Where two spec files
@@ -156,7 +156,7 @@ the individual mismatches.
 
 ## Priors worth using
 
-- `tmp/reports/mutation/mutation.json`, see `docs/tools/mutation-testing.md#which-file-is-what`.
+- `tmp/reports/mutation/mutation.json`, see `docs/build/mutation-testing.md#which-file-is-what`.
   A surviving mutant on a line whose rule the docs state explicitly is a strong candidate. Use it to
   order the work, never as a finding on its own. Never read `stryker-incremental.json`: it is
   Stryker's cache, not a result. Other `tmp/reports/mutation*/**/mutation.json` files: same

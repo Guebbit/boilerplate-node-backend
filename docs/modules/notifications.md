@@ -151,7 +151,7 @@ flowchart LR
   `notifications.staff.task-assigned` (bell only, the assignee alone) and
   `notifications.staff.outbox-dead` (bell only, administrators: the kernel's `outbox.event_dead`
   fact, a plain emit because an outbox row about the outbox could itself die). The four task events
-  reach `notifications` through the [outbox](../tools/outbox.md), so a failing handler is retried;
+  reach `notifications` through the [outbox](../understand/outbox.md), so a failing handler is retried;
   each handler dedupes on its key (`task-opened:<id>` and so on).
 - **The shop's codes.** `shop-tasks.staff.*` register their own route with each call, so the table
   above is not theirs: see [shop-tasks](./shop-tasks.md#the-notices) for their sets and mail class.
@@ -196,7 +196,7 @@ A summary row's params carry `work`, the filtered list path the bell opens.
   Held streams are capped per account and per process (`NODE_SSE_MAX_STREAMS_PER_USER`,
   `NODE_SSE_MAX_STREAMS`): the extra tab is refused with 429 (or 503 when the process is full) and
   `Retry-After`, and still sees new items on its next fetch. See
-  [denial of service](../theory/defences/denial-of-service.md).
+  [denial of service](../understand/defences/denial-of-service.md).
 
 ## Personal data
 
@@ -219,4 +219,4 @@ hard-delete transaction). A staff member's work notices are exported as a kind a
 - [`tasks`](./tasks.md) — `task.opened`, `task.overdue` and `task.assigned`
 - [`webhooks`](./webhooks.md) — `webhook.subscription_auto_disabled`
 - [Observability](./observability.md) — the SSE stream this one follows
-- [Events & Logging](../tools/events-and-logging.md) — why events, and what the bus does not promise
+- [Events & Logging](../understand/events-and-logging.md) — why events, and what the bus does not promise

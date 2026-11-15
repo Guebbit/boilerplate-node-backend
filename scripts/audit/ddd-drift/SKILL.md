@@ -55,15 +55,15 @@ its owner, or a doc contradicts the code · **LOW** placement or wording.
 | D4  | Fake or misplaced domain            | a `domain.ts` _file_ (every domain guard keys on the `domain/` _folder_), or a domain file holding no rule                                                                                             | —                                                                                                                                                                                                | MED                                                 |
 | D5  | Pure rule outside `domain/`         | an import-pure file with two or more callers, or a trap, sits in `session/`, `services/`…                                                                                                              | it is a config constant, an event/audit/analytics catalogue, a port, or a third-party wrapper                                                                                                    | LOW                                                 |
 | D6  | Label vs depth                      | a subdomain label disagrees with the logic's complexity, or two theory pages disagree on what a label implies                                                                                          | —                                                                                                                                                                                                | MED if two pages contradict; LOW per label          |
-| D7  | Shared-kernel or friend growth      | a friend file with no why in its header; a second shared-kernel edge; a one-caller write door left unrestricted                                                                                        | the friend file's header says why that module is the friend; a shared-kernel edge is argued in `docs/theory/strategic-ddd.md` §5                                                                 | MED                                                 |
-| D8  | Anemic or bloated services          | a branch that clears the `docs/theory/domain-layer.md` floor sits inline in a service, worst when it is copied                                                                                         | it is a transaction, a side-effect order, or a one-off with no trap                                                                                                                              | MED if copied; LOW otherwise                        |
+| D7  | Shared-kernel or friend growth      | a friend file with no why in its header; a second shared-kernel edge; a one-caller write door left unrestricted                                                                                        | the friend file's header says why that module is the friend; a shared-kernel edge is argued in `docs/understand/strategic-ddd.md` §5                                                             | MED                                                 |
+| D8  | Anemic or bloated services          | a branch that clears the `docs/understand/domain-layer.md` floor sits inline in a service, worst when it is copied                                                                                     | it is a transaction, a side-effect order, or a one-off with no trap                                                                                                                              | MED if copied; LOW otherwise                        |
 | C1  | A client control with no capability | a write door refuses on a state or role rule (a 409 or 403 code) for a control a client offers, and the resource's `*Actions` has no flag for it; or the flag and the door compute the rule separately | the refusal is a race (a lost conditional write), or is about the caller's account, not the resource (a purchase hold, the open-order limit), or the flag exists and shares the door's predicate | MED; HIGH if the flag and the door already disagree |
 
 C1 mirrors the frontend audit's F2 (`../boilerplate-vue-frontend/scripts/audit/ddd-drift/SKILL.md`):
 one rule seen from each side. An FE ROUTE is the input to this class; the claim is
-`docs/theory/tactical-ddd.md` §2 ("the server sends the answer", "one function, three doors").
+`docs/understand/tactical-ddd.md` §2 ("the server sends the answer", "one function, three doors").
 
-D6 is judged against the standard in `docs/theory/strategic-ddd.md` §4: the label sets how much
+D6 is judged against the standard in `docs/understand/strategic-ddd.md` §4: the label sets how much
 modelling a module earns, the complexity of its logic picks the pattern, and a pure rule goes in
 `domain/` whatever the label. If that page and `domain-layer.md` disagree, that is itself a D6 finding.
 
@@ -71,11 +71,11 @@ modelling a module earns, the complexity of its logic picks the pattern, and a p
 
 ### 1 — claims first, with the code closed
 
-Read `docs/theory/{strategic-ddd,tactical-ddd,domain-layer,modules,module-lifecycle}.md`, the
+Read `docs/understand/{strategic-ddd,tactical-ddd,domain-layer,modules,module-lifecycle}.md`, the
 in-scope `docs/modules/<module>.md`, the `module.ts` docblocks and the `module.yaml` comments.
 **A `whole-repo` run.** The module pages do not fit one reader. Before you read a page, name the
 slices at the top of `whole-repo.claims.md`: clusters of related modules (sub-pages go with their
-module; `docs/modules/index.md` is read with the theory pages), sized so one reader finishes a slice
+module; `docs/modules/start.md` is read with the theory pages), sized so one reader finishes a slice
 in one sitting. Read the theory pages once, yourself.
 
 - Pass 1, per slice: a fresh read-only helper reads that slice's `docs/modules/*.md`, `module.ts`
@@ -99,7 +99,7 @@ table before you open any code, so the code cannot talk you into the doc's versi
 
 ```bash
 # D1 — counts and "only" claims in prose
-rg -n "\b(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|[0-9]+) (modules|callers|reasons|states|edges|functions|places|transitions|counters|events|members|doors|moves)\b|\bthe only\b|\bthe one\b|\bonly \`" docs/theory docs/modules src/modules/*/module.ts .dependency-cruiser.cjs scripts/docs
+rg -n "\b(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|[0-9]+) (modules|callers|reasons|states|edges|functions|places|transitions|counters|events|members|doors|moves)\b|\bthe only\b|\bthe one\b|\bonly \`" docs/understand docs/modules src/modules/*/module.ts .dependency-cruiser.cjs scripts/docs
 
 # D2 — owners that publish a transition table, then who outside them reads it
 rg -ln "_EVENTS|_STATUSES|_FROM\b|canTransition|defineLifecycle" src/modules/*/domain
@@ -151,7 +151,7 @@ correctly outgrew is a doc fix, not a code fix. The smallest fix is prose, never
 
 A `whole-repo` run on commit `20ac75dd5` reports at least: C1 Product restore / hardDelete (as drift or
 DELIBERATE, per §2), D2 `delivery/services/progress.ts` `settleOrder`, D8 the reopen branch written
-twice (`lost.ts`, `reship.ts`), D1 `docs/theory/modules.md` payments → inventory. Calibrate by running
+twice (`lost.ts`, `reship.ts`), D1 `docs/understand/modules.md` payments → inventory. Calibrate by running
 on that commit (a worktree), not on main: later commits fix these. If a run finds none of them, it
 was too loose.
 

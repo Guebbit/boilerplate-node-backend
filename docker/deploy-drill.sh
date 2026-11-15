@@ -6,7 +6,7 @@
 #   3. deploy a second good image, then `--rollback`: the first image runs again ("rollback")
 # The client has generated secrets and lives under `clients/` (gitignored); the stack, its volumes,
 # the drill images and the client directory are all removed at the end, whatever happened.
-# Run it: `npm run deploy:drill`. Docs: docs/tools/deploy-and-rollback.md#the-drill
+# Run it: `npm run deploy:drill`. Docs: docs/operate/deploy-and-rollback.md#the-drill
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

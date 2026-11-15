@@ -59,7 +59,7 @@ Output goes to `tmp/reports/audit-<run>/api-http/<SCOPE>…`. `<run>` and `<SCOP
 
 1. Read the root `openapi.yaml` (the bundle) and state its mtime in the report. Do NOT bundle it:
    the audit reads what a client reads. If it is missing, stop and say so.
-2. Read the "Where we differ, and why" section of `docs/theory/api-standards.md`. A rule whose
+2. Read the "Where we differ, and why" section of `docs/understand/api-standards.md`. A rule whose
    `difference` names a row there gets the verdict `KNOWN-DIFFERENCE` when the difference is what
    you found, with the row `id`.
 3. Read the rules of your part(s) in `scripts/audit/api-standards.yaml`. Open each `source` and
@@ -173,7 +173,7 @@ Output goes to `tmp/reports/audit-<run>/api-http/<SCOPE>…`. `<run>` and `<SCOP
           `src/infrastructure/http/preconditions.ts`. 431 comes from Node itself
           (`src/infrastructure/runtime/server-lifecycle.ts`, plain `app.listen`)
     - Part B: start from `src/infrastructure/http/middlewares/cache.ts` and
-      `docs/theory/defences/http-and-caches.md`, then walk the GETs. `rfc9110-conditional-requests`:
+      `docs/understand/defences/http-and-caches.md`, then walk the GETs. `rfc9110-conditional-requests`:
       every operation on a resource that sends an `ETag` (reads for `If-None-Match`, writes for
       `If-Match`)
     - Part C:
@@ -183,9 +183,9 @@ Output goes to `tmp/reports/audit-<run>/api-http/<SCOPE>…`. `<run>` and `<SCOP
         - `rfc7396-*`: the `patch` operations that declare `application/merge-patch+json`; read the
           service of each
         - `idempotency-key-*`: every POST or PATCH. The house rule
-          (`docs/api/write-methods.md#retrying-a-post`): one whose repeat would write again accepts
+          (`docs/understand/write-methods.md#retrying-a-post`): one whose repeat would write again accepts
           an optional key, and one whose repeat would move money or stock twice (the do-not-retry class) requires it. The rest sit in a
-          class of `docs/tools/idempotency.md` "Named exceptions". A write in neither is a finding.
+          class of `docs/understand/idempotency.md` "Named exceptions". A write in neither is a finding.
           `idempotency-key-missing-400` is guarded: the request-contract case "every operation that
           requires an Idempotency-Key" (`tests/contract/request-contract.test.ts`) sends none to each
           operation the spec marks with the required header; skip the 400 itself and check only that
@@ -270,7 +270,7 @@ a 429 found in both A and D into one row, and write the one worst-first list. Ke
 
 No citation, no finding: an absence claim names the grep that found
 nothing. Three real violations over thirty maybes. The report is disposable; see
-`docs/tools/ai-auditing.md`.
+`docs/build/ai-auditing.md`.
 
 ### Outside the rules
 

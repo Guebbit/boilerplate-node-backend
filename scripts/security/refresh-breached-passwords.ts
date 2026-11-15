@@ -14,7 +14,7 @@
  * Re-run it whenever `PasswordNew`'s pattern changes — nothing else notices that the list has
  * silently under-blocked in the meantime.
  *
- * See: docs/theory/defences/authentication.md
+ * See: docs/understand/defences/authentication.md
  */
 import '@infrastructure/config/dotenv';
 import { readFileSync, writeFileSync } from 'node:fs';

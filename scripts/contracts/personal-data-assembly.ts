@@ -15,7 +15,7 @@
  *
  * Pure: takes text and declarations, returns text. The caller owns the disk.
  *
- * See: docs/api/contract-fragmentation.md
+ * See: docs/build/contract-fragmentation.md
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';

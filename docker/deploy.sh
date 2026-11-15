@@ -19,7 +19,7 @@
 #
 # Why we poll instead of `up --wait`: podman-compose 1.6 accepts `--wait` but exits 0 for a
 # container that crashed or went unhealthy (verified), so health is read from `inspect` here.
-# Design and runbook: docs/tools/deploy-and-rollback.md
+# Design and runbook: docs/operate/deploy-and-rollback.md
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

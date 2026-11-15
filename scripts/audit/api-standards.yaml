@@ -20,13 +20,13 @@
 #   lint        possible = a mechanical finding is REPORTED only, never turned into a Spectral rule.
 #               no = judgement only.
 #   difference  null, an id or a list of ids: rows of "Where we differ" in
-#               docs/theory/api-standards.md. A known difference is reported as
+#               docs/understand/api-standards.md. A known difference is reported as
 #               KNOWN-DIFFERENCE, not as a violation.
 #
 # Rules that Spectral or a test already guards are NOT here: the audits name those guards in
 # their own SKILL.md and skip them. Budget: 3-6 rules for Google AIP and Zalando, 2-4 for an RFC, up to 7 for idempotency-key (no
 # Spectral rule or test guards its clauses).
-# Theory and the list of differences: docs/theory/api-standards.md.
+# Theory and the list of differences: docs/understand/api-standards.md.
 version: 1
 
 rules:
@@ -56,13 +56,13 @@ rules:
       standard: rfc9110
       section: methods
       rule: 'Content received in a DELETE has no defined semantics and cannot alter the meaning or target of the request; a client SHOULD NOT send it; a success SHOULD be 202, 204 or 200 (§9.3.5).'
-      house: A DELETE body is refused with 415, and a repeat writes nothing. With nothing left to remove, the answer is 404 when the URI names one thing that no longer answers a GET. It is the same success when that thing still answers a GET marked deleted or revoked, or when the URI names a collection or a pending request (docs/api/write-methods.md#delete-—-remove).
+      house: A DELETE body is refused with 415, and a repeat writes nothing. With nothing left to remove, the answer is 404 when the URI names one thing that no longer answers a GET. It is the same success when that thing still answers a GET marked deleted or revoked, or when the URI names a collection or a pending request (docs/understand/write-methods.md#delete-—-remove).
       source: https://www.rfc-editor.org/rfc/rfc9110#section-9.3.5
       evidence:
           [
               openapi.yaml paths.*.delete.requestBody,
               src/infrastructure/http/request.ts,
-              docs/api/write-methods.md#delete-—-remove
+              docs/understand/write-methods.md#delete-—-remove
           ]
       lint: possible
       difference: null
@@ -71,7 +71,7 @@ rules:
       standard: rfc9110
       section: status codes
       rule: '201 means one or more new resources were created; `Location`, or else the target URI, identifies the primary one (§15.3.2). A POST that creates a resource SHOULD answer 201 with a `Location` naming it (§9.3.3).'
-      house: 'An action answers 200 with the thing acted on, even when it creates records on the side (docs/api/write-methods.md#action-→-200).'
+      house: 'An action answers 200 with the thing acted on, even when it creates records on the side (docs/understand/write-methods.md#action-→-200).'
       source:
           [
               https://www.rfc-editor.org/rfc/rfc9110#section-15.3.2,
@@ -80,7 +80,7 @@ rules:
       evidence:
           [
               openapi.yaml paths.*.post.responses,
-              docs/api/write-methods.md#create-→-201,
+              docs/understand/write-methods.md#create-→-201,
               tests/support/spec-walk.ts
           ]
       lint: no
@@ -90,7 +90,7 @@ rules:
       standard: rfc9110
       section: conditional requests
       rule: An origin server that receives `If-Match` MUST evaluate it before performing the method, using the strong comparison (§13.1.1), and one that receives `If-None-Match` on a request that selects a representation MUST evaluate it, answering a GET or HEAD whose tag matches with 304 (§13.1.2).
-      house: Every read the contract declares a `304` on (`x-cache` other than `no-store`) sends an `ETag` (RFC 9110 §8.8.3 SHOULD), the two-part `"<editRevision>.<digest>"` one on a versioned item read, and the versioned-resources table lists exactly the `x-versioned` paths (docs/api/write-methods.md#conditional-writes-etag-and-if-match). A PUT answer carries no validator (§9.3.4).
+      house: Every read the contract declares a `304` on (`x-cache` other than `no-store`) sends an `ETag` (RFC 9110 §8.8.3 SHOULD), the two-part `"<editRevision>.<digest>"` one on a versioned item read, and the versioned-resources table lists exactly the `x-versioned` paths (docs/understand/write-methods.md#conditional-writes-etag-and-if-match). A PUT answer carries no validator (§9.3.4).
       source:
           [
               https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1,
@@ -99,7 +99,7 @@ rules:
           ]
       evidence:
           [
-              docs/api/write-methods.md#which-resources-are-versioned,
+              docs/understand/write-methods.md#which-resources-are-versioned,
               scripts/contracts/openapi-bundle.ts,
               src/infrastructure/http/preconditions.ts,
               src/infrastructure/persistence/versioning.ts,
@@ -114,14 +114,14 @@ rules:
       standard: rfc9111
       section: cache-control
       rule: 'An error a cache could otherwise reuse (heuristically cacheable, RFC 9110 §15.1) carries `Cache-Control`; with `no-store` a cache MUST NOT store any part of it.'
-      house: 'Every error answer is `no-store`, on every route (docs/api/errors.md, "Headers on an error").'
+      house: 'Every error answer is `no-store`, on every route (docs/reference/errors.md, "Headers on an error").'
       source: https://www.rfc-editor.org/rfc/rfc9111#section-5.2.2.5
       evidence:
           [
               src/infrastructure/http/response.ts,
               src/app/routes.ts,
               src/infrastructure/http/middlewares/cache.ts,
-              docs/api/errors.md
+              docs/reference/errors.md
           ]
       lint: possible
       difference: null
@@ -130,7 +130,7 @@ rules:
       standard: rfc9111
       section: sensitive information
       rule: 'An answer meant for one recipient (it depends on the caller, or it carries `Set-Cookie`, which alone does not stop caching) carries `Cache-Control` that keeps shared caches from storing it; `private` means a shared cache MUST NOT store it.'
-      house: 'Such an answer is never `public`; it is `private` or `no-store` (docs/tools/redis-cache.md#response-headers).'
+      house: 'Such an answer is never `public`; it is `private` or `no-store` (docs/understand/redis-cache.md#response-headers).'
       source:
           [
               https://www.rfc-editor.org/rfc/rfc9111#section-7.3,
@@ -144,8 +144,8 @@ rules:
               src/modules/account/routes.ts,
               src/modules/account/session/cookies.ts,
               src/modules/account/oauth,
-              docs/tools/redis-cache.md#response-headers,
-              docs/theory/defences/http-and-caches.md
+              docs/understand/redis-cache.md#response-headers,
+              docs/understand/defences/http-and-caches.md
           ]
       lint: no
       difference: null
@@ -154,7 +154,7 @@ rules:
       standard: rfc9111
       section: freshness
       rule: 'A cache MUST NOT reuse a stored response for a request whose `Vary`-selected headers differ, so an answer that varies names what varies it in `Vary` (§4.1).'
-      house: 'Every GET declares its cache answer, and `Cookie` is in `Vary` where a cookie can pick the caller (docs/theory/defences/http-and-caches.md#caches).'
+      house: 'Every GET declares its cache answer, and `Cookie` is in `Vary` where a cookie can pick the caller (docs/understand/defences/http-and-caches.md#caches).'
       source: https://www.rfc-editor.org/rfc/rfc9111#section-4.1
       evidence:
           [
@@ -178,7 +178,7 @@ rules:
           [
               src/infrastructure/http/middlewares/cache.ts,
               src/infrastructure/http/preconditions.ts,
-              docs/api/write-methods.md#conditional-writes-etag-and-if-match
+              docs/understand/write-methods.md#conditional-writes-etag-and-if-match
           ]
       lint: no
       difference: null
@@ -188,13 +188,13 @@ rules:
       standard: rfc9457
       section: problem details object
       rule: 'A problem details document is served as `application/problem+json` (§3).'
-      house: 'Every runtime error answer is built by `rejectResponse` and is a problem; a deliberate exception is declared `x-not-problem` (docs/api/errors.md#outside-the-json-api).'
+      house: 'Every runtime error answer is built by `rejectResponse` and is a problem; a deliberate exception is declared `x-not-problem` (docs/reference/errors.md#outside-the-json-api).'
       source: https://www.rfc-editor.org/rfc/rfc9457#section-3
       evidence:
           [
               src/infrastructure/http/response.ts,
               src/infrastructure/http/errors.ts,
-              docs/api/errors.md#outside-the-json-api
+              docs/reference/errors.md#outside-the-json-api
           ]
       lint: no
       difference: [metrics-text-plain, probe-empty-503, server-parser-bare-errors]
@@ -203,9 +203,9 @@ rules:
       standard: rfc9457
       section: members
       rule: 'A generator MUST use the same status code in the HTTP response as in `status` (§3.1.2), and `title` SHOULD NOT change from occurrence to occurrence of a problem (§3.1.3).'
-      house: '`title` is the status phrase and `instance` is never a URL that carries a secret (docs/api/errors.md#problem-details).'
+      house: '`title` is the status phrase and `instance` is never a URL that carries a secret (docs/reference/errors.md#problem-details).'
       source: https://www.rfc-editor.org/rfc/rfc9457#section-3.1
-      evidence: [src/infrastructure/http/response.ts, docs/api/errors.md#problem-details]
+      evidence: [src/infrastructure/http/response.ts, docs/reference/errors.md#problem-details]
       lint: no
       difference: null
 
@@ -213,9 +213,10 @@ rules:
       standard: rfc9457
       section: extension members
       rule: 'A problem type MAY define extension members, and a client MUST ignore the ones it does not recognize (§3.2).'
-      house: "The `errors` extension is never empty, and every code with no `scope` in the catalogue is in the operation's `x-error-codes` under its status (docs/api/errors.md#the-errors-extension)."
+      house: "The `errors` extension is never empty, and every code with no `scope` in the catalogue is in the operation's `x-error-codes` under its status (docs/reference/errors.md#the-errors-extension)."
       source: https://www.rfc-editor.org/rfc/rfc9457#section-3.2
-      evidence: [openapi.yaml paths.*.*.x-error-codes, docs/api/errors.md#the-errors-extension]
+      evidence:
+          [openapi.yaml paths.*.*.x-error-codes, docs/reference/errors.md#the-errors-extension]
       lint: possible
       difference: closed-problem-schema
 
@@ -224,7 +225,7 @@ rules:
       section: type
       rule: '`type` is `about:blank` only when the problem has no semantics beyond its HTTP status, and its `title` SHOULD then be the status phrase; otherwise a problem type URI (§4.2.1).'
       source: https://www.rfc-editor.org/rfc/rfc9457#section-4.2.1
-      evidence: [src/infrastructure/http/response.ts, docs/api/errors.md#problem-details]
+      evidence: [src/infrastructure/http/response.ts, docs/reference/errors.md#problem-details]
       lint: no
       difference: about-blank-with-codes
 
@@ -238,7 +239,7 @@ rules:
           [
               openapi.yaml paths.*.patch,
               openapi.yaml paths.*.put,
-              docs/api/write-methods.md#put-—-replace
+              docs/understand/write-methods.md#put-—-replace
           ]
       lint: no
       difference: null
@@ -261,14 +262,14 @@ rules:
       standard: rfc5789
       section: advertising support in OPTIONS
       rule: An OPTIONS on a resource that supports PATCH SHOULD answer Accept-Patch, listing the media types its PATCH declares (§3.1).
-      house: Every `Allow` (the OPTIONS 204 and every 405) lists `OPTIONS` itself, computed by the one `allowedMethods` function (RFC 9110 §15.5.6 SHOULD list what the resource supports). Express's own `Allow` leaves it out (docs/api/write-methods.md#a-known-path-with-the-wrong-method).
+      house: Every `Allow` (the OPTIONS 204 and every 405) lists `OPTIONS` itself, computed by the one `allowedMethods` function (RFC 9110 §15.5.6 SHOULD list what the resource supports). Express's own `Allow` leaves it out (docs/understand/write-methods.md#a-known-path-with-the-wrong-method).
       source: https://www.rfc-editor.org/rfc/rfc5789#section-3.1
       evidence:
           [
               src/app/security.ts,
               src/infrastructure/http/middlewares/method-not-allowed.ts,
               openapi.yaml paths.*.patch.requestBody.content,
-              docs/api/write-methods.md#options-says-what-a-path-accepts
+              docs/understand/write-methods.md#options-says-what-a-path-accepts
           ]
       lint: no
       difference: null
@@ -278,12 +279,12 @@ rules:
       standard: rfc7396
       section: semantics
       rule: A `null` member in a merge patch removes that member from the target, at any depth (inside a keyed map it removes the key).
-      house: '`null` is accepted only on a field whose request type lists `null`; anywhere else it is a 422 (docs/api/write-methods.md#empty-null-omitted).'
+      house: '`null` is accepted only on a field whose request type lists `null`; anywhere else it is a 422 (docs/understand/write-methods.md#empty-null-omitted).'
       source: https://www.rfc-editor.org/rfc/rfc7396#section-2
       evidence:
           [
-              docs/api/write-methods.md#patch-—-json-merge-patch,
-              docs/api/write-methods.md#empty-null-omitted,
+              docs/understand/write-methods.md#patch-—-json-merge-patch,
+              docs/understand/write-methods.md#empty-null-omitted,
               openapi.yaml paths.*.patch.requestBody,
               src/kernel/registry.ts TranslatableTarget,
               src/modules/*/module.ts translatables,
@@ -301,7 +302,7 @@ rules:
           [
               src/modules/*/controllers,
               src/modules/*/services,
-              docs/api/write-methods.md#patch-—-json-merge-patch
+              docs/understand/write-methods.md#patch-—-json-merge-patch
           ]
       lint: no
       difference: null
@@ -313,7 +314,7 @@ rules:
       source: https://www.rfc-editor.org/rfc/rfc7396#section-2
       evidence:
           [
-              docs/api/write-methods.md#patch-—-json-merge-patch,
+              docs/understand/write-methods.md#patch-—-json-merge-patch,
               src/modules/*/services,
               src/modules/products/services/translated-write.ts,
               src/modules/locales/services/translations.ts,
@@ -327,7 +328,7 @@ rules:
       standard: rfc6585
       section: 429
       rule: 'A 429 is answered only for too many requests in a time window, its body SHOULD explain the condition, and it MUST NOT be stored by a cache (§4).'
-      house: 'Every 429 carries `Retry-After` in whole seconds (docs/api/errors.md#headers-on-an-error).'
+      house: 'Every 429 carries `Retry-After` in whole seconds (docs/reference/errors.md#headers-on-an-error).'
       source: https://www.rfc-editor.org/rfc/rfc6585#section-4
       evidence:
           [
@@ -336,7 +337,7 @@ rules:
               src/modules/account/cooldown.ts,
               src/modules/account/mail-budget.ts,
               src/modules/account/services/two-factor-outcomes.ts,
-              docs/api/errors.md#headers-on-an-error
+              docs/reference/errors.md#headers-on-an-error
           ]
       lint: possible
       difference: null
@@ -349,7 +350,7 @@ rules:
       evidence:
           [
               src/infrastructure/http/preconditions.ts,
-              docs/api/write-methods.md#what-the-server-does-with-if-match
+              docs/understand/write-methods.md#what-the-server-does-with-if-match
           ]
       lint: no
       difference: null
@@ -368,7 +369,7 @@ rules:
               src/infrastructure/runtime/server-lifecycle.ts,
               src/app/security.ts,
               src/app/error-handling.ts,
-              docs/api/errors.md#outside-the-json-api
+              docs/reference/errors.md#outside-the-json-api
           ]
       lint: no
       difference: null
@@ -379,7 +380,7 @@ rules:
       section: field syntax
       rule: '`RateLimit` and `RateLimit-Policy` are Structured Fields: a list of quoted policy names with `q`, `w`, `r`, `t` parameters.'
       source: https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/
-      evidence: [src/infrastructure/http/middlewares/rate-limit.ts, docs/tools/security.md]
+      evidence: [src/infrastructure/http/middlewares/rate-limit.ts, docs/understand/security.md]
       lint: no
       difference: null
 
@@ -389,21 +390,24 @@ rules:
       rule: Every policy name in the headers is a budget that exists in the declared budgets, and no budget is sent under two names.
       source: https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/
       evidence:
-          [src/infrastructure/http/middlewares/rate-limits.generated.ts, docs/tools/security.md]
+          [
+              src/infrastructure/http/middlewares/rate-limits.generated.ts,
+              docs/understand/security.md
+          ]
       lint: no
       difference: null
 
     - id: ratelimit-server-behavior
       standard: ratelimit-headers
       section: server behavior
-      house: 'A 429 from a declared budget names that budget in `RateLimit` with `r=0` and `t` equal to `Retry-After`, a mailbox budget charged by hand included; cooldowns and the 2FA lock send `Retry-After` only (docs/tools/security.md#response-headers).'
+      house: 'A 429 from a declared budget names that budget in `RateLimit` with `r=0` and `t` equal to `Retry-After`, a mailbox budget charged by hand included; cooldowns and the 2FA lock send `Retry-After` only (docs/understand/security.md#response-headers).'
       rule: 'A server MAY send `RateLimit` and `RateLimit-Policy` on any status, a 429 included; when a response carries both `Retry-After` and `RateLimit`, `Retry-After` SHOULD NOT point earlier than the end of the effective window (§6). Judge the window of the policies at `r=0`, the ones the wait is for.'
       source: https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/
       evidence:
           [
               src/infrastructure/http/middlewares/rate-limit.ts,
               src/infrastructure/http/response.ts,
-              docs/tools/security.md#response-headers
+              docs/understand/security.md#response-headers
           ]
       lint: no
       difference: null
@@ -418,9 +422,9 @@ rules:
           [
               openapi.yaml paths.*.post.parameters,
               openapi.yaml paths.*.patch,
-              docs/tools/idempotency.md#named-exceptions,
-              docs/api/write-methods.md#retrying-a-post,
-              docs/api/write-methods.md (the "Safe to repeat" row)
+              docs/understand/idempotency.md#named-exceptions,
+              docs/understand/write-methods.md#retrying-a-post,
+              docs/understand/write-methods.md (the "Safe to repeat" row)
           ]
       lint: no
       difference: null
@@ -441,7 +445,10 @@ rules:
       rule: 'A 400, 409 or 422 refusal of a key SHOULD point at documentation: a problem `type`, or a `Link` with `rel=describedby` (§2.7).'
       source: https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
       evidence:
-          [src/infrastructure/http/middlewares/idempotency.ts, docs/api/errors.md#problem-details]
+          [
+              src/infrastructure/http/middlewares/idempotency.ts,
+              docs/reference/errors.md#problem-details
+          ]
       lint: no
       difference: idempotency-doc-link
 
@@ -449,9 +456,9 @@ rules:
       standard: idempotency-key
       section: errors
       rule: 'Where a documented idempotent operation requires the key and it is absent, the resource SHOULD reply 400 (§2.7).'
-      house: 'The 400 carries the documented code (docs/tools/idempotency.md#where-it-is-mounted).'
+      house: 'The 400 carries the documented code (docs/understand/idempotency.md#where-it-is-mounted).'
       source: https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
-      evidence: [src/infrastructure/http/middlewares/idempotency.ts, docs/tools/idempotency.md]
+      evidence: [src/infrastructure/http/middlewares/idempotency.ts, docs/understand/idempotency.md]
       lint: no
       difference: null
 
@@ -472,7 +479,7 @@ rules:
       standard: idempotency-key
       section: replay
       rule: 'A retry after the original completed SHOULD be answered consistently with the request having completed (§2.6).'
-      house: 'A replay answers the stored status, body and headers, and says it is a replay (docs/tools/idempotency.md#how-it-works).'
+      house: 'A replay answers the stored status, body and headers, and says it is a replay (docs/understand/idempotency.md#how-it-works).'
       source: https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
       evidence:
           [
@@ -486,14 +493,14 @@ rules:
       standard: idempotency-key
       section: replay
       rule: 'On a do-not-retry operation, a retry never repeats a side effect that may already have committed: after a crash, a failed outcome write or an expired lease, the answer is a replay or a stored outcome-unknown.'
-      house: 'Past the lease a do-not-retry key answers 409 IDEMPOTENCY_OUTCOME_UNKNOWN and runs nothing (docs/tools/idempotency.md#do-not-retry-operations).'
+      house: 'Past the lease a do-not-retry key answers 409 IDEMPOTENCY_OUTCOME_UNKNOWN and runs nothing (docs/understand/idempotency.md#do-not-retry-operations).'
       source: https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
       evidence:
           [
               src/infrastructure/http/middlewares/idempotency.ts,
               src/infrastructure/http/middlewares/idempotency-model.ts,
               src/infrastructure/runtime/server-lifecycle.ts,
-              docs/tools/idempotency.md#do-not-retry-operations
+              docs/understand/idempotency.md#do-not-retry-operations
           ]
       lint: no
       difference: null
@@ -504,7 +511,7 @@ rules:
       section: AIP-121 / AIP-136, methods
       rule: 'A write that fits Get, List, Create, Update or Delete uses it; a custom verb exists only for a state change those cannot say; a Create MUST return the resource itself (AIP-133).'
       source: https://google.aip.dev/136
-      evidence: [openapi.yaml paths.*.post, docs/api/write-methods.md#action-or-field]
+      evidence: [openapi.yaml paths.*.post, docs/understand/write-methods.md#action-or-field]
       lint: no
       difference: [pointer-put, line-answers-parent]
 
@@ -513,7 +520,7 @@ rules:
       section: AIP-136, custom methods
       rule: A custom method is a POST with a verb-and-noun name, written as `:verb` after the resource.
       source: https://google.aip.dev/136
-      evidence: [openapi.yaml paths.*.post, docs/api/write-methods.md#action-→-200]
+      evidence: [openapi.yaml paths.*.post, docs/understand/write-methods.md#action-→-200]
       lint: possible
       difference: [custom-verb-path, operation-name-vs-path]
 
@@ -522,7 +529,8 @@ rules:
       section: AIP-134, update
       rule: A partial update names the fields it changes with a field mask.
       source: https://google.aip.dev/134
-      evidence: [openapi.yaml paths.*.patch, docs/api/write-methods.md#patch-—-json-merge-patch]
+      evidence:
+          [openapi.yaml paths.*.patch, docs/understand/write-methods.md#patch-—-json-merge-patch]
       lint: no
       difference: merge-patch-field-masks
 
@@ -531,7 +539,7 @@ rules:
       section: AIP-158, pagination
       rule: A list pages with an opaque `page_token`; an offset `skip` and a `total_size` are optional.
       source: https://google.aip.dev/158
-      evidence: [openapi.yaml paths.*.get.parameters, docs/api/responses.md#pagination]
+      evidence: [openapi.yaml paths.*.get.parameters, docs/reference/responses.md#pagination]
       lint: no
       difference: [offset-paging, page-size-strict, bounded-list-unpaged]
 
@@ -541,7 +549,7 @@ rules:
       rule: An error answer is a `google.rpc.Status` with an `ErrorInfo` detail.
       # Judged by api-http Part D, and only when the user answers that errors are google.rpc.Status.
       source: https://google.aip.dev/193
-      evidence: [docs/api/errors.md#problem-details, src/infrastructure/http/response.ts]
+      evidence: [docs/reference/errors.md#problem-details, src/infrastructure/http/response.ts]
       lint: no
       difference: problem-json-status
 
@@ -554,8 +562,8 @@ rules:
           [
               openapi.yaml paths.*.delete,
               src/modules/api-keys/openapi.yaml,
-              docs/api/write-methods.md#delete-—-remove,
-              docs/api/write-methods.md#repeating-an-action-409
+              docs/understand/write-methods.md#delete-—-remove,
+              docs/understand/write-methods.md#repeating-an-action-409
           ]
       lint: no
       difference:
@@ -574,7 +582,7 @@ rules:
       section: '#118, property names'
       rule: Property names are snake_case, never camelCase.
       source: https://opensource.zalando.com/restful-api-guidelines/#118
-      evidence: [openapi.yaml components.schemas.*.properties, docs/api/openapi-workflow.md]
+      evidence: [openapi.yaml components.schemas.*.properties, docs/build/openapi-workflow.md]
       lint: possible
       difference: camel-case
 
@@ -583,7 +591,7 @@ rules:
       section: '#240, enum values'
       rule: Enum values are UPPER_SNAKE_CASE strings.
       source: https://opensource.zalando.com/restful-api-guidelines/#240
-      evidence: [openapi.yaml components.schemas.*.enum, docs/api/openapi-workflow.md]
+      evidence: [openapi.yaml components.schemas.*.enum, docs/build/openapi-workflow.md]
       lint: possible
       difference: lowercase-enums
 
@@ -592,7 +600,7 @@ rules:
       section: '#159 / #160, pagination'
       rule: 'A list that can grow past a few hundred entries is paginated (#159), by cursor unless a #160 trade-off favours offset, such as jumping to page N.'
       source: https://opensource.zalando.com/restful-api-guidelines/#160
-      evidence: [openapi.yaml paths.*.get.parameters, docs/api/responses.md#pagination]
+      evidence: [openapi.yaml paths.*.get.parameters, docs/reference/responses.md#pagination]
       lint: no
       difference: offset-paging
 
@@ -601,7 +609,7 @@ rules:
       section: '#173, money'
       rule: An amount is the common money object, `amount` as a decimal number plus `currency`.
       source: https://opensource.zalando.com/restful-api-guidelines/#173
-      evidence: [openapi.yaml components.schemas.*Money*, docs/api/responses.md#money]
+      evidence: [openapi.yaml components.schemas.*Money*, docs/reference/responses.md#money]
       lint: no
       difference: [money-string, money-resource-currency]
 
@@ -610,7 +618,7 @@ rules:
       section: '#176 / #177, error format'
       rule: 'Every endpoint can answer its 4xx and 5xx as `application/problem+json` (#176), and no error exposes a stack trace (#177).'
       source: https://opensource.zalando.com/restful-api-guidelines/#176
-      evidence: [src/infrastructure/http/response.ts, docs/api/errors.md]
+      evidence: [src/infrastructure/http/response.ts, docs/reference/errors.md]
       lint: no
       difference: [metrics-text-plain, probe-empty-503, server-parser-bare-errors]
 
@@ -619,6 +627,7 @@ rules:
       section: '#229 / #230 / #231, idempotent writes'
       rule: 'Every POST and PATCH has had idempotency considered (#229, a SHOULD): it takes an `Idempotency-Key` (#230), a secondary key (#231) or `If-Match`, repeats harmlessly by itself (an absolute merge patch), or sits in a named-exception class.'
       source: https://opensource.zalando.com/restful-api-guidelines/#229
-      evidence: [docs/tools/idempotency.md#named-exceptions, openapi.yaml paths.*.post.parameters]
+      evidence:
+          [docs/understand/idempotency.md#named-exceptions, openapi.yaml paths.*.post.parameters]
       lint: no
       difference: null

@@ -4,7 +4,7 @@
  * with the `declined` status move itself. `PAYMENT_SUCCEEDED` is written by `./settlement.ts`
  * inside the settlement's own transaction.
  *
- * See: docs/tools/outbox.md
+ * See: docs/understand/outbox.md
  */
 
 import { announceInTransaction } from '@kernel/outbox';

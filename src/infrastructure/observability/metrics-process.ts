@@ -4,7 +4,7 @@
  * purpose (see `handleUnhandledRejection`) and a survived failure nobody counts is invisible.
  * Registers against the shared registry — see `metrics-registry.ts`.
  *
- * See: docs/tools/prometheus.md
+ * See: docs/operate/prometheus.md
  */
 
 import { Counter } from 'prom-client';

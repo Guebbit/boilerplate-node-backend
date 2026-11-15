@@ -44,7 +44,7 @@ files decide what exists; the rows decide what it says.**
 ::: warning A language in the database is served, and the API's own words fall back
 A language registered as a row and switched on is **served**: a request in it is answered in it,
 with its product text, its search and its own `Content-Language`
-([one language per request](../tools/i18n.md#one-language-per-request)). The API has no wording of
+([one language per request](../understand/i18n.md#one-language-per-request)). The API has no wording of
 its own in it until a file is deployed, so each message falls back to the default language, one key
 at a time. `GET /locales` reports `apps` per language rather than a bare list of tags, so "does the
 API have its own Spanish words" (the backend app) and "may I download a Spanish dictionary" (a
@@ -107,15 +107,15 @@ A caller holding `display:Locale` whose FIRST `Accept-Language` choice is a draf
 by `GET /products`, `POST /products/search`, `GET /products/{id}` and the example reads. The
 sign-in is the preview token: no new parameter, no new header.
 
-|               |                                                                                                                                  |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Trigger       | The top-ranked range names a switched-off language (exact tag, case-insensitive) and `canPreviewDrafts(caller)` is true          |
-| Permission    | The draft dictionary's own predicate, asked through the translation port: the kernel names no subject                            |
-| Answer        | Draft text field by field over the normal live chain. `Content-Language: <draft>`, `Cache-Control: private, no-store`            |
-| Cache         | The preview flag skips Redis in both directions and wins over `scopeKey` ([redis-cache](../tools/redis-cache.md#draft-previews)) |
-| Everyone else | The live pick, `200`, never an error: a `404` would reveal that the draft exists                                                 |
-| Never         | Mail, orders, snapshots, messages, exports, cart, wishlist, facets: they run outside the request's preview context               |
-| CDN           | In cookie-session mode a CDN must bypass on the session cookie; jwt mode varies on `Authorization`                               |
+|               |                                                                                                                                       |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Trigger       | The top-ranked range names a switched-off language (exact tag, case-insensitive) and `canPreviewDrafts(caller)` is true               |
+| Permission    | The draft dictionary's own predicate, asked through the translation port: the kernel names no subject                                 |
+| Answer        | Draft text field by field over the normal live chain. `Content-Language: <draft>`, `Cache-Control: private, no-store`                 |
+| Cache         | The preview flag skips Redis in both directions and wins over `scopeKey` ([redis-cache](../understand/redis-cache.md#draft-previews)) |
+| Everyone else | The live pick, `200`, never an error: a `404` would reveal that the draft exists                                                      |
+| Never         | Mail, orders, snapshots, messages, exports, cart, wishlist, facets: they run outside the request's preview context                    |
+| CDN           | In cookie-session mode a CDN must bypass on the session cookie; jwt mode varies on `Authorization`                                    |
 
 The oracle: the preview equals what a visitor gets the moment the language is switched on.
 
@@ -172,7 +172,7 @@ A third axis, unrelated to the two tiers above: not the shop's own UI copy, but 
 or anyone holding `update:Translation` writes — a product's `title`, its `description`. This
 module owns that collection
 too, though nothing about it is a tier — see
-[Internationalisation](../tools/i18n.md#tier-3-user-authored-content) for how it composes with tier
+[Internationalisation](../understand/i18n.md#tier-3-user-authored-content) for how it composes with tier
 1's fallback locale and tier 2's `locales` collection.
 
 One row per `(entityType, entityId, locale)`, unique on that triple
@@ -270,14 +270,14 @@ Every rule this module declares and who holds it, role by role. The rule is what
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
 `src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../theory/authorization.md) explains the model.
+evaluator — [Authorization](../understand/authorization.md) explains the model.
 
 <!-- permissions:end -->
 
 ## Related pages
 
-- [Internationalisation](../tools/i18n.md) — the mechanism both tiers, and the translations collection, run on
+- [Internationalisation](../understand/i18n.md) — the mechanism both tiers, and the translations collection, run on
 - [`products`](./products.md) — a translatable entity, and its own write surface
-- [Modules overview](./index.md) — the whole context map
-- [The Flow Runner](../tools/flow-runner.md) — the seeded languages and which square of the grid each covers
-- [Request Input](../theory/request-input.md) — how a locale is negotiated
+- [Modules overview](./start.md) — the whole context map
+- [The Flow Runner](../build/flow-runner.md) — the seeded languages and which square of the grid each covers
+- [Request Input](../understand/request-input.md) — how a locale is negotiated

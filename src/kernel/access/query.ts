@@ -13,7 +13,7 @@
  *               every caller downstream.
  * Mongo-only:   the kernel's one store-specific file besides `../outbox.ts`.
  *
- * See: docs/theory/authorization.md, docs/theory/layers.md
+ * See: docs/understand/authorization.md, docs/understand/layers.md
  */
 
 import { accessibleBy } from '@casl/mongoose';
@@ -41,7 +41,7 @@ import {
  * switch. It is the smallest part: most collections carry no organisation column, most modules
  * never compile a scoped filter at all, and the webhooks fan-out matches every enabled
  * subscription unconditionally. Emptying the set here would scope a minority of the reads and
- * leave the rest quietly reading everything. See docs/theory/tenancy.md §10 for the real list.
+ * leave the rest quietly reading everything. See docs/understand/tenancy.md §10 for the real list.
  */
 const UNSTORED_FIELDS = new Set(['tenantId']);
 

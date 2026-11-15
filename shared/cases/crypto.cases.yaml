@@ -11,7 +11,7 @@
 #                  `aad` is an opaque INPUT here. Each twin builds its own labels from its own
 #                  storage (`<namespace>:<field path>:<owning id>`), so a label in a case is not a
 #                  promise about a real one: ciphertext never moves between twins.
-#                  See docs/theory/defences/crypto-and-secrets.md.
+#                  See docs/understand/defences/crypto-and-secrets.md.
 #   verify-password  argon2id PHC string; the stored parameters win over any current default.
 cases:
     - name: a log pseudonym is the HMAC under the log subkey

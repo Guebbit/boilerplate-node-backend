@@ -6,7 +6,7 @@
  * Here: the examples an account owns, and their cover images.
  * Delete it if: the module holds nothing about a person.
  *
- * See: docs/theory/modules.md#the-manifest
+ * See: docs/understand/modules.md#the-manifest
  */
 
 import type { ClientSession } from 'mongoose';

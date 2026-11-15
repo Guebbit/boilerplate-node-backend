@@ -3,7 +3,7 @@
  * The cart's knobs: how long an untouched cart is kept, how many units one line may hold, how many
  * lines a cart may have, and how many unpaid orders one account may have open at checkout.
  *
- * See: docs/tools/configuration.md
+ * See: docs/operate/configuration.md
  */
 
 import { defineConfig } from '@infrastructure/config/define';

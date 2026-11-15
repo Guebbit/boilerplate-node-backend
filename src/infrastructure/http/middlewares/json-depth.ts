@@ -11,7 +11,7 @@
  * Scope:   JSON only. urlencoded bodies are bounded by `qs`'s own depth limit, and multipart field
  *          names by multer's.
  *
- * See: docs/theory/defences/denial-of-service.md
+ * See: docs/understand/defences/denial-of-service.md
  */
 
 import type { NextFunction, Request, Response } from 'express';

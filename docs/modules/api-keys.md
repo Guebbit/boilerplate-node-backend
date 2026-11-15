@@ -79,7 +79,7 @@ the error handler (`503` or `500`), never to anonymous.
 **A key use counts as activity.** Each use stamps the key's own `lastUsedAt` and, at most once a
 day, the minter's `lastApiKeyUseAt` through the `users` service. The inactivity job reads that, so
 an account driven only through its keys is never minimised or reaped as idle
-([inactive accounts](../theory/data-retention.md#inactive-accounts-minimise-don-t-delete)).
+([inactive accounts](../understand/data-retention.md#inactive-accounts-minimise-don-t-delete)).
 
 ```mermaid
 flowchart LR
@@ -108,7 +108,7 @@ flowchart LR
 ```
 
 The event is not fired on the bus and forgotten: it is a row in the [transactional
-outbox](../tools/outbox.md), committed with the credential write and the session epoch. If
+outbox](../understand/outbox.md), committed with the credential write and the session epoch. If
 revoking the keys fails, the row stays pending and the relay retries it, so a reset can no longer
 report success while the keys stay live. Revoking is idempotent (only active keys are touched, and
 a person with none live gets neither audit row nor mail), so a redelivery does nothing twice.
@@ -162,15 +162,15 @@ for one instead of throwing, exactly like a build with no `account` has no JWTs 
 
 **Revoking is not protected.** Any holder of `delete:ApiKey` revokes any key in the tenant, a
 fellow administrator's included: revoking only takes access away, so the
-[protection of staff accounts](../theory/authorization.md#protecting-people) has nothing to guard.
+[protection of staff accounts](../understand/authorization.md#protecting-people) has nothing to guard.
 
 Minting, listing and revoking a credential have an admin screen in the paired
 `boilerplate-vue-frontend` — `api-keys` there, its own two routes over this module's three
 endpoints. Nothing here requires the UI: any HTTP client works. See that repo's `docs/modules/api-keys.md` for the client side, including why the
 permissions field is free text rather than a picker.
 
-See: [Security](../tools/security.md#machine-to-machine-credentials),
-[Authorization theory](../theory/authorization.md).
+See: [Security](../understand/security.md#machine-to-machine-credentials),
+[Authorization theory](../understand/authorization.md).
 
 ## Who can do what
 
@@ -187,6 +187,6 @@ Every rule this module declares and who holds it, role by role. The rule is what
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
 `src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../theory/authorization.md) explains the model.
+evaluator — [Authorization](../understand/authorization.md) explains the model.
 
 <!-- permissions:end -->

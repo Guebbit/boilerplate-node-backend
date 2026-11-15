@@ -3,7 +3,7 @@
  * MongoDB connection lifecycle. The demo profile's snapshot machinery (empty, capture, restore) is
  * `scenarios/support/database-snapshot.ts` — a different concern, needed by only two callers.
  *
- * See: docs/tools/mongodb-mongoose.md
+ * See: docs/understand/mongodb-mongoose.md
  */
 
 // Mongoose is the ODM over the MongoDB driver. Importing the default export gives the

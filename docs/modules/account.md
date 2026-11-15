@@ -1,7 +1,7 @@
 # account
 
 ::: tip At a glance
-**Owns** — every way into an account: signup, login, [OAuth](./account-oauth.md), [two-factor auth](./account-two-factor.md), refresh, re-auth, password reset, session listing and revocation, logout-everywhere, [scheduled deletion](#scheduled-deletion), and the [data export](#data-export). Four collections of its own: `sessions`, `verificationtokens`, `accountexports` and `erasureledgers` (the [erasure ledger](../theory/data-retention.md#backups-and-erasure): who was erased and when, so a backup restore can erase them again); the address book is [`addresses`](./addresses.md).
+**Owns** — every way into an account: signup, login, [OAuth](./account-oauth.md), [two-factor auth](./account-two-factor.md), refresh, re-auth, password reset, session listing and revocation, logout-everywhere, [scheduled deletion](#scheduled-deletion), and the [data export](#data-export). Four collections of its own: `sessions`, `verificationtokens`, `accountexports` and `erasureledgers` (the [erasure ledger](../understand/data-retention.md#backups-and-erasure): who was erased and when, so a backup restore can erase them again); the address book is [`addresses`](./addresses.md).
 **Depends on** — [`users`](./users.md), whose record it authenticates. The repo's only `shared-kernel` edge.
 **Breaks if you change** — the token lifetimes or the cookie flags. Every guard in the app resolves through this module.
 :::
@@ -77,7 +77,7 @@ in two independent steps:
 - **Delete**, disabled by default (`NODE_INACTIVE_ACCOUNT_DAYS=0`): warns, then soft-, then
   hard-deletes, the hard delete running the same `personalData.erase` hooks every module declares.
 
-Why minimise and not delete: [Data Retention](../theory/data-retention.md#inactive-accounts-minimise-don-t-delete).
+Why minimise and not delete: [Data Retention](../understand/data-retention.md#inactive-accounts-minimise-don-t-delete).
 See [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism.
 
 ::: tip The barrel is one line wide, and that is the story
@@ -211,7 +211,7 @@ stateDiagram-v2
 
 `lapse` is the end of the undo window: the nightly `reap:previous-emails` job clears `previousEmail`
 on an account with no live undo link. See
-[the retention page](../theory/data-retention.md#the-previous-email-after-a-change).
+[the retention page](../understand/data-retention.md#the-previous-email-after-a-change).
 
 Three things in the flow above are decisions rather than mechanics:
 
@@ -223,7 +223,7 @@ Three things in the flow above are decisions rather than mechanics:
   sits behind an unconditional step-up (`sensitive`, plus an `otp` proof when a second factor is
   armed), where the profile edit (`PUT`/`PATCH /account`) asks for nothing and carries no `email`.
   The change has mails, a guard and a pacing of its own, so it is an action
-  ([write-methods](../api/write-methods.md#action-or-field)), and no guard has to read a body to
+  ([write-methods](../understand/write-methods.md#action-or-field)), and no guard has to read a body to
   know whether to step in. It is a POST because it creates the pending change.
 - **Cancelling is its own explicit action, not a side effect of re-typing the current address.**
   Asking for the current address is a `409 EMAIL_ALREADY_CURRENT`, so a retried request can never
@@ -242,7 +242,7 @@ Three things in the flow above are decisions rather than mechanics:
   resend button. The caller is signed in, so the answer can be honest. A password-reset request is
   paced the same way but SILENTLY: inside the minute it answers the same `204` and sends nothing,
   because a `429` would tell a stranger which addresses have an account. Both also spend the
-  recipient's mailbox budget ([security](../tools/security.md#mail-to-one-mailbox-—-the-victim-s-budget)),
+  recipient's mailbox budget ([security](../understand/security.md#mail-to-one-mailbox-—-the-victim-s-budget)),
   which a refused request does not.
 - **A display name is printed only to a mailbox that has proven itself.** `username` is free text
   (up to 50 characters, no charset rule: one would refuse real names). A mail to an address nobody
@@ -283,7 +283,7 @@ up-to-24-hours between the two.
 account, ends its sessions (revocation cause `deletion-scheduled`), mails a restore link and answers
 `202 {requestedAt, purgeAt}`. `purgeAt` is `min(requestedAt + NODE_ACCOUNT_DELETION_GRACE_DAYS,
 one calendar month later)`: the reasoning, the GDPR clock and the table of what a locked account
-loses are in [the retention page](../theory/data-retention.md#self-deletion-a-grace-under-one-month).
+loses are in [the retention page](../understand/data-retention.md#self-deletion-a-grace-under-one-month).
 
 | Way back        | Route                                        | Proof                                                               |
 | --------------- | -------------------------------------------- | ------------------------------------------------------------------- |
@@ -384,7 +384,7 @@ Decisions rather than mechanics:
 - **Plaintext on disk, on purpose.** The file sits unencrypted in `NODE_ACCOUNT_EXPORT_STORE_PATH`,
   like the Mongo data files: private (never under the public directory), regenerable (not backed up),
   at-rest protection is the host's. See
-  [crypto and secrets](../theory/defences/crypto-and-secrets.md#secrets-at-rest).
+  [crypto and secrets](../understand/defences/crypto-and-secrets.md#secrets-at-rest).
 - **Audited at both ends.** `auth.data_export.requested` when it is asked for, and
   `auth.data_export.downloaded` when the data actually leaves.
 
@@ -436,6 +436,6 @@ Identity is one generic subdomain. Keycloak, Auth0 and better-auth all keep it a
 - [OAuth](./account-oauth.md) — the provider port and the three outcomes of a callback
 - [`addresses`](./addresses.md) — shares the `/account` URL prefix and the frontend screen
 - [`users`](./users.md) — the collection this module shares
-- [Security](../tools/security.md) — hashing, cookies, the headers around them, and this module's own rate-limit budgets
-- [Request Flow](../theory/request-flow.md) — where the guard sits in a request
-- [Strategic DDD](../theory/strategic-ddd.md#_2-context-map-—-how-a-module-reaches-its-siblings) — what `shared-kernel` costs
+- [Security](../understand/security.md) — hashing, cookies, the headers around them, and this module's own rate-limit budgets
+- [Request Flow](../understand/request-flow.md) — where the guard sits in a request
+- [Strategic DDD](../understand/strategic-ddd.md#_2-context-map-—-how-a-module-reaches-its-siblings) — what `shared-kernel` costs

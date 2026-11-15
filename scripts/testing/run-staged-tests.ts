@@ -8,7 +8,7 @@
  * Why: `complete:light` skips every suite that needs `mongod`, so a new integration test would
  * otherwise first run at merge time, far from the commit that broke it.
  *
- * See: docs/tools/package-scripts.md
+ * See: docs/reference/package-scripts.md
  */
 
 import { spawnSync } from 'node:child_process';

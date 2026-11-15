@@ -13,7 +13,7 @@
  * deliberately looser (a storage-neutral bound, no ObjectId regex), so a value can pass it and
  * still land here.
  *
- * See: docs/theory/request-flow.md#a-malformed-id-has-one-answer-per-position
+ * See: docs/understand/request-flow.md#a-malformed-id-has-one-answer-per-position
  */
 
 import type { Request, Response } from 'express';

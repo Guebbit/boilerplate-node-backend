@@ -24,7 +24,7 @@ import { observabilityConfig } from './config';
  * DENY by default when `NODE_METRICS_TOKEN` is unset, and `constantTimeEqual` rather than `===`,
  * which would leak the token's prefix to anyone willing to measure.
  *
- * See: docs/tools/security.md#why-the-metrics-endpoint-has-its-own-credential
+ * See: docs/understand/security.md#why-the-metrics-endpoint-has-its-own-credential
  */
 export const isMetricsScraper = (request: Request, response: Response, next: NextFunction) => {
     const expected = observabilityConfig().NODE_METRICS_TOKEN;

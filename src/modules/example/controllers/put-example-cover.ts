@@ -4,7 +4,7 @@
  * hands it to the service. Here: `PUT /examples/:id/cover`.
  * Delete it if: the module has no upload (with `services/cover.ts`, the route and the contract path).
  *
- * See: docs/tools/image-processing.md
+ * See: docs/understand/image-processing.md
  */
 
 import type { Request, Response } from 'express';

@@ -10,7 +10,7 @@
  *                3. hard delete, GRACE_DAYS after the soft delete
  * ```
  *
- * See: docs/theory/data-retention.md#inactive-accounts-minimise-don-t-delete
+ * See: docs/understand/data-retention.md#inactive-accounts-minimise-don-t-delete
  */
 
 import { logger } from '@infrastructure/adapters/logger';

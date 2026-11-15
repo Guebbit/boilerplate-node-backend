@@ -1915,7 +1915,7 @@ components:
                     enum: [true]
                 # Optional, opt-in, unticked by default. Absent: nobody was asked. Nothing is
                 # recorded, and the banner choice applies until the account answers
-                # (`docs/tools/analytics.md#consent`). An unticked box shown to the user is sent
+                # (`docs/understand/analytics.md#consent`). An unticked box shown to the user is sent
                 # as `false`, a recorded answer.
                 analyticsConsent:
                     type: boolean

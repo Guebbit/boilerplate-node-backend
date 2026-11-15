@@ -99,7 +99,7 @@ Money is grouped by currency and never converted. Every figure leaves as a decim
 (`NODE_DEFAULT_CURRENCY`), so a second group appears only after a config change. Money is stored as
 Decimal128, so Mongo's plain `$sum` is exact; one conversion to minor units per currency follows in
 code (`domain-primitives/money.ts#toMinorUnits`, reading the sum as text). See
-[Money at rest](../theory/tactical-ddd.md#at-rest-decimal128).
+[Money at rest](../understand/tactical-ddd.md#at-rest-decimal128).
 
 ## Dates and the time zone
 
@@ -169,7 +169,7 @@ Every rule this module declares and who holds it, role by role. The rule is what
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
 `src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../theory/authorization.md) explains the model.
+evaluator — [Authorization](../understand/authorization.md) explains the model.
 
 <!-- permissions:end -->
 

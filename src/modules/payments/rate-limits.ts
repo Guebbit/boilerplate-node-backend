@@ -9,7 +9,7 @@
  * (`@infrastructure/http/middlewares/rate-limit`), the same factory every other module's budgets
  * go through.
  *
- * See: docs/tools/security.md#the-rate-limit-budgets
+ * See: docs/understand/security.md#the-rate-limit-budgets
  */
 
 import type { Request, RequestHandler } from 'express';

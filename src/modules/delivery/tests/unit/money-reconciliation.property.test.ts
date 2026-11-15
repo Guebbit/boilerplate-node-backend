@@ -5,7 +5,7 @@
  * themselves rather than call one another for. `totals.property.test.ts` and
  * `money.property.test.ts` prove `orders`' own functions in isolation; neither proves the
  * composition every caller of both modules relies on agreeing with — money invariants as one
- * shared property, see docs/tools/property-testing.md. Seeded, so a counterexample reproduces.
+ * shared property, see docs/build/property-testing.md. Seeded, so a counterexample reproduces.
  */
 import fc from 'fast-check';
 import { toMinorUnits } from '@domain-primitives/money';

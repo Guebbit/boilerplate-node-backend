@@ -29,7 +29,7 @@
  * Not OpenAPI Overlay 1.0: that is OpenAPI only (AsyncAPI has no twin) and a new tool beside the
  * bundler's own `x-` steps.
  *
- * See: docs/api/contract-fragmentation.md#extending-another-modules-contract
+ * See: docs/build/contract-fragmentation.md#extending-another-modules-contract
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';

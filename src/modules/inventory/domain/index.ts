@@ -5,7 +5,7 @@
  * itself, not a detail of how it's stored. Not here: the conditional writes that enforce it, the
  * ledger row, the HTTP envelopes.
  *
- * See: docs/theory/domain-layer.md
+ * See: docs/understand/domain-layer.md
  */
 
 export { counterDeltaFor, roomOn } from './transitions';

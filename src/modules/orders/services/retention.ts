@@ -17,7 +17,7 @@ import { clearTimelineActor } from './timeline';
  * The `personalData.erase` hook. Unsets `userId` on every order this account placed and starts
  * its PII clock; `reap:orders` scrubs each once its claim window is over (a never-paid order at
  * once). The orders themselves are kept under Art. 17(3)(b)/(e).
- * See docs/theory/data-retention.md#orders-after-the-account
+ * See docs/understand/data-retention.md#orders-after-the-account
  *
  * @param userId - the erased account's id
  * @param session - joins the detach to the hard-delete transaction calling this hook

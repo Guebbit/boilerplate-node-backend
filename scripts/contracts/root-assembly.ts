@@ -10,7 +10,7 @@
  * Pure: takes the root's text and what each fragment declares, returns the text to bundle. The
  * caller owns the disk.
  *
- * See: docs/theory/module-lifecycle.md#_3-·-the-fragments
+ * See: docs/build/module-lifecycle.md#_3-·-the-fragments
  */
 
 import {

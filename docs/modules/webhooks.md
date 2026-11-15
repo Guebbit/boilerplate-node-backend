@@ -39,10 +39,10 @@ data: {orderId} }`; Slack requires a `text`/`blocks` body, so pointing a subscri
   without waiting on a nightly export.
 - **A reconciliation endpoint that reverses failed or cancelled orders in near-real-time.**
   `payment.failed` and `order.canceled` reach a small endpoint of your own — a publicly reachable
-  HTTPS one, whatever it does internally, since [the SSRF guard](../theory/defences/ssrf.md)
+  HTTPS one, whatever it does internally, since [the SSRF guard](../understand/defences/ssrf.md)
   refuses a private address — rather than a batch job noticing hours later.
 
-The catch — and the reason [SSRF](../theory/defences/ssrf.md) is a live concern here — is that the
+The catch — and the reason [SSRF](../understand/defences/ssrf.md) is a live concern here — is that the
 destination URL is chosen by whoever creates the subscription. Delivering to a URL a caller
 supplies is exactly the shape an attacker abuses to make the server fetch something internal, so
 every delivery goes through `infrastructure/adapters/ssrf-guard.ts` first — see
@@ -94,7 +94,7 @@ every fragment's resource ids `$ref` (a copy of the OpenAPI `Id`, since no Async
 dispute reason) `$ref`s the owning module's own `openapi.yaml` schema, and the bundler copies that
 schema into the bundle ahead of the payloads that use it, so the REST and event contracts share one
 list. The bundler merges the fragments into the `webhooks` section while this module exists (see
-[Contract Fragmentation](../api/contract-fragmentation.md#module-owned-webhook-events)).
+[Contract Fragmentation](../build/contract-fragmentation.md#module-owned-webhook-events)).
 
 Three things read the same files, so they cannot drift apart:
 
@@ -179,7 +179,7 @@ flowchart LR
     BACK -.->|sweep, no broker<br/>claims and sends itself| CLAIM
 ```
 
-**An event that came through the [outbox](../tools/outbox.md) is fanned out idempotently.** The
+**An event that came through the [outbox](../understand/outbox.md) is fanned out idempotently.** The
 relay is at-least-once, so the subscriber can see one event twice. It keeps the outbox row's id as
 the delivery's `eventId`, and a unique `(subscriptionId, eventId)` index makes the second arrival a
 no-op. A failed fan-out throws, so the relay retries it; subscriptions that already have their row
@@ -201,7 +201,7 @@ a look, not an interruption. The notice replaces the old mail to whoever created
 This is deliberately a DIFFERENT channel from what operators hear. A failed delivery never parks —
 it reschedules on its own row, and the sweep republishes — so `QueueJobsParked` never fires for a
 webhook queue backing up; `metrics.ts` is what actually feeds the operator side, with two alerts
-(`docs/tools/prometheus.md`) tuned to stay quiet when one subscriber's endpoint is down among
+(`docs/operate/prometheus.md`) tuned to stay quiet when one subscriber's endpoint is down among
 healthy ones:
 
 - **`WebhookDeliveriesFailingEverywhere`** — zero successes while attempts keep landing, over 30
@@ -309,7 +309,7 @@ stateDiagram-v2
   the failure streak, a side effect a form save must not carry, and each move has its own audit
   action (`admin.webhook_subscription.enabled` / `.disabled`).
 - **A repeat is refused**, not repeated: 409 `WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED` /
-  `_ALREADY_DISABLED` ([the rule](../api/write-methods.md#an-action-whose-target-state-is-already-reached)).
+  `_ALREADY_DISABLED` ([the rule](../understand/write-methods.md#an-action-whose-target-state-is-already-reached)).
   Enabling an enabled subscription would otherwise zero a streak that is still building.
 - **A paused subscription is not relabelled.** The guard only matches a row with no `disabledAt`,
   so it never stamps `autoDisabledAt` over a pause.
@@ -354,9 +354,9 @@ Delivery payloads carry ids, amounts (decimal strings at the currency's own plac
 ## Not wanted? Remove the module
 
 There is no switch. Webhooks are on when this module is in the build, and a deployment that never
-sends them removes it — [Removing a module](../theory/module-lifecycle.md#removing-a-module). That
+sends them removes it — [Removing a module](../build/module-lifecycle.md#removing-a-module). That
 also removes the one place the backend fetches a tenant-supplied URL (the avatar download in `account` fetches a provider-supplied one; see
-[Server-side request forgery](../theory/defences/ssrf.md)).
+[Server-side request forgery](../understand/defences/ssrf.md)).
 
 The standard procedure catches most of it: `tsc` stops on every file that imports the module
 (`sweep:webhook-retries`, `scenarios/webhooks.ts`, the cross-cutting tests), and the
@@ -434,8 +434,8 @@ npm run sync:frontend     # hands the same three to the paired frontend
 **A twin trusts the same CA** the way its runtime does: PHP's cURL reads `CURLOPT_CAINFO` or
 `SSL_CERT_FILE`, pointing at `webhook-sink-ca.pem`.
 
-See: [Events & Logging](../tools/events-and-logging.md), [RabbitMQ](../tools/rabbitmq.md), and
-[the AsyncAPI workflow](../api/asyncapi-workflow.md).
+See: [Events & Logging](../understand/events-and-logging.md), [RabbitMQ](../understand/rabbitmq.md), and
+[the AsyncAPI workflow](../build/asyncapi-workflow.md).
 
 ## Who can do what
 
@@ -453,6 +453,6 @@ Every rule this module declares and who holds it, role by role. The rule is what
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
 `src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../theory/authorization.md) explains the model.
+evaluator — [Authorization](../understand/authorization.md) explains the model.
 
 <!-- permissions:end -->

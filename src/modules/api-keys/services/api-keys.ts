@@ -46,7 +46,7 @@ import type { ApiKeyDocument } from '../model';
  *
  * Five conditions, all required: the rule must be DECLARED (an invented string grants nothing
  * while looking like it does — `assertDeclared`'s own reasoning), TENANT-scoped (a credential is
- * tenant-scoped only, see `docs/tools/security.md#machine-to-machine-credentials`), free of a
+ * tenant-scoped only, see `docs/understand/security.md#machine-to-machine-credentials`), free of a
  * STEP-UP tier (a credential can never re-authenticate, so it would hold a permission that is
  * always refused), one a credential can use at all (`credential: false` marks the rules whose
  * routes are session-only), and actually HELD by the minter right now.

@@ -2,7 +2,7 @@
  * The repository half of the `sort` grammar: `resolveSort` turns the contract-validated token
  * array into a Mongo sort through a per-collection whitelist. The transport half (CSV in a query,
  * one token per body item) is `parseFormCsvList`, tested in `request.test.ts`. See
- * docs/api/sorting.md.
+ * docs/reference/sorting.md.
  */
 import { resolveSort, sortOf, withTiebreaker } from '@infrastructure/persistence/search';
 

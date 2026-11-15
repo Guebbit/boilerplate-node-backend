@@ -13,7 +13,7 @@
  *             than reaching a wider read through a shortcut — `admin` included, who lists every
  *             declared tenant set by name like everyone else.
  *
- * See `docs/theory/authorization.md`, and `shared/authorization-keys.generated.yaml` for the keys
+ * See `docs/understand/authorization.md`, and `shared/authorization-keys.generated.yaml` for the keys
  * themselves — a file the PHP twin reads byte-for-byte identically.
  */
 

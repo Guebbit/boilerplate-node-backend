@@ -59,7 +59,7 @@ documents each choice at the line that makes it.
 
 The SSE stream counts against the same per-account cap as the notifications stream (a staff tab
 holds two), and against the process ceiling: `NODE_SSE_MAX_STREAMS_PER_USER`,
-`NODE_SSE_MAX_STREAMS`. See [denial of service](../theory/defences/denial-of-service.md).
+`NODE_SSE_MAX_STREAMS`. See [denial of service](../understand/defences/denial-of-service.md).
 
 Deleting this module removes the dashboard, not the measurements. The metrics keep being collected;
 nothing serves them.
@@ -110,14 +110,14 @@ Every rule this module declares and who holds it, role by role. The rule is what
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
 `src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../theory/authorization.md) explains the model.
+evaluator — [Authorization](../understand/authorization.md) explains the model.
 
 <!-- permissions:end -->
 
 ## Related pages
 
 - [`audit-logs`](./audit-logs.md) — the collection behind the audit route
-- [The Observability Layer](../tools/observability-layer.md) — what is measured and where
-- [Observability Reference](../tools/observability-reference.md) — every metric and its meaning
-- [Observability Endpoints](../api/observability.md) — the contract for these routes
-- [AsyncAPI Workflow](../api/asyncapi-workflow.md) — the SSE stream's contract
+- [The Observability Layer](../understand/observability-layer.md) — what is measured and where
+- [Observability Reference](../operate/observability-reference.md) — every metric and its meaning
+- [Observability Endpoints](../reference/observability.md) — the contract for these routes
+- [AsyncAPI Workflow](../build/asyncapi-workflow.md) — the SSE stream's contract

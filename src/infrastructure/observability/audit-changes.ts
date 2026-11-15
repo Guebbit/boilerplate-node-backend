@@ -20,7 +20,7 @@ export interface FieldChange {
 
 /**
  * A {@link FieldChange} with no `null` in it: a side that is unset (`null` or `undefined`) is left
- * out, because a response never carries `null` (`docs/api/write-methods.md#empty-null-omitted`).
+ * out, because a response never carries `null` (`docs/understand/write-methods.md#empty-null-omitted`).
  *
  * @param from - the value before
  * @param to - the value after

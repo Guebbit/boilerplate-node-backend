@@ -9,7 +9,7 @@
  * Shares: nothing over HTTP. `account`, `api-keys`, `example`, `orders`, `payments`, `returns`
  *         and `users` consume it, all through this barrel.
  *
- * See: docs/theory/authorization.md
+ * See: docs/understand/authorization.md
  */
 
 import type { AppModule } from '@kernel/registry';

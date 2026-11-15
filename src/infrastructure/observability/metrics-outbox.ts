@@ -4,7 +4,7 @@
  * process runs it, can report without a database round trip, plus the "how many are waiting" gauge.
  * The gauge cannot import the model it counts (`@kernel/outbox`) — that model's owner hands it a reader.
  *
- * See: docs/tools/outbox.md
+ * See: docs/understand/outbox.md
  */
 
 import mongoose from 'mongoose';

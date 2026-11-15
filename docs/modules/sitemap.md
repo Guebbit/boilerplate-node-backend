@@ -109,4 +109,4 @@ A product page's path is `products`' `NODE_FRONTEND_LINK_PRODUCT` (`productPageP
 
 - [`products`](./products.md) — owns the catalogue the product files read
 - [`locales`](./locales.md) — switching a language on or off changes which languages are served
-- [Adding & Removing a Module](../theory/module-lifecycle.md) — the deletability procedure
+- [Adding & Removing a Module](../build/module-lifecycle.md) — the deletability procedure

@@ -44,7 +44,7 @@
 # 0700, each file 0644: compose ignores `uid`/`mode` for a file secret, and Redis (uid 999) and node
 # (uid 1000) must both read it). They are NOT in the client's `.env`, so `docker inspect` shows
 # none, and a child process of the app inherits none. The app reads them through `NODE_X_FILE`
-# variables (docs/tools/configuration.md#secrets-as-files); the data services read the same files.
+# variables (docs/operate/configuration.md#secrets-as-files); the data services read the same files.
 #
 #   mongo_root_password  database, mongo-rs-init    The only place the root account's password exists.
 #   mongo_app_password   database, app, cron, setup
@@ -68,7 +68,7 @@
 # `NODE_REDIS_URL` / `NODE_RABBITMQ_URL` stands), or put the managed password in the file and leave
 # it out of the URL. Optional integration secrets (SMTP, payments, OAuth, antibot) stay in the
 # client's `.env`, since a file secret cannot be optional here.
-# See: docs/getting-started-production.md#secrets
+# See: docs/operate/first-deploy.md#secrets
 #
 # ── BUNDLED OR MANAGED BACKING SERVICES ──────────────────────────────────────────────────────────
 # `database`/`cache`/`queue` below carry `profiles: [bundled]` and start only when
@@ -168,7 +168,7 @@ x-data-hardening: &data-hardening
 #                   `NODE_METRICS_TOKEN` from, so there is one credential and one rotation.
 #   a receiver      Alertmanager renders its routing from the `ALERT_*` knobs in the client's
 #                   `.env`. With none set every alert goes to `null`, which notifies no one — see
-#                   docs/getting-started-production.md#monitoring-and-alerts.
+#                   docs/operate/first-deploy.md#monitoring-and-alerts.
 #   the logs        Alloy tails the container log files under `CONTAINER_LOGS_PATH` (Docker's
 #                   `/var/lib/docker/containers` by default; Podman needs its own path and
 #                   `CONTAINER_LOG_DRIVER=k8s-file`). It reads both engines' formats.
@@ -192,7 +192,7 @@ x-monitoring-hardening: &monitoring-hardening
 #   the drill       `profiles: [restore-drill]`: `docker compose --profile restore-drill run --rm restore-drill`
 #                   restores the latest snapshot into a throwaway Mongo and compares the counts.
 #
-# docs/tools/backups.md has the design, the knobs and the runbook.
+# docs/operate/backups.md has the design, the knobs and the runbook.
 x-backup-env: &backup-env
     BACKUP_REPOSITORY: '${BACKUP_REPOSITORY:-}'
     BACKUP_HOST: '${COMPOSE_PROJECT_NAME}'
@@ -224,7 +224,7 @@ x-app-env: &app-env
     # volume that CA's public cert is shared into, mounted read-only on this container too.
     NODE_DB_URI: '${NODE_DB_URI:-mongodb://${MONGO_APP_USER:-api}@database:27017/${MONGO_DB:-api}?replicaSet=rs0&tls=true&tlsCAFile=/ca-dir/mongo-ca.crt}'
     # Redis and RabbitMQ are plaintext on purpose: one host, the compose network, no published port
-    # (docs/tools/security.md#redis-and-rabbitmq-stay-plaintext). A deployment that crosses a
+    # (docs/understand/security.md#redis-and-rabbitmq-stay-plaintext). A deployment that crosses a
     # network supplies `rediss://` / `amqps://` URLs itself.
     NODE_REDIS_URL: '${NODE_REDIS_URL:-redis://cache:6379}'
     # A SECOND Redis, on purpose: rate-limit counters and single-use claims must never be evicted,
@@ -359,7 +359,7 @@ services:
         # cannot mark a healthy container unhealthy (Swarm would replace it). `/readyz` is for a
         # load balancer's own probe. Kept here although the image declares the same check: Podman
         # builds OCI images by default, and OCI drops `HEALTHCHECK`. `node -e`, not `curl -f`: the
-        # runtime image is node:*-alpine and ships no curl. See docs/tools/health-checks.md.
+        # runtime image is node:*-alpine and ships no curl. See docs/operate/health-checks.md.
         healthcheck:
             test:
                 [
@@ -432,7 +432,7 @@ services:
                 'node --import tsx scripts/ops/check-config.ts && exec supercronic -passthrough-logs -prometheus-listen-address 127.0.0.1:9746 /app/crontab'
             ]
         # This container's own job is the scheduler, so it checks the scheduler — the image's web
-        # check would never pass here (nothing listens on the app port). See docs/tools/health-checks.md.
+        # check would never pass here (nothing listens on the app port). See docs/operate/health-checks.md.
         healthcheck:
             test:
                 [
@@ -900,7 +900,7 @@ services:
         profiles: [monitoring]
         <<: *monitoring-hardening
         # Renders the routing template from the environment below, then starts Alertmanager on it.
-        # Why: Alertmanager reads no env vars itself. docs/tools/prometheus.md#alert-routing
+        # Why: Alertmanager reads no env vars itself. docs/operate/prometheus.md#alert-routing
         entrypoint:
             - '/bin/sh'
             - '/etc/alertmanager/render.sh'
@@ -947,7 +947,7 @@ services:
     # one thing it can tell Prometheus is how full each real mount is (`DiskAlmostFull`).
     # The host root is mounted READ-ONLY at /host: that is how it sees the host's filesystems and
     # not the container's. Virtual and container-storage mounts are excluded: they are not disks.
-    # It is the only exporter on purpose: docs/tools/prometheus.md#alerts-not-used.
+    # It is the only exporter on purpose: docs/operate/prometheus.md#alerts-not-used.
     # https://github.com/prometheus/node_exporter#docker
     node-exporter:
         logging: *logging

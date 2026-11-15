@@ -6,7 +6,7 @@
  * The frontend's copy is a declared fork of this file, not kept in step and not checked
  * (`SHARED_FILES` does not list it).
  *
- * Why JSON and not JUnit, why per module: docs/tools/testing-quickstart.md#why-the-report-reads-json
+ * Why JSON and not JUnit, why per module: docs/build/testing-quickstart.md#why-the-report-reads-json
  *
  * Usage:
  *   npm run test:report                 # read the default report path

@@ -18,7 +18,7 @@
  * stays testable on its own. The webhook-event names built on top of it live in
  * `./asyncapi-webhook-events`.
  *
- * See: docs/api/contract-fragmentation.md#module-owned-webhook-events
+ * See: docs/build/contract-fragmentation.md#module-owned-webhook-events
  */
 
 import { readFileSync } from 'node:fs';

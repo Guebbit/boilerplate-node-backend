@@ -5,7 +5,7 @@
  * value, a wiring file or `factories.ts`.
  * Here: the example service, its domain rules and the publish event.
  *
- * See: docs/theory/strategic-ddd.md
+ * See: docs/understand/strategic-ddd.md
  */
 
 export * from './services';

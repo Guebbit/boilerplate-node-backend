@@ -4,7 +4,7 @@
  * what is added here is what this collection alone needs. Nothing outside the module imports it —
  * the service is the door. Here: translation, image and erasure writes beside the plain CRUD.
  *
- * See: docs/theory/layers.md
+ * See: docs/understand/layers.md
  */
 
 import { updateStatusIfIn as conditionalStatus } from '@infrastructure/persistence/conditional-status';

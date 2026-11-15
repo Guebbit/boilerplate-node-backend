@@ -80,7 +80,7 @@ Three objects, each owned once:
 `GET /returns` answers a `ReturnListItem`: id, order, status, reason, kind, dates and `actions`. The
 customer's note, staff's decline message and the lines are `GET /returns/{id}`, the audited read; a
 customer's own list is the same shape. See
-[a list row is a list item](../api/responses.md#a-list-row-is-a-list-item).
+[a list row is a list item](../reference/responses.md#a-list-row-is-a-list-item).
 
 ## The lifecycle
 
@@ -110,7 +110,7 @@ Two staff members deciding the same request race in the database and exactly one
 that is not conditional is the first: a withdrawal before dispatch is written `closed` at birth.
 
 `declined` and `canceled` are final. A wrong decline is not undone: staff open a new return for the
-same lines ([Declined by mistake](../demo-ecommerce/support.md#declined-by-mistake)), which is how
+same lines ([Declined by mistake](../use-the-shop/support.md#declined-by-mistake)), which is how
 Shopify and Solidus fix it, so a decision stays a record and is never rewritten.
 
 ## Declining a request {#declining-a-request}
@@ -184,7 +184,7 @@ Two things it is **not** for:
 ## The events
 
 `return.requested`, `return.received` and `return.closed` are public webhooks, so each rides the
-[transactional outbox](../tools/outbox.md): the row is written in the transaction of the move it
+[transactional outbox](../understand/outbox.md): the row is written in the transaction of the move it
 announces, keyed on the **order** (`aggregateId`), so one order's events reach `webhooks` in the
 order they were written.
 
@@ -196,7 +196,7 @@ order they were written.
 
 A return that is lost to a race writes nothing, and a failed event write takes the move down with
 it. The audit row and the order's `returnStatus` stay after the commit, best effort. The
-customer's mail is sent from a listener on these events ([Customer mail](../tools/outbox.md#customer-mail)):
+customer's mail is sent from a listener on these events ([Customer mail](../understand/outbox.md#customer-mail)):
 `return.requested` acknowledges, `return.decided` (internal) answers staff's decision, `return.closed`
 says the money went back.
 
@@ -543,7 +543,7 @@ flowchart TD
   approval mails for a defect or a wrong item tell the buyer they choose, and that a repair extends
   the guarantee by 12 months.
 - **Price reduction** (Art. 15) needs no door: the Refund button, with the guide entry
-  [A faulty item](../demo-ecommerce/when-something-goes-wrong.md#faulty-item).
+  [A faulty item](../use-the-shop/when-something-goes-wrong.md#faulty-item).
 
 ## Reads for the stats
 
@@ -603,7 +603,7 @@ excludes, and inside the window). **Staff** (out of stock for good) need
 the **refund key**, `create:Refund` — `stepUp: critical`, so the route asks for a fresh session —
 held by moderator and admin; the manager and the warehouse do not hold it. Holding the key is the
 whole rule, as on every door that sends money out: a refund of one's own order is allowed and its
-audit rows are flagged `ownOrder` ([your own money](../theory/authorization.md#your-own-money)).
+audit rows are flagged `ownOrder` ([your own money](../understand/authorization.md#your-own-money)).
 The refund's **request** is audited the moment its record opens (`admin.payment.refund_requested`),
 before the provider is asked, so a provider refusal that the sweep later finishes still leaves the
 decision on file; an approval or a receipt of one's own return carries the flag too. No new key and
@@ -691,7 +691,7 @@ data under Art. 15.
 The free text is the exception to "kept": `npm run job reap:returns` unsets `note` and `declineMessage`
 once a return has not changed for `NODE_RETURN_TEXT_RETENTION_DAYS`; status, lines, amounts and
 dates stay. No early wipe on account erasure. The reasoning:
-[Data Retention: free text on returns](../theory/data-retention.md#free-text-on-returns).
+[Data Retention: free text on returns](../understand/data-retention.md#free-text-on-returns).
 
 ## Permissions
 
@@ -711,10 +711,10 @@ decision of whether the return was owed.
 
 ## Configuration
 
-| Variable                          | Default | Meaning                                                                                       |
-| --------------------------------- | ------- | --------------------------------------------------------------------------------------------- |
-| `NODE_RETURNS_RATE_LIMIT_MAX`     | —       | Per-account budget: see [the rate-limit budgets](../tools/security.md#the-rate-limit-budgets) |
-| `NODE_RETURN_TEXT_RETENTION_DAYS` | `1095`  | Days without a change before `reap:returns` unsets a return's `note` and `declineMessage`     |
+| Variable                          | Default | Meaning                                                                                            |
+| --------------------------------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `NODE_RETURNS_RATE_LIMIT_MAX`     | —       | Per-account budget: see [the rate-limit budgets](../understand/security.md#the-rate-limit-budgets) |
+| `NODE_RETURN_TEXT_RETENTION_DAYS` | `1095`  | Days without a change before `reap:returns` unsets a return's `note` and `declineMessage`          |
 
 The return address (`NODE_RETURN_ADDRESS_*`) and who pays postage (`NODE_RETURN_POSTAGE_PAYER`) are
 [`shop`'s](./shop.md#configuration). The postage payer is frozen on each return when it opens.
@@ -734,7 +734,7 @@ Every rule this module declares and who holds it, role by role. The rule is what
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
 `src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../theory/authorization.md) explains the model.
+evaluator — [Authorization](../understand/authorization.md) explains the model.
 
 <!-- permissions:end -->
 

@@ -4,7 +4,7 @@
  * precondition scope the repository checks, and put the `ETag` on the answer. The version itself
  * and the check live in `src/infrastructure/persistence/versioning.ts`; nothing here knows what a row looks like.
  *
- * See: docs/api/write-methods.md#conditional-writes-etag-and-if-match
+ * See: docs/understand/write-methods.md#conditional-writes-etag-and-if-match
  */
 
 import { createHash } from 'node:crypto';

@@ -4,7 +4,7 @@
  * dashboard), it is plain HTTP so no protocol upgrade or extra dependency is needed, and
  * browsers reconnect automatically via the built-in `EventSource` client.
  *
- * See: docs/tools/frontend-observability.md
+ * See: docs/operate/frontend-observability.md
  */
 
 import type { Response } from 'express';

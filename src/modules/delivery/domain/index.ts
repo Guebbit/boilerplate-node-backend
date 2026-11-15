@@ -1,7 +1,7 @@
 /**
  * @module
  * Delivery domain — the rules, importable without the module's HTTP surface.
- * See `docs/theory/domain-layer.md`.
+ * See `docs/understand/domain-layer.md`.
  */
 
 export { shipmentLifecycle, SHIPMENT_EVENTS } from './lifecycle';

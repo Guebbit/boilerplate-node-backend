@@ -4,7 +4,7 @@
  * In any module: numbers and lists the PHP twin copies, as data.
  * Here: the two-factor lockout and the delivered-code limits.
  *
- * See: docs/theory/shared-rules.md
+ * See: docs/understand/shared-rules.md
  */
 
 import { z } from 'zod';

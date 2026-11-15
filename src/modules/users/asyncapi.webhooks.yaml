@@ -5,7 +5,7 @@
 # merges it into the `webhooks` section only while that module exists
 # (`scripts/contracts/asyncapi-section-fragments.ts`). Each event is the Standard Webhooks envelope
 # `{ type, timestamp, data }`, ids only: a recipient got the person's data through the API, so it
-# holds the `userId` (GDPR Art. 19, `docs/theory/data-protection.md`). The module's `publicEvents`
+# holds the `userId` (GDPR Art. 19, `docs/understand/data-protection.md`). The module's `publicEvents`
 # (`module.ts`) is what fires it.
 channels:
     user.erased:

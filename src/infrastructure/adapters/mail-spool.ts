@@ -11,7 +11,7 @@
  * reasoning as `image-store.ts`'s quarantine directory: an attachment may carry personal or
  * financial data.
  *
- * See: docs/tools/email-and-rendering.md
+ * See: docs/understand/email-and-rendering.md
  */
 
 import path from 'node:path';

@@ -8,7 +8,7 @@
  * dictionary.
  *
  * Path params are deliberately outside it: a bad id 404s before validation, so they use the
- * fallback phrase. See `docs/tools/i18n.md#validation-messages`.
+ * fallback phrase. See `docs/understand/i18n.md#validation-messages`.
  */
 
 import { z } from 'zod';

@@ -6,7 +6,7 @@
  * nothing that could single one out beyond what the owner already knows.
  *
  * The audit log already keeps the raw User-Agent for 180 days; this is one shorter, friendlier copy,
- * shown back to the person it describes. See docs/theory/data-protection.md.
+ * shown back to the person it describes. See docs/understand/data-protection.md.
  */
 
 import Bowser from 'bowser';

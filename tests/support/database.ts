@@ -20,7 +20,7 @@ import { observeDatabaseCommands } from '@infrastructure/persistence/command-met
  *
  * This bounds the DISK cost and the process count, not memory: what keeps memory flat across files
  * is freeing each file when it ends — `tests/support/test-environment.ts`, and
- * docs/tools/mutation-testing.md#the-bson-warning-sign for what it looks like when that fails.
+ * docs/build/mutation-testing.md#the-bson-warning-sign for what it looks like when that fails.
  *
  * ── ISOLATION IS UNCHANGED ───────────────────────────────────────────────────────────────────────
  * A database name per file keeps files apart, `clearAll` still empties collections between cases,

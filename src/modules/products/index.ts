@@ -1,7 +1,7 @@
 /**
  * @module
  * Products — public barrel; the only surface a sibling module may import (see
- * `docs/theory/strategic-ddd.md` §5 for the rule). `productRepository` and the model's runtime
+ * `docs/understand/strategic-ddd.md` §5 for the rule). `productRepository` and the model's runtime
  * (`productSchema`, `applyProductTransform`, `productModel`) stay inside — a sibling reads the
  * `onHand`/`reserved` mirror through `productService`, never the collection directly; only
  * `@modules/inventory` ever writes it.

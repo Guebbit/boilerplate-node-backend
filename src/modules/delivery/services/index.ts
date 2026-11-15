@@ -2,7 +2,7 @@
  * @module
  * Delivery service — every operation a controller may call into, and the narrow reads and doors a
  * sibling may use. One file per flow, not one big file; see
- * `docs/theory/layers.md`.
+ * `docs/understand/layers.md`.
  *
  * Every act (`ship`, `deliver`, `lost`, `reship`, `fulfill`, `holds`, `cancel-remainder`) is one transaction —
  * `act.ts` — that writes the fulfillment records, the order's summary, any status move and the

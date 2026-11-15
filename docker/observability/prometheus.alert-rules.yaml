@@ -130,7 +130,7 @@ groups:
 
           # The outbox parks an event as `dead` only after every dispatch attempt failed, and
           # nothing else reads a dead row. Same shape as `QueueJobsParked`: a rate above zero is
-          # the alert. See docs/tools/outbox.md#poison-events.
+          # the alert. See docs/understand/outbox.md#poison-events.
           - alert: OutboxEventsDead
             expr: increase(outbox_events_dead_total[15m]) > 0
             for: 0m
@@ -226,7 +226,7 @@ groups:
 
     # Security signals. Every threshold below is a starting point sized for a quiet shop:
     # "tune to your traffic" before trusting it. A busy deployment raises the rates; a quiet one
-    # may lower them. Label names are the ones the metrics register (see docs/tools/prometheus.md).
+    # may lower them. Label names are the ones the metrics register (see docs/operate/prometheus.md).
     - name: security.rules
       rules:
           # Credential stuffing, as a volume: failed logins per second, all accounts together.

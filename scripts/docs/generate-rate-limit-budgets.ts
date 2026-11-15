@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * The rate-limit budget table in `docs/tools/security.md`. Same shape as
+ * The rate-limit budget table in `docs/understand/security.md`. Same shape as
  * `generate-role-matrix.ts`: markers in the page, prose around them untouched, `--check` in
  * `complete`.
  *
@@ -25,7 +25,7 @@ import { failScript } from '../fail-script';
 const checkOnly = hasFlag('check');
 
 /** The page the table lives in. */
-const PAGE = path.join(ROOT, 'docs/tools/security.md');
+const PAGE = path.join(ROOT, 'docs/understand/security.md');
 
 /** Markers bounding the generated block inside the page — everything between them is replaced. */
 const START = '<!-- rate-limit-budgets:start -->';

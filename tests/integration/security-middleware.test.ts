@@ -9,7 +9,7 @@
  * not of this repo's code. This file's job is proving `src/app/security.ts` itself applied
  * `NODE_TRUST_PROXY_HOPS`, which only the real, fully-wired app can show.
  *
- * See: docs/tools/security.md
+ * See: docs/understand/security.md
  */
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';

@@ -103,8 +103,8 @@ Redis `SET NX` widens the claim across workers when it is reachable.
 
 ## Related pages
 
-- [Modules overview](./index.md) — the whole context map
+- [Modules overview](./start.md) — the whole context map
 - [account](./account.md) — mounts the gate on `/signup` and `/reset`
 - [tasks](./tasks.md) — mounts the gate on `/contact`
-- [Security](../tools/security.md) — the rate-limit budgets this rung sits behind
-- [Web attack defences](../theory/defences/automation-and-abuse.md#the-ladder) — the whole ladder, and what each rung buys
+- [Security](../understand/security.md) — the rate-limit budgets this rung sits behind
+- [Web attack defences](../understand/defences/automation-and-abuse.md#the-ladder) — the whole ladder, and what each rung buys

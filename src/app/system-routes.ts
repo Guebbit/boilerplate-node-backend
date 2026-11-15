@@ -26,7 +26,7 @@ router.get('/', (_request, response) => {
  * GET /livez — Kubernetes-style liveness probe: is the process up. No I/O and an empty body, like
  * `/readyz`. It never looks at a dependency, on purpose: a container HEALTHCHECK restarts (or, under
  * Swarm, replaces) on failure, and a restart does not bring a downed database back.
- * See docs/tools/health-checks.md.
+ * See docs/operate/health-checks.md.
  */
 router.get('/livez', (_request, response) => {
     response.status(200).end();

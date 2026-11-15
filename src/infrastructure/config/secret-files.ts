@@ -8,7 +8,7 @@
  *           presence rule sees the resolved value and nothing downstream knows a file existed.
  * Never:    writes into `process.env` (that would hand the value to every child process again).
  *
- * See: docs/tools/configuration.md#secrets-as-files
+ * See: docs/operate/configuration.md#secrets-as-files
  */
 
 import { readFileSync } from 'node:fs';

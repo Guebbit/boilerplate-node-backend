@@ -8,7 +8,7 @@
  * Beaten: by an explicit environment variable, always — a number the operator sets is a fact about
  *         their machine that no heuristic here should second-guess.
  *
- * See: docs/tools/weak-machines.md
+ * See: docs/build/weak-machines.md
  */
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -132,7 +132,7 @@ export const MIN_PROCESS_BUDGET_MB = PROCESS_BASELINE_MB + PER_FILE_RETENTION_MB
  * machine cannot hold the layer, which is the only place it earns its wall-clock cost.
  *
  * A memory-constrained machine does NOT rely on this ceiling — it sets `JEST_PROCESS_BUDGET_MB`
- * below it explicitly. See docs/tools/weak-machines.md for measured figures.
+ * below it explicitly. See docs/build/weak-machines.md for measured figures.
  */
 export const MAX_SHARD_PEAK_MB = 8192;
 

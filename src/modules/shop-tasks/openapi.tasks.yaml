@@ -4,7 +4,7 @@
 # beside its own values); `tasks` never names them, so a project without a shop keeps `contact`,
 # `account_review` and `export_failed`.
 #
-# See: docs/api/contract-fragmentation.md#extending-another-modules-contract
+# See: docs/build/contract-fragmentation.md#extending-another-modules-contract
 openapi: 3.1.0
 info:
     title: shop-tasks — tasks extension

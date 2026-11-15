@@ -40,7 +40,7 @@ export const DELIVERED_CODE_MAX_ATTEMPTS: number = twoFactorRules.deliveredCodes
  * Always the ring's newest (`[0]`) key: unlike a TOTP secret, a delivered code is never persisted
  * across a rotation — it lives at most `DELIVERED_CODE_TTL_MS`, so there is no old ciphertext to
  * decrypt against an earlier entry, only an in-flight code that a rotation mid-window invalidates
- * (the same trade `docs/tools/security.md`'s JWT rotation makes for a session mid-refresh).
+ * (the same trade `docs/understand/security.md`'s JWT rotation makes for a session mid-refresh).
  *
  * @param code - the digits, as sent
  * @returns the hex digest to store in the entry's `codeHash`

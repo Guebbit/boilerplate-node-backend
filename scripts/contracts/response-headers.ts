@@ -13,7 +13,7 @@
  * Why stamped: the app sets these in middleware that runs before any route. A hand-copied list on
  * every operation is a published claim with no guard behind it, and it goes stale silently.
  *
- * See: docs/api/contract-fragmentation.md
+ * See: docs/build/contract-fragmentation.md
  */
 
 import { OpenAPIV3, type OpenAPIV3_1 } from 'openapi-types';

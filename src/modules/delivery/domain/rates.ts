@@ -3,7 +3,7 @@
  * Shipping rates — pure functions over a static table, kept in `domain/` like `evaluateCheckout`
  * so quotes come from exactly one place. `ShippingMethod` is this module's own `openapi.yaml`
  * schema, since `GET /delivery/methods` answers this table verbatim.
- * See `docs/theory/domain-layer.md`.
+ * See `docs/understand/domain-layer.md`.
  */
 
 import { padDecimal, toDecimalString, toMinorUnits, type Money } from '@domain-primitives/money';

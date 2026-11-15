@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * The two tables in `docs/tools/package-dependencies.md`: every `package.json` dependency, grouped
+ * The two tables in `docs/reference/package-dependencies.md`: every `package.json` dependency, grouped
  * by what it's for, and — for anything `./dependency-groups.ts` doesn't claim — which single module
  * imports it. Same shape as `generate-role-matrix.ts`: markers in the page, prose around them
  * untouched, `--check` in `complete`.
@@ -14,7 +14,7 @@
  * `./dependency-groups.ts`. A package that group doesn't claim, and that exactly one module
  * imports, needs no hand entry at all — ownership is what's derived, so it's listed under that
  * module automatically. Anything left over — no group, no single owner — lands in "Ungrouped":
- * visible, not a build failure, per `docs/theory/modules.md`'s "less policing" stance.
+ * visible, not a build failure, per `docs/understand/modules.md`'s "less policing" stance.
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -35,7 +35,7 @@ import { failScript } from '../fail-script';
 const checkOnly = hasFlag('check');
 
 /** The page both generated blocks live in. */
-const PAGE = path.join(ROOT, 'docs', 'tools', 'package-dependencies.md');
+const PAGE = path.join(ROOT, 'docs', 'reference', 'package-dependencies.md');
 
 const RUNTIME_START = '<!-- dependency-map:runtime:start -->';
 const RUNTIME_END = '<!-- dependency-map:runtime:end -->';

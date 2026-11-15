@@ -1,7 +1,7 @@
 /**
  * @module
  * Account service — authentication, the profile a person manages, and two-factor. One file per
- * flow, not one big file — see `docs/theory/layers.md`.
+ * flow, not one big file — see `docs/understand/layers.md`.
  *
  * `accountService`:   login, signup, profile, verification, tokens, OAuth.
  * `twoFactorService`: enrollment, removal, backup codes, the login challenge.

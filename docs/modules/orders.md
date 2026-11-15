@@ -86,7 +86,7 @@ column: `items[].locale` (required on `OrderItem`) freezes which language they w
 purchase time, so an order confirmation and its invoice read in the buyer's language rather than
 whatever the storefront happened to be showing. Reading the order back later must reproduce exactly
 that, never re-resolve against whoever is reading it now — see
-[Internationalisation](../tools/i18n.md#tier-3-user-authored-content).
+[Internationalisation](../understand/i18n.md#tier-3-user-authored-content).
 
 The snapshot also freezes what a preorder promised: `preorder: true` and the `releaseDate` the
 buyer saw. Both are decided once at checkout and never re-derived: the date passing, or an admin moving
@@ -165,10 +165,10 @@ Each account reads back only its own orders; writing and soft-deleting is admin-
 
 One scheduled job via `docker/crontab`: `npm run job reap:orders`, nightly, replaces an order's
 remaining PII (email, shipping name/phone/street, notes) with placeholders once
-the order's claim window has closed (a never-paid order at once, a delivered one after `conformityUntil`, an undelivered paid one 540 days after `paidAt`; [the rule](../theory/data-retention.md#orders-after-the-account)) — amounts, line items and dates survive, only the person is gone. An account inactive past `NODE_INACTIVE_MINIMISE_DAYS` starts the same clock through this
+the order's claim window has closed (a never-paid order at once, a delivered one after `conformityUntil`, an undelivered paid one 540 days after `paidAt`; [the rule](../understand/data-retention.md#orders-after-the-account)) — amounts, line items and dates survive, only the person is gone. An account inactive past `NODE_INACTIVE_MINIMISE_DAYS` starts the same clock through this
 module's `personalData.minimise` hook, keeping its `userId`; a live, active account's orders keep
 their personal fields, since order history is part of the contract
-([why](../theory/data-retention.md#orders-kept-while-the-account-lives)). Each scrub is announced:
+([why](../understand/data-retention.md#orders-kept-while-the-account-lives)). Each scrub is announced:
 the sweep works in batches of 500, and a batch scrubs its orders and writes one `order.redacted`
 outbox row each (`data: { orderId }`) in the same transaction, so the
 [webhook](./webhooks.md) exists exactly when the scrub does (GDPR Art. 19). It fires when the data
@@ -316,7 +316,7 @@ flowchart LR
 
 Every one of these edges is still written by `orders` alone — `delivery`, `payments` and an admin
 override all ASK for a move, never assign the field themselves. See
-[Tactical DDD](../theory/tactical-ddd.md#who-writes-the-status) for the placement rule and
+[Tactical DDD](../understand/tactical-ddd.md#who-writes-the-status) for the placement rule and
 [Who writes the status](#who-writes-the-status) below for the permission rule and the override.
 
 ## Who writes the status
@@ -376,7 +376,7 @@ The per-status half (rows 1 and 4) is the `fulfillment` trait in [the status tra
 **A list row is an `OrderListItem`.** `GET /orders` and `POST /orders/search` answer what the table
 renders (number, the four statuses, total and currency, dates, `actions`): no email, address, line or
 note. Those come from `GET /orders/{id}`, which is the audited read. See
-[a list row is a list item](../api/responses.md#a-list-row-is-a-list-item).
+[a list row is a list item](../reference/responses.md#a-list-row-is-a-list-item).
 
 **Finding an order by the number the customer quotes.** `GET /orders`, `POST /orders/search` and the
 CSV export take an exact, indexed `orderNumber` filter (`orders_orderNumber`, unique: a receipt number
@@ -428,7 +428,7 @@ A status added to the contract fails the build there instead of falling into a d
 `fulfillment` is a value plus whether the summary may refine it: `unfulfilled` (`pending`,
 `canceled`, and `paid` which follows the summary), `in_progress` (`processing`, follows the
 summary), `shipped`, `fulfilled`. The edges between statuses are not traits; they live in the
-[event table](../theory/tactical-ddd.md#_1-the-order-lifecycle).
+[event table](../understand/tactical-ddd.md#_1-the-order-lifecycle).
 
 ### The admin override
 
@@ -499,7 +499,7 @@ write that lost its race leaves no row. `orders` cannot listen to them: they imp
 
 **Paged as a log.** Staff notes make an order's history grow without limit (the only cap is the
 note rate limit, per staff account), so the read takes `page`/`pageSize` and answers `{ items, meta }`,
-newest first, with no `sort` (a log: [Sorting](../api/sorting.md#lists-with-one-fixed-order)). The
+newest first, with no `sort` (a log: [Sorting](../reference/sorting.md#lists-with-one-fixed-order)). The
 buyer's audience is part of the query, not a filter on the page, so `meta.totalItems` and every page
 count only rows that caller may read. Offset paging on a list that grows at its head can shift a row
 onto the next page; the order page dedupes by row id when it loads older rows. The index
@@ -602,7 +602,7 @@ flowchart LR
 formula in a spreadsheet. The writer's `escape_formulas` prefixes any cell starting with `=`, `+`,
 `-` (except a number), `@`, tab or carriage return with `'`. It does not cover `\0` or the
 full-width `＝＋－＠` variants: that gap is known and not handled. See
-[injection](../theory/defences/injection.md).
+[injection](../understand/defences/injection.md).
 
 ## Reads other modules compose
 
@@ -764,7 +764,7 @@ flowchart TD
 ```
 
 The cancelled mail is sent from the `order.canceled` listener (`services/cancel-mail.ts`, the rule
-is [Customer mail](../tools/outbox.md#customer-mail)), so it says what is being returned. The refunded
+is [Customer mail](../understand/outbox.md#customer-mail)), so it says what is being returned. The refunded
 mail belongs to `payments`, which sends it from its own `payment.refunded` listener once the refund settles, so it only ever says what already went back. A paid
 cancel therefore sends both, a few moments apart. A refund the provider refused sends nothing: no
 money moved.
@@ -840,7 +840,7 @@ when it is placed and the cart and profile show the reason and end date, a perso
 it early through the contact page, every set and lift is audited, the data export carries it, the
 mail names the right to object (Art. 21), the privacy notice says so (Art. 13(2)(f)), and a staff note
 is written as if the buyer reads it. The written balancing test, the DPIA screening note and what is
-kept after the hold ends are in [the purchase hold](../theory/data-retention.md#the-purchase-hold).
+kept after the hold ends are in [the purchase hold](../understand/data-retention.md#the-purchase-hold).
 
 ## Shop identity
 
@@ -897,7 +897,7 @@ earlier is always lawful. `returns` and `payments` stamp the result on the refun
 | `NODE_ORDER_PII_DAYS_UNDELIVERED`                                    | `540`   | The same for a paid order that ended without delivery, counted from `paidAt`                                                                                                                   |
 | `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS`                               | `1095`  | Days after a timeline row's own instant before `reap:orders` unsets the free text staff wrote on it (an override's reason, a staff note). The row stays                                        |
 | `NODE_ORDER_EXPORT_MAX_ROWS`                                         | `20000` | Most orders one `GET /orders/export` may carry. Over it: `422` `ORDER_EXPORT_TOO_LARGE`, before any byte of the file                                                                           |
-| `NODE_ORDER_EXPORT_RATE_LIMIT_MAX`, `NODE_ORDER_NOTE_RATE_LIMIT_MAX` | —       | Per-account budgets: see [the rate-limit budgets](../tools/security.md#the-rate-limit-budgets)                                                                                                 |
+| `NODE_ORDER_EXPORT_RATE_LIMIT_MAX`, `NODE_ORDER_NOTE_RATE_LIMIT_MAX` | —       | Per-account budgets: see [the rate-limit budgets](../understand/security.md#the-rate-limit-budgets)                                                                                            |
 | `NODE_ADMIN_ORDER_MAX_LINES`                                         | `100`   | Most lines an admin-created order (`POST /orders`) may carry. Over it: `422` `ORDER_LINE_LIMIT_EXCEEDED`. The contract's own ceiling is 1000; a larger value has no effect                     |
 | `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`                                 | `99999` | Largest quantity on one line of an admin-created order. Same refusal. The contract's ceiling is 999999                                                                                         |
 | `NODE_PURCHASE_HOLD_CANCEL_COUNT`                                    | `3`     | How many of a buyer's unpaid cancels inside the window pause their checkout, and paid ones flag the account ([the purchase hold](#the-purchase-hold)). Minimum 2                               |
@@ -911,7 +911,7 @@ correction takes effect on restart.
 ## Libraries
 
 `csv-stringify` is this module's alone, used by the [CSV export](#the-csv-export). See
-[Package Dependencies](../tools/package-dependencies.md) for where it sits among everything else.
+[Package Dependencies](../reference/package-dependencies.md) for where it sits among everything else.
 
 | Library                  | Maintained                            | What it costs you                                                                                      |
 | ------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -938,14 +938,14 @@ Every rule this module declares and who holds it, role by role. The rule is what
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
 `src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../theory/authorization.md) explains the model.
+evaluator — [Authorization](../understand/authorization.md) explains the model.
 
 <!-- permissions:end -->
 
 ## Related pages
 
-- [Modules overview](./index.md) — the whole context map
+- [Modules overview](./start.md) — the whole context map
 - [`inventory`](./inventory.md) — where the units actually move
 - [`payments`](./payments.md) — the money half of the same transition
-- [Tactical DDD](../theory/tactical-ddd.md) — why this is the aggregate candidate
-- [Events & Logging](../tools/events-and-logging.md) — `order.canceled` and `inventory.reservation_expired`
+- [Tactical DDD](../understand/tactical-ddd.md) — why this is the aggregate candidate
+- [Events & Logging](../understand/events-and-logging.md) — `order.canceled` and `inventory.reservation_expired`

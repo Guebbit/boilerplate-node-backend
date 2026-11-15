@@ -5,7 +5,7 @@
 #   - `restic check --read-data-subset=N%` reads a different slice of the stored data each time,
 #     so a corrupted pack is found weeks before the day it is restored
 # A failure pings the same heartbeat red; the next good backup turns it green again.
-# Design: docs/tools/backups.md#integrity-check
+# Design: docs/operate/backups.md#integrity-check
 # shellcheck source=common.sh
 source /usr/local/lib/backup/common.sh
 

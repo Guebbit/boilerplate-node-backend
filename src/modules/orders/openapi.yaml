@@ -338,7 +338,7 @@ paths:
                 Replaces the order identified by `{id}` in the path (RFC 9110 §9.3.4). `email` is
                 the only writable field — `status` moves only through an action endpoint
                 (`POST /orders/{id}/cancel`, `POST /orders/{id}/override-status`), never a field
-                on this body. See `docs/theory/tactical-ddd.md#who-writes-the-status`.
+                on this body. See `docs/understand/tactical-ddd.md#who-writes-the-status`.
             operationId: replaceOrderById
             security:
                 - bearerAuth: ['update:Order']
@@ -369,7 +369,7 @@ paths:
                 Updates the order identified by `{id}` in the path, merging — an omitted `email`
                 leaves the stored one untouched. `status` moves only through an action endpoint
                 (`POST /orders/{id}/cancel`, `POST /orders/{id}/override-status`), never a field
-                on this body. See `docs/theory/tactical-ddd.md#who-writes-the-status`.
+                on this body. See `docs/understand/tactical-ddd.md#who-writes-the-status`.
             operationId: updateOrderById
             security:
                 - bearerAuth: ['update:Order']
@@ -710,7 +710,7 @@ paths:
 
 components:
     schemas:
-        # The ONE sort grammar, shared with every list (docs/api/sorting.md). `-` sorts
+        # The ONE sort grammar, shared with every list (docs/reference/sorting.md). `-` sorts
         # descending; earlier entries rank first; ties end on the id. Text fields sort
         # case-insensitively.
         OrderSort:
@@ -2761,7 +2761,7 @@ components:
                 # writes — so a client that replaces its cached record from a write does not lose
                 # the block and collapse its own controls. The account export's `ExportOrder`
                 # leaves it out.
-                # See docs/theory/tactical-ddd.md.
+                # See docs/understand/tactical-ddd.md.
                 actions:
                     $ref: '#/components/schemas/OrderActions'
                 withdrawUntil:

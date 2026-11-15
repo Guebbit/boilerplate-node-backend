@@ -6,7 +6,7 @@
  * Scheme:   HMAC-SHA256 under a per-purpose subkey, HKDF-derived from one root secret.
  * Why:      a bare hash of a guessable value is brute-forced; a keyed one needs the key.
  * Sources:  EDPB Guidelines 01/2025 ¶88-89, ¶117-118; RFC 5869; NIST SP 800-57 §5.2.
- * Rotation: single value. Digests change once; see docs/tools/security.md.
+ * Rotation: single value. Digests change once; see docs/understand/security.md.
  *
  * Relative imports only: `logger.ts` imports this, and it sits on jest `globalSetup`'s chain.
  */

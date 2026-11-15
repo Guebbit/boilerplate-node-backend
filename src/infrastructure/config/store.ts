@@ -9,7 +9,7 @@
  * Lives on:    `globalThis`, so a `jest.resetModules()` re-import still sees the same state.
  *
  * Everything else asks a slice (`defineConfig`), and a slice asks {@link currentEnvironment}.
- * See: docs/tools/configuration.md
+ * See: docs/operate/configuration.md
  */
 
 import { resolveSecretFiles } from './secret-files';

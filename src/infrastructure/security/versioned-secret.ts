@@ -7,7 +7,7 @@
  *
  * Rotation is a RING, the same shape `account/session/config.ts`'s `parseKeyRing` gives the JWT
  * secrets: newest first, encrypt always with `ring[0]`, decrypt by looking up the ciphertext's own
- * stamped version among every entry the ring carries. `docs/tools/security.md`'s "Database
+ * stamped version among every entry the ring carries. `docs/understand/security.md`'s "Database
  * credential and key rotation" is the operator-facing runbook this exists for.
  */
 

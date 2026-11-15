@@ -123,7 +123,7 @@ export const searchForCaller = (
  *
  * A pass-through today — `facets()` on the repository already scopes to active, non-deleted rows.
  * Kept here anyway since a controller reaching past the service is the one shape this layer stack
- * disallows; see `docs/theory/layers.md`.
+ * disallows; see `docs/understand/layers.md`.
  */
 export const facets = (): Promise<{ categories: FacetCount[]; tags: FacetCount[] }> =>
     productRepository.facets();

@@ -1,7 +1,7 @@
 /**
  * @module
  * Order service — all business logic for the Order entity, and the one place a controller may call
- * into. One file per flow, not one big file; see `docs/theory/layers.md`.
+ * into. One file per flow, not one big file; see `docs/understand/layers.md`.
  *
  * Write door:  `place.ts` is the one function that writes a new order.
  * Visibility:  `scope.ts` decides who may see what; every read goes through it.

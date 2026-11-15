@@ -29,7 +29,7 @@ http:
                     - url: 'http://acme-app:3000'
                 # Off by default: with one `app` replica an unready instance has nowhere else to
                 # send traffic, and Traefik's own 503 carries no CORS headers. With two or more
-                # replicas, uncomment — docs/tools/health-checks.md#readiness-at-the-load-balancer.
+                # replicas, uncomment — docs/operate/health-checks.md#readiness-at-the-load-balancer.
                 # healthCheck:
                 #     path: /readyz
                 #     interval: 10s

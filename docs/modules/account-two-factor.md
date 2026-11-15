@@ -1,7 +1,7 @@
 # Two-factor authentication
 
 The second factor's **structure** — the registry, the state machine, and what a user document
-carries. [Security](../tools/security.md#two-factor-authentication) covers the same subsystem from
+carries. [Security](../understand/security.md#two-factor-authentication) covers the same subsystem from
 the attacker's side: the crypto at rest, the controls, and what is honestly not covered.
 
 ::: tip At a glance
@@ -172,7 +172,7 @@ Which guard sits on which route is `src/modules/account/routes.ts`. The rule tha
 
 The two login routes are public because they must be: the caller has no session yet, which is the
 entire point of the step. What stands in for one is the challenge — see
-[Security](../tools/security.md#the-challenge-is-a-claim-check-not-a-code) for why it is a
+[Security](../understand/security.md#the-challenge-is-a-claim-check-not-a-code) for why it is a
 single-use `verificationtokens` row rather than a JWT.
 
 ::: warning One route ordering is load-bearing
@@ -182,7 +182,7 @@ moving it changes which handler answers.
 
 Why a mutation needs a code on top of a fresh session, and why removing one method is held to the
 same bar as removing all of them, is argued in
-[Security](../tools/security.md#the-controls-and-which-attack-each-one-answers).
+[Security](../understand/security.md#the-controls-and-which-attack-each-one-answers).
 
 ## Changing factors needs a factor
 
@@ -267,7 +267,7 @@ and the reason `sms` is described everywhere as "a third handler and no other ch
 
 ## Libraries
 
-`account` is the only module that uses `otplib` (the demo scenarios also import it to compute codes) — see [Package Dependencies](../tools/package-dependencies.md) for
+`account` is the only module that uses `otplib` (the demo scenarios also import it to compute codes) — see [Package Dependencies](../reference/package-dependencies.md) for
 where it sits among everything else this repo depends on.
 
 | Library                             | Maintained             | What it costs you                                                 |
@@ -280,6 +280,6 @@ where it sits among everything else this repo depends on.
 
 - [`account`](./account.md) — the module this belongs to
 - [Sessions](./account-sessions.md) — the tokens a completed 2FA login mints, and `amr`
-- [Security](../tools/security.md#two-factor-authentication) — the crypto, the controls, the gaps
+- [Security](../understand/security.md#two-factor-authentication) — the crypto, the controls, the gaps
 - [`users`](./users.md) — where the factors are stored
 - [OAuth](./account-oauth.md) — the other way in, and it consults 2FA like the password login

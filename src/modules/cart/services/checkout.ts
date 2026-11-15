@@ -725,7 +725,7 @@ export const orderConfirm = (
         .then((result) => {
             /*
              * `order_created` fires here too, not just from the admin route's `create()` —
-             * see docs/tools/observability-layer.md. The audit records the caller's real role,
+             * see docs/understand/observability-layer.md. The audit records the caller's real role,
              * whatever it is — no forced override: a purchase made by an admin is still an admin
              * action, not a synthetic "user" role.
              */

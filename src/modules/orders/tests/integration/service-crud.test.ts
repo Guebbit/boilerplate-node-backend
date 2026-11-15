@@ -679,7 +679,7 @@ describe('getById', () => {
 
 describe('update', () => {
     // `status` is not a field `UpdateOrderByIdRequest` declares any more — see
-    // `docs/theory/tactical-ddd.md#who-writes-the-status` for where each move goes instead.
+    // `docs/understand/tactical-ddd.md#who-writes-the-status` for where each move goes instead.
     // `email` is the one field left, so that is the whole of what this suite has to prove.
     it('changes the email', async () => {
         const { order } = await seedOrder();

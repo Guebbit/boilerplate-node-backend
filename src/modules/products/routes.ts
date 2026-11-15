@@ -40,7 +40,7 @@ export const router = Router();
  * answer an anonymous browser. Each write names its own guard instead, and that guard is
  * `isAuthOrCredential` — catalogue writes are `Product`/`Translation` rules over
  * the tenant's own data, so a PIM or a supplier feed may hold them. See
- * docs/tools/security.md#machine-to-machine-credentials.
+ * docs/understand/security.md#machine-to-machine-credentials.
  */
 router.use(getAuth);
 

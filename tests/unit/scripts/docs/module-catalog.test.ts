@@ -43,7 +43,7 @@ describe('renderModuleList', () => {
     it('lists the example module last, linked to the section that explains it rather than to a page', () => {
         expect(list.indexOf('### Example')).toBeGreaterThan(list.indexOf('### Demo shop'));
         expect(list).toContain(
-            '- [`example`](../theory/modules.md#the-module-template) — example summary.'
+            '- [`example`](../understand/modules.md#the-module-template) — example summary.'
         );
         expect(list).not.toContain('./example.md');
     });
@@ -90,7 +90,7 @@ describe('moduleSidebar for the example module', () => {
         const sidebar = moduleSidebar(CATALOGUE);
 
         expect(sidebar[3].items).toEqual([
-            { text: 'example', link: '/theory/modules#the-module-template' }
+            { text: 'example', link: '/understand/modules#the-module-template' }
         ]);
     });
 });

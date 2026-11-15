@@ -21,7 +21,7 @@
  * so a 304 is always safe); a write compares only the edit part, so a sale never refuses an
  * editor's open form. The one registered difference: `if-match-edit-version`.
  *
- * See: docs/api/write-methods.md#conditional-writes-etag-and-if-match
+ * See: docs/understand/write-methods.md#conditional-writes-etag-and-if-match
  */
 
 import { AsyncLocalStorage } from 'node:async_hooks';

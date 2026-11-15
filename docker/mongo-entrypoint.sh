@@ -26,7 +26,7 @@ fi
 # 8.3 requires), with `--tlsAllowConnectionsWithoutCertificates` so it never demands a certificate
 # back (mTLS is a heavier control than this deployment needs). Only the CLIENT side verifies
 # the server: `NODE_DB_URI`'s `tlsCAFile` and every `mongosh`/`mongodump` invocation below (the
-# healthcheck, `mongo-rs-init`, `docs/tools/backups.md`'s dump command) point at $CA_CERT or the
+# healthcheck, `mongo-rs-init`, `docs/operate/backups.md`'s dump command) point at $CA_CERT or the
 # copy this script hands to `mongo-ca-dir` for the containers that never mount this volume.
 #
 # A deployment bringing a real CA-issued certificate instead: drop it in as $SERVER_PEM (cert then

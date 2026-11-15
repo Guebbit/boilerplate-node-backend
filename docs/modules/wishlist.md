@@ -51,7 +51,7 @@ account, but that is a field, not an import: `users`' erase hook reaches it thro
 
 ::: tip Almost nothing depends on it
 Only `notifications` imports it, for the `wishlist.items_removed` event name. Deleting it means
-dropping that listener too — follow [Removing a module](../theory/module-lifecycle.md#removing-a-module);
+dropping that listener too — follow [Removing a module](../build/module-lifecycle.md#removing-a-module);
 `tsc` points at the import.
 :::
 
@@ -118,6 +118,6 @@ flowchart LR
 ## Related pages
 
 - [`cart`](./cart.md) — the same shape, with the hard part attached
-- [Adding & Removing a Module](../theory/module-lifecycle.md) — the deletability procedure
-- [Events & Logging](../tools/events-and-logging.md) — the two events this module listens for
-- [Product Analytics](../tools/analytics.md) — the save/move funnel
+- [Adding & Removing a Module](../build/module-lifecycle.md) — the deletability procedure
+- [Events & Logging](../understand/events-and-logging.md) — the two events this module listens for
+- [Product Analytics](../understand/analytics.md) — the save/move funnel

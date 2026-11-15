@@ -11,7 +11,7 @@
  *          on a store error, answers through the shared error envelope, never express-rate-limit's
  *          own plain-text body.
  *
- * See: docs/tools/security.md#the-rate-limit-budgets
+ * See: docs/understand/security.md#the-rate-limit-budgets
  */
 
 import { isIPv4 } from 'node:net';
@@ -318,7 +318,7 @@ export const chargeBudget = async (budget: RateLimitBudget, key: string): Promis
 
 /**
  * `keyedBy` label for a budget bucketed on the caller's single address — shared so every such
- * budget's row in the generated table (`docs/tools/security.md#the-rate-limit-budgets`) reads as
+ * budget's row in the generated table (`docs/understand/security.md#the-rate-limit-budgets`) reads as
  * the same sentence.
  */
 export const KEYED_BY_ADDRESS = 'address (IPv6 /56)';
@@ -425,7 +425,7 @@ export const priorHits = (info: RateLimitInfo): number => info.used - 1;
  * address-block budget, and by any keying function that needs a fallback for a caller supplying
  * no identifying value of its own.
  *
- * See: docs/tools/security.md#the-rate-limit-budgets
+ * See: docs/understand/security.md#the-rate-limit-budgets
  */
 export const addressBlockOf = (request: Request): string => {
     const { ip } = request;

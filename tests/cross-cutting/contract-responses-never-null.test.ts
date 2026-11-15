@@ -1,7 +1,7 @@
 /**
  * No response schema in the bundled contract admits `null`.
  *
- * The read side of the empty-value rule (`docs/api/write-methods.md#empty-null-omitted`): `null` is
+ * The read side of the empty-value rule (`docs/understand/write-methods.md#empty-null-omitted`): `null` is
  * a write verb ("clear this", PUT/PATCH only). A response says "no value" by leaving the key out.
  * Request bodies keep their `'null'`; only what an operation answers is judged here.
  *

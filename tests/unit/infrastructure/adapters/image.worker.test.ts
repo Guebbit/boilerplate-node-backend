@@ -365,7 +365,7 @@ describe('enqueueIfImagePending', () => {
     });
 
     /**
-     * The residual race `docs/tools/image-processing.md` describes: the queue looked ready at
+     * The residual race `docs/understand/image-processing.md` describes: the queue looked ready at
      * upload time, but the broker died before this publish. The awaited inline fallback is what's
      * under test — the caller must not resolve before the writeback it depends on has run, and the
      * document it gets back must carry the real urls rather than the pre-digest placeholder, since

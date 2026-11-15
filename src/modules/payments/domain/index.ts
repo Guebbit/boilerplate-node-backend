@@ -5,7 +5,7 @@
  * mandatory, so it gets one rather than living as a scattered constant beside each write that
  * reads it.
  *
- * See `docs/theory/domain-layer.md`.
+ * See `docs/understand/domain-layer.md`.
  */
 
 export {

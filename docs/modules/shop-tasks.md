@@ -191,7 +191,7 @@ subject (`subjectName`: the order's number printed as `#…`, or the product's n
 order's or the product's id, the screen it opens) because two such notices must not read the same.
 Unlike the other order notices this one does read: no event carries the order number, so the sink asks
 `payments` or `delivery` for the order of the payment or fulfillment order and `orders` for its number.
-One notice per stuck key. See [Do-not-retry operations](../tools/idempotency.md#do-not-retry-operations).
+One notice per stuck key. See [Do-not-retry operations](../understand/idempotency.md#do-not-retry-operations).
 
 `fulfillment_order.delayed` is both a to-do and a message. One module has one handler per event, so
 a single handler runs the to-do first (idempotent by `eventId`) and then the notice: a redelivery
@@ -303,12 +303,12 @@ flowchart LR
     E -->|"public event"| WH["webhooks<br/>to subscribers"]
 ```
 
-- A do-not-retry write that may or may not have happened is told in-process, not through an event: [Do-not-retry operations](../tools/idempotency.md#do-not-retry-operations).
+- A do-not-retry write that may or may not have happened is told in-process, not through an event: [Do-not-retry operations](../understand/idempotency.md#do-not-retry-operations).
 - To-do kinds, openers, closers, who works them: [Tasks](./tasks.md#who-is-told) and the kind table above.
 - Notice codes, sets and mail class: [Notifications](./notifications.md#work-notices-for-staff).
 - The daily and weekly counts: [the staff digest](#the-staff-digest) above.
-- Every mail, one row each: [Mails we send](../tools/email-and-rendering.md#mails-we-send).
-- Events that survive a crash: [Outbox](../tools/outbox.md). Public events: [Webhooks](./webhooks.md).
+- Every mail, one row each: [Mails we send](../understand/email-and-rendering.md#mails-we-send).
+- Events that survive a crash: [Outbox](../understand/outbox.md). Public events: [Webhooks](./webhooks.md).
 
 ## Configuration
 
@@ -324,5 +324,5 @@ flowchart LR
 
 - [Tasks](./tasks.md) — the engine these openers feed
 - [Notifications](./notifications.md) — the inbox, the bell and the work-notice engine
-- [Extending another module's contract](../api/contract-fragmentation.md#extending-another-modules-contract) — how the kinds and codes reach the contract
-- [Email & PDF Rendering](../tools/email-and-rendering.md) — the digest mail
+- [Extending another module's contract](../build/contract-fragmentation.md#extending-another-modules-contract) — how the kinds and codes reach the contract
+- [Email & PDF Rendering](../understand/email-and-rendering.md) — the digest mail

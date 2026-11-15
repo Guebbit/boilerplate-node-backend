@@ -5,7 +5,7 @@
  * Its own file so `./mail-transports` (loaded before the application, by the jest setup and the
  * dev preload) never imports nodemailer: a test's own `jest.mock('nodemailer')` must still win.
  *
- * See: docs/tools/email-and-rendering.md#smtp-configuration
+ * See: docs/understand/email-and-rendering.md#smtp-configuration
  */
 
 // nodemailer: `createTransport` builds a reusable SMTP sender; `SentMessageInfo` is the server's

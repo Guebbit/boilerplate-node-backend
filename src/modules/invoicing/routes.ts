@@ -1,7 +1,7 @@
 /**
  * @module
  * Express router for invoicing's three download routes — mounted at `/orders`, shared with `orders`'
- * own router (see `./module.ts` and `docs/api/contract-fragmentation.md`'s `account`/`addresses`
+ * own router (see `./module.ts` and `docs/build/contract-fragmentation.md`'s `account`/`addresses`
  * precedent). `getAuth` returns early when a request already carries a resolved auth context, so
  * mounting it here too costs nothing beyond the first router that ran.
  *

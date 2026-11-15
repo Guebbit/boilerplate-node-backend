@@ -4,7 +4,7 @@
  * tier. The lifecycle, the jurisdiction table and the ownership rule live here rather than inline
  * in the service, so the export, the erasure and the doors all ask the same questions.
  *
- * See `docs/theory/domain-layer.md`.
+ * See `docs/understand/domain-layer.md`.
  */
 
 export {

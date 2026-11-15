@@ -6,7 +6,7 @@
  * overrides, and only a language with a deployed file can be overridden. One refresh fills both,
  * so the copy and the list of served languages never come from two different reads.
  *
- * See: docs/tools/i18n.md#database-overrides
+ * See: docs/understand/i18n.md#database-overrides
  */
 
 import i18next from 'i18next';

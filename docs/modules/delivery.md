@@ -60,7 +60,7 @@ flowchart LR
 
 A fulfillment order and a shipment are _about_ an order. The shipped email's language comes through
 `orders`' `mailBuyerOfOrder`, so this module never reads the account itself. It is sent from the
-`shipment.shipped` listener, like every customer mail ([Customer mail](../tools/outbox.md#customer-mail)).
+`shipment.shipped` listener, like every customer mail ([Customer mail](../understand/outbox.md#customer-mail)).
 
 **The rates are pure functions in `domain/`, and that is what makes the cart's edge cheap to
 hold.** [`cart`](./cart.md) imports `findShippingMethod` and `priceShipping` directly — a real,
@@ -362,7 +362,7 @@ buyer who does nothing keeps waiting.
 Selling to the **EU** needs no warning or clause for this, because the shop never cancels on its
 own. Selling to **US** buyers adds the FTC's mail-order rule (16 CFR 435.2): for a long delay the
 buyer's express OK is needed. Staff ask for it by email by hand, and cancel with a refund if there is
-no OK within 30 days. See [before you sell](../demo-ecommerce/before-you-sell.md).
+no OK within 30 days. See [before you sell](../use-the-shop/before-you-sell.md).
 
 The reminder is a task: a delay that the FTC rule covers (a shop in the United States or one of its
 territories, or a buyer shipped to one) opens a `consent_due` task for the staff who hold `OrderEditing`, due 30 days after the agreed date (or on
@@ -618,9 +618,9 @@ them back would count the goods twice. `ShipmentActions.deliver` is true for a l
 when the condition holds.
 
 **What the shop does about the second parcel** is a guide matter: ask for one back or let the buyer
-keep it ([The lost parcel arrived](../demo-ecommerce/when-something-goes-wrong.md#lost-parcel-arrived)).
+keep it ([The lost parcel arrived](../use-the-shop/when-something-goes-wrong.md#lost-parcel-arrived)).
 A parcel returned to sender needs no door of its own: receive the units
-([It came back to us](../demo-ecommerce/when-something-goes-wrong.md#parcel-came-back)), then ship them again.
+([It came back to us](../use-the-shop/when-something-goes-wrong.md#parcel-came-back)), then ship them again.
 
 For the accountant, the shipment with its tracking code and note is the loss documentation: Italy
 presumes goods that went missing were sold unless the loss is documented (DPR 441/1997).
@@ -709,24 +709,24 @@ date this order was expecting, not the product's previous date.
 
 ## Routes and events
 
-| Route                                                      | Answers                                                                                                                                                                           |
-| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /delivery/methods`                                    | the shipping methods and what each costs                                                                                                                                          |
-| `GET /delivery/fulfillment-orders` · `/summary`            | [the preorder board](#the-preorder-board)'s two reads                                                                                                                             |
-| `GET /delivery/fulfillment-orders/restock-date-impact`     | orders a restock-date move would email, before it is saved                                                                                                                        |
-| `GET /orders/{id}/fulfillment-orders` · `/shipments`       | `{ items[] }` each, every item with its own `actions`; unpaged                                                                                                                    |
-| `POST /orders/{id}/process`                                | the order, `processing`                                                                                                                                                           |
-| `POST /delivery/fulfillment-orders/{id}/shipments`         | `201` + `Location` + the shipment; REQUIRED `Idempotency-Key` (a retry would cut a second parcel), see [do-not-retry operations](../tools/idempotency.md#do-not-retry-operations) |
-| `POST /delivery/fulfillment-orders/{id}/fulfill`           | `201` + `Location` like ship, the shipment delivered; optional `Idempotency-Key` (it takes the whole remainder, so a re-run is refused by the order's state)                      |
-| `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | the fulfillment order                                                                                                                                                             |
-| `PATCH /delivery/shipments/{id}`                           | the shipment, tracking added or corrected, at any time (shipped, delivered or lost)                                                                                               |
-| `POST /delivery/shipments/{id}/deliver`                    | the shipment                                                                                                                                                                      |
-| `POST /delivery/shipments/{id}/mark-lost`                  | the shipment, `lost`                                                                                                                                                              |
+| Route                                                      | Answers                                                                                                                                                                                |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /delivery/methods`                                    | the shipping methods and what each costs                                                                                                                                               |
+| `GET /delivery/fulfillment-orders` · `/summary`            | [the preorder board](#the-preorder-board)'s two reads                                                                                                                                  |
+| `GET /delivery/fulfillment-orders/restock-date-impact`     | orders a restock-date move would email, before it is saved                                                                                                                             |
+| `GET /orders/{id}/fulfillment-orders` · `/shipments`       | `{ items[] }` each, every item with its own `actions`; unpaged                                                                                                                         |
+| `POST /orders/{id}/process`                                | the order, `processing`                                                                                                                                                                |
+| `POST /delivery/fulfillment-orders/{id}/shipments`         | `201` + `Location` + the shipment; REQUIRED `Idempotency-Key` (a retry would cut a second parcel), see [do-not-retry operations](../understand/idempotency.md#do-not-retry-operations) |
+| `POST /delivery/fulfillment-orders/{id}/fulfill`           | `201` + `Location` like ship, the shipment delivered; optional `Idempotency-Key` (it takes the whole remainder, so a re-run is refused by the order's state)                           |
+| `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | the fulfillment order                                                                                                                                                                  |
+| `PATCH /delivery/shipments/{id}`                           | the shipment, tracking added or corrected, at any time (shipped, delivered or lost)                                                                                                    |
+| `POST /delivery/shipments/{id}/deliver`                    | the shipment                                                                                                                                                                           |
+| `POST /delivery/shipments/{id}/mark-lost`                  | the shipment, `lost`                                                                                                                                                                   |
 
 The key each route asks is in `src/modules/delivery/routes.ts`: the shipment doors take `update:Shipment` (`fulfill` also `start:Shipment` from `paid`), `process` takes `start:Shipment`, the reads are `display:Order`, the order's owner, or public for the methods.
 
 Every button a client draws comes from the record's own `actions` (or `GET /returns/options`): the
-frontend never re-derives a rule. Every staff door asks the key and nothing else: [no rank](../theory/authorization.md#protecting-people).
+frontend never re-derives a rule. Every staff door asks the key and nothing else: [no rank](../understand/authorization.md#protecting-people).
 
 `FulfillmentOrderActions.ship` and `fulfill` are true on a `paid` order only for a caller who also holds
 `start:Shipment`. `ShipmentActions.update` is the tracking-code edit
@@ -765,7 +765,7 @@ carries a `shipments` section (lines, number, tracking, dates, and for a loss it
 (lines, dates, hold reason, **staff's hold note**): a note a person typed about a person is that
 person's data, and the record holds no staff id, so none is exported. The note is also **reaped** — `npm run job reap:delivery` unsets it once the fulfillment order has not
 changed for `NODE_HOLD_NOTE_RETENTION_DAYS` (default 365), and a lost parcel's `lostNote` with it (`lostMessage` stays: it was sent to the buyer), exactly as `reap:returns` does for a return's
-text ([why](../theory/data-retention.md#free-text-on-holds)). Lines, status and dates stay: they are the
+text ([why](../understand/data-retention.md#free-text-on-holds)). Lines, status and dates stay: they are the
 trail.
 
 ## Configuration
@@ -802,7 +802,7 @@ Every rule this module declares and who holds it, role by role. The rule is what
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
 `src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../theory/authorization.md) explains the model.
+evaluator — [Authorization](../understand/authorization.md) explains the model.
 
 <!-- permissions:end -->
 
@@ -810,8 +810,8 @@ evaluator — [Authorization](../theory/authorization.md) explains the model.
 
 - [`orders`](./orders.md) — what a fulfillment order is about, and the summary it reads
 - [`returns`](./returns.md) — what comes back, and what is cancelled before it leaves
-- [Data Retention](../theory/data-retention.md#free-text-on-holds) — why a hold note is wiped
+- [Data Retention](../understand/data-retention.md#free-text-on-holds) — why a hold note is wiped
 - [`cart`](./cart.md) — the checkout that prices a method
-- [Domain Layer](../theory/domain-layer.md) — why the rates are pure functions
-- [Email & PDF Rendering](../tools/email-and-rendering.md) — the shipped notification
-- [Strategic DDD](../theory/strategic-ddd.md#_5-published-language-—-the-barrel) — what `published-language` buys
+- [Domain Layer](../understand/domain-layer.md) — why the rates are pure functions
+- [Email & PDF Rendering](../understand/email-and-rendering.md) — the shipped notification
+- [Strategic DDD](../understand/strategic-ddd.md#_5-published-language-—-the-barrel) — what `published-language` buys

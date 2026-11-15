@@ -8,7 +8,7 @@
  * `import type`: counts. The type IS the schema, and the coupling survives erasure.
  * Options:      suffixes and the path check are per layer. Defaults are the strict reading.
  *
- * Why two checks, why types count: docs/theory/layers.md#persistence-behind-the-repository
+ * Why two checks, why types count: docs/understand/layers.md#persistence-behind-the-repository
  */
 
 import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';

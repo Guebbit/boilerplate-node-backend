@@ -1,6 +1,6 @@
 /**
  * @module
- * This module's pure rules — see `docs/theory/domain-layer.md` for what earns a place here.
+ * This module's pure rules — see `docs/understand/domain-layer.md` for what earns a place here.
  * Re-exported flat rather than as namespaces: two files, no risk of a name collision growing one.
  */
 

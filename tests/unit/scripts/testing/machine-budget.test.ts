@@ -6,7 +6,7 @@
  * expensive in both directions: too high and the OOM killer takes a worker mid-file, too low and a
  * strong machine pays sharding overhead it does not need. Both directions are asserted.
  *
- * See: docs/tools/weak-machines.md
+ * See: docs/build/weak-machines.md
  */
 
 import os from 'node:os';

@@ -165,7 +165,7 @@ Two different questions, asked at two different moments, both owned by `orders`:
   [why the others do not](./inventory-reservations.md#money-can-land-on-a-released-hold-take-the-units-again).
 - **The final write** — `markPaid` (`orders/friends/payments.ts`) — is what actually moves the order once money has
   settled (`settlePayment` calls it; see "Status transitions" below and
-  `docs/theory/tactical-ddd.md` §1 "Who writes the status"). It is `orders`' own conditional write,
+  `docs/understand/tactical-ddd.md` §1 "Who writes the status"). It is `orders`' own conditional write,
   independent of the pre-check: a race that slips past the pre-check still cannot double-move the
   order, because `markPaid` only writes from `pending`.
 
@@ -425,7 +425,7 @@ sequenceDiagram
   cannot return more than was paid. A miss re-reads and re-checks.
 - **Exact sums.** Amounts are summed in integer minor units (`toMinorUnits`/`toDecimalString` from
   `@domain-primitives/money`), never by adding decimals. They rest as `Decimal128`
-  ([Money at rest](../theory/tactical-ddd.md#at-rest-decimal128)); a refund with more places than
+  ([Money at rest](../understand/tactical-ddd.md#at-rest-decimal128)); a refund with more places than
   the currency's minor unit is refused (`fitsCurrency`).
 - **One key per record.** `refund:{paymentId}:{refundId}` — a retry of a refund is safe at the
   provider, and two different partial refunds are never mistaken for one.
@@ -856,7 +856,7 @@ flowchart LR
 
 ## Libraries
 
-`ibantools` is this module's alone — see [Package Dependencies](../tools/package-dependencies.md)
+`ibantools` is this module's alone — see [Package Dependencies](../reference/package-dependencies.md)
 for where it sits among everything else this repo depends on. Used once, at boot: it is what
 the `paymentsConfig` boot check runs `NODE_BANK_TRANSFER_IBAN`/`_BIC` through before the deployment is allowed to
 advertise `bank_transfer` at all.
@@ -1217,7 +1217,7 @@ Every rule this module declares and who holds it, role by role. The rule is what
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
 `src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../theory/authorization.md) explains the model.
+evaluator — [Authorization](../understand/authorization.md) explains the model.
 
 <!-- permissions:end -->
 
@@ -1225,5 +1225,5 @@ evaluator — [Authorization](../theory/authorization.md) explains the model.
 
 - [The provider port](./payments-provider-port.md) — the interface and the fake behind it
 - [`orders`](./orders.md) — what a payment is about
-- [Layers](../theory/layers.md) — what a port is and where it sits
-- [Security](../tools/security.md) — what is never stored here, and this module's own rate-limit budgets
+- [Layers](../understand/layers.md) — what a port is and where it sits
+- [Security](../understand/security.md) — what is never stored here, and this module's own rate-limit budgets

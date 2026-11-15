@@ -7,7 +7,7 @@
  *         `npx stryker` directly would silently run without the heap cap — which is the one setting
  *         a run on a 30 GB machine cannot do without.
  *
- * See: docs/tools/mutation-testing.md#worker-heap-cap
+ * See: docs/build/mutation-testing.md#worker-heap-cap
  */
 import { spawn } from 'node:child_process';
 import { rm } from 'node:fs/promises';
@@ -18,7 +18,7 @@ import { REPO_ROOT } from '../modules-on-disk';
 
 /**
  * Measured peak RSS of one Stryker/jest worker during a mutation run, rounded up —
- * docs/tools/mutation-testing.md#the-worker-pool-multiplication. The ceiling for this run is RAM,
+ * docs/build/mutation-testing.md#the-worker-pool-multiplication. The ceiling for this run is RAM,
  * not cores, which is why the default below is computed from it instead of copying `jest`'s
  * CPU-only heuristic.
  */
@@ -58,7 +58,7 @@ const OOM_WINDOW_MS = 10 * 60 * 1000;
  * `STRYKER_CONCURRENCY` always wins. Unset, the safe number is computed from this machine rather
  * than left to `stryker.json`'s committed `concurrency: 4` — a number sized for a
  * contributor's laptop, not necessarily this one.
- * See docs/tools/mutation-testing.md#the-worker-pool-multiplication.
+ * See docs/build/mutation-testing.md#the-worker-pool-multiplication.
  *
  * @returns `STRYKER_CONCURRENCY` when set, otherwise the lower of `logical CPUs - 1` and free
  *   memory (`MemAvailable`, not total) divided by one worker's peak RSS
@@ -101,11 +101,11 @@ export const runStryker = ({
 
     /*
      * `--expose-gc` lets the test environment collect after each file, which a single-process dry
-     * run needs to finish — see docs/tools/mutation-testing.md#collect-after-each-file.
+     * run needs to finish — see docs/build/mutation-testing.md#collect-after-each-file.
      *
      * `--max-old-space-size` raises V8's default, a flat ~4.2 GB here rather than a share of the
      * machine — a worker wanting more dies in the first minute. It cannot bound memory held outside
-     * the heap, such as `bson`'s buffers. See docs/tools/mutation-testing.md#worker-heap-cap.
+     * the heap, such as `bson`'s buffers. See docs/build/mutation-testing.md#worker-heap-cap.
      *
      * `...process.env`, never `.env` merged in first: `.env`'s real `NODE_RATE_LIMIT_REDIS_URL`/
      * `NODE_REDIS_URL` would otherwise reach every spawned jest before `tests/support/setup-environment.ts` can
@@ -172,7 +172,7 @@ export const runStryker = ({
                             `  This is the OOM/strand loop, not a slow run. Every restart discards that\n` +
                             `  worker's in-progress mutants, so the run cannot converge — the remaining-time\n` +
                             `  estimate will climb rather than fall if it is left alone.\n\n` +
-                            `  What to read: docs/tools/mutation-testing.md, "When a run never finishes".\n` +
+                            `  What to read: docs/build/mutation-testing.md, "When a run never finishes".\n` +
                             `  What to try first: STRYKER_WORKER_HEAP_MB in .env — Node's default heap is a\n` +
                             `  flat ~4.2 GB regardless of how much RAM this machine has.\n`
                     );

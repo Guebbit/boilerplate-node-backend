@@ -1,7 +1,7 @@
 /**
  * @module
  * Placed orders: admin write and soft delete, plus each account reading back its own. See
- * docs/theory/tactical-ddd.md for the invariants — totals, legal status transitions, what
+ * docs/understand/tactical-ddd.md for the invariants — totals, legal status transitions, what
  * cancelling restores. Depends on products (a line copies the catalogue row's fields at purchase
  * time, through `productService`, into this module's OWN `orderLineProductSchema` — not
  * `products`' `productSchema`, so the embedded copy has nowhere to carry a live warehouse counter)

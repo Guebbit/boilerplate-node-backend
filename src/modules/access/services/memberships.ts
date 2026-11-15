@@ -4,7 +4,7 @@
  * that change it. A role lives in exactly one place, the membership row — the user document holds
  * none of its own.
  *
- * See: docs/theory/authorization.md
+ * See: docs/understand/authorization.md
  */
 
 import type { ClientSession } from 'mongoose';
@@ -179,7 +179,7 @@ export const eraseMemberships = (userId: string, session: ClientSession): Promis
  * No fallback: a role lives in exactly one place, the membership row. `permissions.ts`'s
  * `keysInScope` already treats a `null` role as "no role", not as a guessed default — the anonymous
  * baseline in tenant scope (signing in may only ever widen what a stranger already sees), an empty
- * set in platform scope. See `docs/theory/authorization.md`.
+ * set in platform scope. See `docs/understand/authorization.md`.
  */
 export const rolesOf = (
     userId: string,

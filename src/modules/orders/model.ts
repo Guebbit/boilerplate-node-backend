@@ -169,7 +169,7 @@ export interface OrderDocument
     /**
      * When erasure or inactivity minimisation started this order's PII clock. Only its presence
      * matters: `reap:orders` derives the due date from `paidAt`, `status` and `conformityUntil`
-     * on every run. See `docs/theory/data-retention.md#orders-after-the-account`.
+     * on every run. See `docs/understand/data-retention.md#orders-after-the-account`.
      */
     piiClockStartedAt?: Date;
     /**

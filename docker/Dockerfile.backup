@@ -11,7 +11,7 @@
 # and arm64 only for Ubuntu 24.04. Alpine has no official build.
 #
 # Every download is pinned by SHA-256 per architecture; a mismatch fails the build.
-# docs/tools/backups.md#the-tools lists each tool, its licence and why it was chosen.
+# docs/operate/backups.md#the-tools lists each tool, its licence and why it was chosen.
 #
 # Build: docker build -f docker/Dockerfile.backup -t boilerplate-backup:latest .
 

@@ -7,7 +7,7 @@
  * Pure `Intl`, no imports: `infrastructure/config/fields.ts` reads it too, and that file sits near
  * jest's global-setup import chain.
  *
- * See: docs/tools/i18n.md#language-tags
+ * See: docs/understand/i18n.md#language-tags
  */
 
 /**

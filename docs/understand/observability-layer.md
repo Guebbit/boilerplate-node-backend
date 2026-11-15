@@ -1,0 +1,100 @@
+# The Observability Layer
+
+[Observability Stack Reference](../operate/observability-reference.md) maps the **external stack** —
+Prometheus, Loki, Tempo, Grafana, the OTel collector — and its config. This page is about the
+**code in this repo**: what the layer is made of, and which seams hold it together.
+
+## The layer, in one table
+
+Five signals, one transport, one module.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 50}}}%%
+flowchart LR
+    M["a module's own<br/><i>metrics.ts · audit.ts · analytics.ts</i>"] -->|declares onto| R["infrastructure's shared mechanism<br/><i>metrics-registry · audit map · analytics port</i>"]
+    R --> E["GET /observability/*<br/><i>reads by NAME, never by import</i>"]
+
+    classDef mod fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef infra fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef out fill:#dcfce7,stroke:#16a34a,color:#111827;
+    class M mod;
+    class R infra;
+    class E out;
+```
+
+| Signal          | Mechanism (infrastructure)                                                                                                                                                                                                           | What a module contributes                                                       | Where it goes                                                   |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| **Logs**        | `adapters/logger.ts` — Winston, JSON, two loggers                                                                                                                                                                                    | nothing; every tier just logs                                                   | stdout → Alloy → Loki                                           |
+| **Metrics**     | `observability/metrics-registry.ts` — the shared registry; `observability/metrics-http.ts` — HTTP counters, latency histogram                                                                                                        | `<module>/metrics.ts` declares counters **onto the shared registry**            | `GET /observability/metrics`, scraped by Prometheus             |
+| **Traces**      | `observability/tracer.ts` — a thin wrapper over the OTel API (`withSpan`, `getActiveSpanContext`)                                                                                                                                    | nothing declared; spans are taken where useful                                  | OTLP → collector → Tempo                                        |
+| **Audit**       | `observability/audit.ts` — the action vocabulary, `emitAuditEvent`, and the sink port                                                                                                                                                | `<module>/audit.ts` augments the action map; `audit-logs` **installs the sink** | a log line always; a Mongo row when the sink is registered      |
+| **Analytics**   | `observability/analytics/` — the provider port + `umami` (default), `posthog`, `none`                                                                                                                                                | `<module>/analytics.ts` declares the names that module emits                    | the configured provider                                         |
+| **Readiness**   | `modules/observability/services/dependency-health.ts` (no I/O) + `job-health.ts` (one `leases` query) — the module's own, reading each adapter's connection state directly                                                           | —                                                                               | `GET /observability/health`                                     |
+| **Live stream** | `modules/observability/services/stream.ts` — SSE, 5 s updates, 15 s heartbeat — the module's own                                                                                                                                     | —                                                                               | `GET /observability/events`, shape pinned by `asyncapi.yaml`    |
+| **The module**  | `src/modules/observability/` — readiness (`dependency-health.ts`), job health, the process snapshot, the SSE hub and the scrape guard (`metrics-scraper.ts`) are its own files; controllers plus a thin `services/` folder, no model | —                                                                               | `/observability/{health,metrics,metrics/overview,audit,events}` |
+
+## The four properties any change has to preserve
+
+1. **Modules own their vocabulary; infrastructure owns the mechanism.** `audit.ts`, `metrics.ts`
+   and `analytics.ts` in a module _augment_ infrastructure's maps by declaration merging. No central
+   file enumerates domains, so deleting a module takes its counters and actions with it.
+
+2. **The dashboard reads counters by NAME, never by import.**
+   `get-observability-metrics-overview.ts` calls `metricsRegistry.getSingleMetric('auth_login_total')`
+   and reports zero when the metric is absent. That is the single most important line in the module:
+   it is why the one component whose job is to report on every domain imports **none** of them.
+
+3. **Audit fails open, deliberately, in two layers.** The log line is the compliance record and goes
+   out first; the queryable Mongo row is a convenience the sink adds, fire-and-forget, swallowing its
+   own errors. A Mongo hiccup cannot turn a rejected login into a 500. What the swallow cannot say on
+   its own is counted — `audit_sink_failures_total` — because
+   `GET /observability/audit` answering `{ items: [] }` otherwise looks exactly like "nothing
+   happened".
+
+4. **Liveness, readiness and the detailed snapshot are three different endpoints, on purpose.**
+
+    | Endpoint                    | Answers                                                                                                         | Cost                                                                                                       | Who probes it                                                                                      |
+    | --------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+    | `GET /livez`                | Is the process alive at all?                                                                                    | Nothing — no I/O                                                                                           | The container HEALTHCHECK (Docker/Swarm treat HEALTHCHECK as liveness)                             |
+    | `GET /readyz`               | Should this instance receive traffic RIGHT NOW? (`runtime/readiness.ts`: booted, not draining, Mongo connected) | One in-memory phase read + one Mongoose `readyState` read — no I/O                                         | A load balancer, on a fixed interval — exempt from the global rate limiter for exactly that reason |
+    | `GET /observability/health` | Can this instance serve, and what specifically is missing?                                                      | The job half (`job-health.ts`) runs one `leases` query; the rest reads each adapter's own connection state | An operator, a dashboard, or anything that wants the WHY behind a `/readyz` failure                |
+
+    `GET /` is the client-facing ping (the frontend's API-down banner), not an orchestrator probe.
+    Which check each container runs is on [Health checks](../operate/health-checks.md).
+
+    Conflating liveness with either readiness check means an orchestrator restarting a healthy
+    container because Redis blinked — restarting it does not bring Redis back. Conflating `/readyz`
+    with `/observability/health` means either a load balancer paying the detailed snapshot's cost on
+    every poll, or an operator losing the detail a bare boolean can't carry.
+
+## What this layer does NOT have, and probably should not
+
+Recorded so the question stops coming back:
+
+- **No log→trace correlation beyond `trace_id`.** The logger lifts `trace_id` into every line, which
+  is what Grafana needs to jump from a log to a span. Nothing more elaborate is warranted.
+- **No RED/USE dashboards in-repo.** They live in the Grafana provisioning, not in application code.
+- **No per-domain latency histograms.** One HTTP histogram labelled by normalized route covers it; a
+  histogram per module would multiply cardinality for a question the route label already answers.
+- **No sampling.** Traffic in a boilerplate does not need it, and adding it changes what every
+  percentile means.
+- **No reachability probes in the health endpoint.** See property 4 above — the connection state is
+  what the adapters act on anyway, so reporting it is the truth the application runs on rather than a
+  second opinion obtained by opening a socket.
+
+## Two routes that are not contract-tested from the request side
+
+Both for transport reasons rather than contract ones:
+
+- `GET /observability/events` — SSE never completes, so supertest hangs on it. Its payload is
+  `asyncapi.yaml`'s to pin anyway.
+- `GET /observability/metrics` — the 200 needs `NODE_METRICS_TOKEN` in the process environment.
+  `src/modules/observability/tests/unit/metrics-scraper.test.ts` covers it there instead, including
+  the deny-by-default 503 that fires when the token is unset.
+
+## Related pages
+
+- [Observability Stack Reference](../operate/observability-reference.md) — the external stack and its config
+- [Observability Endpoints](../reference/observability.md) — what each route returns
+- [Events & Logging](./events-and-logging.md) — the log pipeline
+- [Product Analytics](./analytics.md) — event names, and which side emits them

@@ -15,7 +15,7 @@
 # A STAFF ROLE IS ONLY A LIST OF PERMISSION SETS, and nothing else: no level, no rank. A person holds at
 # most one stored role per scope. What protects PEOPLE is a rule, `assign:Role` (the `RoleManagement`
 # set): only its holder may
-# hand out a staff role or change an account that holds one (`docs/theory/authorization.md`,
+# hand out a staff role or change an account that holds one (`docs/understand/authorization.md`,
 # "Protecting people"). Staff without it change customers only.
 #
 # EVERY SIGNED-IN ACCOUNT IS A CUSTOMER TOO. The `audience` block below is not stored and never
@@ -25,7 +25,7 @@
 # anyone else; a staff role only ADDS the staff rules. An API key gets the `guest` rules and what it
 # was minted with, never the audience of its minter.
 #
-# Every tenant role below is a demo persona, run against every screen — see `docs/demo-ecommerce/`
+# Every tenant role below is a demo persona, run against every screen — see `docs/use-the-shop/`
 # — except `admin`, the shop's one superuser account rather than a job. Reusing the others means
 # the permission model is exercised by the demo rather than only by its own tests.
 #

@@ -2,7 +2,7 @@
 # The `backup` service's start: turns the knobs into a crontab, then becomes supercronic.
 # An empty BACKUP_REPOSITORY writes an empty crontab: the container idles, healthy, and no boot
 # warning is printed (same as an empty ALERT_HEARTBEAT_URL).
-# Design: docs/tools/backups.md#the-knobs
+# Design: docs/operate/backups.md#the-knobs
 set -euo pipefail
 
 CRONTAB="${BACKUP_CRONTAB:-/tmp/crontab}"

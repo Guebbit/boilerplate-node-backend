@@ -4,7 +4,7 @@
  * given a session at login, it is given a claim check. Redeeming that check at
  * `POST /account/login/restore` cancels the deletion and starts the session.
  *
- * See: docs/theory/data-retention.md#self-deletion-a-grace-under-one-month
+ * See: docs/understand/data-retention.md#self-deletion-a-grace-under-one-month
  */
 
 import { isRestorable, type UserDocument } from '@modules/users';

@@ -1,0 +1,228 @@
+# Getting Started
+
+From a fresh clone to a browsable API with demo data. Five minutes, three commands, no manual
+editing.
+
+This stack is **container-first**: the shipped `.env` uses compose service hostnames. The default
+profile is lean — 6 containers (`app`, `cron`, `database`, `redis`, `limits`, `rabbitmq`) — with Tempo, Loki,
+Prometheus, Grafana, Alloy and Umami opt-in behind the `observability`/`analytics` profiles
+(`npm run compose:up:full`, or `COMPOSE_PROFILES` in `.env` to keep them across every restart). The dev profiles are `observability`, `analytics`, `docs` and `integrations`; the `bundled` value `.env-example` ships belongs to the production compose file. Host
+mode is supported and has its own scripts; it is the secondary path.
+
+## First run
+
+```mermaid
+flowchart TD
+    Clone(["Fresh clone"]) --> Install["npm install"]
+    Install --> Setup["npm run setup\ncreates .env, fills every secret"]
+    Setup --> Up["npm run compose:up\n(or compose:up:full)"]
+    Up --> Boot["app container runs\nnpm run db:bootstrap on its own"]
+    Boot --> Ready(["Seeded API on :3000"])
+
+    classDef step fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef done fill:#dcfce7,stroke:#16a34a,color:#111827;
+    class Clone,Install,Setup,Up,Boot step;
+    class Ready done;
+```
+
+```bash
+npm install
+npm run setup                    # creates .env from .env-example, fills every secret it refuses to boot without
+npm run compose:up               # the lean default, or: npm run compose:up:full
+```
+
+What `setup` touches, and what it leaves for you, is on
+[First run: `npm run setup`](../operate/configuration.md#first-run-npm-run-setup).
+
+On Podman, also set `CONTAINER_LOGS_PATH` and `CONTAINER_LOG_DRIVER` in `.env`
+(see `.env-example` → _log collection_) — only read once the `observability` profile is
+running. Nothing to set on Docker.
+
+That is the whole setup. The `app` container runs `npm run db:bootstrap` before starting the
+server, so the database is indexed and seeded on first boot — you get demo products, users and
+orders rather than empty lists, without asking for them. Which mongod that lands in, and what
+happens on the second boot, is [Which database am I looking at?](#which-database-am-i-looking-at)
+below.
+
+## Check it worked
+
+```bash
+curl http://localhost:3000/                          # health probe — also returns trace headers
+curl http://localhost:3000/products                  # the seeded demo data
+curl http://localhost:3000/observability/metrics      # Prometheus exposition
+```
+
+| What                | Where                    | Notes                                                      |
+| ------------------- | ------------------------ | ---------------------------------------------------------- |
+| API                 | `http://localhost:3000`  | `NODE_PORT`                                                |
+| Grafana             | `http://localhost:3001`  | needs `compose:up:full` — dashboards, logs, traces         |
+| Docs (this site)    | `http://localhost:3090`  | needs `compose:up:full`, or `npm run docs:dev` on the host |
+| Prometheus          | `http://localhost:9090`  | needs `compose:up:full`                                    |
+| RabbitMQ management | `http://localhost:15672` |                                                            |
+| Umami               | `http://localhost:3080`  | needs `compose:up:full`                                    |
+
+The full list, and the env var for every port, is in
+[Pairing & Ports](./pairing-and-ports.md). This repo owns `3000–3099`; the paired frontend
+owns `8080–8099`, which is what lets both stacks be up at once.
+
+### Rehearse the dead man's switch
+
+The alert pipeline watches itself: Alertmanager pings an outside watcher (Gatus) every minute, and
+silence is the alarm. Locally Gatus mails Mailpit, so you can see it work before you rely on it
+(`compose:up:full`, plus the `integrations` profile for Mailpit):
+
+1. `npm run compose -- stop alertmanager`
+2. Within about 3 minutes the mail lands in Mailpit (`http://localhost:8025`): `alertmanager-heartbeat` is missing.
+3. `npm run compose -- start alertmanager`: the next ping resolves it, and Gatus mails the resolution.
+
+The full chain, and the production setup on a second machine, are in [Gatus](../operate/gatus.md).
+
+## Explore the API without writing a client
+
+Ask for a collection and one lands at the repo root:
+
+```bash
+npm run contracts:bundle -- bruno
+```
+
+`contract.bruno.yml` carries one request per operation the contract declares, pre-filled with **values the seeded database actually holds**.
+Import it into Bruno and start clicking; `POST /account/login` already carries credentials that work.
+
+It is generated rather than hand-written, which is why it cannot rot, and `.gitignore`d rather
+than committed, because its only reader is whoever just asked for one. `@guebbit/openapi-runnable-collections` can also emit Insomnia, Postman and Mockoon collections: add the tool's name to `COLLECTION_TOOLS` in `scripts/contracts/client-collections-bundle.ts` (and a bundle in `bundle-registry.ts`) to get one. See
+[Regenerating After a Change](./regenerating.md).
+
+## Which database am I looking at?
+
+This repo ships **one** dataset — the `shop` scenario. What changes between the commands below is
+not the data, it is which mongod receives it and who put it there.
+
+```mermaid
+flowchart LR
+    Demo["npm run demo"] --> Throwaway[("throwaway mongod\nin a temp dir")]
+    Compose["npm run compose:restart\n(app container)"] --> Volume[("boilerplate_mongodb_volume\ndatabase container")]
+    HostDev["npm run host -- dev"] --> Volume
+
+    Throwaway -.->|"process exits"| Gone(["gone"])
+    Volume -.->|"compose down -v"| Gone
+
+    classDef cmd fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef store fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef gone fill:#fee2e2,stroke:#dc2626,color:#111827;
+    class Demo,Compose,HostDev cmd;
+    class Throwaway,Volume store;
+    class Gone gone;
+```
+
+| You ran                   | Mongo it talks to                                       | Who seeded it                                                     | Survives a restart            |
+| ------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------- |
+| `npm run demo`            | a throwaway mongod, private to that one process         | `scenarios/run-server.ts`, in-process, before listening           | No — gone with the process    |
+| `npm run compose:restart` | the `database` container's `boilerplate_mongodb_volume` | the **`app` container**, running `db:bootstrap` before its server | Yes — until `compose down -v` |
+| `npm run host -- dev`     | that same volume, over the published port               | **nobody** — this path seeds nothing                              | Yes                           |
+
+### "I destroyed the volumes, and the data was back"
+
+`npm run host -- dev` did not put it there. `compose up` starts two things that matter here — the
+`database` container and the `app` container — and `app`'s startup command is
+`docker/ensure-deps.sh && npm run db:bootstrap && npm run dev:docker` (`dev:docker:cluster` when `NODE_ENABLE_CLUSTERING=1` is set). The container seeded the fresh volume before it began
+serving.
+
+Your host process then connects to that same mongod and finds a furnished shop. Two app processes,
+one database.
+
+```bash
+podman compose logs app | head -40    # the bootstrap output, before the server starts listening
+```
+
+To make the host process the only API running, start the data services alone and seed them
+yourself:
+
+```bash
+podman compose up database redis rabbitmq
+npm run host -- db:bootstrap
+```
+
+### The seeding is not repeated, and not automatic in production
+
+`db:sync` is idempotent. The seeder is not — it builds the order book by driving real checkouts —
+so it **skips a database that already holds anything** and exits 0. That is what keeps the second
+`compose up` from giving the shop a second history. `npm run scenario:apply:reset` empties and
+rebuilds on purpose.
+
+A deployment never runs any of it: `docker/deploy.sh <client>` starts the stack and its one-shot
+`setup` runs `db:sync` and then `access:bootstrap` (the same scripts as `npm run deploy:setup`, started with `node --import tsx` because the image has no npm), which upserts the shop row and
+nothing else, and `scenario:apply` refuses outright unless `NODE_ENV` is `development` or `test`.
+See [Deploy and rollback](../operate/deploy-and-rollback.md).
+
+| Local                                           | Production                                      |
+| ----------------------------------------------- | ----------------------------------------------- |
+| `db:bootstrap` — indexes **plus** the demo shop | `deploy:setup` — indexes plus an empty shop row |
+| Demo accounts with published passwords          | No seeded accounts at all                       |
+| Wiped and rebuilt freely                        | Real rows; `scenario:apply` is refused          |
+
+What the dataset actually contains, and how the orders inside it are produced rather than written,
+is [The demo profile](./demo-profile.md#how-a-scenario-is-built).
+
+## Running on the host instead
+
+`npm run dev` alone will **not** work against the shipped `.env`: the hostname `database` only
+resolves inside the compose network. Prefix anything that reaches a datastore with
+`npm run host --`, which redirects the hostnames to `127.0.0.1` and changes nothing else — start
+the stack (or at least Mongo and Redis) first:
+
+```bash
+npm run host -- dev              # the API on the host, against the containerised database
+npm run host -- db:bootstrap     # any script works the same way
+npm run host -- scenario:apply:reset
+npm run host -- db:cache:clear
+```
+
+Only the **hostname** moves. The database name, ports and everything else still come from your
+`.env`, so there is no second env file to keep in sync — see
+[Package Scripts](../reference/package-scripts.md#database-seed-scripts) for the mechanics.
+
+The target is the literal `127.0.0.1`, not the name `localhost`, and that is not a style choice.
+On a dual-stack machine `localhost` resolves to both `::1` and `127.0.0.1`, in an order the
+resolver decides; docker and podman publish a port to `0.0.0.0`, which is IPv4 only. Where the
+resolver answers with the IPv6 address first, the name reaches a port nothing is listening on, and
+a container that is running and healthy refuses every connection — as `ECONNRESET`, or as a hang,
+never as anything that says why.
+
+## Which command runs the app
+
+| Where                            | Command                                                                                                                        |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Containers, production, a laptop | `npm start` / `npm run dev`: one process. Scale with `--scale app=N`.                                                          |
+| A bare VM with no PM2 or systemd | `npm run start:cluster`: one worker per CPU, restarts a crash. Needs `NODE_RATE_LIMIT_REDIS_URL`, or `NODE_CLUSTER_WORKERS=1`. |
+| A bare VM with PM2               | `pm2 start "npm start" -i max`                                                                                                 |
+
+The reasons and the limits of cluster mode: [Clustering](../understand/clustering.md).
+
+## The one command before you commit
+
+```bash
+npm run complete     # build + all tests + lint + format check — several minutes
+```
+
+The pre-commit hook runs a faster subset permanently: it regenerates on disk and refuses a commit whose
+committed generated files are stale (it never stages anything), then eslint and prettier on the staged files, then
+`npm run complete:light:gates` (every other static check plus the unit and cross-cutting suites,
+nothing that needs `mongod`), then `npm run test:staged`: the integration, contract and fuzz test
+files the commit adds or changes, run by file. Run the full `complete` yourself before merging a lane and once on main
+after; CI on push is authoritative. Its mutating twin, `npm run complete:fix`, fixes lint and formatting instead of reporting
+them.
+
+Deliberately outside that gate, run by hand when you want them: `npm run mutation` (Stryker,
+minutes), `npm run test:prism` (boots a mock server on a real port).
+
+## Where to go next
+
+| You want to                                 | Read                                                                            |
+| ------------------------------------------- | ------------------------------------------------------------------------------- |
+| Change an endpoint or a payload             | [OpenAPI Workflow](./openapi-workflow.md)                                       |
+| Know what to rerun after editing a fragment | [Regenerating After a Change](./regenerating.md)                                |
+| Understand the folder layout                | [Theory / Modules](../understand/modules.md), [Layers](../understand/layers.md) |
+| Find out what a dependency is doing here    | [Tools Explained](../understand/tools-explained.md)                             |
+| Look up a script                            | [Package Scripts](../reference/package-scripts.md)                              |
+| Run the paired frontend too                 | [Pairing & Ports](./pairing-and-ports.md)                                       |
+| Deploy this instead of running it locally   | [Getting Started — Production](../operate/first-deploy.md)                      |

@@ -511,7 +511,7 @@ components:
                 before dispatch. Which move may follow which is the
                 server's rule, answered per caller by `Return.actions`.
 
-        # The ONE sort grammar, shared with every list (docs/api/sorting.md). `-` sorts
+        # The ONE sort grammar, shared with every list (docs/reference/sorting.md). `-` sorts
         # descending; earlier entries rank first; ties end on the id.
         ReturnSort:
             type: array

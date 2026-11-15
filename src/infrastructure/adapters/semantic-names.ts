@@ -9,7 +9,7 @@
  *
  * Relative imports only: `logger.ts` sits on jest's `globalSetup` import chain.
  *
- * See: docs/tools/winston.md#field-names-in-the-log-line
+ * See: docs/operate/winston.md#field-names-in-the-log-line
  */
 
 import { isPlainObject } from '../object-guards';
@@ -27,7 +27,7 @@ type LogRecord = Record<string, unknown>;
  *
  * `traceId` and `spanId` become `trace_id` and `span_id`: the OpenTelemetry Logs Data Model
  * puts trace context at the top level of a record, and `@opentelemetry/instrumentation-winston`
- * writes exactly those two keys. Grafana's Loki -> Tempo link reads `trace_id` (docs/tools/loki.md).
+ * writes exactly those two keys. Grafana's Loki -> Tempo link reads `trace_id` (docs/operate/loki.md).
  * The table is data: `shared/rules/semantic-log-names.yaml`.
  */
 export const SEMANTIC_LOG_NAMES: Readonly<Record<string, string>> = semanticLogNameData;

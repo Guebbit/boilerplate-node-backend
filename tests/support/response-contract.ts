@@ -294,7 +294,7 @@ export const assertResponseMatchesContract = (response: Response): void => {
         response.status >= 400 ? undocumentedCodes(operationId, response.status, body) : [];
     if (unlisted.length > 0)
         throw new Error(
-            `${method.toUpperCase()} ${pathname} (${String(response.status)}) sent ${unlisted.join(', ')}, which ${operationId} does not list in x-error-codes (docs/api/errors.md#the-errors-extension)`
+            `${method.toUpperCase()} ${pathname} (${String(response.status)}) sent ${unlisted.join(', ')}, which ${operationId} does not list in x-error-codes (docs/reference/errors.md#the-errors-extension)`
         );
 
     const nulls =
@@ -303,6 +303,6 @@ export const assertResponseMatchesContract = (response: Response): void => {
             : nullPathsIn(body).filter((path) => !isPackedRuleOperand(operationId, path));
     if (nulls.length > 0)
         throw new Error(
-            `${method.toUpperCase()} ${pathname} (${String(response.status)}) sent null at ${nulls.join(', ')}: a response never carries null, an unset value is the absent key (docs/api/write-methods.md#empty-null-omitted)`
+            `${method.toUpperCase()} ${pathname} (${String(response.status)}) sent null at ${nulls.join(', ')}: a response never carries null, an unset value is the absent key (docs/understand/write-methods.md#empty-null-omitted)`
         );
 };

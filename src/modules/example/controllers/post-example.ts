@@ -3,7 +3,7 @@
  * In any module: a create controller validates the body against the generated schema, calls the
  * service, and answers `201` with a `Location`. Here: `POST /examples`.
  *
- * See: docs/theory/request-flow.md
+ * See: docs/understand/request-flow.md
  */
 
 import type { Request, Response } from 'express';

@@ -1,6 +1,6 @@
-# Gatus for the LOCAL stack: the off-host heartbeat service of docs/tools/prometheus.md#alert-routing,
+# Gatus for the LOCAL stack: the off-host heartbeat service of docs/operate/prometheus.md#alert-routing,
 # standing in on this machine so the whole chain can be drilled. In production it runs on ANOTHER
-# machine (docs/tools/gatus.md); this file only differs in where it mails (mailpit) and how fast.
+# machine (docs/operate/gatus.md); this file only differs in where it mails (mailpit) and how fast.
 # The /livez and TLS checks of the production example are left out: they have nothing to watch here.
 #
 # Drill: stop `alertmanager`; within ~3 minutes Gatus mails mailpit (http://localhost:8025) that

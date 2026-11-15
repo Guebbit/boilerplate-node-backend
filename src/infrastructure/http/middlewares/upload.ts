@@ -44,7 +44,7 @@ import { uploadConfig } from '@infrastructure/http/config';
  * two separate moments, which is what lets the second one be a remote bucket. Override with
  * `NODE_UPLOAD_STAGING_PATH` when temp is small, a tmpfs below the cap, or unwritable by the app user.
  *
- * See: docs/tools/security.md
+ * See: docs/understand/security.md
  */
 export const uploadStagingPath = () => uploadConfig().NODE_UPLOAD_STAGING_PATH;
 

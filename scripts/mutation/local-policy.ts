@@ -6,7 +6,7 @@
  * There is no "everything in one go" command any more: the full scope is always sharded
  * (`npm run mutation:full`), so there is nothing left here to refuse.
  *
- * See: docs/tools/mutation-testing.md#running-it-locally
+ * See: docs/build/mutation-testing.md#running-it-locally
  */
 import type { Shard } from './sharding';
 

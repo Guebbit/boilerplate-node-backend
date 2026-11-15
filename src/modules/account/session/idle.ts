@@ -4,7 +4,7 @@
  * for staff and admins only. A shopper's session is never idled out (NIST AAL1 "MAY"; Shopify and
  * Amazon do not either). Enforced here, by the backend, because a client timer is only a courtesy.
  *
- * See: docs/theory/sessions.md#the-staff-idle-timeout
+ * See: docs/understand/sessions.md#the-staff-idle-timeout
  */
 
 import type { AuthContext } from '@types';

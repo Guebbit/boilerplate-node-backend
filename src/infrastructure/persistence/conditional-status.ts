@@ -5,7 +5,7 @@
  * Why it is shared: the condition must ride in the FILTER, never in a read before the write. A copy
  * that forgets `status` in the filter is a silent double-ship or double-refund.
  *
- * See: docs/theory/tactical-ddd.md#deciding-and-enforcing-stay-separate
+ * See: docs/understand/tactical-ddd.md#deciding-and-enforcing-stay-separate
  */
 
 import type { ClientSession, HydratedDocument, Model } from 'mongoose';

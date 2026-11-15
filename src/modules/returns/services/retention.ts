@@ -3,7 +3,7 @@
  * What a return keeps and for how long. The row is a legal record and stays; only the free text
  * a person typed (or staff wrote about them) is wiped once the return has been quiet long enough.
  *
- * See: docs/theory/data-retention.md#free-text-on-returns
+ * See: docs/understand/data-retention.md#free-text-on-returns
  */
 
 import { logger } from '@infrastructure/adapters/logger';

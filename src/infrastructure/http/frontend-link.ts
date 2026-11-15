@@ -4,7 +4,7 @@
  * origin and the caller's locale. Infrastructure builds URLs; it does not know which LINKS exist —
  * `account` and `orders` each own their own kinds, `NODE_FRONTEND_LINK_*` env vars and default
  * templates (`account/config.ts`, `orders/config.ts`) and call this with the template already
- * resolved. See `docs/theory/layers.md` for why a module may depend downward but not sideways, and
+ * resolved. See `docs/understand/layers.md` for why a module may depend downward but not sideways, and
  * why infrastructure may not know a module by name.
  */
 

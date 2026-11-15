@@ -57,7 +57,7 @@ const listEntries = (
     app?: string
 ) => {
     // Query params only — a GET has no body to carry a search payload.
-    // See docs/theory/request-input.md.
+    // See docs/understand/request-input.md.
     const parsed = parseBody(schema, readInput(request, { surface: 'list' }), response);
     if (!parsed) return Promise.resolve();
 

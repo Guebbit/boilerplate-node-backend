@@ -61,7 +61,7 @@ export const ruleId = (action: string, subject: string): string => `${action}:${
  * The action vocabulary a declared RULE may carry, generated from `shared/authorization-keys.generated.yaml`'s
  * `actions:` so the type and the Zod schema below draw on the one list. `manage` is deliberately
  * absent: there is no wildcard of any kind, so nothing declares it as ITS action.
- * See docs/tools/permission-vocabulary.md.
+ * See docs/reference/permission-vocabulary.md.
  */
 export type {
     ActionOn,

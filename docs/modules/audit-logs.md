@@ -71,7 +71,7 @@ did, everyone who did one thing, what happened to one row, and whose data a row 
 Field names are `camelCase` in the event, in Mongo and in the API, like every other collection. The
 log line is the one place they change: the Winston formatter renames them to OpenTelemetry
 semantic-convention names (`actorUserId` becomes `user.id`) on the way out. See
-[Winston](../tools/winston.md#field-names-in-the-log-line).
+[Winston](../operate/winston.md#field-names-in-the-log-line).
 
 One row shape, `AuditEntryItem`, answers every read: `GET /audit`, `GET /observability/audit` and the
 account export. `actorCredentialId` names the API key when a credential did the action, and is absent
@@ -178,7 +178,7 @@ everything:
 The caller snapshots "before" ahead of any in-place assignment. Where the write is atomic and
 returns no previous value (the backorder limit), it reads first.
 
-Which fields of which action go in which column is the `valued` / `named` argument at each call site; the list of audited actions is generated in [the logging page](../tools/winston.md). The policy is the table above: a non-personal field by value, free text, personal data and bearer secrets by name, everything else not at all.
+Which fields of which action go in which column is the `valued` / `named` argument at each call site; the list of audited actions is generated in [the logging page](../operate/winston.md). The policy is the table above: a non-personal field by value, free text, personal data and bearer secrets by name, everything else not at all.
 
 `admin.translation.updated` already lists the locales it upserted and deleted; the text itself is
 free text and stays out.
@@ -199,14 +199,14 @@ Every rule this module declares and who holds it, role by role. The rule is what
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
 `src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../theory/authorization.md) explains the model.
+evaluator — [Authorization](../understand/authorization.md) explains the model.
 
 <!-- permissions:end -->
 
 ## Related pages
 
 - [`observability`](./observability.md) — the module's OTHER reader, `GET /observability/audit`
-- [Authorization](../theory/authorization.md) — `read:AuditLog`, and why a bare key can never answer a platform question
-- [Winston & Audit Logs](../tools/winston.md) — what gets audited and under what action names
-- [Modules](../theory/modules.md#the-manifest) — the headless half of the manifest, for the write side
-- [MongoDB & Mongoose](../tools/mongodb-mongoose.md) — TTL indexes
+- [Authorization](../understand/authorization.md) — `read:AuditLog`, and why a bare key can never answer a platform question
+- [Winston & Audit Logs](../operate/winston.md) — what gets audited and under what action names
+- [Modules](../understand/modules.md#the-manifest) — the headless half of the manifest, for the write side
+- [MongoDB & Mongoose](../understand/mongodb-mongoose.md) — TTL indexes

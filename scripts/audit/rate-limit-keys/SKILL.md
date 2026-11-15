@@ -55,7 +55,7 @@ Read these first; the findings below are all departures from them.
 - `identityOf` hashes the request BODY's `email`/`username`. That key is
   attacker-supplied by construction: it bounds one victim account being guessed at,
   and bounds nothing at all about one attacker sweeping many accounts.
-- `keyedBy` feeds the generated table in `docs/tools/security.md#the-rate-limit-budgets`; `bounds`
+- `keyedBy` feeds the generated table in `docs/understand/security.md#the-rate-limit-budgets`; `bounds`
   (`module.yaml`) feeds only `rate-limits.generated.ts`. Both are prose, not behaviour, and so is
   every comment and doc that names a key. Nothing but this audit compares them with `keyGenerator`.
 
@@ -118,9 +118,9 @@ same route. Which brings the actual finding:
     - its `module.yaml` `bounds`;
     - the comment at its mount site (`routes.ts`, `module.ts`);
     - any key comment in the module's contract fragment;
-    - its paragraph in `docs/tools/security.md`.
+    - its paragraph in `docs/understand/security.md`.
 
-    Then grep `docs/theory/defences/*.md` and `docs/theory/data-protection.md` for `/24`, `/48`,
+    Then grep `docs/understand/defences/*.md` and `docs/understand/data-protection.md` for `/24`, `/48`,
     `/56`, `/64`, `per address`, `keyed on`, `every limit`. Only claims about who is counted: a window,
     default or env-var mismatch gets one line, not a row. A document that says "per account" while the
     code keys on the address is a documented defence that does not exist.
