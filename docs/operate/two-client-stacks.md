@@ -9,6 +9,11 @@ The silo decision — one client, one stack, one database — is a claim until i
 page is the demonstration: two independent stacks built and run side by side on the same machine,
 from the compose file exactly as shipped.
 
+## Before you start
+
+- A host with Podman or Docker with Compose.
+- Two client names, each with its own `.env` and `secrets/` ([Secrets](./first-deploy.md#secrets)).
+
 ```mermaid
 flowchart TB
     subgraph Host["one host"]
@@ -35,7 +40,9 @@ below is layered on to share the proxy.
 page is the walkthrough and the two demonstrations; the compose files are the source of truth.
 :::
 
-## Bring up the first stack
+## Steps
+
+### 1 · Bring up the first stack {#bring-up-the-first-stack}
 
 ```bash
 mkdir -p clients/acme
@@ -256,7 +263,7 @@ Sources:
 [Rancher k3s](https://www.rancher.com/products/k3s) ·
 [k3s networking — Traefik by default](https://docs.k3s.io/networking/networking-services)
 
-## Where to go next
+## Read next
 
 | You want to                                    | Read                                             |
 | ---------------------------------------------- | ------------------------------------------------ |

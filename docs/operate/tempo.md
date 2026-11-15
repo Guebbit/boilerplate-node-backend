@@ -1,21 +1,22 @@
 ---
-type: task
+type: concept
 audience: [operator]
 ---
 
 # Tempo
 
-## What it is
-
 [Grafana Tempo](https://grafana.com/oss/tempo/) is the **trace store** of this boilerplate.
 Spans emitted by the app reach Tempo via the **OTel Collector** (not directly).
+
+## What it is
 
 You query Tempo from Grafana — you do not query Tempo directly.
 
 ## How it is wired
 
-```
-App  →  OTel Collector (OTLP/HTTP :4318)  →  Tempo (OTLP/gRPC :4317)  →  Grafana
+```mermaid
+flowchart LR
+    App["App"] -->|"OTLP/HTTP :4318"| Col["OTel Collector"] -->|"OTLP/gRPC :4317"| T["Tempo"] --> G["Grafana"]
 ```
 
 - The app exports OTLP/HTTP to the endpoint in `OTEL_EXPORTER_OTLP_ENDPOINT` (`http://otel-collector:4318` under compose); unset, trace export is off. `docker-compose.yml` passes the variable through from `.env`.
@@ -39,7 +40,7 @@ App  →  OTel Collector (OTLP/HTTP :4318)  →  Tempo (OTLP/gRPC :4317)  →  G
 
 - [TraceQL query language](https://grafana.com/docs/tempo/latest/traceql/) — needed to write trace queries beyond simple `trace_id` lookups in [Grafana](./grafana.md)
 
-## Related pages
+## Read next
 
 - [Observability Reference](./observability-reference.md)
 - [OpenTelemetry](./opentelemetry.md)

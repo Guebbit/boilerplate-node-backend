@@ -1,16 +1,16 @@
 ---
-type: task
+type: concept
 audience: [operator]
 ---
 
 # rclone
 
-## What it is
-
 [rclone](https://rclone.org) is a command-line tool for moving files between storage systems. This
 repo uses exactly one command: [`rclone serve restic`](https://rclone.org/commands/rclone_serve_restic/),
 which speaks restic's REST protocol over a folder on disk. It is the server half of the
 [Backup server](./backup-server.md).
+
+## What it is
 
 | Fact        | Value                                                                        |
 | ----------- | ---------------------------------------------------------------------------- |
@@ -39,3 +39,7 @@ which speaks restic's REST protocol over a folder on disk. It is the server half
 
 - [rclone serve restic](https://rclone.org/commands/rclone_serve_restic/)
 - [restic: REST server protocol](https://restic.readthedocs.io/en/stable/REST_backend.html)
+
+## Read next
+
+- [Backups](./backups.md)
