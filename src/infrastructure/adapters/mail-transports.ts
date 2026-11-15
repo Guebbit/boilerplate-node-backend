@@ -4,13 +4,13 @@
  *
  * Production registers `smtp` and nothing else. A transport that only pretends — the `log` that
  * renders and drops, the `outbox` that keeps mail in memory — is a test double: it lives in
- * `scenarios/support/doubles/` and is registered by the dev preload and by jest.
+ * `scenarios/support/doubles/` and is registered by the development doubles and by jest.
  *
  * Each transport answers one question production code needs without naming it: does mail sent
  * through you reach a person's inbox? (`delivers`.) A second factor that mails a code asks
  * that instead of comparing to a name.
  *
- * Light on purpose: no `nodemailer` and no `ejs` here. The jest setup and the dev preload load
+ * Light on purpose: no `nodemailer` and no `ejs` here. The jest setup and the development doubles load
  * this file before the application, and `smtp` loads its sender on first use for that reason.
  */
 
@@ -71,7 +71,7 @@ const smtpTransport: MailTransportAdapter = {
 
 /**
  * Every transport this process knows, shared across module instances (see
- * `createSharedProviderRegistry`) so a double registered at preload survives a module reset.
+ * `createSharedProviderRegistry`) so a double registered at boot survives a module reset.
  */
 const mailTransportRegistry = createSharedProviderRegistry<MailTransportAdapter>(
     'mail-transports',

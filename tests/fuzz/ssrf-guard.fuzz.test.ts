@@ -204,7 +204,7 @@ describe('resolveSafeOutboundTarget — the pinned lookup it hands back', () => 
 });
 
 /*
- * A registered exempt origin — what the dev preload registers for the demo sink. The WHOLE origin:
+ * A registered exempt origin — what the development doubles register for the demo sink. The WHOLE origin:
  * scheme, host and port. Literal IPs, not DNS names: `resolveAllAddresses` returns a literal
  * straight back without calling `resolve4`/`resolve6`, so these cases need no `mockDns`.
  */

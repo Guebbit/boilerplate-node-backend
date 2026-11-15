@@ -20,6 +20,7 @@
 import { extractErrorMessage } from '@guebbit/js-toolkit';
 import { logger } from '@infrastructure/adapters/logger';
 import { recordJobOutcome } from '@infrastructure/persistence/lease';
+import { loadDevelopmentDoubles } from '../src/app/development-doubles';
 
 /**
  * A script whose environment failed validation: say why, exit non-zero, and still close whatever
@@ -108,9 +109,13 @@ export const runScript = (
     main: () => Promise<void>,
     cleanup: () => Promise<unknown>
 ): Promise<void> =>
-    // Judged first, so a typo in the environment names itself here instead of surfacing halfway
-    // through the job. Lazy: a script that fails validation never loads what it would have run.
-    import('../src/app/config')
+    // The development doubles first (a no-op outside `NODE_ENV=development`), so the gate below
+    // judges the environment this process will actually run with: `log` is a valid mail transport
+    // here, and only here.
+    loadDevelopmentDoubles()
+        // Judged next, so a typo in the environment names itself here instead of surfacing halfway
+        // through the job. Lazy: a script that fails validation never loads what it would have run.
+        .then(() => import('../src/app/config'))
         .then(({ assertProcessConfig }) => assertProcessConfig())
         .then(
             () => runChecked(name, main, cleanup),

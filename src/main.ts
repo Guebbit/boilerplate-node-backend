@@ -5,6 +5,8 @@
  *
  * Why this order: OTel must start BEFORE express and mongoose load (it patches them), and `serve`
  * is imported dynamically below because a static import would be hoisted above `startTracing()`.
+ * Under `NODE_ENV=development` the development doubles load after tracing and before `serve`, so
+ * they are registered before the config gate and any request.
  * `src/cluster.ts` is the other entry (`npm run start:cluster`, a bare VM with no process manager).
  *
  * @see docs/understand/clustering.md
@@ -16,16 +18,22 @@ import '@infrastructure/runtime/mongoose-boot';
 // OTel must initialize before any other module is loaded.
 import { startTracing } from '@infrastructure/runtime/otel-sdk';
 import { logger } from '@infrastructure/adapters/logger';
+import { loadDevelopmentDoubles } from '@app/development-doubles';
 import { extractErrorMessage } from '@guebbit/js-toolkit';
 
 /** Start the OpenTelemetry SDK before express/http/mongoose are loaded (it patches them). */
 startTracing();
 
-/** Build, listen and wire the signal handlers. Side-effect only: nothing needs the instance back. */
-import('./serve').catch((error: unknown) => {
-    logger.error({
-        message: 'Could not load the server.',
-        error: extractErrorMessage(error, String(error))
+/**
+ * Register the development doubles (a no-op outside `NODE_ENV=development`), then build, listen
+ * and wire the signal handlers. Side-effect only: nothing needs the instance back.
+ */
+loadDevelopmentDoubles()
+    .then(() => import('./serve'))
+    .catch((error: unknown) => {
+        logger.error({
+            message: 'Could not load the server.',
+            error: extractErrorMessage(error, String(error))
+        });
+        process.exitCode = 1;
     });
-    process.exitCode = 1;
-});

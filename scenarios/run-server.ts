@@ -25,6 +25,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { parseEnv } from 'node:util';
+// First of ours: it loads `.env` and registers the doubles, and `shellValue` below reads what it
+// left in `process.env`. `demo` forces `NODE_ENV` itself, after imports, so the `NODE_ENV` loader
+// in `src/app/development-doubles.ts` cannot serve it.
+import './support/development-doubles';
 // Before any model loads: Mongoose defaults are read at schema build.
 import '@infrastructure/runtime/mongoose-boot';
 import { currentEnvironment, installEnvironment } from '@infrastructure/config/store';
@@ -48,10 +52,11 @@ const DOTENV: Partial<Record<string, string>> = existsSync(path.join(process.cwd
 /**
  * A variable the SHELL set, as opposed to one `.env` supplied.
  *
- * `development-doubles` has already loaded `.env` into `process.env`, so a `.env` copied from
- * `.env-example` (every budget at its human default, a placeholder webhook secret) looks like a
- * shell choice. A value equal to the file's own is that copy and does not count; a different one
- * was set by the caller (the antibot run pins a small login budget on purpose) and does.
+ * `development-doubles`, the first import above, has already loaded `.env` into `process.env`, so
+ * a `.env` copied from `.env-example` (every budget at its human default, a placeholder webhook
+ * secret) looks like a shell choice. A value equal to the file's own is that copy and does not
+ * count; a different one was set by the caller (the antibot run pins a small login budget on
+ * purpose) and does.
  * @param key - the variable
  * @returns the shell's value, or `undefined` when it set none
  */

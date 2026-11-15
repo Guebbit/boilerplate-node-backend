@@ -5,7 +5,7 @@
  *
  * Writes three files into `scenarios/support/tls/`:
  *
- *   webhook-sink-ca.pem    the test CA's certificate (what the dev preload trusts)
+ *   webhook-sink-ca.pem    the test CA's certificate (what the development doubles trust)
  *   webhook-sink-cert.pem  the sink's leaf certificate, signed by that CA
  *   webhook-sink-key.pem   the leaf's private key (public on purpose, see below)
  *

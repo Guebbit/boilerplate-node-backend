@@ -13,7 +13,7 @@ import type { PaymentProvider } from './index';
 
 /**
  * Every implementation this process knows, shared across module instances (see
- * `createSharedProviderRegistry`) so a double registered at preload survives a module reset.
+ * `createSharedProviderRegistry`) so a double registered at boot survives a module reset.
  */
 export const paymentProviderRegistry = createSharedProviderRegistry<PaymentProvider>('payments');
 

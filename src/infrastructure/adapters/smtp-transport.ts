@@ -3,7 +3,7 @@
  * The `smtp` mail transport's sender: a nodemailer SMTP client, built on first use and reused.
  *
  * Its own file so `./mail-transports` (loaded before the application, by the jest setup and the
- * dev preload) never imports nodemailer: a test's own `jest.mock('nodemailer')` must still win.
+ * development doubles) never imports nodemailer: a test's own `jest.mock('nodemailer')` must still win.
  *
  * @see docs/understand/email-and-rendering.md#smtp-configuration
  */

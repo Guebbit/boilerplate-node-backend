@@ -111,7 +111,7 @@ default), `scenarios/webhooks.ts` seeds no demo subscription at all — a develo
 the `webhook-tester` compose profile never gets a dead subscription auto-disabling in their logs.
 Set it and a subscription appears, pointed at the sink, with a fixed and documented secret so a
 captured delivery's signature is a copy-paste rather than a mystery — see
-[Seeing it work](../modules/webhooks.md#seeing-it-work). Only a process that loads the [dev preload](./test-doubles.md) exempts the sink.
+[Seeing it work](../modules/webhooks.md#seeing-it-work). Only a process that loads the [development doubles](./test-doubles.md) exempts the sink.
 
 ## The seeded language coverage
 

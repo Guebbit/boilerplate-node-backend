@@ -221,7 +221,7 @@ module.exports = {
         {
             name: 'src-cannot-reach-scenarios',
             comment:
-                "scenarios/ imports a module's repository, model and factories directly — the inversion that lets a production image omit the folder outright, but only if nothing PRODUCTION under src/ reaches it, even transitively through a helper. No file under src/ is exempt: the demo's control surface lives in scenarios/support/demo.ts and reaches the app by being passed to createApp as an extension. A co-located spec is exempted for an unrelated reason: it boots the real app over supertest, and every contract/integration test does that regardless of scenarios/ — a production image never ships tests/ either way.",
+                "scenarios/ imports a module's repository, model and factories directly — the inversion that lets a production image omit the folder outright, but only if nothing PRODUCTION under src/ reaches it, even transitively through a helper. No file under src/ is exempt, but for one runtime door depcruise cannot see: src/app/development-doubles.ts, a runtime import() taken only under NODE_ENV=development (a unit test guards its path). The demo's control surface lives in scenarios/support/demo.ts and reaches the app by being passed to createApp as an extension. A co-located spec is exempted for an unrelated reason: it boots the real app over supertest, and every contract/integration test does that regardless of scenarios/ — a production image never ships tests/ either way.",
             severity: 'error',
             from: {
                 path: '^src/',

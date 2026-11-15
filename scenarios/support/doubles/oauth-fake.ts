@@ -1,7 +1,7 @@
 /**
  * @module
  * The fake identity provider — a test double, never shipped: no network call, no consent screen.
- * Registered into the OAuth registry only by the dev preload (`./register`) and by the tests that
+ * Registered into the OAuth registry only by the development doubles (`./register`) and by the tests that
  * need it, never by production code. `authorizeUrl` skips straight to the callback with a fixed
  * `code`, so clicking "Continue with Google" in a Cypress spec never has to leave this app; the
  * `state` still round-trips through the real cookie, so the CSRF check gets genuine coverage too.

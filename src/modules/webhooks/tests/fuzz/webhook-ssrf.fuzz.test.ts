@@ -112,7 +112,7 @@ describe('deliverWebhook — a redirect is a failed delivery, never followed', (
 });
 
 describe('deliverWebhook — the exempted demo host is still https-only', () => {
-    // What the dev preload registers for the demo sink: the whole origin, port included.
+    // What the development doubles register for the demo sink: the whole origin, port included.
     beforeEach(() => {
         registerSsrfExemptOrigin('https://127.0.0.1:8443');
         registerSsrfExemptOrigin('http://127.0.0.1:8080');

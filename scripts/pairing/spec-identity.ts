@@ -85,7 +85,7 @@ export const SHARED_FILES: readonly SharedFile[] = [
      */
     { backend: 'shared/rules/cookies.yaml', frontend: 'contracts/cookies.yaml' },
     /*
-     * The demo webhook sink's TLS pair. The backend trusts the CA (the dev preload), the
+     * The demo webhook sink's TLS pair. The backend trusts the CA (the development doubles), the
      * frontend's Cypress sink serves the leaf and its key: a fork between them fails every demo
      * delivery at the handshake, and nothing in either suite would say why.
      */

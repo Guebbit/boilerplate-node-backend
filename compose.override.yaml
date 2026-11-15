@@ -116,8 +116,8 @@ services:
 
         # Commands to be executed at RUNTIME when the container starts. Replaces Dockerfile commands (if any)
         #
-        # `db:bootstrap` runs the index sync (`db:sync`'s script, dev doubles preloaded so the `log` mail
-        # transport registers) reconciled against the schemas, then the seeder
+        # `db:bootstrap` runs the index sync (`db:sync`, which loads the development doubles through
+        # `NODE_ENV=development`, so the `log` mail transport registers) reconciled against the schemas, then the seeder
         # (demo data) before the server starts, so a fresh `compose up` yields a populated, browsable
         # stack instead of empty lists that read as "not wired". `db:sync` is idempotent; the seeder
         # is not — it builds the shop's order book by driving real checkouts — so it SKIPS a
@@ -204,10 +204,6 @@ services:
             NODE_RABBITMQ_URL: 'amqp://guest:guest@queue:5672'
             OTEL_EXPORTER_OTLP_ENDPOINT: '${OTEL_EXPORTER_OTLP_ENDPOINT:-}'
             NODE_SERVICE_NAME: 'cron'
-            # The doubles a job here needs (a cancelled order closes its fake card intent; a job's
-            # mail goes through the log): production's image has none. `--require tsx/cjs` first so
-            # the `.ts` preload loads. `--import` here would hang `npx tsx`.
-            NODE_OPTIONS: '--require tsx/cjs --require ./scenarios/support/development-doubles.ts'
         volumes:
             - .:/app:Z
             # Kept fresh by `docker/ensure-deps.sh` (see the `app` service).
@@ -657,7 +653,7 @@ services:
     # (`^https://` in the contract), so the sink is reached through this proxy and never directly.
     #
     # Serves the committed demo leaf certificate (`scenarios/support/tls/`), valid for 127.0.0.1
-    # and this service's own name. The dev preload trusts it
+    # and this service's own name. The development doubles trust it
     # (`scenarios/support/doubles/webhook-sink.ts`) whenever a sink URL is set. Nothing else trusts it.
     #
     # Remake and trust recipe: docs/modules/webhooks.md#https-in-the-demo

@@ -10,10 +10,10 @@
  * inert-by-default shape as `scenarios/support/doubles/mail-outbox.ts`.
  *
  * The URL is `https://` like every webhook URL, so the edit form can save it. Reachable at all only
- * because the dev preload registers the sink's origin with `@infrastructure/adapters/ssrf-guard`
+ * because the development doubles register the sink's origin with `@infrastructure/adapters/ssrf-guard`
  * (`scenarios/support/doubles/webhook-sink.ts`), which lets THIS ONE origin through without a
  * public address — the sink is on loopback, which the guard refuses for everyone else. The sink's
- * certificate is the test CA's (`scenarios/support/tls/`), trusted by the dev preload
+ * certificate is the test CA's (`scenarios/support/tls/`), trusted by the development doubles
  * (`scenarios/support/doubles/webhook-sink.ts`).
  *
  * A fixed session id, not a generated one: `webhook-tester`'s `AUTO_CREATE_SESSIONS=true` means a

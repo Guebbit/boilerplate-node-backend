@@ -3,7 +3,7 @@
  * Contract tests for the OAuth surface: `GET /config`'s providers are in `tests/contract/config.contract.test.ts`; this is the full
  * start → callback round trip through the `fake` provider — the same path a Cypress spec walks
  * against a real browser, exercised here against the real routes, the real CSRF cookie, and a
- * real database. Registers `fake` the way the dev preload does: production seeds no such
+ * real database. Registers `fake` the way the development doubles do: production seeds no such
  * entry, so this suite has to put it there itself.
  */
 

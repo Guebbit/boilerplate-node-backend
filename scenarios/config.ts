@@ -73,7 +73,7 @@ export const seedPasswords = (): Record<PersonaName, string> => {
 
 /**
  * Where the demo's webhook sink listens. Read by the seeder (the subscription it writes points
- * here) and by the dev preload (which exempts this origin from the SSRF address check, since the
+ * here) and by the development doubles (which exempt this origin from the SSRF address check, since the
  * sink is on loopback or a private compose address) — never by production code.
  */
 export const demoSinkConfig = defineConfig({

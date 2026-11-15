@@ -1,7 +1,7 @@
 /**
  * @module
  * The OAuth provider registry (`oauth/providers/index.ts`) and the `fake` double
- * (`scenarios/support/doubles/oauth-fake.ts`) only the dev preload ever registers into it.
+ * (`scenarios/support/doubles/oauth-fake.ts`) only the development doubles ever register into it.
  * Google/GitHub each get their own file for the token-exchange parsing; this one is about
  * "which providers show up at all", the same question `payments/tests/unit/providers.test.ts`
  * answers for the single-active-provider registry.
@@ -59,7 +59,7 @@ describe('the OAuth provider registry', () => {
     });
 
     it('lists fake once something registers it, with no credentials of its own', () => {
-        // Production seeds no `fake` entry at all — only the dev preload
+        // Production seeds no `fake` entry at all — only the development doubles
         // (`scenarios/support/development-doubles.ts`) calls `registerOAuthProvider('fake', ...)`,
         // which this reproduces directly.
         expect(enabledProviders()).not.toContain('fake');

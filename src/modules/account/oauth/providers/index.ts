@@ -19,8 +19,8 @@ type OAuthProviderFactory = () => OAuthProvider | undefined;
 /**
  * Every implementation this PRODUCTION build knows, keyed by the name a route/`OAuthAccount`
  * uses. A live deployment adds one file and calls {@link registerOAuthProvider} — no edit here
- * required. `fake` is NOT seeded here: it is a test double outside `src/`, which the dev
- * preload (`scenarios/support/development-doubles.ts`) registers itself.
+ * required. `fake` is NOT seeded here: it is a test double outside `src/`, which the development
+ * doubles (`scenarios/support/development-doubles.ts`) register.
  */
 const registry = createProviderRegistry<OAuthProviderFactory>({
     google: () => (isOAuthProviderConfigured('google') ? googleOAuthProvider : undefined),

@@ -255,7 +255,7 @@ captured requests are also at `GET /api/session/<id>/requests`).
 Two things make this reachable at all, both narrowed on purpose:
 
 - The sink is on loopback, which `ssrf-guard.ts` exists to refuse. It gets a one-origin exemption
-  (host AND port; `scenarios/support/doubles/webhook-sink.ts`, registered by the dev preload) from
+  (host AND port; `scenarios/support/doubles/webhook-sink.ts`, registered by the development doubles) from
   the private-address check only. Production code has no exemption at all: nothing in `src/`
   registers one. The `https:` rule has no exemption, so the demo's URL is `https://` like every
   other and the edit form saves it.
@@ -273,17 +273,17 @@ touching production code:
 
 ```mermaid
 flowchart LR
-    B["backend<br/>dev preload trusts the test CA"] -->|"https://127.0.0.1:3070"| P["webhook-tester-tls<br/>(Caddy, demo leaf)"]
+    B["backend<br/>development doubles trust the test CA"] -->|"https://127.0.0.1:3070"| P["webhook-tester-tls<br/>(Caddy, demo leaf)"]
     P -->|"http, compose network"| T["webhook-tester"]
     B -.->|"https://127.0.0.1:3200 (demo profile)"| C["Cypress sink<br/>(node:https, same leaf)"]
 ```
 
-| Piece                      | Where                                                                                  | Notes                                                                                                                                                                                                                                      |
-| -------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| test CA, leaf and leaf key | `scenarios/support/tls/webhook-sink-{ca,cert,key}.pem`                                 | committed; the leaf covers `127.0.0.1`, `localhost` and `webhook-tester-tls`; valid ten years                                                                                                                                              |
-| trust                      | `scenarios/support/doubles/webhook-sink.ts`                                            | the dev preload adds the test CA to the process's roots when `NODE_WEBHOOK_DEMO_SINK_URL` is set (`tls.setDefaultCACertificates`), next to the SSRF exemption it pairs with. No launcher sets anything; production never loads the preload |
-| TLS proxy                  | `webhook-tester-tls` in `compose.override.yaml`, `docker/webhook-tester-tls.Caddyfile` | `--profile integrations`, loopback only; the tester itself publishes no port                                                                                                                                                               |
-| frontend copies            | `<frontend>/scripts/e2e/tls/`                                                          | `sync:frontend` copies the same three files; its Cypress sink serves the leaf                                                                                                                                                              |
+| Piece                      | Where                                                                                  | Notes                                                                                                                                                                                                                                             |
+| -------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| test CA, leaf and leaf key | `scenarios/support/tls/webhook-sink-{ca,cert,key}.pem`                                 | committed; the leaf covers `127.0.0.1`, `localhost` and `webhook-tester-tls`; valid ten years                                                                                                                                                     |
+| trust                      | `scenarios/support/doubles/webhook-sink.ts`                                            | the development doubles add the test CA to the process's roots when `NODE_WEBHOOK_DEMO_SINK_URL` is set (`tls.setDefaultCACertificates`), next to the SSRF exemption it pairs with. No launcher sets anything; production never loads the doubles |
+| TLS proxy                  | `webhook-tester-tls` in `compose.override.yaml`, `docker/webhook-tester-tls.Caddyfile` | `--profile integrations`, loopback only; the tester itself publishes no port                                                                                                                                                                      |
+| frontend copies            | `<frontend>/scripts/e2e/tls/`                                                          | `sync:frontend` copies the same three files; its Cypress sink serves the leaf                                                                                                                                                                     |
 
 The private key is public on purpose: it is a fixture, valid only for loopback and one compose
 name. The CA's own key is thrown away when the fixtures are made, and the CA is

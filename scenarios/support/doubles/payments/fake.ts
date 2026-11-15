@@ -1,7 +1,7 @@
 /**
  * @module
  * The fake PSP — a test double, never shipped: it lives outside `src/` and is registered only by
- * the dev preload and the jest setup (`./register`). It never talks to the outside world, but
+ * the development doubles and the jest setup (`./register`). It never talks to the outside world, but
  * imposes the same shape a real PSP does: it hands back an intent reference the browser finishes
  * against, it answers with the asynchronous states (`requires_action`, `processing`) as well as
  * the terminal ones, and it signs its webhooks. That is what lets the demo and every e2e walk the

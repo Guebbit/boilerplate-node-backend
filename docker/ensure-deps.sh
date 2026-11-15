@@ -23,8 +23,5 @@ fi
 
 echo "ensure-deps: package-lock.json changed, running npm ci"
 cd /app
-# The cron service sets NODE_OPTIONS for its app code; install scripts must not inherit it
-# (the image build sets none).
-unset NODE_OPTIONS
 npm ci
 echo "$current" > "$stamp_file"

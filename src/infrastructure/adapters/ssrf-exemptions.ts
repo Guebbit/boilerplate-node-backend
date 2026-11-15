@@ -4,7 +4,7 @@
  * production: nothing in `src/` registers one. A development or demo process registers its own
  * sink before the application loads (`scenarios/support/doubles/webhook-sink.ts`).
  *
- * Its own file, with no imports, so the dev preload and the jest setup can register one without
+ * Its own file, with no imports, so the development doubles and the jest setup can register one without
  * loading the guard (and its DNS imports) before a test's own DNS mock is in place.
  */
 

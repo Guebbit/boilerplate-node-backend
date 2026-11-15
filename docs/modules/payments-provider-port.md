@@ -10,7 +10,7 @@ one is wired in.
 
 ::: tip At a glance
 **Selected by** — `NODE_PAYMENT_PROVIDER`, read fresh per call. No default: unset means no card payments.
-**Shipped with** — no implementation. `fake` is a [test double](../build/test-doubles.md) outside `src/`, registered by the dev preload and by jest.
+**Shipped with** — no implementation. `fake` is a [test double](../build/test-doubles.md) outside `src/`, registered by the development doubles and by jest.
 **Breaks if you change** — the `PaymentProvider` interface. It is the contract a real PSP has to satisfy.
 :::
 

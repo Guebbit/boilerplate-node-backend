@@ -11,6 +11,7 @@ import { runScript } from '../../../scripts/run-script';
 import { logger } from '@infrastructure/adapters/logger';
 import { recordJobOutcome } from '@infrastructure/persistence/lease';
 import { assertProcessConfig } from '@app/config';
+import { loadDevelopmentDoubles } from '@app/development-doubles';
 
 // Inline `jest.fn()`s rather than outer consts: `jest.mock` is hoisted above the imports, so a
 // factory closing over a `const` would read it before initialisation.
@@ -23,13 +24,20 @@ jest.mock('@infrastructure/persistence/lease', () => ({
 // The real gate loads every module; what is under test here is only what runScript does with its
 // verdict. The gate itself is `tests/unit/app/config.test.ts`'s and `tests/unit/kernel/`'s.
 jest.mock('@app/config', () => ({ assertProcessConfig: jest.fn() }));
+// What the loader does is `tests/unit/app/development-doubles.test.ts`'s; here only when it runs.
+jest.mock('@app/development-doubles', () => ({ loadDevelopmentDoubles: jest.fn() }));
 
 const mockError = jest.mocked(logger.error);
 const mockWarn = jest.mocked(logger.warn);
 const mockRecordJobOutcome = jest.mocked(recordJobOutcome);
 const mockAssertProcessConfig = jest.mocked(assertProcessConfig);
+const mockLoadDevelopmentDoubles = jest.mocked(loadDevelopmentDoubles);
 
 const ORIGINAL_EXIT_CODE = process.exitCode;
+
+beforeEach(() => {
+    mockLoadDevelopmentDoubles.mockReset().mockResolvedValue(undefined);
+});
 
 afterEach(() => {
     process.exitCode = ORIGINAL_EXIT_CODE;
@@ -89,6 +97,49 @@ describe('runScript on an invalid environment', () => {
                 () => Promise.reject(new Error('quit failed'))
             )
         ).resolves.toBeUndefined();
+    });
+});
+
+describe('runScript and the development doubles', () => {
+    it('loads them before the config gate judges the environment', async () => {
+        const order: string[] = [];
+        mockLoadDevelopmentDoubles.mockImplementation(() => {
+            order.push('development-doubles');
+            return Promise.resolve();
+        });
+        mockAssertProcessConfig.mockImplementation(() => {
+            order.push('gate');
+        });
+
+        await runScript(
+            undefined,
+            () => {
+                order.push('main');
+                return Promise.resolve();
+            },
+            () => Promise.resolve()
+        );
+
+        expect(order).toEqual(['development-doubles', 'gate', 'main']);
+    });
+
+    it('refuses to run when they cannot load: says why, exits non-zero, still cleans up, no outcome', async () => {
+        mockLoadDevelopmentDoubles.mockRejectedValue(
+            new Error('NODE_ENV=development, but this image has no `scenarios/`')
+        );
+        const main = jest.fn().mockResolvedValue(undefined);
+        const cleanup = jest.fn().mockResolvedValue(undefined);
+
+        await runScript('reap:orders', main, cleanup);
+
+        expect(main).not.toHaveBeenCalled();
+        expect(mockAssertProcessConfig).not.toHaveBeenCalled();
+        expect(process.exitCode).toBe(1);
+        expect(mockError).toHaveBeenCalledWith(
+            expect.objectContaining({ error: expect.stringContaining('no `scenarios/`') as string })
+        );
+        expect(cleanup).toHaveBeenCalledTimes(1);
+        expect(mockRecordJobOutcome).not.toHaveBeenCalled();
     });
 });
 

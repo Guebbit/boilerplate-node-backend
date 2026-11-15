@@ -70,7 +70,7 @@ const sharedKey = (name: string): symbol =>
  * A registry that every copy of this module in the process shares, by `name`.
  *
  * Why: the doubles (a fake payment provider, a mail log) are registered once, before the
- * application loads — by the dev preload, or by jest's `setupFiles` — and a module registry that
+ * application loads — by the development doubles, or by jest's `setupFiles` — and a module registry that
  * is reset or isolated (`jest.resetModules`, `isolateModules`) re-evaluates the file that owns
  * the registry. A private map would come back empty and lose every double. The map lives on
  * `globalThis` instead, like the config store's state (`config/store.ts`).

@@ -4,7 +4,7 @@
  * every delivery it gets and says whether each one was signed with the subscription's secret.
  *
  * It serves the demo sink's certificate and registers the sink exemption, the same two things the
- * dev preload does, so the real SSRF guard and the real TLS client run unchanged. The exemption
+ * development doubles do, so the real SSRF guard and the real TLS client run unchanged. The exemption
  * adds the sink's CA to the process-wide roots; {@link WebhookReceiver.stop} puts them back.
  */
 import tls from 'node:tls';

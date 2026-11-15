@@ -5,7 +5,7 @@
  * Every webhook URL is `https://`, the demo's included, so the row the seeder writes straight to
  * the database must be one the contract's own edit body accepts and the service saves — a record
  * its own form cannot save is the failure this guards. The sink's origin is exempt from the
- * private-address check only (registered below, as the dev preload does), which is why a loopback
+ * private-address check only (registered below, as the development doubles do), which is why a loopback
  * `https://` URL passes here at all.
  */
 
@@ -37,7 +37,7 @@ const context = {
 
 beforeEach(() => {
     setEnvironment({ NODE_WEBHOOK_DEMO_SINK_URL: SINK_URL });
-    // What the dev preload does for a process that has the sink configured: the sink is on
+    // What the development doubles do for a process that has the sink configured: the sink is on
     // loopback, which the SSRF guard refuses unless its origin is registered.
     registerWebhookSinkExemption();
 });

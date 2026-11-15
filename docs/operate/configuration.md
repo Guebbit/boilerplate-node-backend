@@ -39,6 +39,10 @@ was already a dependency.
 A junk value **refuses to boot**. It never falls back to the default:
 `NODE_MAX_UPLOAD_BYTES=5mb` stops the boot; it is not read as 5 MB or as the default. Blank counts as unset.
 
+Every entry point judges the **whole** config, scripts included, never a slice of it. In development
+the [development doubles](../build/test-doubles.md) load first, so `NODE_MAIL_TRANSPORT=log` is valid
+in every process there.
+
 ## Who owns what
 
 | Layer          | File                                                               | Holds                                                        |

@@ -2,7 +2,7 @@
  * @module
  * The demo webhook sink's SSRF exemption and TLS trust — a test double, never shipped. The sink (`webhook-tester`
  * behind its TLS proxy, or the frontend's own Cypress listener) is on loopback or a private compose
- * address, which the SSRF guard refuses for everyone else. A process that loads the dev preload
+ * address, which the SSRF guard refuses for everyone else. A process that loads the development doubles
  * registers the sink's origin here, so production code has no exemption of its own.
  *
  * The WHOLE origin, port included: a sink on `:3070` does not open the rest of that machine.

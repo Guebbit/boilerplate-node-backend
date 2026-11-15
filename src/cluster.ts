@@ -3,7 +3,8 @@
  * default (`src/main.ts` is); containers scale with `--scale app=N` instead.
  *
  * Like `main.ts`, it starts OTel before `serve` loads express and mongoose: `serve` is imported
- * dynamically below, while a static import is hoisted above any statement.
+ * dynamically below, while a static import is hoisted above any statement. Under
+ * `NODE_ENV=development` the primary and every worker also load the development doubles themselves.
  */
 // First: every other import reads the environment, and this is what loads `.env` into it.
 import './infrastructure/config/dotenv';
@@ -19,6 +20,7 @@ import os from 'node:os';
 import cluster from 'node:cluster';
 import { extractErrorMessage } from '@guebbit/js-toolkit';
 import { logger } from '@infrastructure/adapters/logger';
+import { loadDevelopmentDoubles } from '@app/development-doubles';
 import { clusterConfig } from '@infrastructure/runtime/config';
 import {
     assertSharedRateLimitCounters,
@@ -200,20 +202,22 @@ const refuseUnsharedRateLimits = (): Promise<void> =>
  * Entry fork: the primary supervises workers; a worker (or a single-process run) serves.
  * https://nodejs.org/api/cluster.html#clusterisprimary
  */
-if (cluster.isPrimary && CLUSTER_ENABLED) {
-    // Lazy: the primary loads every module's config only to judge it, once, before forking.
-    void import('@app/config')
-        .then(({ assertProcessConfig }) => assertProcessConfig())
-        .then(refuseUnsharedRateLimits)
-        .then(supervise)
-        .catch((error: unknown) => {
-            logger.error({
-                message: 'Refusing to start: invalid configuration.',
-                error: extractErrorMessage(error, String(error))
+const enter = (): void => {
+    if (cluster.isPrimary && CLUSTER_ENABLED) {
+        // Lazy: the primary loads every module's config only to judge it, once, before forking.
+        void import('@app/config')
+            .then(({ assertProcessConfig }) => assertProcessConfig())
+            .then(refuseUnsharedRateLimits)
+            .then(supervise)
+            .catch((error: unknown) => {
+                logger.error({
+                    message: 'Refusing to start: invalid configuration.',
+                    error: extractErrorMessage(error, String(error))
+                });
+                process.exitCode = 1;
             });
-            process.exitCode = 1;
-        });
-} else {
+        return;
+    }
     /*
      * Workers execute `./serve` — `createApp()` built, started, and wired to this
      * worker's own signal handlers. Side-effect only: nothing here needs the instance back.
@@ -225,4 +229,18 @@ if (cluster.isPrimary && CLUSTER_ENABLED) {
         });
         process.exitCode = 1;
     });
-}
+};
+
+/**
+ * The development doubles load once, here, before the primary/worker split: a forked worker runs
+ * this file from the top, so the primary and every worker register them themselves.
+ */
+loadDevelopmentDoubles()
+    .then(enter)
+    .catch((error: unknown) => {
+        logger.error({
+            message: 'Refusing to start: the development doubles could not load.',
+            error: extractErrorMessage(error, String(error))
+        });
+        process.exitCode = 1;
+    });

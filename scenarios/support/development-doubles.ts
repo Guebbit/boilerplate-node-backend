@@ -1,16 +1,17 @@
 /**
  * @module
- * The door the doubles come through: a Node preload, run as `tsx --import <this file> …`.
+ * The door the doubles come through: what a development process runs before it serves.
  *
  * Production has no fake payment provider, no mail log and no OAuth stand-in — they are not in
- * `src/`, not in the image. A process that wants them (`dev`, `e2e:serve`, `demo`, `debug`,
- * `scenario:apply`) loads this file first, and it:
+ * `src/`, not in the image. A process that wants them loads this file, and it:
  *   1. reads `.env`, so "when unset" below means unset there too;
  *   2. gives the three variables a developer machine would otherwise have to set a default;
  *   3. registers the doubles in the registries the application resolves from.
  *
- * `cluster.fork()` hands `execArgv` to every worker, so a worker preloads this too.
- * https://nodejs.org/api/cluster.html#clustersettings
+ * Who loads it:
+ *   `NODE_ENV=development`  `src/app/development-doubles.ts`, at boot, in `src/main.ts`,
+ *                           `src/cluster.ts` (the primary and every worker) and `runScript`.
+ *   `demo`, `scenario:apply`  a static import: each forces its own environment.
  *
  * @see docs/build/test-doubles.md
  */

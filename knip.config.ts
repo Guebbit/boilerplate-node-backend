@@ -57,11 +57,6 @@ const config: KnipConfig = {
     ignoreBinaries: [
         // `scenarios/tools/generate-webhook-sink-tls.ts` shells out to it.
         'openssl'
-    ],
-    // Imports that resolve at run time, not from the importing file.
-    ignoreUnresolved: [
-        // A `tsx --import` argument in `tests/cluster/support/cluster.ts`, resolved from the repo root.
-        './scenarios/support/development-doubles.ts'
     ]
 };
 
