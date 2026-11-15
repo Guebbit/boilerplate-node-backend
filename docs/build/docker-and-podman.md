@@ -22,8 +22,8 @@ flowchart LR
 
         subgraph CoreData["Core data"]
             MongoDB[("database\nMongoDB :27017")]
-            Redis[("redis\nRedis cache :6379")]
-            RabbitMQ["rabbitmq\nAMQP :5672\nUI :15672"]
+            Redis[("cache\nRedis cache :6379")]
+            RabbitMQ["queue\nRabbitMQ AMQP :5672\nUI :15672"]
         end
 
         subgraph ObsStack["Observability stack"]

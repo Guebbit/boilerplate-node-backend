@@ -28,7 +28,7 @@ This stack is **container-first**: the shipped `.env` uses compose service hostn
 ```bash
 npm install
 npm run setup              # creates .env from .env-example, fills every secret it refuses to boot without
-npm run compose:up         # podman by default, CONTAINER_ENGINE=docker for Docker — 5 containers: app, cron, database, redis, rabbitmq
+npm run compose:up         # podman by default, CONTAINER_ENGINE=docker for Docker — 6 containers: app, cron, database, cache, limits, queue
 ```
 
 That is the whole setup. The `app` container runs `npm run db:bootstrap` before starting, so the
@@ -44,7 +44,7 @@ Tempo, Loki, Prometheus, Grafana, Alloy and Umami are opt-in — the things that
 worth cloning, but a weight most machines don't want running by default:
 
 ```bash
-npm run compose:up:full   # adds observability + analytics + the docs site (17 containers)
+npm run compose:up:full   # adds observability + analytics + the docs site (18 containers)
 ```
 
 `compose:restart` and `compose:rebuild` honour the same profiles: set `COMPOSE_PROFILES` in `.env`

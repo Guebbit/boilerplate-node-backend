@@ -18,7 +18,7 @@ This stack is **container-first**: the shipped `.env` uses compose service hostn
 
 | Profile (compose) | Containers                                                                   |
 | ----------------- | ---------------------------------------------------------------------------- |
-| default (lean)    | `app`, `cron`, `database`, `redis`, `limits`, `rabbitmq`                     |
+| default (lean)    | `app`, `cron`, `database`, `cache`, `limits`, `queue`                        |
 | `observability`   | tempo, otel-collector, prometheus, alertmanager, gatus, loki, grafana, alloy |
 | `analytics`       | umami, umami-db, umami-init                                                  |
 | `docs`            | this site                                                                    |
@@ -154,7 +154,7 @@ To make the host process the only API running, start the data services alone and
 yourself:
 
 ```bash
-podman compose up database redis rabbitmq
+podman compose up database cache queue
 npm run host -- db:bootstrap
 ```
 

@@ -98,7 +98,7 @@ See [Retries and parking](#retries-and-parking) for what happens after the "nack
 
 | Env var                  | Description                                                                   |
 | ------------------------ | ----------------------------------------------------------------------------- |
-| `NODE_RABBITMQ_URL`      | Full AMQP URI (preferred). Example: `amqp://user:pass@rabbitmq:5672`          |
+| `NODE_RABBITMQ_URL`      | Full AMQP URI (preferred). Example: `amqp://user:pass@queue:5672`             |
 | `NODE_RABBITMQ_HOST`     | Hostname fallback when URL is not set (default `127.0.0.1`).                  |
 | `NODE_RABBITMQ_PORT`     | Port fallback. Setting it is what switches the queue on when no URL is given. |
 | `NODE_RABBITMQ_USER`     | Username fallback (default `guest`).                                          |
@@ -113,7 +113,7 @@ host and port; the boot log names the broker and its source.
 
 ## Docker Compose
 
-The `docker-compose.yml` includes a `rabbitmq` service with the management plugin, `rabbitmq:4-management` —
+The `docker-compose.yml` includes a `queue` service with the management plugin, `rabbitmq:4-management-alpine` —
 the same 4.x line as `docker-compose.production.yml`'s digest-pinned `rabbitmq:4-alpine` image (the
 dev one adds the management UI), which is what makes quorum queues' 4.x
 behaviour ([Queue type: quorum](#queue-type-quorum), [Priority](#priority)) the same in dev as in

@@ -47,10 +47,10 @@ services:
             # "database" service, or NODE_DB_URI when set. Do not redeclare it here — an entry in
             # this block shadows `.env` and makes an external URI impossible to set without editing compose.
             NODE_ENV: 'development' # Node environment (production or development)
-            NODE_REDIS_URL: 'redis://redis:6379'
+            NODE_REDIS_URL: 'redis://cache:6379'
             # The `limits` instance: rate-limit counters and single-use claims, never evicted.
             NODE_RATE_LIMIT_REDIS_URL: 'redis://limits:6379'
-            NODE_RABBITMQ_URL: 'amqp://guest:guest@rabbitmq:5672'
+            NODE_RABBITMQ_URL: 'amqp://guest:guest@queue:5672'
             NODE_ENABLE_CLUSTERING: '${NODE_ENABLE_CLUSTERING:-0}'
             # 0 = one worker per CPU core (see `.env-example`). On a many-core dev machine that is
             # a lot of Node processes for one person's traffic — `NODE_CLUSTER_WORKERS=1 npm run
@@ -143,11 +143,11 @@ services:
         depends_on:
             database:
                 condition: service_healthy
-            redis:
+            cache:
                 condition: service_started
             limits:
                 condition: service_started
-            rabbitmq:
+            queue:
                 condition: service_started
 
         # Health check to verify the container is alive (liveness, not readiness)
@@ -200,10 +200,10 @@ services:
             replicas: 1
         environment:
             NODE_ENV: 'development'
-            NODE_REDIS_URL: 'redis://redis:6379'
+            NODE_REDIS_URL: 'redis://cache:6379'
             # The `limits` instance: rate-limit counters and single-use claims, never evicted.
             NODE_RATE_LIMIT_REDIS_URL: 'redis://limits:6379'
-            NODE_RABBITMQ_URL: 'amqp://guest:guest@rabbitmq:5672'
+            NODE_RABBITMQ_URL: 'amqp://guest:guest@queue:5672'
             OTEL_EXPORTER_OTLP_ENDPOINT: '${OTEL_EXPORTER_OTLP_ENDPOINT:-}'
             NODE_SERVICE_NAME: 'cron'
             # The doubles a job here needs (a cancelled order closes its fake card intent; a job's
@@ -238,11 +238,11 @@ services:
         depends_on:
             database:
                 condition: service_healthy
-            redis:
+            cache:
                 condition: service_started
             limits:
                 condition: service_started
-            rabbitmq:
+            queue:
                 condition: service_started
 
     # Another container
@@ -253,7 +253,7 @@ services:
 
         # Official mongo image, downloaded from the web as is
         # from docker hub (if not already present locally)
-        image: mongo:9.0.4@sha256:452bdaf2127b8ff851e31410a267809b9829eded219979f2210e7c7efb85a058
+        image: docker.io/library/mongo:9.0.4@sha256:452bdaf2127b8ff851e31410a267809b9829eded219979f2210e7c7efb85a058
 
         # Same
         restart: unless-stopped
@@ -313,9 +313,9 @@ services:
     # are served from memory instead of hitting MongoDB again. On restart the cache is cold (data is
     # lost), which is fine: nothing here is a source of truth, and nothing here may be relied on to
     # stay. Counters and single-use claims live on `limits` below, because THIS instance evicts.
-    redis:
+    cache:
         logging: *container-logging
-        image: redis:7
+        image: docker.io/library/redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
         restart: unless-stopped
         # Redis defaults to `maxmemory 0` — unlimited — and would grow until the host or the
         # container limit stops it. That is the wrong default for a cache: entries here are worth
@@ -347,7 +347,7 @@ services:
     # https://redis.io/docs/latest/develop/reference/eviction/
     limits:
         logging: *container-logging
-        image: redis:7
+        image: docker.io/library/redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
         restart: unless-stopped
         command: >-
             redis-server
@@ -359,9 +359,10 @@ services:
     # RabbitMQ: message broker for async tasks (email, PDF generation, etc.). Matches production
     # (docker-compose.production.yml) — quorum-queue message priority is a 4.x feature, and dev
     # must run what prod runs. See docs/understand/rabbitmq.md#queue-type-quorum.
-    rabbitmq:
+    queue:
         logging: *container-logging
-        image: rabbitmq:4-management
+        # The `-management` flavour, in dev only: the UI on :15672 needs it. Production runs plain `4-alpine`.
+        image: docker.io/library/rabbitmq:4-management-alpine@sha256:4841f6384ef8313c3594cd3f2e9f40c10805f8a61c45f08a9a5d9ddea8199267
         restart: unless-stopped
         environment:
             RABBITMQ_DEFAULT_USER: guest
@@ -404,7 +405,7 @@ services:
     prometheus:
         logging: *container-logging
         profiles: ['observability']
-        image: prom/prometheus:v2.55.1
+        image: docker.io/prom/prometheus:v2.55.1@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3
         restart: unless-stopped
         command:
             - '--config.file=/etc/prometheus/prometheus.yml'
@@ -425,7 +426,7 @@ services:
     alertmanager:
         logging: *container-logging
         profiles: ['observability']
-        image: prom/alertmanager:v0.34.1
+        image: docker.io/prom/alertmanager:v0.34.1@sha256:e9733bafb1bdef9b00e25a21f8f99dc26a22224bf16641ad754d1649f4c3357a
         restart: unless-stopped
         # Renders the routing template from the environment below, then starts Alertmanager on it.
         # Why: Alertmanager reads no env vars itself. docs/operate/prometheus.md#alert-routing
@@ -476,7 +477,7 @@ services:
     loki:
         logging: *container-logging
         profiles: ['observability']
-        image: grafana/loki:3.7.8
+        image: docker.io/grafana/loki:3.7.8@sha256:1107dd5274e0ada47e42472b7a7e71f3b2a2fe878878108f3e2f9e51528f0193
         restart: unless-stopped
         command: ['-config.file=/etc/loki/loki-config.yaml']
         volumes:
@@ -514,7 +515,7 @@ services:
     alloy:
         logging: *container-logging
         profiles: ['observability']
-        image: grafana/alloy:v1.20.1
+        image: docker.io/grafana/alloy:v1.20.1@sha256:2aa2099af76c0098d4af7a4d6e48f86cb66dc1a000222ad927a1c67c6542d13f
         restart: unless-stopped
         # Root, because the engine's log files are root-owned (rootless podman maps it to your user).
         user: root
