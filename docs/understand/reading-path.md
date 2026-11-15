@@ -20,7 +20,7 @@ the whole stack on one diagram. This page is about the code.
 
 ::: tip Landed on a file instead
 This page is for reading the codebase in order. If you got here from a filename you did not
-recognise, the **[File Glossary](../reference/start.md)** is the other direction: look the file up, get a
+recognise, the **[Reference](../reference/start.md)** is the other direction: look the folder up, get a
 sentence and a link, carry on with what you were doing.
 :::
 
